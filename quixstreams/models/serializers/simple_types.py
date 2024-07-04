@@ -46,10 +46,8 @@ class BytesDeserializer(Deserializer):
     A deserializer to bypass bytes without any changes
     """
 
-    def __call__(
-        self, value: bytes, ctx: SerializationContext
-    ) -> Union[bytes, Mapping[str, bytes]]:
-        return self._to_dict(value)
+    def __call__(self, value: bytes, ctx: SerializationContext) -> bytes:
+        return value
 
 
 class BytesSerializer(Serializer):
@@ -62,14 +60,14 @@ class BytesSerializer(Serializer):
 
 
 class StringDeserializer(Deserializer):
-    def __init__(self, column_name: Optional[str] = None, codec: str = "utf_8"):
+    def __init__(self, codec: str = "utf_8"):
         """
         Deserializes bytes to strings using the specified encoding.
         :param codec: string encoding
 
         A wrapper around `confluent_kafka.serialization.StringDeserializer`.
         """
-        super().__init__(column_name=column_name)
+        super().__init__()
         self._codec = codec
         self._deserializer = _StringDeserializer(codec=self._codec)
 
@@ -77,8 +75,7 @@ class StringDeserializer(Deserializer):
     def __call__(
         self, value: bytes, ctx: SerializationContext
     ) -> Union[str, Mapping[str, str]]:
-        deserialized = self._deserializer(value=value)
-        return self._to_dict(deserialized)
+        return self._deserializer(value=value)
 
 
 class IntegerDeserializer(Deserializer):
@@ -88,16 +85,15 @@ class IntegerDeserializer(Deserializer):
     A wrapper around `confluent_kafka.serialization.IntegerDeserializer`.
     """
 
-    def __init__(self, column_name: Optional[str] = None):
-        super().__init__(column_name=column_name)
+    def __init__(self):
+        super().__init__()
         self._deserializer = _IntegerDeserializer()
 
     @_wrap_serialization_error
     def __call__(
         self, value: bytes, ctx: SerializationContext
     ) -> Union[int, Mapping[str, int]]:
-        deserialized = self._deserializer(value=value)
-        return self._to_dict(deserialized)
+        return self._deserializer(value=value)
 
 
 class DoubleDeserializer(Deserializer):
@@ -107,16 +103,15 @@ class DoubleDeserializer(Deserializer):
     A wrapper around `confluent_kafka.serialization.DoubleDeserializer`.
     """
 
-    def __init__(self, column_name: Optional[str] = None):
-        super().__init__(column_name=column_name)
+    def __init__(self):
+        super().__init__()
         self._deserializer = _DoubleDeserializer()
 
     @_wrap_serialization_error
     def __call__(
         self, value: bytes, ctx: SerializationContext
     ) -> Union[float, Mapping[str, float]]:
-        deserialized = self._deserializer(value=value)
-        return self._to_dict(deserialized)
+        return self._deserializer(value=value)
 
 
 class StringSerializer(Serializer):

@@ -78,32 +78,6 @@ class TestDeserializers:
         assert deserializer(value, ctx=dummy_context) == expected
 
     @pytest.mark.parametrize(
-        "deserializer, value, expected",
-        [
-            (
-                IntegerDeserializer("value"),
-                int_to_bytes(123),
-                {"value": 123},
-            ),
-            (DoubleDeserializer("value"), float_to_bytes(123), {"value": 123.0}),
-            (DoubleDeserializer("value"), float_to_bytes(123.123), {"value": 123.123}),
-            (StringDeserializer("value"), b"abc", {"value": "abc"}),
-            (
-                StringDeserializer("value", codec="cp1251"),
-                "abc".encode("cp1251"),
-                {"value": "abc"},
-            ),
-            (BytesDeserializer("value"), b"123123", {"value": b"123123"}),
-            (JSONDeserializer("value"), b"123123", {"value": 123123}),
-            (JSONDeserializer("value"), b'{"a":"b"}', {"value": {"a": "b"}}),
-        ],
-    )
-    def test_deserialize_with_column_name_success(
-        self, deserializer: Deserializer, value, expected
-    ):
-        assert deserializer(value, ctx=dummy_context) == expected
-
-    @pytest.mark.parametrize(
         "deserializer, value",
         [
             (IntegerDeserializer(), b"abc"),
