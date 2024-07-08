@@ -1,4 +1,4 @@
-# Configuring Quix Streams Application
+# Configuring Quix Streams Applications
 
 `quixstreams.Application` class is the main place to configure Quix Streams applications.
 
@@ -37,7 +37,7 @@ See more `auto.offset.reset` in this [article](https://www.quix.io/blog/kafka-au
 
 - **`processing_guarantee`** - Use "at-least-once" or "exactly-once" processing guarantees.  
 See [Processing Guarantees](#processing-guarantees) for more information.  
-**Options**: `"at-least-once"` or `"exactly-once".  
+**Options** - `"at-least-once"` or `"exactly-once"`.  
 **Default** - `"at-least-once"`.
 
 ## Authentication
