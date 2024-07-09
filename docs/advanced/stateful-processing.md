@@ -153,11 +153,8 @@ app.clear_state()
 ## State Guarantees
 
 Because Quix Streams currently handles messages with "At Least Once" delivery guarantees, it is possible
-for the state to become slightly out of sync with a topic in between shutdowns and
-rebalances. 
+for the state to become slightly out of sync with a topic in between shutdowns and rebalances. 
 
-While the impact of this is generally minimal and only for a small amount of messages,
-be aware this could cause side effects where the same message may be re-processed 
-differently, if it depended on certain state conditionals.
+While the impact of this is generally minimal and only for a small amount of messages, be aware this could cause side effects where the same message may be reprocessed differently, if it depended on certain state conditionals.
 
-"Exactly Once" delivery guarantees avoids this, and it is currently on our roadmap.
+"Exactly Once" delivery guarantees avoid this. You can learn more about delivery/processing guarantees [here](https://quix.io/docs/quix-streams/configuration.html?h=#processing-guarantees).
