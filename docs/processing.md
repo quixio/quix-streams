@@ -501,6 +501,9 @@ For example, to log input data, or to update a counter in the State.
 The return of the callback passed to `.update()` will be ignored, and the original input
 will be sent to downstream operations instead.
 
+Because of the in-place nature of `.update()`, reassigning the operation to an `sdf` 
+again is OPTIONAL. 
+
 **Example:**
 
 ```python
@@ -508,8 +511,9 @@ will be sent to downstream operations instead.
 # The updated list will be passed downstream
 sdf = sdf.update(lambda some_list: some_list.append(1))
 
-# Using .update() to print a value to the console
-sdf = sdf.update(lambda value: print("Received value: ", value))
+# OR instead (no reassignment):
+sdf.update(lambda some_list: some_list.append(1))
+
 ```
 
 ### StreamingDataFrame.filter()
