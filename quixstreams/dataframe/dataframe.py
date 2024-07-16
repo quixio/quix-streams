@@ -312,6 +312,7 @@ class StreamingDataFrame(BaseStreaming):
         :param metadata: if True, the callback will receive key, timestamp and headers
             along with the value.
             Default - `False`.
+        :return: the updated StreamingDataFrame instance (reassignment NOT required).
         """
         if stateful:
             self._register_store()
@@ -576,7 +577,7 @@ class StreamingDataFrame(BaseStreaming):
             If passed, the return type of this callable must be serializable
             by `key_serializer` defined for this Topic object.
             By default, the current message key will be used.
-
+        :return: the updated StreamingDataFrame instance (reassignment NOT required).
         """
         return self._add_update(
             lambda value, orig_key, timestamp, headers: self._produce(
