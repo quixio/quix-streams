@@ -413,6 +413,16 @@ class TestStreamingDataFrame:
         with pytest.raises(TypeError):
             sdf.drop(columns)
 
+    def test_drop_empty_list(self, dataframe_factory):
+        """
+        Dropping an empty list is ignored entirely.
+        """
+        sdf = dataframe_factory()
+        pre_drop_stream = sdf.stream.tree()
+        sdf = sdf.drop([])
+        post_drop_stream = sdf.stream.tree()
+        assert pre_drop_stream == post_drop_stream
+
 
 class TestStreamingDataFrameApplyExpand:
     def test_apply_expand(self, dataframe_factory):

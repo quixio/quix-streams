@@ -984,6 +984,8 @@ class StreamingDataFrame(BaseStreaming):
         :return: a new StreamingDataFrame instance
         """
         if isinstance(columns, list):
+            if not columns:
+                return self
             if not all(isinstance(s, str) for s in columns):
                 raise TypeError(f"column list must contain strings only")
         elif isinstance(columns, str):
