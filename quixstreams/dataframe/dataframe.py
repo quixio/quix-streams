@@ -283,12 +283,16 @@ class StreamingDataFrame(BaseStreaming):
         The result of the function will be ignored, and the original value will be
         passed downstream.
 
+        Reassignment is OPTIONAL for this operation (is applied regardless).
+
 
         Example Snippet:
 
         ```python
         # Stores a value and mutates a list by appending a new item to it.
         # Also prints to console.
+
+        logger = logging.get_logger()
 
         def func(values: list, state: State):
             value = values[0]
@@ -298,7 +302,8 @@ class StreamingDataFrame(BaseStreaming):
 
         sdf = StreamingDataframe()
         sdf = sdf.update(func, stateful=True)
-        sdf = sdf.update(lambda value: print("Received value: ", value))
+        # does not require reassigning
+        sdf.update(lambda v: logger.info("message value is {v}"))
         ```
 
         :param func: function to update value
@@ -546,6 +551,8 @@ class StreamingDataFrame(BaseStreaming):
         """
         Produce current value to a topic. You can optionally specify a new key.
 
+        Reassignment is OPTIONAL for this operation (is applied regardless).
+
         Example Snippet:
 
         ```python
@@ -560,7 +567,8 @@ class StreamingDataFrame(BaseStreaming):
 
         sdf = app.dataframe(input_topic)
         sdf = sdf.to_topic(output_topic_0)
-        sdf = sdf.to_topic(output_topic_1, key=lambda data: data["a_field"])
+        # does not require reassigning
+        sdf.to_topic(output_topic_1, key=lambda data: data["a_field"])
         ```
 
         :param topic: instance of `Topic`
@@ -680,7 +688,7 @@ class StreamingDataFrame(BaseStreaming):
 
         Can also output a more dict-friendly format with `pretty=True`.
 
-        Reassignment is OPTIONAL for this function (is applied regardless).
+        Reassignment is OPTIONAL for this operation (is applied regardless).
 
         > NOTE: prints the current (edited) values, not the original values.
 
