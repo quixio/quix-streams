@@ -477,6 +477,27 @@ class TestStreamingDataFrameUpdate:
         assert sdf_id_4 == sdf_id_5
         assert sdf_tree_4 != sdf_tree_5
 
+    def test_chaining_inplace_with_non_inplace(self, dataframe_factory):
+        """
+        When chaining together inplace and non-inplace, reassigning must happen else
+        everything starting with the non-inplace will be lost.
+        """
+        sdf = dataframe_factory()
+        sdf.update(lambda v: v.append(1)).apply(lambda v: v + [2]).update(
+            lambda v: v.append(3)
+        )
+        sdf = sdf.apply(lambda v: v + [4])
+
+        value = []
+        key, timestamp, headers = b"key", 0, []
+
+        assert sdf.test(value, key, timestamp, headers)[0] == (
+            [1, 4],
+            key,
+            timestamp,
+            headers,
+        )
+
 
 class TestStreamingDataFrameToTopic:
     @pytest.mark.parametrize("reassign", [True, False])

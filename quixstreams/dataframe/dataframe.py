@@ -283,7 +283,8 @@ class StreamingDataFrame(BaseStreaming):
         The result of the function will be ignored, and the original value will be
         passed downstream.
 
-        Reassignment is OPTIONAL for this operation (is applied regardless).
+        This operation occurs in-place, meaning reassignment is entirely OPTIONAL: the
+        original `StreamingDataFrame` is returned for chaining (`sdf.update().print()`).
 
 
         Example Snippet:
@@ -552,7 +553,8 @@ class StreamingDataFrame(BaseStreaming):
         """
         Produce current value to a topic. You can optionally specify a new key.
 
-        Reassignment is OPTIONAL for this operation (is applied regardless).
+        This operation occurs in-place, meaning reassignment is entirely OPTIONAL: the
+        original `StreamingDataFrame` is returned for chaining (`sdf.update().print()`).
 
         Example Snippet:
 
@@ -689,7 +691,8 @@ class StreamingDataFrame(BaseStreaming):
 
         Can also output a more dict-friendly format with `pretty=True`.
 
-        Reassignment is OPTIONAL for this operation (is applied regardless).
+        This operation occurs in-place, meaning reassignment is entirely OPTIONAL: the
+        original `StreamingDataFrame` is returned for chaining (`sdf.update().print()`).
 
         > NOTE: prints the current (edited) values, not the original values.
 
@@ -715,7 +718,7 @@ class StreamingDataFrame(BaseStreaming):
         """
         print_args = ["value", "key", "timestamp", "headers"]
         if pretty:
-            printer = functools.partial(pprint.pprint, indent=2)
+            printer = functools.partial(pprint.pprint, indent=2, sort_dicts=False)
         else:
             printer = print
         return self._add_update(

@@ -501,8 +501,12 @@ For example, to log input data, or to update a counter in the State.
 The return of the callback passed to `.update()` will be ignored, and the original input
 will be sent to downstream operations instead.
 
-Because of the in-place nature of `.update()`, reassigning the operation to an `sdf` 
-again is OPTIONAL. 
+This operation occurs in-place, meaning reassigning the operation to your `sdf` is 
+entirely OPTIONAL; the original `StreamingDataFrame` is still returned to allow the 
+chaining of commands like `sdf.update().print()`.
+
+> Note: chains that include any non-inplace function will still require reassignment: 
+> `sdf = sdf.update().filter().print()`
 
 **Example:**
 
