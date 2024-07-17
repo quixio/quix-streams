@@ -501,6 +501,13 @@ For example, to log input data, or to update a counter in the State.
 The return of the callback passed to `.update()` will be ignored, and the original input
 will be sent to downstream operations instead.
 
+This operation occurs in-place, meaning reassigning the operation to your `sdf` is 
+entirely OPTIONAL; the original `StreamingDataFrame` is still returned to allow the 
+chaining of commands like `sdf.update().print()`.
+
+> Note: chains that include any non-inplace function will still require reassignment: 
+> `sdf = sdf.update().filter().print()`
+
 **Example:**
 
 ```python
@@ -508,8 +515,9 @@ will be sent to downstream operations instead.
 # The updated list will be passed downstream
 sdf = sdf.update(lambda some_list: some_list.append(1))
 
-# Using .update() to print a value to the console
-sdf = sdf.update(lambda value: print("Received value: ", value))
+# OR instead (no reassignment):
+sdf.update(lambda some_list: some_list.append(1))
+
 ```
 
 ### StreamingDataFrame.filter()

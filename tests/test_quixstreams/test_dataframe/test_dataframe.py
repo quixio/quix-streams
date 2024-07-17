@@ -1,3 +1,4 @@
+import json
 import operator
 import uuid
 from collections import namedtuple
@@ -369,6 +370,26 @@ class TestStreamingDataFrame:
         )[0]
         assert result == expected
 
+    @pytest.mark.parametrize(
+        "metadata,expected",
+        [
+            (False, str({"value": {"x": 1}})),
+            (
+                True,
+                str({"value": {"x": 1}, "key": b"key", "timestamp": 0, "headers": []}),
+            ),
+        ],
+    )
+    def test_print(self, dataframe_factory, metadata, expected, capsys):
+        sdf = dataframe_factory()
+        sdf.print(metadata=metadata)
+
+        value = {"x": 1}
+        key, timestamp, headers = b"key", 0, []
+        sdf.test(value=value, key=key, timestamp=timestamp, headers=headers)
+
+        assert expected in capsys.readouterr().out
+
 
 class TestStreamingDataFrameApplyExpand:
     def test_apply_expand(self, dataframe_factory):
@@ -418,7 +439,68 @@ class TestStreamingDataFrameApplyExpand:
             _ = sdf[sdf.apply(lambda v: [v, v], expand=True)]
 
 
+class TestStreamingDataFrameUpdate:
+    def test_update_no_reassign(self, dataframe_factory):
+        """
+        "Update" operations should be applied regardless of a reassignment,
+        and anything else requires assignment.
+        """
+        sdf = dataframe_factory()
+        sdf_tree_1 = sdf.stream.tree()
+        sdf_id_1 = id(sdf)
+
+        # non-update non-reassignment (no change!)
+        sdf.apply(lambda v: v)
+        sdf_tree_2 = sdf.stream.tree()
+        sdf_id_2 = id(sdf)
+        assert sdf_id_1 == sdf_id_2
+        assert sdf_tree_1 == sdf_tree_2
+
+        # non-update reassignment
+        sdf = sdf.apply(lambda v: v)
+        sdf_tree_3 = sdf.stream.tree()
+        sdf_id_3 = id(sdf)
+        assert sdf_id_2 != sdf_id_3
+        assert sdf_tree_2 != sdf_tree_3
+
+        # update non-reassignment
+        sdf.update(lambda v: v)
+        sdf_tree_4 = sdf.stream.tree()
+        sdf_id_4 = id(sdf)
+        assert sdf_id_3 == sdf_id_4
+        assert sdf_tree_3 != sdf_tree_4
+
+        # update reassignment
+        sdf = sdf.update(lambda v: v)
+        sdf_tree_5 = sdf.stream.tree()
+        sdf_id_5 = id(sdf)
+        assert sdf_id_4 == sdf_id_5
+        assert sdf_tree_4 != sdf_tree_5
+
+    def test_chaining_inplace_with_non_inplace(self, dataframe_factory):
+        """
+        When chaining together inplace and non-inplace, reassigning must happen else
+        everything starting with the non-inplace will be lost.
+        """
+        sdf = dataframe_factory()
+        sdf.update(lambda v: v.append(1)).apply(lambda v: v + [2]).update(
+            lambda v: v.append(3)
+        )
+        sdf = sdf.apply(lambda v: v + [4])
+
+        value = []
+        key, timestamp, headers = b"key", 0, []
+
+        assert sdf.test(value, key, timestamp, headers)[0] == (
+            [1, 4],
+            key,
+            timestamp,
+            headers,
+        )
+
+
 class TestStreamingDataFrameToTopic:
+    @pytest.mark.parametrize("reassign", [True, False])
     def test_to_topic(
         self,
         dataframe_factory,
@@ -426,6 +508,7 @@ class TestStreamingDataFrameToTopic:
         row_producer_factory,
         topic_manager_topic_factory,
         message_context_factory,
+        reassign,
     ):
         topic = topic_manager_topic_factory(
             key_serializer="str",
@@ -436,7 +519,10 @@ class TestStreamingDataFrameToTopic:
         producer = row_producer_factory()
 
         sdf = dataframe_factory(producer=producer)
-        sdf = sdf.to_topic(topic)
+        if reassign:
+            sdf = sdf.to_topic(topic)
+        else:
+            sdf.to_topic(topic)
 
         value = {"x": 1, "y": 2}
         key, timestamp = "key", 10

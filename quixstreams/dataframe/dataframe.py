@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextvars
 import functools
 import operator
+import pprint
 from copy import deepcopy
 from datetime import timedelta
 from typing import (
@@ -282,6 +283,9 @@ class StreamingDataFrame(BaseStreaming):
         The result of the function will be ignored, and the original value will be
         passed downstream.
 
+        This operation occurs in-place, meaning reassignment is entirely OPTIONAL: the
+        original `StreamingDataFrame` is returned for chaining (`sdf.update().print()`).
+
 
         Example Snippet:
 
@@ -297,7 +301,8 @@ class StreamingDataFrame(BaseStreaming):
 
         sdf = StreamingDataframe()
         sdf = sdf.update(func, stateful=True)
-        sdf = sdf.update(lambda value: print("Received value: ", value))
+        # does not require reassigning
+        sdf.update(lambda v: v.append(1))
         ```
 
         :param func: function to update value
@@ -306,6 +311,7 @@ class StreamingDataFrame(BaseStreaming):
         :param metadata: if True, the callback will receive key, timestamp and headers
             along with the value.
             Default - `False`.
+        :return: the updated StreamingDataFrame instance (reassignment NOT required).
         """
         if stateful:
             self._register_store()
@@ -319,15 +325,14 @@ class StreamingDataFrame(BaseStreaming):
                 func=cast(UpdateWithMetadataCallbackStateful, with_metadata_func),
                 processing_context=self._processing_context,
             )
-            stream = self.stream.add_update(
+            return self._add_update(
                 cast(UpdateWithMetadataCallback, stateful_func), metadata=True
             )
         else:
-            stream = self.stream.add_update(
+            return self._add_update(
                 cast(Union[UpdateCallback, UpdateWithMetadataCallback], func),
                 metadata=metadata,
             )
-        return self.__dataframe_clone__(stream=stream)
 
     @overload
     def filter(self, func: FilterCallback) -> Self: ...
@@ -546,6 +551,9 @@ class StreamingDataFrame(BaseStreaming):
         """
         Produce current value to a topic. You can optionally specify a new key.
 
+        This operation occurs in-place, meaning reassignment is entirely OPTIONAL: the
+        original `StreamingDataFrame` is returned for chaining (`sdf.update().print()`).
+
         Example Snippet:
 
         ```python
@@ -560,7 +568,8 @@ class StreamingDataFrame(BaseStreaming):
 
         sdf = app.dataframe(input_topic)
         sdf = sdf.to_topic(output_topic_0)
-        sdf = sdf.to_topic(output_topic_1, key=lambda data: data["a_field"])
+        # does not require reassigning
+        sdf.to_topic(output_topic_1, key=lambda data: data["a_field"])
         ```
 
         :param topic: instance of `Topic`
@@ -568,9 +577,9 @@ class StreamingDataFrame(BaseStreaming):
             If passed, the return type of this callable must be serializable
             by `key_serializer` defined for this Topic object.
             By default, the current message key will be used.
-
+        :return: the updated StreamingDataFrame instance (reassignment NOT required).
         """
-        return self.update(
+        return self._add_update(
             lambda value, orig_key, timestamp, headers: self._produce(
                 topic=topic,
                 value=value,
@@ -672,6 +681,48 @@ class StreamingDataFrame(BaseStreaming):
 
         stream = self.stream.add_transform(func=_set_headers_callback)
         return self.__dataframe_clone__(stream=stream)
+
+    def print(self, pretty: bool = True, metadata: bool = False) -> Self:
+        """
+        Print out the current message value (and optionally, the message metadata) to
+        stdout (console) (like the built-in `print` function).
+
+        Can also output a more dict-friendly format with `pretty=True`.
+
+        This operation occurs in-place, meaning reassignment is entirely OPTIONAL: the
+        original `StreamingDataFrame` is returned for chaining (`sdf.update().print()`).
+
+        > NOTE: prints the current (edited) values, not the original values.
+
+        Example Snippet:
+
+        ```python
+        from quixstreams import Application
+
+
+        app = Application()
+        input_topic = app.topic("data")
+
+        sdf = app.dataframe(input_topic)
+        sdf["edited_col"] = sdf["orig_col"] + "edited"
+        # print the updated message value with the newly added column
+        sdf.print()
+        ```
+
+        :param pretty: Whether to use "pprint" formatting, which uses new-lines and
+            indents for easier console reading (but might be worse for log parsing).
+        :param metadata: Whether to additionally print the key, timestamp, and headers
+        :return: the updated StreamingDataFrame instance (reassignment NOT required).
+        """
+        print_args = ["value", "key", "timestamp", "headers"]
+        if pretty:
+            printer = functools.partial(pprint.pprint, indent=2, sort_dicts=False)
+        else:
+            printer = print
+        return self._add_update(
+            lambda *args: printer({print_args[i]: args[i] for i in range(len(args))}),
+            metadata=metadata,
+        )
 
     def compose(
         self,
@@ -929,6 +980,14 @@ class StreamingDataFrame(BaseStreaming):
         )
         self._producer.produce_row(row=row, topic=topic, key=key, timestamp=timestamp)
 
+    def _add_update(
+        self,
+        func: Union[UpdateCallback, UpdateWithMetadataCallback],
+        metadata: bool = False,
+    ):
+        self._stream = self._stream.add_update(func, metadata=metadata)
+        return self
+
     def _register_store(self):
         """
         Register the default store for input topic in StateStoreManager
@@ -986,7 +1045,7 @@ class StreamingDataFrame(BaseStreaming):
             # Update an item key with a result of another sdf.apply()
             diff = self.stream.diff(item.stream)
             other_sdf_composed = diff.compose_returning()
-            stream = self.stream.add_update(
+            self._add_update(
                 lambda value, key, timestamp, headers: operator.setitem(
                     value,
                     item_key,
@@ -997,7 +1056,7 @@ class StreamingDataFrame(BaseStreaming):
         elif isinstance(item, StreamingSeries):
             # Update an item key with a result of another series
             series_composed = item.compose_returning()
-            stream = self.stream.add_update(
+            self._add_update(
                 lambda value, key, timestamp, headers: operator.setitem(
                     value, item_key, series_composed(value, key, timestamp, headers)[0]
                 ),
@@ -1005,10 +1064,7 @@ class StreamingDataFrame(BaseStreaming):
             )
         else:
             # Update an item key with a constant
-            stream = self.stream.add_update(
-                lambda value: operator.setitem(value, item_key, item)
-            )
-        self._stream = stream
+            self._add_update(lambda value: operator.setitem(value, item_key, item))
 
     @overload
     def __getitem__(self, item: str) -> StreamingSeries: ...
