@@ -684,7 +684,7 @@ class StreamingDataFrame(BaseStreaming):
         stream = self.stream.add_transform(func=_set_headers_callback)
         return self.__dataframe_clone__(stream=stream)
 
-    def print(self, pretty: bool = False, metadata: bool = False) -> Self:
+    def print(self, pretty: bool = True, metadata: bool = False) -> Self:
         """
         Print out the current message value (and optionally, the message metadata) to
         stdout (console) (like the built-in `print` function).
