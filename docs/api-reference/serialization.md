@@ -10,7 +10,7 @@
 class QuixDeserializer(JSONDeserializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/8dada467a1132f5edcefe85f9cde0d727718d617/quixstreams/models/serializers/quix.py#L73)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/d1c312905abaa551ea99b4db5afe2a25d428e445/quixstreams/models/serializers/quix.py#L73)
 
 Handles Deserialization for any Quix-formatted topic.
 
@@ -23,18 +23,15 @@ Parses JSON data from either `TimeseriesData` and `EventData` (ignores the rest)
 #### QuixDeserializer.\_\_init\_\_
 
 ```python
-def __init__(column_name: Optional[str] = None,
-             loads: Callable[[Union[bytes, bytearray]], Any] = default_loads)
+def __init__(loads: Callable[[Union[bytes, bytearray]], Any] = default_loads)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/8dada467a1132f5edcefe85f9cde0d727718d617/quixstreams/models/serializers/quix.py#L80)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/d1c312905abaa551ea99b4db5afe2a25d428e445/quixstreams/models/serializers/quix.py#L80)
 
 
 <br>
 ***Arguments:***
 
-- `column_name`: if provided, the deserialized value will be wrapped into
-dictionary with `column_name` as a key.
 - `loads`: function to parse json from bytes.
 Default - :py:func:`quixstreams.utils.json.loads`.
 
@@ -49,7 +46,7 @@ Default - :py:func:`quixstreams.utils.json.loads`.
 def split_values() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/8dada467a1132f5edcefe85f9cde0d727718d617/quixstreams/models/serializers/quix.py#L100)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/d1c312905abaa551ea99b4db5afe2a25d428e445/quixstreams/models/serializers/quix.py#L97)
 
 Each Quix message might contain data for multiple Rows.
 This property informs the downstream processors about that, so they can
@@ -66,7 +63,7 @@ def deserialize(model_key: str, value: Union[List[Mapping],
                                              Mapping]) -> Iterable[Mapping]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/8dada467a1132f5edcefe85f9cde0d727718d617/quixstreams/models/serializers/quix.py#L153)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/d1c312905abaa551ea99b4db5afe2a25d428e445/quixstreams/models/serializers/quix.py#L150)
 
 Deserialization function for particular data types (Timeseries or EventData).
 
@@ -91,7 +88,7 @@ Iterable of dicts
 class QuixTimeseriesSerializer(QuixSerializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/8dada467a1132f5edcefe85f9cde0d727718d617/quixstreams/models/serializers/quix.py#L321)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/d1c312905abaa551ea99b4db5afe2a25d428e445/quixstreams/models/serializers/quix.py#L318)
 
 Serialize data to JSON formatted according to Quix Timeseries format.
 
@@ -123,7 +120,7 @@ Output:
 class QuixEventsSerializer(QuixSerializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/8dada467a1132f5edcefe85f9cde0d727718d617/quixstreams/models/serializers/quix.py#L409)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/d1c312905abaa551ea99b4db5afe2a25d428e445/quixstreams/models/serializers/quix.py#L406)
 
 Serialize data to JSON formatted according to Quix EventData format.
 The input value is expected to be a dictionary with the following keys:
@@ -164,7 +161,7 @@ Output:
 class BytesDeserializer(Deserializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/8dada467a1132f5edcefe85f9cde0d727718d617/quixstreams/models/serializers/simple_types.py#L44)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/d1c312905abaa551ea99b4db5afe2a25d428e445/quixstreams/models/serializers/simple_types.py#L44)
 
 A deserializer to bypass bytes without any changes
 
@@ -176,7 +173,7 @@ A deserializer to bypass bytes without any changes
 class BytesSerializer(Serializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/8dada467a1132f5edcefe85f9cde0d727718d617/quixstreams/models/serializers/simple_types.py#L55)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/d1c312905abaa551ea99b4db5afe2a25d428e445/quixstreams/models/serializers/simple_types.py#L53)
 
 A serializer to bypass bytes without any changes
 
@@ -188,7 +185,7 @@ A serializer to bypass bytes without any changes
 class StringDeserializer(Deserializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/8dada467a1132f5edcefe85f9cde0d727718d617/quixstreams/models/serializers/simple_types.py#L64)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/d1c312905abaa551ea99b4db5afe2a25d428e445/quixstreams/models/serializers/simple_types.py#L62)
 
 <a id="quixstreams.models.serializers.simple_types.StringDeserializer.__init__"></a>
 
@@ -197,10 +194,10 @@ class StringDeserializer(Deserializer)
 #### StringDeserializer.\_\_init\_\_
 
 ```python
-def __init__(column_name: Optional[str] = None, codec: str = "utf_8")
+def __init__(codec: str = "utf_8")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/8dada467a1132f5edcefe85f9cde0d727718d617/quixstreams/models/serializers/simple_types.py#L65)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/d1c312905abaa551ea99b4db5afe2a25d428e445/quixstreams/models/serializers/simple_types.py#L63)
 
 Deserializes bytes to strings using the specified encoding.
 
@@ -219,7 +216,7 @@ A wrapper around `confluent_kafka.serialization.StringDeserializer`.
 class IntegerDeserializer(Deserializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/8dada467a1132f5edcefe85f9cde0d727718d617/quixstreams/models/serializers/simple_types.py#L84)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/d1c312905abaa551ea99b4db5afe2a25d428e445/quixstreams/models/serializers/simple_types.py#L81)
 
 Deserializes bytes to integers.
 
@@ -233,7 +230,7 @@ A wrapper around `confluent_kafka.serialization.IntegerDeserializer`.
 class DoubleDeserializer(Deserializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/8dada467a1132f5edcefe85f9cde0d727718d617/quixstreams/models/serializers/simple_types.py#L103)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/d1c312905abaa551ea99b4db5afe2a25d428e445/quixstreams/models/serializers/simple_types.py#L99)
 
 Deserializes float to IEEE 764 binary64.
 
@@ -247,7 +244,7 @@ A wrapper around `confluent_kafka.serialization.DoubleDeserializer`.
 class StringSerializer(Serializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/8dada467a1132f5edcefe85f9cde0d727718d617/quixstreams/models/serializers/simple_types.py#L122)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/d1c312905abaa551ea99b4db5afe2a25d428e445/quixstreams/models/serializers/simple_types.py#L117)
 
 <a id="quixstreams.models.serializers.simple_types.StringSerializer.__init__"></a>
 
@@ -259,7 +256,7 @@ class StringSerializer(Serializer)
 def __init__(codec: str = "utf_8")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/8dada467a1132f5edcefe85f9cde0d727718d617/quixstreams/models/serializers/simple_types.py#L123)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/d1c312905abaa551ea99b4db5afe2a25d428e445/quixstreams/models/serializers/simple_types.py#L118)
 
 Serializes strings to bytes using the specified encoding.
 
@@ -277,7 +274,7 @@ Serializes strings to bytes using the specified encoding.
 class IntegerSerializer(Serializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/8dada467a1132f5edcefe85f9cde0d727718d617/quixstreams/models/serializers/simple_types.py#L135)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/d1c312905abaa551ea99b4db5afe2a25d428e445/quixstreams/models/serializers/simple_types.py#L130)
 
 Serializes integers to bytes
 
@@ -289,7 +286,7 @@ Serializes integers to bytes
 class DoubleSerializer(Serializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/8dada467a1132f5edcefe85f9cde0d727718d617/quixstreams/models/serializers/simple_types.py#L148)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/d1c312905abaa551ea99b4db5afe2a25d428e445/quixstreams/models/serializers/simple_types.py#L143)
 
 Serializes floats to bytes
 
