@@ -713,13 +713,13 @@ class StreamingDataFrame(BaseStreaming):
         :param metadata: Whether to additionally print the key, timestamp, and headers
         :return: the updated StreamingDataFrame instance (reassignment NOT required).
         """
-        _PRINT_ARGS = ["value", "key", "timestamp", "headers"]
+        print_args = ["value", "key", "timestamp", "headers"]
         if pretty:
             printer = functools.partial(pprint.pprint, indent=2)
         else:
             printer = print
         return self._add_update(
-            lambda *args: printer({_PRINT_ARGS[i]: args[i] for i in range(len(args))}),
+            lambda *args: printer({print_args[i]: args[i] for i in range(len(args))}),
             metadata=metadata,
         )
 
