@@ -402,7 +402,7 @@ class TestStreamingDataFrame:
         value = {"col_a": 1, "col_b": 2, "col_c": 3}
         key, timestamp, headers = b"key", 0, []
         sdf = dataframe_factory()
-        sdf = sdf.drop(columns)
+        sdf.drop(columns)
         assert sdf.test(value=value, key=key, timestamp=timestamp, headers=headers)[
             0
         ] == (expected, key, timestamp, headers)

@@ -970,6 +970,10 @@ class StreamingDataFrame(BaseStreaming):
         """
         Drop column(s) from the message value (value must support `del`, like a dict).
 
+        This operation occurs in-place, meaning reassignment is entirely OPTIONAL: the
+        original `StreamingDataFrame` is returned for chaining (`sdf.update().print()`).
+
+
         Example Snippet:
 
         ```python
@@ -977,7 +981,7 @@ class StreamingDataFrame(BaseStreaming):
         # This would transform {"x": 1, "y": 2, "z": 3} to {"z": 3}
 
         sdf = StreamingDataframe()
-        sdf = sdf.drop(["x", "y"])
+        sdf.drop(["x", "y"])
         ```
 
         :param columns: a single column name or a list of names, where names are `str`
@@ -994,8 +998,7 @@ class StreamingDataFrame(BaseStreaming):
             raise TypeError(
                 f"Expected a string or a list of strings, not {type(columns)}"
             )
-        stream = self.stream.add_update(lambda value: _drop(value, columns))
-        return self.__dataframe_clone__(stream)
+        return self._add_update(lambda value: _drop(value, columns), metadata=False)
 
     def _produce(
         self,
