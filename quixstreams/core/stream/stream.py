@@ -234,14 +234,19 @@ class Stream:
         """
         Return a list of all parent Streams including the node itself.
 
-        The tree is ordered from child to parent (current node comes first).
+        The tree is ordered from parent to child (current node comes last).
         :return: a list of `Stream` objects
         """
+
         tree_ = [self]
         node = self
         while node.parent:
-            tree_.insert(0, node.parent)
+            tree_.append(node.parent)
             node = node.parent
+
+        # Reverse to get expected ordering.
+        tree_.reverse()
+
         return tree_
 
     def compose_returning(self) -> ReturningExecutor:
