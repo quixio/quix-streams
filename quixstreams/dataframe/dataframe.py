@@ -293,8 +293,6 @@ class StreamingDataFrame(BaseStreaming):
         # Stores a value and mutates a list by appending a new item to it.
         # Also prints to console.
 
-        logger = logging.get_logger()
-
         def func(values: list, state: State):
             value = values[0]
             if value != state.get("my_store_key"):
@@ -304,7 +302,7 @@ class StreamingDataFrame(BaseStreaming):
         sdf = StreamingDataframe()
         sdf = sdf.update(func, stateful=True)
         # does not require reassigning
-        sdf.update(lambda v: logger.info("message value is {v}"))
+        sdf.update(lambda v: v.append(1))
         ```
 
         :param func: function to update value
