@@ -89,10 +89,10 @@ class Consumer:
             Passed as `group.id` to `confluent_kafka.Consumer`
         :param auto_offset_reset: Consumer `auto.offset.reset` setting.
             Available values:
-              - "earliest" - automatically reset the offset to the smallest offset
-              - "latest" - automatically reset the offset to the largest offset
-              - "error" - trigger an error (ERR__AUTO_OFFSET_RESET) which is retrieved
-                by consuming messages (used for testing)
+                <br>"earliest" - automatically reset the offset to the smallest offset
+                <br>"latest" - automatically reset the offset to the largest offset
+                <br>"error" - trigger an error (`ERR__AUTO_OFFSET_RESET`) which is
+                    retrieved by consuming messages (used for testing)
         :param auto_commit_enable: If true, periodically commit offset of
             the last message handed to the application. Default - `True`.
         :param logger: a Logger instance to attach librdkafka logging to
@@ -133,13 +133,14 @@ class Consumer:
         object's :py:func:`Message.error()` method to distinguish between proper
         messages (error() returns None), or an event or error.
 
-        Note: Callbacks may be called from this method, such as
-        ``on_assign``, ``on_revoke``, et al.
+        Note: a `RebalancingCallback` may be called from this method (
+        `on_assign`, `on_revoke`, or `on_lost`).
 
         :param float timeout: Maximum time in seconds to block waiting for message,
             event or callback. None or -1 is infinite. Default: None.
-        :returns: A Message object or None on timeout
-        :raises: RuntimeError if called on a closed consumer
+        :return: A `Message` object or `None` on timeout
+        :rtype: Optional[Message]
+        :raises RuntimeError: if called on a closed consumer
         """
         return self._consumer.poll(timeout=timeout if timeout is not None else -1)
 
@@ -154,27 +155,17 @@ class Consumer:
         Set subscription to supplied list of topics
         This replaces a previous subscription.
 
-        :param list(str) topics: List of topics (strings) to subscribe to.
-        :param callable on_assign: callback to provide handling of customized offsets
-            on completion of a successful partition re-assignment.
-        :param callable on_revoke: callback to provide handling of offset commits to
-            a customized store on the start of a rebalance operation.
-        :param callable on_lost: callback to provide handling in the case the partition
-            assignment has been lost. Partitions that have been lost may already be
-            owned by other members in the group and therefore committing offsets,
-            for example, may fail.
-
-
-        :raises KafkaException:
-        :raises: RuntimeError if called on a closed consumer
-
-          .. py:function:: on_assign(consumer, partitions)
-          .. py:function:: on_revoke(consumer, partitions)
-          .. py:function:: on_lost(consumer, partitions)
-
-            :param Consumer consumer: Consumer instance.
-            :param list(TopicPartition) partitions: Absolute list of partitions being
-            assigned or revoked.
+        :param List[str] topics: List of topics (strings) to subscribe to.
+        :param Optional[RebalancingCallback] on_assign: callback to provide handling of
+            customized offsets on completion of a successful partition re-assignment.
+        :param Optional[RebalancingCallback] on_revoke: callback to provide handling of
+            offset commits to a customized store on the start of a rebalance operation.
+        :param Optional[RebalancingCallback] on_lost: callback to provide handling in
+            the case the partition assignment has been lost. Partitions that have been
+            lost may already be owned by other members in the group and therefore
+            committing offsets, for example, may fail.
+        :raises KafkaException: if a Kafka-based error occurs
+        :raises RuntimeError: if called on a closed consumer
         """
 
         @_wrap_assignment_errors
@@ -240,8 +231,9 @@ class Consumer:
     def unsubscribe(self):
         """
         Remove current subscription.
-          :raises: KafkaException
-          :raises: RuntimeError if called on a closed consumer
+
+        :raises KafkaException: if a Kafka-based error occurs
+        :raises RuntimeError: if called on a closed consumer
         """
         return self._consumer.unsubscribe()
 
@@ -251,20 +243,17 @@ class Consumer:
         offsets: Optional[List[TopicPartition]] = None,
     ):
         """
-        .. py:function:: store_offsets([message=None], [offsets=None])
+        Store offsets for a message or a list of offsets.
 
-          Store offsets for a message or a list of offsets.
+        `message` and `offsets` are mutually exclusive. The stored offsets
+        will be committed according to 'auto.commit.interval.ms' or manual
+        offset-less `commit`.
+        Note that 'enable.auto.offset.store' must be set to False when using this API.
 
-          ``message`` and ``offsets`` are mutually exclusive. The stored offsets
-          will be committed according to 'auto.commit.interval.ms' or manual
-          offset-less `commit`.
-          Note that 'enable.auto.offset.store' must be set to False when using this API.
-
-          :param confluent_kafka.Message message: Store message's offset+1.
-          :param list(TopicPartition) offsets: List of topic+partitions+offsets to store.
-          :rtype: None
-          :raises: KafkaException
-          :raises: RuntimeError if called on a closed consumer
+        :param confluent_kafka.Message message: Store message's offset+1.
+        :param List[TopicPartition] offsets: List of topic+partitions+offsets to store.
+        :raises KafkaException: if a Kafka-based error occurs
+        :raises RuntimeError: if called on a closed consumer
         """
 
         if message is not None and offsets is not None:
@@ -288,22 +277,22 @@ class Consumer:
         """
         Commit a message or a list of offsets.
 
-        The ``message`` and ``offsets`` parameters are mutually exclusive.
+        The `message` and `offsets` parameters are mutually exclusive.
         If neither is set, the current partition assignment's offsets are used instead.
         Use this method to commit offsets if you have 'enable.auto.commit' set to False.
 
-        :param confluent_kafka.Message message: Commit the message's offset+1.
+        :param Message message: Commit the message's offset+1.
             Note: By convention, committed offsets reflect the next message
             to be consumed, **not** the last message consumed.
-        :param list(TopicPartition) offsets: List of topic+partitions+offsets to commit.
+        :param List[TopicPartition] offsets: List of topic+partitions+offsets to commit.
         :param bool asynchronous: If true, asynchronously commit, returning None
             immediately. If False, the commit() call will block until the commit
             succeeds or fails and the committed offsets will be returned (on success).
             Note that specific partitions may have failed and the .err field of
             each partition should be checked for success.
-        :rtype: None|list(TopicPartition)
-        :raises: KafkaException
-        :raises: RuntimeError if called on a closed consumer
+        :rtype: Optional[List[TopicPartition]]
+        :raises KafkaException: if a Kafka-based error occurs
+        :raises RuntimeError: if called on a closed consumer
         """
 
         if message is not None and offsets is not None:
@@ -323,17 +312,15 @@ class Consumer:
         self, partitions: List[TopicPartition], timeout: Optional[float] = None
     ) -> List[TopicPartition]:
         """
-        .. py:function:: committed(partitions, [timeout=None])
+        Retrieve committed offsets for the specified partitions.
 
-          Retrieve committed offsets for the specified partitions.
-
-          :param list(TopicPartition) partitions: List of topic+partitions to query for stored offsets.
-          :param float timeout: Request timeout (seconds).
+        :param List[TopicPartition] partitions: List of topic+partitions to query for stored offsets.
+        :param float timeout: Request timeout (seconds).
             None or -1 is infinite. Default: None
-          :returns: List of topic+partitions with offset and possibly error set.
-          :rtype: list(TopicPartition)
-          :raises: KafkaException
-          :raises: RuntimeError if called on a closed consumer
+        :return: List of topic+partitions with offset and possibly error set.
+        :rtype: List[TopicPartition]
+        :raises KafkaException: if a Kafka-based error occurs
+        :raises RuntimeError: if called on a closed consumer
         """
         return self._consumer.committed(
             partitions, timeout=timeout if timeout is not None else -1
@@ -355,11 +342,11 @@ class Consumer:
             Cached values: The low offset is updated periodically
             (if statistics.interval.ms is set) while the high offset is updated on each
             message fetched from the broker for this partition.
-        :returns: Tuple of (low,high) on success or None on timeout.
+        :return: Tuple of (low,high) on success or None on timeout.
             The high offset is the offset of the last message + 1.
-        :rtype: tuple(int,int)
-        :raises: KafkaException
-        :raises: RuntimeError if called on a closed consumer
+        :rtype: Tuple[int, int]
+        :raises KafkaException: if a Kafka-based error occurs
+        :raises RuntimeError: if called on a closed consumer
         """
         return self._consumer.get_watermark_offsets(
             partition, timeout=timeout if timeout is not None else -1, cached=cached
@@ -369,35 +356,33 @@ class Consumer:
         self, topic: Optional[str] = None, timeout: Optional[float] = None
     ) -> ClusterMetadata:
         """
-        .. py:function:: list_topics([topic=None], [timeout=-1])
+        Request metadata from the cluster.
+        This method provides the same information as
+        listTopics(), describeTopics() and describeCluster() in  the Java Admin client.
 
-         Request metadata from the cluster.
-         This method provides the same information as
-         listTopics(), describeTopics() and describeCluster() in  the Java Admin client.
-
-         :param str topic: If specified, only request information about this topic,
+        :param str topic: If specified, only request information about this topic,
             else return results for all topics in cluster.
             Warning: If auto.create.topics.enable is set to true on the broker and
             an unknown topic is specified, it will be created.
-         :param float timeout: The maximum response time before timing out
+        :param float timeout: The maximum response time before timing out
             None or -1 is infinite. Default: None
-         :rtype: ClusterMetadata
-         :raises: KafkaException
+        :rtype: ClusterMetadata
+        :raises KafkaException: if a Kafka-based error occurs
         """
         return self._consumer.list_topics(
             topic=topic, timeout=timeout if timeout is not None else -1
         )
 
-    def memberid(self) -> str:
+    def memberid(self) -> Optional[str]:
         """
         Return this client's broker-assigned group member id.
 
         The member id is assigned by the group coordinator and is propagated to
         the consumer during rebalance.
 
-         :returns: Member id string or None
-         :rtype: string
-         :raises: RuntimeError if called on a closed consumer
+        :return: Member id string or None
+        :rtype: Optional[string]
+        :raises RuntimeError: if called on a closed consumer
         """
         return self._consumer.memberid()
 
@@ -413,14 +398,14 @@ class Consumer:
         corresponding partition. If the provided timestamp exceeds that of the
         last message in the partition, a value of -1 will be returned.
 
-         :param list(TopicPartition) partitions: topic+partitions with timestamps
+        :param List[TopicPartition] partitions: topic+partitions with timestamps
             in the TopicPartition.offset field.
-         :param float timeout: The maximum response time before timing out.
+        :param float timeout: The maximum response time before timing out.
             None or -1 is infinite. Default: None
-         :returns: List of topic+partition with offset field set and possibly error set
-         :rtype: list(TopicPartition)
-         :raises: KafkaException
-         :raises: RuntimeError if called on a closed consumer
+        :return: List of topic+partition with offset field set and possibly error set
+        :rtype: List[TopicPartition]
+        :raises KafkaException: if a Kafka-based error occurs
+        :raises RuntimeError: if called on a closed consumer
         """
 
         return self._consumer.offsets_for_times(
@@ -433,23 +418,20 @@ class Consumer:
 
         Paused partitions must be tracked manually.
 
-        Does NOT affect the result of Consumer.assignment().
+        Does NOT affect the result of `Consumer.assignment()`.
 
-        :param list(TopicPartition) partitions: List of topic+partitions to pause.
-        :rtype: None
-        :raises: KafkaException
+        :param List[TopicPartition] partitions: List of topic+partitions to pause.
+        :raises KafkaException: if a Kafka-based error occurs
         """
         return self._consumer.pause(partitions)
 
     def resume(self, partitions: List[TopicPartition]):
         """
-        .. py:function:: resume(partitions)
+        Resume consumption for the provided list of partitions.
 
-          Resume consumption for the provided list of partitions.
-
-          :param list(TopicPartition) partitions: List of topic+partitions to resume.
-          :rtype: None
-          :raises: KafkaException
+        :param List[TopicPartition] partitions: List of topic+partitions to resume.
+        :rtype: None
+        :raises KafkaException: if a Kafka-based error occurs
         """
         return self._consumer.resume(partitions)
 
@@ -457,13 +439,13 @@ class Consumer:
         """
         Retrieve current positions (offsets) for the specified partitions.
 
-        :param list(TopicPartition) partitions: List of topic+partitions to return
+        :param List[TopicPartition] partitions: List of topic+partitions to return
             current offsets for. The current offset is the offset of
             the last consumed message + 1.
-        :returns: List of topic+partitions with offset and possibly error set.
-        :rtype: list(TopicPartition)
-        :raises: KafkaException
-        :raises: RuntimeError if called on a closed consumer
+        :return: List of topic+partitions with offset and possibly error set.
+        :rtype: List[TopicPartition]
+        :raises KafkaException: if a Kafka-based error occurs
+        :raises RuntimeError: if called on a closed consumer
         """
         return self._consumer.position(partitions)
 
@@ -471,16 +453,16 @@ class Consumer:
         """
         Set consume position for partition to offset.
         The offset may be an absolute (>=0) or a
-        logical offset (:py:const:`OFFSET_BEGINNING` et.al).
+        logical offset like `OFFSET_BEGINNING`.
 
-        seek() may only be used to update the consume offset of an
-        actively consumed partition (i.e., after :py:const:`assign()`),
+        `seek()` may only be used to update the consume offset of an
+        actively consumed partition (i.e., after `Consumer.assign()`),
         to set the starting offset of partition not being consumed instead
         pass the offset in an `assign()` call.
 
         :param TopicPartition partition: Topic+partition+offset to seek to.
 
-        :raises: KafkaException
+        :raises KafkaException: if a Kafka-based error occurs
         """
         return self._consumer.seek(partition)
 
@@ -490,22 +472,24 @@ class Consumer:
         """
         Returns the current partition assignment.
 
-        :returns: List of assigned topic+partitions.
-        :rtype: list(TopicPartition)
-        :raises: KafkaException
-        :raises: RuntimeError if called on a closed consumer
+        :return: List of assigned topic+partitions.
+        :rtype: List[TopicPartition]
+        :raises KafkaException: if a Kafka-based error occurs
+        :raises RuntimeError: if called on a closed consumer
         """
         return self._consumer.assignment()
 
     def set_sasl_credentials(self, username: str, password: str):
         """
-
         Sets the SASL credentials used for this client.
         These credentials will overwrite the old ones, and will be used the next
         time the client needs to authenticate.
         This method will not disconnect existing broker connections that have been
         established with the old credentials.
         This method is applicable only to SASL PLAIN and SCRAM mechanisms.
+
+        :param str username: your username
+        :param str password: your password
         """
         return self._consumer.set_sasl_credentials(username, password)
 
@@ -518,6 +502,8 @@ class Consumer:
 
         Any additional partitions besides the ones passed during the `Consumer`
         `on_assign` callback will NOT be associated with the consumer group.
+
+        :param List[TopicPartition] partitions: a list of topic partitions
         """
         return self._consumer.incremental_assign(partitions)
 
@@ -526,6 +512,8 @@ class Consumer:
         Revoke partitions.
 
         Can be called outside an on_revoke callback.
+
+        :param List[TopicPartition] partitions: a list of topic partitions
         """
         return self._consumer.incremental_unassign(partitions)
 
@@ -541,8 +529,6 @@ class Consumer:
 
         Registered callbacks may be called from this method,
         see `poll()` for more info.
-
-        :rtype: None
         """
         logger.debug("Closing Kafka consumer")
         self._consumer.close()
