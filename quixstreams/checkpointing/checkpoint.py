@@ -77,7 +77,7 @@ class Checkpoint:
         # same checkpoint.
         # It shouldn't normally happen, but a lot of logic relies on it,
         # and it's better to be safe.
-        if offset < stored_offset:
+        if offset <= stored_offset:
             raise InvalidStoredOffset(
                 f"Cannot store offset smaller or equal than already processed"
                 f" one: {offset} <= {stored_offset}"

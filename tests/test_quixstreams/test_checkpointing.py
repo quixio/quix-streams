@@ -68,7 +68,7 @@ class TestCheckpoint:
         checkpoint = checkpoint_factory()
         checkpoint.store_offset("topic", 0, 10)
         with pytest.raises(InvalidStoredOffset):
-            checkpoint.store_offset("topic", 0, 9)
+            checkpoint.store_offset("topic", 0, 10)
 
     @pytest.mark.parametrize("exactly_once", [False, True])
     def test_commit_no_state_success(
