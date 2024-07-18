@@ -143,6 +143,52 @@ sdf = sdf.apply(lambda value: {'temperature': value['temperature'],
 > To make projection on top of non-mapping values (like custom objects), use
 > the `.apply()` approach.
 
+## Dropping Columns
+Similarly to projections, you may drop unnecessary columns from incoming records using a `StreamingDataFrame.drop()` method.
+
+It accepts either one column name as a string or a list of names.
+
+The `.drop()` method updates the existing `StreamingDataFrame` object and returns the same `StreamingDataFrame` instance so that you can chain other methods after the `drop()` call, too.
+
+Internally, it mutates the record's value and deletes the keys in place.
+
+**Example**:
+
+In this example, assume you receive temperature readings in the following format:
+
+```json
+{
+  "temperature": 35.5,
+  "timestamp": 1710865771.3750699,
+  "metadata": {
+    "sensor_id": "sensor-1"
+  }
+} 
+```
+
+and you need to drop a "metadata" key from the record:
+
+```json
+{
+  "temperature": 35.5,
+  "timestamp": 1710865771.3750699
+}
+```
+
+Here is how to do that with `StreamingDataFrame`:
+
+```python
+sdf = app.dataframe(...)
+# Dropping the "metadata" key from the record's value assuming it's a dictionary
+sdf.drop("metadata")
+
+# You may also drop multiple keys by providing a list of names:
+sdf.drop(["metadata", "timestamp"])
+```
+
+> **_NOTE:_**  The `StreamingDataFrame.drop()` method works only with mapping-like values like dictionaries.
+
+
 ## Transforming Data
 
 ### Generating New Data
@@ -547,7 +593,26 @@ sdf = sdf[sdf.apply(lambda value: value['field_a'] > 0)]
 To debug code in `StreamingDataFrame`, you can use the usual tools like prints, logging
 and breakpoints.
 
-**Example**:
+**Example 1**:
+
+Using `StreamingDataFrame.print()` to print the current record's value and metadata in the stream:
+
+```python
+sdf = app.dataframe(...)
+# some SDF transformations happening here ...  
+
+# Print the current record's value, key, timestamp and headers 
+sdf.print(metadata=True)
+# It will print the record's data wrapped into a dict for readability:
+# { 'value': {'number': 12183},
+#   'key': b'key',
+#   'timestamp': 1721129697951,
+#   'headers': [('header_name', b'header-value')]
+#   }
+```
+
+
+**Example 2**:
 
 Here is how to use `StreamingDataFrame.update()` to set a breakpoint and examine the
 value between operations:
@@ -559,10 +624,7 @@ sdf = app.dataframe(...)
 # some SDF transformations happening here ...  
 
 # Set a breakpoint
-sdf = sdf.update(lambda value: pdb.set_trace())
-
-# Or simply print the value
-sdf = sdf.update(lambda value: print('Value: ', value))
+sdf.update(lambda value: pdb.set_trace())
 ```
 
 ## Updating Kafka Timestamps
