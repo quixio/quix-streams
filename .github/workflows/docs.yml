@@ -1,0 +1,50 @@
+name: Generate Documentation
+
+on:
+  push:
+    branches:
+      - autogenerate-docs
+
+jobs:
+  generate-docs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.8'
+
+      - name: Install dependencies
+        run: |
+          cd docs/build
+          pip install -r requirements.txt
+
+      - name: Generate documentation
+        run: |
+          cd docs/build
+          python build.py
+
+      # - name: Configure Git
+      #   run: |
+      #     git config --global user.name 'github-actions'
+      #     git config --global user.email 'github-actions@github.com'
+
+      # - name: Commit and push changes
+      #   run: |
+      #     git checkout -b update-docs
+      #     git add ../api-reference
+      #     git commit -m "Update documentation"
+      #     git push -u origin update-docs
+
+      # - name: Create Pull Request
+      #   uses: peter-evans/create-pull-request@v6
+      #   with:
+      #     token: ${{ secrets.GITHUB_TOKEN }}
+      #     branch: update-docs
+      #     title: 'Update Documentation'
+      #     body: 'This PR updates the documentation with the latest changes.'
+      #     labels: 'documentation'
