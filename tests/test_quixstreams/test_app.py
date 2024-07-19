@@ -557,7 +557,7 @@ class TestAppGroupBy:
 
         processed_count = 0
 
-        timestamp = 1000
+        timestamp_ms = int(time.time() * 1000)
         user_id = "abc123"
         value_in = {"user": user_id}
         expected_message_count = 1
@@ -589,7 +589,7 @@ class TestAppGroupBy:
 
         with app.get_producer() as producer:
             msg = app_topic_in.serialize(
-                key="some_key", value=value_in, timestamp_ms=timestamp
+                key="some_key", value=value_in, timestamp_ms=timestamp_ms
             )
             producer.produce(
                 app_topic_in.name, key=msg.key, value=msg.value, timestamp=msg.timestamp
@@ -615,7 +615,7 @@ class TestAppGroupBy:
         # as original one
         assert row.value == {
             "user": user_id,
-            "groupby_timestamp": timestamp,
+            "groupby_timestamp": timestamp_ms,
         }
 
     @pytest.mark.parametrize("processing_guarantee", ["exactly-once", "at-least-once"])
@@ -643,7 +643,10 @@ class TestAppGroupBy:
 
         processed_count = 0
 
-        timestamp = 1000
+        window_duration_ms = 1000
+        timestamp_ms = int(time.time() * 1000)
+        # use a "window-friendly" timestamp for easier testing
+        timestamp_ms = timestamp_ms - (timestamp_ms % window_duration_ms)
         user_id = "abc123"
         value_in = {"user": user_id}
         expected_message_count = 1
@@ -672,12 +675,12 @@ class TestAppGroupBy:
         sdf["groupby_timestamp"] = sdf.apply(
             lambda value, key, timestamp_, headers: timestamp_, metadata=True
         )
-        sdf = sdf.tumbling_window(duration_ms=1000).count().current()
+        sdf = sdf.tumbling_window(duration_ms=window_duration_ms).count().current()
         sdf = sdf.to_topic(app_topic_out)
 
         with app.get_producer() as producer:
             msg = app_topic_in.serialize(
-                key="some_key", value=value_in, timestamp_ms=timestamp
+                key="some_key", value=value_in, timestamp_ms=timestamp_ms
             )
             producer.produce(
                 app_topic_in.name, key=msg.key, value=msg.value, timestamp=msg.timestamp
@@ -700,7 +703,11 @@ class TestAppGroupBy:
         # Check that "user_id" is now used as a message key
         assert row.key.decode() == user_id
         # Check that window is calculated based on the original timestamp
-        assert row.value == {"start": 1000, "end": 2000, "value": 1}
+        assert row.value == {
+            "start": timestamp_ms,
+            "end": timestamp_ms + window_duration_ms,
+            "value": 1,
+        }
 
 
 class TestAppExactlyOnce:
