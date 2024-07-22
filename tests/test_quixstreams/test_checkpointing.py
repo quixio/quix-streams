@@ -21,6 +21,7 @@ from quixstreams.state.rocksdb import RocksDBPartitionTransaction
 def checkpoint_factory(state_manager, consumer, row_producer_factory):
     def factory(
         commit_interval: float = 1,
+        commit_every: int = 0,
         consumer_: Optional[Consumer] = None,
         producer_: Optional[RowProducer] = None,
         state_manager_: Optional[StateStoreManager] = None,
@@ -28,6 +29,7 @@ def checkpoint_factory(state_manager, consumer, row_producer_factory):
     ):
         return Checkpoint(
             commit_interval=commit_interval,
+            commit_every=commit_every,
             producer=producer_ or row_producer_factory(transactional=exactly_once),
             consumer=consumer_ or consumer,
             state_manager=state_manager_ or state_manager,
@@ -60,9 +62,24 @@ class TestCheckpoint:
         mock_producer.begin_transaction.assert_called()
 
     @pytest.mark.parametrize("commit_interval, expired", [(0, True), (999, False)])
-    def test_expired(self, commit_interval, expired, checkpoint_factory):
+    def test_expired_with_commit_interval(
+        self, commit_interval, expired, checkpoint_factory
+    ):
         checkpoint = checkpoint_factory(commit_interval=commit_interval)
         assert checkpoint.expired() == expired
+
+    def test_expired_with_commit_every(self, checkpoint_factory):
+        checkpoint = checkpoint_factory(commit_interval=999, commit_every=2)
+        checkpoint.store_offset("topic", 0, 0)
+        assert not checkpoint.expired()
+
+        checkpoint.store_offset("topic", 0, 1)
+        assert checkpoint.expired()
+
+    def test_expired_with_commit_every_and_commit_interval(self, checkpoint_factory):
+        checkpoint = checkpoint_factory(commit_interval=0, commit_every=10)
+        checkpoint.store_offset("topic", 0, 0)
+        assert checkpoint.expired()
 
     def test_store_already_processed_offset_fails(self, checkpoint_factory):
         checkpoint = checkpoint_factory()

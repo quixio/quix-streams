@@ -6,7 +6,14 @@ We call this process a “checkpointing”.
 
 The goal of checkpointing is to ensure that applications can recover after failures and reprocess records from Kafka producing the same results as if the failure never happened.
 
-Currently, Quix Streams provides *At-Least-Once* processing guarantees, which means that each incoming message will be processed, but it may happen multiple times and generate duplicated outputs.
+
+Quix Streams supports both *At-Least-Once* and *Exactly-Once* processing guarantees, which can be changed using the `processing_guarantee` parameter.
+
+- When At-Least-Once guarantee is enabled (the default), each incoming message is guaranteed to be processed, but it may happen multiple times and generate duplicated outputs in case of failure
+- If Exactly-Once guarantee is enabled, the outputs are guaranteed to be unique for every message at the cost of increased latency.
+
+See the [Configuration](../configuration.md#processing-guarantees) page to learn more about processing guarantees.  
+ 
 
 ## Under the Hood
 
@@ -61,9 +68,9 @@ During recovery, the app will apply changelog updates to the local state stores.
 
 ## Configuring the Checkpointing
 
-Users may configure how often the checkpoints are committed by passing the `commit_interval` parameter to the `Application` class.
+Users may configure how often the checkpoints are committed by passing the `commit_interval` and `commit_every` parameters to the `Application` class.
 
-The default commit interval is 5 seconds.
+By default, the `commit_interval` is 5 seconds, and the `commit_every` is 0, and only the commit interval is taken into account. 
 
 Changing the commit interval will have several implications for the application:
 
@@ -80,8 +87,12 @@ Changing the commit interval will have several implications for the application:
     However, it will reduce memory usage and limit the number of potentially reprocessed messages, reducing duplicates.
     
 - If `commit_interval` is set to `0`, the application will commit a checkpoint for every processed Kafka message.
+- If `commit_every` is set, the application will commit after processing N messages across all assigned partitions.
+  - You may use `commit_interval` to get more granular control over the commit schedule.  
+  - For example, if `commit_every=1000` and `commit_interval=5.0`, the application will commit the checkpoint as soon as 1000 messages are processed or 5s interval is elapsed. 
 
-When configuring the commit interval, take into account such factors as the number of unique keys in the input topics, hardware, and infrastructure.
+When configuring the `commit_interval` and `commit_every`, take into account such factors as the number of unique keys in the input topics, hardware, and infrastructure.
+
 
 ## Limitations
 

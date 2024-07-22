@@ -26,8 +26,13 @@ Consumer group is also used in the state directory path and as a prefix for chan
 
 - **`commit_interval`** - How often to commit the processed offsets and state in seconds.  
 **Default** - `5.0`.    
-See the [Checkpointing](advanced/checkpointing.md) page for more information about 
+See the [Checkpointing](advanced/checkpointing.md#configuring-the-checkpointing) page for more information about 
 the `commit_interval` parameter.
+
+- **`commit_every`** - Commit the checkpoint after processing N offsets.  
+**Default** - `0`.  
+See the [Checkpointing](advanced/checkpointing.md#configuring-the-checkpointing) page for more information about 
+the `commit_every` parameter.
 
 - **`auto_offset_reset`** - Consumer `auto.offset.reset` setting.  
 It determines where the consumer should start reading messages from.  
