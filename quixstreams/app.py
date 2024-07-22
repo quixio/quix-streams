@@ -37,6 +37,7 @@ from .platforms.quix import (
 from .processing_context import ProcessingContext
 from .rowconsumer import RowConsumer
 from .rowproducer import RowProducer
+from .sinks import SinkManager
 from .state import StateStoreManager
 from .state.recovery import RecoveryManager
 from .state.rocksdb import RocksDBOptionsType
@@ -328,6 +329,7 @@ class Application:
             consumer=self._consumer,
             state_manager=self._state_manager,
             exactly_once=self._uses_exactly_once,
+            sink_manager=SinkManager(),
         )
 
     @property
@@ -779,6 +781,7 @@ class Application:
                 if self._state_manager.recovery_required:
                     self._state_manager.do_recovery()
                 else:
+                    self._processing_context.resume_ready_partitions()
                     self._process_message(dataframe_composed)
                     self._processing_context.commit_checkpoint()
 
@@ -859,6 +862,7 @@ class Application:
         # sometimes "empty" calls happen, probably updating the consumer epoch
         if not topic_partitions:
             return
+        logger.debug(f"Rebalancing: assigning partitions")
 
         # First commit everything processed so far because assignment can take a while
         # and fail
@@ -869,7 +873,6 @@ class Application:
         self._consumer.incremental_assign(topic_partitions)
 
         if self._state_manager.stores:
-            logger.debug(f"Rebalancing: assigning state store partitions")
             for tp in topic_partitions:
                 # Get the latest committed offset for the assigned topic partition
                 tp_committed = self._consumer.committed([tp], timeout=30)[0]
@@ -911,6 +914,7 @@ class Application:
         # because of the unhandled exception.
         # In this case, we should drop the checkpoint and let another consumer
         # pick up from the latest one
+        logger.debug(f"Rebalancing: revoking partitions")
         if self._failed:
             logger.warning(
                 "Application is stopping due to failure, "
@@ -920,21 +924,26 @@ class Application:
             self._processing_context.commit_checkpoint(force=True)
 
         self._consumer.incremental_unassign(topic_partitions)
-        if self._state_manager.stores:
-            logger.debug(f"Rebalancing: revoking state store partitions")
-            for tp in topic_partitions:
+        for tp in topic_partitions:
+            if self._state_manager.stores:
                 self._state_manager.on_partition_revoke(
                     topic=tp.topic, partition=tp.partition
                 )
+            self._processing_context.on_partition_revoke(
+                topic=tp.topic, partition=tp.partition
+            )
 
     def _on_lost(self, _, topic_partitions: List[TopicPartition]):
         """
         Dropping lost partitions from consumer and state
         """
+        logger.debug(f"Rebalancing: dropping lost partitions")
         if self._state_manager.stores:
-            logger.debug(f"Rebalancing: dropping lost state store partitions")
             for tp in topic_partitions:
                 self._state_manager.on_partition_revoke(
+                    topic=tp.topic, partition=tp.partition
+                )
+                self._processing_context.on_partition_revoke(
                     topic=tp.topic, partition=tp.partition
                 )
 

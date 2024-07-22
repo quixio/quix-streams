@@ -45,6 +45,7 @@ from quixstreams.models import (
 )
 from quixstreams.models.serializers import SerializerType, DeserializerType
 from quixstreams.processing_context import ProcessingContext
+from quixstreams.sinks.manager import Sink
 from quixstreams.state.types import State
 from .base import BaseStreaming
 from .exceptions import InvalidOperation, GroupByLimitExceeded
@@ -1009,6 +1010,26 @@ class StreamingDataFrame(BaseStreaming):
             lambda value: _drop(value, columns, ignore_missing=errors == "ignore"),
             metadata=False,
         )
+
+    def sink(self, sink: Sink) -> Self:
+        # TODO: Docs
+        self._processing_context.sink_manager.register(sink)
+
+        def _sink_callback(
+            value: Any, key: Any, timestamp: int, headers: List[Tuple[str, HeaderValue]]
+        ):
+            ctx = message_context()
+            sink.add(
+                value=value,
+                key=key,
+                timestamp=timestamp,
+                headers=headers,
+                partition=ctx.partition,
+                topic=ctx.topic,
+                offset=ctx.offset,
+            )
+
+        return self.update(_sink_callback, metadata=True)
 
     def _produce(
         self,
