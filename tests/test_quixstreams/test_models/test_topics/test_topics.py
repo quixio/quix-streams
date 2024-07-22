@@ -503,6 +503,55 @@ class TestTopic:
             )
 
     @pytest.mark.parametrize(
+        "deserializers, input_kv, expected_kv",
+        [
+            (
+                {"key_deserializer": "str", "value_deserializer": "json"},
+                {"key": b"woo", "value": b'{"a":["cool","json"]}'},
+                {"key": "woo", "value": {"a": ["cool", "json"]}},
+            ),
+            (
+                {"key_deserializer": None, "value_deserializer": "int"},
+                {"key": None, "value": int_to_bytes(12345)},
+                {"key": None, "value": 12345},
+            ),
+            (
+                {"key_deserializer": "str", "value_deserializer": "json"},
+                {"key": None, "value": None},
+                {"key": None, "value": None},
+            ),
+        ],
+    )
+    def test_deserialize(
+        self, topic_manager_topic_factory, deserializers, input_kv, expected_kv
+    ):
+        topic = topic_manager_topic_factory(**deserializers, use_serdes_nones=True)
+        message = topic.deserialize(
+            ConfluentKafkaMessageStub(
+                **input_kv,
+                headers=[("header", b"value")],
+                timestamp=(1000, 2000),
+            )
+        )
+        assert {"key": message.key, "value": message.value} == expected_kv
+        assert message.headers == [("header", b"value")]
+        assert message.timestamp == 2000
+
+    def test_deserializer_missing_deserializer(self, topic_manager_topic_factory):
+        topic = topic_manager_topic_factory(
+            key_deserializer=None, value_deserializer="str", use_serdes_nones=True
+        )
+        with pytest.raises(DeserializerIsNotProvidedError):
+            topic.deserialize(
+                ConfluentKafkaMessageStub(
+                    key=b"key",
+                    value=b"value",
+                    headers=[("header", b"value")],
+                    timestamp=(1000, 2000),
+                )
+            )
+
+    @pytest.mark.parametrize(
         "key_serializer, value_serializer, key, value",
         [
             (

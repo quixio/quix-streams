@@ -580,6 +580,7 @@ def topic_manager_topic_factory(topic_manager_factory):
         name: Optional[str] = None,
         partitions: int = 1,
         create_topic: bool = False,
+        use_serdes_nones: bool = False,
         key_serializer: Optional[Union[Serializer, str]] = None,
         value_serializer: Optional[Union[Serializer, str]] = None,
         key_deserializer: Optional[Union[Deserializer, str]] = None,
@@ -596,9 +597,10 @@ def topic_manager_topic_factory(topic_manager_factory):
             "config": topic_manager.topic_config(num_partitions=partitions),
             "timestamp_extractor": timestamp_extractor,
         }
-        topic = topic_manager.topic(
-            name, **{k: v for k, v in topic_args.items() if v is not None}
-        )
+        if not use_serdes_nones:
+            # will use the topic manager serdes defaults rather than "Nones"
+            topic_args = {k: v for k, v in topic_args.items() if v is not None}
+        topic = topic_manager.topic(name, **topic_args)
         if create_topic:
             topic_manager.create_all_topics()
         return topic

@@ -274,19 +274,23 @@ class Topic:
 
     def deserialize(self, message: ConfluentKafkaMessageProto):
         ctx = SerializationContext(topic=message.topic(), headers=message.headers())
-        key_bytes = message.key()
-        value_bytes = message.value()
+        if (key := message.key()) is not None:
+            if self._key_deserializer:
+                key = self._key_deserializer(key, ctx=ctx)
+            else:
+                raise DeserializerIsNotProvidedError(
+                    f'Key deserializer is not provided for topic "{self.name}"'
+                )
+        if (value := message.value()) is not None:
+            if self._value_deserializer:
+                value = self._value_deserializer(value, ctx=ctx)
+            else:
+                raise DeserializerIsNotProvidedError(
+                    f'Value deserializer is not provided for topic "{self.name}"'
+                )
         return KafkaMessage(
-            key=(
-                None
-                if key_bytes is None
-                else self._key_deserializer(key_bytes, ctx=ctx)
-            ),
-            value=(
-                None
-                if value_bytes is None
-                else self._value_serializer(value_bytes, ctx=ctx)
-            ),
+            key=key,
+            value=value,
             headers=message.headers(),
             timestamp=message.timestamp()[1],
         )
