@@ -98,6 +98,7 @@ class Application:
         consumer_group: Optional[str] = None,
         auto_offset_reset: AutoOffsetReset = "latest",
         commit_interval: float = 5.0,
+        commit_every: int = 0,
         consumer_extra_config: Optional[dict] = None,
         producer_extra_config: Optional[dict] = None,
         state_dir: str = "state",
@@ -138,6 +139,15 @@ class Application:
               >***NOTE:*** Quix Applications will prefix it with the Quix workspace id.
         :param commit_interval: How often to commit the processed messages in seconds.
             Default - 5.0.
+        :param commit_every: Commit the checkpoint after processing N messages.
+            Use this parameter for more granular control of the commit schedule.
+            If the value is > 0, the application will commit the checkpoint after
+            processing the specified number of messages across all the assigned
+            partitions.
+            If the value is <= 0, only the `commit_interval` will be considered.
+            Default - 0.
+                >***NOTE:*** Only input offsets are counted, and the application
+                > may produce more results than the number of incoming messages.
         :param auto_offset_reset: Consumer `auto.offset.reset` setting
         :param consumer_extra_config: A dictionary with additional options that
             will be passed to `confluent_kafka.Consumer` as is.
@@ -256,6 +266,7 @@ class Application:
         self._consumer_group = consumer_group
         self._auto_offset_reset = auto_offset_reset
         self._commit_interval = commit_interval
+        self._commit_every = commit_every
         self._producer_extra_config = producer_extra_config
         self._consumer_extra_config = consumer_extra_config
         self._processing_guarantee = processing_guarantee
@@ -312,6 +323,7 @@ class Application:
         )
         self._processing_context = ProcessingContext(
             commit_interval=self._commit_interval,
+            commit_every=commit_every,
             producer=self._producer,
             consumer=self._consumer,
             state_manager=self._state_manager,
@@ -730,6 +742,7 @@ class Application:
             f'consumer_group="{self._consumer_group}" '
             f'auto_offset_reset="{self._auto_offset_reset}" '
             f"commit_interval={self._commit_interval}s "
+            f"commit_every={self._commit_every} "
             f'processing_guarantee="{self._processing_guarantee}"'
         )
         if self.is_quix_app:

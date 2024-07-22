@@ -29,6 +29,7 @@ class ProcessingContext:
     consumer: RowConsumer
     state_manager: StateStoreManager
     exactly_once: bool = False
+    commit_every: int = 0
     _checkpoint: Optional[Checkpoint] = dataclasses.field(
         init=False, repr=False, default=None
     )
@@ -53,9 +54,10 @@ class ProcessingContext:
         """
         Initialize a new checkpoint
         """
-        logger.debug(f"Starting a checkpoint...")
+        logger.debug(f"Initializing a checkpoint...")
         self._checkpoint = Checkpoint(
             commit_interval=self.commit_interval,
+            commit_every=self.commit_every,
             state_manager=self.state_manager,
             producer=self.producer,
             consumer=self.consumer,

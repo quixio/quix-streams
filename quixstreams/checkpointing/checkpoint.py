@@ -34,6 +34,7 @@ class Checkpoint:
         consumer: Consumer,
         state_manager: StateStoreManager,
         exactly_once: bool = False,
+        commit_every: int = 0,
     ):
         self._created_at = time.monotonic()
         # A mapping of <(topic, partition): processed offset>
@@ -47,15 +48,21 @@ class Checkpoint:
         self._consumer = consumer
         self._producer = producer
         self._exactly_once = exactly_once
+        self._commit_every = commit_every
+        self._total_offsets_processed = 0
 
         if self._exactly_once:
             self._producer.begin_transaction()
 
     def expired(self) -> bool:
         """
-        Returns `True` if checkpoint deadline has expired.
+        Returns `True` if checkpoint deadline has expired OR
+        if the total number of processed offsets exceeded the "commit_every" limit
+        when it's defined.
         """
-        return (time.monotonic() - self._commit_interval) >= self._created_at
+        return (time.monotonic() - self._commit_interval) >= self._created_at or (
+            0 < self._commit_every <= self._total_offsets_processed
+        )
 
     def empty(self) -> bool:
         """
@@ -77,12 +84,13 @@ class Checkpoint:
         # same checkpoint.
         # It shouldn't normally happen, but a lot of logic relies on it,
         # and it's better to be safe.
-        if offset < stored_offset:
+        if offset <= stored_offset:
             raise InvalidStoredOffset(
                 f"Cannot store offset smaller or equal than already processed"
                 f" one: {offset} <= {stored_offset}"
             )
         self._tp_offsets[(topic, partition)] = offset
+        self._total_offsets_processed += 1
 
     def get_store_transaction(
         self, topic: str, partition: int, store_name: str = DEFAULT_STATE_STORE_NAME
