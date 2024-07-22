@@ -80,6 +80,8 @@ class Stream:
 
         self.func = func if func is not None else ApplyFunction(lambda value: value)
         self.parent = parent
+        self.children = []
+        self.orphan = False
 
     def __repr__(self) -> str:
         """
@@ -230,6 +232,31 @@ class Stream:
             head = node
         return head
 
+    def mark_as_orphan(self):
+        self.orphan = True
+
+    # def map_tree(self):
+    #     tree_ = {}
+    #     node = self
+    #     while node:
+    #         tree_[node] = [child for child in node.children if not child.orphan]
+    #         node = node.parent
+    #     return tree_
+
+    def _add_node_children(self, tree, node):
+        if node.children:
+            if node not in tree:
+                tree[node] = []
+            for child in node.children:
+                if not child.orphan:
+                    tree[node].append(child)
+                    self._add_node_children(tree, child)
+
+    def full_tree(self):
+        tree_ = {}
+        self._add_node_children(tree_, self.tree()[0])
+        return tree_
+
     def tree(self) -> List[Self]:
         """
         Return a list of all parent Streams including the node itself.
@@ -318,11 +345,13 @@ class Stream:
         """
 
         tree = self.tree()
+        # [func_a, func_b, func_c]
         functions = [node.func for node in tree]
 
         composed = sink or self._default_sink
 
         # Iterate over a reversed list of functions
+        # [func_c, func_b, func_a]
         for func in reversed(functions):
             # Validate that only allowed functions are passed
             if not allow_updates and isinstance(
@@ -340,6 +369,9 @@ class Stream:
 
             # Compose functions from the tree together so the top function calls
             # the bottom one
+            # f.get_executor(c) -> do v2 = f(v), then c(v2)
+            # func_c.get_executor(end) -> do end(func_c(v))
+            # func_b.get_executor(end(func_c((v)) -> end(func_c(func_b(v)))
             composed = func.get_executor(composed)
 
         return composed
@@ -363,6 +395,8 @@ class Stream:
         return diff
 
     def _add(self, func: StreamFunction) -> Self:
-        return self.__class__(func=func, parent=self)
+        new_node = self.__class__(func=func, parent=self)
+        self.children.append(new_node)
+        return new_node
 
     def _default_sink(self, value: Any, key: Any, timestamp: int, headers: Any): ...
