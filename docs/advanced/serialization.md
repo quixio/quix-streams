@@ -7,6 +7,7 @@ Quix Streams supports multiple serialization formats to exchange data between Ka
 - `integer`
 - `double`
 - `json`
+- `avro`
 
 The serialization settings are defined per-topic using these parameters of `Application.topic()` function:
 
@@ -71,4 +72,30 @@ MY_SCHEMA = {
 app = Application(broker_address='localhost:9092', consumer_group='consumer')
 input_topic = app.topic('input', value_deserializer=JSONDeserializer(schema=MY_SCHEMA))
 output_topic = app.topic('output', value_serializer=JSONSerializer(schema=MY_SCHEMA))
+```
+
+### Avro
+
+The avro serializer and deserializer need to be pass explicitly.
+
+> ***WARNING***: The avro serializer and deserializer requires the fastavro library.
+> You can install quixstreams with the necessary dependencies using
+> `pip install quixstreams[avro]`
+
+```python
+from quixstreams import Application
+from quixstreams.models.serialize.avro import AvroSerializer, AvroDeserializer
+
+MY_SCHEMA = {
+    "type": "record",
+    "name": "testschema",
+    "fields": [
+        {"name": "name", "type": "string"},
+        {"name": "id", "type": "int", "default": 0},
+    ],
+}
+
+app = Application(broker_address='localhost:9092', consumer_group='consumer')
+input_topic = app.topic('input', value_deserializer=AvroDeserializer(schema=MY_SCHEMA))
+output_topic = app.topic('output', value_serializer=AvroSerializer(schema=MY_SCHEMA))
 ```

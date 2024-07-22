@@ -20,6 +20,17 @@ from quixstreams.models import (
 )
 from .utils import int_to_bytes, float_to_bytes
 
+from quixstreams.models.serializers.avro import AvroDeserializer, AvroSerializer
+
+AVRO_TEST_SCHEMA = {
+    "type": "record",
+    "name": "testschema",
+    "fields": [
+        {"name": "name", "type": "string"},
+        {"name": "id", "type": "int", "default": 0},
+    ],
+}
+
 dummy_context = SerializationContext(topic="topic")
 
 JSONSCHEMA_TEST_SCHEMA = {
@@ -57,6 +68,12 @@ class TestSerializers:
                 {"id": 10, "name": "foo"},
                 b'{"id":10,"name":"foo"}',
             ),
+            (
+                AvroSerializer(AVRO_TEST_SCHEMA),
+                {"name": "foo", "id": 123},
+                b"\x06foo\xf6\x01",
+            ),
+            (AvroSerializer(AVRO_TEST_SCHEMA), {"name": "foo"}, b"\x06foo\x00"),
         ],
     )
     def test_serialize_success(self, serializer: Serializer, value, expected):
@@ -83,6 +100,9 @@ class TestSerializers:
                 ),
                 {"id": 10},
             ),
+            (AvroSerializer(AVRO_TEST_SCHEMA), {"foo": "foo", "id": 123}),
+            (AvroSerializer(AVRO_TEST_SCHEMA), {"id": 123}),
+            (AvroSerializer(AVRO_TEST_SCHEMA, strict=True), {"name": "foo"}),
         ],
     )
     def test_serialize_error(self, serializer: Serializer, value):
@@ -121,6 +141,16 @@ class TestDeserializers:
                 b'{"id":10,"name":"foo"}',
                 {"id": 10, "name": "foo"},
             ),
+            (
+                AvroDeserializer(AVRO_TEST_SCHEMA),
+                b"\x06foo\xf6\x01",
+                {"name": "foo", "id": 123},
+            ),
+            (
+                AvroDeserializer(AVRO_TEST_SCHEMA),
+                b"\x06foo\x00",
+                {"name": "foo", "id": 0},
+            ),
         ],
     )
     def test_deserialize_no_column_name_success(
@@ -145,6 +175,7 @@ class TestDeserializers:
                 ),
                 b'{"id":10}',
             ),
+            (AvroDeserializer(AVRO_TEST_SCHEMA), b"\x26foo\x00"),
         ],
     )
     def test_deserialize_error(self, deserializer: Deserializer, value):
