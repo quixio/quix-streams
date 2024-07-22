@@ -114,6 +114,7 @@ class StreamingDataFrame(BaseStreaming):
         processing_context: ProcessingContext,
         stream: Optional[Stream] = None,
         branches: Optional[Dict[str, Stream]] = None,
+        root: bool = False,
     ):
         self._stream: Stream = stream or Stream()
         self._topic = topic
@@ -121,6 +122,7 @@ class StreamingDataFrame(BaseStreaming):
         self._branches = branches or {}
         self._processing_context = processing_context
         self._producer = processing_context.producer
+        self._root = root
 
     @property
     def processing_context(self) -> ProcessingContext:
@@ -1079,6 +1081,7 @@ class StreamingDataFrame(BaseStreaming):
             # Update an item key with a result of another sdf.apply()
             diff = self.stream.diff(item.stream)
             other_sdf_composed = diff.compose_returning()
+            item.stream.mark_as_orphan()
             self._add_update(
                 lambda value, key, timestamp, headers: operator.setitem(
                     value,
@@ -1122,6 +1125,7 @@ class StreamingDataFrame(BaseStreaming):
             # Filter SDF based on another SDF
             diff = self.stream.diff(item.stream)
             other_sdf_composed = diff.compose_returning()
+            item.stream.mark_as_orphan()
             return self.filter(
                 lambda value, key, timestamp, headers: other_sdf_composed(
                     value, key, timestamp, headers
