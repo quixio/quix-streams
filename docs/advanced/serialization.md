@@ -48,3 +48,27 @@ output_topic = app.topic('output', value_serializer=JSONSerializer())
 ```
 
 You can find all available serializers in `quixstreams.models.serializers` module.
+
+## Jsonschema support
+
+The json serializer and deserializer support validation of the data against a jsonschema.
+
+```python
+from jsonschema import Draft202012Validator
+
+from quixstreams import Application
+from quixstreams.models import JSONDeserializer, JSONSerializer
+
+MY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "name": {"type": "string"},
+        "id": {"type": "number"},
+    },
+    "required": ["id"],
+}
+
+app = Application(broker_address='localhost:9092', consumer_group='consumer')
+input_topic = app.topic('input', value_deserializer=JSONDeserializer(schema=MY_SCHEMA))
+output_topic = app.topic('output', value_serializer=JSONSerializer(schema=MY_SCHEMA))
+```
