@@ -42,7 +42,7 @@ class Sink(abc.ABC):
 
     def flush(self, topic: str, partition: int):
         batch = self._batches.get((topic, partition))
-        if partition is not None:
+        if batch is not None:
             logger.debug(
                 f'Flushing sink "{self}" for partition "{topic}[{partition}]; '
                 f'total_records={batch.size}"'
