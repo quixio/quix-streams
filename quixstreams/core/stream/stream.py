@@ -90,7 +90,7 @@ class Stream:
         :return: a string of format
             "<Stream [<total functions>]: <FuncType: func_name> | ... >"
         """
-        tree_funcs = [s.func for s in self.tree()]
+        tree_funcs = [s.func for s in self.tree_to_root()]
         funcs_repr = " | ".join(
             (f"<{f.__class__.__name__}: {f.func.__qualname__}>" for f in tree_funcs)
         )
@@ -232,7 +232,7 @@ class Stream:
             head = node
         return head
 
-    def tree(self, stop_at=None) -> List[Self]:
+    def tree_to_root(self, stop_at=None) -> List[Self]:
         """
         Return a list of all parent Streams including the node itself.
 
@@ -244,9 +244,7 @@ class Stream:
         node = self
         if stop_at is None:
             stop_at = []
-        while parent := node.parent:
-            if parent in stop_at:
-                break
+        while (parent := node.parent) and (parent not in stop_at):
             tree_.append(parent)
             node = node.parent
 
@@ -258,18 +256,10 @@ class Stream:
     def mark_as_orphan(self):
         self.orphan = True
 
-    # def map_tree(self):
-    #     tree_ = {}
-    #     node = self
-    #     while node:
-    #         tree_[node] = [child for child in node.children if not child.orphan]
-    #         node = node.parent
-    #     return tree_
-
     def _add_node_children(self, tree, node):
+        if node not in tree:
+            tree[node] = []
         if node.children:
-            if node not in tree:
-                tree[node] = []
             for child in node.children:
                 if not child.orphan:
                     tree[node].append(child)
@@ -277,57 +267,99 @@ class Stream:
 
     def tree_map(self):
         tree_ = {}
-        self._add_node_children(tree_, self.tree()[0])
+        self._add_node_children(tree_, self.tree_to_root()[0])
         return tree_
 
-    def tree_paths(self, stream=None, paths=None, current_path=None):
-        if not stream:
-            stream = self.tree()[0]
-        if paths is None:
-            paths = []
-        if current_path is None:
-            current_path = []
-        current_path.append(stream)
-        if children := [child for child in stream.children if not child.orphan]:
-            for child in children:
-                self.tree_paths(child, paths, current_path[:])
-        else:
-            paths.append(current_path)
-        return paths
+    def tree_leaves(self, tree=None):
+        return [stream for stream in (tree or self.tree_map()) if not stream.children]
 
-    # def tree_leaves(self):
-    #     return [path[-1] for path in self.tree_paths()]
+    def tree_splits(self, tree=None):
+        tree = tree or self.tree_map()
+        return {
+            stream for stream in (tree or self.tree_map()) if len(stream.children) > 1
+        }
+
+    # def compose_splits(self):
+    #     tree_map = self.tree_map()
+    #     leaves = self.tree_leaves(tree=tree_map)
+    #     splits = self.tree_splits(tree=tree_map)
+    #     pending_composes = {stream: [] for stream in splits}
+    #     final_composes = {}
     #
-    # def tree_splits(self):
-    #     return {child: stream for stream, children in self.tree_map().items() for child in children if len(children) > 1}
+    #     while leaves:
+    #         leaf = leaves.pop()
+    #         if leaf in splits:
+    #             splits.remove(leaf)
+    #             tree = leaf.parent.tree_to_root(stop_at=splits)
+    #         else:
+    #             tree = leaf.tree_to_root(stop_at=splits)
+    #         composed = self.compose(tree=tree, composed=final_composes.pop(leaf, None))
+    #         if not splits:
+    #             return composed
+    #
+    #         split = tree[0].parent
+    #         pending_composes[split].append(composed)
+    #
+    #         if len(pending_composes[split]) == len(tree_map[split]):
+    #             final_composes[split] = self.compose(
+    #                 tree=[split], composed=pending_composes.pop(split)
+    #             )
+    #             leaves.append(split)
+
+    # def compose_splits_v2(self):
+    #     """Does not work yet, trying something below"""
+    #     tree_map = self.tree_map()
+    #     leaves = self.tree_leaves(tree=tree_map)
+    #     splits = self.tree_splits(tree=tree_map)
+    #     pending_composes = {stream: [] for stream in splits}
+    #     final_composes = {}
+    #     composed = None
+    #
+    #     while leaves:
+    #         leaf = leaves.pop()
+    #         tree = leaf.tree_to_root(stop_at=splits)
+    #         split = tree[0].parent
+    #         pending_composes[split].append(self.compose(tree=tree, composed=final_composes.pop(leaf, None)))
+    #
+    #         if len(pending_composes[split]) == len(tree_map[split]):
+    #             splits.remove(split)
+    #             new_tree = split.tree_to_root(stop_at=splits)
+    #             composed = self.compose(tree=new_tree, composed=pending_composes.pop(split))
+    #             if splits:
+    #                 new_leaf = new_tree[0]
+    #                 leaves.append(new_leaf)
+    #                 final_composes[new_leaf] = composed
+    #     return composed
 
     def compose_splits(self):
         tree_map = self.tree_map()
-        paths = self.tree_paths()
-        leaves = [path[-1] for path in paths]
-        splits = {stream for stream, children in tree_map.items() if len(children) > 1}
-        pending_composes = {stream: [] for stream in splits}
-        final_composes = {}
+        splits = self.tree_splits(tree=tree_map)
+        pending_composes = {stream: [] for stream in reversed(list(splits))}
+        composed = None
 
-        while leaves:
-            leaf = leaves.pop()
-            if leaf in splits:
-                splits.remove(leaf)
-                tree = leaf.parent.tree(stop_at=splits)
-            else:
-                tree = leaf.tree(stop_at=splits)
-            composed = self.compose(tree=tree, composed=final_composes.pop(leaf, None))
-            if not splits:
-                return composed
+        # Start all the initial composes
+        for leaf in self.tree_leaves(tree=tree_map):
+            tree = leaf.tree_to_root(stop_at=splits)
+            pending_composes[tree[0].parent].append(self.compose(tree=tree))
 
-            split = tree[0].parent
-            pending_composes[split].append(composed)
+        # After leaves are composed, at least one split will always have its list of
+        # children fully composed, and as those are .composed() together, another split
+        # will then have its children fully composed...and so on.
+        # This occurs repeatedly until all splits have been composed in this manner.
+        while pending_composes:
+            for split, pending in pending_composes.items():
+                if len(pending) == len(split.children):
+                    # the children at this split are composed and ready to finalize
+                    break
+            splits.remove(split)
+            new_tree = split.tree_to_root(stop_at=splits)
+            # we pass the list of composed children; .compose() and StreamFunction
+            # know how to properly compose them (necessary for data copying steps).
+            composed = self.compose(tree=new_tree, composed=pending_composes.pop(split))
+            if split := new_tree[0].parent:
+                pending_composes[split].append(composed)
 
-            if len(pending_composes[split]) == len(tree_map[split]):
-                final_composes[split] = self.compose(
-                    tree=[split], composed=pending_composes.pop(split)
-                )
-                leaves.append(split)
+        return composed
 
     def compose_returning(self) -> ReturningExecutor:
         """
@@ -399,7 +431,7 @@ class Stream:
         """
 
         if not tree:
-            tree = self.tree()
+            tree = self.tree_to_root()
         functions = [node.func for node in tree]
 
         if not composed:
@@ -427,36 +459,9 @@ class Stream:
 
         return composed
 
-    # def compose_recursive(
-    #     self,
-    #     tree: Optional[List[Self]] = None,
-    #     stream: Optional[Self] = None,
-    #     composed=None,
-    # ) -> VoidExecutor:
-    #
-    #     if tree is None:
-    #         tree = self.full_tree()
-    #         stream = list(tree.keys())[0]
-    #     if not composed:
-    #         composed = stream.func
-    #     if not stream:
-    #         return composed
-    #
-    #     children = [child for child in stream.children if not child.orphan]
-    #     if len(children) == 1:
-    #         child = children[0]
-    #         return self.compose_recursive(tree, child, stream.func.get_executor(child))
-    #     elif len(children) > 1:
-    #         composes = []
-    #         for child in children:
-    #             composes.append(self.compose_recursive(tree, child))
-    #         return stream.func.get_executor(*composes)
-    #     else:
-    #         return stream.func.get_executor(self._default_sink)
-
     def _diff_from_last_common_parent(self, other: Self) -> List[Self]:
-        nodes_self = self.tree()
-        nodes_other = other.tree()
+        nodes_self = self.tree_to_root()
+        nodes_other = other.tree_to_root()
 
         diff = []
         last_common_parent = None
