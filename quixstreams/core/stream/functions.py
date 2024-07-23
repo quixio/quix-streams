@@ -83,33 +83,6 @@ class StreamFunction(abc.ABC):
         """
 
 
-# class SimpleFunction(StreamFunction):
-#     """
-#     Wrap a function into "Apply" function.
-#
-#     The provided callback is expected to return a new value based on input,
-#     and its result will always be passed downstream.
-#     """
-#
-#     def __init__(
-#         self,
-#         func: ApplyCallback,
-#     ):
-#         super().__init__(func)
-#
-#     def get_executor(self, *child_executor: Callable[[Any], None]) -> Callable[[Any], None]:
-#
-#         def wrapper(value: Any, func=self.func):
-#             # Execute a function on a single value and return its result
-#             result = func(value)
-#             *executors, last_executor = child_executor
-#             for executor in executors:
-#                 executor(deepcopy(result))
-#             last_executor(result)
-#
-#         return wrapper
-
-
 class ApplyFunction(StreamFunction):
     """
     Wrap a function into "Apply" function.
@@ -127,27 +100,31 @@ class ApplyFunction(StreamFunction):
         self.expand = expand
 
     def get_executor(self, *child_executor: VoidExecutor) -> VoidExecutor:
-        # if self.expand:
-        #
-        #     def wrapper(
-        #         value: Any, key: Any, timestamp: int, headers: Any, func=self.func
-        #     ):
-        #         # Execute a function on a single value and wrap results into a list
-        #         # to expand them downstream
-        #         result = func(value)
-        #         for item in result:
-        #             child_executor(item, key, timestamp, headers)
-        #
-        # else:
+        if self.expand:
 
-        def wrapper(value: Any, key: Any, timestamp: int, headers: Any, func=self.func):
-            # Execute a function on a single value and return its result
-            result = func(value)
-            # print(f'APPLY: {result}')
-            *executors, last_executor = child_executor
-            for executor in executors:
-                executor(deepcopy(result), key, timestamp, headers)
-            last_executor(result, key, timestamp, headers)
+            def wrapper(
+                value: Any, key: Any, timestamp: int, headers: Any, func=self.func
+            ):
+                # Execute a function on a single value and wrap results into a list
+                # to expand them downstream
+                result = func(value)
+                for item in result:
+                    *executors, last_executor = child_executor
+                    for executor in executors:
+                        executor(deepcopy(item), key, timestamp, headers)
+                    last_executor(item, key, timestamp, headers)
+
+        else:
+
+            def wrapper(
+                value: Any, key: Any, timestamp: int, headers: Any, func=self.func
+            ):
+                # Execute a function on a single value and return its result
+                result = func(value)
+                *executors, last_executor = child_executor
+                for executor in executors:
+                    executor(deepcopy(result), key, timestamp, headers)
+                last_executor(result, key, timestamp, headers)
 
         return wrapper
 
@@ -169,7 +146,7 @@ class ApplyWithMetadataFunction(StreamFunction):
         super().__init__(func)
         self.expand = expand
 
-    def get_executor(self, child_executor: VoidExecutor) -> VoidExecutor:
+    def get_executor(self, *child_executor: VoidExecutor) -> VoidExecutor:
         if self.expand:
 
             def wrapper(
@@ -179,7 +156,10 @@ class ApplyWithMetadataFunction(StreamFunction):
                 # to expand them downstream
                 result = func(value, key, timestamp, headers)
                 for item in result:
-                    child_executor(item, key, timestamp, headers)
+                    *executors, last_executor = child_executor
+                    for executor in executors:
+                        executor(deepcopy(item), key, timestamp, headers)
+                    last_executor(item, key, timestamp, headers)
 
         else:
 
@@ -188,7 +168,10 @@ class ApplyWithMetadataFunction(StreamFunction):
             ):
                 # Execute a function on a single value and return its result
                 result = func(value, key, timestamp, headers)
-                child_executor(result, key, timestamp, headers)
+                *executors, last_executor = child_executor
+                for executor in executors:
+                    executor(deepcopy(result), key, timestamp, headers)
+                last_executor(result, key, timestamp, headers)
 
         return wrapper
 
@@ -209,7 +192,6 @@ class FilterFunction(StreamFunction):
         def wrapper(value: Any, key: Any, timestamp: int, headers: Any, func=self.func):
             # Filter a single value
             result = func(value)
-            # print(f'FILTER: {result}')
             if result:
                 *executors, last_executor = child_executor
                 for executor in executors:
@@ -237,7 +219,6 @@ class FilterWithMetadataFunction(StreamFunction):
         def wrapper(value: Any, key: Any, timestamp: int, headers: Any, func=self.func):
             # Filter a single value
             result = func(value, key, timestamp, headers)
-            # print(f'FILTER_MD: {result}')
             if result:
                 *executors, last_executor = child_executor
                 for executor in executors:
@@ -265,7 +246,6 @@ class UpdateFunction(StreamFunction):
         def wrapper(value: Any, key: Any, timestamp: int, headers: Any, func=self.func):
             # Update a single value and forward it
             func(value)
-            # print(f'UPDATE: {value}')
             *executors, last_executor = child_executor
             for executor in executors:
                 executor(deepcopy(value), key, timestamp, headers)
@@ -288,11 +268,14 @@ class UpdateWithMetadataFunction(StreamFunction):
     def __init__(self, func: UpdateWithMetadataCallback):
         super().__init__(func)
 
-    def get_executor(self, child_executor: VoidExecutor) -> VoidExecutor:
+    def get_executor(self, *child_executor: VoidExecutor) -> VoidExecutor:
         def wrapper(value: Any, key: Any, timestamp: int, headers: Any, func=self.func):
             # Update a single value and forward it
             func(value, key, timestamp, headers)
-            child_executor(value, key, timestamp, headers)
+            *executors, last_executor = child_executor
+            for executor in executors:
+                executor(deepcopy(value), key, timestamp, headers)
+            last_executor(value, key, timestamp, headers)
 
         return wrapper
 
@@ -320,7 +303,7 @@ class TransformFunction(StreamFunction):
         super().__init__(func)
         self.expand = expand
 
-    def get_executor(self, child_executor: VoidExecutor) -> VoidExecutor:
+    def get_executor(self, *child_executor: VoidExecutor) -> VoidExecutor:
         if self.expand:
 
             def wrapper(
@@ -332,7 +315,12 @@ class TransformFunction(StreamFunction):
             ):
                 result = func(value, key, timestamp, headers)
                 for new_value, new_key, new_timestamp, new_headers in result:
-                    child_executor(new_value, new_key, new_timestamp, new_headers)
+                    *executors, last_executor = child_executor
+                    for executor in executors:
+                        executor(
+                            deepcopy(new_value), new_key, new_timestamp, new_headers
+                        )
+                    last_executor(new_value, new_key, new_timestamp, new_headers)
 
         else:
 
@@ -347,6 +335,9 @@ class TransformFunction(StreamFunction):
                 new_value, new_key, new_timestamp, new_headers = func(
                     value, key, timestamp, headers
                 )
-                child_executor(new_value, new_key, new_timestamp, new_headers)
+                *executors, last_executor = child_executor
+                for executor in executors:
+                    executor(deepcopy(new_value), new_key, new_timestamp, new_headers)
+                last_executor(new_value, new_key, new_timestamp, new_headers)
 
         return wrapper
