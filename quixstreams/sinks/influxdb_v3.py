@@ -88,3 +88,4 @@ class InfluxDBV3Sink(Sink):
                         topic=batch.topic,
                         partition=batch.partition,
                     )
+                raise
