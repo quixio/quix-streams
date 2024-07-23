@@ -1,5 +1,6 @@
 import abc
 from typing import Callable, Any, Tuple, Union, Protocol, Iterable
+from copy import deepcopy
 
 __all__ = (
     "StreamCallback",
@@ -76,10 +77,37 @@ class StreamFunction(abc.ABC):
         self.func = func
 
     @abc.abstractmethod
-    def get_executor(self, child_executor: VoidExecutor) -> VoidExecutor:
+    def get_executor(self, *child_executor: VoidExecutor) -> VoidExecutor:
         """
         Returns a wrapper to be called on a value, key and timestamp.
         """
+
+
+# class SimpleFunction(StreamFunction):
+#     """
+#     Wrap a function into "Apply" function.
+#
+#     The provided callback is expected to return a new value based on input,
+#     and its result will always be passed downstream.
+#     """
+#
+#     def __init__(
+#         self,
+#         func: ApplyCallback,
+#     ):
+#         super().__init__(func)
+#
+#     def get_executor(self, *child_executor: Callable[[Any], None]) -> Callable[[Any], None]:
+#
+#         def wrapper(value: Any, func=self.func):
+#             # Execute a function on a single value and return its result
+#             result = func(value)
+#             *executors, last_executor = child_executor
+#             for executor in executors:
+#                 executor(deepcopy(result))
+#             last_executor(result)
+#
+#         return wrapper
 
 
 class ApplyFunction(StreamFunction):
@@ -98,26 +126,28 @@ class ApplyFunction(StreamFunction):
         super().__init__(func)
         self.expand = expand
 
-    def get_executor(self, child_executor: VoidExecutor) -> VoidExecutor:
-        if self.expand:
+    def get_executor(self, *child_executor: VoidExecutor) -> VoidExecutor:
+        # if self.expand:
+        #
+        #     def wrapper(
+        #         value: Any, key: Any, timestamp: int, headers: Any, func=self.func
+        #     ):
+        #         # Execute a function on a single value and wrap results into a list
+        #         # to expand them downstream
+        #         result = func(value)
+        #         for item in result:
+        #             child_executor(item, key, timestamp, headers)
+        #
+        # else:
 
-            def wrapper(
-                value: Any, key: Any, timestamp: int, headers: Any, func=self.func
-            ):
-                # Execute a function on a single value and wrap results into a list
-                # to expand them downstream
-                result = func(value)
-                for item in result:
-                    child_executor(item, key, timestamp, headers)
-
-        else:
-
-            def wrapper(
-                value: Any, key: Any, timestamp: int, headers: Any, func=self.func
-            ):
-                # Execute a function on a single value and return its result
-                result = func(value)
-                child_executor(result, key, timestamp, headers)
+        def wrapper(value: Any, key: Any, timestamp: int, headers: Any, func=self.func):
+            # Execute a function on a single value and return its result
+            result = func(value)
+            # print(f'APPLY: {result}')
+            *executors, last_executor = child_executor
+            for executor in executors:
+                executor(deepcopy(result), key, timestamp, headers)
+            last_executor(result, key, timestamp, headers)
 
         return wrapper
 
@@ -175,11 +205,16 @@ class FilterFunction(StreamFunction):
     def __init__(self, func: FilterCallback):
         super().__init__(func)
 
-    def get_executor(self, child_executor: VoidExecutor) -> VoidExecutor:
+    def get_executor(self, *child_executor: VoidExecutor) -> VoidExecutor:
         def wrapper(value: Any, key: Any, timestamp: int, headers: Any, func=self.func):
             # Filter a single value
-            if func(value):
-                child_executor(value, key, timestamp, headers)
+            result = func(value)
+            # print(f'FILTER: {result}')
+            if result:
+                *executors, last_executor = child_executor
+                for executor in executors:
+                    executor(deepcopy(value), key, timestamp, headers)
+                last_executor(value, key, timestamp, headers)
 
         return wrapper
 
@@ -198,11 +233,16 @@ class FilterWithMetadataFunction(StreamFunction):
     def __init__(self, func: FilterWithMetadataCallback):
         super().__init__(func)
 
-    def get_executor(self, child_executor: VoidExecutor) -> VoidExecutor:
+    def get_executor(self, *child_executor: VoidExecutor) -> VoidExecutor:
         def wrapper(value: Any, key: Any, timestamp: int, headers: Any, func=self.func):
             # Filter a single value
-            if func(value, key, timestamp, headers):
-                child_executor(value, key, timestamp, headers)
+            result = func(value, key, timestamp, headers)
+            # print(f'FILTER_MD: {result}')
+            if result:
+                *executors, last_executor = child_executor
+                for executor in executors:
+                    executor(deepcopy(value), key, timestamp, headers)
+                last_executor(value, key, timestamp, headers)
 
         return wrapper
 
@@ -221,11 +261,15 @@ class UpdateFunction(StreamFunction):
     def __init__(self, func: UpdateCallback):
         super().__init__(func)
 
-    def get_executor(self, child_executor: VoidExecutor) -> VoidExecutor:
+    def get_executor(self, *child_executor: VoidExecutor) -> VoidExecutor:
         def wrapper(value: Any, key: Any, timestamp: int, headers: Any, func=self.func):
             # Update a single value and forward it
             func(value)
-            child_executor(value, key, timestamp, headers)
+            # print(f'UPDATE: {value}')
+            *executors, last_executor = child_executor
+            for executor in executors:
+                executor(deepcopy(value), key, timestamp, headers)
+            last_executor(value, key, timestamp, headers)
 
         return wrapper
 

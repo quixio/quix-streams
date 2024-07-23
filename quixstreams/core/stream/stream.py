@@ -232,6 +232,29 @@ class Stream:
             head = node
         return head
 
+    def tree(self, stop_at=None) -> List[Self]:
+        """
+        Return a list of all parent Streams including the node itself.
+
+        The tree is ordered from parent to child (current node comes last).
+        :return: a list of `Stream` objects
+        """
+
+        tree_ = [self]
+        node = self
+        if stop_at is None:
+            stop_at = []
+        while parent := node.parent:
+            if parent in stop_at:
+                break
+            tree_.append(parent)
+            node = node.parent
+
+        # Reverse to get expected ordering.
+        tree_.reverse()
+
+        return tree_
+
     def mark_as_orphan(self):
         self.orphan = True
 
@@ -252,29 +275,59 @@ class Stream:
                     tree[node].append(child)
                     self._add_node_children(tree, child)
 
-    def full_tree(self):
+    def tree_map(self):
         tree_ = {}
         self._add_node_children(tree_, self.tree()[0])
         return tree_
 
-    def tree(self) -> List[Self]:
-        """
-        Return a list of all parent Streams including the node itself.
+    def tree_paths(self, stream=None, paths=None, current_path=None):
+        if not stream:
+            stream = self.tree()[0]
+        if paths is None:
+            paths = []
+        if current_path is None:
+            current_path = []
+        current_path.append(stream)
+        if children := [child for child in stream.children if not child.orphan]:
+            for child in children:
+                self.tree_paths(child, paths, current_path[:])
+        else:
+            paths.append(current_path)
+        return paths
 
-        The tree is ordered from parent to child (current node comes last).
-        :return: a list of `Stream` objects
-        """
+    # def tree_leaves(self):
+    #     return [path[-1] for path in self.tree_paths()]
+    #
+    # def tree_splits(self):
+    #     return {child: stream for stream, children in self.tree_map().items() for child in children if len(children) > 1}
 
-        tree_ = [self]
-        node = self
-        while node.parent:
-            tree_.append(node.parent)
-            node = node.parent
+    def compose_splits(self):
+        tree_map = self.tree_map()
+        paths = self.tree_paths()
+        leaves = [path[-1] for path in paths]
+        splits = {stream for stream, children in tree_map.items() if len(children) > 1}
+        pending_composes = {stream: [] for stream in splits}
+        final_composes = {}
 
-        # Reverse to get expected ordering.
-        tree_.reverse()
+        while leaves:
+            leaf = leaves.pop()
+            if leaf in splits:
+                splits.remove(leaf)
+                tree = leaf.parent.tree(stop_at=splits)
+            else:
+                tree = leaf.tree(stop_at=splits)
+            composed = self.compose(tree=tree, composed=final_composes.pop(leaf, None))
+            if not splits:
+                return composed
 
-        return tree_
+            split = tree[0].parent
+            pending_composes[split].append(composed)
+
+            if len(pending_composes[split]) == len(tree_map[split]):
+                final_composes[split] = self.compose(
+                    tree=[split], composed=pending_composes.pop(split)
+                )
+                leaves.append(split)
 
     def compose_returning(self) -> ReturningExecutor:
         """
@@ -297,7 +350,7 @@ class Stream:
             allow_expands=False,
             allow_updates=False,
             allow_transforms=False,
-            sink=lambda value, key, timestamp, headers: buffer.appendleft(
+            composed=lambda value, key, timestamp, headers: buffer.appendleft(
                 (value, key, timestamp, headers)
             ),
         )
@@ -315,11 +368,12 @@ class Stream:
 
     def compose(
         self,
+        tree: Optional[List[Self]] = None,
+        composed: Optional[Callable[[Any, Any, int, Any], None]] = None,
         allow_filters: bool = True,
         allow_updates: bool = True,
         allow_expands: bool = True,
         allow_transforms: bool = True,
-        sink: Optional[Callable[[Any, Any, int, Any], None]] = None,
     ) -> VoidExecutor:
         """
         Compose a list of functions from this `Stream` and its parents into one
@@ -344,14 +398,14 @@ class Stream:
         :raises ValueError: if disallowed functions are present in the stream tree.
         """
 
-        tree = self.tree()
-        # [func_a, func_b, func_c]
+        if not tree:
+            tree = self.tree()
         functions = [node.func for node in tree]
 
-        composed = sink or self._default_sink
+        if not composed:
+            composed = self._default_sink
 
         # Iterate over a reversed list of functions
-        # [func_c, func_b, func_a]
         for func in reversed(functions):
             # Validate that only allowed functions are passed
             if not allow_updates and isinstance(
@@ -367,14 +421,38 @@ class Stream:
             elif not allow_expands and func.expand:
                 raise ValueError("Expand functions are not allowed")
 
-            # Compose functions from the tree together so the top function calls
-            # the bottom one
-            # f.get_executor(c) -> do v2 = f(v), then c(v2)
-            # func_c.get_executor(end) -> do end(func_c(v))
-            # func_b.get_executor(end(func_c((v)) -> end(func_c(func_b(v)))
-            composed = func.get_executor(composed)
+            composed = func.get_executor(
+                *composed if isinstance(composed, list) else [composed]
+            )
 
         return composed
+
+    # def compose_recursive(
+    #     self,
+    #     tree: Optional[List[Self]] = None,
+    #     stream: Optional[Self] = None,
+    #     composed=None,
+    # ) -> VoidExecutor:
+    #
+    #     if tree is None:
+    #         tree = self.full_tree()
+    #         stream = list(tree.keys())[0]
+    #     if not composed:
+    #         composed = stream.func
+    #     if not stream:
+    #         return composed
+    #
+    #     children = [child for child in stream.children if not child.orphan]
+    #     if len(children) == 1:
+    #         child = children[0]
+    #         return self.compose_recursive(tree, child, stream.func.get_executor(child))
+    #     elif len(children) > 1:
+    #         composes = []
+    #         for child in children:
+    #             composes.append(self.compose_recursive(tree, child))
+    #         return stream.func.get_executor(*composes)
+    #     else:
+    #         return stream.func.get_executor(self._default_sink)
 
     def _diff_from_last_common_parent(self, other: Self) -> List[Self]:
         nodes_self = self.tree()
