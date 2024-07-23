@@ -18,9 +18,15 @@ from quixstreams.models import (
     DoubleDeserializer,
     StringDeserializer,
 )
-from .utils import int_to_bytes, float_to_bytes
+from quixstreams.models.serializers.protobuf import (
+    ProtobufSerializer,
+    ProtobufDeserializer,
+)
 
 from quixstreams.models.serializers.avro import AvroDeserializer, AvroSerializer
+
+from .utils import int_to_bytes, float_to_bytes
+from .protobuf.test_pb2 import Test
 
 AVRO_TEST_SCHEMA = {
     "type": "record",
@@ -30,6 +36,7 @@ AVRO_TEST_SCHEMA = {
         {"name": "id", "type": "int", "default": 0},
     ],
 }
+
 
 dummy_context = SerializationContext(topic="topic")
 
@@ -74,6 +81,22 @@ class TestSerializers:
                 b"\x06foo\xf6\x01",
             ),
             (AvroSerializer(AVRO_TEST_SCHEMA), {"name": "foo"}, b"\x06foo\x00"),
+            (ProtobufSerializer(Test), {}, b""),
+            (ProtobufSerializer(Test), {"id": 3}, b"\x10\x03"),
+            (ProtobufSerializer(Test), {"name": "foo", "id": 2}, b"\n\x03foo\x10\x02"),
+            (ProtobufSerializer(Test), Test(name="foo", id=2), b"\n\x03foo\x10\x02"),
+            # Both values are supported for enum
+            (
+                ProtobufSerializer(Test),
+                {"name": "foo", "id": 2, "enum": "B"},
+                b"\n\x03foo\x10\x02\x18\x01",
+            ),
+            (
+                ProtobufSerializer(Test),
+                {"name": "foo", "id": 2, "enum": 1},
+                b"\n\x03foo\x10\x02\x18\x01",
+            ),
+            (ProtobufSerializer(Test), {"name": "foo"}, b"\n\x03foo"),
         ],
     )
     def test_serialize_success(self, serializer: Serializer, value, expected):
@@ -103,6 +126,7 @@ class TestSerializers:
             (AvroSerializer(AVRO_TEST_SCHEMA), {"foo": "foo", "id": 123}),
             (AvroSerializer(AVRO_TEST_SCHEMA), {"id": 123}),
             (AvroSerializer(AVRO_TEST_SCHEMA, strict=True), {"name": "foo"}),
+            (ProtobufSerializer(Test), {"bar": 3}),
         ],
     )
     def test_serialize_error(self, serializer: Serializer, value):
@@ -151,6 +175,36 @@ class TestDeserializers:
                 b"\x06foo\x00",
                 {"name": "foo", "id": 0},
             ),
+            (
+                ProtobufDeserializer(Test),
+                b"\n\x03foo\x10\x02",
+                {"enum": "A", "name": "foo", "id": 2},
+            ),
+            (
+                ProtobufDeserializer(Test, to_dict=False),
+                b"\n\x03foo\x10\x02",
+                Test(name="foo", id=2),
+            ),
+            (
+                ProtobufDeserializer(Test, use_integers_for_enums=True),
+                b"\n\x03foo\x10\x02",
+                {"enum": 0, "name": "foo", "id": 2},
+            ),
+            (
+                ProtobufDeserializer(Test),
+                b"\n\x03foo",
+                {
+                    "enum": "A",
+                    "name": "foo",
+                    "id": 0,
+                },
+            ),
+            (
+                ProtobufDeserializer(Test),
+                b"\x10\x03",
+                {"enum": "A", "name": "", "id": 3},
+            ),
+            (ProtobufDeserializer(Test), b"", {"enum": "A", "name": "", "id": 0}),
         ],
     )
     def test_deserialize_no_column_name_success(
@@ -176,6 +230,7 @@ class TestDeserializers:
                 b'{"id":10}',
             ),
             (AvroDeserializer(AVRO_TEST_SCHEMA), b"\x26foo\x00"),
+            (ProtobufDeserializer(Test), b"\n\x03foo\x10\x02\x13"),
         ],
     )
     def test_deserialize_error(self, deserializer: Deserializer, value):

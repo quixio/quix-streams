@@ -28,10 +28,12 @@ Homepage = "https://github.com/quixio/quix-streams"
 
 [project.optional-dependencies]
 all = [
-  "fastavro>=1.8,<2.0"
+  "fastavro>=1.8,<2.0",
+  "protobuf>=5.27.2,<6.0"
 ]
 
 avro = ["fastavro>=1.8,<2.0"]
+protobuf = ["protobuf>=5.27.2,<6.0"]
 
 [tool.setuptools.packages.find]
 include = ["quixstreams*"]
