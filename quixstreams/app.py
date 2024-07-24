@@ -294,6 +294,7 @@ class Application:
         self._producer = self._get_rowproducer(on_error=on_producer_error)
         self._running = False
         self._failed = False
+        self._sdfs = []
 
         if not topic_manager:
             topic_manager = topic_manager_factory(
@@ -612,6 +613,7 @@ class Application:
             topic_manager=self._topic_manager,
             processing_context=self._processing_context,
         )
+        self._sdfs.append(sdf)
         return sdf
 
     def stop(self, fail: bool = False):
@@ -764,10 +766,7 @@ class Application:
         self._source_manager.register(source)
         return topic
 
-    def run(
-        self,
-        dataframe: StreamingDataFrame,
-    ):
+    def run(self):
         """
         Start processing data from Kafka using provided `StreamingDataFrame`
 
@@ -788,10 +787,8 @@ class Application:
         df = app.dataframe(topic)
         df.apply(lambda value, context: print('New message', value)
 
-        app.run(dataframe=df)
+        app.run()
         ```
-
-        :param dataframe: instance of `StreamingDataFrame`
         """
         self._run(dataframe)
 
@@ -838,7 +835,7 @@ class Application:
 
     def _run_dataframe(self, dataframe):
         self._consumer.subscribe(
-            dataframe.topics_to_subscribe,
+            list({t for sdf in self._sdfs for t in sdf.topics_to_subscribe}),
             on_assign=self._on_assign,
             on_revoke=self._on_revoke,
             on_lost=self._on_lost,
@@ -850,13 +847,15 @@ class Application:
         # Initialize the checkpoint
         self._processing_context.init_checkpoint()
 
-        dataframe_composed = dataframe.compose()
+        dataframes_composed = {
+                k: v for sdf in self._sdfs for k, v in sdf.compose().items()
+            }
 
         while self._running:
             if self._state_manager.recovery_required:
                 self._state_manager.do_recovery()
             else:
-                self._process_message(dataframe_composed)
+                self._process_message(dataframes_composed)
                 self._processing_context.commit_checkpoint()
                 self._processing_context.resume_ready_partitions()
                 self._source_manager.raise_for_error()
