@@ -295,6 +295,7 @@ class Application:
         self._producer = self._get_rowproducer(on_error=on_producer_error)
         self._running = False
         self._failed = False
+        self._sdfs = []
 
         if not topic_manager:
             topic_manager = topic_manager_factory(
