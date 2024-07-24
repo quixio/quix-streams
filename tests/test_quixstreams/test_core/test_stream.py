@@ -9,7 +9,7 @@ from quixstreams.core.stream.functions import (
     FilterFunction,
     TransformFunction,
 )
-from tests.utils import Sink
+from .utils import Sink
 
 
 class TestStream:
