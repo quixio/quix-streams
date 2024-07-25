@@ -5,7 +5,7 @@ from typing import Optional
 
 from quixstreams.checkpointing import Checkpoint
 from quixstreams.exceptions import QuixException
-from quixstreams.processing_context.pausing import PausingManager
+from quixstreams.processing.pausing import PausingManager
 from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
 from quixstreams.sinks import SinkManager
@@ -31,17 +31,12 @@ class ProcessingContext:
     consumer: RowConsumer
     state_manager: StateStoreManager
     sink_manager: SinkManager
+    pausing_manager: PausingManager
     commit_every: int = 0
     exactly_once: bool = False
-    _pausing_manager: PausingManager = dataclasses.field(
-        init=False, repr=False, default=None
-    )
     _checkpoint: Optional[Checkpoint] = dataclasses.field(
         init=False, repr=False, default=None
     )
-
-    def __post_init__(self):
-        self._pausing_manager = PausingManager(consumer=self.consumer)
 
     @property
     def checkpoint(self) -> Checkpoint:
@@ -70,7 +65,7 @@ class ProcessingContext:
             producer=self.producer,
             consumer=self.consumer,
             sink_manager=self.sink_manager,
-            pausing_manager=self._pausing_manager,
+            pausing_manager=self.pausing_manager,
             exactly_once=self.exactly_once,
         )
 
@@ -98,11 +93,10 @@ class ProcessingContext:
             self.init_checkpoint()
 
     def resume_ready_partitions(self):
-        self._pausing_manager.resume_if_ready()
+        self.pausing_manager.resume_if_ready()
 
     def on_partition_revoke(self, topic: str, partition: int):
-        # TODO: Maybe initialize the pausingmanager outside of the processing context to simplify testing
-        self._pausing_manager.revoke(topic=topic, partition=partition)
+        self.pausing_manager.revoke(topic=topic, partition=partition)
 
     def __enter__(self):
         return self

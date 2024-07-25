@@ -44,7 +44,7 @@ from quixstreams.models import (
     HeaderValue,
 )
 from quixstreams.models.serializers import SerializerType, DeserializerType
-from quixstreams.processing_context import ProcessingContext
+from quixstreams.processing import ProcessingContext
 from quixstreams.sinks.manager import Sink
 from quixstreams.state.types import State
 from .base import BaseStreaming
@@ -1011,8 +1011,23 @@ class StreamingDataFrame(BaseStreaming):
             metadata=False,
         )
 
-    def sink(self, sink: Sink) -> Self:
-        # TODO: Docs
+    def sink(self, sink: Sink):
+        """
+        Sink the processed data to the specified destination.
+
+        Internally, sinks will batch the processed records in memory and
+        flush them on each checkpoint.
+        The offset will be committed only if all the sinks for all topic partitions
+        are flushed successfully.
+
+        Note: `sink()` is a terminal operation, and you cannot add new operations
+        to the same StreamingDataFrame after it's called.
+        # TODO: Make sinks terminal
+        # TODO: Explain backpressure
+
+
+
+        """
         self._processing_context.sink_manager.register(sink)
 
         def _sink_callback(
@@ -1029,7 +1044,7 @@ class StreamingDataFrame(BaseStreaming):
                 offset=ctx.offset,
             )
 
-        return self.update(_sink_callback, metadata=True)
+        self.update(_sink_callback, metadata=True)
 
     def _produce(
         self,

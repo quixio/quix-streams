@@ -5,7 +5,7 @@ import pytest
 
 from quixstreams.dataframe.dataframe import StreamingDataFrame
 from quixstreams.models.topics import Topic, TopicManager
-from quixstreams.processing_context import ProcessingContext
+from quixstreams.processing import ProcessingContext, PausingManager
 from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
 from quixstreams.state import StateStoreManager

@@ -34,7 +34,7 @@ from .platforms.quix import (
     check_state_management_enabled,
     QuixTopicManager,
 )
-from .processing_context import ProcessingContext
+from .processing import ProcessingContext, PausingManager
 from .rowconsumer import RowConsumer
 from .rowproducer import RowProducer
 from .sinks import SinkManager
@@ -322,6 +322,8 @@ class Application:
                 else None
             ),
         )
+        self._sink_manager = SinkManager()
+        self._pausing_manager = PausingManager(consumer=self._consumer)
         self._processing_context = ProcessingContext(
             commit_interval=self._commit_interval,
             commit_every=commit_every,
@@ -329,7 +331,8 @@ class Application:
             consumer=self._consumer,
             state_manager=self._state_manager,
             exactly_once=self._uses_exactly_once,
-            sink_manager=SinkManager(),
+            sink_manager=self._sink_manager,
+            pausing_manager=self._pausing_manager,
         )
 
     @property
@@ -781,9 +784,9 @@ class Application:
                 if self._state_manager.recovery_required:
                     self._state_manager.do_recovery()
                 else:
-                    self._processing_context.resume_ready_partitions()
                     self._process_message(dataframe_composed)
                     self._processing_context.commit_checkpoint()
+                    self._processing_context.resume_ready_partitions()
 
             logger.info("Stop processing of StreamingDataFrame")
 

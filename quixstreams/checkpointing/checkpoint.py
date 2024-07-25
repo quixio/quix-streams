@@ -5,7 +5,7 @@ from typing import Dict, Tuple
 from confluent_kafka import TopicPartition, KafkaException
 
 from quixstreams.kafka import Consumer
-from quixstreams.processing_context.pausing import PausingManager
+from quixstreams.processing.pausing import PausingManager
 from quixstreams.rowproducer import RowProducer
 from quixstreams.sinks.exceptions import SinkBackpressureError
 from quixstreams.state import (
@@ -175,6 +175,8 @@ class Checkpoint:
                     # The topic-partition is paused, skip flushing other sinks for
                     # this TP.
                     # Also drop the batch to reprocess it later.
+                    # Note: when flushing multiple sinks for the same TP, some
+                    # of them can be flushed before one of the sinks is backpressured.
                     sink.drop_batch(topic=topic, partition=partition)
                     break
 
@@ -195,7 +197,7 @@ class Checkpoint:
                     )
 
         # Step 4. Commit offsets to Kafka
-        # Filter out offsets of the paused partitions.
+        # First, filter out offsets of the paused topic partitions.
         tp_offsets = {
             (topic, partition): offset
             for (topic, partition), offset in self._tp_offsets.items()
@@ -226,7 +228,7 @@ class Checkpoint:
                     raise CheckpointConsumerCommitError(partition.error)
 
         # Step 5. Flush state store partitions to the disk together with changelog
-        # offsets
+        # offsets.
         # Get produced offsets after flushing the producer
         produced_offsets = self._producer.offsets
         for (
