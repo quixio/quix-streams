@@ -6,8 +6,13 @@ from datetime import timedelta
 import pytest
 
 from quixstreams import State
-from quixstreams.dataframe.exceptions import InvalidOperation, GroupByLimitExceeded
+from quixstreams.dataframe.exceptions import (
+    InvalidOperation,
+    GroupByLimitExceeded,
+    DataFrameLocked,
+)
 from quixstreams.dataframe.windows import WindowResult
+from tests.utils import DummySink
 
 RecordStub = namedtuple("RecordStub", ("value", "key", "timestamp"))
 
@@ -1671,3 +1676,31 @@ class TestStreamingDataFrameGroupBy:
 
         with pytest.raises(GroupByLimitExceeded):
             sdf.group_by("col_b")
+
+    @pytest.mark.parametrize(
+        "operation",
+        [
+            lambda sdf: sdf["a"],
+            lambda sdf: operator.setitem(sdf, "a", 1),
+            lambda sdf: sdf.apply(...),
+            lambda sdf: sdf.update(...),
+            lambda sdf: sdf.filter(...),
+            lambda sdf: sdf.print(),
+            lambda sdf: sdf.drop(),
+            lambda sdf: sdf.group_by(),
+            lambda sdf: sdf.tumbling_window(1),
+            lambda sdf: sdf.hopping_window(1, 1),
+            lambda sdf: sdf.to_topic(...),
+            lambda sdf: sdf.sink(...),
+            lambda sdf: sdf.set_headers(...),
+            lambda sdf: sdf.set_timestamp(...),
+        ],
+    )
+    def test_sink_locks_sdf(self, operation, dataframe_factory, topic_manager_factory):
+        topic_manager = topic_manager_factory()
+        topic = topic_manager.topic(str(uuid.uuid4()))
+        sdf = dataframe_factory(topic, topic_manager=topic_manager)
+        sdf.sink(DummySink())
+
+        with pytest.raises(DataFrameLocked):
+            operation(sdf)

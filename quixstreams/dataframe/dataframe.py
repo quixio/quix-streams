@@ -18,9 +18,10 @@ from typing import (
     Tuple,
     Literal,
     Collection,
+    TypeVar,
 )
 
-from typing_extensions import Self
+from typing_extensions import Self, ParamSpec
 
 from quixstreams.context import (
     message_context,
@@ -48,7 +49,7 @@ from quixstreams.processing import ProcessingContext
 from quixstreams.sinks.manager import Sink
 from quixstreams.state.types import State
 from .base import BaseStreaming
-from .exceptions import InvalidOperation, GroupByLimitExceeded
+from .exceptions import InvalidOperation, GroupByLimitExceeded, DataFrameLocked
 from .series import StreamingSeries
 from .utils import ensure_milliseconds
 from .windows import TumblingWindowDefinition, HoppingWindowDefinition
@@ -59,6 +60,27 @@ UpdateCallbackStateful = Callable[[Any, State], None]
 UpdateWithMetadataCallbackStateful = Callable[[Any, Any, int, Any, State], None]
 FilterCallbackStateful = Callable[[Any, State], bool]
 FilterWithMetadataCallbackStateful = Callable[[Any, Any, int, Any, State], bool]
+
+
+_T = TypeVar("_T")
+_P = ParamSpec("_P")
+
+
+def _ensure_unlocked(func: Callable[_P, _T]) -> Callable[_P, _T]:
+    """
+    Ensure the SDF instance is not locked by the sink() call before adding new
+    operations to it.
+    """
+
+    @functools.wraps(func)
+    def wrapper(self: StreamingDataFrame, *args, **kwargs):
+        if self._locked:
+            raise DataFrameLocked(
+                "StreamingDataFrame is already sinked and cannot be modified"
+            )
+        return func(self, *args, **kwargs)
+
+    return wrapper
 
 
 class StreamingDataFrame(BaseStreaming):
@@ -122,6 +144,7 @@ class StreamingDataFrame(BaseStreaming):
         self._branches = branches or {}
         self._processing_context = processing_context
         self._producer = processing_context.producer
+        self._locked = False
 
     @property
     def processing_context(self) -> ProcessingContext:
@@ -176,6 +199,7 @@ class StreamingDataFrame(BaseStreaming):
         expand: bool = ...,
     ) -> Self: ...
 
+    @_ensure_unlocked
     def apply(
         self,
         func: Union[
@@ -265,6 +289,7 @@ class StreamingDataFrame(BaseStreaming):
         metadata: Literal[True],
     ) -> Self: ...
 
+    @_ensure_unlocked
     def update(
         self,
         func: Union[
@@ -357,6 +382,7 @@ class StreamingDataFrame(BaseStreaming):
         metadata: Literal[True],
     ) -> Self: ...
 
+    @_ensure_unlocked
     def filter(
         self,
         func: Union[
@@ -443,6 +469,7 @@ class StreamingDataFrame(BaseStreaming):
         key_serializer: Optional[SerializerType] = ...,
     ) -> Self: ...
 
+    @_ensure_unlocked
     def group_by(
         self,
         key: Union[str, Callable[[Any], Any]],
@@ -546,6 +573,7 @@ class StreamingDataFrame(BaseStreaming):
             lambda value, key_, timestamp, headers: key in value
         )
 
+    @_ensure_unlocked
     def to_topic(
         self, topic: Topic, key: Optional[Callable[[Any], Any]] = None
     ) -> Self:
@@ -591,6 +619,7 @@ class StreamingDataFrame(BaseStreaming):
             metadata=True,
         )
 
+    @_ensure_unlocked
     def set_timestamp(self, func: Callable[[Any, Any, int, Any], int]) -> Self:
         """
         Set a new timestamp based on the current message value and its metadata.
@@ -632,6 +661,7 @@ class StreamingDataFrame(BaseStreaming):
         stream = self.stream.add_transform(func=_set_timestamp_callback)
         return self.__dataframe_clone__(stream=stream)
 
+    @_ensure_unlocked
     def set_headers(
         self,
         func: Callable[
@@ -683,6 +713,7 @@ class StreamingDataFrame(BaseStreaming):
         stream = self.stream.add_transform(func=_set_headers_callback)
         return self.__dataframe_clone__(stream=stream)
 
+    @_ensure_unlocked
     def print(self, pretty: bool = True, metadata: bool = False) -> Self:
         """
         Print out the current message value (and optionally, the message metadata) to
@@ -799,6 +830,7 @@ class StreamingDataFrame(BaseStreaming):
         context.run(composed[topic.name], value, key, timestamp, headers)
         return result
 
+    @_ensure_unlocked
     def tumbling_window(
         self,
         duration_ms: Union[int, timedelta],
@@ -875,6 +907,7 @@ class StreamingDataFrame(BaseStreaming):
             duration_ms=duration_ms, grace_ms=grace_ms, dataframe=self, name=name
         )
 
+    @_ensure_unlocked
     def hopping_window(
         self,
         duration_ms: Union[int, timedelta],
@@ -967,6 +1000,7 @@ class StreamingDataFrame(BaseStreaming):
             name=name,
         )
 
+    @_ensure_unlocked
     def drop(
         self,
         columns: Union[str, List[str]],
@@ -1011,6 +1045,7 @@ class StreamingDataFrame(BaseStreaming):
             metadata=False,
         )
 
+    @_ensure_unlocked
     def sink(self, sink: Sink):
         """
         Sink the processed data to the specified destination.
@@ -1044,7 +1079,14 @@ class StreamingDataFrame(BaseStreaming):
                 offset=ctx.offset,
             )
 
-        self.update(_sink_callback, metadata=True)
+        sdf = self.update(_sink_callback, metadata=True)
+        self._lock()
+
+    def _lock(self):
+        """
+        Lock the StreamingDataFrame to prevent adding new operations to it.
+        """
+        self._locked = True
 
     def _produce(
         self,
@@ -1120,6 +1162,7 @@ class StreamingDataFrame(BaseStreaming):
         )
         return clone
 
+    @_ensure_unlocked
     def __setitem__(self, item_key: Any, item: Union[Self, object]):
         if isinstance(item, self.__class__):
             # Update an item key with a result of another sdf.apply()
@@ -1152,6 +1195,7 @@ class StreamingDataFrame(BaseStreaming):
     @overload
     def __getitem__(self, item: Union[StreamingSeries, List[str], Self]) -> Self: ...
 
+    @_ensure_unlocked
     def __getitem__(
         self, item: Union[str, List[str], StreamingSeries, Self]
     ) -> Union[Self, StreamingSeries]:

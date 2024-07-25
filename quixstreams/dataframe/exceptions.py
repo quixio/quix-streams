@@ -6,6 +6,7 @@ __all__ = (
     "GroupByLimitExceeded",
     "InvalidColumnReference",
     "ColumnDoesNotExist",
+    "DataFrameLocked",
 )
 
 
@@ -19,3 +20,6 @@ class InvalidColumnReference(QuixException): ...
 
 
 class GroupByLimitExceeded(QuixException): ...
+
+
+class DataFrameLocked(QuixException): ...
