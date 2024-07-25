@@ -2,6 +2,11 @@ import dataclasses
 import time
 from typing import Optional, List, Tuple, Union
 from confluent_kafka import OFFSET_INVALID
+from typing import List
+
+from quixstreams.sinks import Sink
+from quixstreams.sinks.base import SinkBatch
+from quixstreams.sinks.base.item import SinkItem
 
 DEFAULT_TIMEOUT = 10.0
 
@@ -93,3 +98,17 @@ class ConfluentKafkaMessageStub:
 
     def __len__(self) -> int:
         return len(self._value)
+
+
+class DummySink(Sink):
+    def __init__(self):
+        super().__init__()
+        self._results = []
+
+    def write(self, batch: SinkBatch):
+        for item in batch:
+            self._results.append(item)
+
+    @property
+    def results(self) -> List[SinkItem]:
+        return self._results

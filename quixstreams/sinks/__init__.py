@@ -1,6 +1,5 @@
-from .base import Sink as Sink
-from .manager import SinkManager as SinkManager
+from .base import Sink as Sink, SinkBatch as SinkBatch
 from .exceptions import (
     SinkBackpressureError as SinkBackpressureError,
-    SinkAlreadyRegisteredError as SinkAlreadyRegisteredError,
 )
+from .manager import SinkManager as SinkManager

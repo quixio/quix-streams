@@ -15,8 +15,7 @@ class Sink(abc.ABC):
         self._batches = {}
 
     def __repr__(self):
-        # TODO: Maybe have a proper name for a sink
-        return str(self.__class__.__name__)
+        return f"<Sink: {self.__class__.__name__}>"
 
     @abc.abstractmethod
     def write(self, batch: SinkBatch): ...
@@ -31,11 +30,11 @@ class Sink(abc.ABC):
         partition: int,
         offset: int,
     ):
-        # TODO: Maybe create a batch once on assign to avoid setdefault on each call
-        batch = self._batches.setdefault(
-            (topic, partition),
-            SinkBatch(partition=partition, topic=topic),
-        )
+        tp = (topic, partition)
+        batch = self._batches.get(tp)
+        if batch is None:
+            batch = SinkBatch(topic=topic, partition=partition)
+            self._batches[tp] = batch
         batch.append(
             value=value, key=key, timestamp=timestamp, headers=headers, offset=offset
         )

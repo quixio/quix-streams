@@ -1,7 +1,6 @@
 from typing import List
 
 from .base import Sink
-from .exceptions import SinkAlreadyRegisteredError
 
 
 class SinkManager:
@@ -9,9 +8,9 @@ class SinkManager:
         self._sinks = {}
 
     def register(self, sink: Sink):
-        if id(sink) in self._sinks:
-            raise SinkAlreadyRegisteredError(f"Sink {sink} is already registered")
-        self._sinks[id(sink)] = sink
+        sink_id = id(sink)
+        if sink_id not in self._sinks:
+            self._sinks[id(sink)] = sink
 
     @property
     def sinks(self) -> List[Sink]:

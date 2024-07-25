@@ -13,9 +13,10 @@ _MAX_FLOAT = sys.float_info.max
 
 
 class PausingManager:
-    # TODO: Come up with a better name
-    # TODO: Docs, tests
-    # A class to keep a list of the paused (i.e. paused) partitions
+    """
+    A class to temporarily pause topic partitions and resume them after
+    the timeout is elapsed.
+    """
 
     _paused_tps: Dict[Tuple[str, int], float]
 
@@ -23,16 +24,6 @@ class PausingManager:
         self._consumer = consumer
         self._paused_tps = {}
         self._next_resume_at = _MAX_FLOAT
-
-    def revoke(self, topic: str, partition: int):
-        """
-        Remove partition from the list of paused TPs if it's revoked
-        """
-        tp = (topic, partition)
-        if tp not in self._paused_tps:
-            return
-        self._paused_tps.pop(tp)
-        self._reset_next_resume_at()
 
     def pause(self, topic: str, partition: int, resume_after: float):
         """
@@ -47,15 +38,17 @@ class PausingManager:
         # Add a TP to the dict to avoid repetitive pausing
         resume_at = time.monotonic() + resume_after
         self._paused_tps[(topic, partition)] = resume_at
-        # Remember when the next TP should be resumed to exit early in the unpause()
-        # calls.
-        # Partitions get rarely paused, but the resume checks can be done
+        # Remember when the next TP should be resumed to exit early
+        # in the resume_if_ready() calls.
+        # Partitions are rarely paused, but the resume checks can be done
         # thousands times a sec.
         self._next_resume_at = min(self._next_resume_at, resume_at)
         logger.debug(
-            f'Pause topic partition "{topic}[{partition}]" for {resume_after}s'
+            f'Pausing topic partition "{topic}[{partition}]" for {resume_after}s'
         )
-        self._consumer.pause([TopicPartition(topic=topic, partition=partition)])
+        self._consumer.pause(
+            partitions=[TopicPartition(topic=topic, partition=partition)]
+        )
 
     def is_paused(self, topic: str, partition: int) -> bool:
         """
@@ -76,9 +69,21 @@ class PausingManager:
             tp for tp, resume_at in self._paused_tps.items() if resume_at <= now
         ]
         for topic, partition in tps_to_resume:
-            logger.debug(f'Resume topic partition "{topic}[{partition}]"')
-            self._consumer.resume([TopicPartition(topic=topic, partition=partition)])
+            logger.debug(f'Resuming topic partition "{topic}[{partition}]"')
+            self._consumer.resume(
+                partitions=[TopicPartition(topic=topic, partition=partition)]
+            )
             self._paused_tps.pop((topic, partition))
+        self._reset_next_resume_at()
+
+    def revoke(self, topic: str, partition: int):
+        """
+        Remove partition from the list of paused TPs if it's revoked
+        """
+        tp = (topic, partition)
+        if tp not in self._paused_tps:
+            return
+        self._paused_tps.pop(tp)
         self._reset_next_resume_at()
 
     def _reset_next_resume_at(self):
