@@ -2,7 +2,8 @@ from itertools import islice
 from typing import Optional, Iterable, TypeVar
 
 import influxdb_client_3
-from influxdb_client_3 import InfluxDBClient3, WritePrecision
+from influxdb_client_3 import InfluxDBClient3, WritePrecision, WriteOptions
+from influxdb_client_3.write_client.client.write_api import WriteType
 
 from .base import Sink, SinkBatch
 from .exceptions import SinkBackpressureError
@@ -24,6 +25,8 @@ class InfluxDBV3Sink(Sink):
         time_precision: WritePrecision = WritePrecision.MS,
         include_metadata_tags: bool = False,
         batch_size: int = 1000,
+        enable_gzip: bool = True,
+        request_timeout_ms: int = 10_000,
         debug: bool = False,
     ):
         """
@@ -60,6 +63,10 @@ class InfluxDBV3Sink(Sink):
             Note that it only affects the size of the writing batch, and not the number
             of records flushed on each checkpoint.
             Default - `1000`.
+        :param enable_gzip: if True, enables gzip compression for writes.
+            Default - `True`.
+        :param request_timeout_ms: an HTTP request timeout in milliseconds.
+            Default - `10000`.
         :param debug: if True, print debug logs from InfluxDB client.
             Default - `False`.
         """
@@ -71,6 +78,13 @@ class InfluxDBV3Sink(Sink):
             org=organization_id,
             database=database,
             debug=debug,
+            enable_gzip=enable_gzip,
+            timeout=request_timeout_ms,
+            write_client_options={
+                "write_options": WriteOptions(
+                    write_type=WriteType.synchronous,
+                )
+            },
         )
         self._measurement = measurement
         self._fields_keys = fields_keys
