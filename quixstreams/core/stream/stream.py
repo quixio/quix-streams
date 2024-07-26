@@ -81,8 +81,7 @@ class Stream:
 
         self.func = func if func is not None else ApplyFunction(lambda value: value)
         self.parent = parent
-        self.children = []
-        self.orphan = False
+        self.children = set()
 
     def __repr__(self) -> str:
         """
@@ -254,17 +253,17 @@ class Stream:
 
         return tree_
 
-    def mark_as_orphan(self):
-        self.orphan = True
+    def prune(self):
+        if self.parent:
+            self.parent.children.remove(self)
 
     def _add_node_children(self, tree, node):
         if node not in tree:
             tree[node] = []
         if node.children:
             for child in node.children:
-                if not child.orphan:
-                    tree[node].append(child)
-                    self._add_node_children(tree, child)
+                tree[node].append(child)
+                self._add_node_children(tree, child)
 
     def tree_map(self):
         tree_ = {}
@@ -440,7 +439,7 @@ class Stream:
 
     def _add(self, func: StreamFunction) -> Self:
         new_node = self.__class__(func=func, parent=self)
-        self.children.append(new_node)
+        self.children.add(new_node)
         return new_node
 
     def _default_sink(self, value: Any, key: Any, timestamp: int, headers: Any): ...
