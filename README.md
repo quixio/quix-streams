@@ -14,7 +14,7 @@ Quix Streams has the following benefits:
 
 - Streaming DataFrame API (similar to pandas DataFrame) for tabular data transformations.
 - Support for custom stateful operations.
-- Support for aggregations over tumbling and hopping time windows.
+- Support for custom aggregations over tumbling and hopping time windows.
 - Support for "exactly-once" Kafka processing guarantees.
 - Pure Python with no need for a server-side engine.  
 
