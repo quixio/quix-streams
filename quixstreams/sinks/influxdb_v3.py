@@ -15,28 +15,62 @@ class InfluxDBV3Sink(Sink):
         self,
         token: str,
         host: str,
-        org: str,
+        organization_id: str,
         database: str,
         measurement: str,
         fields_keys: Iterable[str] = (),
         tags_keys: Iterable[str] = (),
         time_key: Optional[str] = None,
+        time_precision: WritePrecision = WritePrecision.MS,
+        include_metadata_tags: bool = False,
         batch_size: int = 1000,
         debug: bool = False,
     ):
+        """
+        A sink connector for InfluxDB v3.
+        It will batch the processed records in memory and flush them to InfluxDB
+        on the checkpoint.
+
+        :param token: InfluxDB access token
+        :param host: InfluxDB host in format "https://<host>"
+        :param organization_id: InfluxDB organization_id
+        :param database: database name
+        :measurement: measurement name
+        :param fields_keys: a list of keys to be used as "fields" when writing to InfluxDB.
+            If empty, the whole record value will be used.
+            Default - empty.
+        :param tags_keys: a list of keys to be used as "tags" when writing to InfluxDB.
+            If empty, no tags will be sent.
+            Default - empty.
+        :param time_key: a key to be used as "time" when writing to InfluxDB.
+            By default, the record timestamp will be used with "ms" time precision.
+            When using a custom key, you may need to adjust the `time_precision` setting
+            to match.
+        :param include_metadata_tags: if True, includes record's key, topic,
+            and partition as tags.
+            Default - `False`.
+        :param batch_size: how many records to write to InfluxDB at once.
+            Note that it only affects the size of the writing batch, and not the number
+            of records flushed on each checkpoint.
+            Default - `1000`.
+        :param debug: if True, print debug logs from InfluxDB client.
+            Default - `False`.
+        """
+        # TODO: Tests
         super().__init__()
         self._client = InfluxDBClient3(
             token=token,
             host=host,
-            org=org,
+            org=organization_id,
             database=database,
             debug=debug,
         )
         self._measurement = measurement
         self._fields_keys = fields_keys
         self._tags_keys = tags_keys or []
+        self._include_metadata_tags = include_metadata_tags
         self._time_key = time_key
-        self._write_precision = WritePrecision.MS
+        self._write_precision = time_precision
         self._batch_size = batch_size
 
     def _iter_batches(self, it: Iterable[T], n: int) -> Iterable[Iterable[T]]:
@@ -59,10 +93,10 @@ class InfluxDBV3Sink(Sink):
             for item in write_batch:
                 value = item.value
                 tags = {tag_key: value[tag_key] for tag_key in tags_keys}
-                tags["__key"] = item.key
-                tags["__offset"] = item.offset
-                tags["__partition"] = batch.partition
-                tags["__topic"] = batch.topic
+                if self._include_metadata_tags:
+                    tags["__key"] = item.key
+                    tags["__topic"] = batch.topic
+                    tags["__partition"] = batch.partition
                 fields = (
                     {field_key: value[field_key] for field_key in fields_keys}
                     if fields_keys
@@ -78,14 +112,13 @@ class InfluxDBV3Sink(Sink):
                 records.append(record)
             try:
                 self._client.write(records, write_precision=self._write_precision)
-                # TODO: Maybe use backoff and retries here
             except influxdb_client_3.InfluxDBError as exc:
-                if exc.retry_after:
+                if exc.response.status == 429 and exc.retry_after:
                     # The write limit is exceeded, raise a SinkBackpressureError
                     # to pause the partition for a certain period of time.
                     raise SinkBackpressureError(
                         retry_after=int(exc.retry_after),
                         topic=batch.topic,
                         partition=batch.partition,
-                    )
+                    ) from exc
                 raise
