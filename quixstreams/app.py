@@ -14,7 +14,7 @@ from pydantic import Field, AliasGenerator
 from pydantic_settings import PydanticBaseSettingsSource, SettingsConfigDict
 
 from .context import set_message_context, copy_context
-from .dataframe import StreamingDataFrame
+from .dataframe import StreamingDataFrame, DataframeRegistry
 from .error_callbacks import (
     ConsumerErrorCallback,
     ProcessingErrorCallback,
@@ -294,7 +294,6 @@ class Application:
         self._producer = self._get_rowproducer(on_error=on_producer_error)
         self._running = False
         self._failed = False
-        self._sdfs = []
 
         if not topic_manager:
             topic_manager = topic_manager_factory(
@@ -338,6 +337,7 @@ class Application:
             sink_manager=self._sink_manager,
             pausing_manager=self._pausing_manager,
         )
+        self._dataframe_registry = DataframeRegistry()
 
     @property
     def config(self) -> "ApplicationConfig":
@@ -612,8 +612,9 @@ class Application:
             topic=topic,
             topic_manager=self._topic_manager,
             processing_context=self._processing_context,
+            stream_registry=self._dataframe_registry,
         )
-        self._sdfs.append(sdf)
+        self._dataframe_registry.register(sdf)
         return sdf
 
     def stop(self, fail: bool = False):
@@ -833,9 +834,8 @@ class Application:
             else:
                 self._run_sources()
 
-    def _run_dataframe(self, dataframe):
-        self._consumer.subscribe(
-            list({t for sdf in self._sdfs for t in sdf.topics_to_subscribe}),
+    def _run_dataframe(self, dataframe):self._consumer.subscribe(
+                self._dataframe_registry.consumer_topics(),
             on_assign=self._on_assign,
             on_revoke=self._on_revoke,
             on_lost=self._on_lost,
@@ -847,9 +847,7 @@ class Application:
         # Initialize the checkpoint
         self._processing_context.init_checkpoint()
 
-        dataframes_composed = {
-                k: v for sdf in self._sdfs for k, v in sdf.compose().items()
-            }
+        dataframes_composed = self._dataframe_registry.compose_all()
 
         while self._running:
             if self._state_manager.recovery_required:
