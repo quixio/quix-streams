@@ -10,7 +10,7 @@ from confluent_kafka import TopicPartition
 from typing_extensions import Self
 
 from .context import set_message_context, copy_context
-from .dataframe import StreamingDataFrame
+from .dataframe import StreamingDataFrame, DataframeRegistry
 from .error_callbacks import (
     ConsumerErrorCallback,
     ProcessingErrorCallback,
@@ -284,7 +284,6 @@ class Application:
         self._auto_create_topics = auto_create_topics
         self._running = False
         self._failed = False
-        self._sdfs = []
 
         if not topic_manager:
             topic_manager = topic_manager_factory(
@@ -318,6 +317,7 @@ class Application:
             state_manager=self._state_manager,
             exactly_once=self._uses_exactly_once,
         )
+        self._dataframe_registry = DataframeRegistry()
 
     @property
     def is_quix_app(self) -> bool:
@@ -585,8 +585,9 @@ class Application:
             topic=topic,
             topic_manager=self._topic_manager,
             processing_context=self._processing_context,
+            stream_registry=self._dataframe_registry,
         )
-        self._sdfs.append(sdf)
+        self._dataframe_registry.register(sdf)
         return sdf
 
     def stop(self, fail: bool = False):
@@ -745,7 +746,7 @@ class Application:
         with exit_stack:
             # Subscribe to topics in Kafka and start polling
             self._consumer.subscribe(
-                list({t for sdf in self._sdfs for t in sdf.topics_to_subscribe}),
+                self._dataframe_registry.consumer_topics(),
                 on_assign=self._on_assign,
                 on_revoke=self._on_revoke,
                 on_lost=self._on_lost,
@@ -757,9 +758,7 @@ class Application:
             # Initialize the checkpoint
             self._processing_context.init_checkpoint()
 
-            dataframes_composed = {
-                k: v for sdf in self._sdfs for k, v in sdf.compose().items()
-            }
+            dataframes_composed = self._dataframe_registry.compose_all()
 
             while self._running:
                 if self._state_manager.recovery_required:

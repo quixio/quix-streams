@@ -4,7 +4,6 @@ import contextvars
 import functools
 import operator
 import pprint
-from copy import deepcopy
 from datetime import timedelta
 from typing import (
     Optional,
@@ -47,7 +46,8 @@ from quixstreams.models.serializers import SerializerType, DeserializerType
 from quixstreams.processing_context import ProcessingContext
 from quixstreams.state.types import State
 from .base import BaseStreaming
-from .exceptions import InvalidOperation, GroupByLimitExceeded
+from .exceptions import InvalidOperation
+from .registry import DataframeRegistry
 from .series import StreamingSeries
 from .utils import ensure_milliseconds
 from .windows import TumblingWindowDefinition, HoppingWindowDefinition
@@ -111,24 +111,16 @@ class StreamingDataFrame(BaseStreaming):
         self,
         topic: Topic,
         topic_manager: TopicManager,
+        stream_registry: DataframeRegistry,
         processing_context: ProcessingContext,
         stream: Optional[Stream] = None,
-        branches: Optional[Dict[str, Stream]] = None,
-        root: Optional[Self] = None,
     ):
         self._stream: Stream = stream or Stream()
         self._topic = topic
         self._topic_manager = topic_manager
-        self._branches = branches or {}
-        self._sdf_root = root if root is not None else self
+        self._stream_registry = stream_registry
         self._processing_context = processing_context
         self._producer = processing_context.producer
-        if self._topic.name not in self._branches:
-            self._branches[self._topic.name] = self._stream
-
-    @property
-    def __root_branches__(self):
-        return self._sdf_root._branches
 
     @property
     def processing_context(self) -> ProcessingContext:
@@ -141,16 +133,6 @@ class StreamingDataFrame(BaseStreaming):
     @property
     def topic(self) -> Topic:
         return self._topic
-
-    @property
-    def topics_to_subscribe(self) -> List[Topic]:
-        all_topics = self._topic_manager.all_topics
-        topics = [all_topics[name] for name in self.__root_branches__]
-        if self._topic not in topics:
-            # enables getting a full topic list before compose() is called,
-            # allowing independence from app runtime call ordering
-            topics.append(self._topic)
-        return topics
 
     @overload
     def apply(self, func: ApplyCallback, *, expand: bool = ...) -> Self: ...
@@ -503,10 +485,6 @@ class StreamingDataFrame(BaseStreaming):
         :return: a clone with this operation added (assign to keep its effect).
         """
         # >= 1 since branches are only added once finalized
-        if len(self._branches) >= 2:
-            raise GroupByLimitExceeded(
-                "Only one GroupBy operation is allowed per StreamingDataFrame"
-            )
         if not key:
             raise ValueError('Parameter "key" cannot be empty')
         if callable(key) and not name:
@@ -525,7 +503,7 @@ class StreamingDataFrame(BaseStreaming):
 
         self.to_topic(topic=groupby_topic, key=self._groupby_key(key))
         new_branch = self.__dataframe_clone__(topic=groupby_topic)
-        self._add_branch(new_branch)
+        self._stream_registry.register(new_sdf=new_branch, original_sdf=self)
         return new_branch
 
     @staticmethod
@@ -765,10 +743,7 @@ class StreamingDataFrame(BaseStreaming):
         :return: a function that accepts "value"
             and returns a result of StreamingDataFrame
         """
-        return {
-            name: stream.compose(sink=sink)
-            for name, stream in self._sdf_root._branches.items()
-        }
+        return self._stream_registry.compose_all(sink)
 
     def test(
         self,
@@ -1039,16 +1014,6 @@ class StreamingDataFrame(BaseStreaming):
             topic_name=self._topic.name
         )
 
-    def _add_branch(self, branch):
-        """
-        Add a StreamingDataFrame to the branch cache via its corresponding topic name.
-
-        Implies no further operations will be added to that branch.
-
-        :param branch: a StreamingDataFrame instance
-        """
-        self._sdf_root._branches[branch._topic.name] = branch._stream
-
     def _groupby_key(
         self, key: Union[str, Callable[[Any], Any]]
     ) -> Callable[[Any], Any]:
@@ -1079,8 +1044,7 @@ class StreamingDataFrame(BaseStreaming):
             topic=topic or self._topic,
             processing_context=self._processing_context,
             topic_manager=self._topic_manager,
-            branches=deepcopy(self._branches),
-            root=self._sdf_root,
+            stream_registry=self._stream_registry,
         )
         return clone
 
