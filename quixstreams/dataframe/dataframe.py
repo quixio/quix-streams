@@ -1144,7 +1144,7 @@ class StreamingDataFrame(BaseStreaming):
             # Update an item key with a result of another sdf.apply()
             diff = self.stream.diff(item.stream)
             other_sdf_composed = diff.compose_returning()
-            item.stream.mark_as_orphan()
+            item.stream.prune()
             self._add_update(
                 lambda value, key, timestamp, headers: operator.setitem(
                     value,
@@ -1189,7 +1189,7 @@ class StreamingDataFrame(BaseStreaming):
             # Filter SDF based on another SDF
             diff = self.stream.diff(item.stream)
             other_sdf_composed = diff.compose_returning()
-            item.stream.mark_as_orphan()
+            item.stream.prune()
             return self.filter(
                 lambda value, key, timestamp, headers: other_sdf_composed(
                     value, key, timestamp, headers
