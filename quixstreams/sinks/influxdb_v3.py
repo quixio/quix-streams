@@ -27,9 +27,16 @@ class InfluxDBV3Sink(Sink):
         debug: bool = False,
     ):
         """
-        A sink connector for InfluxDB v3.
-        It will batch the processed records in memory and flush them to InfluxDB
-        on the checkpoint.
+        A connector to sink processed data to InfluxDB v3.
+
+        It batches the processed records in memory per topic partition
+        and flushes them to InfluxDB at the checkpoint.
+
+        The InfluxDB sink transparently handles backpressure if the DB instance
+        cannot accept more data at the moment
+        (e.g., when InfluxDB returns an HTTP 429 error with the "retry_after" header set).
+        When this happens, the sink will notify the Application to pause consuming
+        from the backpressured topic partition until the "retry_after" timeout elapses.
 
         :param token: InfluxDB access token
         :param host: InfluxDB host in format "https://<host>"
