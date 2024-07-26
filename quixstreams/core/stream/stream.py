@@ -90,7 +90,7 @@ class Stream:
         :return: a string of format
             "<Stream [<total functions>]: <FuncType: func_name> | ... >"
         """
-        tree_funcs = [s.func for s in self.tree_to_root()]
+        tree_funcs = [s.func for s in self.tree_full()]
         funcs_repr = " | ".join(
             (f"<{f.__class__.__name__}: {f.func.__qualname__}>" for f in tree_funcs)
         )
@@ -232,19 +232,19 @@ class Stream:
             head = node
         return head
 
-    def tree_to_root(self, stop_at=None) -> List[Self]:
+    def tree_full(self, allow_splits=True) -> List[Self]:
         """
         Return a list of all parent Streams including the node itself.
+
+        Can optionally stop at a first encountered split with allow_splits=False
 
         The tree is ordered from parent to child (current node comes last).
         :return: a list of `Stream` objects
         """
 
-        tree_ = [self]
         node = self
-        if stop_at is None:
-            stop_at = []
-        while (parent := node.parent) and (parent not in stop_at):
+        tree_ = [node]
+        while (parent := node.parent) and (allow_splits or len(parent.children) < 2):
             tree_.append(parent)
             node = node.parent
 
@@ -267,7 +267,7 @@ class Stream:
 
     def tree_map(self):
         tree_ = {}
-        self._add_node_children(tree_, self.tree_to_root()[0])
+        self._add_node_children(tree_, self.tree_full()[0])
         return tree_
 
     def tree_leaves(self, tree=None):
@@ -326,7 +326,7 @@ class Stream:
         # Start all the initial composes
         pending_composes = {stream: [] for stream in reversed(list(splits))}
         for leaf in self.tree_leaves(tree=tree_map):
-            tree = leaf.tree_to_root(stop_at=splits)
+            tree = leaf.tree_full(allow_splits=False)
             pending_composes[tree[0].parent].append(compose(tree, composed))
 
         # After leaves are composed, at least one split will always have its list of
@@ -338,8 +338,7 @@ class Stream:
                 if len(pending) == len(split.children):
                     # the children at this split are composed and ready to finalize
                     break
-            splits.remove(split)
-            new_tree = split.tree_to_root(stop_at=splits)
+            new_tree = split.tree_full(allow_splits=False)
             # we pass the list of composed children; .compose() and StreamFunction
             # know how to properly compose them (necessary for data copying steps).
             composed = compose(new_tree, pending_composes.pop(split))
@@ -420,8 +419,8 @@ class Stream:
         return composed
 
     def _diff_from_last_common_parent(self, other: Self) -> List[Self]:
-        nodes_self = self.tree_to_root()
-        nodes_other = other.tree_to_root()
+        nodes_self = self.tree_full()
+        nodes_other = other.tree_full()
 
         diff = []
         last_common_parent = None
