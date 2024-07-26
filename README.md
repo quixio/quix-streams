@@ -44,7 +44,10 @@ See [requirements.txt](https://github.com/quixio/quix-streams/blob/main/requirem
 Here's an example of how to <b>process</b> data from a Kafka Topic with Quix Streams:
 
 ```python
-from quixstreams import Application, State
+from quixstreams import Application
+
+# A minimal application reading temperature data in Celsius from the Kafka topic,
+# converting it to Fahrenheit and producing alerts to another topic.
 
 # Define an application that will connect to Kafka
 app = Application(
@@ -52,16 +55,19 @@ app = Application(
 )
 
 # Define the Kafka topics
-temperature_topic = app.topic("temperature")
-alerts_topic = app.topic("alerts")
+temperature_topic = app.topic("temperature-celsius", value_deserializer='json')
+alerts_topic = app.topic("temperature-alerts", value_serializer='json')
 
-# Create a Streaming DataFrame
+# Create a Streaming DataFrame connected to the input Kafka topic
 sdf = app.dataframe(topic=temperature_topic)
 
-# Transform, filter, and enrich data from Kafka here
-sdf = sdf[sdf['temperature'] > 100]
+# Convert temperature to Fahrenheit by transforming the input message
+sdf = sdf.apply(lambda value: {'temperature_F': (value['temperature'] * 9/5) + 32})
 
-# Produce the result to the output topic
+# Filter values above the threshold
+sdf = sdf[sdf['temperature_F'] > 150]
+
+# Produce alerts to the output topic
 sdf = sdf.to_topic(alerts_topic)
 
 # Run the streaming application 
@@ -104,7 +110,7 @@ to learn how to use Quix Streams and Quix Cloud together.
 ##// TODO: Make it shorter, remove the already shipped features.
 ##// TODO: Update according to the current roadmap.
 
-This library is being actively developed. 
+This library is being actively developed by a full-time team
 
 Here are some of the planned improvements:
 
@@ -119,11 +125,11 @@ Here are some of the planned improvements:
 
 
 ## Get Involved 👋
-##//TODO: Make the items shorter.
 
 - Please use [GitHub issues](https://github.com/quixio/quix-streams/issues) to report bugs and suggest new features.
-- Follow us on [X](https://x.com/Quix_io) and [LinkedIn](https://www.linkedin.com/company/70925173) where we share our latest tutorials, forthcoming community events and the occasional meme.
 - Join the [Quix Community on Slack](https://quix.io/slack-invite), a vibrant group of Kafka Python developers, data engineers and newcomers to Apache Kafka, who are learning and leveraging Quix Streams for real-time data processing.
+- Watch and subscribe to [@QuixStreams on YouTube](https://www.youtube.com/@QuixStreams) for code-along tutorials from scratch and interesting community highlights.
+- Follow us on [X](https://x.com/Quix_io) and [LinkedIn](https://www.linkedin.com/company/70925173) where we share our latest tutorials, forthcoming community events and the occasional meme.
 - If you have any questions or feedback - write to us at support@quix.io!
 
 
