@@ -123,7 +123,7 @@ Here are some of the planned improvements:
 
 - Please use [GitHub issues](https://github.com/quixio/quix-streams/issues) to report bugs and suggest new features.
 - Follow us on [X](https://x.com/Quix_io) and [LinkedIn](https://www.linkedin.com/company/70925173) where we share our latest tutorials, forthcoming community events and the occasional meme.
-- Join the [Quix Community on Slack](https://quix.io/slack-invite), a vibrant group of Python developers, data enthusiasts and newcomers to Apache Kafka, who are learning and leveraging Quix Streams for real-time data processing.
+- Join the [Quix Community on Slack](https://quix.io/slack-invite), a vibrant group of Kafka Python developers, data engineers and newcomers to Apache Kafka, who are learning and leveraging Quix Streams for real-time data processing.
 - If you have any questions or feedback - write to us at support@quix.io!
 
 
