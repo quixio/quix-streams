@@ -81,7 +81,7 @@ To see Quix Streams in action, check out the Quickstart and Tutorials in the doc
 ### Key Concepts
 There are two primary objects:
 - `StreamingDataFrame` - a predefined declarative pipeline to process and transform incoming messages.
-- `Application` - to manage the Kafka-related setup & teardown and message lifecycle (consuming, committing). It processes each message with the dataframe you provide it.
+- `Application` - to manage the Kafka-related setup, teardown and message lifecycle (consuming, committing). It processes each message with the dataframe you provide for it to run.
 
 Under the hood, the `Application` will:
 - Consume and deserialize messages.
