@@ -1,7 +1,7 @@
 from tests.utils import DummySink
 
 
-class TestSink:
+class TestBatchingSink:
     def test_add_and_flush(self):
         sink = DummySink()
         topic, partition = "topic", 0
@@ -32,7 +32,7 @@ class TestSink:
         sink.flush(topic="topic", partition=0)
         assert sink.results == []
 
-    def test_drop_batch(self):
+    def test_on_paused(self):
         sink = DummySink()
         topic, partition = "topic", 0
         key, value = "key", "value"
@@ -46,12 +46,12 @@ class TestSink:
             timestamp=0,
             headers=[],
         )
-        sink.drop_batch(topic=topic, partition=partition)
+        sink.on_paused(topic=topic, partition=partition)
         sink.flush(topic=topic, partition=partition)
         assert sink.results == []
 
-    def test_drop_batch_empty(self):
+    def test_on_paused_no_batch(self):
         sink = DummySink()
-        sink.drop_batch(topic="topic", partition=0)
+        sink.on_paused(topic="topic", partition=0)
         sink.flush(topic="topic", partition=0)
         assert sink.results == []

@@ -13,7 +13,7 @@ from quixstreams.checkpointing.exceptions import (
 from quixstreams.kafka import Consumer
 from quixstreams.processing import PausingManager
 from quixstreams.rowproducer import RowProducer
-from quixstreams.sinks import SinkManager, Sink, SinkBackpressureError
+from quixstreams.sinks import SinkManager, BatchingSink, SinkBackpressureError
 from quixstreams.sinks.base import SinkBatch
 from quixstreams.state import StateStoreManager
 from quixstreams.state.exceptions import StoreNotRegisteredError, StoreTransactionFailed
@@ -59,14 +59,14 @@ def rowproducer_mock(request):
     return p
 
 
-class BackpressuredSink(Sink):
+class BackpressuredSink(BatchingSink):
     def write(self, batch: SinkBatch):
         raise SinkBackpressureError(
             retry_after=999, topic=batch.topic, partition=batch.partition
         )
 
 
-class FailingSink(Sink):
+class FailingSink(BatchingSink):
     def write(self, batch: SinkBatch):
         raise ValueError("Sink write failed")
 

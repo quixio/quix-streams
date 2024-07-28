@@ -7,6 +7,7 @@ from confluent_kafka import TopicPartition, KafkaException
 from quixstreams.kafka import Consumer
 from quixstreams.processing.pausing import PausingManager
 from quixstreams.rowproducer import RowProducer
+from quixstreams.sinks import SinkManager
 from quixstreams.sinks.exceptions import SinkBackpressureError
 from quixstreams.state import (
     StateStoreManager,
@@ -19,7 +20,6 @@ from .exceptions import (
     CheckpointProducerTimeout,
     CheckpointConsumerCommitError,
 )
-from quixstreams.sinks import SinkManager
 
 logger = logging.getLogger(__name__)
 
@@ -177,7 +177,7 @@ class Checkpoint:
                     # Also drop the batch to reprocess it later.
                     # Note: when flushing multiple sinks for the same TP, some
                     # of them can be flushed before one of the sinks is backpressured.
-                    sink.drop_batch(topic=topic, partition=partition)
+                    sink.on_paused(topic=topic, partition=partition)
                     break
 
                 try:

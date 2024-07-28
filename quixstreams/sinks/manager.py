@@ -1,17 +1,17 @@
 from typing import List
 
-from .base import Sink
+from .base import BaseSink
 
 
 class SinkManager:
     def __init__(self):
         self._sinks = {}
 
-    def register(self, sink: Sink):
+    def register(self, sink: BaseSink):
         sink_id = id(sink)
         if sink_id not in self._sinks:
             self._sinks[id(sink)] = sink
 
     @property
-    def sinks(self) -> List[Sink]:
+    def sinks(self) -> List[BaseSink]:
         return list(self._sinks.values())

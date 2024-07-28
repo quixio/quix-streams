@@ -1,10 +1,11 @@
 import dataclasses
 import time
-from typing import Optional, List, Tuple, Union
-from confluent_kafka import OFFSET_INVALID
 from typing import List
+from typing import Optional, Tuple, Union
 
-from quixstreams.sinks import Sink
+from confluent_kafka import OFFSET_INVALID
+
+from quixstreams.sinks import BatchingSink
 from quixstreams.sinks.base import SinkBatch
 from quixstreams.sinks.base.item import SinkItem
 
@@ -100,7 +101,7 @@ class ConfluentKafkaMessageStub:
         return len(self._value)
 
 
-class DummySink(Sink):
+class DummySink(BatchingSink):
     def __init__(self):
         super().__init__()
         self._results = []

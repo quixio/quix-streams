@@ -8,14 +8,36 @@ from quixstreams.sinks.base.batch import SinkBatch
 logger = logging.getLogger(__name__)
 
 
-class Sink(abc.ABC):
+class BaseSink(abc.ABC):
+    # TODO: Docs
+
+    @abc.abstractmethod
+    def flush(self, topic: str, partition: int): ...
+
+    @abc.abstractmethod
+    def add(
+        self,
+        value: Any,
+        key: Any,
+        timestamp: int,
+        headers: List[Tuple[str, HeaderValue]],
+        topic: str,
+        partition: int,
+        offset: int,
+    ): ...
+
+    def on_paused(self, topic: str, partition: int): ...
+
+
+class BatchingSink(BaseSink):
+    # TODO: Docs (including "how to create your own sink)
     _batches: Dict[Tuple[str, int], SinkBatch]
 
     def __init__(self):
         self._batches = {}
 
     def __repr__(self):
-        return f"<Sink: {self.__class__.__name__}>"
+        return f"<BatchingSink: {self.__class__.__name__}>"
 
     @abc.abstractmethod
     def write(self, batch: SinkBatch): ...
@@ -52,7 +74,7 @@ class Sink(abc.ABC):
                 self.write(batch)
             finally:
                 # Always drop the batch after flushing it
-                self.drop_batch(topic=topic, partition=partition)
+                self._batches.pop((topic, partition), None)
 
-    def drop_batch(self, topic: str, partition: int):
+    def on_paused(self, topic: str, partition: int):
         self._batches.pop((topic, partition), None)
