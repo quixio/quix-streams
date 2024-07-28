@@ -46,7 +46,7 @@ from quixstreams.models import (
 )
 from quixstreams.models.serializers import SerializerType, DeserializerType
 from quixstreams.processing import ProcessingContext
-from quixstreams.sinks.manager import Sink
+from quixstreams.sinks import BaseSink
 from quixstreams.state.types import State
 from .base import BaseStreaming
 from .exceptions import InvalidOperation, GroupByLimitExceeded, DataFrameLocked
@@ -1046,21 +1046,23 @@ class StreamingDataFrame(BaseStreaming):
         )
 
     @_ensure_unlocked
-    def sink(self, sink: Sink):
+    def sink(self, sink: BaseSink):
         """
         Sink the processed data to the specified destination.
 
-        Internally, sinks will batch the processed records in memory and
-        flush them on each checkpoint.
+        Internally, each processed record is added to a sink, and the sinks are
+        flushed on each checkpoint.
         The offset will be committed only if all the sinks for all topic partitions
         are flushed successfully.
 
+        Additionally, Sinks may signal the backpressure to the application
+        (e.g., when the destination is rate-limited).
+        When this happens, the application will pause the corresponding topic partition
+        and resume again after the timeout.
+        The backpressure handling and timeouts are defined by the specific sinks.
+
         Note: `sink()` is a terminal operation, and you cannot add new operations
         to the same StreamingDataFrame after it's called.
-        # TODO: Make sinks terminal
-        # TODO: Explain backpressure
-
-
 
         """
         self._processing_context.sink_manager.register(sink)
@@ -1079,7 +1081,7 @@ class StreamingDataFrame(BaseStreaming):
                 offset=ctx.offset,
             )
 
-        sdf = self.update(_sink_callback, metadata=True)
+        self.update(_sink_callback, metadata=True)
         self._lock()
 
     def _lock(self):
