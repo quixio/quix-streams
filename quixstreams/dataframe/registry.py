@@ -38,7 +38,9 @@ class DataframeRegistry:
     def compose_all(
         self, sink: Optional[Callable[[Any, Any, int, Any], None]] = None
     ) -> Dict[str, VoidExecutor]:
-        return {topic: stream.compose(sink) for topic, stream in self._registry.items()}
+        return {
+            topic: stream.compose(sink=sink) for topic, stream in self._registry.items()
+        }
 
     def consumer_topics(self) -> List[Topic]:
         return self._topics
