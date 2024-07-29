@@ -19,7 +19,7 @@ It has the following benefits:
 - Exactly-once processing semantics via Kafka transactions.
 - Pure Python with no need for a server-side engine.  
 
-Use Quix Streams to build event-driven, machine learning/AI or physics-based applications and data pipelines that depend on real-time data from Kafka.
+Use Quix Streams to build simple Kafka producer/consumer applications or leverage stream processing to build complex event-driven systems, real-time data pipelines and AI/ML products.
 
 
 ## Getting Started 🏄
