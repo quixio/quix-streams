@@ -62,7 +62,7 @@ alerts_topic = app.topic("temperature-alerts", value_serializer='json')
 sdf = app.dataframe(topic=temperature_topic)
 
 # Convert temperature to Fahrenheit by transforming the input message (with an anonymous or user-defined function)
-sdf = sdf.apply(lambda value: {'temperature_F': (value['temperature'] * 9/5) + 32})
+sdf = sdf.apply(lambda value: {"temperature_F": (value["temperature"] * 9/5) + 32})
 
 # Filter values above the threshold
 sdf = sdf[sdf["temperature_F"] > 150]
