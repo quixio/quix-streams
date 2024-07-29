@@ -1,4 +1,4 @@
-![Quix - React to data, fast](https://github.com/quixio/quix-streams/blob/main/images/quixstreams-banner.jpg)
+![Quix - React to data, fast](./images/quixstreams-banner.png)
 
  [![GitHub Version](https://img.shields.io/github/tag-pre/quixio/quix-streams.svg?label=Version&color=008dff)](https://github.com/quixio/quix-streams/releases)
 ![PyPI License](https://img.shields.io/pypi/l/quixstreams?label=Licence&color=008dff)
