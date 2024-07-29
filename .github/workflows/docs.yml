@@ -28,7 +28,8 @@ jobs:
         run: |
           cd docs/build
           python build.py
-          git diff --quiet && echo "::set-output name=diff::false" || echo "::set-output name=diff::true"
+          git diff --quiet && DIFF=false || DIFF=true
+          echo "diff=$DIFF" >> $GITHUB_OUTPUT
 
       - name: Commit and push changes
         if: steps.generate.outputs.diff == 'true'
