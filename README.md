@@ -65,7 +65,7 @@ sdf = app.dataframe(topic=temperature_topic)
 sdf = sdf.apply(lambda value: {'temperature_F': (value['temperature'] * 9/5) + 32})
 
 # Filter values above the threshold
-sdf = sdf[sdf['temperature_F'] > 150]
+sdf = sdf[sdf["temperature_F"] > 150]
 
 # Produce alerts to the output topic
 sdf = sdf.to_topic(alerts_topic)
