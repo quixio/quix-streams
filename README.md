@@ -25,8 +25,7 @@ Quix Streams has the following benefits:
 Use Quix Streams to build event-driven, machine learning/AI or physics-based applications that depend on real-time data from Kafka.
 
 
-## Getting started 🏄
-
+## Getting Started 🏄
 
 ### Install Quix Streams
 
@@ -109,7 +108,7 @@ You'll get self-service DevOps, CI/CD and monitoring, all built with best in cla
 Please see the [**Connecting to Quix Cloud**](https://quix.io/docs/quix-streams/quix-platform.html) page 
 to learn how to use Quix Streams and Quix Cloud together.
 
-## Roadmap
+## Roadmap 📍
 
 This library is being actively developed by a full-time team.
 
@@ -125,7 +124,7 @@ Here are some of the planned improvements:
 - [ ] Schema Registry support
 
 
-## Get Involved 👋
+## Get Involved 🤝
 
 - Please use [GitHub issues](https://github.com/quixio/quix-streams/issues) to report bugs and suggest new features.
 - Join the [Quix Community on Slack](https://quix.io/slack-invite), a vibrant group of Kafka Python developers, data engineers and newcomers to Apache Kafka, who are learning and leveraging Quix Streams for real-time data processing.
@@ -134,7 +133,7 @@ Here are some of the planned improvements:
 - If you have any questions or feedback - write to us at support@quix.io!
 
 
-## License
+## License 📗
 
 Quix Streams is licensed under the Apache 2.0 license.  
 View a copy of the License file [here](https://github.com/quixio/quix-streams/blob/main/LICENSE).
