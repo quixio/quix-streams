@@ -45,7 +45,7 @@ jobs:
           git config --global user.name 'github-actions'
           git config --global user.email 'github-actions@github.com'
           git commit -m "Update documentation"
-          git push -Fu origin update-docs
+          git push -f -u origin update-docs
         # env:
         #   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
