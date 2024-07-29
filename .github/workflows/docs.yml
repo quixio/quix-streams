@@ -41,8 +41,8 @@ jobs:
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v6
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
           branch: update-docs
+          base: autogenerate-docs
           title: 'Update Documentation'
           body: 'This PR updates the documentation with the latest changes.'
           labels: 'documentation'
