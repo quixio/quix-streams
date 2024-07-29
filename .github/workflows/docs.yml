@@ -26,13 +26,10 @@ jobs:
       - name: Generate documentation
         id: generate
         run: |
-          git rev-parse --abbrev-ref HEAD
-          git checkout autogenerate-docs
-          git rev-parse --abbrev-ref HEAD
+          git diff
           cd docs/build
           python build.py
           git diff --quiet && DIFF=false || DIFF=true
-          git diff
           echo $DIFF
           echo "diff=$DIFF" >> $GITHUB_OUTPUT
 
