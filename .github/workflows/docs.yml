@@ -13,21 +13,12 @@ jobs:
       contents: write
       pull-requests: write
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.8'
-
-      - name: Install dependencies
-        run: |
-          cd docs/build
-          pip install -r requirements.txt
-
+          python-version: '3.12'
+      - run: pip install -r docs/build/requirements.txt
       - name: Generate documentation
         id: generate
         run: |
