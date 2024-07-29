@@ -97,20 +97,18 @@ Under the hood, the `Application` will:
 - Scale using Kafka's built-in consumer groups mechanism.
 
 
-### Using Quix Cloud
-##// TODO: Mention that Quix Streams can be deployed anywhere where Python runs.
+### Deployment
+You can run Quix Streams pipelines anywhere Python is installed.
 
-Deploy Quix Streams pipelines to [Quix Cloud](https://quix.io/product) on AWS, Azure, GCP or on-premise for a fully managed platform with self-service DevOps and monitoring, all built with best in class engineering practices learned from Formula 1 Racing.
+Deploy to your own infrastructure or to [Quix Cloud](https://quix.io/product) on AWS, Azure, GCP or on-premise for a fully managed platform.  
+You'll get self-service DevOps, CI/CD and monitoring, all built with best in class engineering practices learned from Formula 1 Racing.
 
 Please see the [**Connecting to Quix Cloud**](https://quix.io/docs/quix-streams/quix-platform.html) page 
 to learn how to use Quix Streams and Quix Cloud together.
 
 ## Roadmap
 
-##// TODO: Make it shorter, remove the already shipped features.
-##// TODO: Update according to the current roadmap.
-
-This library is being actively developed by a full-time team
+This library is being actively developed by a full-time team.
 
 Here are some of the planned improvements:
 
