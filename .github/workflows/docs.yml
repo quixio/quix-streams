@@ -19,29 +19,14 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install -r docs/build/requirements.txt
-      - name: Generate documentation
-        # id: generate
-        run: |
-          cd docs/build
-          python build.py
-        #  git diff --quiet && DIFF=false || DIFF=true
-        #  echo $DIFF
-        #  echo "diff=$DIFF" >> $GITHUB_OUTPUT
-
-      # - name: Commit and push changes
-      #   # if: steps.generate.outputs.diff == 'true'
-      #   run: |
-      #     git checkout -b update-docs
-      #     git add docs/api-reference
-      #     git config --global user.name 'github-actions'
-      #     git config --global user.email 'github-actions@github.com'
-      #     git commit -m "Update documentation"
-      #     git push -f -u origin update-docs
-
+      - run: python build.py
+        working-directory: ./docs/build
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v6
         with:
+          commit-message: Update documentation
           branch: update-docs
+          delete-branch: true
           title: 'Update Documentation'
           body: 'This PR updates the documentation with the latest changes.'
           labels: 'documentation'
