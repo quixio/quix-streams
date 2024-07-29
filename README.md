@@ -55,8 +55,8 @@ app = Application(
 )
 
 # Define the Kafka topics
-temperature_topic = app.topic("temperature-celsius", value_deserializer='json')
-alerts_topic = app.topic("temperature-alerts", value_serializer='json')
+temperature_topic = app.topic("temperature-celsius", value_deserializer="json")
+alerts_topic = app.topic("temperature-alerts", value_serializer="json")
 
 # Create a Streaming DataFrame connected to the input Kafka topic
 sdf = app.dataframe(topic=temperature_topic)
