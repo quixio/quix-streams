@@ -28,15 +28,12 @@ jobs:
           cd docs/build
           python build.py
 
-      - name: Configure Git
-        run: |
-          git config --global user.name 'github-actions'
-          git config --global user.email 'github-actions@github.com'
-
       - name: Commit and push changes
         run: |
           git checkout -b update-docs
           git add docs/api-reference
+          git config --global user.name 'github-actions'
+          git config --global user.email 'github-actions@github.com'
           git commit -m "Update documentation"
           git push -u origin update-docs
         env:
