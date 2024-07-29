@@ -29,12 +29,14 @@ jobs:
           cd docs/build
           python build.py
           git diff --quiet && DIFF=false || DIFF=true
+          git diff
           echo $DIFF
           echo "diff=$DIFF" >> $GITHUB_OUTPUT
 
       - name: Commit and push changes
         if: steps.generate.outputs.diff == 'true'
         run: |
+          echo $GITHUB_OUTPUT
           git checkout -b update-docs
           git add docs/api-reference
           git config --global user.name 'github-actions'
