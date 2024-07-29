@@ -9,7 +9,6 @@
 [![X](https://img.shields.io/twitter/url?label=X&style=social&url=https%3A%2F%2Ftwitter.com%2Fquix_io)](https://twitter.com/quix_io)
 
 # 100% Python Stream Processing for Kafka
-##// TODO: A PICTURE/ANIMATION/VIDEO GOES HERE
 
 Quix Streams is a cloud-native library for processing data in Kafka using pure Python. It’s designed to give you the power of a distributed system in a lightweight library by combining Kafka's low-level scalability and resiliency features with an easy-to-use Python interface (to ease newcomers to stream processing). 
 
