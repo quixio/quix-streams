@@ -42,7 +42,7 @@ jobs:
         uses: peter-evans/create-pull-request@v6
         with:
           branch: update-docs
-          base: autogenerate-docs
+          base: main
           title: 'Update Documentation'
           body: 'This PR updates the documentation with the latest changes.'
           labels: 'documentation'
