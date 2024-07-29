@@ -20,7 +20,7 @@ jobs:
           python-version: '3.12'
       - run: pip install -r docs/build/requirements.txt
       - name: Generate documentation
-        id: generate
+        # id: generate
         run: |
           cd docs/build
           python build.py
@@ -37,14 +37,12 @@ jobs:
           git config --global user.email 'github-actions@github.com'
           git commit -m "Update documentation"
           git push -f -u origin update-docs
-        # env:
-        #   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # - name: Create Pull Request
-      #   uses: peter-evans/create-pull-request@v6
-      #   with:
-      #     token: ${{ secrets.GITHUB_TOKEN }}
-      #     branch: update-docs
-      #     title: 'Update Documentation'
-      #     body: 'This PR updates the documentation with the latest changes.'
-      #     labels: 'documentation'
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: update-docs
+          title: 'Update Documentation'
+          body: 'This PR updates the documentation with the latest changes.'
+          labels: 'documentation'
