@@ -46,8 +46,8 @@ jobs:
           git config --global user.email 'github-actions@github.com'
           git commit -m "Update documentation"
           git push -u origin update-docs
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # env:
+        #   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # - name: Create Pull Request
       #   uses: peter-evans/create-pull-request@v6
