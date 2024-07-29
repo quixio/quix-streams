@@ -19,7 +19,9 @@ loader = PythonLoader(
 )
 renderer = MarkdownRenderer(
     source_linker=GithubSourceLinker(
-        root=LIBRARY_ROOT_PATH.as_posix(), repo="quixio/quix-streams"
+        root=LIBRARY_ROOT_PATH.as_posix(),
+        repo="quixio/quix-streams",
+        use_branch=True,
     ),
     source_position="after signature",
     source_format="[[VIEW SOURCE]]({url})",
