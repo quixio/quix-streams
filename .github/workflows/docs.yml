@@ -5,8 +5,12 @@ on:
     branches:
       - autogenerate-docs
 
+permissions: { }
+
 jobs:
   generate-docs:
+    permissions:
+      pull-requests: write
     runs-on: ubuntu-latest
 
     steps:
@@ -26,26 +30,23 @@ jobs:
       - name: Generate documentation
         id: generate
         run: |
-          git diff
           cd docs/build
           python build.py
-          git diff
-#          git diff --quiet && DIFF=false || DIFF=true
-#          echo $DIFF
-#          echo "diff=$DIFF" >> $GITHUB_OUTPUT
+        #  git diff --quiet && DIFF=false || DIFF=true
+        #  echo $DIFF
+        #  echo "diff=$DIFF" >> $GITHUB_OUTPUT
 
-      # - name: Commit and push changes
-      #   if: steps.generate.outputs.diff == 'true'
-      #   run: |
-      #     echo $GITHUB_OUTPUT
-      #     git checkout -b update-docs
-      #     git add docs/api-reference
-      #     git config --global user.name 'github-actions'
-      #     git config --global user.email 'github-actions@github.com'
-      #     git commit -m "Update documentation"
-      #     git push -u origin update-docs
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Commit and push changes
+        # if: steps.generate.outputs.diff == 'true'
+        run: |
+          git checkout -b update-docs
+          git add docs/api-reference
+          git config --global user.name 'github-actions'
+          git config --global user.email 'github-actions@github.com'
+          git commit -m "Update documentation"
+          git push -u origin update-docs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # - name: Create Pull Request
       #   uses: peter-evans/create-pull-request@v6
