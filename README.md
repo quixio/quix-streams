@@ -61,7 +61,7 @@ alerts_topic = app.topic("temperature-alerts", value_serializer='json')
 # Create a Streaming DataFrame connected to the input Kafka topic
 sdf = app.dataframe(topic=temperature_topic)
 
-# Convert temperature to Fahrenheit by transforming the input message
+# Convert temperature to Fahrenheit by transforming the input message (with an anonymous or user-defined function)
 sdf = sdf.apply(lambda value: {'temperature_F': (value['temperature'] * 9/5) + 32})
 
 # Filter values above the threshold
