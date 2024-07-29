@@ -24,11 +24,14 @@ jobs:
           pip install -r requirements.txt
 
       - name: Generate documentation
+        id: generate
         run: |
           cd docs/build
           python build.py
+          git diff --quiet && echo "::set-output name=diff::false" || echo "::set-output name=diff::true"
 
       - name: Commit and push changes
+        if: steps.generate.outputs.diff == 'true'
         run: |
           git checkout -b update-docs
           git add docs/api-reference
