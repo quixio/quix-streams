@@ -1,4 +1,4 @@
-![Quix - React to data, fast](./images/quixstreams-banner.png)
+![Quix - React to data, fast](https://github.com/quixio/quix-streams/blob/main/images/quixstreams-banner.jpg)
 
  [![GitHub Version](https://img.shields.io/github/tag-pre/quixio/quix-streams.svg?label=Version&color=008dff)](https://github.com/quixio/quix-streams/releases)
 ![PyPI License](https://img.shields.io/pypi/l/quixstreams?label=Licence&color=008dff)
@@ -8,21 +8,19 @@
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-0A66C2.svg?logo=linkedin)](https://www.linkedin.com/company/70925173/)
 [![X](https://img.shields.io/twitter/url?label=X&style=social&url=https%3A%2F%2Ftwitter.com%2Fquix_io)](https://twitter.com/quix_io)
 
-# Quix Streams
+# 100% Python Stream Processing for Kafka
 ##// TODO: A PICTURE/ANIMATION/VIDEO GOES HERE
 
-Quix Streams is a cloud-native library for processing data in Kafka using pure Python. It’s designed to give you the power of a distributed system in a lightweight library by combining Kafka's low-level scalability and resiliency features with an easy-to-use Python interface (to ease newcomers to stream processing).
+Quix Streams is a cloud-native library for processing data in Kafka using pure Python. It’s designed to give you the power of a distributed system in a lightweight library by combining Kafka's low-level scalability and resiliency features with an easy-to-use Python interface (to ease newcomers to stream processing). 
 
-Quix Streams has the following benefits:
-
+It has the following benefits:
 - Streaming DataFrame API (similar to pandas DataFrame) for tabular data transformations.
-- Support for custom stateful operations.
-- Support for custom aggregations over tumbling and hopping time windows.
-- Support for exactly-once processing semantics via Kafka transactions.
+- Custom stateful operations via a state object.
+- Custom reducing and aggregating over tumbling and hopping time windows.
+- Exactly-once processing semantics via Kafka transactions.
 - Pure Python with no need for a server-side engine.  
 
-
-Use Quix Streams to build event-driven, machine learning/AI or physics-based applications that depend on real-time data from Kafka.
+Use Quix Streams to build event-driven, machine learning/AI or physics-based applications and data pipelines that depend on real-time data from Kafka.
 
 
 ## Getting Started 🏄
@@ -115,7 +113,7 @@ This library is being actively developed by a full-time team.
 Here are some of the planned improvements:
 
 - [x] [Windowed aggregations over Tumbling & Hopping windows](https://quix.io/docs/quix-streams/v2-0-latest/windowing.html)
-- [x] [State recovery based on Kafka changelog topics](https://quix.io/docs/quix-streams/advanced/stateful-processing.html#fault-tolerance-recovery)
+- [x] [Stateful operations and recovery based on Kafka changelog topics](https://quix.io/docs/quix-streams/advanced/stateful-processing.html)
 - [x] [Group-by operation](https://quix.io/docs/quix-streams/groupby.html)
 - [x] ["Exactly Once" delivery guarantees for Kafka message processing (AKA transactions)](https://quix.io/docs/quix-streams/configuration.html#processing-guarantees)
 - [ ] Joins
