@@ -37,6 +37,7 @@ jobs:
         if: steps.generate.outputs.diff == 'true'
         run: |
           echo $GITHUB_OUTPUT
+          git checkout autogenerate-docs
           git checkout -b update-docs
           git add docs/api-reference
           git config --global user.name 'github-actions'
