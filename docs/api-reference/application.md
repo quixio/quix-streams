@@ -63,6 +63,7 @@ def __init__(broker_address: Optional[Union[str, ConnectionConfig]] = None,
              consumer_group: Optional[str] = None,
              auto_offset_reset: AutoOffsetReset = "latest",
              commit_interval: float = 5.0,
+             commit_every: int = 0,
              consumer_extra_config: Optional[dict] = None,
              producer_extra_config: Optional[dict] = None,
              state_dir: str = "state",
@@ -109,6 +110,15 @@ Default - "quixstreams-default" (set during init)
   >***NOTE:*** Quix Applications will prefix it with the Quix workspace id.
 - `commit_interval`: How often to commit the processed messages in seconds.
 Default - 5.0.
+- `commit_every`: Commit the checkpoint after processing N messages.
+Use this parameter for more granular control of the commit schedule.
+If the value is > 0, the application will commit the checkpoint after
+processing the specified number of messages across all the assigned
+partitions.
+If the value is <= 0, only the `commit_interval` will be considered.
+Default - 0.
+    >***NOTE:*** Only input offsets are counted, and the application
+    > may produce more results than the number of incoming messages.
 - `auto_offset_reset`: Consumer `auto.offset.reset` setting
 - `consumer_extra_config`: A dictionary with additional options that
 will be passed to `confluent_kafka.Consumer` as is.
