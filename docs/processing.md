@@ -150,6 +150,9 @@ It accepts either one column name as a string or a list of names.
 
 The `.drop()` method updates the existing `StreamingDataFrame` object and returns the same `StreamingDataFrame` instance so that you can chain other methods after the `drop()` call, too.
 
+By default, the `.drop()` fails if one of the columns is missing in the value.  
+If you expect some columns to be missing, you can pass `errors="ignore"` to the `.drop()` method to suppress the errors. 
+
 Internally, it mutates the record's value and deletes the keys in place.
 
 **Example**:
@@ -184,6 +187,9 @@ sdf.drop("metadata")
 
 # You may also drop multiple keys by providing a list of names:
 sdf.drop(["metadata", "timestamp"])
+
+# You may suppress KeyErrors if some columns are missing in the value dictionary
+sdf.drop(["missing_column"], errors='ignore')
 ```
 
 > **_NOTE:_**  The `StreamingDataFrame.drop()` method works only with mapping-like values like dictionaries.

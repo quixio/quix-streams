@@ -1,4 +1,3 @@
-import json
 import operator
 import uuid
 from collections import namedtuple
@@ -422,6 +421,24 @@ class TestStreamingDataFrame:
         sdf = sdf.drop([])
         post_drop_stream = sdf.stream.tree()
         assert pre_drop_stream == post_drop_stream
+
+    def test_drop_missing_columns_errors_raise(self, dataframe_factory):
+        value = {"col_a": 1}
+        key, timestamp, headers = b"key", 0, []
+        sdf = dataframe_factory()
+        sdf.drop(["col_b", "col_c"], errors="raise")
+        with pytest.raises(KeyError):
+            assert sdf.test(value=value, key=key, timestamp=timestamp, headers=headers)
+
+    def test_drop_missing_columns_errors_ignore(self, dataframe_factory):
+        value = {"col_a": 1}
+        expected = {"col_a": 1}
+        key, timestamp, headers = b"key", 0, []
+        sdf = dataframe_factory()
+        sdf.drop(["col_b", "col_c"], errors="ignore")
+        assert sdf.test(value=value, key=key, timestamp=timestamp, headers=headers)[
+            0
+        ] == (expected, key, timestamp, headers)
 
 
 class TestStreamingDataFrameApplyExpand:

@@ -966,7 +966,11 @@ class StreamingDataFrame(BaseStreaming):
             name=name,
         )
 
-    def drop(self, columns: Union[str, List[str]]) -> Self:
+    def drop(
+        self,
+        columns: Union[str, List[str]],
+        errors: Literal["ignore", "raise"] = "raise",
+    ) -> Self:
         """
         Drop column(s) from the message value (value must support `del`, like a dict).
 
@@ -985,6 +989,9 @@ class StreamingDataFrame(BaseStreaming):
         ```
 
         :param columns: a single column name or a list of names, where names are `str`
+        :param errors: If "ignore", suppress error and only existing labels are dropped.
+            Default - `"raise"`.
+
         :return: a new StreamingDataFrame instance
         """
         if isinstance(columns, list):
@@ -998,7 +1005,10 @@ class StreamingDataFrame(BaseStreaming):
             raise TypeError(
                 f"Expected a string or a list of strings, not {type(columns)}"
             )
-        return self._add_update(lambda value: _drop(value, columns), metadata=False)
+        return self._add_update(
+            lambda value: _drop(value, columns, ignore_missing=errors == "ignore"),
+            metadata=False,
+        )
 
     def _produce(
         self,
@@ -1145,14 +1155,19 @@ class StreamingDataFrame(BaseStreaming):
         )
 
 
-def _drop(value: Dict, columns: List[str]):
+def _drop(value: Dict, columns: List[str], ignore_missing: bool = False):
     """
     remove columns from the value, inplace
     :param value: a dict or something that supports `del`
     :param columns: a list of column names
+    :param ignore_missing: if True, ignore missing columns
     """
     for column in columns:
-        del value[column]
+        try:
+            del value[column]
+        except KeyError:
+            if not ignore_missing:
+                raise
 
 
 def _as_metadata_func(
