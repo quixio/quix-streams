@@ -5,13 +5,13 @@ import influxdb_client_3
 from influxdb_client_3 import InfluxDBClient3, WritePrecision, WriteOptions
 from influxdb_client_3.write_client.client.write_api import WriteType
 
-from .base import Sink, SinkBatch
+from .base import BatchingSink, SinkBatch
 from .exceptions import SinkBackpressureError
 
 T = TypeVar("T")
 
 
-class InfluxDBV3Sink(Sink):
+class InfluxDBV3Sink(BatchingSink):
     def __init__(
         self,
         token: str,
@@ -70,7 +70,8 @@ class InfluxDBV3Sink(Sink):
         :param debug: if True, print debug logs from InfluxDB client.
             Default - `False`.
         """
-        # TODO: Tests
+        # TODO: Tests, requirements, wrap import errors nicely
+        # TODO: maybe call the base class "BatchingSink"
         super().__init__()
         self._client = InfluxDBClient3(
             token=token,
@@ -132,7 +133,9 @@ class InfluxDBV3Sink(Sink):
                 }
                 records.append(record)
             try:
-                self._client.write(records, write_precision=self._write_precision)
+                self._client.write(
+                    record=records, write_precision=self._write_precision
+                )
             except influxdb_client_3.InfluxDBError as exc:
                 if exc.response.status == 429 and exc.retry_after:
                     # The write limit is exceeded, raise a SinkBackpressureError
