@@ -10,7 +10,7 @@
 class Application()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/app.py#L56)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/app.py#L56)
 
 The main Application class.
 
@@ -83,7 +83,7 @@ def __init__(broker_address: Optional[Union[str, ConnectionConfig]] = None,
              processing_guarantee: ProcessingGuarantee = "at-least-once")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/app.py#L94)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/app.py#L94)
 
 
 <br>
@@ -186,7 +186,7 @@ def Quix(
 ) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/app.py#L342)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/app.py#L342)
 
 >***NOTE:*** DEPRECATED: use Application with `quix_sdk_token` argument instead.
 
@@ -297,7 +297,7 @@ def topic(name: str,
           timestamp_extractor: Optional[TimestampExtractor] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/app.py#L483)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/app.py#L483)
 
 Create a topic definition.
 
@@ -378,7 +378,7 @@ topic = app.topic("input-topic", timestamp_extractor=custom_ts_extractor)
 def dataframe(topic: Topic) -> StreamingDataFrame
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/app.py#L563)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/app.py#L563)
 
 A simple helper method that generates a `StreamingDataFrame`, which is used
 
@@ -428,7 +428,7 @@ to be used as an input topic.
 def stop(fail: bool = False)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/app.py#L602)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/app.py#L602)
 
 Stop the internal poll loop and the message processing.
 
@@ -455,7 +455,7 @@ to unhandled exception, and it shouldn't commit the current checkpoint.
 def get_producer() -> Producer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/app.py#L625)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/app.py#L625)
 
 Create and return a pre-configured Producer instance.
 The Producer is initialized with params passed to Application.
@@ -490,7 +490,7 @@ with app.get_producer() as producer:
 def get_consumer(auto_commit_enable: bool = True) -> Consumer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/app.py#L655)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/app.py#L655)
 
 Create and return a pre-configured Consumer instance.
 The Consumer is initialized with params passed to Application.
@@ -539,7 +539,7 @@ with app.get_consumer() as consumer:
 def clear_state()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/app.py#L702)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/app.py#L702)
 
 Clear the state of the application.
 
@@ -553,7 +553,7 @@ Clear the state of the application.
 def run(dataframe: StreamingDataFrame)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/app.py#L708)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/app.py#L708)
 
 Start processing data from Kafka using provided `StreamingDataFrame`
 

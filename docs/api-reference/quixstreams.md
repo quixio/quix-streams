@@ -14,7 +14,7 @@
 def configure_logging(loglevel: Optional[LogLevel]) -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/logging.py#L26)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/logging.py#L26)
 
 Configure "quixstreams" logger.
 
@@ -51,7 +51,7 @@ True if logging config has been updated, otherwise False.
 def strip_workspace_id_prefix(workspace_id: str, s: str) -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/platforms/quix/config.py#L31)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/platforms/quix/config.py#L31)
 
 Remove the workspace ID from a given string if it starts with it,
 
@@ -74,7 +74,7 @@ the string with workspace_id prefix removed
 def prepend_workspace_id(workspace_id: str, s: str) -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/platforms/quix/config.py#L43)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/platforms/quix/config.py#L43)
 
 Add the workspace ID as a prefix to a given string if it does not have it,
 
@@ -98,7 +98,7 @@ the string with workspace_id prepended
 class QuixApplicationConfig()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/platforms/quix/config.py#L56)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/platforms/quix/config.py#L56)
 
 A convenience container class for Quix Application configs.
 
@@ -110,7 +110,7 @@ A convenience container class for Quix Application configs.
 class QuixKafkaConfigsBuilder()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/platforms/quix/config.py#L66)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/platforms/quix/config.py#L66)
 
 Retrieves all the necessary information from the Quix API and builds all the
 objects required to connect a confluent-kafka client to the Quix Platform.
@@ -136,7 +136,7 @@ def __init__(quix_sdk_token: Optional[str] = None,
              topic_create_timeout: float = 60)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/platforms/quix/config.py#L82)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/platforms/quix/config.py#L82)
 
 **Arguments**:
 
@@ -151,7 +151,7 @@ def __init__(quix_sdk_token: Optional[str] = None,
 def strip_workspace_id_prefix(s: str) -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/platforms/quix/config.py#L160)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/platforms/quix/config.py#L160)
 
 Remove the workspace ID from a given string if it starts with it,
 
@@ -173,7 +173,7 @@ the string with workspace_id prefix removed
 def prepend_workspace_id(s: str) -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/platforms/quix/config.py#L170)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/platforms/quix/config.py#L170)
 
 Add the workspace ID as a prefix to a given string if it does not have it,
 
@@ -196,7 +196,7 @@ def search_for_workspace(workspace_name_or_id: Optional[str] = None,
                          timeout: Optional[float] = None) -> Optional[dict]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/platforms/quix/config.py#L180)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/platforms/quix/config.py#L180)
 
 Search for a workspace given an expected workspace name or id.
 
@@ -218,7 +218,7 @@ def get_workspace_info(known_workspace_topic: Optional[str] = None,
                        timeout: Optional[float] = None) -> dict
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/platforms/quix/config.py#L222)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/platforms/quix/config.py#L222)
 
 Queries for workspace data from the Quix API, regardless of instance cache,
 
@@ -240,7 +240,7 @@ def search_workspace_for_topic(
         timeout: Optional[float] = None) -> Optional[str]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/platforms/quix/config.py#L250)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/platforms/quix/config.py#L250)
 
 Search through all the topics in the given workspace id to see if there is a
 
@@ -266,7 +266,7 @@ def search_for_topic_workspace(topic: str,
                                ) -> Optional[dict]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/platforms/quix/config.py#L271)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/platforms/quix/config.py#L271)
 
 Find what workspace a topic belongs to.
 
@@ -292,7 +292,7 @@ def create_topics(topics: List[Topic],
                   finalize_timeout: Optional[float] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/platforms/quix/config.py#L369)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/platforms/quix/config.py#L369)
 
 Create topics in a Quix cluster.
 
@@ -312,7 +312,7 @@ def get_topic(topic_name: str,
               timeout: Optional[float] = None) -> Optional[dict]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/platforms/quix/config.py#L419)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/platforms/quix/config.py#L419)
 
 return the topic ID (the actual cluster topic name) if it exists, else None
 
@@ -338,7 +338,7 @@ def confirm_topics_exist(topics: Union[List[Topic], List[str]],
                          timeout: Optional[float] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/platforms/quix/config.py#L451)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/platforms/quix/config.py#L451)
 
 Confirm whether the desired set of topics exists in the Quix workspace.
 
@@ -355,7 +355,7 @@ Confirm whether the desired set of topics exists in the Quix workspace.
 def get_application_config(consumer_group_id: str) -> QuixApplicationConfig
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/platforms/quix/config.py#L483)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/platforms/quix/config.py#L483)
 
 Get all the necessary attributes for an Application to run on Quix Cloud.
 
@@ -379,7 +379,7 @@ a QuixApplicationConfig instance
 class QuixEnvironment()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/platforms/quix/env.py#L7)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/platforms/quix/env.py#L7)
 
 Class to access various Quix platform environment settings
 
@@ -392,7 +392,7 @@ Class to access various Quix platform environment settings
 def state_management_enabled() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/platforms/quix/env.py#L19)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/platforms/quix/env.py#L19)
 
 Check whether "State management" is enabled for the current deployment
 
@@ -409,7 +409,7 @@ True if state management is enabled, otherwise False
 def deployment_id() -> Optional[str]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/platforms/quix/env.py#L27)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/platforms/quix/env.py#L27)
 
 Return current Quix deployment id.
 
@@ -429,7 +429,7 @@ deployment id or None
 def workspace_id() -> Optional[str]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/platforms/quix/env.py#L39)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/platforms/quix/env.py#L39)
 
 Return Quix workspace id if set
 
@@ -446,7 +446,7 @@ workspace id or None
 def portal_api() -> Optional[str]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/platforms/quix/env.py#L47)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/platforms/quix/env.py#L47)
 
 Return Quix Portal API url if set
 
@@ -463,7 +463,7 @@ portal API URL or None
 def state_dir() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/platforms/quix/env.py#L56)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/platforms/quix/env.py#L56)
 
 Return application state directory on Quix.
 
@@ -483,7 +483,7 @@ path to state dir
 def check_state_management_enabled()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/platforms/quix/checks.py#L11)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/platforms/quix/checks.py#L11)
 
 Check if State Management feature is enabled for the current deployment on
 Quix platform.
@@ -497,7 +497,7 @@ If it's disabled, the exception will be raised.
 def check_state_dir(state_dir: str)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/platforms/quix/checks.py#L28)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/platforms/quix/checks.py#L28)
 
 Check if Application "state_dir" matches the state dir on Quix platform.
 
@@ -523,7 +523,7 @@ If it doesn't match, the warning will be logged.
 class QuixPortalApiService()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/platforms/quix/api.py#L19)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/platforms/quix/api.py#L19)
 
 A light wrapper around the Quix Portal Api. If used in the Quix Platform, it will
 use that workspaces auth token and portal endpoint, else you must provide it.
@@ -545,7 +545,7 @@ def get_workspace_certificate(workspace_id: Optional[str] = None,
                               timeout: float = 30) -> Optional[bytes]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/platforms/quix/api.py#L119)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/platforms/quix/api.py#L119)
 
 Get a workspace TLS certificate if available.
 
@@ -576,7 +576,7 @@ certificate as bytes if present, or None
 class QuixTopicManager(TopicManager)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/platforms/quix/topic_manager.py#L9)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/platforms/quix/topic_manager.py#L9)
 
 The source of all topic management with quixstreams.
 
@@ -600,7 +600,7 @@ def __init__(topic_admin: TopicAdmin,
              create_timeout: float = 60)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/platforms/quix/topic_manager.py#L30)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/platforms/quix/topic_manager.py#L30)
 
 **Arguments**:
 
@@ -622,7 +622,7 @@ generated for you.
 class StreamingDataFrame(BaseStreaming)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/dataframe.py#L63)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/dataframe.py#L63)
 
 `StreamingDataFrame` is the main object you will use for ETL work.
 
@@ -685,7 +685,7 @@ def apply(func: Union[
           metadata: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/dataframe.py#L178)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/dataframe.py#L178)
 
 Apply a function to transform the value and return a new value.
 
@@ -737,7 +737,7 @@ def update(func: Union[
            metadata: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/dataframe.py#L267)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/dataframe.py#L267)
 
 Apply a function to mutate value in-place or to perform a side effect
 
@@ -797,7 +797,7 @@ def filter(func: Union[
            metadata: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/dataframe.py#L359)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/dataframe.py#L359)
 
 Filter value using provided function.
 
@@ -843,7 +843,7 @@ def group_by(key: Union[str, Callable[[Any], Any]],
              key_serializer: Optional[SerializerType] = "json") -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/dataframe.py#L445)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/dataframe.py#L445)
 
 "Groups" messages by re-keying them via the provided group_by operation
 
@@ -900,7 +900,7 @@ a clone with this operation added (assign to keep its effect).
 def contains(key: str) -> StreamingSeries
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/dataframe.py#L523)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/dataframe.py#L523)
 
 Check if the key is present in the Row value.
 
@@ -931,7 +931,7 @@ or False otherwise.
 def to_topic(topic: Topic, key: Optional[Callable[[Any], Any]] = None) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/dataframe.py#L548)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/dataframe.py#L548)
 
 Produce current value to a topic. You can optionally specify a new key.
 
@@ -976,7 +976,7 @@ the updated StreamingDataFrame instance (reassignment NOT required).
 def set_timestamp(func: Callable[[Any, Any, int, Any], int]) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/dataframe.py#L593)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/dataframe.py#L593)
 
 Set a new timestamp based on the current message value and its metadata.
 
@@ -1021,7 +1021,7 @@ def set_headers(
 ) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/dataframe.py#L634)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/dataframe.py#L634)
 
 Set new message headers based on the current message value and metadata.
 
@@ -1062,7 +1062,7 @@ a new StreamingDataFrame instance
 def print(pretty: bool = True, metadata: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/dataframe.py#L685)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/dataframe.py#L685)
 
 Print out the current message value (and optionally, the message metadata) to
 
@@ -1110,7 +1110,7 @@ def compose(
 ) -> Dict[str, VoidExecutor]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/dataframe.py#L727)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/dataframe.py#L727)
 
 Compose all functions of this StreamingDataFrame into one big closure.
 
@@ -1156,7 +1156,7 @@ def test(value: Any,
          topic: Optional[Topic] = None) -> List[Any]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/dataframe.py#L764)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/dataframe.py#L764)
 
 A shorthand to test `StreamingDataFrame` with provided value
 
@@ -1187,7 +1187,7 @@ def tumbling_window(duration_ms: Union[int, timedelta],
                     name: Optional[str] = None) -> TumblingWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/dataframe.py#L801)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/dataframe.py#L801)
 
 Create a tumbling window transformation on this StreamingDataFrame.
 
@@ -1264,7 +1264,7 @@ def hopping_window(duration_ms: Union[int, timedelta],
                    name: Optional[str] = None) -> HoppingWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/dataframe.py#L877)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/dataframe.py#L877)
 
 Create a hopping window transformation on this StreamingDataFrame.
 
@@ -1347,7 +1347,7 @@ like `sum`, `count`, etc. and applied to the StreamingDataFrame.
 def drop(columns: Union[str, List[str]]) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/dataframe.py#L969)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/dataframe.py#L969)
 
 Drop column(s) from the message value (value must support `del`, like a dict).
 
@@ -1385,7 +1385,7 @@ a new StreamingDataFrame instance
 class StreamingSeries(BaseStreaming)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/series.py#L47)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/series.py#L47)
 
 `StreamingSeries` are typically generated by `StreamingDataframes` when getting
 elements from, or performing certain operations on, a `StreamingDataframe`,
@@ -1443,7 +1443,7 @@ sdf = sdf[["column_a"] & (sdf["new_sum_field"] >= 10)]
 def from_apply_callback(cls, func: ApplyWithMetadataCallback) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/series.py#L107)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/series.py#L107)
 
 Create a StreamingSeries from a function.
 
@@ -1465,7 +1465,7 @@ instance of `StreamingSeries`
 def apply(func: ApplyCallback) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/series.py#L121)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/series.py#L121)
 
 Add a callable to the execution list for this series.
 
@@ -1509,7 +1509,7 @@ a new `StreamingSeries` with the new callable added
 def compose_returning() -> ReturningExecutor
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/series.py#L155)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/series.py#L155)
 
 Compose a list of functions from this StreamingSeries and its parents into one
 
@@ -1536,7 +1536,7 @@ def compose(
                             None]] = None) -> VoidExecutor
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/series.py#L170)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/series.py#L170)
 
 Compose all functions of this StreamingSeries into one big closure.
 
@@ -1586,7 +1586,7 @@ def test(value: Any,
          ctx: Optional[MessageContext] = None) -> Any
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/series.py#L214)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/series.py#L214)
 
 A shorthand to test `StreamingSeries` with provided value
 
@@ -1612,7 +1612,7 @@ result of `StreamingSeries`
 def isin(other: Container) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/series.py#L269)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/series.py#L269)
 
 Check if series value is in "other".
 
@@ -1649,7 +1649,7 @@ new StreamingSeries
 def contains(other: Union[Self, object]) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/series.py#L296)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/series.py#L296)
 
 Check if series value contains "other"
 
@@ -1686,7 +1686,7 @@ new StreamingSeries
 def is_(other: Union[Self, object]) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/series.py#L321)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/series.py#L321)
 
 Check if series value refers to the same object as `other`
 
@@ -1720,7 +1720,7 @@ new StreamingSeries
 def isnot(other: Union[Self, object]) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/series.py#L344)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/series.py#L344)
 
 Check if series value does not refer to the same object as `other`
 
@@ -1755,7 +1755,7 @@ new StreamingSeries
 def isnull() -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/series.py#L368)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/series.py#L368)
 
 Check if series value is None.
 
@@ -1786,7 +1786,7 @@ new StreamingSeries
 def notnull() -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/series.py#L391)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/series.py#L391)
 
 Check if series value is not None.
 
@@ -1817,7 +1817,7 @@ new StreamingSeries
 def abs() -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/series.py#L414)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/series.py#L414)
 
 Get absolute value of the series value.
 
@@ -1853,7 +1853,7 @@ new StreamingSeries
 def ensure_milliseconds(delta: Union[int, timedelta]) -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/utils.py#L5)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/utils.py#L5)
 
 Convert timedelta to milliseconds.
 
@@ -1885,7 +1885,7 @@ timedelta value in milliseconds as `int`
 class FixedTimeWindowDefinition(abc.ABC)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/windows/definitions.py#L20)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/windows/definitions.py#L20)
 
 <a id="quixstreams.dataframe.windows.definitions.FixedTimeWindowDefinition.sum"></a>
 
@@ -1895,7 +1895,7 @@ class FixedTimeWindowDefinition(abc.ABC)
 def sum() -> "FixedTimeWindow"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/windows/definitions.py#L67)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/windows/definitions.py#L67)
 
 Configure the window to aggregate data by summing up values within
 
@@ -1913,7 +1913,7 @@ an instance of `FixedTimeWindow` configured to perform sum aggregation.
 def count() -> "FixedTimeWindow"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/windows/definitions.py#L94)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/windows/definitions.py#L94)
 
 Configure the window to aggregate data by counting the number of values
 
@@ -1931,7 +1931,7 @@ an instance of `FixedTimeWindow` configured to perform record count.
 def mean() -> "FixedTimeWindow"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/windows/definitions.py#L121)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/windows/definitions.py#L121)
 
 Configure the window to aggregate data by calculating the mean of the values
 
@@ -1951,7 +1951,7 @@ def reduce(reducer: Callable[[Any, Any], Any],
            initializer: Callable[[Any], Any]) -> "FixedTimeWindow"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/windows/definitions.py#L152)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/windows/definitions.py#L152)
 
 Configure the window to perform a custom aggregation using `reducer`
 
@@ -2000,7 +2000,7 @@ A window configured to perform custom reduce aggregation on the data.
 def max() -> "FixedTimeWindow"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/windows/definitions.py#L212)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/windows/definitions.py#L212)
 
 Configure a window to aggregate the maximum value within each window period.
 
@@ -2017,7 +2017,7 @@ value within each window period.
 def min() -> "FixedTimeWindow"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/windows/definitions.py#L241)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/windows/definitions.py#L241)
 
 Configure a window to aggregate the minimum value within each window period.
 
@@ -2042,7 +2042,7 @@ value within each window period.
 class FixedTimeWindow()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/windows/time_based.py#L32)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/windows/time_based.py#L32)
 
 <a id="quixstreams.dataframe.windows.time_based.FixedTimeWindow.final"></a>
 
@@ -2052,7 +2052,7 @@ class FixedTimeWindow()
 def final() -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/windows/time_based.py#L107)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/windows/time_based.py#L107)
 
 Apply the window aggregation and return results only when the windows are
 closed.
@@ -2083,7 +2083,7 @@ can remain unprocessed until the message the same key is received.
 def current() -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/windows/time_based.py#L145)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/windows/time_based.py#L145)
 
 Apply the window transformation to the StreamingDataFrame to return results
 for each updated window.
@@ -2114,7 +2114,7 @@ def get_window_ranges(timestamp_ms: int,
                       step_ms: Optional[int] = None) -> List[Tuple[int, int]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/dataframe/windows/base.py#L18)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/dataframe/windows/base.py#L18)
 
 Get a list of window ranges for the given timestamp.
 
@@ -2144,7 +2144,7 @@ a list of (<start>, <end>) tuples
 class RowProducer()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/rowproducer.py#L71)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/rowproducer.py#L71)
 
 A producer class that is capable of serializing Rows to bytes and send them to Kafka.
 
@@ -2179,7 +2179,7 @@ def produce_row(row: Row,
                 timestamp: Optional[int] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/rowproducer.py#L121)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/rowproducer.py#L121)
 
 Serialize Row to bytes according to the Topic serialization settings
 
@@ -2203,7 +2203,7 @@ If this method fails, it will trigger the provided "on_error" callback.
 def poll(timeout: float = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/rowproducer.py#L161)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/rowproducer.py#L161)
 
 Polls the producer for events and calls `on_delivery` callbacks.
 
@@ -2221,7 +2221,7 @@ If `poll()` fails, it will trigger the provided "on_error" callback
 def abort_transaction(timeout: Optional[float] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/rowproducer.py#L232)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/rowproducer.py#L232)
 
 Attempt an abort if an active transaction.
 
@@ -2247,7 +2247,7 @@ the Checkpoint inits another immediately after committing.
 class StreamFunction(abc.ABC)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/core/stream/functions.py#L65)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/core/stream/functions.py#L65)
 
 A base class for all the streaming operations in Quix Streams.
 
@@ -2263,7 +2263,7 @@ values.
 def get_executor(child_executor: VoidExecutor) -> VoidExecutor
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/core/stream/functions.py#L79)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/core/stream/functions.py#L79)
 
 Returns a wrapper to be called on a value, key and timestamp.
 
@@ -2275,7 +2275,7 @@ Returns a wrapper to be called on a value, key and timestamp.
 class ApplyFunction(StreamFunction)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/core/stream/functions.py#L85)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/core/stream/functions.py#L85)
 
 Wrap a function into "Apply" function.
 
@@ -2290,7 +2290,7 @@ and its result will always be passed downstream.
 class ApplyWithMetadataFunction(StreamFunction)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/core/stream/functions.py#L125)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/core/stream/functions.py#L125)
 
 Wrap a function into "Apply" function.
 
@@ -2306,7 +2306,7 @@ and its result will always be passed downstream.
 class FilterFunction(StreamFunction)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/core/stream/functions.py#L166)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/core/stream/functions.py#L166)
 
 Wraps a function into a "Filter" function.
 The result of a Filter function is interpreted as boolean.
@@ -2322,7 +2322,7 @@ value is filtered out.
 class FilterWithMetadataFunction(StreamFunction)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/core/stream/functions.py#L187)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/core/stream/functions.py#L187)
 
 Wraps a function into a "Filter" function.
 
@@ -2340,7 +2340,7 @@ Otherwise, the value will be filtered out.
 class UpdateFunction(StreamFunction)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/core/stream/functions.py#L210)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/core/stream/functions.py#L210)
 
 Wrap a function into an "Update" function.
 
@@ -2358,7 +2358,7 @@ downstream.
 class UpdateWithMetadataFunction(StreamFunction)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/core/stream/functions.py#L233)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/core/stream/functions.py#L233)
 
 Wrap a function into an "Update" function.
 
@@ -2376,7 +2376,7 @@ downstream.
 class TransformFunction(StreamFunction)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/core/stream/functions.py#L256)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/core/stream/functions.py#L256)
 
 Wrap a function into a "Transform" function.
 
@@ -2406,7 +2406,7 @@ The result of the callback will always be passed downstream.
 class Stream()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/core/stream/stream.py#L34)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/core/stream/stream.py#L34)
 
 <a id="quixstreams.core.stream.stream.Stream.__init__"></a>
 
@@ -2417,7 +2417,7 @@ def __init__(func: Optional[StreamFunction] = None,
              parent: Optional[Self] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/core/stream/stream.py#L35)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/core/stream/stream.py#L35)
 
 A base class for all streaming operations.
 
@@ -2468,7 +2468,7 @@ def add_filter(func: Union[FilterCallback, FilterWithMetadataCallback],
                metadata: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/core/stream/stream.py#L97)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/core/stream/stream.py#L97)
 
 Add a function to filter values from the Stream.
 
@@ -2503,7 +2503,7 @@ def add_apply(func: Union[
               metadata: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/core/stream/stream.py#L122)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/core/stream/stream.py#L122)
 
 Add an "apply" function to the Stream.
 
@@ -2534,7 +2534,7 @@ def add_update(func: Union[UpdateCallback, UpdateWithMetadataCallback],
                metadata: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/core/stream/stream.py#L155)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/core/stream/stream.py#L155)
 
 Add an "update" function to the Stream, that will mutate the input value.
 
@@ -2562,7 +2562,7 @@ def add_transform(func: Union[TransformCallback, TransformExpandedCallback],
                   expand: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/core/stream/stream.py#L179)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/core/stream/stream.py#L179)
 
 Add a "transform" function to the Stream, that will mutate the input value.
 
@@ -2591,7 +2591,7 @@ a new Stream derived from the current one
 def diff(other: "Stream") -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/core/stream/stream.py#L204)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/core/stream/stream.py#L204)
 
 Takes the difference between Streams `self` and `other` based on their last
 
@@ -2623,7 +2623,7 @@ new `Stream` instance including all the Streams from the diff
 def tree() -> List[Self]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/core/stream/stream.py#L233)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/core/stream/stream.py#L233)
 
 Return a list of all parent Streams including the node itself.
 
@@ -2641,7 +2641,7 @@ a list of `Stream` objects
 def compose_returning() -> ReturningExecutor
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/core/stream/stream.py#L252)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/core/stream/stream.py#L252)
 
 Compose a list of functions from this `Stream` and its parents into one
 big closure that always returns the transformed record.
@@ -2666,7 +2666,7 @@ def compose(
                             None]] = None) -> VoidExecutor
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/core/stream/stream.py#L289)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/core/stream/stream.py#L289)
 
 Compose a list of functions from this `Stream` and its parents into one
 
@@ -2711,7 +2711,7 @@ the stream has transform functions in the tree. Default - True.
 class ProcessingContext()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/processing_context.py#L21)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/processing_context.py#L21)
 
 A class to share processing-related objects
 between `Application` and `StreamingDataFrame` instances.
@@ -2724,7 +2724,7 @@ between `Application` and `StreamingDataFrame` instances.
 def store_offset(topic: str, partition: int, offset: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/processing_context.py#L43)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/processing_context.py#L43)
 
 Store the offset of the processed message to the checkpoint.
 
@@ -2742,7 +2742,7 @@ Store the offset of the processed message to the checkpoint.
 def init_checkpoint()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/processing_context.py#L53)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/processing_context.py#L53)
 
 Initialize a new checkpoint
 
@@ -2754,7 +2754,7 @@ Initialize a new checkpoint
 def commit_checkpoint(force: bool = False)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/processing_context.py#L67)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/processing_context.py#L67)
 
 Attempts finalizing the current Checkpoint only if the Checkpoint is "expired",
 
@@ -2783,7 +2783,7 @@ else just close it. A new Checkpoint is then created.
 def dict_values(d: object) -> List
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/utils/dicts.py#L4)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/utils/dicts.py#L4)
 
 Recursively unpacks a set of nested dicts to get a flattened list of leaves,
 
@@ -2811,7 +2811,7 @@ a list with all the leaves of the various contained dicts
 def dumps(value: Any) -> bytes
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/utils/json.py#L8)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/utils/json.py#L8)
 
 Serialize to JSON using `orjson` package.
 
@@ -2831,7 +2831,7 @@ bytes
 def loads(value: bytes) -> Any
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/utils/json.py#L18)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/utils/json.py#L18)
 
 Deserialize from JSON using `orjson` package.
 
@@ -2863,7 +2863,7 @@ object
 class TimestampType(enum.IntEnum)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/timestamps.py#L8)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/timestamps.py#L8)
 
 <a id="quixstreams.models.timestamps.TimestampType.TIMESTAMP_NOT_AVAILABLE"></a>
 
@@ -2891,7 +2891,7 @@ broker receive time
 class MessageTimestamp()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/timestamps.py#L14)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/timestamps.py#L14)
 
 Represents a timestamp of incoming Kafka message.
 
@@ -2907,7 +2907,7 @@ it should not be mutated during message processing.
 def create(cls, timestamp_type: int, milliseconds: int) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/timestamps.py#L41)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/timestamps.py#L41)
 
 Create a Timestamp object based on data
 
@@ -2944,7 +2944,7 @@ Timestamp object
 class MessageContext()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/messagecontext.py#L4)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/messagecontext.py#L4)
 
 An object with Kafka message properties.
 
@@ -2963,7 +2963,7 @@ it should not be mutated during message processing.
 class ConfluentKafkaMessageProto(Protocol)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/types.py#L13)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/types.py#L13)
 
 An interface of `confluent_kafka.Message`.
 
@@ -2988,7 +2988,7 @@ see https://github.com/confluentinc/confluent-kafka-python/issues/1535.
 class IgnoreMessage(exceptions.QuixException)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/serializers/exceptions.py#L46)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/serializers/exceptions.py#L46)
 
 Raise this exception from Deserializer.__call__ in order to ignore the processing
 of the particular message.
@@ -3005,7 +3005,7 @@ of the particular message.
 class QuixDeserializer(JSONDeserializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/serializers/quix.py#L73)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/serializers/quix.py#L73)
 
 Handles Deserialization for any Quix-formatted topic.
 
@@ -3019,7 +3019,7 @@ Parses JSON data from either `TimeseriesData` and `EventData` (ignores the rest)
 def __init__(loads: Callable[[Union[bytes, bytearray]], Any] = default_loads)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/serializers/quix.py#L80)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/serializers/quix.py#L80)
 
 **Arguments**:
 
@@ -3035,7 +3035,7 @@ Default - :py:func:`quixstreams.utils.json.loads`.
 def split_values() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/serializers/quix.py#L97)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/serializers/quix.py#L97)
 
 Each Quix message might contain data for multiple Rows.
 This property informs the downstream processors about that, so they can
@@ -3050,7 +3050,7 @@ def deserialize(model_key: str, value: Union[List[Mapping],
                                              Mapping]) -> Iterable[Mapping]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/serializers/quix.py#L150)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/serializers/quix.py#L150)
 
 Deserialization function for particular data types (Timeseries or EventData).
 
@@ -3071,7 +3071,7 @@ Iterable of dicts
 class QuixSerializer(JSONSerializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/serializers/quix.py#L271)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/serializers/quix.py#L271)
 
 <a id="quixstreams.models.serializers.quix.QuixSerializer.__init__"></a>
 
@@ -3082,7 +3082,7 @@ def __init__(as_legacy: bool = True,
              dumps: Callable[[Any], Union[str, bytes]] = default_dumps)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/serializers/quix.py#L275)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/serializers/quix.py#L275)
 
 Serializer that returns data in json format.
 
@@ -3100,7 +3100,7 @@ Default - :py:func:`quixstreams.utils.json.dumps`
 class QuixTimeseriesSerializer(QuixSerializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/serializers/quix.py#L318)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/serializers/quix.py#L318)
 
 Serialize data to JSON formatted according to Quix Timeseries format.
 
@@ -3132,7 +3132,7 @@ Output:
 class QuixEventsSerializer(QuixSerializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/serializers/quix.py#L406)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/serializers/quix.py#L406)
 
 Serialize data to JSON formatted according to Quix EventData format.
 The input value is expected to be a dictionary with the following keys:
@@ -3173,7 +3173,7 @@ Output:
 class BytesDeserializer(Deserializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/serializers/simple_types.py#L44)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/serializers/simple_types.py#L44)
 
 A deserializer to bypass bytes without any changes
 
@@ -3185,7 +3185,7 @@ A deserializer to bypass bytes without any changes
 class BytesSerializer(Serializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/serializers/simple_types.py#L53)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/serializers/simple_types.py#L53)
 
 A serializer to bypass bytes without any changes
 
@@ -3197,7 +3197,7 @@ A serializer to bypass bytes without any changes
 class StringDeserializer(Deserializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/serializers/simple_types.py#L62)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/serializers/simple_types.py#L62)
 
 <a id="quixstreams.models.serializers.simple_types.StringDeserializer.__init__"></a>
 
@@ -3207,7 +3207,7 @@ class StringDeserializer(Deserializer)
 def __init__(codec: str = "utf_8")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/serializers/simple_types.py#L63)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/serializers/simple_types.py#L63)
 
 Deserializes bytes to strings using the specified encoding.
 
@@ -3224,7 +3224,7 @@ A wrapper around `confluent_kafka.serialization.StringDeserializer`.
 class IntegerDeserializer(Deserializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/serializers/simple_types.py#L81)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/serializers/simple_types.py#L81)
 
 Deserializes bytes to integers.
 
@@ -3238,7 +3238,7 @@ A wrapper around `confluent_kafka.serialization.IntegerDeserializer`.
 class DoubleDeserializer(Deserializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/serializers/simple_types.py#L99)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/serializers/simple_types.py#L99)
 
 Deserializes float to IEEE 764 binary64.
 
@@ -3252,7 +3252,7 @@ A wrapper around `confluent_kafka.serialization.DoubleDeserializer`.
 class StringSerializer(Serializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/serializers/simple_types.py#L117)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/serializers/simple_types.py#L117)
 
 <a id="quixstreams.models.serializers.simple_types.StringSerializer.__init__"></a>
 
@@ -3262,7 +3262,7 @@ class StringSerializer(Serializer)
 def __init__(codec: str = "utf_8")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/serializers/simple_types.py#L118)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/serializers/simple_types.py#L118)
 
 Serializes strings to bytes using the specified encoding.
 
@@ -3278,7 +3278,7 @@ Serializes strings to bytes using the specified encoding.
 class IntegerSerializer(Serializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/serializers/simple_types.py#L130)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/serializers/simple_types.py#L130)
 
 Serializes integers to bytes
 
@@ -3290,7 +3290,7 @@ Serializes integers to bytes
 class DoubleSerializer(Serializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/serializers/simple_types.py#L143)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/serializers/simple_types.py#L143)
 
 Serializes floats to bytes
 
@@ -3306,7 +3306,7 @@ Serializes floats to bytes
 class JSONSerializer(Serializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/serializers/json.py#L13)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/serializers/json.py#L13)
 
 <a id="quixstreams.models.serializers.json.JSONSerializer.__init__"></a>
 
@@ -3316,7 +3316,7 @@ class JSONSerializer(Serializer)
 def __init__(dumps: Callable[[Any], Union[str, bytes]] = default_dumps)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/serializers/json.py#L14)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/serializers/json.py#L14)
 
 Serializer that returns data in json format.
 
@@ -3333,7 +3333,7 @@ Default - :py:func:`quixstreams.utils.json.dumps`
 class JSONDeserializer(Deserializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/serializers/json.py#L35)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/serializers/json.py#L35)
 
 <a id="quixstreams.models.serializers.json.JSONDeserializer.__init__"></a>
 
@@ -3343,7 +3343,7 @@ class JSONDeserializer(Deserializer)
 def __init__(loads: Callable[[Union[bytes, bytearray]], Any] = default_loads)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/serializers/json.py#L36)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/serializers/json.py#L36)
 
 Deserializer that parses data from JSON
 
@@ -3364,7 +3364,7 @@ Default - :py:func:`quixstreams.utils.json.loads`.
 class SerializationContext()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/serializers/base.py#L22)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/serializers/base.py#L22)
 
 Provides additional context for message serialization/deserialization.
 
@@ -3378,7 +3378,7 @@ Every `Serializer` and `Deserializer` receives an instance of `SerializationCont
 def to_confluent_ctx(field: MessageField) -> _SerializationContext
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/serializers/base.py#L35)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/serializers/base.py#L35)
 
 Convert `SerializationContext` to `confluent_kafka.SerializationContext`
 
@@ -3400,7 +3400,7 @@ instance of `confluent_kafka.serialization.SerializationContext`
 class Deserializer(abc.ABC)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/serializers/base.py#L47)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/serializers/base.py#L47)
 
 <a id="quixstreams.models.serializers.base.Deserializer.__init__"></a>
 
@@ -3410,7 +3410,7 @@ class Deserializer(abc.ABC)
 def __init__(*args, **kwargs)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/serializers/base.py#L48)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/serializers/base.py#L48)
 
 A base class for all Deserializers
 
@@ -3423,7 +3423,7 @@ A base class for all Deserializers
 def split_values() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/serializers/base.py#L54)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/serializers/base.py#L54)
 
 Return True if the deserialized message should be considered as Iterable
 and each item in it should be processed as a separate message.
@@ -3436,7 +3436,7 @@ and each item in it should be processed as a separate message.
 class Serializer(abc.ABC)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/serializers/base.py#L65)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/serializers/base.py#L65)
 
 A base class for all Serializers
 
@@ -3449,7 +3449,7 @@ A base class for all Serializers
 def extra_headers() -> MessageHeadersMapping
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/serializers/base.py#L71)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/serializers/base.py#L71)
 
 Informs producer to set additional headers
 
@@ -3486,7 +3486,7 @@ dict with headers
 def convert_topic_list(topics: List[Topic]) -> List[ConfluentTopic]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/topics/admin.py#L24)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/topics/admin.py#L24)
 
 Converts `Topic`s to `ConfluentTopic`s as required for Confluent's
 
@@ -3508,7 +3508,7 @@ list of confluent_kafka `ConfluentTopic`s
 class TopicAdmin()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/topics/admin.py#L47)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/topics/admin.py#L47)
 
 For performing "admin"-level operations on a Kafka cluster, mostly around topics.
 
@@ -3524,7 +3524,7 @@ def __init__(broker_address: Union[str, ConnectionConfig],
              extra_config: Optional[Mapping] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/topics/admin.py#L54)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/topics/admin.py#L54)
 
 **Arguments**:
 
@@ -3542,7 +3542,7 @@ or a ConnectionConfig object if authentication is required.
 def list_topics(timeout: float = -1) -> Dict[str, ConfluentTopicMetadata]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/topics/admin.py#L83)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/topics/admin.py#L83)
 
 Get a list of topics and their metadata from a Kafka cluster
 
@@ -3563,7 +3563,7 @@ def inspect_topics(topic_names: List[str],
                    timeout: float = 30) -> Dict[str, Optional[TopicConfig]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/topics/admin.py#L94)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/topics/admin.py#L94)
 
 A simplified way of getting the topic configurations of the provided topics
 
@@ -3589,7 +3589,7 @@ def create_topics(topics: List[Topic],
                   finalize_timeout: float = 60)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/topics/admin.py#L176)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/topics/admin.py#L176)
 
 Create the given list of topics and confirm they are ready.
 
@@ -3616,7 +3616,7 @@ def merge_headers(original: Optional[MessageHeadersTuples],
                   other: MessageHeadersMapping) -> MessageHeadersTuples
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/topics/utils.py#L8)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/topics/utils.py#L8)
 
 Merge two sets of Kafka message headers, overwriting headers in "origin"
 
@@ -3644,7 +3644,7 @@ a list of (key, value) tuples.
 class TopicConfig()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/topics/topic.py#L42)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/topics/topic.py#L42)
 
 Represents all kafka-level configuration for a kafka topic.
 
@@ -3658,7 +3658,7 @@ Generally used by Topic and any topic creation procedures.
 class Topic()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/topics/topic.py#L83)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/topics/topic.py#L83)
 
 A definition of a Kafka topic.
 
@@ -3681,7 +3681,7 @@ def __init__(
         timestamp_extractor: Optional[TimestampExtractor] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/topics/topic.py#L92)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/topics/topic.py#L92)
 
 **Arguments**:
 
@@ -3703,7 +3703,7 @@ milliseconds from a deserialized message.
 def name() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/topics/topic.py#L121)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/topics/topic.py#L121)
 
 Topic name
 
@@ -3715,7 +3715,7 @@ Topic name
 def row_serialize(row: Row, key: Any) -> KafkaMessage
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/topics/topic.py#L131)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/topics/topic.py#L131)
 
 Serialize Row to a Kafka message structure
 
@@ -3737,7 +3737,7 @@ def row_deserialize(
         message: ConfluentKafkaMessageProto) -> Union[Row, List[Row], None]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/topics/topic.py#L162)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/topics/topic.py#L162)
 
 Deserialize incoming Kafka message to a Row.
 
@@ -3765,7 +3765,7 @@ Row, list of Rows or None if the message is ignored.
 def affirm_ready_for_create(topics: List[Topic])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/topics/manager.py#L20)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/topics/manager.py#L20)
 
 Validate a list of topics is ready for creation attempt
 
@@ -3781,7 +3781,7 @@ Validate a list of topics is ready for creation attempt
 class TopicManager()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/topics/manager.py#L30)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/topics/manager.py#L30)
 
 The source of all topic management with quixstreams.
 
@@ -3802,7 +3802,7 @@ def __init__(topic_admin: TopicAdmin,
              create_timeout: float = 60)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/topics/manager.py#L53)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/topics/manager.py#L53)
 
 **Arguments**:
 
@@ -3820,7 +3820,7 @@ def __init__(topic_admin: TopicAdmin,
 def changelog_topics() -> Dict[str, Dict[str, Topic]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/topics/manager.py#L103)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/topics/manager.py#L103)
 
 Note: `Topic`s are the changelogs.
 
@@ -3835,7 +3835,7 @@ returns: the changelog topic dict, {topic_name: {suffix: Topic}}
 def all_topics() -> Dict[str, Topic]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/topics/manager.py#L112)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/topics/manager.py#L112)
 
 Every registered topic name mapped to its respective `Topic`.
 
@@ -3851,7 +3851,7 @@ def topic_config(num_partitions: Optional[int] = None,
                  extra_config: Optional[dict] = None) -> TopicConfig
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/topics/manager.py#L220)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/topics/manager.py#L220)
 
 Convenience method for generating a `TopicConfig` with default settings
 
@@ -3879,7 +3879,7 @@ def topic(name: str,
           timestamp_extractor: Optional[TimestampExtractor] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/topics/manager.py#L241)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/topics/manager.py#L241)
 
 A convenience method for generating a `Topic`. Will use default config options
 
@@ -3914,7 +3914,7 @@ def repartition_topic(operation: str,
                       timeout: Optional[float] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/topics/manager.py#L286)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/topics/manager.py#L286)
 
 Create an internal repartition topic.
 
@@ -3942,7 +3942,7 @@ def changelog_topic(topic_name: str,
                     timeout: Optional[float] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/topics/manager.py#L326)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/topics/manager.py#L326)
 
 Performs all the logic necessary to generate a changelog topic based on a
 
@@ -3983,7 +3983,7 @@ def create_topics(topics: List[Topic],
                   create_timeout: Optional[float] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/topics/manager.py#L383)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/topics/manager.py#L383)
 
 Creates topics via an explicit list of provided `Topics`.
 
@@ -4005,7 +4005,7 @@ def create_all_topics(timeout: Optional[float] = None,
                       create_timeout: Optional[float] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/topics/manager.py#L411)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/topics/manager.py#L411)
 
 A convenience method to create all Topic objects stored on this TopicManager.
 
@@ -4022,7 +4022,7 @@ A convenience method to create all Topic objects stored on this TopicManager.
 def validate_all_topics(timeout: Optional[float] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/models/topics/manager.py#L424)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/models/topics/manager.py#L424)
 
 Validates all topics exist and changelogs have correct topic and rep factor.
 
@@ -4040,7 +4040,7 @@ Issues are pooled and raised as an Exception once inspections are complete.
 class WindowedRocksDBStore(RocksDBStore)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/windowed/store.py#L10)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/windowed/store.py#L10)
 
 RocksDB-based windowed state store.
 
@@ -4060,7 +4060,7 @@ def __init__(
         options: Optional[RocksDBOptionsType] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/windowed/store.py#L18)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/windowed/store.py#L18)
 
 **Arguments**:
 
@@ -4083,7 +4083,7 @@ if using changelogs
 class WindowedRocksDBStorePartition(RocksDBStorePartition)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/windowed/partition.py#L24)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/windowed/partition.py#L24)
 
 A base class to access windowed state in RocksDB.
 
@@ -4113,7 +4113,7 @@ stores the expiration index to delete expired windows.
 class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/windowed/transaction.py#L22)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/windowed/transaction.py#L22)
 
 <a id="quixstreams.state.rocksdb.windowed.transaction.WindowedRocksDBPartitionTransaction.expire_windows"></a>
 
@@ -4125,7 +4125,7 @@ def expire_windows(duration_ms: int,
                    grace_ms: int = 0) -> List[Tuple[Tuple[int, int], Any]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/windowed/transaction.py#L105)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/windowed/transaction.py#L105)
 
 Get a list of expired windows from RocksDB considering latest timestamp,
 
@@ -4163,7 +4163,7 @@ sorted list of tuples in format `((start, end), value)`
 def parse_window_key(key: bytes) -> Tuple[bytes, int, int]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/windowed/serialization.py#L12)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/windowed/serialization.py#L12)
 
 Parse the window key from Rocksdb into (message_key, start, end) structure.
 
@@ -4186,7 +4186,7 @@ a tuple with message key, start timestamp, end timestamp
 def encode_window_key(start_ms: int, end_ms: int) -> bytes
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/windowed/serialization.py#L39)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/windowed/serialization.py#L39)
 
 Encode window start and end timestamps into bytes of the following format:
 
@@ -4211,7 +4211,7 @@ window timestamps as bytes
 def encode_window_prefix(prefix: bytes, start_ms: int) -> bytes
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/windowed/serialization.py#L53)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/windowed/serialization.py#L53)
 
 Encode window prefix and start time to iterate over keys in RocksDB
 
@@ -4239,7 +4239,7 @@ bytes
 class WindowedTransactionState(WindowedState)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/windowed/state.py#L9)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/windowed/state.py#L9)
 
 <a id="quixstreams.state.rocksdb.windowed.state.WindowedTransactionState.__init__"></a>
 
@@ -4250,7 +4250,7 @@ def __init__(transaction: "WindowedRocksDBPartitionTransaction",
              prefix: bytes)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/windowed/state.py#L12)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/windowed/state.py#L12)
 
 A windowed state to be provided into `StreamingDataFrame` window functions.
 
@@ -4268,7 +4268,7 @@ def get_window(start_ms: int,
                default: Any = None) -> Optional[Any]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/windowed/state.py#L23)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/windowed/state.py#L23)
 
 Get the value of the window defined by `start` and `end` timestamps
 
@@ -4292,7 +4292,7 @@ value or None if the key is not found and `default` is not provided
 def update_window(start_ms: int, end_ms: int, value: Any, timestamp_ms: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/windowed/state.py#L39)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/windowed/state.py#L39)
 
 Set a value for the window.
 
@@ -4314,7 +4314,7 @@ using the provided `timestamp`.
 def get_latest_timestamp() -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/windowed/state.py#L60)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/windowed/state.py#L60)
 
 Get the latest observed timestamp for the current state partition.
 
@@ -4334,7 +4334,7 @@ def expire_windows(duration_ms: int,
                    grace_ms: int = 0) -> List[Tuple[Tuple[int, int], Any]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/windowed/state.py#L72)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/windowed/state.py#L72)
 
 Get a list of expired windows from RocksDB considering the current
 latest timestamp, window duration and grace period.
@@ -4356,7 +4356,7 @@ calling this method multiple times will yield different results for the same
 class RocksDBOptions(RocksDBOptionsType)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/options.py#L25)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/options.py#L25)
 
 RocksDB database options.
 
@@ -4377,7 +4377,7 @@ Please see `rocksdict.Options` for a complete description of other options.
 def to_options() -> rocksdict.Options
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/options.py#L53)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/options.py#L53)
 
 Convert parameters to `rocksdict.Options`
 
@@ -4397,7 +4397,7 @@ instance of `rocksdict.Options`
 class RocksDBStore(Store)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/store.py#L19)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/store.py#L19)
 
 RocksDB-based state store.
 
@@ -4417,7 +4417,7 @@ def __init__(
         options: Optional[options_type] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/store.py#L29)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/store.py#L29)
 
 **Arguments**:
 
@@ -4437,7 +4437,7 @@ if using changelogs
 def topic() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/store.py#L53)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/store.py#L53)
 
 Store topic name
 
@@ -4450,7 +4450,7 @@ Store topic name
 def name() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/store.py#L60)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/store.py#L60)
 
 Store name
 
@@ -4463,7 +4463,7 @@ Store name
 def partitions() -> Dict[int, RocksDBStorePartition]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/store.py#L67)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/store.py#L67)
 
 Mapping of assigned store partitions
 
@@ -4475,7 +4475,7 @@ Mapping of assigned store partitions
 def assign_partition(partition: int) -> RocksDBStorePartition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/store.py#L80)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/store.py#L80)
 
 Open and assign store partition.
 
@@ -4498,7 +4498,7 @@ instance of`RocksDBStorePartition`
 def revoke_partition(partition: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/store.py#L117)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/store.py#L117)
 
 Revoke and close the assigned store partition.
 
@@ -4516,7 +4516,7 @@ If the partition is not assigned, it will log the message and return.
 def start_partition_transaction(partition: int) -> RocksDBPartitionTransaction
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/store.py#L138)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/store.py#L138)
 
 Start a new partition transaction.
 
@@ -4539,7 +4539,7 @@ instance of `RocksDBPartitionTransaction`
 def close()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/store.py#L160)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/store.py#L160)
 
 Close the store and revoke all assigned partitions
 
@@ -4555,7 +4555,7 @@ Close the store and revoke all assigned partitions
 class RocksDBStorePartition(StorePartition)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/partition.py#L40)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/partition.py#L40)
 
 A base class to access state in RocksDB.
 
@@ -4582,7 +4582,7 @@ it will retry according to `open_max_retries` and `open_retry_backoff` options.
 def begin() -> RocksDBPartitionTransaction
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/partition.py#L75)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/partition.py#L75)
 
 Create a new `RocksDBTransaction` object.
 
@@ -4601,7 +4601,7 @@ def recover_from_changelog_message(
         changelog_message: ConfluentKafkaMessageProto, committed_offset: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/partition.py#L128)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/partition.py#L128)
 
 Updates state from a given changelog message.
 
@@ -4627,7 +4627,7 @@ messages and improves the state consistency guarantees.
 def set_changelog_offset(changelog_offset: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/partition.py#L169)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/partition.py#L169)
 
 Set the changelog offset based on a message (usually an "offset-only" message).
 
@@ -4645,7 +4645,7 @@ Used during recovery.
 def write(batch: WriteBatch)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/partition.py#L179)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/partition.py#L179)
 
 Write `WriteBatch` to RocksDB
 
@@ -4663,7 +4663,7 @@ def get(key: bytes,
         cf_name: str = "default") -> Union[None, bytes, Any]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/partition.py#L186)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/partition.py#L186)
 
 Get a key from RocksDB.
 
@@ -4685,7 +4685,7 @@ a value if the key is present in the DB. Otherwise, `default`
 def exists(key: bytes, cf_name: str = "default") -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/partition.py#L200)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/partition.py#L200)
 
 Check if a key is present in the DB.
 
@@ -4706,7 +4706,7 @@ Check if a key is present in the DB.
 def get_processed_offset() -> Optional[int]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/partition.py#L211)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/partition.py#L211)
 
 Get last processed offset for the given partition
 
@@ -4722,7 +4722,7 @@ offset or `None` if there's no processed offset yet
 def get_changelog_offset() -> Optional[int]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/partition.py#L223)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/partition.py#L223)
 
 Get offset that the changelog is up-to-date with.
 
@@ -4738,7 +4738,7 @@ offset or `None` if there's no processed offset yet
 def close()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/partition.py#L233)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/partition.py#L233)
 
 Close the underlying RocksDB
 
@@ -4751,7 +4751,7 @@ Close the underlying RocksDB
 def path() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/partition.py#L246)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/partition.py#L246)
 
 Absolute path to RocksDB database folder
 
@@ -4768,7 +4768,7 @@ file path
 def destroy(cls, path: str)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/partition.py#L254)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/partition.py#L254)
 
 Delete underlying RocksDB database
 
@@ -4786,7 +4786,7 @@ The database must be closed first.
 def get_column_family_handle(cf_name: str) -> ColumnFamily
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/partition.py#L264)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/partition.py#L264)
 
 Get a column family handle to pass to it WriteBatch.
 
@@ -4809,7 +4809,7 @@ instance of `rocksdict.ColumnFamily`
 def get_column_family(cf_name: str) -> Rdict
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/partition.py#L285)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/partition.py#L285)
 
 Get a column family instance.
 
@@ -4839,7 +4839,7 @@ instance of `rocksdict.Rdict` for the given column family
 class RocksDBPartitionTransaction(PartitionTransaction)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/transaction.py#L61)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/transaction.py#L61)
 
 A transaction class to perform simple key-value operations like
 "get", "set", "delete" and "exists" on a single RocksDB partition.
@@ -4879,7 +4879,7 @@ def __init__(partition: "RocksDBStorePartition",
              changelog_producer: Optional[ChangelogProducer] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/transaction.py#L100)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/transaction.py#L100)
 
 **Arguments**:
 
@@ -4900,7 +4900,7 @@ def get(key: Any,
         cf_name: str = "default") -> Optional[Any]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/transaction.py#L124)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/transaction.py#L124)
 
 Get a key from the store.
 
@@ -4930,7 +4930,7 @@ value or `default`
 def set(key: Any, value: Any, prefix: bytes, cf_name: str = "default")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/transaction.py#L164)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/transaction.py#L164)
 
 Set a key to the store.
 
@@ -4952,7 +4952,7 @@ It first updates the key in the update cache.
 def delete(key: Any, prefix: bytes, cf_name: str = "default")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/transaction.py#L187)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/transaction.py#L187)
 
 Delete a key from the store.
 
@@ -4973,7 +4973,7 @@ It first deletes the key from the update cache.
 def exists(key: Any, prefix: bytes, cf_name: str = "default") -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/transaction.py#L208)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/transaction.py#L208)
 
 Check if a key exists in the store.
 
@@ -4998,7 +4998,7 @@ It first looks up the key in the update cache.
 def prepare(processed_offset: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/transaction.py#L235)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/transaction.py#L235)
 
 Produce changelog messages to the changelog topic for all changes accumulated
 
@@ -5026,7 +5026,7 @@ def flush(processed_offset: Optional[int] = None,
           changelog_offset: Optional[int] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/transaction.py#L259)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/transaction.py#L259)
 
 Flush the recent updates to the database.
 
@@ -5055,7 +5055,7 @@ optional.
 def completed() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/transaction.py#L294)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/transaction.py#L294)
 
 Check if the transaction is completed.
 
@@ -5077,7 +5077,7 @@ The completed transaction should not be re-used.
 def prepared() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/transaction.py#L308)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/transaction.py#L308)
 
 Check if the transaction is in PREPARED status.
 
@@ -5097,7 +5097,7 @@ updates anymore, but its state is not yet flushed to the disk
 def failed() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/transaction.py#L320)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/transaction.py#L320)
 
 Check if the transaction has failed.
 
@@ -5117,7 +5117,7 @@ and
 def changelog_topic_partition() -> Optional[Tuple[str, int]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/transaction.py#L332)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/transaction.py#L332)
 
 Return the changelog topic-partition for the StorePartition of this transaction.
 
@@ -5135,7 +5135,7 @@ Returns `None` if changelog_producer is not provided.
 def as_state(prefix: Any = DEFAULT_PREFIX) -> TransactionState
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/rocksdb/transaction.py#L346)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/rocksdb/transaction.py#L346)
 
 Create a one-time use `TransactionState` object with a limited CRUD interface
 
@@ -5180,7 +5180,7 @@ an instance of `TransactionState`
 class RecoveryPartition()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/recovery.py#L25)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/recovery.py#L25)
 
 A changelog topic partition mapped to a respective `StorePartition` with helper
 methods to determine its current recovery status.
@@ -5196,7 +5196,7 @@ Since `StorePartition`s do recovery directly, it also handles recovery transacti
 def offset() -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/recovery.py#L61)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/recovery.py#L61)
 
 Get the changelog offset from the underlying `StorePartition`.
 
@@ -5213,7 +5213,7 @@ changelog offset (int)
 def needs_recovery_check() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/recovery.py#L77)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/recovery.py#L77)
 
 Determine whether to attempt recovery for underlying `StorePartition`.
 
@@ -5228,7 +5228,7 @@ This does NOT mean that anything actually requires recovering.
 def has_invalid_offset() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/recovery.py#L88)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/recovery.py#L88)
 
 Determine if the current changelog offset stored in state is invalid.
 
@@ -5241,7 +5241,7 @@ def recover_from_changelog_message(
         changelog_message: ConfluentKafkaMessageProto)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/recovery.py#L102)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/recovery.py#L102)
 
 Recover the StorePartition using a message read from its respective changelog.
 
@@ -5257,7 +5257,7 @@ Recover the StorePartition using a message read from its respective changelog.
 def set_watermarks(lowwater: int, highwater: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/recovery.py#L114)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/recovery.py#L114)
 
 Set the changelog watermarks as gathered from Consumer.get_watermark_offsets()
 
@@ -5274,7 +5274,7 @@ Set the changelog watermarks as gathered from Consumer.get_watermark_offsets()
 def set_recovery_consume_position(offset: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/recovery.py#L124)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/recovery.py#L124)
 
 Update the recovery partition with the consumer's position (whenever
 
@@ -5294,7 +5294,7 @@ It is possible that it may be set more than once.
 class ChangelogProducerFactory()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/recovery.py#L136)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/recovery.py#L136)
 
 Generates ChangelogProducers, which produce changelog messages to a StorePartition.
 
@@ -5306,7 +5306,7 @@ Generates ChangelogProducers, which produce changelog messages to a StorePartiti
 def __init__(changelog_name: str, producer: RowProducer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/recovery.py#L141)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/recovery.py#L141)
 
 **Arguments**:
 
@@ -5325,7 +5325,7 @@ a ChangelogWriter instance
 def get_partition_producer(partition_num) -> "ChangelogProducer"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/recovery.py#L151)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/recovery.py#L151)
 
 Generate a ChangelogProducer for producing to a specific partition number
 
@@ -5343,7 +5343,7 @@ Generate a ChangelogProducer for producing to a specific partition number
 class ChangelogProducer()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/recovery.py#L165)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/recovery.py#L165)
 
 Generated for a `StorePartition` to produce state changes to its respective
 kafka changelog partition.
@@ -5356,7 +5356,7 @@ kafka changelog partition.
 def __init__(changelog_name: str, partition: int, producer: RowProducer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/recovery.py#L171)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/recovery.py#L171)
 
 **Arguments**:
 
@@ -5374,7 +5374,7 @@ def produce(key: bytes,
             headers: Optional[MessageHeadersMapping] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/recovery.py#L194)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/recovery.py#L194)
 
 Produce a message to a changelog topic partition.
 
@@ -5392,7 +5392,7 @@ Produce a message to a changelog topic partition.
 class RecoveryManager()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/recovery.py#L219)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/recovery.py#L219)
 
 Manages all consumer-related aspects of recovery, including:
     - assigning/revoking, pausing/resuming topic partitions (especially changelogs)
@@ -5412,7 +5412,7 @@ Recovery is attempted from the `Application` after any new partition assignment.
 def partitions() -> Dict[int, Dict[str, RecoveryPartition]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/recovery.py#L238)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/recovery.py#L238)
 
 Returns a mapping of assigned RecoveryPartitions in the following format:
 {<partition>: {<store_name>: <RecoveryPartition>}}
@@ -5426,7 +5426,7 @@ Returns a mapping of assigned RecoveryPartitions in the following format:
 def has_assignments() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/recovery.py#L246)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/recovery.py#L246)
 
 Whether the Application has assigned RecoveryPartitions
 
@@ -5443,7 +5443,7 @@ has assignments, as bool
 def recovering() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/recovery.py#L255)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/recovery.py#L255)
 
 Whether the Application is currently recovering
 
@@ -5459,7 +5459,7 @@ is recovering, as bool
 def register_changelog(topic_name: str, store_name: str) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/recovery.py#L263)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/recovery.py#L263)
 
 Register a changelog Topic with the TopicManager.
 
@@ -5476,7 +5476,7 @@ Register a changelog Topic with the TopicManager.
 def do_recovery()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/recovery.py#L275)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/recovery.py#L275)
 
 If there are any active RecoveryPartitions, do a recovery procedure.
 
@@ -5491,7 +5491,7 @@ def assign_partition(topic: str, partition: int, committed_offset: int,
                      store_partitions: Dict[str, StorePartition])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/recovery.py#L328)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/recovery.py#L328)
 
 Assigns `StorePartition`s (as `RecoveryPartition`s) ONLY IF recovery required.
 
@@ -5505,7 +5505,7 @@ Pauses active consumer partitions as needed.
 def revoke_partition(partition_num: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/recovery.py#L405)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/recovery.py#L405)
 
 revoke ALL StorePartitions (across all Stores) for a given partition number
 
@@ -5529,7 +5529,7 @@ revoke ALL StorePartitions (across all Stores) for a given partition number
 class Store(Protocol)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L11)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L11)
 
 Abstract state store.
 
@@ -5545,7 +5545,7 @@ partitions' transactions.
 def topic() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L22)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L22)
 
 Topic name
 
@@ -5558,7 +5558,7 @@ Topic name
 def name() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L29)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L29)
 
 Store name
 
@@ -5571,7 +5571,7 @@ Store name
 def partitions() -> Dict[int, "StorePartition"]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L36)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L36)
 
 Mapping of assigned store partitions
 
@@ -5587,7 +5587,7 @@ dict of "{partition: <StorePartition>}"
 def assign_partition(partition: int) -> "StorePartition"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L43)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L43)
 
 Assign new store partition
 
@@ -5607,7 +5607,7 @@ instance of `StorePartition`
 def revoke_partition(partition: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L52)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L52)
 
 Revoke assigned store partition
 
@@ -5623,7 +5623,7 @@ Revoke assigned store partition
 def start_partition_transaction(partition: int) -> "PartitionTransaction"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L60)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L60)
 
 Start a new partition transaction.
 
@@ -5645,7 +5645,7 @@ instance of `PartitionTransaction`
 def close()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L69)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L69)
 
 Close store and revoke all store partitions
 
@@ -5657,7 +5657,7 @@ Close store and revoke all store partitions
 class StorePartition(Protocol)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L80)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L80)
 
 A base class to access state in the underlying storage.
 It represents a single instance of some storage (e.g. a single database for
@@ -5672,7 +5672,7 @@ the persistent storage).
 def path() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L89)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L89)
 
 Absolute path to RocksDB database folder
 
@@ -5684,7 +5684,7 @@ Absolute path to RocksDB database folder
 def begin() -> "PartitionTransaction"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L95)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L95)
 
 State new `PartitionTransaction`
 
@@ -5697,7 +5697,7 @@ def recover_from_changelog_message(
         changelog_message: ConfluentKafkaMessageProto, committed_offset: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L100)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L100)
 
 Updates state from a given changelog message.
 
@@ -5714,7 +5714,7 @@ Updates state from a given changelog message.
 def get_processed_offset() -> Optional[int]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L111)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L111)
 
 Get last processed offset for the given partition
 
@@ -5730,7 +5730,7 @@ offset or `None` if there's no processed offset yet
 def get_changelog_offset() -> Optional[int]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L118)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L118)
 
 Get offset that the changelog is up-to-date with.
 
@@ -5746,7 +5746,7 @@ offset or `None` if there's no processed offset yet
 def set_changelog_offset(changelog_offset: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L125)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L125)
 
 Set the changelog offset based on a message (usually an "offset-only" message).
 
@@ -5764,7 +5764,7 @@ Used during recovery.
 class State(Protocol)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L136)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L136)
 
 Primary interface for working with key-value state data from `StreamingDataFrame`
 
@@ -5776,7 +5776,7 @@ Primary interface for working with key-value state data from `StreamingDataFrame
 def get(key: Any, default: Any = None) -> Optional[Any]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L141)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L141)
 
 Get the value for key if key is present in the state, else default
 
@@ -5797,7 +5797,7 @@ value or None if the key is not found and `default` is not provided
 def set(key: Any, value: Any)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L151)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L151)
 
 Set value for the key.
 
@@ -5814,7 +5814,7 @@ Set value for the key.
 def delete(key: Any)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L159)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L159)
 
 Delete value for the key.
 
@@ -5832,7 +5832,7 @@ This function always returns `None`, even if value is not found.
 def exists(key: Any) -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L168)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L168)
 
 Check if the key exists in state.
 
@@ -5852,7 +5852,7 @@ True if key exists, False otherwise
 class PartitionTransaction(Protocol)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L177)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L177)
 
 A transaction class to perform simple key-value operations like
 "get", "set", "delete" and "exists" on a single storage partition.
@@ -5865,7 +5865,7 @@ A transaction class to perform simple key-value operations like
 def as_state(prefix: Any) -> State
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L183)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L183)
 
 Create an instance implementing the `State` protocol to be provided
 
@@ -5885,7 +5885,7 @@ an instance implementing the `State` protocol
 def get(key: Any, prefix: bytes, default: Any = None) -> Optional[Any]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L194)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L194)
 
 Get the value for key if key is present in the state, else default
 
@@ -5907,7 +5907,7 @@ value or None if the key is not found and `default` is not provided
 def set(key: Any, prefix: bytes, value: Any)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L205)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L205)
 
 Set value for the key.
 
@@ -5925,7 +5925,7 @@ Set value for the key.
 def delete(key: Any, prefix: bytes)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L214)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L214)
 
 Delete value for the key.
 
@@ -5944,7 +5944,7 @@ This function always returns `None`, even if value is not found.
 def exists(key: Any, prefix: bytes) -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L224)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L224)
 
 Check if the key exists in state.
 
@@ -5966,7 +5966,7 @@ True if key exists, False otherwise
 def failed() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L234)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L234)
 
 Return `True` if transaction failed to update data at some point.
 
@@ -5985,7 +5985,7 @@ bool
 def completed() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L244)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L244)
 
 Return `True` if transaction is successfully completed.
 
@@ -6004,7 +6004,7 @@ bool
 def prepared() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L254)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L254)
 
 Return `True` if transaction is prepared completed.
 
@@ -6022,7 +6022,7 @@ bool
 def prepare(processed_offset: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L263)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L263)
 
 Produce changelog messages to the changelog topic for all changes accumulated
 
@@ -6048,7 +6048,7 @@ to the changelog topic.
 def changelog_topic_partition() -> Optional[Tuple[str, int]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L279)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L279)
 
 Return the changelog topic-partition for the StorePartition of this transaction.
 
@@ -6067,7 +6067,7 @@ def flush(processed_offset: Optional[int] = None,
           changelog_offset: Optional[int] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L288)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L288)
 
 Flush the recent updates to the storage.
 
@@ -6085,7 +6085,7 @@ optional.
 class WindowedState(Protocol)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L306)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L306)
 
 A windowed state to be provided into `StreamingDataFrame` window functions.
 
@@ -6099,7 +6099,7 @@ def get_window(start_ms: int,
                default: Any = None) -> Optional[Any]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L311)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L311)
 
 Get the value of the window defined by `start` and `end` timestamps
 
@@ -6123,7 +6123,7 @@ value or None if the key is not found and `default` is not provided
 def update_window(start_ms: int, end_ms: int, value: Any, timestamp_ms: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L325)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L325)
 
 Set a value for the window.
 
@@ -6145,7 +6145,7 @@ using the provided `timestamp`.
 def get_latest_timestamp() -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L339)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L339)
 
 Get the latest observed timestamp for the current state partition.
 
@@ -6165,7 +6165,7 @@ def expire_windows(duration_ms: int,
                    grace_ms: int = 0) -> List[Tuple[Tuple[int, int], Any]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L350)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L350)
 
 Get a list of expired windows from RocksDB considering the current
 
@@ -6188,7 +6188,7 @@ calling this method multiple times will yield different results for the same
 class WindowedPartitionTransaction(Protocol)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L367)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L367)
 
 <a id="quixstreams.state.types.WindowedPartitionTransaction.failed"></a>
 
@@ -6199,7 +6199,7 @@ class WindowedPartitionTransaction(Protocol)
 def failed() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L370)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L370)
 
 Return `True` if transaction failed to update data at some point.
 
@@ -6218,7 +6218,7 @@ bool
 def completed() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L380)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L380)
 
 Return `True` if transaction is successfully completed.
 
@@ -6237,7 +6237,7 @@ bool
 def prepared() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L390)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L390)
 
 Return `True` if transaction is prepared completed.
 
@@ -6255,7 +6255,7 @@ bool
 def prepare(processed_offset: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L399)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L399)
 
 Produce changelog messages to the changelog topic for all changes accumulated
 
@@ -6283,7 +6283,7 @@ def get_window(start_ms: int,
                default: Any = None) -> Optional[Any]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L416)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L416)
 
 Get the value of the window defined by `start` and `end` timestamps
 
@@ -6309,7 +6309,7 @@ def update_window(start_ms: int, end_ms: int, value: Any, timestamp_ms: int,
                   prefix: bytes)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L435)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L435)
 
 Set a value for the window.
 
@@ -6332,7 +6332,7 @@ using the provided `timestamp`.
 def get_latest_timestamp() -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L452)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L452)
 
 Get the latest observed timestamp for the current state partition.
 
@@ -6351,7 +6351,7 @@ latest observed event timestamp in milliseconds
 def expire_windows(duration_ms: int, prefix: bytes, grace_ms: int = 0)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L463)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L463)
 
 Get a list of expired windows from RocksDB considering the current
 
@@ -6376,7 +6376,7 @@ def flush(processed_offset: Optional[int] = None,
           changelog_offset: Optional[int] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L478)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L478)
 
 Flush the recent updates to the storage.
 
@@ -6395,7 +6395,7 @@ optional.
 def changelog_topic_partition() -> Optional[Tuple[str, int]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L492)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L492)
 
 Return the changelog topic-partition for the StorePartition of this transaction.
 
@@ -6413,7 +6413,7 @@ Returns `None` if changelog_producer is not provided.
 class PartitionRecoveryTransaction(Protocol)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L506)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L506)
 
 A class for managing recovery for a StorePartition from a changelog message
 
@@ -6425,7 +6425,7 @@ A class for managing recovery for a StorePartition from a changelog message
 def flush()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L513)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L513)
 
 Flush the recovery update to the storage.
 
@@ -6437,7 +6437,7 @@ Flush the recovery update to the storage.
 class PartitionTransactionStatus(enum.Enum)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/types.py#L520)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/types.py#L520)
 
 <a id="quixstreams.state.types.PartitionTransactionStatus.STARTED"></a>
 
@@ -6479,7 +6479,7 @@ Transaction is failed, it cannot be used anymore
 class StateStoreManager()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/manager.py#L24)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/manager.py#L24)
 
 Class for managing state stores and partitions.
 
@@ -6497,7 +6497,7 @@ StateStoreManager is responsible for:
 def stores() -> Dict[str, Dict[str, Store]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/manager.py#L62)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/manager.py#L62)
 
 Map of registered state stores
 
@@ -6514,7 +6514,7 @@ dict in format {topic: {store_name: store}}
 def recovery_required() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/manager.py#L70)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/manager.py#L70)
 
 Whether recovery needs to be done.
 
@@ -6527,7 +6527,7 @@ Whether recovery needs to be done.
 def using_changelogs() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/manager.py#L79)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/manager.py#L79)
 
 Whether the StateStoreManager is using changelog topics
 
@@ -6543,7 +6543,7 @@ using changelogs, as bool
 def do_recovery()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/manager.py#L87)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/manager.py#L87)
 
 Perform a state recovery, if necessary.
 
@@ -6555,7 +6555,7 @@ Perform a state recovery, if necessary.
 def stop_recovery()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/manager.py#L93)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/manager.py#L93)
 
 Stop recovery (called during app shutdown).
 
@@ -6567,7 +6567,7 @@ Stop recovery (called during app shutdown).
 def get_store(topic: str, store_name: str = DEFAULT_STATE_STORE_NAME) -> Store
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/manager.py#L99)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/manager.py#L99)
 
 Get a store for given name and topic
 
@@ -6589,7 +6589,7 @@ def register_store(topic_name: str,
                    store_name: str = DEFAULT_STATE_STORE_NAME)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/manager.py#L132)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/manager.py#L132)
 
 Register a state store to be managed by StateStoreManager.
 
@@ -6611,7 +6611,7 @@ Each store can be registered only once for each topic.
 def register_windowed_store(topic_name: str, store_name: str)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/manager.py#L157)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/manager.py#L157)
 
 Register a windowed state store to be managed by StateStoreManager.
 
@@ -6633,7 +6633,7 @@ Each window store can be registered only once for each topic.
 def clear_stores()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/manager.py#L180)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/manager.py#L180)
 
 Delete all state stores managed by StateStoreManager.
 
@@ -6646,7 +6646,7 @@ def on_partition_assign(topic: str, partition: int,
                         committed_offset: int) -> List[StorePartition]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/manager.py#L195)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/manager.py#L195)
 
 Assign store partitions for each registered store for the given `TopicPartition`
 
@@ -6670,7 +6670,7 @@ list of assigned `StorePartition`
 def on_partition_revoke(topic: str, partition: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/manager.py#L221)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/manager.py#L221)
 
 Revoke store partitions for each registered store for the given `TopicPartition`
 
@@ -6687,7 +6687,7 @@ Revoke store partitions for each registered store for the given `TopicPartition`
 def init()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/manager.py#L234)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/manager.py#L234)
 
 Initialize `StateStoreManager` and create a store directory
 
@@ -6700,7 +6700,7 @@ Initialize `StateStoreManager` and create a store directory
 def close()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/manager.py#L241)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/manager.py#L241)
 
 Close all registered stores
 
@@ -6716,7 +6716,7 @@ Close all registered stores
 class TransactionState(State)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/state.py#L6)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/state.py#L6)
 
 <a id="quixstreams.state.state.TransactionState.__init__"></a>
 
@@ -6726,7 +6726,7 @@ class TransactionState(State)
 def __init__(prefix: bytes, transaction: PartitionTransaction)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/state.py#L12)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/state.py#L12)
 
 Simple key-value state to be provided into `StreamingDataFrame` functions
 
@@ -6742,7 +6742,7 @@ Simple key-value state to be provided into `StreamingDataFrame` functions
 def get(key: Any, default: Any = None) -> Optional[Any]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/state.py#L21)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/state.py#L21)
 
 Get the value for key if key is present in the state, else default
 
@@ -6763,7 +6763,7 @@ value or None if the key is not found and `default` is not provided
 def set(key: Any, value: Any)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/state.py#L31)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/state.py#L31)
 
 Set value for the key.
 
@@ -6780,7 +6780,7 @@ Set value for the key.
 def delete(key: Any)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/state.py#L39)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/state.py#L39)
 
 Delete value for the key.
 
@@ -6798,7 +6798,7 @@ This function always returns `None`, even if value is not found.
 def exists(key: Any) -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/state/state.py#L48)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/state/state.py#L48)
 
 Check if the key exists in state.
 
@@ -6826,7 +6826,7 @@ True if key exists, False otherwise
 class PartitionAssignmentError(QuixException)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/exceptions/assignment.py#L6)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/exceptions/assignment.py#L6)
 
 Error happened during partition rebalancing.
 Raised from `on_assign`, `on_revoke` and `on_lost` callbacks
@@ -6847,7 +6847,7 @@ Raised from `on_assign`, `on_revoke` and `on_lost` callbacks
 def set_message_context(context: Optional[MessageContext])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/context.py#L20)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/context.py#L20)
 
 Set a MessageContext for the current message in the given `contextvars.Context`
 
@@ -6884,7 +6884,7 @@ sdf = sdf.update(lambda value: alter_context(value))
 def message_context() -> MessageContext
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/context.py#L51)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/context.py#L51)
 
 Get a MessageContext for the current message, which houses most of the message
 
@@ -6923,7 +6923,7 @@ instance of `MessageContext`
 class ConnectionConfig(BaseSettings)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/kafka/configuration.py#L17)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/kafka/configuration.py#L17)
 
 Provides an interface for all librdkafka connection-based configs.
 
@@ -6946,7 +6946,7 @@ def settings_customise_sources(
 ) -> Tuple[PydanticBaseSettingsSource, ...]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/kafka/configuration.py#L96)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/kafka/configuration.py#L96)
 
 Included to ignore reading/setting values from the environment
 
@@ -6961,7 +6961,7 @@ def from_librdkafka_dict(cls,
                          ignore_extras: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/kafka/configuration.py#L110)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/kafka/configuration.py#L110)
 
 Create a `ConnectionConfig` from a librdkafka config dictionary.
 
@@ -6982,7 +6982,7 @@ a ConnectionConfig
 def as_librdkafka_dict(plaintext_secrets=True) -> dict
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/kafka/configuration.py#L125)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/kafka/configuration.py#L125)
 
 Dump any non-empty config values as a librdkafka dictionary.
 
@@ -7012,7 +7012,7 @@ a librdkafka-compatible dictionary
 class Producer()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/kafka/producer.py#L39)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/kafka/producer.py#L39)
 
 <a id="quixstreams.kafka.producer.Producer.__init__"></a>
 
@@ -7026,7 +7026,7 @@ def __init__(broker_address: Union[str, ConnectionConfig],
              flush_timeout: Optional[int] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/kafka/producer.py#L40)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/kafka/producer.py#L40)
 
 A wrapper around `confluent_kafka.Producer`.
 
@@ -7062,7 +7062,7 @@ def produce(topic: str,
             on_delivery: Optional[DeliveryCallback] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/kafka/producer.py#L78)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/kafka/producer.py#L78)
 
 Produce a message to a topic.
 
@@ -7093,7 +7093,7 @@ for the produced message.
 def poll(timeout: float = 0)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/kafka/producer.py#L139)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/kafka/producer.py#L139)
 
 Polls the producer for events and calls `on_delivery` callbacks.
 
@@ -7110,7 +7110,7 @@ Polls the producer for events and calls `on_delivery` callbacks.
 def flush(timeout: Optional[float] = None) -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/kafka/producer.py#L147)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/kafka/producer.py#L147)
 
 Wait for all messages in the Producer queue to be delivered.
 
@@ -7131,7 +7131,7 @@ number of messages remaining to flush
 class TransactionalProducer(Producer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/kafka/producer.py#L178)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/kafka/producer.py#L178)
 
 A separate producer class used only internally for transactions
 (transactions are only needed when using a consumer).
@@ -7148,7 +7148,7 @@ A separate producer class used only internally for transactions
 class Consumer()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/kafka/consumer.py#L64)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/kafka/consumer.py#L64)
 
 <a id="quixstreams.kafka.consumer.Consumer.__init__"></a>
 
@@ -7166,7 +7166,7 @@ def __init__(broker_address: Union[str, ConnectionConfig],
              extra_config: Optional[dict] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/kafka/consumer.py#L65)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/kafka/consumer.py#L65)
 
 A wrapper around `confluent_kafka.Consumer`.
 
@@ -7205,7 +7205,7 @@ Note: values passed as arguments override values in `extra_config`.
 def poll(timeout: Optional[float] = None) -> Optional[Message]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/kafka/consumer.py#L128)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/kafka/consumer.py#L128)
 
 Consumes a single message, calls callbacks and returns events.
 
@@ -7240,7 +7240,7 @@ def subscribe(topics: List[str],
               on_lost: Optional[RebalancingCallback] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/kafka/consumer.py#L147)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/kafka/consumer.py#L147)
 
 Set subscription to supplied list of topics
 
@@ -7271,7 +7271,7 @@ committing offsets, for example, may fail.
 def unsubscribe()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/kafka/consumer.py#L231)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/kafka/consumer.py#L231)
 
 Remove current subscription.
 
@@ -7289,7 +7289,7 @@ def store_offsets(message: Optional[Message] = None,
                   offsets: Optional[List[TopicPartition]] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/kafka/consumer.py#L240)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/kafka/consumer.py#L240)
 
 Store offsets for a message or a list of offsets.
 
@@ -7318,7 +7318,7 @@ def commit(message: Optional[Message] = None,
            asynchronous: bool = True) -> Optional[List[TopicPartition]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/kafka/consumer.py#L271)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/kafka/consumer.py#L271)
 
 Commit a message or a list of offsets.
 
@@ -7352,7 +7352,7 @@ def committed(partitions: List[TopicPartition],
               timeout: Optional[float] = None) -> List[TopicPartition]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/kafka/consumer.py#L311)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/kafka/consumer.py#L311)
 
 Retrieve committed offsets for the specified partitions.
 
@@ -7381,7 +7381,7 @@ def get_watermark_offsets(partition: TopicPartition,
                           cached: bool = False) -> Tuple[int, int]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/kafka/consumer.py#L329)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/kafka/consumer.py#L329)
 
 Retrieve low and high offsets for the specified partition.
 
@@ -7414,7 +7414,7 @@ def list_topics(topic: Optional[str] = None,
                 timeout: Optional[float] = None) -> ClusterMetadata
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/kafka/consumer.py#L355)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/kafka/consumer.py#L355)
 
 Request metadata from the cluster.
 
@@ -7442,7 +7442,7 @@ None or -1 is infinite. Default: None
 def memberid() -> Optional[str]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/kafka/consumer.py#L376)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/kafka/consumer.py#L376)
 
 Return this client's broker-assigned group member id.
 
@@ -7466,7 +7466,7 @@ def offsets_for_times(partitions: List[TopicPartition],
                       timeout: Optional[float] = None) -> List[TopicPartition]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/kafka/consumer.py#L389)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/kafka/consumer.py#L389)
 
 Look up offsets by timestamp for the specified partitions.
 
@@ -7499,7 +7499,7 @@ None or -1 is infinite. Default: None
 def pause(partitions: List[TopicPartition])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/kafka/consumer.py#L415)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/kafka/consumer.py#L415)
 
 Pause consumption for the provided list of partitions.
 
@@ -7523,7 +7523,7 @@ Does NOT affect the result of `Consumer.assignment()`.
 def resume(partitions: List[TopicPartition])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/kafka/consumer.py#L428)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/kafka/consumer.py#L428)
 
 Resume consumption for the provided list of partitions.
 
@@ -7543,7 +7543,7 @@ Resume consumption for the provided list of partitions.
 def position(partitions: List[TopicPartition]) -> List[TopicPartition]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/kafka/consumer.py#L438)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/kafka/consumer.py#L438)
 
 Retrieve current positions (offsets) for the specified partitions.
 
@@ -7570,7 +7570,7 @@ the last consumed message + 1.
 def seek(partition: TopicPartition)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/kafka/consumer.py#L452)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/kafka/consumer.py#L452)
 
 Set consume position for partition to offset.
 
@@ -7598,7 +7598,7 @@ pass the offset in an `assign()` call.
 def assignment() -> List[TopicPartition]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/kafka/consumer.py#L469)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/kafka/consumer.py#L469)
 
 Returns the current partition assignment.
 
@@ -7619,7 +7619,7 @@ Returns the current partition assignment.
 def set_sasl_credentials(username: str, password: str)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/kafka/consumer.py#L482)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/kafka/consumer.py#L482)
 
 Sets the SASL credentials used for this client.
 
@@ -7642,7 +7642,7 @@ This method is applicable only to SASL PLAIN and SCRAM mechanisms.
 def incremental_assign(partitions: List[TopicPartition])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/kafka/consumer.py#L496)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/kafka/consumer.py#L496)
 
 Assign new partitions.
 
@@ -7664,7 +7664,7 @@ Any additional partitions besides the ones passed during the `Consumer`
 def incremental_unassign(partitions: List[TopicPartition])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/kafka/consumer.py#L510)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/kafka/consumer.py#L510)
 
 Revoke partitions.
 
@@ -7682,7 +7682,7 @@ Can be called outside an on_revoke callback.
 def close()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/kafka/consumer.py#L520)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/kafka/consumer.py#L520)
 
 Close down and terminate the Kafka Consumer.
 
@@ -7703,7 +7703,7 @@ see `poll()` for more info.
 def consumer_group_metadata() -> GroupMetadata
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/kafka/consumer.py#L537)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/kafka/consumer.py#L537)
 
 Used by the producer during consumer offset sending for an EOS transaction.
 
@@ -7723,7 +7723,7 @@ Used by the producer during consumer offset sending for an EOS transaction.
 class Application()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/app.py#L56)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/app.py#L56)
 
 The main Application class.
 
@@ -7791,7 +7791,7 @@ def __init__(broker_address: Optional[Union[str, ConnectionConfig]] = None,
              processing_guarantee: ProcessingGuarantee = "at-least-once")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/app.py#L94)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/app.py#L94)
 
 **Arguments**:
 
@@ -7899,7 +7899,7 @@ def Quix(
 ) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/app.py#L342)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/app.py#L342)
 
 >***NOTE:*** DEPRECATED: use Application with `quix_sdk_token` argument instead.
 
@@ -8002,7 +8002,7 @@ def topic(name: str,
           timestamp_extractor: Optional[TimestampExtractor] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/app.py#L483)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/app.py#L483)
 
 Create a topic definition.
 
@@ -8073,7 +8073,7 @@ topic = app.topic("input-topic", timestamp_extractor=custom_ts_extractor)
 def dataframe(topic: Topic) -> StreamingDataFrame
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/app.py#L563)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/app.py#L563)
 
 A simple helper method that generates a `StreamingDataFrame`, which is used
 
@@ -8115,7 +8115,7 @@ to be used as an input topic.
 def stop(fail: bool = False)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/app.py#L602)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/app.py#L602)
 
 Stop the internal poll loop and the message processing.
 
@@ -8138,7 +8138,7 @@ to unhandled exception, and it shouldn't commit the current checkpoint.
 def get_producer() -> Producer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/app.py#L625)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/app.py#L625)
 
 Create and return a pre-configured Producer instance.
 The Producer is initialized with params passed to Application.
@@ -8169,7 +8169,7 @@ with app.get_producer() as producer:
 def get_consumer(auto_commit_enable: bool = True) -> Consumer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/app.py#L655)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/app.py#L655)
 
 Create and return a pre-configured Consumer instance.
 The Consumer is initialized with params passed to Application.
@@ -8214,7 +8214,7 @@ with app.get_consumer() as consumer:
 def clear_state()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/app.py#L702)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/app.py#L702)
 
 Clear the state of the application.
 
@@ -8226,7 +8226,7 @@ Clear the state of the application.
 def run(dataframe: StreamingDataFrame)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/app.py#L708)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/app.py#L708)
 
 Start processing data from Kafka using provided `StreamingDataFrame`
 
@@ -8266,7 +8266,7 @@ app.run(dataframe=df)
 class RowConsumer(Consumer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/rowconsumer.py#L19)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/rowconsumer.py#L19)
 
 <a id="quixstreams.rowconsumer.RowConsumer.__init__"></a>
 
@@ -8283,7 +8283,7 @@ def __init__(broker_address: Union[str, ConnectionConfig],
              on_error: Optional[ConsumerErrorCallback] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/rowconsumer.py#L20)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/rowconsumer.py#L20)
 
 A consumer class that is capable of deserializing Kafka messages to Rows
 
@@ -8326,7 +8326,7 @@ def subscribe(topics: List[Topic],
               on_lost: Optional[RebalancingCallback] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/rowconsumer.py#L72)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/rowconsumer.py#L72)
 
 Set subscription to supplied list of topics.
 
@@ -8355,7 +8355,7 @@ for example, may fail.
 def poll_row(timeout: float = None) -> Union[Row, List[Row], None]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/rowconsumer.py#L106)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/rowconsumer.py#L106)
 
 Consumes a single message and deserialize it to Row or a list of Rows.
 
@@ -8383,7 +8383,7 @@ single Row, list of Rows or None
 class Checkpoint()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/checkpointing/checkpoint.py#L24)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/checkpointing/checkpoint.py#L24)
 
 Class to keep track of state updates and consumer offsets and to checkpoint these
 updates on schedule.
@@ -8396,7 +8396,7 @@ updates on schedule.
 def expired() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/checkpointing/checkpoint.py#L57)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/checkpointing/checkpoint.py#L57)
 
 Returns `True` if checkpoint deadline has expired OR
 if the total number of processed offsets exceeded the "commit_every" limit
@@ -8410,7 +8410,7 @@ when it's defined.
 def empty() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/checkpointing/checkpoint.py#L67)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/checkpointing/checkpoint.py#L67)
 
 Returns `True` if checkpoint doesn't have any offsets stored yet.
 
@@ -8423,7 +8423,7 @@ Returns `True` if checkpoint doesn't have any offsets stored yet.
 def store_offset(topic: str, partition: int, offset: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/checkpointing/checkpoint.py#L74)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/checkpointing/checkpoint.py#L74)
 
 Store the offset of the processed message to the checkpoint.
 
@@ -8444,7 +8444,7 @@ def get_store_transaction(
         store_name: str = DEFAULT_STATE_STORE_NAME) -> PartitionTransaction
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/checkpointing/checkpoint.py#L95)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/checkpointing/checkpoint.py#L95)
 
 Get a PartitionTransaction for the given store, topic and partition.
 
@@ -8468,7 +8468,7 @@ instance of `PartitionTransaction`
 def close()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/checkpointing/checkpoint.py#L118)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/checkpointing/checkpoint.py#L118)
 
 Perform cleanup (when the checkpoint is empty) instead of committing.
 
@@ -8482,7 +8482,7 @@ Needed for exactly-once, as Kafka transactions are timeboxed.
 def commit()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy/quixstreams/checkpointing/checkpoint.py#L127)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main-copy-macos-test/quixstreams/checkpointing/checkpoint.py#L127)
 
 Commit the checkpoint.
 
