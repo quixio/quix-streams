@@ -286,11 +286,11 @@ class Stream:
         sink: Optional[Callable[[Any, Any, int, Any], None]] = None,
     ) -> VoidExecutor:
         """
-        Compose a list of functions from this `Stream` and its parents into one
-        big closure using a "composer" function.
+        Generate an "executor" closure by mapping all relatives of this `Stream` and
+        composing their functions together.
 
-        This "executor" closure is to be used to execute all functions in the stream
-        for the given key, value and timestamps.
+        The resulting "executor" can be called with a given
+        value, key, timestamp, and headers (i.e. a Kafka message).
 
         By default, executor doesn't return the result of the execution.
         To accumulate the results, pass the `sink` parameter.
@@ -318,12 +318,13 @@ class Stream:
 
         tree_nodes = self.tree_all_nodes()
         splits = {s for s in tree_nodes if len(s.children) > 1}
+        leaves = [s for s in tree_nodes if not s.children]
         if not splits:
-            return compose(tree_nodes, composed)
+            return compose(leaves[0].tree_root_path(), composed)
 
         # Start all the initial composes
         pending_composes = {stream: [] for stream in reversed(list(splits))}
-        for tree_leaf in [s for s in tree_nodes if not s.children]:
+        for tree_leaf in leaves:
             tree = tree_leaf.tree_root_path(allow_splits=False)
             pending_composes[tree[0].parent].append(compose(tree, composed))
 
