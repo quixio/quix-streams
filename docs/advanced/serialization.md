@@ -76,7 +76,9 @@ output_topic = app.topic('output', value_serializer=JSONSerializer(schema=MY_SCH
 
 ## Avro
 
-The avro serializer and deserializer need to be pass explicitly.
+The Avro serializer and deserializer need to be passed explicitly.  
+
+In the current version, the schema must be provided manually.
 
 > ***WARNING***: The avro serializer and deserializer requires the fastavro library.
 > You can install quixstreams with the necessary dependencies using
