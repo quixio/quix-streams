@@ -80,7 +80,7 @@ The Avro serializer and deserializer need to be passed explicitly.
 
 In the current version, the schema must be provided manually.
 
-> ***WARNING***: The avro serializer and deserializer requires the fastavro library.
+> ***WARNING***: The avro serializer and deserializer require the `fastavro` library.
 > You can install quixstreams with the necessary dependencies using
 > `pip install quixstreams[avro]`
 
