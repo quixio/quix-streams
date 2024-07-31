@@ -1,7 +1,7 @@
 import abc
 import functools
 import pickle
-from typing import Callable, Any, Tuple, Union, Protocol, Iterable
+from typing import Callable, Any, Tuple, Union, Protocol, Iterable, TypeVar
 
 __all__ = (
     "StreamCallback",
@@ -32,6 +32,7 @@ class SupportsBool(Protocol):
     def __bool__(self) -> bool: ...
 
 
+T = TypeVar("T")
 ApplyCallback = Callable[[Any], Any]
 ApplyExpandedCallback = Callable[[Any], Iterable[Any]]
 UpdateCallback = Callable[[Any], None]
@@ -64,13 +65,15 @@ VoidExecutor = Callable[[Any, Any, int, Any], None]
 ReturningExecutor = Callable[[Any, Any, int, Any], Tuple[Any, Any, int, Any]]
 
 
-def expanded_child_executor_func(execution_set, result_unpack_meta: bool = False):
+def expanded_child_executor_func(
+    execution_set, result_unpack_meta: bool = False
+) -> VoidExecutor:
     # is a TransformFunction
     if result_unpack_meta:
 
-        def wrapper(results, key: Any, timestamp: int, headers: Any):
-            for result, new_key, new_timestamp, new_headers in results:
-                execution_set(result, new_key, new_timestamp, new_headers)
+        def wrapper(results: Iterable[Tuple[Any, Any, int, Any]], *args):
+            for result in results:
+                execution_set(*result)
 
         return wrapper
 
@@ -83,28 +86,30 @@ def expanded_child_executor_func(execution_set, result_unpack_meta: bool = False
         return wrapper
 
 
-def child_executor_func(execution_set, result_unpack_meta: bool = False):
+def child_executor_func(
+    execution_set, result_unpack_meta: bool = False
+) -> VoidExecutor:
     # is a TransformFunction
     if result_unpack_meta:
 
-        def wrapper(result, key: Any, timestamp: int, headers: Any):
+        def wrapper(result: Tuple[Any, Any, int, Any], *args):
             execution_set(*result)
 
         return wrapper
 
     else:
 
-        def wrapper(result, key: Any, timestamp: int, headers: Any):
-            return execution_set(result, key, timestamp, headers)
+        def wrapper(result: Any, key: Any, timestamp: int, headers: Any):
+            execution_set(result, key, timestamp, headers)
 
         return wrapper
 
 
-def copier():
+def copier() -> Callable[[Any], Any]:
     serializer = pickle.dumps
     deserializer = pickle.loads
 
-    def _copier(data):
+    def _copier(data: T) -> Callable[[], T]:
         serialized = serializer(data)
         return lambda: deserializer(serialized)
 
@@ -112,6 +117,23 @@ def copier():
 
 
 class ExecutorFactory:
+    """
+    Constructs the executor pattern for a given StreamFunction when `get_executions`
+    is called.
+
+    The end result *roughly* translates to something like this:
+
+    def get_executor(*executors):
+        def wrapper(v, k, t, h, func):
+            results = func(v, k, t, h)
+            for result in results:  # for expands
+                for executor in executors:  # executors == number of splits
+                    executor(deepcopy(result), k, t, h)  # deepcopy for splits-1
+
+    The actual implementation depends on the StreamFunction and splits or expands.
+
+    """
+
     def __init__(
         self, *executors: VoidExecutor, expand: bool = False, unpack_meta: bool = False
     ):
@@ -126,42 +148,42 @@ class ExecutorFactory:
         *self._split_executions, self._final_execution = executors
         self._copier = copier()
 
-    def get_executions(self):
+    def get_executions(self) -> VoidExecutor:
         if self._split_executions:
             return self._execution_with_splits()
         return self._execution_no_splits()
 
-    def _execution_no_splits(self):
+    def _execution_no_splits(self) -> VoidExecutor:
         final_caller = self._child_executor(self._execution_generator())
 
-        def wrapper(result, key, timestamp, headers):
+        def wrapper(result: Any, key: Any, timestamp: int, headers: Any):
             final_caller(result, key, timestamp, headers)
 
         return wrapper
 
-    def _execution_with_splits(self):
+    def _execution_with_splits(self) -> VoidExecutor:
         split_caller = self._child_executor(self._execution_split_generator())
         final_caller = self._child_executor(self._execution_generator())
 
-        def wrapper(result, key, timestamp, headers):
+        def wrapper(result: Any, key: Any, timestamp: int, headers: Any):
             split_caller(result, key, timestamp, headers)
             final_caller(result, key, timestamp, headers)
 
         return wrapper
 
-    def _execution_generator(self):
+    def _execution_generator(self) -> VoidExecutor:
         execution = self._final_execution
 
-        def wrapper(result, key: Any, timestamp: int, headers: Any):
+        def wrapper(result: Any, key: Any, timestamp: int, headers: Any):
             execution(result, key, timestamp, headers)
 
         return wrapper
 
-    def _execution_split_generator(self):
+    def _execution_split_generator(self) -> VoidExecutor:
         copier = self._copier
         executions = self._split_executions
 
-        def wrapper(result, key: Any, timestamp: int, headers: Any):
+        def wrapper(result: Any, key: Any, timestamp: int, headers: Any):
             get_copy = copier(result)
             for executor in executions:
                 executor(get_copy(), key, timestamp, headers)
@@ -207,14 +229,14 @@ class ApplyFunction(StreamFunction):
 
     def get_executor(self, *child_executors: VoidExecutor) -> VoidExecutor:
 
-        executions = ExecutorFactory(
+        next_executions = ExecutorFactory(
             *child_executors,
             expand=self.expand,
         ).get_executions()
 
         def wrapper(value: Any, key: Any, timestamp: int, headers: Any, func=self.func):
             results = func(value)
-            executions(results, key, timestamp, headers)
+            next_executions(results, key, timestamp, headers)
 
         return wrapper
 
@@ -238,14 +260,14 @@ class ApplyWithMetadataFunction(StreamFunction):
 
     def get_executor(self, *child_executors: VoidExecutor) -> VoidExecutor:
 
-        executions = ExecutorFactory(
+        next_executions = ExecutorFactory(
             *child_executors,
             expand=self.expand,
         ).get_executions()
 
         def wrapper(value: Any, key: Any, timestamp: int, headers: Any, func=self.func):
             results = func(value, key, timestamp, headers)
-            executions(results, key, timestamp, headers)
+            next_executions(results, key, timestamp, headers)
 
         return wrapper
 
@@ -264,11 +286,11 @@ class FilterFunction(StreamFunction):
 
     def get_executor(self, *child_executors: VoidExecutor) -> VoidExecutor:
 
-        executions = ExecutorFactory(*child_executors).get_executions()
+        next_executions = ExecutorFactory(*child_executors).get_executions()
 
         def wrapper(value: Any, key: Any, timestamp: int, headers: Any, func=self.func):
             if func(value):
-                executions(value, key, timestamp, headers)
+                next_executions(value, key, timestamp, headers)
 
         return wrapper
 
@@ -288,11 +310,11 @@ class FilterWithMetadataFunction(StreamFunction):
         super().__init__(func)
 
     def get_executor(self, *child_executors: VoidExecutor) -> VoidExecutor:
-        executions = ExecutorFactory(*child_executors).get_executions()
+        next_executions = ExecutorFactory(*child_executors).get_executions()
 
         def wrapper(value: Any, key: Any, timestamp: int, headers: Any, func=self.func):
             if func(value, key, timestamp, headers):
-                executions(value, key, timestamp, headers)
+                next_executions(value, key, timestamp, headers)
 
         return wrapper
 
@@ -313,11 +335,11 @@ class UpdateFunction(StreamFunction):
 
     def get_executor(self, *child_executors: VoidExecutor) -> VoidExecutor:
         # Update a single value and forward it
-        executions = ExecutorFactory(*child_executors).get_executions()
+        next_executions = ExecutorFactory(*child_executors).get_executions()
 
         def wrapper(value: Any, key: Any, timestamp: int, headers: Any, func=self.func):
             func(value)
-            executions(value, key, timestamp, headers)
+            next_executions(value, key, timestamp, headers)
 
         return wrapper
 
@@ -338,11 +360,11 @@ class UpdateWithMetadataFunction(StreamFunction):
 
     def get_executor(self, *child_executors: VoidExecutor) -> VoidExecutor:
         # Update a single value and forward it
-        executions = ExecutorFactory(*child_executors).get_executions()
+        next_executions = ExecutorFactory(*child_executors).get_executions()
 
         def wrapper(value: Any, key: Any, timestamp: int, headers: Any, func=self.func):
             func(value, key, timestamp, headers)
-            executions(value, key, timestamp, headers)
+            next_executions(value, key, timestamp, headers)
 
         return wrapper
 
@@ -372,12 +394,12 @@ class TransformFunction(StreamFunction):
 
     def get_executor(self, *child_executors: VoidExecutor) -> VoidExecutor:
 
-        executions = ExecutorFactory(
+        next_executions = ExecutorFactory(
             *child_executors, expand=self.expand, unpack_meta=True
         ).get_executions()
 
         def wrapper(value: Any, key: Any, timestamp: int, headers: Any, func=self.func):
             results = func(value, key, timestamp, headers)
-            executions(results, key, timestamp, headers)
+            next_executions(results, key, timestamp, headers)
 
         return wrapper
