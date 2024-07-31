@@ -767,7 +767,7 @@ class Application:
         self._source_manager.register(source)
         return topic
 
-    def run(self):
+    def run(self, dataframe: Optional[StreamingDataFrame] = None):
         """
         Start processing data from Kafka using provided `StreamingDataFrame`
 
@@ -804,6 +804,13 @@ class Application:
         self.stop(fail=fail)
 
     def _run(self, dataframe: Optional[StreamingDataFrame] = None):
+        if dataframe is not None:
+            warnings.warn(
+                "Application.run() received a `dataframe` argument which is "
+                "no longer used (StreamingDataFrames are now tracked automatically); "
+                "the argument should be removed.",
+                DeprecationWarning,
+            )
         self._setup_signal_handlers()
 
         logger.info(

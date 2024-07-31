@@ -11,6 +11,7 @@ from quixstreams.dataframe.exceptions import (
     GroupByLimitExceeded,
     DataFrameLocked,
 )
+from quixstreams.dataframe.registry import DataframeRegistry
 from quixstreams.dataframe.windows import WindowResult
 from tests.utils import DummySink
 
@@ -422,9 +423,9 @@ class TestStreamingDataFrame:
         Dropping an empty list is ignored entirely.
         """
         sdf = dataframe_factory()
-        pre_drop_stream = sdf.stream.tree()
+        pre_drop_stream = sdf.stream.tree_root_path()
         sdf = sdf.drop([])
-        post_drop_stream = sdf.stream.tree()
+        post_drop_stream = sdf.stream.tree_root_path()
         assert pre_drop_stream == post_drop_stream
 
     def test_drop_missing_columns_errors_raise(self, dataframe_factory):
@@ -501,33 +502,33 @@ class TestStreamingDataFrameUpdate:
         and anything else requires assignment.
         """
         sdf = dataframe_factory()
-        sdf_tree_1 = sdf.stream.tree()
+        sdf_tree_1 = sdf.stream.tree_root_path()
         sdf_id_1 = id(sdf)
 
         # non-update non-reassignment (no change!)
         sdf.apply(lambda v: v)
-        sdf_tree_2 = sdf.stream.tree()
+        sdf_tree_2 = sdf.stream.tree_root_path()
         sdf_id_2 = id(sdf)
         assert sdf_id_1 == sdf_id_2
         assert sdf_tree_1 == sdf_tree_2
 
         # non-update reassignment
         sdf = sdf.apply(lambda v: v)
-        sdf_tree_3 = sdf.stream.tree()
+        sdf_tree_3 = sdf.stream.tree_root_path()
         sdf_id_3 = id(sdf)
         assert sdf_id_2 != sdf_id_3
         assert sdf_tree_2 != sdf_tree_3
 
         # update non-reassignment
         sdf.update(lambda v: v)
-        sdf_tree_4 = sdf.stream.tree()
+        sdf_tree_4 = sdf.stream.tree_root_path()
         sdf_id_4 = id(sdf)
         assert sdf_id_3 == sdf_id_4
         assert sdf_tree_3 != sdf_tree_4
 
         # update reassignment
         sdf = sdf.update(lambda v: v)
-        sdf_tree_5 = sdf.stream.tree()
+        sdf_tree_5 = sdf.stream.tree_root_path()
         sdf_id_5 = id(sdf)
         assert sdf_id_4 == sdf_id_5
         assert sdf_tree_4 != sdf_tree_5
@@ -1426,12 +1427,15 @@ class TestStreamingDataFrameGroupBy:
         col_update = "updated_col"
         headers = [("key", b"value")]
 
-        sdf = dataframe_factory(topic, topic_manager=topic_manager, producer=producer)
+        sdf_registry = DataframeRegistry()
+        sdf = dataframe_factory(
+            topic, topic_manager=topic_manager, producer=producer, registry=sdf_registry
+        )
         sdf = sdf.group_by(col)
         sdf[col] = col_update
 
         groupby_topic = sdf.topic
-        assert sdf.topics_to_subscribe == [topic, sdf.topic]
+        assert sdf_registry.consumer_topics() == [topic, sdf.topic]
         assert (
             groupby_topic.name == topic_manager.repartition_topic(col, topic.name).name
         )
@@ -1504,12 +1508,15 @@ class TestStreamingDataFrameGroupBy:
         col_update = "updated_col"
         headers = [("key", b"value")]
 
-        sdf = dataframe_factory(topic, topic_manager=topic_manager, producer=producer)
+        sdf_registry = DataframeRegistry()
+        sdf = dataframe_factory(
+            topic, topic_manager=topic_manager, producer=producer, registry=sdf_registry
+        )
         sdf = sdf.group_by(col, name=op_name)
         sdf[col] = col_update
 
         groupby_topic = sdf.topic
-        assert sdf.topics_to_subscribe == [topic, sdf.topic]
+        assert sdf_registry.consumer_topics() == [topic, sdf.topic]
         assert (
             groupby_topic.name
             == topic_manager.repartition_topic(op_name, topic.name).name
@@ -1583,12 +1590,15 @@ class TestStreamingDataFrameGroupBy:
         col_update = "updated_col"
         headers = [("key", b"value")]
 
-        sdf = dataframe_factory(topic, topic_manager=topic_manager, producer=producer)
+        sdf_registry = DataframeRegistry()
+        sdf = dataframe_factory(
+            topic, topic_manager=topic_manager, producer=producer, registry=sdf_registry
+        )
         sdf = sdf.group_by(lambda v: v[col], name=op_name)
         sdf[col] = col_update
 
         groupby_topic = sdf.topic
-        assert [topic, sdf.topic] == sdf.topics_to_subscribe
+        assert sdf_registry.consumer_topics() == [topic, sdf.topic]
         assert (
             groupby_topic.name
             == topic_manager.repartition_topic(op_name, topic.name).name

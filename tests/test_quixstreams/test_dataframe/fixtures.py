@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from quixstreams.dataframe.dataframe import StreamingDataFrame
+from quixstreams.dataframe.registry import DataframeRegistry
 from quixstreams.models.topics import Topic, TopicManager
 from quixstreams.processing import ProcessingContext, PausingManager
 from quixstreams.rowconsumer import RowConsumer
@@ -19,6 +20,7 @@ def dataframe_factory(topic_manager_topic_factory, topic_manager_factory):
         topic_manager: Optional[TopicManager] = None,
         state_manager: Optional[StateStoreManager] = None,
         producer: Optional[RowProducer] = None,
+        registry: Optional[DataframeRegistry] = None,
     ) -> StreamingDataFrame:
         producer = producer if producer is not None else MagicMock(spec_set=RowProducer)
         topic_manager = topic_manager or MagicMock(spec=TopicManager)
@@ -38,8 +40,16 @@ def dataframe_factory(topic_manager_topic_factory, topic_manager_factory):
         )
         processing_ctx.init_checkpoint()
 
-        return StreamingDataFrame(
-            topic=topic, topic_manager=topic_manager, processing_context=processing_ctx
+        if not registry:
+            registry = DataframeRegistry()
+
+        sdf = StreamingDataFrame(
+            topic=topic,
+            topic_manager=topic_manager,
+            stream_registry=registry,
+            processing_context=processing_ctx,
         )
+        registry.register(sdf)
+        return sdf
 
     return factory
