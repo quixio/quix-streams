@@ -74,7 +74,7 @@ input_topic = app.topic('input', value_deserializer=JSONDeserializer(schema=MY_S
 output_topic = app.topic('output', value_serializer=JSONSerializer(schema=MY_SCHEMA))
 ```
 
-### Avro
+## Avro
 
 The avro serializer and deserializer need to be pass explicitly.
 
