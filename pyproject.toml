@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "quixstreams"
-dynamic = ["version", "dependencies", "optional-dependencies"]
+dynamic = ["version", "dependencies"]
 description = "Python library for building stream processing applications with Apache Kafka"
 license = {file = "LICENSE"}
 readme = "README.md"
@@ -25,6 +25,13 @@ classifiers = [
 
 [project.urls]
 Homepage = "https://github.com/quixio/quix-streams"
+
+[project.optional-dependencies]
+all = [
+  "fastavro>=1.8,<2.0"
+]
+
+avro = ["fastavro>=1.8,<2.0"]
 
 [tool.setuptools.packages.find]
 include = ["quixstreams*"]

@@ -7,6 +7,7 @@ Quix Streams supports multiple serialization formats to exchange data between Ka
 - `integer`
 - `double`
 - `json`
+- `avro`
 
 The serialization settings are defined per-topic using these parameters of `Application.topic()` function:
 
@@ -71,4 +72,34 @@ MY_SCHEMA = {
 app = Application(broker_address='localhost:9092', consumer_group='consumer')
 input_topic = app.topic('input', value_deserializer=JSONDeserializer(schema=MY_SCHEMA))
 output_topic = app.topic('output', value_serializer=JSONSerializer(schema=MY_SCHEMA))
+```
+
+## Avro
+Apache Avro is a row-based binary serialization format data. Avro stores the schema in JSON format alongside the data, enabling efficient processing and schema evolution.
+
+You can learn more the Apache Avro format [here](https://avro.apache.org/docs/).
+The Avro serializer and deserializer need to be passed explicitly.  
+
+In the current version, the schema must be provided manually.
+
+> ***WARNING***: Avro serializer and deserializer require the `fastavro` library.
+> You can install quixstreams with the necessary dependencies using
+> `pip install quixstreams[avro]`
+
+```python
+from quixstreams import Application
+from quixstreams.models.serialize.avro import AvroSerializer, AvroDeserializer
+
+MY_SCHEMA = {
+    "type": "record",
+    "name": "testschema",
+    "fields": [
+        {"name": "name", "type": "string"},
+        {"name": "id", "type": "int", "default": 0},
+    ],
+}
+
+app = Application(broker_address='localhost:9092', consumer_group='consumer')
+input_topic = app.topic('input', value_deserializer=AvroDeserializer(schema=MY_SCHEMA))
+output_topic = app.topic('output', value_serializer=AvroSerializer(schema=MY_SCHEMA))
 ```

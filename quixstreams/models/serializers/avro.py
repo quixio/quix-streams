@@ -1,0 +1,113 @@
+from typing import Union, Mapping, Optional, Any, Iterable
+
+from io import BytesIO
+
+from fastavro import schemaless_reader, schemaless_writer, parse_schema
+from fastavro.types import Schema
+
+from .base import Serializer, Deserializer, SerializationContext
+from .exceptions import SerializationError
+
+__all__ = ("AvroSerializer", "AvroDeserializer")
+
+
+class AvroSerializer(Serializer):
+    def __init__(
+        self,
+        schema: Schema,
+        strict: bool = False,
+        strict_allow_default: bool = False,
+        disable_tuple_notation: bool = False,
+    ):
+        """
+        Serializer that returns data in Avro format.
+
+        For more information see fastavro [schemaless_writer](https://fastavro.readthedocs.io/en/latest/writer.html#fastavro._write_py.schemaless_writer) method.
+
+        :param schema: The avro schema.
+        :param strict: If set to True, an error will be raised if records do not contain exactly the same fields that the schema states.
+            Default - `False`
+        :param strict_allow_default: If set to True, an error will be raised if records do not contain exactly the same fields that the schema states unless it is a missing field that has a default value in the schema.
+            Default - `False`
+        :param disable_tuple_notation: If set to True, tuples will not be treated as a special case. Therefore, using a tuple to indicate the type of a record will not work.
+            Default - `False`
+        """
+        self._schema = parse_schema(schema)
+        self._strict = strict
+        self._strict_allow_default = strict_allow_default
+        self._disable_tuple_notation = disable_tuple_notation
+
+    def __call__(self, value: Any, ctx: SerializationContext) -> bytes:
+        data = BytesIO()
+
+        with BytesIO() as data:
+            try:
+                schemaless_writer(
+                    data,
+                    self._schema,
+                    value,
+                    strict=self._strict,
+                    strict_allow_default=self._strict_allow_default,
+                    disable_tuple_notation=self._disable_tuple_notation,
+                )
+            except ValueError as exc:
+                raise SerializationError(str(exc)) from exc
+
+            return data.getvalue()
+
+
+class AvroDeserializer(Deserializer):
+    def __init__(
+        self,
+        schema: Schema,
+        reader_schema: Optional[Schema] = None,
+        return_record_name: bool = False,
+        return_record_name_override: bool = False,
+        return_named_type: bool = False,
+        return_named_type_override: bool = False,
+        handle_unicode_errors: str = "strict",
+    ):
+        """
+        Deserializer that parses data from Avro.
+
+        For more information see fastavro [schemaless_reader](https://fastavro.readthedocs.io/en/latest/reader.html#fastavro._read_py.schemaless_reader) method.
+
+        :param schema: The Avro schema.
+        :param reader_schema: If the schema has changed since being written then the new schema can be given to allow for schema migration.
+            Default - `None`
+        :param return_record_name: If true, when reading a union of records, the result will be a tuple where the first value is the name of the record and the second value is the record itself.
+            Default - `False`
+        :param return_record_name_override: If true, this will modify the behavior of return_record_name so that the record name is only returned for unions where there is more than one record. For unions that only have one record, this option will make it so that the record is returned by itself, not a tuple with the name.
+            Default - `False`
+        :param return_named_type: If true, when reading a union of named types, the result will be a tuple where the first value is the name of the type and the second value is the record itself NOTE: Using this option will ignore return_record_name and return_record_name_override.
+            Default - `False`
+        :param return_named_type_override: If true, this will modify the behavior of return_named_type so that the named type is only returned for unions where there is more than one named type. For unions that only have one named type, this option will make it so that the named type is returned by itself, not a tuple with the name.
+            Default - `False`
+        :param handle_unicode_errors: Should be set to a valid string that can be used in the errors argument of the string decode() function.
+            Default - `"strict"`
+        """
+        super().__init__()
+        self._schema = parse_schema(schema)
+        self._reader_schema = parse_schema(reader_schema) if reader_schema else None
+        self._return_record_name = return_record_name
+        self._return_record_name_override = return_record_name_override
+        self._return_named_type = return_named_type
+        self._return_named_type_override = return_named_type_override
+        self._handle_unicode_errors = handle_unicode_errors
+
+    def __call__(
+        self, value: bytes, ctx: SerializationContext
+    ) -> Union[Iterable[Mapping], Mapping]:
+        try:
+            return schemaless_reader(
+                BytesIO(value),
+                self._schema,
+                reader_schema=self._reader_schema,
+                return_record_name=self._return_record_name,
+                return_record_name_override=self._return_record_name_override,
+                return_named_type=self._return_named_type,
+                return_named_type_override=self._return_named_type_override,
+                handle_unicode_errors=self._handle_unicode_errors,
+            )
+        except EOFError as exc:
+            raise SerializationError(str(exc)) from exc
