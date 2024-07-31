@@ -713,7 +713,7 @@ class Application:
         """
         self._state_manager.clear_stores()
 
-    def run(self):
+    def run(self, dataframe: Optional[StreamingDataFrame] = None):
         """
         Start processing data from Kafka using provided `StreamingDataFrame`
 
@@ -737,6 +737,13 @@ class Application:
         app.run()
         ```
         """
+        if dataframe is not None:
+            warnings.warn(
+                "Application.run() received a `dataframe` argument which is "
+                "no longer used (StreamingDataFrames are now tracked automatically); "
+                "the argument should be removed.",
+                DeprecationWarning,
+            )
         self._setup_signal_handlers()
 
         logger.info(

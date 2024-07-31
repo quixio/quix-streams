@@ -16,22 +16,25 @@ class DataframeRegistry:
         self._branches: List[str] = []
 
     @property
-    def registry(self):
+    def registry(self) -> Dict[str, Stream]:
         return self._registry
 
     def register(
         self,
         new_sdf: "StreamingDataFrame",
-        original_sdf: Optional["StreamingDataFrame"] = None,
+        branched_sdf: Optional["StreamingDataFrame"] = None,
     ):
         if (topic := new_sdf.topic).name in self._registry:
             raise DuplicateStreamingDataFrame(
                 f"There is already a StreamingDataFrame using topic {topic.name}"
             )
-        if original_sdf is not None and original_sdf.topic.name in self._branches:
-            raise GroupByLimitExceeded(
-                "Only one GroupBy operation is allowed per StreamingDataFrame"
-            )
+        if branched_sdf is not None:
+            if branched_sdf.topic.name not in self._branches:
+                self._branches.append(topic.name)
+            else:
+                raise GroupByLimitExceeded(
+                    "Only one GroupBy operation is allowed per StreamingDataFrame"
+                )
         self._topics.append(topic)
         self._registry[topic.name] = new_sdf.stream
 
