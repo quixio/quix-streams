@@ -75,7 +75,9 @@ output_topic = app.topic('output', value_serializer=JSONSerializer(schema=MY_SCH
 ```
 
 ## Avro
+Apache Avro is a row-based binary serialization format data. Avro stores the schema in JSON format alongside the data, enabling efficient processing and schema evolution.
 
+You can learn more the Apache Avro format [here](https://avro.apache.org/docs/).
 The Avro serializer and deserializer need to be passed explicitly.  
 
 In the current version, the schema must be provided manually.
