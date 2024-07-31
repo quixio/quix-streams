@@ -503,7 +503,7 @@ class StreamingDataFrame(BaseStreaming):
 
         self.to_topic(topic=groupby_topic, key=self._groupby_key(key))
         new_branch = self.__dataframe_clone__(topic=groupby_topic)
-        self._stream_registry.register(new_sdf=new_branch, original_sdf=self)
+        self._stream_registry.register(new_sdf=new_branch, branched_sdf=self)
         return new_branch
 
     @staticmethod

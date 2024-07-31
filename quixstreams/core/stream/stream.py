@@ -90,7 +90,7 @@ class Stream:
         :return: a string of format
             "<Stream [<total functions>]: <FuncType: func_name> | ... >"
         """
-        tree_funcs = [s.func for s in self.tree_full()]
+        tree_funcs = [s.func for s in self.tree_root_path()]
         funcs_repr = " | ".join(
             (f"<{f.__class__.__name__}: {f.func.__qualname__}>" for f in tree_funcs)
         )
@@ -232,7 +232,7 @@ class Stream:
             head = node
         return head
 
-    def tree_full(self, allow_splits=True) -> List[Self]:
+    def tree_root_path(self, allow_splits=True) -> List[Self]:
         """
         Return a list of all parent Streams including the node itself.
 
@@ -257,27 +257,25 @@ class Stream:
         if self.parent:
             self.parent.children.remove(self)
 
-    def _add_node_children(self, tree, node):
-        if node not in tree:
-            tree[node] = []
-        if node.children:
-            for child in node.children:
-                tree[node].append(child)
-                self._add_node_children(tree, child)
-
-    def tree_map(self):
-        tree_ = {}
-        self._add_node_children(tree_, self.tree_full()[0])
-        return tree_
-
-    def tree_leaves(self, tree=None):
-        return [stream for stream in (tree or self.tree_map()) if not stream.children]
-
-    def tree_splits(self, tree=None):
-        tree = tree or self.tree_map()
-        return {
-            stream for stream in (tree or self.tree_map()) if len(stream.children) > 1
-        }
+    def tree_all_nodes(
+        self,
+        collected_nodes: Optional[List[Self]] = None,
+        current_node: Optional[Self] = None,
+    ) -> List[Self]:
+        """
+        Starts at tree root and finds every Stream in the tree (including splits).
+        :param collected_nodes: collection of all Streams interconnected to this one
+        :param current_node: Stream to add
+        :return: The collection of all Streams interconnected to this one
+        """
+        if not collected_nodes:
+            collected_nodes = []
+        if not current_node:
+            current_node = self.tree_root_path()[0]
+        collected_nodes.append(current_node)
+        for child in current_node.children:
+            self.tree_all_nodes(collected_nodes, child)
+        return collected_nodes
 
     def compose(
         self,
@@ -318,15 +316,15 @@ class Stream:
             allow_transforms=allow_transforms,
         )
 
-        tree_map = self.tree_map()
-        splits = self.tree_splits(tree=tree_map)
+        tree_nodes = self.tree_all_nodes()
+        splits = {s for s in tree_nodes if len(s.children) > 1}
         if not splits:
-            return compose(tree_map, composed)
+            return compose(tree_nodes, composed)
 
         # Start all the initial composes
         pending_composes = {stream: [] for stream in reversed(list(splits))}
-        for leaf in self.tree_leaves(tree=tree_map):
-            tree = leaf.tree_full(allow_splits=False)
+        for tree_leaf in [s for s in tree_nodes if not s.children]:
+            tree = tree_leaf.tree_root_path(allow_splits=False)
             pending_composes[tree[0].parent].append(compose(tree, composed))
 
         # After leaves are composed, at least one split will always have its list of
@@ -338,7 +336,7 @@ class Stream:
                 if len(pending) == len(split.children):
                     # the children at this split are composed and ready to finalize
                     break
-            new_tree = split.tree_full(allow_splits=False)
+            new_tree = split.tree_root_path(allow_splits=False)
             # we pass the list of composed children; .compose() and StreamFunction
             # know how to properly compose them (necessary for data copying steps).
             composed = compose(new_tree, pending_composes.pop(split))
@@ -419,8 +417,8 @@ class Stream:
         return composed
 
     def _diff_from_last_common_parent(self, other: Self) -> List[Self]:
-        nodes_self = self.tree_full()
-        nodes_other = other.tree_full()
+        nodes_self = self.tree_root_path()
+        nodes_other = other.tree_root_path()
 
         diff = []
         last_common_parent = None
