@@ -840,7 +840,8 @@ sdf = (
 #### StreamingDataFrame.drop
 
 ```python
-def drop(columns: Union[str, List[str]]) -> Self
+def drop(columns: Union[str, List[str]],
+         errors: Literal["ignore", "raise"] = "raise") -> Self
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L969)
@@ -868,6 +869,8 @@ sdf.drop(["x", "y"])
 ***Arguments:***
 
 - `columns`: a single column name or a list of names, where names are `str`
+- `errors`: If "ignore", suppress error and only existing labels are dropped.
+Default - `"raise"`.
 
 
 <br>
