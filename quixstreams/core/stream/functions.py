@@ -1,7 +1,7 @@
 import abc
 import functools
+import pickle
 from typing import Callable, Any, Tuple, Union, Protocol, Iterable
-from .copier import CopyFactory
 
 __all__ = (
     "StreamCallback",
@@ -100,6 +100,17 @@ def child_executor_func(execution_set, result_unpack_meta: bool = False):
         return wrapper
 
 
+def copier():
+    serializer = pickle.dumps
+    deserializer = pickle.loads
+
+    def _copier(data):
+        serialized = serializer(data)
+        return lambda: deserializer(serialized)
+
+    return _copier
+
+
 class ExecutorFactory:
     def __init__(
         self, *executors: VoidExecutor, expand: bool = False, unpack_meta: bool = False
@@ -112,8 +123,8 @@ class ExecutorFactory:
             self._child_executor = functools.partial(
                 child_executor_func, result_unpack_meta=unpack_meta
             )
-        *self._split_executions, self._last_execution = executors
-        self._copier = CopyFactory()
+        *self._split_executions, self._final_execution = executors
+        self._copier = copier()
 
     def get_executions(self):
         if self._split_executions:
@@ -124,7 +135,7 @@ class ExecutorFactory:
         final_caller = self._child_executor(self._execution_generator())
 
         def wrapper(result, key, timestamp, headers):
-            return final_caller(result, key, timestamp, headers)
+            final_caller(result, key, timestamp, headers)
 
         return wrapper
 
@@ -139,8 +150,7 @@ class ExecutorFactory:
         return wrapper
 
     def _execution_generator(self):
-
-        execution = self._last_execution
+        execution = self._final_execution
 
         def wrapper(result, key: Any, timestamp: int, headers: Any):
             execution(result, key, timestamp, headers)
@@ -152,7 +162,7 @@ class ExecutorFactory:
         executions = self._split_executions
 
         def wrapper(result, key: Any, timestamp: int, headers: Any):
-            get_copy = copier.copier(result)
+            get_copy = copier(result)
             for executor in executions:
                 executor(get_copy(), key, timestamp, headers)
 
