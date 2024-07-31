@@ -1344,7 +1344,8 @@ like `sum`, `count`, etc. and applied to the StreamingDataFrame.
 #### StreamingDataFrame.drop
 
 ```python
-def drop(columns: Union[str, List[str]]) -> Self
+def drop(columns: Union[str, List[str]],
+         errors: Literal["ignore", "raise"] = "raise") -> Self
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L969)
@@ -1368,6 +1369,8 @@ sdf.drop(["x", "y"])
 **Arguments**:
 
 - `columns`: a single column name or a list of names, where names are `str`
+- `errors`: If "ignore", suppress error and only existing labels are dropped.
+Default - `"raise"`.
 
 **Returns**:
 
@@ -7770,6 +7773,7 @@ def __init__(broker_address: Optional[Union[str, ConnectionConfig]] = None,
              consumer_group: Optional[str] = None,
              auto_offset_reset: AutoOffsetReset = "latest",
              commit_interval: float = 5.0,
+             commit_every: int = 0,
              consumer_extra_config: Optional[dict] = None,
              producer_extra_config: Optional[dict] = None,
              state_dir: str = "state",
@@ -7814,6 +7818,15 @@ Default - "quixstreams-default" (set during init)
   >***NOTE:*** Quix Applications will prefix it with the Quix workspace id.
 - `commit_interval`: How often to commit the processed messages in seconds.
 Default - 5.0.
+- `commit_every`: Commit the checkpoint after processing N messages.
+Use this parameter for more granular control of the commit schedule.
+If the value is > 0, the application will commit the checkpoint after
+processing the specified number of messages across all the assigned
+partitions.
+If the value is <= 0, only the `commit_interval` will be considered.
+Default - 0.
+    >***NOTE:*** Only input offsets are counted, and the application
+    > may produce more results than the number of incoming messages.
 - `auto_offset_reset`: Consumer `auto.offset.reset` setting
 - `consumer_extra_config`: A dictionary with additional options that
 will be passed to `confluent_kafka.Consumer` as is.
@@ -8388,7 +8401,9 @@ def expired() -> bool
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L57)
 
-Returns `True` if checkpoint deadline has expired.
+Returns `True` if checkpoint deadline has expired OR
+if the total number of processed offsets exceeded the "commit_every" limit
+when it's defined.
 
 <a id="quixstreams.checkpointing.checkpoint.Checkpoint.empty"></a>
 
