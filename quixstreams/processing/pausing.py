@@ -3,7 +3,7 @@ import sys
 import time
 from typing import Tuple, Dict
 
-from confluent_kafka import TopicPartition
+from confluent_kafka import TopicPartition, KafkaException
 
 from quixstreams.kafka import Consumer
 
@@ -43,12 +43,20 @@ class PausingManager:
         # Partitions are rarely paused, but the resume checks can be done
         # thousands times a sec.
         self._next_resume_at = min(self._next_resume_at, resume_at)
+        tp = TopicPartition(topic=topic, partition=partition)
+        position, *_ = self._consumer.position([tp])
         logger.debug(
-            f'Pausing topic partition "{topic}[{partition}]" for {resume_after}s'
+            f'Pausing topic partition "{topic}[{partition}]" for {resume_after}s; '
+            f"current_offset={position.offset}"
         )
-        self._consumer.pause(
-            partitions=[TopicPartition(topic=topic, partition=partition)]
+        self._consumer.pause(partitions=[tp])
+        # Seek the TP back to its committed offset to start from it on resume
+        committed_tp, *_ = self._consumer.committed([tp])
+        logger.debug(
+            f'Seek the paused partition "{topic}[{partition}]" back to the committed '
+            f"offset; committed_offset={committed_tp.offset}"
         )
+        self._consumer.seek(committed_tp)
 
     def is_paused(self, topic: str, partition: int) -> bool:
         """

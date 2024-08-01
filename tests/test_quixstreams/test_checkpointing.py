@@ -592,6 +592,11 @@ class TestCheckpoint:
             state_manager_=state_manager,
             sink_manager_=sink_manager,
         )
+        # First get some topic partitions assigned because PausingManager will be
+        # seeking to the committed offsets
+        consumer.subscribe([topic_name])
+        while not consumer.assignment():
+            consumer.poll(0.1)
 
         # Create sinks and register them
         backpressured_sink = BackpressuredSink()
