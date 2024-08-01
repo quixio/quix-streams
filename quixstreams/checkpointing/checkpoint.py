@@ -174,11 +174,10 @@ class Checkpoint:
                 if self._pausing_manager.is_paused(topic=topic, partition=partition):
                     # The topic-partition is paused, skip flushing other sinks for
                     # this TP.
-                    # Also drop the batch to reprocess it later.
                     # Note: when flushing multiple sinks for the same TP, some
                     # of them can be flushed before one of the sinks is backpressured.
                     sink.on_paused(topic=topic, partition=partition)
-                    break
+                    continue
 
                 try:
                     sink.flush(topic=topic, partition=partition)

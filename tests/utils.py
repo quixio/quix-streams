@@ -113,3 +113,7 @@ class DummySink(BatchingSink):
     @property
     def results(self) -> List[SinkItem]:
         return self._results
+
+    @property
+    def total_batched(self) -> int:
+        return sum(batch.size for batch in self._batches.values())

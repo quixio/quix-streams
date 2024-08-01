@@ -575,3 +575,60 @@ class TestCheckpoint:
             [TopicPartition(topic=topic_name, partition=0)]
         )
         assert committed.offset == -1001
+
+    def test_commit_with_sink_backpressured(
+        self,
+        topic_factory,
+        consumer,
+        state_manager,
+        checkpoint_factory,
+        state_manager_factory,
+        rowproducer_mock,
+    ):
+        topic_name, _ = topic_factory()
+        sink_manager = SinkManager()
+        checkpoint = checkpoint_factory(
+            consumer_=consumer,
+            state_manager_=state_manager,
+            sink_manager_=sink_manager,
+        )
+
+        # Create sinks and register them
+        backpressured_sink = BackpressuredSink()
+        dummy_sink = DummySink()
+
+        # It's important to register the backpressured sink first for this test
+        sink_manager.register(backpressured_sink)
+        sink_manager.register(dummy_sink)
+
+        processed_offset = 999
+        value, key, timestamp, headers = "value", "key", 1, []
+        for sink in (backpressured_sink, dummy_sink):
+            sink.add(
+                value=value,
+                key=key,
+                timestamp=timestamp,
+                topic=topic_name,
+                partition=0,
+                headers=headers,
+                offset=processed_offset,
+            )
+
+        assert dummy_sink.total_batched == 1
+
+        # Store the processed offset to simulate processing
+        checkpoint.store_offset(topic_name, 0, processed_offset)
+
+        checkpoint.commit()
+
+        # Ensure that the offset has not been committed because of a backpressure
+        committed, *_ = consumer.committed(
+            [TopicPartition(topic=topic_name, partition=0)]
+        )
+        assert committed.offset == -1001
+
+        # Ensure that DummySink has not been flushed because
+        # the FailingSink is backpressured
+        assert not dummy_sink.results
+        # Ensure that DummySink dropped the accumulated batch
+        assert not dummy_sink.total_batched
