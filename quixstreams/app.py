@@ -941,14 +941,14 @@ class Application:
         Dropping lost partitions from consumer and state
         """
         logger.debug(f"Rebalancing: dropping lost partitions")
-        if self._state_manager.stores:
-            for tp in topic_partitions:
+        for tp in topic_partitions:
+            if self._state_manager.stores:
                 self._state_manager.on_partition_revoke(
                     topic=tp.topic, partition=tp.partition
                 )
-                self._processing_context.on_partition_revoke(
-                    topic=tp.topic, partition=tp.partition
-                )
+            self._processing_context.on_partition_revoke(
+                topic=tp.topic, partition=tp.partition
+            )
 
     def _setup_signal_handlers(self):
         signal.signal(signal.SIGINT, self._on_sigint)
