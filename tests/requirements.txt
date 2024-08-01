@@ -4,3 +4,4 @@ pytest
 requests>=2.32
 docker>=7.1.0 # Required to use requests>=2.32
 fastavro>=1.8,<2.0
+protobuf>=5.27.2

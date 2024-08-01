@@ -8,6 +8,7 @@ Quix Streams supports multiple serialization formats to exchange data between Ka
 - `double`
 - `json`
 - `avro`
+- `protobuf`
 
 The serialization settings are defined per-topic using these parameters of `Application.topic()` function:
 
@@ -103,3 +104,29 @@ app = Application(broker_address='localhost:9092', consumer_group='consumer')
 input_topic = app.topic('input', value_deserializer=AvroDeserializer(schema=MY_SCHEMA))
 output_topic = app.topic('output', value_serializer=AvroSerializer(schema=MY_SCHEMA))
 ```
+
+## Protobuf
+Protocol Buffers are language-neutral, platform-neutral extensible mechanisms for serializing structured data.
+
+You can learn more about the Protocol buffers format [here](https://protobuf.dev/)
+The Protobuf serializer and deserializer need to be passed explicitly.
+
+In the current version, the schema must be provided manually.
+
+> ***WARNING***: The protobuf serializer and deserializer requires the protobuf library.
+> You can install quixstreams with the necessary dependencies using
+> `pip install quixstreams[protobuf]`
+
+```python
+from quixstreams import Application
+from quixstreams.models.serialize.protobuf import ProtobufSerializer, ProtobufDeserializer
+
+from my_input_models_pb2 import InputProto
+from my_output_models_pb2 import OutputProto
+
+app = Application(broker_address='localhost:9092', consumer_group='consumer')
+input_topic = app.topic('input', value_deserializer=ProtobufDeserializer(msg_type=InputProto))
+output_topic = app.topic('output', value_serializer=ProtobufSerializer(msg_type=OutputProto))
+```
+
+By default the protobuf deserializer will deserialize the message to a python dictionary. Doing it has a big performance impact. You can disable this behavior by initializing the deserializer with `to_dict` set to `False`. The protobuf message object will then be used as the message value limiting the available StreamingDataframe API.
