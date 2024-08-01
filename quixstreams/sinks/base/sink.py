@@ -9,10 +9,25 @@ logger = logging.getLogger(__name__)
 
 
 class BaseSink(abc.ABC):
-    # TODO: Docs
+    """
+    This is a base class for all sinks.
+
+    Subclass it and implement its methods to create your own sink.
+
+    Note that Sinks are currently in beta, and their design may change over time.
+    """
 
     @abc.abstractmethod
-    def flush(self, topic: str, partition: int): ...
+    def flush(self, topic: str, partition: int):
+        """
+        This method is triggered by the Checkpoint class when it commits.
+
+        You can use `flush()` to write the batched data to the destination (in case of
+        a batching sink), or confirm the delivery of the previously sent messages
+        (in case of a streaming sink).
+
+        If flush() fails, the checkpoint will be aborted.
+        """
 
     @abc.abstractmethod
     def add(
@@ -24,13 +39,38 @@ class BaseSink(abc.ABC):
         topic: str,
         partition: int,
         offset: int,
-    ): ...
+    ):
+        """
+        This method is triggered on every new processed record being sent to this sink.
 
-    def on_paused(self, topic: str, partition: int): ...
+        You can use it to accumulate batches of data before sending them outside, or
+        to send results right away in a streaming manner and confirm a delivery later
+        on flush().
+        """
+
+    def on_paused(self, topic: str, partition: int):
+        """
+        This method is triggered when the sink is paused due to backpressure, when
+        the `SinkBackpressureError` is raised.
+
+        Here you can react to the backpressure events.
+        """
 
 
 class BatchingSink(BaseSink):
-    # TODO: Docs (including "how to create your own sink)
+    """
+    A base class for batching sinks, that need to accumulate the data first before
+    sending it to the external destinatios.
+
+    Examples: databases, objects stores, and other destinations where
+    writing every message is not optimal.
+
+    It automatically handles batching, keeping batches in memory per topic-partition.
+
+    You may subclass it and override the `write()` method to implement a custom
+    batching sink.
+    """
+
     _batches: Dict[Tuple[str, int], SinkBatch]
 
     def __init__(self):
@@ -40,7 +80,15 @@ class BatchingSink(BaseSink):
         return f"<BatchingSink: {self.__class__.__name__}>"
 
     @abc.abstractmethod
-    def write(self, batch: SinkBatch): ...
+    def write(self, batch: SinkBatch):
+        """
+        This method implements actual writing to the external destination.
+
+        It may also raise `SinkBackpressureError` if the destination cannot accept new
+        writes at the moment.
+        When this happens, the accumulated batch is dropped and the app pauses the
+        corresponding topic partition.
+        """
 
     def add(
         self,
@@ -52,6 +100,9 @@ class BatchingSink(BaseSink):
         partition: int,
         offset: int,
     ):
+        """
+        Add a new record to in-memory batch.
+        """
         tp = (topic, partition)
         batch = self._batches.get(tp)
         if batch is None:
@@ -62,6 +113,9 @@ class BatchingSink(BaseSink):
         )
 
     def flush(self, topic: str, partition: int):
+        """
+        Flush an accumulated batch to the destination and drop it afterward.
+        """
         batch = self._batches.get((topic, partition))
         if batch is not None:
             logger.debug(
@@ -77,4 +131,7 @@ class BatchingSink(BaseSink):
                 self._batches.pop((topic, partition), None)
 
     def on_paused(self, topic: str, partition: int):
+        """
+        When the destination is already backpressure, drop the accumulated batch.
+        """
         self._batches.pop((topic, partition), None)
