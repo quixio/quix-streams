@@ -5,10 +5,11 @@ try:
     import influxdb_client_3
     from influxdb_client_3 import InfluxDBClient3, WritePrecision, WriteOptions
     from influxdb_client_3.write_client.client.write_api import WriteType
-
-    _influx_client_installed = True
-except ImportError:
-    _influx_client_installed = False
+except ImportError as exc:
+    raise ImportError(
+        'Package "influxdb3-python" is missing: '
+        "run pip install quixstreams[influxdb3] to fix it"
+    ) from exc
 
 from .base import BatchingSink, SinkBatch
 from .exceptions import SinkBackpressureError
@@ -27,7 +28,7 @@ class InfluxDBV3Sink(BatchingSink):
         fields_keys: Iterable[str] = (),
         tags_keys: Iterable[str] = (),
         time_key: Optional[str] = None,
-        time_precision: "WritePrecision" = "ms",
+        time_precision: WritePrecision = WritePrecision.MS,
         include_metadata_tags: bool = False,
         batch_size: int = 1000,
         enable_gzip: bool = True,
@@ -75,12 +76,6 @@ class InfluxDBV3Sink(BatchingSink):
         :param debug: if True, print debug logs from InfluxDB client.
             Default - `False`.
         """
-
-        if not _influx_client_installed:
-            raise ImportError(
-                'Missing package "influxdb3-python": '
-                "run pip install quixstreams[influxdb3] to fix it"
-            )
 
         super().__init__()
         self._client = InfluxDBClient3(
