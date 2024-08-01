@@ -10,7 +10,7 @@ from confluent_kafka import TopicPartition
 from typing_extensions import Self
 
 from .context import set_message_context, copy_context
-from .dataframe import StreamingDataFrame
+from .dataframe import StreamingDataFrame, DataframeRegistry
 from .error_callbacks import (
     ConsumerErrorCallback,
     ProcessingErrorCallback,
@@ -329,6 +329,7 @@ class Application:
             state_manager=self._state_manager,
             exactly_once=self._uses_exactly_once,
         )
+        self._dataframe_registry = DataframeRegistry()
 
     @property
     def is_quix_app(self) -> bool:
@@ -596,7 +597,9 @@ class Application:
             topic=topic,
             topic_manager=self._topic_manager,
             processing_context=self._processing_context,
+            stream_registry=self._dataframe_registry,
         )
+        self._dataframe_registry.register(sdf)
         return sdf
 
     def stop(self, fail: bool = False):
@@ -705,10 +708,7 @@ class Application:
         """
         self._state_manager.clear_stores()
 
-    def run(
-        self,
-        dataframe: StreamingDataFrame,
-    ):
+    def run(self, dataframe: Optional[StreamingDataFrame] = None):
         """
         Start processing data from Kafka using provided `StreamingDataFrame`
 
@@ -729,11 +729,16 @@ class Application:
         df = app.dataframe(topic)
         df.apply(lambda value, context: print('New message', value)
 
-        app.run(dataframe=df)
+        app.run()
         ```
-
-        :param dataframe: instance of `StreamingDataFrame`
         """
+        if dataframe is not None:
+            warnings.warn(
+                "Application.run() received a `dataframe` argument which is "
+                "no longer used (StreamingDataFrames are now tracked automatically); "
+                "the argument should be removed.",
+                DeprecationWarning,
+            )
         self._setup_signal_handlers()
 
         logger.info(
@@ -761,7 +766,7 @@ class Application:
         with exit_stack:
             # Subscribe to topics in Kafka and start polling
             self._consumer.subscribe(
-                dataframe.topics_to_subscribe,
+                self._dataframe_registry.consumer_topics(),
                 on_assign=self._on_assign,
                 on_revoke=self._on_revoke,
                 on_lost=self._on_lost,
@@ -773,13 +778,13 @@ class Application:
             # Initialize the checkpoint
             self._processing_context.init_checkpoint()
 
-            dataframe_composed = dataframe.compose()
+            dataframes_composed = self._dataframe_registry.compose_all()
 
             while self._running:
                 if self._state_manager.recovery_required:
                     self._state_manager.do_recovery()
                 else:
-                    self._process_message(dataframe_composed)
+                    self._process_message(dataframes_composed)
                     self._processing_context.commit_checkpoint()
 
             logger.info("Stop processing of StreamingDataFrame")

@@ -38,7 +38,7 @@ class TestStream:
         stream.compose(sink=result.append_record)(value, key, timestamp, headers)
         assert result == expected
 
-    def test_tree(self):
+    def test_tree_root_path(self):
         stream = (
             Stream()
             .add_apply(lambda v: ...)
@@ -46,7 +46,7 @@ class TestStream:
             .add_update(lambda v: ...)
             .add_transform(lambda v, k, t, h: ...)
         )
-        tree = stream.tree()
+        tree = stream.tree_root_path()
         assert len(tree) == 5
         assert isinstance(tree[0].func, ApplyFunction)
         assert isinstance(tree[1].func, ApplyFunction)
@@ -67,7 +67,7 @@ class TestStream:
 
         diff = stream.diff(stream2)
 
-        diff_tree = diff.tree()
+        diff_tree = diff.tree_root_path()
         assert len(diff_tree) == 3
         assert isinstance(diff_tree[0].func, ApplyFunction)
         assert isinstance(diff_tree[1].func, UpdateFunction)

@@ -1,5 +1,6 @@
 import collections
 import copy
+import functools
 import itertools
 from typing import List, Callable, Optional, Any, Union
 
@@ -80,6 +81,7 @@ class Stream:
 
         self.func = func if func is not None else ApplyFunction(lambda value: value)
         self.parent = parent
+        self.children = set()
 
     def __repr__(self) -> str:
         """
@@ -88,7 +90,7 @@ class Stream:
         :return: a string of format
             "<Stream [<total functions>]: <FuncType: func_name> | ... >"
         """
-        tree_funcs = [s.func for s in self.tree()]
+        tree_funcs = [s.func for s in self.tree_root_path()]
         funcs_repr = " | ".join(
             (f"<{f.__class__.__name__}: {f.func.__qualname__}>" for f in tree_funcs)
         )
@@ -230,24 +232,119 @@ class Stream:
             head = node
         return head
 
-    def tree(self) -> List[Self]:
+    def tree_root_path(self, allow_splits=True) -> List[Self]:
         """
         Return a list of all parent Streams including the node itself.
+
+        Can optionally stop at a first encountered split with allow_splits=False
 
         The tree is ordered from parent to child (current node comes last).
         :return: a list of `Stream` objects
         """
 
-        tree_ = [self]
         node = self
-        while node.parent:
-            tree_.append(node.parent)
+        tree_ = [node]
+        while (parent := node.parent) and (allow_splits or len(parent.children) < 2):
+            tree_.append(parent)
             node = node.parent
 
         # Reverse to get expected ordering.
         tree_.reverse()
 
         return tree_
+
+    def prune(self):
+        if self.parent:
+            self.parent.children.remove(self)
+
+    def tree_all_nodes(
+        self,
+        collected_nodes: Optional[List[Self]] = None,
+        current_node: Optional[Self] = None,
+    ) -> List[Self]:
+        """
+        Starts at tree root and finds every Stream in the tree (including splits).
+        :param collected_nodes: collection of all Streams interconnected to this one
+        :param current_node: Stream to add
+        :return: The collection of all Streams interconnected to this one
+        """
+        if not collected_nodes:
+            collected_nodes = []
+        if not current_node:
+            current_node = self.tree_root_path()[0]
+        collected_nodes.append(current_node)
+        for child in current_node.children:
+            self.tree_all_nodes(collected_nodes, child)
+        return collected_nodes
+
+    def compose(
+        self,
+        allow_filters=True,
+        allow_expands=True,
+        allow_updates=True,
+        allow_transforms=True,
+        sink: Optional[Callable[[Any, Any, int, Any], None]] = None,
+    ) -> VoidExecutor:
+        """
+        Generate an "executor" closure by mapping all relatives of this `Stream` and
+        composing their functions together.
+
+        The resulting "executor" can be called with a given
+        value, key, timestamp, and headers (i.e. a Kafka message).
+
+        By default, executor doesn't return the result of the execution.
+        To accumulate the results, pass the `sink` parameter.
+
+        :param allow_filters: If False, this function will fail with `ValueError` if
+            the stream has filter functions in the tree. Default - True.
+        :param allow_updates: If False, this function will fail with `ValueError` if
+            the stream has update functions in the tree. Default - True.
+        :param allow_expands: If False, this function will fail with `ValueError` if
+            the stream has functions with "expand=True" in the tree. Default - True.
+        :param allow_transforms: If False, this function will fail with `ValueError` if
+            the stream has transform functions in the tree. Default - True.
+        :param sink: callable to accumulate the results of the execution, optional.
+
+        """
+
+        composed = sink or self._default_sink
+        compose = functools.partial(
+            self._compose,
+            allow_filters=allow_filters,
+            allow_expands=allow_expands,
+            allow_updates=allow_updates,
+            allow_transforms=allow_transforms,
+        )
+
+        tree_nodes = self.tree_all_nodes()
+        splits = {s for s in tree_nodes if len(s.children) > 1}
+        leaves = [s for s in tree_nodes if not s.children]
+        if not splits:
+            return compose(leaves[0].tree_root_path(), composed)
+
+        # Start all the initial composes
+        pending_composes = {stream: [] for stream in reversed(list(splits))}
+        for tree_leaf in leaves:
+            tree = tree_leaf.tree_root_path(allow_splits=False)
+            pending_composes[tree[0].parent].append(compose(tree, composed))
+
+        # After leaves are composed, at least one split will always have its list of
+        # children fully composed, and as those are .composed() together, another split
+        # will then have its children fully composed...and so on.
+        # This occurs repeatedly until all splits have been composed in this manner.
+        while pending_composes:
+            for split, pending in pending_composes.items():
+                if len(pending) == len(split.children):
+                    # the children at this split are composed and ready to finalize
+                    break
+            new_tree = split.tree_root_path(allow_splits=False)
+            # we pass the list of composed children; .compose() and StreamFunction
+            # know how to properly compose them (necessary for data copying steps).
+            composed = compose(new_tree, pending_composes.pop(split))
+            if split := new_tree[0].parent:
+                pending_composes[split].append(composed)
+
+        return composed
 
     def compose_returning(self) -> ReturningExecutor:
         """
@@ -286,41 +383,17 @@ class Stream:
 
         return wrapper
 
-    def compose(
+    def _compose(
         self,
-        allow_filters: bool = True,
-        allow_updates: bool = True,
-        allow_expands: bool = True,
-        allow_transforms: bool = True,
-        sink: Optional[Callable[[Any, Any, int, Any], None]] = None,
+        tree: List[Self],
+        composed: List[Callable[[Any, Any, int, Any], None]],
+        allow_filters: bool,
+        allow_updates: bool,
+        allow_expands: bool,
+        allow_transforms: bool,
     ) -> VoidExecutor:
-        """
-        Compose a list of functions from this `Stream` and its parents into one
-        big closure using a "composer" function.
 
-        This "executor" closure is to be used to execute all functions in the stream for the given
-        key, value and timestamps.
-
-        By default, executor doesn't return the result of the execution.
-        To accumulate the results, pass the `sink` parameter.
-
-        :param allow_filters: If False, this function will fail with `ValueError` if
-            the stream has filter functions in the tree. Default - True.
-        :param allow_updates: If False, this function will fail with `ValueError` if
-            the stream has update functions in the tree. Default - True.
-        :param allow_expands: If False, this function will fail with `ValueError` if
-            the stream has functions with "expand=True" in the tree. Default - True.
-        :param allow_transforms: If False, this function will fail with `ValueError` if
-            the stream has transform functions in the tree. Default - True.
-        :param sink: callable to accumulate the results of the execution, optional.
-
-        :raises ValueError: if disallowed functions are present in the stream tree.
-        """
-
-        tree = self.tree()
         functions = [node.func for node in tree]
-
-        composed = sink or self._default_sink
 
         # Iterate over a reversed list of functions
         for func in reversed(functions):
@@ -338,15 +411,15 @@ class Stream:
             elif not allow_expands and func.expand:
                 raise ValueError("Expand functions are not allowed")
 
-            # Compose functions from the tree together so the top function calls
-            # the bottom one
-            composed = func.get_executor(composed)
+            composed = func.get_executor(
+                *composed if isinstance(composed, list) else [composed]
+            )
 
         return composed
 
     def _diff_from_last_common_parent(self, other: Self) -> List[Self]:
-        nodes_self = self.tree()
-        nodes_other = other.tree()
+        nodes_self = self.tree_root_path()
+        nodes_other = other.tree_root_path()
 
         diff = []
         last_common_parent = None
@@ -363,6 +436,8 @@ class Stream:
         return diff
 
     def _add(self, func: StreamFunction) -> Self:
-        return self.__class__(func=func, parent=self)
+        new_node = self.__class__(func=func, parent=self)
+        self.children.add(new_node)
+        return new_node
 
     def _default_sink(self, value: Any, key: Any, timestamp: int, headers: Any): ...
