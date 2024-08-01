@@ -1,5 +1,4 @@
-from itertools import islice
-from typing import Optional, Iterable, TypeVar
+from typing import Optional, Iterable
 
 try:
     import influxdb_client_3
@@ -13,8 +12,6 @@ except ImportError as exc:
 
 from .base import BatchingSink, SinkBatch
 from .exceptions import SinkBackpressureError
-
-T = TypeVar("T")
 
 
 class InfluxDBV3Sink(BatchingSink):
@@ -100,22 +97,12 @@ class InfluxDBV3Sink(BatchingSink):
         self._write_precision = time_precision
         self._batch_size = batch_size
 
-    def _iter_batches(self, it: Iterable[T], n: int) -> Iterable[Iterable[T]]:
-        """
-        Batch data into tuples of length n. The last batch may be shorter.
-        """
-        if n < 1:
-            raise ValueError("n must be at least one")
-        it_ = iter(it)
-        while batch := tuple(islice(it_, n)):
-            yield batch
-
     def write(self, batch: SinkBatch):
         measurement = self._measurement
         fields_keys = self._fields_keys
         tags_keys = self._tags_keys
         time_key = self._time_key
-        for write_batch in self._iter_batches(batch, n=self._batch_size):
+        for write_batch in batch.iter_chunks(n=self._batch_size):
             records = []
             for item in write_batch:
                 value = item.value

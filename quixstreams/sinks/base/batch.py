@@ -1,5 +1,6 @@
 from collections import deque
-from typing import Deque, Tuple, List, Any, Iterator
+from itertools import islice
+from typing import Deque, Tuple, List, Any, Iterator, Iterable
 
 from quixstreams.models import HeaderValue
 from .item import SinkItem
@@ -22,6 +23,10 @@ class SinkBatch:
     @property
     def partition(self) -> int:
         return self._partition
+
+    @property
+    def size(self) -> int:
+        return len(self._buffer)
 
     def append(
         self,
@@ -47,9 +52,16 @@ class SinkBatch:
     def empty(self) -> bool:
         return len(self._buffer) == 0
 
-    @property
-    def size(self) -> int:
-        return len(self._buffer)
+    def iter_chunks(self, n: int) -> Iterable[Iterable[SinkItem]]:
+        """
+        Iterate over batch data in chunks of length n.
+        The last batch may be shorter.
+        """
+        if n < 1:
+            raise ValueError("n must be at least one")
+        it_ = iter(self)
+        while batch := tuple(islice(it_, n)):
+            yield batch
 
     def __iter__(self) -> Iterator[SinkItem]:
         return iter(self._buffer)
