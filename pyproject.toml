@@ -29,11 +29,13 @@ Homepage = "https://github.com/quixio/quix-streams"
 [project.optional-dependencies]
 all = [
   "fastavro>=1.8,<2.0",
-  "protobuf>=5.27.2,<6.0"
+  "protobuf>=5.27.2,<6.0",
+  "influxdb-python>=0.7,<1.0"
 ]
 
 avro = ["fastavro>=1.8,<2.0"]
 protobuf = ["protobuf>=5.27.2,<6.0"]
+influxdb3 = ["influxdb-python>=0.7,<1.0"]
 
 [tool.setuptools.packages.find]
 include = ["quixstreams*"]
