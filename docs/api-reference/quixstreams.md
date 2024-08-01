@@ -2975,6 +2975,93 @@ Use it to not depend on exact implementation and simplify testing.
 Instances of `confluent_kafka.Message` cannot be directly created from Python,
 see https://github.com/confluentinc/confluent-kafka-python/issues/1535.
 
+<a id="quixstreams.models.serializers.avro"></a>
+
+## quixstreams.models.serializers.avro
+
+<a id="quixstreams.models.serializers.avro.AvroSerializer"></a>
+
+### AvroSerializer
+
+```python
+class AvroSerializer(Serializer)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/avro.py#L14)
+
+<a id="quixstreams.models.serializers.avro.AvroSerializer.__init__"></a>
+
+#### AvroSerializer.\_\_init\_\_
+
+```python
+def __init__(schema: Schema,
+             strict: bool = False,
+             strict_allow_default: bool = False,
+             disable_tuple_notation: bool = False)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/avro.py#L15)
+
+Serializer that returns data in Avro format.
+
+For more information see fastavro [schemaless_writer](https://fastavro.readthedocs.io/en/latest/writer.html#fastavro._write_py.schemaless_writer) method.
+
+**Arguments**:
+
+- `schema`: The avro schema.
+- `strict`: If set to True, an error will be raised if records do not contain exactly the same fields that the schema states.
+Default - `False`
+- `strict_allow_default`: If set to True, an error will be raised if records do not contain exactly the same fields that the schema states unless it is a missing field that has a default value in the schema.
+Default - `False`
+- `disable_tuple_notation`: If set to True, tuples will not be treated as a special case. Therefore, using a tuple to indicate the type of a record will not work.
+Default - `False`
+
+<a id="quixstreams.models.serializers.avro.AvroDeserializer"></a>
+
+### AvroDeserializer
+
+```python
+class AvroDeserializer(Deserializer)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/avro.py#L59)
+
+<a id="quixstreams.models.serializers.avro.AvroDeserializer.__init__"></a>
+
+#### AvroDeserializer.\_\_init\_\_
+
+```python
+def __init__(schema: Schema,
+             reader_schema: Optional[Schema] = None,
+             return_record_name: bool = False,
+             return_record_name_override: bool = False,
+             return_named_type: bool = False,
+             return_named_type_override: bool = False,
+             handle_unicode_errors: str = "strict")
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/avro.py#L60)
+
+Deserializer that parses data from Avro.
+
+For more information see fastavro [schemaless_reader](https://fastavro.readthedocs.io/en/latest/reader.html#fastavro._read_py.schemaless_reader) method.
+
+**Arguments**:
+
+- `schema`: The Avro schema.
+- `reader_schema`: If the schema has changed since being written then the new schema can be given to allow for schema migration.
+Default - `None`
+- `return_record_name`: If true, when reading a union of records, the result will be a tuple where the first value is the name of the record and the second value is the record itself.
+Default - `False`
+- `return_record_name_override`: If true, this will modify the behavior of return_record_name so that the record name is only returned for unions where there is more than one record. For unions that only have one record, this option will make it so that the record is returned by itself, not a tuple with the name.
+Default - `False`
+- `return_named_type`: If true, when reading a union of named types, the result will be a tuple where the first value is the name of the type and the second value is the record itself NOTE: Using this option will ignore return_record_name and return_record_name_override.
+Default - `False`
+- `return_named_type_override`: If true, this will modify the behavior of return_named_type so that the named type is only returned for unions where there is more than one named type. For unions that only have one named type, this option will make it so that the named type is returned by itself, not a tuple with the name.
+Default - `False`
+- `handle_unicode_errors`: Should be set to a valid string that can be used in the errors argument of the string decode() function.
+Default - `"strict"`
+
 <a id="quixstreams.models.serializers"></a>
 
 ## quixstreams.models.serializers
@@ -3309,17 +3396,19 @@ Serializes floats to bytes
 class JSONSerializer(Serializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/json.py#L13)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/json.py#L15)
 
 <a id="quixstreams.models.serializers.json.JSONSerializer.__init__"></a>
 
 #### JSONSerializer.\_\_init\_\_
 
 ```python
-def __init__(dumps: Callable[[Any], Union[str, bytes]] = default_dumps)
+def __init__(dumps: Callable[[Any], Union[str, bytes]] = default_dumps,
+             schema: Optional[Mapping] = None,
+             validator: Optional[Validator] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/json.py#L14)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/json.py#L16)
 
 Serializer that returns data in json format.
 
@@ -3327,6 +3416,10 @@ Serializer that returns data in json format.
 
 - `dumps`: a function to serialize objects to json.
 Default - :py:func:`quixstreams.utils.json.dumps`
+- `schema`: A schema used to validate the data using [`jsonschema.Draft202012Validator`](https://python-jsonschema.readthedocs.io/en/stable/api/jsonschema/validators/`jsonschema.validators.Draft202012Validator`).
+Default - `None`
+- `validator`: A jsonschema validator used to validate the data. Takes precedences over the schema.
+Default - `None`
 
 <a id="quixstreams.models.serializers.json.JSONDeserializer"></a>
 
@@ -3336,17 +3429,19 @@ Default - :py:func:`quixstreams.utils.json.dumps`
 class JSONDeserializer(Deserializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/json.py#L35)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/json.py#L58)
 
 <a id="quixstreams.models.serializers.json.JSONDeserializer.__init__"></a>
 
 #### JSONDeserializer.\_\_init\_\_
 
 ```python
-def __init__(loads: Callable[[Union[bytes, bytearray]], Any] = default_loads)
+def __init__(loads: Callable[[Union[bytes, bytearray]], Any] = default_loads,
+             schema: Optional[Mapping] = None,
+             validator: Optional[Validator] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/json.py#L36)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/json.py#L59)
 
 Deserializer that parses data from JSON
 
@@ -3354,6 +3449,10 @@ Deserializer that parses data from JSON
 
 - `loads`: function to parse json from bytes.
 Default - :py:func:`quixstreams.utils.json.loads`.
+- `schema`: A schema used to validate the data using [`jsonschema.Draft202012Validator`](https://python-jsonschema.readthedocs.io/en/stable/api/jsonschema/validators/`jsonschema.validators.Draft202012Validator`).
+Default - `None`
+- `validator`: A jsonschema validator used to validate the data. Takes precedences over the schema.
+Default - `None`
 
 <a id="quixstreams.models.serializers.base"></a>
 
