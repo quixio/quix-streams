@@ -117,18 +117,20 @@ class BatchingSink(BaseSink):
         Flush an accumulated batch to the destination and drop it afterward.
         """
         batch = self._batches.get((topic, partition))
-        if batch is not None:
-            logger.debug(
-                f'Flushing sink "{self}" for partition "{topic}[{partition}]; '
-                f'total_records={batch.size}"'
-            )
-            # TODO: Some custom error handling may be needed here
-            #   For now simply fail
-            try:
-                self.write(batch)
-            finally:
-                # Always drop the batch after flushing it
-                self._batches.pop((topic, partition), None)
+        if batch is None:
+            return
+
+        logger.debug(
+            f'Flushing sink "{self}" for partition "{topic}[{partition}]; '
+            f'total_records={batch.size}"'
+        )
+        # TODO: Some custom error handling may be needed here
+        #   For now simply fail
+        try:
+            self.write(batch)
+        finally:
+            # Always drop the batch after flushing it
+            self._batches.pop((topic, partition), None)
 
     def on_paused(self, topic: str, partition: int):
         """
