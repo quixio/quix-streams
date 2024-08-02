@@ -42,10 +42,10 @@ class InfluxDBV3Sink(BatchingSink):
         """
         A connector to sink processed data to InfluxDB v3.
 
-        It batches the processed records in memory per topic partition
-        and flushes them to InfluxDB at the checkpoint.
+        It batches the processed records in memory per topic partition, converts
+        them to the InfluxDB format, and flushes them to InfluxDB at the checkpoint.
 
-        The InfluxDB sink transparently handles backpressure if the DB instance
+        The InfluxDB sink transparently handles backpressure if the destination instance
         cannot accept more data at the moment
         (e.g., when InfluxDB returns an HTTP 429 error with the "retry_after" header set).
         When this happens, the sink will notify the Application to pause consuming
@@ -80,8 +80,8 @@ class InfluxDBV3Sink(BatchingSink):
         :param include_metadata_tags: if True, includes record's key, topic,
             and partition as tags.
             Default - `False`.
-        :param batch_size: how many records to write to InfluxDB at once.
-            Note that it only affects the size of the writing batch, and not the number
+        :param batch_size: how many records to write to InfluxDB in one request.
+            Note that it only affects the size of one write request, and not the number
             of records flushed on each checkpoint.
             Default - `1000`.
         :param enable_gzip: if True, enables gzip compression for writes.
