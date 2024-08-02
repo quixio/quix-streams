@@ -1,3 +1,6 @@
+import logging
+import sys
+import time
 from typing import Optional, Iterable
 
 try:
@@ -12,6 +15,8 @@ except ImportError as exc:
 
 from .base import BatchingSink, SinkBatch
 from .exceptions import SinkBackpressureError
+
+logger = logging.getLogger(__name__)
 
 
 class InfluxDBV3Sink(BatchingSink):
@@ -104,6 +109,10 @@ class InfluxDBV3Sink(BatchingSink):
         time_key = self._time_key
         for write_batch in batch.iter_chunks(n=self._batch_size):
             records = []
+
+            min_timestamp = sys.maxsize
+            max_timestamp = -1
+
             for item in write_batch:
                 value = item.value
                 tags = {tag_key: value[tag_key] for tag_key in tags_keys}
@@ -124,9 +133,21 @@ class InfluxDBV3Sink(BatchingSink):
                     "time": ts,
                 }
                 records.append(record)
+                min_timestamp = min(ts, min_timestamp)
+                max_timestamp = max(ts, max_timestamp)
+
             try:
+                _start = time.monotonic()
                 self._client.write(
                     record=records, write_precision=self._write_precision
+                )
+                elapsed = round(time.monotonic() - _start, 2)
+                logger.info(
+                    f"Sent data to InfluxDB; "
+                    f"total_records={len(records)} "
+                    f"min_timestamp={min_timestamp} "
+                    f"max_timestamp={max_timestamp} "
+                    f"time_elapsed={elapsed}s"
                 )
             except influxdb_client_3.InfluxDBError as exc:
                 if exc.response and exc.response.status == 429 and exc.retry_after:
