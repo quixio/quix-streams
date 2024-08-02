@@ -1,7 +1,9 @@
 import logging
 import sys
 import time
-from typing import Optional, Iterable
+from typing import Optional, Iterable, Any, List, Tuple, Mapping
+
+from quixstreams.models import HeaderValue
 
 try:
     import influxdb_client_3
@@ -49,17 +51,28 @@ class InfluxDBV3Sink(BatchingSink):
         When this happens, the sink will notify the Application to pause consuming
         from the backpressured topic partition until the "retry_after" timeout elapses.
 
+        >***NOTE***: InfluxDBV3Sink can accept only dictionary-like values.
+        > If the record values are not dicts, you need to convert them to dicts before
+        > sinking.
+
         :param token: InfluxDB access token
         :param host: InfluxDB host in format "https://<host>"
         :param organization_id: InfluxDB organization_id
         :param database: database name
         :measurement: measurement name
         :param fields_keys: a list of keys to be used as "fields" when writing to InfluxDB.
+            If present, it must not overlap with "tags_keys".
             If empty, the whole record value will be used.
-            Default - empty.
+            >***NOTE*** The fields' values can only be strings, floats, integers, or booleans.
+            Default - `()`.
         :param tags_keys: a list of keys to be used as "tags" when writing to InfluxDB.
+            If present, it must not overlap with "fields_keys".
+            These keys will be popped from the value dictionary
+            automatically because InfluxDB doesn't allow the same keys be
+            both in tags and fields.
             If empty, no tags will be sent.
-            Default - empty.
+            >***NOTE***: InfluxDB client always converts tag values to strings.
+            Default - `()`.
         :param time_key: a key to be used as "time" when writing to InfluxDB.
             By default, the record timestamp will be used with "ms" time precision.
             When using a custom key, you may need to adjust the `time_precision` setting
@@ -80,6 +93,13 @@ class InfluxDBV3Sink(BatchingSink):
         """
 
         super().__init__()
+        fields_tags_keys_overlap = set(fields_keys) & set(tags_keys)
+        if fields_tags_keys_overlap:
+            overlap_str = ",".join(str(k) for k in fields_tags_keys_overlap)
+            raise ValueError(
+                f'Keys {overlap_str} are present in both "fields_keys" and "tags_keys"'
+            )
+
         self._client = InfluxDBClient3(
             token=token,
             host=host,
@@ -96,11 +116,36 @@ class InfluxDBV3Sink(BatchingSink):
         )
         self._measurement = measurement
         self._fields_keys = fields_keys
-        self._tags_keys = tags_keys or []
+        self._tags_keys = tags_keys
         self._include_metadata_tags = include_metadata_tags
         self._time_key = time_key
         self._write_precision = time_precision
         self._batch_size = batch_size
+
+    def add(
+        self,
+        value: Any,
+        key: Any,
+        timestamp: int,
+        headers: List[Tuple[str, HeaderValue]],
+        topic: str,
+        partition: int,
+        offset: int,
+    ):
+        if not isinstance(value, Mapping):
+            raise TypeError(
+                f'Sink "{self.__class__.__name__}" supports only dictionary-like '
+                f"values, got {type(value)}"
+            )
+        return super().add(
+            value=value,
+            key=key,
+            timestamp=timestamp,
+            headers=headers,
+            topic=topic,
+            partition=partition,
+            offset=offset,
+        )
 
     def write(self, batch: SinkBatch):
         measurement = self._measurement
@@ -115,13 +160,27 @@ class InfluxDBV3Sink(BatchingSink):
 
             for item in write_batch:
                 value = item.value
-                tags = {tag_key: value[tag_key] for tag_key in tags_keys}
+                tags = {}
+                if tags_keys:
+                    for tag_key in tags_keys:
+                        # TODO: InfluxDB client always converts tags values to strings
+                        #  by doing str().
+                        #  We may add some extra validation here in the future to prevent
+                        #  unwanted conversion.
+                        tag = value.pop(tag_key)
+                        tags[tag_key] = tag
+
                 if self._include_metadata_tags:
                     tags["__key"] = item.key
                     tags["__topic"] = batch.topic
                     tags["__partition"] = batch.partition
+
                 fields = (
-                    {field_key: value[field_key] for field_key in fields_keys}
+                    {
+                        field_key: value[field_key]
+                        for field_key in fields_keys
+                        if field_key not in tags_keys
+                    }
                     if fields_keys
                     else value
                 )

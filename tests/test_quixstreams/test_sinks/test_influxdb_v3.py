@@ -49,7 +49,7 @@ class TestInfluxDBV3Sink:
         )
         topic = "test-topic"
 
-        value, timestamp = "value", 1
+        value, timestamp = {"key": "value"}, 1
         for partition in (0, 1):
             sink.add(
                 value=value,
@@ -149,6 +149,78 @@ class TestInfluxDBV3Sink:
             "write_precision": "ms",
         }
 
+    def test_write_values_not_dicts_fail(self, influxdb_v3_sink_factory):
+        client_mock = MagicMock(spec_set=InfluxDBClient3)
+        measurement = "measurement"
+
+        sink = influxdb_v3_sink_factory(
+            client_mock=client_mock, measurement=measurement
+        )
+        topic = "test-topic"
+
+        value, timestamp = 1, 1
+        with pytest.raises(TypeError, match="supports only dictionary-like values"):
+            sink.add(
+                value=value,
+                key="key",
+                timestamp=timestamp,
+                headers=[],
+                topic=topic,
+                partition=0,
+                offset=1,
+            )
+
+    def test_write_tags_keys_excluded_from_fields(self, influxdb_v3_sink_factory):
+        client_mock = MagicMock(spec_set=InfluxDBClient3)
+        measurement = "measurement"
+
+        sink = influxdb_v3_sink_factory(
+            client_mock=client_mock, measurement=measurement, tags_keys=["b"]
+        )
+        topic = "test-topic"
+
+        value, timestamp = {"a": 1, "b": 2}, 1
+        sink.add(
+            value=value,
+            key="key",
+            timestamp=timestamp,
+            headers=[],
+            topic=topic,
+            partition=0,
+            offset=1,
+        )
+        sink.flush(topic=topic, partition=0)
+
+        assert client_mock.write.call_count == 1
+        first_call = client_mock.write.call_args_list[0]
+        assert first_call.kwargs == {
+            "record": [
+                {
+                    "measurement": measurement,
+                    "tags": {"b": 2},
+                    "fields": {"a": 1},
+                    "time": timestamp,
+                }
+            ],
+            "write_precision": "ms",
+        }
+
+    def test_init_fields_keys_and_tags_keys_overlap_fails(
+        self, influxdb_v3_sink_factory
+    ):
+        client_mock = MagicMock(spec_set=InfluxDBClient3)
+        measurement = "measurement"
+
+        with pytest.raises(
+            ValueError, match='are present in both "fields_keys" and "tags_keys"'
+        ):
+            influxdb_v3_sink_factory(
+                client_mock=client_mock,
+                measurement=measurement,
+                tags_keys=["b"],
+                fields_keys=["b"],
+            )
+
     def test_write_include_metadata_tags_true(self, influxdb_v3_sink_factory):
         client_mock = MagicMock(spec_set=InfluxDBClient3)
         measurement = "measurement"
@@ -193,7 +265,7 @@ class TestInfluxDBV3Sink:
         )
         topic = "test-topic"
 
-        value1, value2 = "value1", "value2"
+        value1, value2 = {"key": "value1"}, {"key": "value2"}
         timestamp = 1
         sink.add(
             value=value1,
@@ -257,7 +329,7 @@ class TestInfluxDBV3Sink:
         )
         topic = "test-topic"
 
-        value1, value2 = "value1", "value2"
+        value1, value2 = {"key": "value1"}, {"key": "value2"}
         timestamp = 1
         sink.add(
             value=value1,
@@ -285,7 +357,7 @@ class TestInfluxDBV3Sink:
         )
         topic = "test-topic"
 
-        value1, value2 = "value1", "value2"
+        value1, value2 = {"key": "value1"}, {"key": "value2"}
         timestamp = 1
         sink.add(
             value=value1,
