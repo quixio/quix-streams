@@ -129,7 +129,7 @@ class InfluxDBV3Sink(BatchingSink):
                     record=records, write_precision=self._write_precision
                 )
             except influxdb_client_3.InfluxDBError as exc:
-                if exc.response.status == 429 and exc.retry_after:
+                if exc.response and exc.response.status == 429 and exc.retry_after:
                     # The write limit is exceeded, raise a SinkBackpressureError
                     # to pause the partition for a certain period of time.
                     raise SinkBackpressureError(

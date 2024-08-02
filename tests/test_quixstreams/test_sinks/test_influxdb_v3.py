@@ -272,3 +272,29 @@ class TestInfluxDBV3Sink:
             sink.flush(topic=topic, partition=0)
 
         assert raised.value.retry_after == 10
+
+    def test_write_fails_propagates_exception(self, influxdb_v3_sink_factory):
+        influx_some_err = influxdb_client_3.InfluxDBError()
+
+        client_mock = MagicMock(spec_set=InfluxDBClient3)
+        client_mock.write.side_effect = influx_some_err
+        measurement = "measurement"
+
+        sink = influxdb_v3_sink_factory(
+            client_mock=client_mock, measurement=measurement, batch_size=1
+        )
+        topic = "test-topic"
+
+        value1, value2 = "value1", "value2"
+        timestamp = 1
+        sink.add(
+            value=value1,
+            key="key",
+            timestamp=timestamp,
+            headers=[],
+            topic=topic,
+            partition=0,
+            offset=1,
+        )
+        with pytest.raises(influxdb_client_3.InfluxDBError):
+            sink.flush(topic=topic, partition=0)
