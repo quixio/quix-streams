@@ -28,6 +28,7 @@ from quixstreams.platforms.quix import QuixKafkaConfigsBuilder, QuixApplicationC
 from quixstreams.platforms.quix.env import QuixEnvironment
 from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
+from quixstreams.sinks import SinkBatch, SinkBackpressureError
 from quixstreams.state import State
 from tests.utils import DummySink
 
@@ -2018,3 +2019,73 @@ class TestApplicationSink:
         assert committed0.offset == 1
         assert committed1.offset == 1
         assert committed2.offset == 1
+
+    def test_run_with_sink_backpressure(
+        self,
+        app_factory,
+        executor,
+    ):
+        """
+        Test that backpressure is handled correctly by the app
+        """
+
+        total_messages = 10
+        topic_name = str(uuid.uuid4())
+        partition = 0
+
+        class _BackpressureSink(DummySink):
+            _backpressured = False
+
+            def write(self, batch: SinkBatch):
+                # Backpressure sink once here to ensure the offset rewind works
+                if not self._backpressured:
+                    self._backpressured = True
+                    raise SinkBackpressureError(
+                        topic=topic_name, partition=partition, retry_after=1
+                    )
+                return super().write(batch=batch)
+
+        app = app_factory(
+            auto_offset_reset="earliest",
+            commit_interval=1.0,  # Commit every second
+        )
+        sink = _BackpressureSink()
+
+        topic = app.topic(
+            topic_name,
+            value_deserializer="str",
+        )
+        sdf = app.dataframe(topic)
+        sdf.sink(sink)
+
+        key, value, timestamp_ms = b"key", "value", 1000
+        headers = [("key", b"value")]
+
+        # Produce messages to different topic partitions and flush
+        with app.get_producer() as producer:
+            for _ in range(total_messages):
+                producer.produce(
+                    topic=topic.name,
+                    key=key,
+                    value=value,
+                    timestamp=timestamp_ms,
+                    headers=headers,
+                )
+
+        executor.submit(_stop_app_on_timeout, app, 15.0)
+        app.run(sdf)
+
+        # Ensure all messages were flushed to the sink
+        assert len(sink.results) == total_messages
+        for item in sink.results:
+            assert item.key == key
+            assert item.value == value
+            assert item.timestamp == timestamp_ms
+            assert item.headers == headers
+
+        # Ensure that the offsets are committed
+        with app.get_consumer() as consumer:
+            committed, *_ = consumer.committed(
+                [TopicPartition(topic=topic.name, partition=0)]
+            )
+        assert committed.offset == total_messages

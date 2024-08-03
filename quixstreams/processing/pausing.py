@@ -3,7 +3,7 @@ import sys
 import time
 from typing import Tuple, Dict
 
-from confluent_kafka import TopicPartition, KafkaException
+from confluent_kafka import TopicPartition
 
 from quixstreams.kafka import Consumer
 
@@ -25,7 +25,13 @@ class PausingManager:
         self._paused_tps = {}
         self._next_resume_at = _MAX_FLOAT
 
-    def pause(self, topic: str, partition: int, resume_after: float):
+    def pause(
+        self,
+        topic: str,
+        partition: int,
+        offset_to_seek: int,
+        resume_after: float,
+    ):
         """
         Pause the topic-partition for a certain period of time.
 
@@ -43,20 +49,21 @@ class PausingManager:
         # Partitions are rarely paused, but the resume checks can be done
         # thousands times a sec.
         self._next_resume_at = min(self._next_resume_at, resume_at)
-        tp = TopicPartition(topic=topic, partition=partition)
+        tp = TopicPartition(topic=topic, partition=partition, offset=offset_to_seek)
         position, *_ = self._consumer.position([tp])
         logger.debug(
             f'Pausing topic partition "{topic}[{partition}]" for {resume_after}s; '
             f"current_offset={position.offset}"
         )
         self._consumer.pause(partitions=[tp])
-        # Seek the TP back to its committed offset to start from it on resume
-        committed_tp, *_ = self._consumer.committed([tp])
+        # Seek the TP back to the "offset_to_seek" to start from it on resume.
+        # The "offset_to_seek" is provided by the Checkpoint and is expected to be the
+        # first offset processed in the checkpoint.
         logger.debug(
-            f'Seek the paused partition "{topic}[{partition}]" back to the committed '
-            f"offset; committed_offset={committed_tp.offset}"
+            f'Seek the paused partition "{topic}[{partition}]" back to '
+            f"offset {tp.offset}"
         )
-        self._consumer.seek(committed_tp)
+        self._consumer.seek(partition=tp)
 
     def is_paused(self, topic: str, partition: int) -> bool:
         """

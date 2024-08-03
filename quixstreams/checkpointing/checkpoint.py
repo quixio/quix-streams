@@ -44,6 +44,9 @@ class Checkpoint:
         self._created_at = time.monotonic()
         # A mapping of <(topic, partition): processed offset>
         self._tp_offsets: Dict[Tuple[str, int], int] = {}
+        # A mapping of <(topic, partition): starting offset> with the first
+        # processed offsets within the checkpoint
+        self._starting_tp_offsets: Dict[Tuple[str, int], int] = {}
         # A mapping of <(topic, partition, store_name): PartitionTransaction>
         self._store_transactions: Dict[(str, int, str), PartitionTransaction] = {}
         # Passing zero or lower will flush the checkpoint after each processed message
@@ -86,7 +89,8 @@ class Checkpoint:
         :param partition: partition number
         :param offset: message offset
         """
-        stored_offset = self._tp_offsets.get((topic, partition), -1)
+        tp = (topic, partition)
+        stored_offset = self._tp_offsets.get(tp, -1)
         # A paranoid check to ensure that processed offsets always increase within the
         # same checkpoint.
         # It shouldn't normally happen, but a lot of logic relies on it,
@@ -96,7 +100,11 @@ class Checkpoint:
                 f"Cannot store offset smaller or equal than already processed"
                 f" one: {offset} <= {stored_offset}"
             )
-        self._tp_offsets[(topic, partition)] = offset
+        self._tp_offsets[tp] = offset
+        # Track the first processed offset in the transaction to rewind back to it
+        # in case of sink backpressure
+        if tp not in self._starting_tp_offsets:
+            self._starting_tp_offsets[tp] = offset
         self._total_offsets_processed += 1
 
     def get_store_transaction(
@@ -190,9 +198,15 @@ class Checkpoint:
                         f"processed_offset={offset}"
                     )
                     # The backpressure is detected from the sink
-                    # Pause the partition to let it cool down
+                    # Pause the partition to let it cool down and seek it back to
+                    # the first processed offset of this Checkpoint (it must be equal
+                    # to the last committed offset).
+                    offset_to_seek = self._starting_tp_offsets[(topic, partition)]
                     self._pausing_manager.pause(
-                        topic=topic, partition=partition, resume_after=exc.retry_after
+                        topic=topic,
+                        partition=partition,
+                        resume_after=exc.retry_after,
+                        offset_to_seek=offset_to_seek,
                     )
 
         # Step 4. Commit offsets to Kafka
