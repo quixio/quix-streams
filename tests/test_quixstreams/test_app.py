@@ -28,7 +28,9 @@ from quixstreams.platforms.quix import QuixKafkaConfigsBuilder, QuixApplicationC
 from quixstreams.platforms.quix.env import QuixEnvironment
 from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
+from quixstreams.sinks import SinkBatch, SinkBackpressureError
 from quixstreams.state import State
+from tests.utils import DummySink
 
 
 def _stop_app_on_future(app: Application, future: Future, timeout: float):
@@ -1937,3 +1939,153 @@ class TestApplicationRecovery:
                     app.run(sdf)
         # The app should be recovered
         validate_state()
+
+
+class TestApplicationSink:
+    def test_run_with_sink_success(
+        self,
+        app_factory,
+        executor,
+    ):
+
+        processed_count = 0
+        total_messages = 3
+
+        def on_message_processed(topic_, partition, offset):
+            # Set the callback to track total messages processed
+            # The callback is not triggered if processing fails
+            nonlocal processed_count
+
+            processed_count += 1
+            # Stop processing after consuming all the messages
+            if processed_count == total_messages:
+                done.set_result(True)
+
+        app = app_factory(
+            auto_offset_reset="earliest",
+            on_message_processed=on_message_processed,
+        )
+        sink = DummySink()
+
+        topic = app.topic(
+            str(uuid.uuid4()),
+            value_deserializer="str",
+            config=TopicConfig(num_partitions=3, replication_factor=1),
+        )
+        sdf = app.dataframe(topic)
+        sdf.sink(sink)
+
+        key, value, timestamp_ms = b"key", "value", 1000
+        headers = [("key", b"value")]
+
+        # Produce messages to different topic partitions and flush
+        with app.get_producer() as producer:
+            for i in range(total_messages):
+                producer.produce(
+                    topic=topic.name,
+                    partition=i,
+                    key=key,
+                    value=value,
+                    timestamp=timestamp_ms,
+                    headers=headers,
+                )
+
+        done = Future()
+
+        # Stop app when the future is resolved
+        executor.submit(_stop_app_on_future, app, done, 15.0)
+        app.run(sdf)
+
+        # Check that all messages have been processed
+        assert processed_count == total_messages
+
+        # Ensure all messages were flushed to the sink
+        assert len(sink.results) == 3
+        for item in sink.results:
+            assert item.key == key
+            assert item.value == value
+            assert item.timestamp == timestamp_ms
+            assert item.headers == headers
+
+        # Ensure that the offsets are committed
+        with app.get_consumer() as consumer:
+            committed0, committed1, committed2 = consumer.committed(
+                [
+                    TopicPartition(topic=topic.name, partition=0),
+                    TopicPartition(topic=topic.name, partition=1),
+                    TopicPartition(topic=topic.name, partition=2),
+                ]
+            )
+        assert committed0.offset == 1
+        assert committed1.offset == 1
+        assert committed2.offset == 1
+
+    def test_run_with_sink_backpressure(
+        self,
+        app_factory,
+        executor,
+    ):
+        """
+        Test that backpressure is handled correctly by the app
+        """
+
+        total_messages = 10
+        topic_name = str(uuid.uuid4())
+        partition = 0
+
+        class _BackpressureSink(DummySink):
+            _backpressured = False
+
+            def write(self, batch: SinkBatch):
+                # Backpressure sink once here to ensure the offset rewind works
+                if not self._backpressured:
+                    self._backpressured = True
+                    raise SinkBackpressureError(
+                        topic=topic_name, partition=partition, retry_after=1
+                    )
+                return super().write(batch=batch)
+
+        app = app_factory(
+            auto_offset_reset="earliest",
+            commit_interval=1.0,  # Commit every second
+        )
+        sink = _BackpressureSink()
+
+        topic = app.topic(
+            topic_name,
+            value_deserializer="str",
+        )
+        sdf = app.dataframe(topic)
+        sdf.sink(sink)
+
+        key, value, timestamp_ms = b"key", "value", 1000
+        headers = [("key", b"value")]
+
+        # Produce messages to different topic partitions and flush
+        with app.get_producer() as producer:
+            for _ in range(total_messages):
+                producer.produce(
+                    topic=topic.name,
+                    key=key,
+                    value=value,
+                    timestamp=timestamp_ms,
+                    headers=headers,
+                )
+
+        executor.submit(_stop_app_on_timeout, app, 15.0)
+        app.run(sdf)
+
+        # Ensure all messages were flushed to the sink
+        assert len(sink.results) == total_messages
+        for item in sink.results:
+            assert item.key == key
+            assert item.value == value
+            assert item.timestamp == timestamp_ms
+            assert item.headers == headers
+
+        # Ensure that the offsets are committed
+        with app.get_consumer() as consumer:
+            committed, *_ = consumer.committed(
+                [TopicPartition(topic=topic.name, partition=0)]
+            )
+        assert committed.offset == total_messages

@@ -6,7 +6,7 @@ from quixstreams.context import message_context
 from quixstreams.core.stream import (
     TransformExpandedCallback,
 )
-from quixstreams.processing_context import ProcessingContext
+from quixstreams.processing import ProcessingContext
 from quixstreams.state import WindowedPartitionTransaction, WindowedState
 from .base import (
     WindowAggregateFunc,

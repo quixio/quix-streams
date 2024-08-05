@@ -5,7 +5,10 @@ from typing import Dict, Tuple
 from confluent_kafka import TopicPartition, KafkaException
 
 from quixstreams.kafka import Consumer
+from quixstreams.processing.pausing import PausingManager
 from quixstreams.rowproducer import RowProducer
+from quixstreams.sinks import SinkManager
+from quixstreams.sinks.exceptions import SinkBackpressureError
 from quixstreams.state import (
     StateStoreManager,
     PartitionTransaction,
@@ -33,21 +36,28 @@ class Checkpoint:
         producer: RowProducer,
         consumer: Consumer,
         state_manager: StateStoreManager,
+        sink_manager: SinkManager,
+        pausing_manager: PausingManager,
         exactly_once: bool = False,
         commit_every: int = 0,
     ):
         self._created_at = time.monotonic()
         # A mapping of <(topic, partition): processed offset>
         self._tp_offsets: Dict[Tuple[str, int], int] = {}
-
+        # A mapping of <(topic, partition): starting offset> with the first
+        # processed offsets within the checkpoint
+        self._starting_tp_offsets: Dict[Tuple[str, int], int] = {}
         # A mapping of <(topic, partition, store_name): PartitionTransaction>
         self._store_transactions: Dict[(str, int, str), PartitionTransaction] = {}
         # Passing zero or lower will flush the checkpoint after each processed message
         self._commit_interval = max(commit_interval, 0)
+
         self._state_manager = state_manager
         self._consumer = consumer
         self._producer = producer
         self._exactly_once = exactly_once
+        self._sink_manager = sink_manager
+        self._pausing_manager = pausing_manager
         self._commit_every = commit_every
         self._total_offsets_processed = 0
 
@@ -79,7 +89,8 @@ class Checkpoint:
         :param partition: partition number
         :param offset: message offset
         """
-        stored_offset = self._tp_offsets.get((topic, partition), -1)
+        tp = (topic, partition)
+        stored_offset = self._tp_offsets.get(tp, -1)
         # A paranoid check to ensure that processed offsets always increase within the
         # same checkpoint.
         # It shouldn't normally happen, but a lot of logic relies on it,
@@ -89,7 +100,11 @@ class Checkpoint:
                 f"Cannot store offset smaller or equal than already processed"
                 f" one: {offset} <= {stored_offset}"
             )
-        self._tp_offsets[(topic, partition)] = offset
+        self._tp_offsets[tp] = offset
+        # Track the first processed offset in the transaction to rewind back to it
+        # in case of sink backpressure
+        if tp not in self._starting_tp_offsets:
+            self._starting_tp_offsets[tp] = offset
         self._total_offsets_processed += 1
 
     def get_store_transaction(
@@ -155,17 +170,61 @@ class Checkpoint:
         unproduced_msg_count = self._producer.flush()
         if unproduced_msg_count > 0:
             raise CheckpointProducerTimeout(
-                f"'{unproduced_msg_count}' messages failed to be produced before the producer flush timeout"
+                f"'{unproduced_msg_count}' messages failed to be produced before "
+                f"the producer flush timeout"
             )
 
-        # Get produced offsets after flushing the producer
-        produced_offsets = self._producer.offsets
+        logger.debug("Checkpoint: flushing sinks")
+        sinks = self._sink_manager.sinks
+        # Step 3. Flush sinks
+        for (topic, partition), offset in self._tp_offsets.items():
+            for sink in sinks:
+                if self._pausing_manager.is_paused(topic=topic, partition=partition):
+                    # The topic-partition is paused, skip flushing other sinks for
+                    # this TP.
+                    # Note: when flushing multiple sinks for the same TP, some
+                    # of them can be flushed before one of the sinks is backpressured.
+                    sink.on_paused(topic=topic, partition=partition)
+                    continue
 
-        # Step 3. Commit offsets to Kafka
+                try:
+                    sink.flush(topic=topic, partition=partition)
+                except SinkBackpressureError as exc:
+                    logger.warning(
+                        f'Backpressure for sink "{sink}" is detected, '
+                        f"the partition will be paused and resumed again "
+                        f"in {exc.retry_after}s; "
+                        f'partition="{topic}[{partition}]" '
+                        f"processed_offset={offset}"
+                    )
+                    # The backpressure is detected from the sink
+                    # Pause the partition to let it cool down and seek it back to
+                    # the first processed offset of this Checkpoint (it must be equal
+                    # to the last committed offset).
+                    offset_to_seek = self._starting_tp_offsets[(topic, partition)]
+                    self._pausing_manager.pause(
+                        topic=topic,
+                        partition=partition,
+                        resume_after=exc.retry_after,
+                        offset_to_seek=offset_to_seek,
+                    )
+
+        # Step 4. Commit offsets to Kafka
+        # First, filter out offsets of the paused topic partitions.
+        tp_offsets = {
+            (topic, partition): offset
+            for (topic, partition), offset in self._tp_offsets.items()
+            if not self._pausing_manager.is_paused(topic=topic, partition=partition)
+        }
+        if not tp_offsets:
+            # No offsets to commit because every partition is paused, exiting early
+            return
+
         offsets = [
             TopicPartition(topic=topic, partition=partition, offset=offset + 1)
-            for (topic, partition), offset in self._tp_offsets.items()
+            for (topic, partition), offset in tp_offsets.items()
         ]
+
         if self._exactly_once:
             self._producer.commit_transaction(
                 offsets, self._consumer.consumer_group_metadata()
@@ -181,14 +240,19 @@ class Checkpoint:
                 if partition.error:
                     raise CheckpointConsumerCommitError(partition.error)
 
-        # Step 4. Flush state store partitions to the disk together with changelog
-        # offsets
+        # Step 5. Flush state store partitions to the disk together with changelog
+        # offsets.
+        # Get produced offsets after flushing the producer
+        produced_offsets = self._producer.offsets
         for (
             topic,
             partition,
             store_name,
         ), transaction in self._store_transactions.items():
-            offset = self._tp_offsets[(topic, partition)]
+            offset = tp_offsets.get((topic, partition))
+            # Offset can be None if the partition is paused
+            if offset is None:
+                continue
 
             # Get the changelog topic-partition for the given transaction
             # It can be None if changelog topics are disabled in the app config

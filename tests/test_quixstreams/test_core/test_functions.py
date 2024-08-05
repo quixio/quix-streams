@@ -10,7 +10,7 @@ from quixstreams.core.stream.functions import (
     FilterWithMetadataFunction,
 )
 
-from tests.utils import Sink
+from .utils import Sink
 
 
 class TestFunctions:

@@ -34,9 +34,10 @@ from .platforms.quix import (
     check_state_management_enabled,
     QuixTopicManager,
 )
-from .processing_context import ProcessingContext
+from .processing import ProcessingContext, PausingManager
 from .rowconsumer import RowConsumer
 from .rowproducer import RowProducer
+from .sinks import SinkManager
 from .state import StateStoreManager
 from .state.recovery import RecoveryManager
 from .state.rocksdb import RocksDBOptionsType
@@ -321,6 +322,8 @@ class Application:
                 else None
             ),
         )
+        self._sink_manager = SinkManager()
+        self._pausing_manager = PausingManager(consumer=self._consumer)
         self._processing_context = ProcessingContext(
             commit_interval=self._commit_interval,
             commit_every=commit_every,
@@ -328,6 +331,8 @@ class Application:
             consumer=self._consumer,
             state_manager=self._state_manager,
             exactly_once=self._uses_exactly_once,
+            sink_manager=self._sink_manager,
+            pausing_manager=self._pausing_manager,
         )
 
     @property
@@ -781,6 +786,7 @@ class Application:
                 else:
                     self._process_message(dataframe_composed)
                     self._processing_context.commit_checkpoint()
+                    self._processing_context.resume_ready_partitions()
 
             logger.info("Stop processing of StreamingDataFrame")
 
@@ -859,6 +865,7 @@ class Application:
         # sometimes "empty" calls happen, probably updating the consumer epoch
         if not topic_partitions:
             return
+        logger.debug(f"Rebalancing: assigning partitions")
 
         # First commit everything processed so far because assignment can take a while
         # and fail
@@ -869,7 +876,6 @@ class Application:
         self._consumer.incremental_assign(topic_partitions)
 
         if self._state_manager.stores:
-            logger.debug(f"Rebalancing: assigning state store partitions")
             for tp in topic_partitions:
                 # Get the latest committed offset for the assigned topic partition
                 tp_committed = self._consumer.committed([tp], timeout=30)[0]
@@ -911,6 +917,7 @@ class Application:
         # because of the unhandled exception.
         # In this case, we should drop the checkpoint and let another consumer
         # pick up from the latest one
+        logger.debug(f"Rebalancing: revoking partitions")
         if self._failed:
             logger.warning(
                 "Application is stopping due to failure, "
@@ -920,23 +927,28 @@ class Application:
             self._processing_context.commit_checkpoint(force=True)
 
         self._consumer.incremental_unassign(topic_partitions)
-        if self._state_manager.stores:
-            logger.debug(f"Rebalancing: revoking state store partitions")
-            for tp in topic_partitions:
+        for tp in topic_partitions:
+            if self._state_manager.stores:
                 self._state_manager.on_partition_revoke(
                     topic=tp.topic, partition=tp.partition
                 )
+            self._processing_context.on_partition_revoke(
+                topic=tp.topic, partition=tp.partition
+            )
 
     def _on_lost(self, _, topic_partitions: List[TopicPartition]):
         """
         Dropping lost partitions from consumer and state
         """
-        if self._state_manager.stores:
-            logger.debug(f"Rebalancing: dropping lost state store partitions")
-            for tp in topic_partitions:
+        logger.debug(f"Rebalancing: dropping lost partitions")
+        for tp in topic_partitions:
+            if self._state_manager.stores:
                 self._state_manager.on_partition_revoke(
                     topic=tp.topic, partition=tp.partition
                 )
+            self._processing_context.on_partition_revoke(
+                topic=tp.topic, partition=tp.partition
+            )
 
     def _setup_signal_handlers(self):
         signal.signal(signal.SIGINT, self._on_sigint)

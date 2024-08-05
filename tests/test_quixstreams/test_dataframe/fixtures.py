@@ -5,9 +5,10 @@ import pytest
 
 from quixstreams.dataframe.dataframe import StreamingDataFrame
 from quixstreams.models.topics import Topic, TopicManager
-from quixstreams.processing_context import ProcessingContext
+from quixstreams.processing import ProcessingContext, PausingManager
 from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
+from quixstreams.sinks import SinkManager
 from quixstreams.state import StateStoreManager
 
 
@@ -23,12 +24,17 @@ def dataframe_factory(topic_manager_topic_factory, topic_manager_factory):
         topic_manager = topic_manager or MagicMock(spec=TopicManager)
         state_manager = state_manager or MagicMock(spec=StateStoreManager)
         topic = topic or topic_manager_topic_factory("test")
+        consumer = MagicMock(spec_set=RowConsumer)
+        pausing_manager = PausingManager(consumer=consumer)
+        sink_manager = SinkManager()
 
         processing_ctx = ProcessingContext(
             producer=producer,
-            consumer=MagicMock(spec_set=RowConsumer),
+            consumer=consumer,
             commit_interval=0,
             state_manager=state_manager,
+            pausing_manager=pausing_manager,
+            sink_manager=sink_manager,
         )
         processing_ctx.init_checkpoint()
 

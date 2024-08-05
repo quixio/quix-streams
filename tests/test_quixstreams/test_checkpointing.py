@@ -11,10 +11,14 @@ from quixstreams.checkpointing.exceptions import (
     CheckpointConsumerCommitError,
 )
 from quixstreams.kafka import Consumer
+from quixstreams.processing import PausingManager
 from quixstreams.rowproducer import RowProducer
+from quixstreams.sinks import SinkManager, BatchingSink, SinkBackpressureError
+from quixstreams.sinks.base import SinkBatch
 from quixstreams.state import StateStoreManager
 from quixstreams.state.exceptions import StoreNotRegisteredError, StoreTransactionFailed
 from quixstreams.state.rocksdb import RocksDBPartitionTransaction
+from tests.utils import DummySink
 
 
 @pytest.fixture()
@@ -25,14 +29,23 @@ def checkpoint_factory(state_manager, consumer, row_producer_factory):
         consumer_: Optional[Consumer] = None,
         producer_: Optional[RowProducer] = None,
         state_manager_: Optional[StateStoreManager] = None,
+        sink_manager_: Optional[SinkManager] = None,
+        pausing_manager_: Optional[PausingManager] = None,
         exactly_once: bool = False,
     ):
+        consumer_ = consumer_ or consumer
+        sink_manager_ = sink_manager_ or SinkManager()
+        pausing_manager_ = pausing_manager_ or PausingManager(consumer=consumer)
+        producer_ = producer_ or row_producer_factory(transactional=exactly_once)
+        state_manager_ = state_manager_ or state_manager
         return Checkpoint(
             commit_interval=commit_interval,
             commit_every=commit_every,
-            producer=producer_ or row_producer_factory(transactional=exactly_once),
-            consumer=consumer_ or consumer,
-            state_manager=state_manager_ or state_manager,
+            producer=producer_,
+            consumer=consumer_,
+            state_manager=state_manager_,
+            sink_manager=sink_manager_,
+            pausing_manager=pausing_manager_,
             exactly_once=exactly_once,
         )
 
@@ -44,6 +57,18 @@ def rowproducer_mock(request):
     p = MagicMock(spec_set=RowProducer)
     p.flush.return_value = getattr(request, "param", 0)
     return p
+
+
+class BackpressuredSink(BatchingSink):
+    def write(self, batch: SinkBatch):
+        raise SinkBackpressureError(
+            retry_after=999, topic=batch.topic, partition=batch.partition
+        )
+
+
+class FailingSink(BatchingSink):
+    def write(self, batch: SinkBatch):
+        raise ValueError("Sink write failed")
 
 
 class TestCheckpoint:
@@ -458,3 +483,157 @@ class TestCheckpoint:
             str(err.value)
             == '<CheckpointConsumerCommitError code="1" description="test error">'
         )
+
+    def test_commit_with_sink_success(
+        self,
+        topic_factory,
+        consumer,
+        state_manager,
+        checkpoint_factory,
+        state_manager_factory,
+        rowproducer_mock,
+    ):
+        topic_name, _ = topic_factory()
+        sink_manager = SinkManager()
+        checkpoint = checkpoint_factory(
+            consumer_=consumer, state_manager_=state_manager, sink_manager_=sink_manager
+        )
+
+        processed_offset = 999
+        value, key, timestamp, headers = "value", "key", 1, []
+        # Create two dummy sinks
+        sink1 = DummySink()
+        sink2 = DummySink()
+        # Register sinks and add messages to them
+        for sink in (sink1, sink2):
+            sink_manager.register(sink)
+            sink.add(
+                value=value,
+                key=key,
+                timestamp=timestamp,
+                topic=topic_name,
+                partition=0,
+                headers=headers,
+                offset=processed_offset,
+            )
+
+        # Store the processed offset to simulate processing
+        checkpoint.store_offset(topic_name, 0, processed_offset)
+        checkpoint.commit()
+
+        # Ensure that both sinks has been flushed
+        for sink in (sink1, sink2):
+            assert len(sink.results) == 1
+            sink_result = sink.results[0]
+            assert sink_result.value == value
+            assert sink_result.key == key
+            assert sink_result.timestamp == timestamp
+            assert sink_result.headers == headers
+
+    def test_commit_with_sink_fails(
+        self,
+        topic_factory,
+        consumer,
+        state_manager,
+        checkpoint_factory,
+        state_manager_factory,
+        rowproducer_mock,
+    ):
+        topic_name, _ = topic_factory()
+        sink_manager = SinkManager()
+        checkpoint = checkpoint_factory(
+            consumer_=consumer,
+            state_manager_=state_manager,
+            sink_manager_=sink_manager,
+        )
+
+        # Create a failing sink and register it
+        sink = FailingSink()
+        sink_manager.register(sink)
+
+        processed_offset = 999
+        value, key, timestamp, headers = "value", "key", 1, []
+        sink.add(
+            value=value,
+            key=key,
+            timestamp=timestamp,
+            topic=topic_name,
+            partition=0,
+            headers=headers,
+            offset=processed_offset,
+        )
+
+        # Store the processed offset to simulate processing
+        checkpoint.store_offset(topic_name, 0, processed_offset)
+
+        # Ensure that the error in Sink is propagated and fails the checkpoint
+        with pytest.raises(ValueError):
+            checkpoint.commit()
+
+        # Ensure that the offset has not been committed
+        committed, *_ = consumer.committed(
+            [TopicPartition(topic=topic_name, partition=0)]
+        )
+        assert committed.offset == -1001
+
+    def test_commit_with_sink_backpressured(
+        self,
+        topic_factory,
+        consumer,
+        state_manager,
+        checkpoint_factory,
+        state_manager_factory,
+        rowproducer_mock,
+    ):
+        topic_name, _ = topic_factory()
+        sink_manager = SinkManager()
+        checkpoint = checkpoint_factory(
+            consumer_=consumer,
+            state_manager_=state_manager,
+            sink_manager_=sink_manager,
+        )
+        # First get some topic partitions assigned because PausingManager will be
+        # seeking to the committed offsets
+        consumer.subscribe([topic_name])
+        while not consumer.assignment():
+            consumer.poll(0.1)
+
+        # Create sinks and register them
+        backpressured_sink = BackpressuredSink()
+        dummy_sink = DummySink()
+
+        # It's important to register the backpressured sink first for this test
+        sink_manager.register(backpressured_sink)
+        sink_manager.register(dummy_sink)
+
+        processed_offset = 999
+        value, key, timestamp, headers = "value", "key", 1, []
+        for sink in (backpressured_sink, dummy_sink):
+            sink.add(
+                value=value,
+                key=key,
+                timestamp=timestamp,
+                topic=topic_name,
+                partition=0,
+                headers=headers,
+                offset=processed_offset,
+            )
+
+        assert dummy_sink.total_batched == 1
+
+        # Store the processed offset to simulate processing
+        checkpoint.store_offset(topic_name, 0, processed_offset)
+
+        checkpoint.commit()
+
+        # Ensure that the offset has not been committed because of a backpressure
+        committed, *_ = consumer.committed(
+            [TopicPartition(topic=topic_name, partition=0)]
+        )
+        assert committed.offset == -1001
+
+        # Ensure that DummySink has not been flushed because
+        # the FailingSink is backpressured
+        assert not dummy_sink.results
+        # Ensure that DummySink dropped the accumulated batch
+        assert not dummy_sink.total_batched
