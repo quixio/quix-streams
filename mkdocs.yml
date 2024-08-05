@@ -41,6 +41,13 @@ nav:
     - Managing Kafka Topics: advanced/topics.md
     - Using Producer & Consumer: advanced/producer-consumer-lowlevel.md
   - Connecting to Quix Cloud: quix-platform.md
+  - 'Connectors [beta]':
+    # TODO: Docs
+    -  Sinks:
+        - 'connectors/sinks/README.md'
+        - CSV Sink: connectors/sinks/csv-sink.md
+        - InfluxDB v3 Sink: connectors/sinks/influxdb3-sink.md
+        - Creating a Custom Sink: connectors/sinks/custom-sinks.md
   - Upgrading Guide:
     - Upgrading from Quix Streams v0.5: upgrading-legacy.md
 
