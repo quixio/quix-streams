@@ -88,7 +88,7 @@ Since the implementation of `BatchingSink` accumulates data in-memory, it will i
 
 If the batches become large enough, it can also put additional load on the destination and decrease the overall throughput. 
 
-To adjust how much data is batched and written in one go, users may provide a `commit_every` parameter to the `Application`.    
+To adjust the number of messages that are batched and written in one go, you may provide a `commit_every` parameter to the `Application`.    
 It will limit the amount of data processed and sinked during a single checkpoint.  
 Note that it only limits the amount of incoming messages, and not the number of records being written to sinks.
 
