@@ -2,7 +2,7 @@
 
 Quix Streams provides basic facilities to implement custom sinks for external destinations (currently in beta).
 
-To create a new sink, users can subclass and implement the following Python base classes:
+To create a new sink, extend and implement the following Python base classes:
 - `quixstreams.sinks.base.sink.BaseSink` - the basic interface for all sinks.  
 The `StreamingDataFrame.sink()` accepts implementations of this class.
 
