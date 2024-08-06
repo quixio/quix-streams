@@ -43,7 +43,7 @@ Under the hood, it transforms data to the Influx format using  and writes proces
 
 ### What data can be sent to InfluxDB
 
-`InfluxDBV3Sink` can accept only dictionary-like values.
+`InfluxDBV3Sink` can accept only dictionary values.
 
 If the record values are not dicts, you need to convert them to dicts using `StreamingDataFrame.apply()` before sinking.
 
