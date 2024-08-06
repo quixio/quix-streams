@@ -100,7 +100,7 @@ from quixstreams.sinks.influxdb_v3 import InfluxDBV3Sink
 
 # Commit the checkpoints after processing 1000 messages or after a 5 second interval has elapsed (whichever is sooner).
 app = Application(
-    broker_address='localhost:9092',
+    broker_address="localhost:9092",
     commit_interval=5.0, 
     commit_every=1000,  
 )
