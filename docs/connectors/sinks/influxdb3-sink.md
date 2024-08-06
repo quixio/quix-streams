@@ -35,7 +35,7 @@ sdf = app.dataframe(topic)
 sdf.sink(influx_sink)
 ```
 
-## How InfluxDB Sink works
+## How the InfluxDB Sink works
 `InfluxDBV3Sink` is a batching sink.  
 It batches processed records in memory per topic partition, and writes them to the InfluxDB instance on checkpoint.
 
