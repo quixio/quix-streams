@@ -98,7 +98,7 @@ When using a custom key, you may need to adjust the `time_precision` setting to 
 - `time_precision` - a time precision to use when writing to InfluxDB.  
 Default - `ms`.
 
-- `include_metadata_tags` - if True, includes record's key, topic, and partition as tags.  
+- `include_metadata_tags` - if True, includes the record's key, topic, and partition as tags.  
 Default - `False`.
 
 - `batch_size` - how many records to write to InfluxDB in one request.    
