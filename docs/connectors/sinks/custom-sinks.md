@@ -107,7 +107,7 @@ app = Application(
 topic = app.topic('numbers-topic')
 sdf = app.dataframe(topic)
 
-# Create an Influx sink that batches data between checkpoints.
+# Create an InfluxDB sink that batches data between checkpoints.
 influx_sink = InfluxDBV3Sink(
     token="<influxdb-access-token>",
     host="<influxdb-host>",
