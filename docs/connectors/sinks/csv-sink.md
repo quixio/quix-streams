@@ -46,7 +46,7 @@ from quixstreams.sinks.csv import CSVSink
 
 # Initialize a CSVSink with a file path 
 csv_sink = CSVSink(
-    path='file.csv',
+    path="file.csv",
     # Define custom serializers for keys and values here.
     # The callables must accept one argument for key/value, and return a string
     key_serializer=lambda key: json.dumps(key),
