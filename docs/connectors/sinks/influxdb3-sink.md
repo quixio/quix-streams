@@ -92,7 +92,7 @@ See the [What data can be sent to InfluxDB](#what-data-can-be-sent-to-influxdb) 
 
             
 - `time_key` - a key to be used as "time" when writing to InfluxDB.  
-By default, the record timestamp will be used with "ms" time precision.  
+By default, the record timestamp will be used with millisecond time precision.
 When using a custom key, you may need to adjust the `time_precision` setting to match.
 
 - `time_precision` - a time precision to use when writing to InfluxDB.  
