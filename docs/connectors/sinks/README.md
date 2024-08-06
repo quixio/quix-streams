@@ -8,7 +8,7 @@ An example using InfluxDB Sink:
 
 ```python
 from quixstreams import Application
-from quixstreams.sinks.influxdb_v3 import InfluxDB3Sink
+from quixstreams.sinks.influxdb3 import InfluxDB3Sink
 
 app = Application(broker_address="localhost:9092")
 topic = app.topic("numbers-topic")
@@ -41,7 +41,7 @@ Make sure you call `StreamingDataFrame.sink()` as the last operation.
 
 Currently, Quix Streams provides these sinks out of the box:
 - [CSV Sink](csv-sink.md) - a simple CSV sinks that writes data to a single CSV file.
-- [InfluxDB 3 Sink](influxdb3-sink.md) - a sink to write data to InfluxDB v3.
+- [InfluxDB 3 Sink](influxdb3-sink.md) - a sink to write data to InfluxDB 3.
 
 It's also possible to implement your own custom sinks.  
 Please see the [Creating a Custom Sink](custom-sinks.md) page on how to do that.

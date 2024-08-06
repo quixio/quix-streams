@@ -13,7 +13,7 @@ it to the `StreamingDataFrame.sink()` method:
 
 ```python
 from quixstreams import Application
-from quixstreams.sinks.influxdb_v3 import InfluxDB3Sink
+from quixstreams.sinks.influxdb3 import InfluxDB3Sink
 
 app = Application(broker_address="localhost:9092")
 topic = app.topic("numbers-topic")
@@ -43,7 +43,7 @@ Under the hood, it transforms data to the Influx format using  and writes proces
 
 ### What data can be sent to InfluxDB
 
-`InfluxDB3Sink` can accept only dictionary values.
+`InfluxDB3Sink` can accept only dictionaries values.
 
 If the record values are not dicts, you need to convert them to dicts using `StreamingDataFrame.apply()` before sinking.
 

@@ -6,11 +6,11 @@ import pytest
 from influxdb_client_3 import InfluxDBClient3, WritePrecision
 
 from quixstreams.sinks import SinkBackpressureError
-from quixstreams.sinks.influxdb_v3 import InfluxDB3Sink
+from quixstreams.sinks.influxdb3 import InfluxDB3Sink
 
 
 @pytest.fixture()
-def influxdb_v3_sink_factory():
+def influxdb3_sink_factory():
     def factory(
         client_mock: MagicMock,
         measurement: str,
@@ -41,12 +41,10 @@ def influxdb_v3_sink_factory():
 
 
 class TestInfluxDB3Sink:
-    def test_write_success(self, influxdb_v3_sink_factory):
+    def test_write_success(self, influxdb3_sink_factory):
         client_mock = MagicMock(spec_set=InfluxDBClient3)
         measurement = "measurement"
-        sink = influxdb_v3_sink_factory(
-            client_mock=client_mock, measurement=measurement
-        )
+        sink = influxdb3_sink_factory(client_mock=client_mock, measurement=measurement)
         topic = "test-topic"
 
         value, timestamp = {"key": "value"}, 1
@@ -77,12 +75,12 @@ class TestInfluxDB3Sink:
             "write_precision": "ms",
         }
 
-    def test_write_fields_keys(self, influxdb_v3_sink_factory):
+    def test_write_fields_keys(self, influxdb3_sink_factory):
         client_mock = MagicMock(spec_set=InfluxDBClient3)
         measurement = "measurement"
         fields_keys = ["key1"]
 
-        sink = influxdb_v3_sink_factory(
+        sink = influxdb3_sink_factory(
             client_mock=client_mock, measurement=measurement, fields_keys=fields_keys
         )
         topic = "test-topic"
@@ -113,12 +111,12 @@ class TestInfluxDB3Sink:
             "write_precision": "ms",
         }
 
-    def test_write_tags_keys(self, influxdb_v3_sink_factory):
+    def test_write_tags_keys(self, influxdb3_sink_factory):
         client_mock = MagicMock(spec_set=InfluxDBClient3)
         measurement = "measurement"
         tags_keys = ["tag1"]
 
-        sink = influxdb_v3_sink_factory(
+        sink = influxdb3_sink_factory(
             client_mock=client_mock, measurement=measurement, tags_keys=tags_keys
         )
         topic = "test-topic"
@@ -149,17 +147,15 @@ class TestInfluxDB3Sink:
             "write_precision": "ms",
         }
 
-    def test_write_values_not_dicts_fail(self, influxdb_v3_sink_factory):
+    def test_write_values_not_dicts_fail(self, influxdb3_sink_factory):
         client_mock = MagicMock(spec_set=InfluxDBClient3)
         measurement = "measurement"
 
-        sink = influxdb_v3_sink_factory(
-            client_mock=client_mock, measurement=measurement
-        )
+        sink = influxdb3_sink_factory(client_mock=client_mock, measurement=measurement)
         topic = "test-topic"
 
         value, timestamp = 1, 1
-        with pytest.raises(TypeError, match="supports only dictionary-like values"):
+        with pytest.raises(TypeError, match="supports only dictionaries"):
             sink.add(
                 value=value,
                 key="key",
@@ -170,11 +166,11 @@ class TestInfluxDB3Sink:
                 offset=1,
             )
 
-    def test_write_tags_keys_excluded_from_fields(self, influxdb_v3_sink_factory):
+    def test_write_tags_keys_excluded_from_fields(self, influxdb3_sink_factory):
         client_mock = MagicMock(spec_set=InfluxDBClient3)
         measurement = "measurement"
 
-        sink = influxdb_v3_sink_factory(
+        sink = influxdb3_sink_factory(
             client_mock=client_mock, measurement=measurement, tags_keys=["b"]
         )
         topic = "test-topic"
@@ -205,27 +201,25 @@ class TestInfluxDB3Sink:
             "write_precision": "ms",
         }
 
-    def test_init_fields_keys_and_tags_keys_overlap_fails(
-        self, influxdb_v3_sink_factory
-    ):
+    def test_init_fields_keys_and_tags_keys_overlap_fails(self, influxdb3_sink_factory):
         client_mock = MagicMock(spec_set=InfluxDBClient3)
         measurement = "measurement"
 
         with pytest.raises(
             ValueError, match='are present in both "fields_keys" and "tags_keys"'
         ):
-            influxdb_v3_sink_factory(
+            influxdb3_sink_factory(
                 client_mock=client_mock,
                 measurement=measurement,
                 tags_keys=["b"],
                 fields_keys=["b"],
             )
 
-    def test_write_include_metadata_tags_true(self, influxdb_v3_sink_factory):
+    def test_write_include_metadata_tags_true(self, influxdb3_sink_factory):
         client_mock = MagicMock(spec_set=InfluxDBClient3)
         measurement = "measurement"
 
-        sink = influxdb_v3_sink_factory(
+        sink = influxdb3_sink_factory(
             client_mock=client_mock, measurement=measurement, include_metadata_tags=True
         )
         topic = "test-topic"
@@ -256,11 +250,11 @@ class TestInfluxDB3Sink:
             "write_precision": "ms",
         }
 
-    def test_write_batch_size(self, influxdb_v3_sink_factory):
+    def test_write_batch_size(self, influxdb3_sink_factory):
         client_mock = MagicMock(spec_set=InfluxDBClient3)
         measurement = "measurement"
 
-        sink = influxdb_v3_sink_factory(
+        sink = influxdb3_sink_factory(
             client_mock=client_mock, measurement=measurement, batch_size=1
         )
         topic = "test-topic"
@@ -312,7 +306,7 @@ class TestInfluxDB3Sink:
             "write_precision": "ms",
         }
 
-    def test_write_backpressured(self, influxdb_v3_sink_factory):
+    def test_write_backpressured(self, influxdb3_sink_factory):
         class Response:
             status = 429
 
@@ -324,7 +318,7 @@ class TestInfluxDB3Sink:
         client_mock.write.side_effect = influx_429_err
         measurement = "measurement"
 
-        sink = influxdb_v3_sink_factory(
+        sink = influxdb3_sink_factory(
             client_mock=client_mock, measurement=measurement, batch_size=1
         )
         topic = "test-topic"
@@ -345,14 +339,14 @@ class TestInfluxDB3Sink:
 
         assert raised.value.retry_after == 10
 
-    def test_write_fails_propagates_exception(self, influxdb_v3_sink_factory):
+    def test_write_fails_propagates_exception(self, influxdb3_sink_factory):
         influx_some_err = influxdb_client_3.InfluxDBError()
 
         client_mock = MagicMock(spec_set=InfluxDBClient3)
         client_mock.write.side_effect = influx_some_err
         measurement = "measurement"
 
-        sink = influxdb_v3_sink_factory(
+        sink = influxdb3_sink_factory(
             client_mock=client_mock, measurement=measurement, batch_size=1
         )
         topic = "test-topic"

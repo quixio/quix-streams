@@ -75,7 +75,7 @@ For example, the `BatchingSink` will add a record to an in-memory batch.
 Other sinks may write the data straight away.
 
 2. When the current checkpoint is committed, the app calls `BaseSink.flush()`.  
-This is the moment when the sink can either write the accumulated data (like `BatchingSink`), or confirm the delivery of the previously written data.
+For example, `BatchingSink` will write the accumulated data during `flush()`.
    1. If the destination cannot accept new data, sinks can raise a special exception `SinkBackpressureError(topic, partition, retry_after)` and specify the timeout for the writes to be retried later.  
    2. The application will react to `SinkBackpressureError` by pausing the corresponding topic-partition for the given time and seeking the partition offset back to the beginning of the checkpoint.  
    3. When the timeout elapses, the app will resume consuming from this partition, re-process the data, and try to sink it again.
@@ -96,7 +96,7 @@ Note that it only limits the amount of incoming messages, and not the number of 
 
 ```python
 from quixstreams import Application
-from quixstreams.sinks.influxdb_v3 import InfluxDB3Sink
+from quixstreams.sinks.influxdb3 import InfluxDB3Sink
 
 # Commit the checkpoints after processing 1000 messages or after a 5 second interval has elapsed (whichever is sooner).
 app = Application(

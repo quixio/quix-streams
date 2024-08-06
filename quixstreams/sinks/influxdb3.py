@@ -51,7 +51,7 @@ class InfluxDB3Sink(BatchingSink):
         When this happens, the sink will notify the Application to pause consuming
         from the backpressured topic partition until the "retry_after" timeout elapses.
 
-        >***NOTE***: InfluxDB3Sink can accept only dictionary-like values.
+        >***NOTE***: InfluxDB3Sink can accept only dictionaries.
         > If the record values are not dicts, you need to convert them to dicts before
         > sinking.
 
@@ -135,8 +135,8 @@ class InfluxDB3Sink(BatchingSink):
     ):
         if not isinstance(value, Mapping):
             raise TypeError(
-                f'Sink "{self.__class__.__name__}" supports only dictionary-like '
-                f"values, got {type(value)}"
+                f'Sink "{self.__class__.__name__}" supports only dictionaries,'
+                f" got {type(value)}"
             )
         return super().add(
             value=value,
