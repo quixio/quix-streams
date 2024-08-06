@@ -39,7 +39,7 @@ Make sure you call `StreamingDataFrame.sink()` as the last operation.
 
 ## Supported Sinks
 
-Currently, Quix Streams provides these sinks out-of-box:
+Currently, Quix Streams provides these sinks out of the box:
 - [CSV Sink](csv-sink.md) - a simple CSV sinks that writes data to a single CSV file.
 - [InfluxDBv3 Sink](influxdb3-sink.md) - a sink to write data to InfluxDB v3.
 
