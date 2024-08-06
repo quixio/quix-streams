@@ -60,7 +60,7 @@ class BaseSink(abc.ABC):
         This method is triggered when the sink is paused due to backpressure, when
         the `SinkBackpressureError` is raised.
 
-        Here you can react to the backpressure events.
+        Here you can react to backpressure events.
         """
 ```
 
