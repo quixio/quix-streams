@@ -4,7 +4,7 @@ InfluxDB is an open source time series database for metrics, events, and real-ti
 
 Quix Streams provides a Sink for InfluxDB v3 to write the processed data to it.  
 
-Please note that this sink supports only InfluxDB v3, and versions 1 and 2 are not supported.
+>***NOTE***: This sink only supports InfluxDB v3. Versions 1 and 2 are not supported.
 
 ## How To Use InfluxDB Sink
 
