@@ -82,7 +82,7 @@ InfluxDBV3Sink accepts the following configuration parameters:
 
 - `database` - a database name
 
-- `measurement` - a measurement name, required
+- `measurement` - a measurement name, required.
   
 - `fields_keys` - a list of keys to be used as "fields" when writing to InfluxDB.  
 See the [What data can be sent to InfluxDB](#what-data-can-be-sent-to-influxdb) for more info.
