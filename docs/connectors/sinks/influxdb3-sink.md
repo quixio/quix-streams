@@ -1,4 +1,4 @@
-# InfluxDB V3 Sink
+# InfluxDB v3 Sink
 
 InfluxDB is an open source time series database for metrics, events, and real-time analytics.
 
