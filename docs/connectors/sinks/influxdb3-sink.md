@@ -18,7 +18,7 @@ from quixstreams.sinks.influxdb_v3 import InfluxDBV3Sink
 app = Application(broker_address="localhost:9092")
 topic = app.topic("numbers-topic")
 
-# Initialize InfluxDBV3Sink
+# Initialize InfluxDB v3 sink
 influx_sink = InfluxDBV3Sink(
     token="<influxdb-access-token>",
     host="<influxdb-host>",
