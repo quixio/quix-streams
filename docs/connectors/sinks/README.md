@@ -20,8 +20,8 @@ influx_sink = InfluxDBV3Sink(
     organization_id="<influxdb-org>",
     database="<influxdb-database>",
     measurement="numbers",
-    fields_keys=['number'],
-    tags_keys=['tag']
+    fields_keys=["number"],
+    tags_keys=["tag"]
 )
 
 sdf = app.dataframe(topic)
