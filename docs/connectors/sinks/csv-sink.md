@@ -13,11 +13,11 @@ it to the `StreamingDataFrame.sink()` method:
 from quixstreams import Application
 from quixstreams.sinks.csv import CSVSink
 
-app = Application(broker_address='localhost:9092')
-topic = app.topic('input-topic')
+app = Application(broker_address="localhost:9092")
+topic = app.topic("input-topic")
 
-# Initialize a CSVSink with a file path 
-csv_sink = CSVSink(path='file.csv')
+# Initialize a CSV sink with a file path 
+csv_sink = CSVSink(path="file.csv")
 
 sdf = app.dataframe(topic)
 # Do some processing here ...
