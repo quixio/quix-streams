@@ -31,7 +31,7 @@ sdf.sink(influx_sink)
 ```
 
 ## Sinks Are Terminal
-When `.sink()` is called on the StreamingDataFrame instance, it marks the end of the processing pipeline, and 
+When `.sink()` is called on a StreamingDataFrame instance, it marks the end of the processing pipeline, and 
  the StreamingDataFrame can't be changed anymore.
 
 Make sure you call `StreamingDataFrame.sink()` as the last operation.
