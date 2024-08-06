@@ -37,7 +37,7 @@ sdf.sink(influx_sink)
 
 ## How the InfluxDB Sink works
 `InfluxDBV3Sink` is a batching sink.  
-It batches processed records in memory per topic partition, and writes them to the InfluxDB instance on checkpoint.
+It batches processed records in memory per topic partition, and writes them to the InfluxDB instance when a checkpoint has been committed.
 
 Under the hood, it transforms data to the Influx format using  and writes processed records in batches.
 
