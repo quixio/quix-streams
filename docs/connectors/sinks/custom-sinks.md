@@ -118,7 +118,6 @@ influx_sink = InfluxDBV3Sink(
     tags_keys=["tag"]
 )
 
-# The Influx sink will write to InfluxDB after processing 1000 messages 
-# across all assigned partitions.
+# The sink will write to InfluxDB across all assigned partitions.
 sdf.sink(influx_sink)
 ```
