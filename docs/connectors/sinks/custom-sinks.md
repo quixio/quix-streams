@@ -7,7 +7,7 @@ To create a new sink, extend and implement the following Python base classes:
 The `StreamingDataFrame.sink()` accepts implementations of this class.
 
 - `quixstreams.sinks.base.sink.BatchingSink` - a base class for batching sinks, that need to batch data first before writing it to the external destination.  
-Check out [InfluxDBV3Sink](influxdb3-sink.md) and [CSVSink](csv-sink.md) for example implementations of the batching sinks.
+Check out [InfluxDB3Sink](influxdb3-sink.md) and [CSVSink](csv-sink.md) for example implementations of the batching sinks.
 
 
 Here is the code for `BaseSink` class for the reference:
@@ -96,7 +96,7 @@ Note that it only limits the amount of incoming messages, and not the number of 
 
 ```python
 from quixstreams import Application
-from quixstreams.sinks.influxdb_v3 import InfluxDBV3Sink
+from quixstreams.sinks.influxdb_v3 import InfluxDB3Sink
 
 # Commit the checkpoints after processing 1000 messages or after a 5 second interval has elapsed (whichever is sooner).
 app = Application(
@@ -108,7 +108,7 @@ topic = app.topic('numbers-topic')
 sdf = app.dataframe(topic)
 
 # Create an InfluxDB sink that batches data between checkpoints.
-influx_sink = InfluxDBV3Sink(
+influx_sink = InfluxDB3Sink(
     token="<influxdb-access-token>",
     host="<influxdb-host>",
     organization_id="<influxdb-org>",

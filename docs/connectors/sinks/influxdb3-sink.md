@@ -8,18 +8,18 @@ Quix Streams provides a Sink for InfluxDB v3 to write the processed data to it.
 
 ## How To Use InfluxDB Sink
 
-To sink data to InfluxDB, you need to create an instance of `InfluxDBV3Sink` and pass 
+To sink data to InfluxDB, you need to create an instance of `InfluxDB3Sink` and pass 
 it to the `StreamingDataFrame.sink()` method:
 
 ```python
 from quixstreams import Application
-from quixstreams.sinks.influxdb_v3 import InfluxDBV3Sink
+from quixstreams.sinks.influxdb_v3 import InfluxDB3Sink
 
 app = Application(broker_address="localhost:9092")
 topic = app.topic("numbers-topic")
 
-# Initialize InfluxDB v3 sink
-influx_sink = InfluxDBV3Sink(
+# Initialize InfluxDB3Sink
+influx_sink = InfluxDB3Sink(
     token="<influxdb-access-token>",
     host="<influxdb-host>",
     organization_id="<influxdb-org>",
@@ -36,14 +36,14 @@ sdf.sink(influx_sink)
 ```
 
 ## How the InfluxDB Sink works
-`InfluxDBV3Sink` is a batching sink.  
+`InfluxDB3Sink` is a batching sink.  
 It batches processed records in memory per topic partition, and writes them to the InfluxDB instance when a checkpoint has been committed.
 
 Under the hood, it transforms data to the Influx format using  and writes processed records in batches.
 
 ### What data can be sent to InfluxDB
 
-`InfluxDBV3Sink` can accept only dictionary values.
+`InfluxDB3Sink` can accept only dictionary values.
 
 If the record values are not dicts, you need to convert them to dicts using `StreamingDataFrame.apply()` before sinking.
 
@@ -63,7 +63,7 @@ If empty, no tags will be sent.
 To learn more about schema design and data types in InfluxDB, please read [InfluxDB schema design recommendations](https://docs.influxdata.com/influxdb/cloud-serverless/write-data/best-practices/schema-design/).
 
 ## Delivery guarantees
-`InfluxDBV3Sink` provides at-least-once guarantees, and the same records may be written multiple times in case of errors during processing.  
+`InfluxDB3Sink` provides at-least-once guarantees, and the same records may be written multiple times in case of errors during processing.  
 
 ## Backpressure handling
 InfluxDB sink automatically handles events when the database cannot accept new data due to write limits.  
@@ -72,7 +72,7 @@ When this happens, the application loses the accumulated in-memory batch and pau
 When the timeout expires, the app automatically resumes the partition to re-process the data and sink it again.
 
 ## Configuration
-InfluxDBV3Sink accepts the following configuration parameters:
+InfluxDB3Sink accepts the following configuration parameters:
 
 - `token` - InfluxDB access token.
 

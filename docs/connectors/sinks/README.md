@@ -8,13 +8,13 @@ An example using InfluxDB Sink:
 
 ```python
 from quixstreams import Application
-from quixstreams.sinks.influxdb_v3 import InfluxDBV3Sink
+from quixstreams.sinks.influxdb_v3 import InfluxDB3Sink
 
 app = Application(broker_address="localhost:9092")
 topic = app.topic("numbers-topic")
 
-# Initialize InfluxDB v3 sink
-influx_sink = InfluxDBV3Sink(
+# Initialize InfluxDB3Sink
+influx_sink = InfluxDB3Sink(
     token="<influxdb-access-token>",
     host="<influxdb-host>",
     organization_id="<influxdb-org>",

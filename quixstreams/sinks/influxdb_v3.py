@@ -21,7 +21,7 @@ from .exceptions import SinkBackpressureError
 logger = logging.getLogger(__name__)
 
 
-class InfluxDBV3Sink(BatchingSink):
+class InfluxDB3Sink(BatchingSink):
     def __init__(
         self,
         token: str,
@@ -51,7 +51,7 @@ class InfluxDBV3Sink(BatchingSink):
         When this happens, the sink will notify the Application to pause consuming
         from the backpressured topic partition until the "retry_after" timeout elapses.
 
-        >***NOTE***: InfluxDBV3Sink can accept only dictionary-like values.
+        >***NOTE***: InfluxDB3Sink can accept only dictionary-like values.
         > If the record values are not dicts, you need to convert them to dicts before
         > sinking.
 

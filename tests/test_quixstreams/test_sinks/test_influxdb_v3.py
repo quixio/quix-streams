@@ -6,7 +6,7 @@ import pytest
 from influxdb_client_3 import InfluxDBClient3, WritePrecision
 
 from quixstreams.sinks import SinkBackpressureError
-from quixstreams.sinks.influxdb_v3 import InfluxDBV3Sink
+from quixstreams.sinks.influxdb_v3 import InfluxDB3Sink
 
 
 @pytest.fixture()
@@ -20,8 +20,8 @@ def influxdb_v3_sink_factory():
         batch_size: int = 1000,
         time_precision: WritePrecision = WritePrecision.MS,
         include_metadata_tags: bool = False,
-    ) -> InfluxDBV3Sink:
-        sink = InfluxDBV3Sink(
+    ) -> InfluxDB3Sink:
+        sink = InfluxDB3Sink(
             token="",
             host="",
             organization_id="test",
@@ -40,7 +40,7 @@ def influxdb_v3_sink_factory():
     return factory
 
 
-class TestInfluxDBV3Sink:
+class TestInfluxDB3Sink:
     def test_write_success(self, influxdb_v3_sink_factory):
         client_mock = MagicMock(spec_set=InfluxDBClient3)
         measurement = "measurement"
