@@ -48,7 +48,7 @@ class BaseSink(abc.ABC):
         offset: int,
     ):
         """
-        This method is triggered on every new processed record being sent to this sink.
+        This method is triggered on every new record sent to this sink.
 
         You can use it to accumulate batches of data before sending them outside, or
         to send results right away in a streaming manner and confirm a delivery later
