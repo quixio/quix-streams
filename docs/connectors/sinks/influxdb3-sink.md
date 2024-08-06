@@ -101,7 +101,7 @@ Default - `ms`.
 - `include_metadata_tags` - if True, includes the record's key, topic, and partition as tags.  
 Default - `False`.
 
-- `batch_size` - how many records to write to InfluxDB in one request.    
+- `batch_size` - the number of records to write to InfluxDB in one request.    
 Note that it only affects the size of one write request, and not the number of records flushed on each checkpoint.    
 Default - `1000`.
 
