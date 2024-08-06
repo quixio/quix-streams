@@ -10,8 +10,8 @@ An example using InfluxDB Sink:
 from quixstreams import Application
 from quixstreams.sinks.influxdb_v3 import InfluxDBV3Sink
 
-app = Application(broker_address='localhost:9092')
-topic = app.topic('numbers-topic')
+app = Application(broker_address="localhost:9092")
+topic = app.topic("numbers-topic")
 
 # Initialize InfluxDBV3Sink
 influx_sink = InfluxDBV3Sink(
