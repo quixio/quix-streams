@@ -67,7 +67,7 @@ class BaseSink(abc.ABC):
 
 ## Sinks workflow
 
-During the processing, Sinks do the following operations:
+During processing, Sinks do the following operations:
 
 1. When a new record arrives, the application calls `BaseSink.add()` method.    
 At this point, the sink implementation can decide what to do with the new record.  
