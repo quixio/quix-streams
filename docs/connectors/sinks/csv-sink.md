@@ -2,7 +2,7 @@
 
 A basic sink to write processed data to a single CSV file.
 
-It's meant to be used mostly for local debugging of the app.
+It's meant to be used mostly for local debugging.
 
 ## How To Use CSV Sink
 
