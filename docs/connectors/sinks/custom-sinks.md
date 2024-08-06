@@ -84,7 +84,7 @@ This is the moment when the sink can either write the accumulated data (like `Ba
 
 
 ## Performance considerations
-Since implementation of `BatchingSink` accumulate data in-memory, it can increase memory usage.
+Since the implementation of `BatchingSink` accumulates data in-memory, it will increase memory usage.
 
 If the batches become large enough, it can also put additional load on the destination and decrease the overall throughput. 
 
