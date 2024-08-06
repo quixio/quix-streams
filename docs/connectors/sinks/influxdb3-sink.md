@@ -80,7 +80,7 @@ InfluxDBV3Sink accepts the following configuration parameters:
 
 - `organization_id` - InfluxDB organization_id
 
-- `database` - a database name
+- `database` - a database name.
 
 - `measurement` - a measurement name, required.
   
