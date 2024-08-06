@@ -27,7 +27,7 @@ sdf.sink(csv_sink)
 
 ## How CSV Sink works
 `CSVSink` is a batching sink.  
-It batches processed records in memory per topic partition, and writes them to the file on checkpoint.  
+It batches processed records in memory per topic partition, and writes them to the file when a checkpoint is committed.  
 
 The output file format is the following:
 ```
