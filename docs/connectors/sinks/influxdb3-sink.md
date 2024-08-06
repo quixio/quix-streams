@@ -55,7 +55,7 @@ If empty, the whole record value will be used.
 The fields' values can only be strings, floats, integers, or booleans.
 
 - `tags_keys` - a list of keys to be used as "tags" when writing to InfluxDB.
-If present, it must not overlap with `fields_keys`.  
+If present, its keys cannot overlap with any in `fields_keys`.  
 These keys will be popped from the value dictionary automatically because InfluxDB doesn't allow the same keys be both in tags and fields.  
 If empty, no tags will be sent.
 >***NOTE***: InfluxDB client always converts tag values to strings.
