@@ -50,7 +50,7 @@ If the record values are not dicts, you need to convert them to dicts using `Str
 The structure of the sinked data is defined by the `fields_keys` and `tags_keys` parameters provided to the sink class.
 
 - `fields_keys` - a list of keys to be used as "fields" when writing to InfluxDB.  
-If present, it must not overlap with `tags_keys`.  
+If present, its keys cannot overlap with any in `tags_keys`.  
 If empty, the whole record value will be used.
 The fields' values can only be strings, floats, integers, or booleans.
 
