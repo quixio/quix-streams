@@ -74,7 +74,7 @@ When the timeout expires, the app automatically resumes the partition to re-proc
 ## Configuration
 InfluxDBV3Sink accepts the following configuration parameters:
 
-- `token` - InfluxDB access token
+- `token` - InfluxDB access token.
 
 - `host` - InfluxDB host in format "https://<host>"
 
