@@ -80,7 +80,7 @@ This is the moment when the sink can either write the accumulated data (like `Ba
    2. The application will react to `SinkBackpressureError` by pausing the corresponding topic-partition for the given time and seeking the partition offset back to the beginning of the checkpoint.  
    3. When the timeout elapses, the app will resume consuming from this partition, re-process the data, and try to sink it again.
 
-3. If any of the sinks fail during `flush()`, the application will abort the checkpoint, and the data needs to be re-processed again. 
+3. If any of the sinks fail during `flush()`, the application will abort the checkpoint, and the data will be re-processed again. 
 
 
 ## Performance considerations
