@@ -77,6 +77,7 @@ class InfluxDBV3Sink(BatchingSink):
             By default, the record timestamp will be used with "ms" time precision.
             When using a custom key, you may need to adjust the `time_precision` setting
             to match.
+        :param time_precision: a time precision to use when writing to InfluxDB.
         :param include_metadata_tags: if True, includes record's key, topic,
             and partition as tags.
             Default - `False`.
