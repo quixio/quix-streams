@@ -78,7 +78,7 @@ InfluxDBV3Sink accepts the following configuration parameters:
 
 - `host` - InfluxDB host in format "https://<host>"
 
-- `organization_id` - InfluxDB organization_id
+- `organization_id` - InfluxDB organization ID.
 
 - `database` - a database name.
 
