@@ -114,8 +114,8 @@ influx_sink = InfluxDBV3Sink(
     organization_id="<influxdb-org>",
     database="<influxdb-database>",
     measurement="numbers",
-    fields_keys=['number'],
-    tags_keys=['tag']
+    fields_keys=["number"],
+    tags_keys=["tag"]
 )
 
 # The Influx sink will write to InfluxDB after processing 1000 messages 
