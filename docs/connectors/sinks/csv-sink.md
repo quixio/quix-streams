@@ -38,7 +38,7 @@ b'557bae7f-14b6-46c4-abc3-12f232b54c8e',"{""number"": 1}",1722945524546,numbers-
 ## Serialization Formats
 By default, `CSVSink` serializes record keys by calling `str()` on them, and message values with `json.dumps()`.
 
-To use your own serilization, pass `key_serializer` and `value_serializer` to `CSVSink`:
+To use your own serializer, pass `key_serializer` and `value_serializer` to `CSVSink`:
 
 ```python
 import json
