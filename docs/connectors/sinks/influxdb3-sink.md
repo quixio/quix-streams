@@ -47,7 +47,7 @@ Under the hood, it transforms data to the Influx format using  and writes proces
 
 If the record values are not dicts, you need to convert them to dicts using `StreamingDataFrame.apply()` before sinking.
 
-The structure of the sinked data is defined by `fields_keys` and `tags_keys` parameters provided to the sink class.
+The structure of the sinked data is defined by the `fields_keys` and `tags_keys` parameters provided to the sink class.
 
 - `fields_keys` - a list of keys to be used as "fields" when writing to InfluxDB.  
 If present, it must not overlap with `tags_keys`.  
