@@ -69,7 +69,7 @@ class BaseSink(abc.ABC):
 
 During the processing, Sinks do the following operations:
 
-1. When the records arrive to sink, the application calls `BaseSink.add()` method.    
+1. When a new record arrives, the application calls `BaseSink.add()` method.    
 At this point, the sink implementation can decide what to do with the new record.  
 For example, the `BatchingSink` will add a record to an in-memory batch.  
 Other sinks may write the data straight away.
