@@ -19,7 +19,7 @@ class BaseSink(abc.ABC):
     """
     This is a base class for all sinks.
 
-    Subclass it and implement its methods to create your own sink.
+    Subclass and implement its methods to create your own sink.
 
     Note that Sinks are currently in beta, and their design may change over time.
     """
