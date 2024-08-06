@@ -98,7 +98,7 @@ Note that it only limits the amount of incoming messages, and not the number of 
 from quixstreams import Application
 from quixstreams.sinks.influxdb_v3 import InfluxDBV3Sink
 
-# Commit the checkpoints after processing 1000 messages OR after 5s interval is elapsed.
+# Commit the checkpoints after processing 1000 messages or after a 5 second interval has elapsed (whichever is sooner).
 app = Application(
     broker_address='localhost:9092',
     commit_interval=5.0, 
