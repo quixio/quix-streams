@@ -532,7 +532,7 @@ class StreamingDataFrame(BaseStreaming):
 
         self.to_topic(topic=groupby_topic, key=self._groupby_key(key))
         new_branch = self.__dataframe_clone__(topic=groupby_topic)
-        self._stream_registry.register(new_sdf=new_branch, branched_sdf=self)
+        self._stream_registry.register_branch(branched_sdf=self, new_branch=new_branch)
         return new_branch
 
     @staticmethod
@@ -1145,7 +1145,7 @@ class StreamingDataFrame(BaseStreaming):
             # Update an item key with a result of another sdf.apply()
             diff = self.stream.diff(item.stream)
             other_sdf_composed = diff.compose_returning()
-            item.stream.prune()
+            item.stream.prune(diff)
             self._add_update(
                 lambda value, key, timestamp, headers: operator.setitem(
                     value,

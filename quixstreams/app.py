@@ -614,7 +614,7 @@ class Application:
             processing_context=self._processing_context,
             stream_registry=self._dataframe_registry,
         )
-        self._dataframe_registry.register(sdf)
+        self._dataframe_registry.register_root(sdf)
         return sdf
 
     def stop(self, fail: bool = False):
