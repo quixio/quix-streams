@@ -30,6 +30,7 @@ from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
 from quixstreams.sinks import SinkBatch, SinkBackpressureError
 from quixstreams.state import State
+from quixstreams.sources import ValueIterableSource, SourceException
 from tests.utils import DummySink
 
 
@@ -2089,3 +2090,91 @@ class TestApplicationSink:
                 [TopicPartition(topic=topic.name, partition=0)]
             )
         assert committed.offset == total_messages
+
+
+class TestApplicationSource:
+    def test_run_with_source_success(
+        self,
+        app_factory,
+        executor,
+    ):
+
+        processed_count = 0
+        total_messages = 3
+
+        done = Future()
+
+        def on_message_processed(topic_, partition, offset):
+            # Set the callback to track total messages processed
+            # The callback is not triggered if processing fails
+            nonlocal processed_count
+
+            processed_count += 1
+            # Stop processing after consuming all the messages
+            if processed_count == total_messages:
+                done.set_result(True)
+
+        app = app_factory(
+            auto_offset_reset="earliest",
+            on_message_processed=on_message_processed,
+        )
+
+        source = ValueIterableSource(
+            name="foo", key="foo", values=iter(range(total_messages))
+        )
+        sdf = app.dataframe(source=source)
+
+        executor.submit(_stop_app_on_future, app, done, 15.0)
+
+        values = []
+        sdf = sdf.apply(lambda value: values.append(value))
+        app.run(sdf)
+
+        assert values == [0, 1, 2]
+
+    def test_run_source_only(self, app_factory):
+        topic_name = str(uuid.uuid4())
+
+        app = app_factory(
+            auto_offset_reset="earliest",
+        )
+
+        def values():
+            yield 0
+            yield 1
+            yield 2
+
+        source = ValueIterableSource(name="foo", key="foo", values=values())
+        app.source(source, topic=app.topic(topic_name))
+        app._run()
+
+        results = []
+        with app.get_consumer() as consumer:
+            consumer.subscribe(topics=[topic_name])
+
+            for _ in range(3):
+                msg = consumer.poll()
+                results.append(msg.value())
+
+        assert results == [b"0", b"1", b"2"]
+
+    def test_run_with_source_error(
+        self,
+        app_factory,
+    ):
+        def values():
+            yield 0
+            yield 1
+            yield 2
+            raise RuntimeError("test error")
+
+        app = app_factory(
+            auto_offset_reset="earliest",
+        )
+
+        source = ValueIterableSource(name="foo", key="foo", values=values())
+        sdf = app.dataframe(source=source)
+
+        # The app stops on source error
+        with pytest.raises(SourceException):
+            app.run(sdf)
