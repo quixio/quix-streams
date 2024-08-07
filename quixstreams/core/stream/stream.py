@@ -203,13 +203,11 @@ class Stream:
 
         return self._add(TransformFunction(func, expand=expand))
 
-    def diff(
-        self,
-        other: "Stream",
-    ) -> Self:
+    def diff(self, other: "Stream", prune: bool = False) -> Self:
         """
         Takes the difference between Streams `self` and `other` based on their last
-        common parent, and returns a new `Stream` that includes only this difference.
+        common parent, and returns a new, independent `Stream` that includes only
+        this difference (the start of the "diff" will have no parent).
 
         It's impossible to calculate a diff when:
          - Streams don't have a common parent.
@@ -217,20 +215,21 @@ class Stream:
             the `other` Stream, and the resulting diff is empty.
 
         :param other: a `Stream` to take a diff from.
-        :raises ValueError: if Streams don't have a common parent
-            or if the diff is empty.
-        :return: new `Stream` instance including all the Streams from the diff
+        :param prune: Whether to additionally remove the diff from this Stream
+        :raises ValueError: if Streams don't have a common parent,
+            if the diff is empty, or pruning failed.
+        :return: a new independent `Stream` instance whose root begins at the diff
         """
         diff = self._diff_from_last_common_parent(other)
         parent = None
-        head = None
+        if prune:
+            self.prune(diff[0])
         for node in diff:
             # Copy the node to ensure we don't alter the previously created Nodes
             node = copy.deepcopy(node)
             node.parent = parent
             parent = node
-            head = node
-        return head
+        return parent
 
     def tree_root_path(self, allow_splits=True) -> List[Self]:
         """
@@ -253,9 +252,26 @@ class Stream:
 
         return tree_
 
-    def prune(self):
-        if self.parent:
-            self.parent.children.remove(self)
+    def prune(self, other: Self):
+        """
+        Removes a stream node by looking for where the "other" node is a child within
+        the current and removing it.
+
+        Note this assumes that "other" shares an immediate split point with this Stream.
+        :param other: another Stream
+        :return:
+        """
+        node = self
+        while node:
+            if other in node.children:
+                node.children.remove(other)
+                return
+            node = node.parent
+        raise ValueError(
+            "Could not prune nested stream; this might be caused by "
+            "a stream attempting to be used multiple times, "
+            "or referencing a stream from a non-immediate split"
+        )
 
     def tree_all_nodes(
         self,
