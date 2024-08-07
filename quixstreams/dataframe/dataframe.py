@@ -1143,9 +1143,8 @@ class StreamingDataFrame(BaseStreaming):
     def __setitem__(self, item_key: Any, item: Union[Self, object]):
         if isinstance(item, self.__class__):
             # Update an item key with a result of another sdf.apply()
-            diff = self.stream.diff(item.stream)
+            diff = self.stream.diff(item.stream, prune=True)
             other_sdf_composed = diff.compose_returning()
-            item.stream.prune(diff)
             self._add_update(
                 lambda value, key, timestamp, headers: operator.setitem(
                     value,
@@ -1188,9 +1187,8 @@ class StreamingDataFrame(BaseStreaming):
             )
         elif isinstance(item, self.__class__):
             # Filter SDF based on another SDF
-            diff = self.stream.diff(item.stream)
+            diff = self.stream.diff(item.stream, prune=True)
             other_sdf_composed = diff.compose_returning()
-            item.stream.prune()
             return self.filter(
                 lambda value, key, timestamp, headers: other_sdf_composed(
                     value, key, timestamp, headers
