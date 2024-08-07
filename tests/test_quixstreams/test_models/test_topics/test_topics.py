@@ -492,7 +492,9 @@ class TestTopic:
         self, topic_json_serdes_factory, topic_manager_topic_factory
     ):
         topic = topic_manager_topic_factory(
-            key_serializer="string", value_serializer=None
+            key_serializer="string",
+            value_serializer=None,
+            use_serdes_nones=True,
         )
         with pytest.raises(SerializerIsNotProvidedError):
             topic.serialize(

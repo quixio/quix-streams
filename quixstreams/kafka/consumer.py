@@ -119,7 +119,8 @@ class Consumer:
                 "logger": logger,
                 "error_cb": error_callback,
                 "on_commit": functools.partial(
-                    _default_on_commit_cb, on_commit=on_commit
+                    _default_on_commit_cb,
+                    on_commit=on_commit,
                 ),
             },
         }
