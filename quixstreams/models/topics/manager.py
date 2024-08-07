@@ -241,9 +241,9 @@ class TopicManager:
     def topic(
         self,
         name: str,
-        value_deserializer: Optional[DeserializerType] = None,
+        value_deserializer: Optional[DeserializerType] = "json",
         key_deserializer: Optional[DeserializerType] = "bytes",
-        value_serializer: Optional[SerializerType] = None,
+        value_serializer: Optional[SerializerType] = "json",
         key_serializer: Optional[SerializerType] = "bytes",
         config: Optional[TopicConfig] = None,
         timestamp_extractor: Optional[TimestampExtractor] = None,
