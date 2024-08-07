@@ -45,6 +45,8 @@ from .state.recovery import RecoveryManager
 from .state.rocksdb import RocksDBOptionsType
 from .sources.manager import SourceManager, BaseSource
 
+from .sources.manager import SourceManager, BaseSource
+
 __all__ = ("Application",)
 
 logger = logging.getLogger(__name__)
@@ -251,7 +253,7 @@ class Application:
 
             # SDK Token or QuixKafkaConfigsBuilder were provided
             logger.info(
-                f"{quix_app_source} detected; "
+                f"{quix_app_source} detected; "Discussion started for the middle/long term. python version, library versioning ...
                 f"the application will connect to Quix Cloud brokers"
             )
             topic_manager_factory = functools.partial(
@@ -601,7 +603,6 @@ class Application:
         app.run(dataframe=df)
         ```
 
-
         :param topic: a `quixstreams.models.Topic` instance
             to be used as an input topic.
         :return: `StreamingDataFrame` object
@@ -768,7 +769,7 @@ class Application:
 
     def run(
         self,
-        dataframe: StreamingDataFrame,
+        dataframe: StreamingDataFrame = None,
     ):
         """
         Start processing data from Kafka using provided `StreamingDataFrame`
@@ -823,7 +824,7 @@ class Application:
         exit_stack.enter_context(self._consumer)
         exit_stack.push(
             lambda exc_type, exc_val, exc_tb: self.stop(fail=exc_val is not None)
-        )
+        ) 
 
         with exit_stack:
             # Subscribe to topics in Kafka and start polling

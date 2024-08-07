@@ -134,7 +134,7 @@ class StreamingDataFrame(BaseStreaming):
 
     def __init__(
         self,
-        topic: Topic,
+        topic: Optional[Topic],
         topic_manager: TopicManager,
         processing_context: ProcessingContext,
         stream: Optional[Stream] = None,

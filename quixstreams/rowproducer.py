@@ -1,5 +1,5 @@
 import logging
-from functools import wraps
+from functools import wraps, partial
 from time import sleep
 from typing import Optional, Any, Union, Dict, Tuple, List, Callable
 
