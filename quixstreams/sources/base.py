@@ -102,7 +102,7 @@ class Source(BaseSource):
         self._topic: Optional[Topic] = None
         self._producer: Optional[RowProducer] = None
 
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self.stopping = threading.Event()
 
     def serialize(
@@ -186,9 +186,8 @@ class Source(BaseSource):
         """
         This method is triggered when the source needs to be stopped.
         """
-        if not self.stopping.is_set():
-            logger.info("stopping source %s", self)
-            self.stopping.set()
+        logger.info("stopping source %s", self)
+        self.stopping.set()
 
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__}({self.name})>"

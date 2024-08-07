@@ -22,6 +22,8 @@ class SourceThread(threading.Thread):
         self.topic: Topic = topic
         self.producer: RowProducer = producer
 
+        self._stopping = False
+
     def start(self) -> "SourceThread":
         logger.info("starting source %s", self.source)
         self.source.configure(self.topic, self.producer)
@@ -36,7 +38,13 @@ class SourceThread(threading.Thread):
             logger.exception(f"Error in source {self}")
             raise
 
-        self.source.stop()
+        if not self._stopping:
+            self.source.stop()
+
+    def stop(self):
+        if not self._stopping:
+            self._stopping = True
+            self.source.stop()
 
     def wait_stopped(self) -> None:
         """
@@ -79,7 +87,7 @@ class SourceManager:
 
     def stop_sources(self):
         for thread in self.threads:
-            thread.source.stop()
+            thread.stop()
 
         for thread in self.threads:
             thread.wait_stopped()
