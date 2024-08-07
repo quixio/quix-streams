@@ -42,7 +42,6 @@ nav:
     - Using Producer & Consumer: advanced/producer-consumer-lowlevel.md
   - Connecting to Quix Cloud: quix-platform.md
   - 'Connectors [beta]':
-    # TODO: Docs
     -  Sinks:
         - 'connectors/sinks/README.md'
         - CSV Sink: connectors/sinks/csv-sink.md
