@@ -1,5 +1,6 @@
 import logging
 import time
+from abc import abstractmethod
 from typing import Dict, Tuple
 
 from confluent_kafka import TopicPartition, KafkaException
@@ -24,21 +25,19 @@ from .exceptions import (
 logger = logging.getLogger(__name__)
 
 
-class Checkpoint:
+class BaseCheckpoint:
     """
-    Class to keep track of state updates and consumer offsets and to checkpoint these
+    Base class to keep track of state updates and consumer offsets and to checkpoint these
     updates on schedule.
+
+    Two implementations exist:
+        * one for checkpointing the Application in quixstreams/checkpoint/checkpoint.py
+        * one for checkpointing the kafka source in quixstreams/sources/kafka/checkpoint.py
     """
 
     def __init__(
         self,
         commit_interval: float,
-        producer: RowProducer,
-        consumer: Consumer,
-        state_manager: StateStoreManager,
-        sink_manager: SinkManager,
-        pausing_manager: PausingManager,
-        exactly_once: bool = False,
         commit_every: int = 0,
     ):
         self._created_at = time.monotonic()
@@ -52,17 +51,8 @@ class Checkpoint:
         # Passing zero or lower will flush the checkpoint after each processed message
         self._commit_interval = max(commit_interval, 0)
 
-        self._state_manager = state_manager
-        self._consumer = consumer
-        self._producer = producer
-        self._exactly_once = exactly_once
-        self._sink_manager = sink_manager
-        self._pausing_manager = pausing_manager
         self._commit_every = commit_every
         self._total_offsets_processed = 0
-
-        if self._exactly_once:
-            self._producer.begin_transaction()
 
     def expired(self) -> bool:
         """
@@ -106,6 +96,52 @@ class Checkpoint:
         if tp not in self._starting_tp_offsets:
             self._starting_tp_offsets[tp] = offset
         self._total_offsets_processed += 1
+
+    @abstractmethod
+    def close(self):
+        """
+        Perform cleanup (when the checkpoint is empty) instead of committing.
+
+        Needed for exactly-once, as Kafka transactions are timeboxed.
+        """
+
+    @abstractmethod
+    def commit(self):
+        """
+        Commit the checkpoint.
+        """
+        pass
+
+
+class Checkpoint(BaseCheckpoint):
+    """
+    Checkpoint implementation used by the application
+    """
+
+    def __init__(
+        self,
+        commit_interval: float,
+        producer: RowProducer,
+        consumer: Consumer,
+        state_manager: StateStoreManager,
+        sink_manager: SinkManager,
+        pausing_manager: PausingManager,
+        exactly_once: bool = False,
+        commit_every: int = 0,
+    ):
+        super().__init__(
+            commit_interval=commit_interval,
+            commit_every=commit_every,
+        )
+
+        self._state_manager = state_manager
+        self._consumer = consumer
+        self._producer = producer
+        self._sink_manager = sink_manager
+        self._pausing_manager = pausing_manager
+        self._exactly_once = exactly_once
+        if self._exactly_once:
+            self._producer.begin_transaction()
 
     def get_store_transaction(
         self, topic: str, partition: int, store_name: str = DEFAULT_STATE_STORE_NAME

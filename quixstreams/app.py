@@ -1,4 +1,5 @@
 import contextlib
+import dataclasses
 import functools
 import logging
 import os
@@ -682,7 +683,7 @@ class Application:
                 producer.produce(topic=topic.name, key=b"key", value=b"value")
         ```
         """
-        self._setup_topics()
+        self.setup_topics()
 
         return Producer(
             broker_address=self._config.broker_address,
@@ -725,8 +726,13 @@ class Application:
                     # consumer.store_offsets(msg)
 
         ```
+
+        :param auto_commit_enable: Enable or disable auto commit
+            Default - True
+        :param consumer_group_suffix: Suffix added to the application consumer group
+            Default - ""
         """
-        self._setup_topics()
+        self.setup_topics()
 
         return Consumer(
             broker_address=self._config.broker_address,
@@ -817,7 +823,7 @@ class Application:
         if self.is_quix_app:
             self._quix_runtime_init()
 
-        self._setup_topics()
+        self.setup_topics()
 
         exit_stack = contextlib.ExitStack()
         exit_stack.enter_context(self._processing_context)
@@ -881,7 +887,11 @@ class Application:
         if self._state_manager.stores:
             check_state_management_enabled()
 
-    def _setup_topics(self):
+    def setup_topics(self):
+        """
+        Validate and create the topics
+        """
+
         topics_list = ", ".join(
             f'"{topic}"' for topic in self._topic_manager.all_topics
         )

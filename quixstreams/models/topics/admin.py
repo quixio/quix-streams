@@ -209,3 +209,13 @@ class TopicAdmin:
             ),
             finalize_timeout=finalize_timeout,
         )
+
+    # support pickling by dropping the inner admin
+    def __getstate__(self) -> object:
+        state = self.__dict__.copy()
+        state.pop("_inner_admin", None)
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self._inner_admin = None

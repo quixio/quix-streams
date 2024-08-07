@@ -5,7 +5,7 @@ from typing import Optional, Union
 
 
 from quixstreams.models.messages import KafkaMessage
-from quixstreams.models.topics import Topic
+from quixstreams.models.topics import TopicConfig, Topic
 from quixstreams.models.types import Headers
 from quixstreams.rowproducer import RowProducer
 from quixstreams.checkpointing.exceptions import CheckpointProducerTimeout
@@ -146,7 +146,7 @@ class Source(BaseSource):
         * produce
         * flush
 
-    Helper property
+            Helper property
         * running
 
     Subclass it and implement the `run` method to fetch data and produce it to Kafka.
@@ -238,7 +238,7 @@ class Source(BaseSource):
         timestamp_ms: Optional[int] = None,
     ) -> KafkaMessage:
         """
-        Serialize data to bytes using the producer topic serializers and return a `quixstreams.models.messages.KafkaMessage`.
+        Serialize data to bytes using the producer topic serializers and return a `quixstreams.models.messages.KafkaMessage` .
 
         :return: `quixstreams.models.messages.KafkaMessage`
         """
