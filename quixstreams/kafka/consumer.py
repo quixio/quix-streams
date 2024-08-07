@@ -556,3 +556,13 @@ class Consumer:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
+
+    # support pickling by dropping the inner consumer
+    def __getstate__(self) -> object:
+        state = self.__dict__.copy()
+        state.pop("_inner_consumer", None)
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self._inner_consumer = None

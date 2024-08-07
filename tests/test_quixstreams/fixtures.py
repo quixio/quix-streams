@@ -295,6 +295,7 @@ def app_factory(kafka_container, random_consumer_group, tmp_path):
         use_changelog_topics: bool = True,
         topic_manager: Optional[TopicManager] = None,
         processing_guarantee: ProcessingGuarantee = "at-least-once",
+        request_timeout: float = 30,
     ) -> Application:
         state_dir = state_dir or (tmp_path / "state").absolute()
         return Application(
@@ -314,6 +315,7 @@ def app_factory(kafka_container, random_consumer_group, tmp_path):
             use_changelog_topics=use_changelog_topics,
             topic_manager=topic_manager,
             processing_guarantee=processing_guarantee,
+            request_timeout=request_timeout,
         )
 
     return factory

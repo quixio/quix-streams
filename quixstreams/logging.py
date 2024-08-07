@@ -39,6 +39,7 @@ def configure_logging(
     :param pid: if True include the process PID in the logs
     :return: True if logging config has been updated, otherwise False.
     """
+
     if loglevel is None:
         # Skipping logging configuration
         return False

@@ -429,7 +429,7 @@ class TestApplication:
 
         with patch.object(topic_manager, "create_all_topics") as create:
             with patch.object(topic_manager, "validate_all_topics"):
-                app._setup_topics()
+                app.setup_topics()
 
         create.assert_called()
 
@@ -443,7 +443,7 @@ class TestApplication:
 
         with patch.object(topic_manager, "create_all_topics") as create:
             with patch.object(topic_manager, "validate_all_topics"):
-                app._setup_topics()
+                app.setup_topics()
 
         create.assert_not_called()
 
@@ -456,7 +456,7 @@ class TestApplication:
 
         with patch.object(topic_manager, "validate_all_topics") as validate:
             with patch.object(topic_manager, "create_all_topics"):
-                app._setup_topics()
+                app.setup_topics()
 
         validate.assert_called()
 
@@ -465,7 +465,7 @@ class TestApplication:
         Topics are set up according to app settings when get_producer is called
         """
         app = app_factory()
-        with patch.object(app, "_setup_topics") as setup_topics:
+        with patch.object(app, "setup_topics") as setup_topics:
             with app.get_producer():
                 ...
         setup_topics.assert_called()
@@ -475,7 +475,7 @@ class TestApplication:
         Topics are set up according to app settings when get_consumer is called
         """
         app = app_factory()
-        with patch.object(app, "_setup_topics") as setup_topics:
+        with patch.object(app, "setup_topics") as setup_topics:
             with app.get_consumer():
                 ...
         setup_topics.assert_called()
