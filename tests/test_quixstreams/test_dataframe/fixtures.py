@@ -43,7 +43,7 @@ def dataframe_factory(topic_manager_topic_factory, topic_manager_factory):
             stream_registry=registry,
             processing_context=processing_ctx,
         )
-        registry.register(sdf)
+        registry.register_root(sdf)
         return sdf
 
     return factory
