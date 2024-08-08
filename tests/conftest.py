@@ -37,12 +37,12 @@ def log_test_progress(request: pytest.FixtureRequest):
 @pytest.fixture(scope="session")
 def kafka_container() -> Generator[KafkaContainer, None, None]:
     (
-        kafka_container,
+        container,
         broker_address,
         kafka_port,
     ) = ContainerHelper.create_kafka_container()
     test_logger.debug(f"Starting Kafka container on {broker_address}")
-    ContainerHelper.start_kafka_container(kafka_container)
+    ContainerHelper.start_kafka_container(container)
     test_logger.debug(f"Started Kafka container on {broker_address}")
     yield KafkaContainer(broker_address=broker_address)
-    kafka_container.stop()
+    container.stop()
