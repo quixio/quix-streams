@@ -107,6 +107,14 @@ doc_map = {
             "quixstreams.context",
         ]
     },
+    "sinks.md": {
+        k: None
+        for k in [
+            "quixstreams.sinks.influxdb3",
+            "quixstreams.sinks.csv",
+            "quixstreams.sinks.base.sink",
+        ]
+    },
 }
 
 # Go over all modules and assign them to doc files
