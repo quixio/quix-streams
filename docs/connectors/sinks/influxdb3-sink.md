@@ -62,7 +62,7 @@ If empty, no tags will be sent.
 
 To learn more about schema design and data types in InfluxDB, please read [InfluxDB schema design recommendations](https://docs.influxdata.com/influxdb/cloud-serverless/write-data/best-practices/schema-design/).
 
-## Delivery guarantees
+## Delivery Guarantees
 `InfluxDB3Sink` provides at-least-once guarantees, and the same records may be written multiple times in case of errors during processing.  
 
 ## Backpressure handling
