@@ -2,7 +2,7 @@
 
 In many stream processing use cases the results need to be written to external destinations to be shared with other subsystems. 
 
-Quix Streams provides a Sink API to achieve that.
+Quix Streams provides a sink API to achieve that.
 
 An example using InfluxDB Sink:
 
