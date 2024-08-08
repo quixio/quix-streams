@@ -41,7 +41,7 @@ It batches processed records in memory per topic partition, and writes them to t
 
 Under the hood, it transforms data to the Influx format using  and writes processed records in batches.
 
-### What data can be sent to InfluxDB
+### What data can be sent to InfluxDB?
 
 `InfluxDB3Sink` can accept only dictionaries values.
 
