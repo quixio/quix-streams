@@ -56,13 +56,17 @@ class ContainerHelper:
     @staticmethod
     def start_kafka_container(kafka_container: DockerContainer) -> None:
         kafka_container.start()
-        start = datetime.datetime.utcnow()
-        cut_off = start + datetime.timedelta(seconds=20)
-        while cut_off > datetime.datetime.utcnow():
-            time.sleep(0.5)
-            logs = kafka_container.get_logs()
-            for line in logs:
-                line = line.decode()
-                if "Kafka Server started" in line:
-                    return
-        raise TimeoutError("Failed to start container")
+        wait_for_container_readiness(kafka_container, "Kafka Server started")
+
+
+def wait_for_container_readiness(container: DockerContainer, text: str) -> None:
+    start = datetime.datetime.utcnow()
+    cut_off = start + datetime.timedelta(seconds=20)
+    while cut_off > datetime.datetime.utcnow():
+        time.sleep(0.5)
+        logs = container.get_logs()
+        for line in logs:
+            line = line.decode()
+            if text in line:
+                return
+    raise TimeoutError("Failed to start container")
