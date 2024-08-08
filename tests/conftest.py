@@ -3,6 +3,7 @@ from collections import namedtuple
 from typing import Generator
 
 import pytest
+from testcontainers.core.network import Network
 
 from .containerhelper import ContainerHelper
 from .logging import LOGGING_CONFIG, patch_logger_class
@@ -18,7 +19,10 @@ pytest_plugins = [
     "tests.test_quixstreams.test_state.test_rocksdb.test_windowed.fixtures",
 ]
 
-KafkaContainer = namedtuple("KafkaContainer", ("broker_address",))
+KafkaContainer = namedtuple(
+    "KafkaContainer",
+    ["broker_address", "internal_broker_address"],
+)
 
 test_logger = logging.getLogger("quixstreams.tests")
 
@@ -35,14 +39,23 @@ def log_test_progress(request: pytest.FixtureRequest):
 
 
 @pytest.fixture(scope="session")
-def kafka_container() -> Generator[KafkaContainer, None, None]:
+def network():
+    with Network() as network:
+        yield network
+
+
+@pytest.fixture(scope="session")
+def kafka_container(network: Network) -> Generator[KafkaContainer, None, None]:
     (
         container,
-        broker_address,
-        kafka_port,
-    ) = ContainerHelper.create_kafka_container()
-    test_logger.debug(f"Starting Kafka container on {broker_address}")
+        internal_broker_address,
+        external_broker_address,
+    ) = ContainerHelper.create_kafka_container(network)
+    test_logger.debug(f"Starting Kafka container on {external_broker_address}")
     ContainerHelper.start_kafka_container(container)
-    test_logger.debug(f"Started Kafka container on {broker_address}")
-    yield KafkaContainer(broker_address=broker_address)
+    test_logger.debug(f"Started Kafka container on {external_broker_address}")
+    yield KafkaContainer(
+        broker_address=external_broker_address,
+        internal_broker_address=internal_broker_address,
+    )
     container.stop()
