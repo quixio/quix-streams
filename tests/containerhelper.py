@@ -6,19 +6,22 @@ import uuid
 from typing import Tuple
 
 from testcontainers.core.container import DockerContainer
+from testcontainers.core.network import Network
 
 
 class ContainerHelper:
     @staticmethod
-    def create_kafka_container() -> Tuple[DockerContainer, str, int]:
+    def create_kafka_container(network: Network) -> Tuple[DockerContainer, str, str]:
         """
-        Returns (kafka container, broker list, kafka port) tuple
+        Returns (kafka container, internal broker address, external broker address) tuple
         """
-        kafka_address = "127.0.0.1"
-        kafka_port = random.randint(16000, 20000)
-        broker_list = f"{kafka_address}:{kafka_port}"
-        docker_hostname = uuid.uuid4().hex
         docker_image_name = "confluentinc/cp-kafka:7.6.1"
+        docker_hostname = uuid.uuid4().hex
+
+        kafka_port = random.randint(16000, 20000)
+        internal_broker_address = f"{docker_hostname}:9092"
+        external_broker_address = f"127.0.0.1:{kafka_port}"
+
         kraft_cluster_id = base64.urlsafe_b64encode(uuid.uuid4().bytes).decode()
 
         kafka_container = (
@@ -31,7 +34,7 @@ class ContainerHelper:
             )
             .with_env(
                 "KAFKA_ADVERTISED_LISTENERS",
-                f"PLAINTEXT://localhost:9092,EXTERNAL://{broker_list}",
+                f"PLAINTEXT://{internal_broker_address},EXTERNAL://{external_broker_address}",
             )
             .with_env(
                 "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP",
@@ -46,8 +49,9 @@ class ContainerHelper:
             .with_env("KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR", "1")
             .with_env("KAFKA_TRANSACTION_STATE_LOG_MIN_ISR", "1")
             .with_bind_ports(kafka_port, kafka_port)
+            .with_network(network)
         )
-        return kafka_container, broker_list, kafka_port
+        return kafka_container, internal_broker_address, external_broker_address
 
     @staticmethod
     def start_kafka_container(kafka_container: DockerContainer) -> None:
