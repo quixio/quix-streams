@@ -6,7 +6,7 @@ Quix Streams provides a Sink for InfluxDB v3 to write the processed data to it.
 
 >***NOTE***: This sink only supports InfluxDB v3. Versions 1 and 2 are not supported.
 
-## How To Use InfluxDB Sink
+## How To Use the InfluxDB Sink
 
 To sink data to InfluxDB, you need to create an instance of `InfluxDB3Sink` and pass 
 it to the `StreamingDataFrame.sink()` method:
