@@ -58,6 +58,38 @@ class ContainerHelper:
         kafka_container.start()
         wait_for_container_readiness(kafka_container, "Kafka Server started")
 
+    @staticmethod
+    def create_schema_registry_container(
+        network: Network,
+        broker_address: str,
+    ) -> Tuple[DockerContainer, str]:
+        docker_image_name = "confluentinc/cp-schema-registry"
+
+        schema_registry_port = random.randint(16000, 20000)
+        schema_registry_address = f"http://0.0.0.0:{schema_registry_port}"
+
+        schema_registry_container = (
+            DockerContainer(image=docker_image_name)
+            .with_env(
+                "SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS",
+                f"PLAINTEXT://{broker_address}",
+            )
+            .with_env("SCHEMA_REGISTRY_LISTENERS", schema_registry_address)
+            .with_env("SCHEMA_REGISTRY_HOST_NAME", "localhost")
+            .with_bind_ports(schema_registry_port, schema_registry_port)
+            .with_network(network)
+        )
+        return schema_registry_container, schema_registry_address
+
+    @staticmethod
+    def start_schema_registry_container(
+        schema_registry_container: DockerContainer,
+    ) -> None:
+        schema_registry_container.start()
+        wait_for_container_readiness(
+            schema_registry_container, "Server started, listening for requests"
+        )
+
 
 def wait_for_container_readiness(container: DockerContainer, text: str) -> None:
     start = datetime.datetime.utcnow()

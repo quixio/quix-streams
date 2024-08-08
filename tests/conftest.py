@@ -23,6 +23,10 @@ KafkaContainer = namedtuple(
     "KafkaContainer",
     ["broker_address", "internal_broker_address"],
 )
+SchemaRegistryContainer = namedtuple(
+    "SchemaRegistryContainer",
+    ["schema_registry_address"],
+)
 
 test_logger = logging.getLogger("quixstreams.tests")
 
@@ -58,4 +62,22 @@ def kafka_container(network: Network) -> Generator[KafkaContainer, None, None]:
         broker_address=external_broker_address,
         internal_broker_address=internal_broker_address,
     )
+    container.stop()
+
+
+@pytest.fixture(scope="session")
+def schema_registry_container(
+    network: Network, kafka_container: KafkaContainer
+) -> Generator[SchemaRegistryContainer, None, None]:
+    container, schema_registry_address = (
+        ContainerHelper.create_schema_registry_container(
+            network, kafka_container.internal_broker_address
+        )
+    )
+    test_logger.debug(
+        f"Starting Schema Registry container on {schema_registry_address}"
+    )
+    ContainerHelper.start_schema_registry_container(container)
+    test_logger.debug(f"Started Schema Registry container on {schema_registry_address}")
+    yield SchemaRegistryContainer(schema_registry_address=schema_registry_address)
     container.stop()
