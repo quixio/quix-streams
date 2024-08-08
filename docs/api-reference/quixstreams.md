@@ -622,7 +622,7 @@ generated for you.
 class StreamingDataFrame(BaseStreaming)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L63)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L86)
 
 `StreamingDataFrame` is the main object you will use for ETL work.
 
@@ -673,6 +673,7 @@ sdf = sdf.to_topic(topic_obj)
 #### StreamingDataFrame.apply
 
 ```python
+@_ensure_unlocked
 def apply(func: Union[
     ApplyCallback,
     ApplyCallbackStateful,
@@ -685,7 +686,7 @@ def apply(func: Union[
           metadata: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L178)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L203)
 
 Apply a function to transform the value and return a new value.
 
@@ -726,6 +727,7 @@ Default - `False`.
 #### StreamingDataFrame.update
 
 ```python
+@_ensure_unlocked
 def update(func: Union[
     UpdateCallback,
     UpdateCallbackStateful,
@@ -737,7 +739,7 @@ def update(func: Union[
            metadata: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L267)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L293)
 
 Apply a function to mutate value in-place or to perform a side effect
 
@@ -786,6 +788,7 @@ the updated StreamingDataFrame instance (reassignment NOT required).
 #### StreamingDataFrame.filter
 
 ```python
+@_ensure_unlocked
 def filter(func: Union[
     FilterCallback,
     FilterCallbackStateful,
@@ -797,7 +800,7 @@ def filter(func: Union[
            metadata: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L359)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L386)
 
 Filter value using provided function.
 
@@ -835,6 +838,7 @@ Default - `False`.
 #### StreamingDataFrame.group\_by
 
 ```python
+@_ensure_unlocked
 def group_by(key: Union[str, Callable[[Any], Any]],
              name: Optional[str] = None,
              value_deserializer: Optional[DeserializerType] = "json",
@@ -843,7 +847,7 @@ def group_by(key: Union[str, Callable[[Any], Any]],
              key_serializer: Optional[SerializerType] = "json") -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L445)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L473)
 
 "Groups" messages by re-keying them via the provided group_by operation
 
@@ -900,7 +904,7 @@ a clone with this operation added (assign to keep its effect).
 def contains(key: str) -> StreamingSeries
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L523)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L551)
 
 Check if the key is present in the Row value.
 
@@ -928,10 +932,11 @@ or False otherwise.
 #### StreamingDataFrame.to\_topic
 
 ```python
+@_ensure_unlocked
 def to_topic(topic: Topic, key: Optional[Callable[[Any], Any]] = None) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L548)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L577)
 
 Produce current value to a topic. You can optionally specify a new key.
 
@@ -973,10 +978,11 @@ the updated StreamingDataFrame instance (reassignment NOT required).
 #### StreamingDataFrame.set\_timestamp
 
 ```python
+@_ensure_unlocked
 def set_timestamp(func: Callable[[Any, Any, int, Any], int]) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L593)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L623)
 
 Set a new timestamp based on the current message value and its metadata.
 
@@ -1013,6 +1019,7 @@ a new StreamingDataFrame instance
 #### StreamingDataFrame.set\_headers
 
 ```python
+@_ensure_unlocked
 def set_headers(
     func: Callable[
         [Any, Any, int, List[Tuple[str, HeaderValue]]],
@@ -1021,7 +1028,7 @@ def set_headers(
 ) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L634)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L665)
 
 Set new message headers based on the current message value and metadata.
 
@@ -1059,10 +1066,11 @@ a new StreamingDataFrame instance
 #### StreamingDataFrame.print
 
 ```python
+@_ensure_unlocked
 def print(pretty: bool = True, metadata: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L685)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L717)
 
 Print out the current message value (and optionally, the message metadata) to
 
@@ -1110,7 +1118,7 @@ def compose(
 ) -> Dict[str, VoidExecutor]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L727)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L759)
 
 Compose all functions of this StreamingDataFrame into one big closure.
 
@@ -1156,7 +1164,7 @@ def test(value: Any,
          topic: Optional[Topic] = None) -> List[Any]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L764)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L796)
 
 A shorthand to test `StreamingDataFrame` with provided value
 
@@ -1182,12 +1190,13 @@ result of `StreamingDataFrame`
 #### StreamingDataFrame.tumbling\_window
 
 ```python
+@_ensure_unlocked
 def tumbling_window(duration_ms: Union[int, timedelta],
                     grace_ms: Union[int, timedelta] = 0,
                     name: Optional[str] = None) -> TumblingWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L801)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L834)
 
 Create a tumbling window transformation on this StreamingDataFrame.
 
@@ -1258,13 +1267,14 @@ like `sum`, `count`, etc. applied to the StreamingDataFrame.
 #### StreamingDataFrame.hopping\_window
 
 ```python
+@_ensure_unlocked
 def hopping_window(duration_ms: Union[int, timedelta],
                    step_ms: Union[int, timedelta],
                    grace_ms: Union[int, timedelta] = 0,
                    name: Optional[str] = None) -> HoppingWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L877)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L911)
 
 Create a hopping window transformation on this StreamingDataFrame.
 
@@ -1344,11 +1354,12 @@ like `sum`, `count`, etc. and applied to the StreamingDataFrame.
 #### StreamingDataFrame.drop
 
 ```python
+@_ensure_unlocked
 def drop(columns: Union[str, List[str]],
          errors: Literal["ignore", "raise"] = "raise") -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L969)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1004)
 
 Drop column(s) from the message value (value must support `del`, like a dict).
 
@@ -1375,6 +1386,33 @@ Default - `"raise"`.
 **Returns**:
 
 a new StreamingDataFrame instance
+
+<a id="quixstreams.dataframe.dataframe.StreamingDataFrame.sink"></a>
+
+#### StreamingDataFrame.sink
+
+```python
+@_ensure_unlocked
+def sink(sink: BaseSink)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1049)
+
+Sink the processed data to the specified destination.
+
+Internally, each processed record is added to a sink, and the sinks are
+flushed on each checkpoint.
+The offset will be committed only if all the sinks for all topic partitions
+are flushed successfully.
+
+Additionally, Sinks may signal the backpressure to the application
+(e.g., when the destination is rate-limited).
+When this happens, the application will pause the corresponding topic partition
+and resume again after the timeout.
+The backpressure handling and timeouts are defined by the specific sinks.
+
+Note: `sink()` is a terminal operation, and you cannot add new operations
+to the same StreamingDataFrame after it's called.
 
 <a id="quixstreams.dataframe.series"></a>
 
@@ -2701,11 +2739,15 @@ the stream has transform functions in the tree. Default - True.
 
 ## quixstreams.core
 
-<a id="quixstreams.processing_context"></a>
+<a id="quixstreams.processing"></a>
 
-## quixstreams.processing\_context
+## quixstreams.processing
 
-<a id="quixstreams.processing_context.ProcessingContext"></a>
+<a id="quixstreams.processing.context"></a>
+
+## quixstreams.processing.context
+
+<a id="quixstreams.processing.context.ProcessingContext"></a>
 
 ### ProcessingContext
 
@@ -2714,12 +2756,12 @@ the stream has transform functions in the tree. Default - True.
 class ProcessingContext()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/processing_context.py#L21)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/processing/context.py#L23)
 
 A class to share processing-related objects
 between `Application` and `StreamingDataFrame` instances.
 
-<a id="quixstreams.processing_context.ProcessingContext.store_offset"></a>
+<a id="quixstreams.processing.context.ProcessingContext.store_offset"></a>
 
 #### ProcessingContext.store\_offset
 
@@ -2727,7 +2769,7 @@ between `Application` and `StreamingDataFrame` instances.
 def store_offset(topic: str, partition: int, offset: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/processing_context.py#L43)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/processing/context.py#L47)
 
 Store the offset of the processed message to the checkpoint.
 
@@ -2737,7 +2779,7 @@ Store the offset of the processed message to the checkpoint.
 - `partition`: partition number
 - `offset`: message offset
 
-<a id="quixstreams.processing_context.ProcessingContext.init_checkpoint"></a>
+<a id="quixstreams.processing.context.ProcessingContext.init_checkpoint"></a>
 
 #### ProcessingContext.init\_checkpoint
 
@@ -2745,11 +2787,11 @@ Store the offset of the processed message to the checkpoint.
 def init_checkpoint()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/processing_context.py#L53)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/processing/context.py#L57)
 
 Initialize a new checkpoint
 
-<a id="quixstreams.processing_context.ProcessingContext.commit_checkpoint"></a>
+<a id="quixstreams.processing.context.ProcessingContext.commit_checkpoint"></a>
 
 #### ProcessingContext.commit\_checkpoint
 
@@ -2757,7 +2799,7 @@ Initialize a new checkpoint
 def commit_checkpoint(force: bool = False)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/processing_context.py#L67)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/processing/context.py#L72)
 
 Attempts finalizing the current Checkpoint only if the Checkpoint is "expired",
 
@@ -2769,6 +2811,406 @@ else just close it. A new Checkpoint is then created.
 **Arguments**:
 
 - `force`: if `True`, commit the Checkpoint before its expiration deadline.
+
+<a id="quixstreams.processing.pausing"></a>
+
+## quixstreams.processing.pausing
+
+<a id="quixstreams.processing.pausing.PausingManager"></a>
+
+### PausingManager
+
+```python
+class PausingManager()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/processing/pausing.py#L15)
+
+A class to temporarily pause topic partitions and resume them after
+the timeout is elapsed.
+
+<a id="quixstreams.processing.pausing.PausingManager.pause"></a>
+
+#### PausingManager.pause
+
+```python
+def pause(topic: str, partition: int, offset_to_seek: int,
+          resume_after: float)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/processing/pausing.py#L28)
+
+Pause the topic-partition for a certain period of time.
+
+This method is supposed to be called in case of backpressure from Sinks.
+
+<a id="quixstreams.processing.pausing.PausingManager.is_paused"></a>
+
+#### PausingManager.is\_paused
+
+```python
+def is_paused(topic: str, partition: int) -> bool
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/processing/pausing.py#L68)
+
+Check if the topic-partition is already paused
+
+<a id="quixstreams.processing.pausing.PausingManager.resume_if_ready"></a>
+
+#### PausingManager.resume\_if\_ready
+
+```python
+def resume_if_ready()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/processing/pausing.py#L74)
+
+Resume consuming from topic-partitions after the wait period has elapsed.
+
+<a id="quixstreams.processing.pausing.PausingManager.revoke"></a>
+
+#### PausingManager.revoke
+
+```python
+def revoke(topic: str, partition: int)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/processing/pausing.py#L94)
+
+Remove partition from the list of paused TPs if it's revoked
+
+<a id="quixstreams.sinks.influxdb3"></a>
+
+## quixstreams.sinks.influxdb3
+
+<a id="quixstreams.sinks.influxdb3.InfluxDB3Sink"></a>
+
+### InfluxDB3Sink
+
+```python
+class InfluxDB3Sink(BatchingSink)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/influxdb3.py#L24)
+
+<a id="quixstreams.sinks.influxdb3.InfluxDB3Sink.__init__"></a>
+
+#### InfluxDB3Sink.\_\_init\_\_
+
+```python
+def __init__(token: str,
+             host: str,
+             organization_id: str,
+             database: str,
+             measurement: str,
+             fields_keys: Iterable[str] = (),
+             tags_keys: Iterable[str] = (),
+             time_key: Optional[str] = None,
+             time_precision: WritePrecision = WritePrecision.MS,
+             include_metadata_tags: bool = False,
+             batch_size: int = 1000,
+             enable_gzip: bool = True,
+             request_timeout_ms: int = 10_000,
+             debug: bool = False)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/influxdb3.py#L25)
+
+A connector to sink processed data to InfluxDB v3.
+
+It batches the processed records in memory per topic partition, converts
+them to the InfluxDB format, and flushes them to InfluxDB at the checkpoint.
+
+The InfluxDB sink transparently handles backpressure if the destination instance
+cannot accept more data at the moment
+(e.g., when InfluxDB returns an HTTP 429 error with the "retry_after" header set).
+When this happens, the sink will notify the Application to pause consuming
+from the backpressured topic partition until the "retry_after" timeout elapses.
+
+>***NOTE***: InfluxDB3Sink can accept only dictionaries.
+> If the record values are not dicts, you need to convert them to dicts before
+> sinking.
+
+**Arguments**:
+
+- `token`: InfluxDB access token
+- `host`: InfluxDB host in format "https://<host>"
+- `organization_id`: InfluxDB organization_id
+- `database`: database name
+- `fields_keys`: a list of keys to be used as "fields" when writing to InfluxDB.
+If present, it must not overlap with "tags_keys".
+If empty, the whole record value will be used.
+>***NOTE*** The fields' values can only be strings, floats, integers, or booleans.
+Default - `()`.
+- `tags_keys`: a list of keys to be used as "tags" when writing to InfluxDB.
+If present, it must not overlap with "fields_keys".
+These keys will be popped from the value dictionary
+automatically because InfluxDB doesn't allow the same keys be
+both in tags and fields.
+If empty, no tags will be sent.
+>***NOTE***: InfluxDB client always converts tag values to strings.
+Default - `()`.
+- `time_key`: a key to be used as "time" when writing to InfluxDB.
+By default, the record timestamp will be used with "ms" time precision.
+When using a custom key, you may need to adjust the `time_precision` setting
+to match.
+- `time_precision`: a time precision to use when writing to InfluxDB.
+- `include_metadata_tags`: if True, includes record's key, topic,
+and partition as tags.
+Default - `False`.
+- `batch_size`: how many records to write to InfluxDB in one request.
+Note that it only affects the size of one write request, and not the number
+of records flushed on each checkpoint.
+Default - `1000`.
+- `enable_gzip`: if True, enables gzip compression for writes.
+Default - `True`.
+- `request_timeout_ms`: an HTTP request timeout in milliseconds.
+Default - `10000`.
+- `debug`: if True, print debug logs from InfluxDB client.
+Default - `False`.
+
+<a id="quixstreams.sinks"></a>
+
+## quixstreams.sinks
+
+<a id="quixstreams.sinks.csv"></a>
+
+## quixstreams.sinks.csv
+
+<a id="quixstreams.sinks.csv.CSVSink"></a>
+
+### CSVSink
+
+```python
+class CSVSink(BatchingSink)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/csv.py#L9)
+
+<a id="quixstreams.sinks.csv.CSVSink.__init__"></a>
+
+#### CSVSink.\_\_init\_\_
+
+```python
+def __init__(path: str,
+             dialect: str = "excel",
+             key_serializer: Callable[[Any], str] = str,
+             value_serializer: Callable[[Any], str] = json.dumps)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/csv.py#L11)
+
+A base CSV sink that writes data from all assigned partitions to a single file.
+
+It's best to be used for local debugging.
+
+Column format:
+    (key, value, timestamp, topic, partition, offset)
+
+**Arguments**:
+
+- `path`: a path to CSV file
+- `dialect`: a CSV dialect to use. It affects quoting and delimiters.
+See the ["csv" module docs](https://docs.python.org/3/library/csv.html#csv-fmt-params) for more info.
+Default - `"excel"`.
+- `key_serializer`: a callable to convert keys to strings.
+Default - `str()`.
+- `value_serializer`: a callable to convert values to strings.
+Default - `json.dumps()`.
+
+<a id="quixstreams.sinks.exceptions"></a>
+
+## quixstreams.sinks.exceptions
+
+<a id="quixstreams.sinks.manager"></a>
+
+## quixstreams.sinks.manager
+
+<a id="quixstreams.sinks.base.sink"></a>
+
+## quixstreams.sinks.base.sink
+
+<a id="quixstreams.sinks.base.sink.BaseSink"></a>
+
+### BaseSink
+
+```python
+class BaseSink(abc.ABC)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L11)
+
+This is a base class for all sinks.
+
+Subclass it and implement its methods to create your own sink.
+
+Note that Sinks are currently in beta, and their design may change over time.
+
+<a id="quixstreams.sinks.base.sink.BaseSink.flush"></a>
+
+#### BaseSink.flush
+
+```python
+@abc.abstractmethod
+def flush(topic: str, partition: int)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L21)
+
+This method is triggered by the Checkpoint class when it commits.
+
+You can use `flush()` to write the batched data to the destination (in case of
+a batching sink), or confirm the delivery of the previously sent messages
+(in case of a streaming sink).
+
+If flush() fails, the checkpoint will be aborted.
+
+<a id="quixstreams.sinks.base.sink.BaseSink.add"></a>
+
+#### BaseSink.add
+
+```python
+@abc.abstractmethod
+def add(value: Any, key: Any, timestamp: int,
+        headers: List[Tuple[str, HeaderValue]], topic: str, partition: int,
+        offset: int)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L33)
+
+This method is triggered on every new processed record being sent to this sink.
+
+You can use it to accumulate batches of data before sending them outside, or
+to send results right away in a streaming manner and confirm a delivery later
+on flush().
+
+<a id="quixstreams.sinks.base.sink.BaseSink.on_paused"></a>
+
+#### BaseSink.on\_paused
+
+```python
+def on_paused(topic: str, partition: int)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L51)
+
+This method is triggered when the sink is paused due to backpressure, when
+the `SinkBackpressureError` is raised.
+
+Here you can react to the backpressure events.
+
+<a id="quixstreams.sinks.base.sink.BatchingSink"></a>
+
+### BatchingSink
+
+```python
+class BatchingSink(BaseSink)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L60)
+
+A base class for batching sinks, that need to accumulate the data first before
+sending it to the external destinatios.
+
+Examples: databases, objects stores, and other destinations where
+writing every message is not optimal.
+
+It automatically handles batching, keeping batches in memory per topic-partition.
+
+You may subclass it and override the `write()` method to implement a custom
+batching sink.
+
+<a id="quixstreams.sinks.base.sink.BatchingSink.write"></a>
+
+#### BatchingSink.write
+
+```python
+@abc.abstractmethod
+def write(batch: SinkBatch)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L83)
+
+This method implements actual writing to the external destination.
+
+It may also raise `SinkBackpressureError` if the destination cannot accept new
+writes at the moment.
+When this happens, the accumulated batch is dropped and the app pauses the
+corresponding topic partition.
+
+<a id="quixstreams.sinks.base.sink.BatchingSink.add"></a>
+
+#### BatchingSink.add
+
+```python
+def add(value: Any, key: Any, timestamp: int,
+        headers: List[Tuple[str, HeaderValue]], topic: str, partition: int,
+        offset: int)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L93)
+
+Add a new record to in-memory batch.
+
+<a id="quixstreams.sinks.base.sink.BatchingSink.flush"></a>
+
+#### BatchingSink.flush
+
+```python
+def flush(topic: str, partition: int)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L115)
+
+Flush an accumulated batch to the destination and drop it afterward.
+
+<a id="quixstreams.sinks.base.sink.BatchingSink.on_paused"></a>
+
+#### BatchingSink.on\_paused
+
+```python
+def on_paused(topic: str, partition: int)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L135)
+
+When the destination is already backpressure, drop the accumulated batch.
+
+<a id="quixstreams.sinks.base.batch"></a>
+
+## quixstreams.sinks.base.batch
+
+<a id="quixstreams.sinks.base.batch.SinkBatch"></a>
+
+### SinkBatch
+
+```python
+class SinkBatch()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/batch.py#L11)
+
+<a id="quixstreams.sinks.base.batch.SinkBatch.iter_chunks"></a>
+
+#### SinkBatch.iter\_chunks
+
+```python
+def iter_chunks(n: int) -> Iterable[Iterable[SinkItem]]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/batch.py#L55)
+
+Iterate over batch data in chunks of length n.
+The last batch may be shorter.
+
+<a id="quixstreams.sinks.base"></a>
+
+## quixstreams.sinks.base
+
+<a id="quixstreams.sinks.base.item"></a>
+
+## quixstreams.sinks.base.item
 
 <a id="quixstreams.utils"></a>
 
@@ -3383,6 +3825,83 @@ class DoubleSerializer(Serializer)
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/simple_types.py#L143)
 
 Serializes floats to bytes
+
+<a id="quixstreams.models.serializers.protobuf"></a>
+
+## quixstreams.models.serializers.protobuf
+
+<a id="quixstreams.models.serializers.protobuf.ProtobufSerializer"></a>
+
+### ProtobufSerializer
+
+```python
+class ProtobufSerializer(Serializer)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/protobuf.py#L12)
+
+<a id="quixstreams.models.serializers.protobuf.ProtobufSerializer.__init__"></a>
+
+#### ProtobufSerializer.\_\_init\_\_
+
+```python
+def __init__(msg_type: Message,
+             deterministic: bool = False,
+             ignore_unknown_fields: bool = False)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/protobuf.py#L13)
+
+Serializer that returns data in protobuf format.
+
+Serialisation from a python dictionary can have a significant performance impact. An alternative is to pass the serializer an object of the `msg_type` class.
+
+**Arguments**:
+
+- `msg_type`: protobuf message class.
+- `deterministic`: If true, requests deterministic serialization of the protobuf, with predictable ordering of map keys
+Default - `False`
+- `ignore_unknown_fields`: If True, do not raise errors for unknown fields.
+Default - `False`
+
+<a id="quixstreams.models.serializers.protobuf.ProtobufDeserializer"></a>
+
+### ProtobufDeserializer
+
+```python
+class ProtobufDeserializer(Deserializer)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/protobuf.py#L52)
+
+<a id="quixstreams.models.serializers.protobuf.ProtobufDeserializer.__init__"></a>
+
+#### ProtobufDeserializer.\_\_init\_\_
+
+```python
+def __init__(msg_type: Message,
+             use_integers_for_enums: bool = False,
+             preserving_proto_field_name: bool = False,
+             to_dict: bool = True)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/protobuf.py#L53)
+
+Deserializer that parses protobuf data into a dictionary suitable for a StreamingDataframe.
+
+Deserialisation to a python dictionary can have a significant performance impact. You can disable this behavior using `to_dict`, in that case the protobuf message will be used as the StreamingDataframe row value.
+
+**Arguments**:
+
+- `msg_type`: protobuf message class.
+- `use_integers_for_enums`: If true, use integers instead of enum names.
+Default - `False`
+- `preserving_proto_field_name`: If True, use the original proto field names as
+defined in the .proto file. If False, convert the field names to
+lowerCamelCase.
+Default - `False`
+- `to_dict`: If false, return the protobuf message instead of a dict.
+Default - `True`
 
 <a id="quixstreams.models.serializers.json"></a>
 
@@ -7825,7 +8344,7 @@ Used by the producer during consumer offset sending for an EOS transaction.
 class Application()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L56)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L57)
 
 The main Application class.
 
@@ -7893,7 +8412,7 @@ def __init__(broker_address: Optional[Union[str, ConnectionConfig]] = None,
              processing_guarantee: ProcessingGuarantee = "at-least-once")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L94)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L95)
 
 **Arguments**:
 
@@ -8001,7 +8520,7 @@ def Quix(
 ) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L342)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L347)
 
 >***NOTE:*** DEPRECATED: use Application with `quix_sdk_token` argument instead.
 
@@ -8104,7 +8623,7 @@ def topic(name: str,
           timestamp_extractor: Optional[TimestampExtractor] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L483)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L488)
 
 Create a topic definition.
 
@@ -8175,7 +8694,7 @@ topic = app.topic("input-topic", timestamp_extractor=custom_ts_extractor)
 def dataframe(topic: Topic) -> StreamingDataFrame
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L563)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L568)
 
 A simple helper method that generates a `StreamingDataFrame`, which is used
 
@@ -8217,7 +8736,7 @@ to be used as an input topic.
 def stop(fail: bool = False)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L602)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L607)
 
 Stop the internal poll loop and the message processing.
 
@@ -8240,7 +8759,7 @@ to unhandled exception, and it shouldn't commit the current checkpoint.
 def get_producer() -> Producer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L625)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L630)
 
 Create and return a pre-configured Producer instance.
 The Producer is initialized with params passed to Application.
@@ -8271,7 +8790,7 @@ with app.get_producer() as producer:
 def get_consumer(auto_commit_enable: bool = True) -> Consumer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L655)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L660)
 
 Create and return a pre-configured Consumer instance.
 The Consumer is initialized with params passed to Application.
@@ -8316,7 +8835,7 @@ with app.get_consumer() as consumer:
 def clear_state()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L702)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L707)
 
 Clear the state of the application.
 
@@ -8328,7 +8847,7 @@ Clear the state of the application.
 def run(dataframe: StreamingDataFrame)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L708)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L713)
 
 Start processing data from Kafka using provided `StreamingDataFrame`
 
@@ -8485,7 +9004,7 @@ single Row, list of Rows or None
 class Checkpoint()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L24)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L27)
 
 Class to keep track of state updates and consumer offsets and to checkpoint these
 updates on schedule.
@@ -8498,7 +9017,7 @@ updates on schedule.
 def expired() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L57)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L67)
 
 Returns `True` if checkpoint deadline has expired OR
 if the total number of processed offsets exceeded the "commit_every" limit
@@ -8512,7 +9031,7 @@ when it's defined.
 def empty() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L67)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L77)
 
 Returns `True` if checkpoint doesn't have any offsets stored yet.
 
@@ -8525,7 +9044,7 @@ Returns `True` if checkpoint doesn't have any offsets stored yet.
 def store_offset(topic: str, partition: int, offset: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L74)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L84)
 
 Store the offset of the processed message to the checkpoint.
 
@@ -8546,7 +9065,7 @@ def get_store_transaction(
         store_name: str = DEFAULT_STATE_STORE_NAME) -> PartitionTransaction
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L95)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L110)
 
 Get a PartitionTransaction for the given store, topic and partition.
 
@@ -8570,7 +9089,7 @@ instance of `PartitionTransaction`
 def close()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L118)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L133)
 
 Perform cleanup (when the checkpoint is empty) instead of committing.
 
@@ -8584,7 +9103,7 @@ Needed for exactly-once, as Kafka transactions are timeboxed.
 def commit()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L127)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L142)
 
 Commit the checkpoint.
 

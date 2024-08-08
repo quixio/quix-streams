@@ -10,7 +10,7 @@
 class StreamingDataFrame(BaseStreaming)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L63)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L86)
 
 `StreamingDataFrame` is the main object you will use for ETL work.
 
@@ -69,6 +69,7 @@ sdf = sdf.to_topic(topic_obj)
 #### StreamingDataFrame.apply
 
 ```python
+@_ensure_unlocked
 def apply(func: Union[
     ApplyCallback,
     ApplyCallbackStateful,
@@ -81,7 +82,7 @@ def apply(func: Union[
           metadata: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L178)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L203)
 
 Apply a function to transform the value and return a new value.
 
@@ -128,6 +129,7 @@ Default - `False`.
 #### StreamingDataFrame.update
 
 ```python
+@_ensure_unlocked
 def update(func: Union[
     UpdateCallback,
     UpdateCallbackStateful,
@@ -139,7 +141,7 @@ def update(func: Union[
            metadata: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L267)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L293)
 
 Apply a function to mutate value in-place or to perform a side effect
 
@@ -196,6 +198,7 @@ the updated StreamingDataFrame instance (reassignment NOT required).
 #### StreamingDataFrame.filter
 
 ```python
+@_ensure_unlocked
 def filter(func: Union[
     FilterCallback,
     FilterCallbackStateful,
@@ -207,7 +210,7 @@ def filter(func: Union[
            metadata: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L359)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L386)
 
 Filter value using provided function.
 
@@ -251,6 +254,7 @@ Default - `False`.
 #### StreamingDataFrame.group\_by
 
 ```python
+@_ensure_unlocked
 def group_by(key: Union[str, Callable[[Any], Any]],
              name: Optional[str] = None,
              value_deserializer: Optional[DeserializerType] = "json",
@@ -259,7 +263,7 @@ def group_by(key: Union[str, Callable[[Any], Any]],
              key_serializer: Optional[SerializerType] = "json") -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L445)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L473)
 
 "Groups" messages by re-keying them via the provided group_by operation
 
@@ -324,7 +328,7 @@ a clone with this operation added (assign to keep its effect).
 def contains(key: str) -> StreamingSeries
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L523)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L551)
 
 Check if the key is present in the Row value.
 
@@ -360,10 +364,11 @@ or False otherwise.
 #### StreamingDataFrame.to\_topic
 
 ```python
+@_ensure_unlocked
 def to_topic(topic: Topic, key: Optional[Callable[[Any], Any]] = None) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L548)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L577)
 
 Produce current value to a topic. You can optionally specify a new key.
 
@@ -413,10 +418,11 @@ the updated StreamingDataFrame instance (reassignment NOT required).
 #### StreamingDataFrame.set\_timestamp
 
 ```python
+@_ensure_unlocked
 def set_timestamp(func: Callable[[Any, Any, int, Any], int]) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L593)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L623)
 
 Set a new timestamp based on the current message value and its metadata.
 
@@ -461,6 +467,7 @@ a new StreamingDataFrame instance
 #### StreamingDataFrame.set\_headers
 
 ```python
+@_ensure_unlocked
 def set_headers(
     func: Callable[
         [Any, Any, int, List[Tuple[str, HeaderValue]]],
@@ -469,7 +476,7 @@ def set_headers(
 ) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L634)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L665)
 
 Set new message headers based on the current message value and metadata.
 
@@ -515,10 +522,11 @@ a new StreamingDataFrame instance
 #### StreamingDataFrame.print
 
 ```python
+@_ensure_unlocked
 def print(pretty: bool = True, metadata: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L685)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L717)
 
 Print out the current message value (and optionally, the message metadata) to
 
@@ -574,7 +582,7 @@ def compose(
 ) -> Dict[str, VoidExecutor]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L727)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L759)
 
 Compose all functions of this StreamingDataFrame into one big closure.
 
@@ -628,7 +636,7 @@ def test(value: Any,
          topic: Optional[Topic] = None) -> List[Any]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L764)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L796)
 
 A shorthand to test `StreamingDataFrame` with provided value
 
@@ -660,12 +668,13 @@ result of `StreamingDataFrame`
 #### StreamingDataFrame.tumbling\_window
 
 ```python
+@_ensure_unlocked
 def tumbling_window(duration_ms: Union[int, timedelta],
                     grace_ms: Union[int, timedelta] = 0,
                     name: Optional[str] = None) -> TumblingWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L801)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L834)
 
 Create a tumbling window transformation on this StreamingDataFrame.
 
@@ -745,13 +754,14 @@ sdf = (
 #### StreamingDataFrame.hopping\_window
 
 ```python
+@_ensure_unlocked
 def hopping_window(duration_ms: Union[int, timedelta],
                    step_ms: Union[int, timedelta],
                    grace_ms: Union[int, timedelta] = 0,
                    name: Optional[str] = None) -> HoppingWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L877)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L911)
 
 Create a hopping window transformation on this StreamingDataFrame.
 
@@ -840,11 +850,12 @@ sdf = (
 #### StreamingDataFrame.drop
 
 ```python
+@_ensure_unlocked
 def drop(columns: Union[str, List[str]],
          errors: Literal["ignore", "raise"] = "raise") -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L969)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1004)
 
 Drop column(s) from the message value (value must support `del`, like a dict).
 
@@ -877,6 +888,35 @@ Default - `"raise"`.
 ***Returns:***
 
 a new StreamingDataFrame instance
+
+<a id="quixstreams.dataframe.dataframe.StreamingDataFrame.sink"></a>
+
+<br><br>
+
+#### StreamingDataFrame.sink
+
+```python
+@_ensure_unlocked
+def sink(sink: BaseSink)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1049)
+
+Sink the processed data to the specified destination.
+
+Internally, each processed record is added to a sink, and the sinks are
+flushed on each checkpoint.
+The offset will be committed only if all the sinks for all topic partitions
+are flushed successfully.
+
+Additionally, Sinks may signal the backpressure to the application
+(e.g., when the destination is rate-limited).
+When this happens, the application will pause the corresponding topic partition
+and resume again after the timeout.
+The backpressure handling and timeouts are defined by the specific sinks.
+
+Note: `sink()` is a terminal operation, and you cannot add new operations
+to the same StreamingDataFrame after it's called.
 
 <a id="quixstreams.dataframe.series"></a>
 
