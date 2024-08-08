@@ -65,7 +65,7 @@ class BaseSink(abc.ABC):
 ```
 
 
-## Sinks workflow
+## Sinks Workflow
 
 During processing, Sinks do the following operations:
 
