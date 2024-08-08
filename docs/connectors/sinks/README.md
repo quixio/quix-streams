@@ -46,7 +46,7 @@ Currently, Quix Streams provides these sinks out of the box:
 It's also possible to implement your own custom sinks.  
 Please see the [Creating a Custom Sink](custom-sinks.md) page on how to do that.
 
-## Performance considerations
+## Performance Considerations
 Since the implementation of `BatchingSink` accumulates data in-memory, it will increase memory usage.
 
 If the batches become large enough, it can also put additional load on the destination and decrease the overall throughput. 
