@@ -65,7 +65,7 @@ To learn more about schema design and data types in InfluxDB, please read [Influ
 ## Delivery Guarantees
 `InfluxDB3Sink` provides at-least-once guarantees, and the same records may be written multiple times in case of errors during processing.  
 
-## Backpressure handling
+## Backpressure Handling
 InfluxDB sink automatically handles events when the database cannot accept new data due to write limits.  
 
 When this happens, the application loses the accumulated in-memory batch and pauses the corresponding topic partition for a timeout duration returned by InfluxDB API (it returns an HTTP error with 429 status code and a `Retry-After` header with a timeout).  
