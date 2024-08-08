@@ -1,10 +1,14 @@
+import json
 from typing import Union, Mapping, Optional, Any, Iterable
 
 from io import BytesIO
 
+from confluent_kafka.schema_registry import SchemaRegistryClient
+from confluent_kafka.schema_registry.avro import AvroSerializer as _AvroSerializer
 from fastavro import schemaless_reader, schemaless_writer, parse_schema
 from fastavro.types import Schema
 
+from quixstreams.schema_registry import SchemaRegistryConfig
 from .base import Serializer, Deserializer, SerializationContext
 from .exceptions import SerializationError
 
@@ -18,6 +22,7 @@ class AvroSerializer(Serializer):
         strict: bool = False,
         strict_allow_default: bool = False,
         disable_tuple_notation: bool = False,
+        schema_registry_config: Optional[SchemaRegistryConfig] = None,
     ):
         """
         Serializer that returns data in Avro format.
@@ -36,8 +41,18 @@ class AvroSerializer(Serializer):
         self._strict = strict
         self._strict_allow_default = strict_allow_default
         self._disable_tuple_notation = disable_tuple_notation
+        self._schema_registry_serializer = None
+        if schema_registry_config:
+            conf = schema_registry_config.as_dict(plaintext_secrets=True)
+            self._schema_registry_serializer = _AvroSerializer(
+                schema_registry_client=SchemaRegistryClient(conf),
+                schema_str=json.dumps(schema),
+            )
 
     def __call__(self, value: Any, ctx: SerializationContext) -> bytes:
+        if self._schema_registry_serializer:
+            return self._schema_registry_serializer(value, ctx)
+
         data = BytesIO()
 
         with BytesIO() as data:
