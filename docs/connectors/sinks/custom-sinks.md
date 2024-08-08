@@ -21,7 +21,7 @@ class BaseSink(abc.ABC):
 
     Subclass and implement its methods to create your own sink.
 
-    Note that Sinks are currently in beta, and their design may change over time.
+    Note that sinks are currently in beta, and their design may change over time.
     """
 
     @abc.abstractmethod
