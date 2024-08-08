@@ -1,5 +1,6 @@
 import logging.config
 from collections import namedtuple
+from typing import Generator
 
 import pytest
 
@@ -34,7 +35,7 @@ def log_test_progress(request: pytest.FixtureRequest):
 
 
 @pytest.fixture(scope="session")
-def kafka_container() -> KafkaContainer:
+def kafka_container() -> Generator[KafkaContainer, None, None]:
     (
         kafka_container,
         broker_address,
