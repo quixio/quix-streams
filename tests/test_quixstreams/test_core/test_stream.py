@@ -330,3 +330,165 @@ class TestStream:
             (1, "key1", 1, [("key", b"value")]),
             (2, "key2", 2, [("key", b"value2")]),
         ]
+
+
+class TestStreamSplit:
+
+    def test_basic_split(self):
+        calls = []
+
+        def add_n(n):
+            def wrapper(value):
+                calls.append(n)
+                return value + n
+
+            return wrapper
+
+        stream = Stream().add_apply(add_n(1))
+        stream_2 = stream.add_apply(add_n(10))
+        stream_3 = stream.add_apply(add_n(20))
+        stream = stream.add_apply(add_n(100))
+        sink = Sink()
+        extras = ("key", 0, [])
+        stream.compose(sink=sink.append_record)(0, *extras)
+        expected = [(11, *extras), (21, *extras), (101, *extras)]
+
+        # each operation is only called once (no redundant processing)
+        assert len(calls) == 4
+        # each split result is correct
+        assert len(sink) == len(expected)
+        for result in sink:
+            assert result in expected
+
+    def test_split_confirm_data_copied(self):
+        """
+        Use mutable objects to confirm data is copied during splits.
+        :return:
+        """
+
+        def d(n):
+            def wrapper(value):
+                value[n] = [n]
+                if n - 1 in value:
+                    value[n - 1].append(n)
+                return value
+
+            return wrapper
+
+        stream = Stream().add_apply(d(0))
+        stream_2 = stream.add_apply(d(1))
+        stream = stream.add_apply(d(2))
+        sink = Sink()
+        extras = ("key", 0, [])
+        stream.compose(sink=sink.append_record)({}, *extras)
+        expected = [({0: [0], 2: [2]}, *extras), ({0: [0, 1], 1: [1]}, *extras)]
+
+        # each split result is correct
+        assert len(sink) == len(expected)
+        for result in sink:
+            assert result in expected
+
+    def test_chained_split(self):
+        calls = []
+
+        def add_n(n):
+            def wrapper(value):
+                calls.append(n)
+                return value + n
+
+            return wrapper
+
+        stream = Stream().add_apply(add_n(1))
+        stream_2 = stream.add_apply(add_n(10)).add_apply(add_n(20))
+        stream = stream.add_apply(add_n(100))
+        sink = Sink()
+        extras = ("key", 0, [])
+        stream.compose(sink=sink.append_record)(0, *extras)
+        expected = [(31, *extras), (101, *extras)]
+
+        # each operation is only called once (no redundant processing)
+        assert len(calls) == 4
+        # each split result is correct
+        assert len(sink) == len(expected)
+        for result in sink:
+            assert result in expected
+
+    def test_longer_splits(self):
+        calls = []
+
+        def add_n(n):
+            def wrapper(value):
+                calls.append(n)
+                return value + n
+
+            return wrapper
+
+        stream = Stream().add_apply(add_n(1))
+        stream = stream.add_apply(add_n(2))
+        stream_2 = stream.add_apply(add_n(10))
+        stream_2 = stream_2.add_apply(add_n(20))
+        stream = stream.add_apply(add_n(100))
+        sink = Sink()
+        extras = ("key", 0, [])
+        stream.compose(sink=sink.append_record)(0, *extras)
+        expected = [(33, *extras), (103, *extras)]
+
+        # each operation is only called once (no redundant processing)
+        assert len(calls) == 5
+        # each split result is correct
+        assert len(sink) == len(expected)
+        for result in sink:
+            assert result in expected
+
+    def test_multi_split(self):
+        """
+        --< is a split
+        "S'" denotes the continuation of the stream that was split from
+
+        stream     ---[ add_120, div_2  ]---<      (stream', stream2), 60
+        stream_2   ---[     div_3       ]---<      (stream_2', stream_3, stream_4), 20
+        stream_3   ---[ add_10, add_3   ]---|END   33
+        stream_4   ---[     add_24      ]---|END   44
+        stream_2'  ---[     add_2       ]---|END   22
+        stream'    ---[     add_40      ]---<      (stream'', stream_5), 100
+        stream_5   ---[ div_2, add_5    ]---|END   55
+        stream''   ---[ div_100, add_10 ]---|END   11
+
+        :return:
+        """
+
+        calls = []
+
+        def add_n(n):
+            def wrapper(value):
+                calls.append(f"add_{n}")
+                return value + n
+
+            return wrapper
+
+        def div_n(n):
+            def wrapper(value):
+                calls.append(f"div_{n}")
+                return value // n
+
+            return wrapper
+
+        stream = Stream().add_apply(add_n(120)).add_apply(div_n(2))  # 60
+        stream_2 = stream.add_apply(div_n(3))  # 20
+        stream_3 = stream_2.add_apply(add_n(10)).add_apply(add_n(3))  # 33
+        stream_4 = stream_2.add_apply(add_n(24))  # 44
+        stream_2 = stream_2.add_apply(add_n(2))  # 22
+        stream = stream.add_apply(add_n(40))  # 100
+        stream_5 = stream.add_apply(div_n(2)).add_apply(add_n(5))  # 55
+        stream = stream.add_apply(div_n(100)).add_apply(add_n(10))  # 11
+        sink = Sink()
+        extras = ("key", 0, [])
+        stream.compose(sink=sink.append_record)(0, *extras)
+        expected = [(11 * n, *extras) for n in range(1, 6)]
+
+        # each operation is only called once (no redundant processing)
+        assert len(calls) == 12
+        # each split result is correct
+        assert len(sink) == len(expected)
+        for result in sink:
+            assert result in expected
