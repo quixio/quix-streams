@@ -25,7 +25,7 @@ sdf = app.dataframe(topic)
 sdf.sink(csv_sink)
 ```
 
-## How CSV Sink works
+## How the CSV Sink Works
 `CSVSink` is a batching sink.  
 It batches processed records in memory per topic partition, and writes them to the file when a checkpoint is committed.  
 
