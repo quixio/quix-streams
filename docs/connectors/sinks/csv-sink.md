@@ -54,5 +54,5 @@ csv_sink = CSVSink(
 )
 ```
 
-## Delivery guarantees
+## Delivery Guarantees
 The `CSVSink` provides at-least-once guarantees, and the resulting CSV file may contain duplicated rows of data if there were errors during processing.
