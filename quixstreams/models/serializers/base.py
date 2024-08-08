@@ -26,13 +26,21 @@ class SerializationContext:
     Every `Serializer` and `Deserializer` receives an instance of `SerializationContext`
     """
 
-    __slots__ = ("topic", "headers")
+    __slots__ = ("topic", "headers", "field")
 
-    def __init__(self, topic: str, headers: Optional[MessageHeadersTuples] = None):
+    def __init__(
+        self,
+        topic: str,
+        headers: Optional[MessageHeadersTuples] = None,
+        field: MessageField = MessageField.NONE,
+    ) -> None:
         self.topic = topic
         self.headers = headers
+        self.field = field
 
-    def to_confluent_ctx(self, field: MessageField) -> _SerializationContext:
+    def to_confluent_ctx(
+        self, field: Optional[MessageField] = None
+    ) -> _SerializationContext:
         """
         Convert `SerializationContext` to `confluent_kafka.SerializationContext`
         in order to re-use serialization already provided by `confluent_kafka` library.
@@ -40,7 +48,7 @@ class SerializationContext:
         :return: instance of `confluent_kafka.serialization.SerializationContext`
         """
         return _SerializationContext(
-            field=field, topic=self.topic, headers=self.headers
+            field=field or self.field, topic=self.topic, headers=self.headers
         )
 
 
