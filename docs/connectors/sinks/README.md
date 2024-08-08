@@ -30,7 +30,7 @@ sdf = app.dataframe(topic)
 sdf.sink(influx_sink)
 ```
 
-## Sinks Are Terminal
+## Sinks Are Destinations
 When `.sink()` is called on a StreamingDataFrame instance, it marks the end of the processing pipeline, and 
  the StreamingDataFrame can't be changed anymore.
 
