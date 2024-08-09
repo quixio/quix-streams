@@ -15,6 +15,7 @@ from quixstreams.state import (
     DEFAULT_STATE_STORE_NAME,
 )
 from quixstreams.state.exceptions import StoreTransactionFailed
+from quixstreams.sources.manager import SourceManager
 from .exceptions import (
     InvalidStoredOffset,
     CheckpointProducerTimeout,
@@ -38,6 +39,7 @@ class Checkpoint:
         state_manager: StateStoreManager,
         sink_manager: SinkManager,
         pausing_manager: PausingManager,
+        source_manager: SourceManager,
         exactly_once: bool = False,
         commit_every: int = 0,
     ):
@@ -60,6 +62,7 @@ class Checkpoint:
         self._pausing_manager = pausing_manager
         self._commit_every = commit_every
         self._total_offsets_processed = 0
+        self._source_manager = source_manager
 
         if self._exactly_once:
             self._producer.begin_transaction()
@@ -265,3 +268,6 @@ class Checkpoint:
             transaction.flush(
                 processed_offset=offset, changelog_offset=changelog_offset
             )
+
+        # Step 5. Checkpoint the sources
+        self._source_manager.checkpoint()

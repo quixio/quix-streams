@@ -1,7 +1,7 @@
 import dataclasses
 import logging
 import time
-from typing import Optional
+from typing import Optional, List
 
 from quixstreams.checkpointing import Checkpoint
 from quixstreams.exceptions import QuixException
@@ -10,6 +10,7 @@ from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
 from quixstreams.sinks import SinkManager
 from quixstreams.state import StateStoreManager
+from quixstreams.sources.manager import SourceManager
 
 __all__ = ("ProcessingContext",)
 
@@ -32,6 +33,7 @@ class ProcessingContext:
     state_manager: StateStoreManager
     sink_manager: SinkManager
     pausing_manager: PausingManager
+    source_manager: SourceManager
     commit_every: int = 0
     exactly_once: bool = False
     _checkpoint: Optional[Checkpoint] = dataclasses.field(
@@ -67,6 +69,7 @@ class ProcessingContext:
             sink_manager=self.sink_manager,
             pausing_manager=self.pausing_manager,
             exactly_once=self.exactly_once,
+            source_manager=self.source_manager,
         )
 
     def commit_checkpoint(self, force: bool = False):
@@ -99,8 +102,10 @@ class ProcessingContext:
         self.pausing_manager.revoke(topic=topic, partition=partition)
 
     def __enter__(self):
+        self.source_manager.start_sources()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        self.source_manager.stop_sources()
         if self.exactly_once:
             self.producer.abort_transaction(5)

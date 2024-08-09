@@ -4,6 +4,7 @@ import logging
 import os
 import signal
 import warnings
+import threading
 from typing import Optional, List, Callable, Union, Literal, get_args
 
 from confluent_kafka import TopicPartition
@@ -28,6 +29,7 @@ from .models import (
     DeserializerType,
     TimestampExtractor,
 )
+from .models.types import Headers
 from .platforms.quix import (
     QuixKafkaConfigsBuilder,
     check_state_dir,
@@ -41,6 +43,7 @@ from .sinks import SinkManager
 from .state import StateStoreManager
 from .state.recovery import RecoveryManager
 from .state.rocksdb import RocksDBOptionsType
+from .sources.manager import SourceManager, BaseSource
 
 __all__ = ("Application",)
 
@@ -294,7 +297,7 @@ class Application:
         self._on_processing_error = on_processing_error or default_on_processing_error
         self._on_message_processed = on_message_processed
         self._auto_create_topics = auto_create_topics
-        self._running = False
+        self._stopping = threading.Event()
         self._failed = False
 
         if not topic_manager:
@@ -322,6 +325,8 @@ class Application:
                 else None
             ),
         )
+
+        self._source_manager = SourceManager()
         self._sink_manager = SinkManager()
         self._pausing_manager = PausingManager(consumer=self._consumer)
         self._processing_context = ProcessingContext(
@@ -333,7 +338,10 @@ class Application:
             exactly_once=self._uses_exactly_once,
             sink_manager=self._sink_manager,
             pausing_manager=self._pausing_manager,
+            source_manager=self._source_manager,
         )
+
+        self._setup_excepthook()
 
     @property
     def is_quix_app(self) -> bool:
@@ -567,7 +575,8 @@ class Application:
 
     def dataframe(
         self,
-        topic: Topic,
+        topic: Optional[Topic] = None,
+        source: Optional[BaseSource] = None,
     ) -> StreamingDataFrame:
         """
         A simple helper method that generates a `StreamingDataFrame`, which is used
@@ -597,8 +606,14 @@ class Application:
             to be used as an input topic.
         :return: `StreamingDataFrame` object
         """
+        if not source and not topic:
+            raise TypeError("one of `source` or `topic` is required")
+        elif source and not topic:
+            topic = source.default_topic(self._topic_manager)
+
         sdf = StreamingDataFrame(
             topic=topic,
+            source=source,
             topic_manager=self._topic_manager,
             processing_context=self._processing_context,
         )
@@ -618,7 +633,7 @@ class Application:
             to unhandled exception, and it shouldn't commit the current checkpoint.
         """
 
-        self._running = False
+        self._stopping.set()
         if fail:
             # Update "_failed" only when fail=True to prevent stop(failed=False) from
             # resetting it
@@ -626,6 +641,20 @@ class Application:
 
         if self._state_manager.using_changelogs:
             self._state_manager.stop_recovery()
+
+    def _setup_excepthook(self):
+        """
+        Override threading excepthook to handle exceptions hapenning in sources.
+        """
+        original_excepthook = threading.excepthook
+
+        def excepthook(args):
+            if args.thread in self._processing_context.source_manager.threads:
+                self.stop(fail=False)
+            else:
+                original_excepthook(args)
+
+        threading.excepthook = excepthook
 
     def get_producer(self) -> Producer:
         """
@@ -657,7 +686,9 @@ class Application:
             extra_config=self._producer_extra_config,
         )
 
-    def get_consumer(self, auto_commit_enable: bool = True) -> Consumer:
+    def get_consumer(
+        self, auto_commit_enable: bool = True, consummer_group: Optional[str] = None
+    ) -> Consumer:
         """
         Create and return a pre-configured Consumer instance.
         The Consumer is initialized with params passed to Application.
@@ -698,7 +729,7 @@ class Application:
 
         return Consumer(
             broker_address=self._broker_address,
-            consumer_group=self._consumer_group,
+            consumer_group=consummer_group or self._consumer_group,
             auto_offset_reset=self._auto_offset_reset,
             auto_commit_enable=auto_commit_enable,
             extra_config=self._consumer_extra_config,
@@ -709,6 +740,31 @@ class Application:
         Clear the state of the application.
         """
         self._state_manager.clear_stores()
+
+    def source(self, source: BaseSource, topic: Optional[Topic] = None) -> Topic:
+        """
+        Add a source to the application.
+
+        See :class:`quixstreams.sources.base.BaseSource` for more details.
+
+        :param source: a :class:`quixstreams.sources.BaseSource` instance
+        :param topic: a :class:`quixstreams.models.Topic` instance to be used as the source producer topic
+            Default: `None`
+        """
+        if not topic:
+            topic = source.default_topic(self._topic_manager)
+
+        producer = RowProducer(
+            broker_address=self._broker_address,
+            extra_config=self._producer_extra_config,
+            flush_timeout=self._consumer_extra_config.get(
+                "max.poll.interval.ms", _default_max_poll_interval_ms
+            )
+            / 1000,  # convert to seconds
+            transactional=self._uses_exactly_once,
+        )
+        self._processing_context.source_manager.register(source, producer, topic)
+        return topic
 
     def run(
         self,
@@ -739,6 +795,9 @@ class Application:
 
         :param dataframe: instance of `StreamingDataFrame`
         """
+        self._run(dataframe)
+
+    def _run(self, dataframe: Optional[StreamingDataFrame] = None):
         self._setup_signal_handlers()
 
         logger.info(
@@ -755,6 +814,9 @@ class Application:
 
         self._setup_topics()
 
+        if dataframe is not None and dataframe.source:
+            self.source(dataframe.source, dataframe.topic)
+
         exit_stack = contextlib.ExitStack()
         exit_stack.enter_context(self._processing_context)
         exit_stack.enter_context(self._state_manager)
@@ -765,30 +827,35 @@ class Application:
 
         with exit_stack:
             # Subscribe to topics in Kafka and start polling
-            self._consumer.subscribe(
-                dataframe.topics_to_subscribe,
-                on_assign=self._on_assign,
-                on_revoke=self._on_revoke,
-                on_lost=self._on_lost,
-            )
-            logger.info("Waiting for incoming messages")
-            # Start polling Kafka for messages and callbacks
-            self._running = True
+            if dataframe is not None:
+                self._run_dataframe(dataframe)
+            else:
+                self._stopping.wait()
 
-            # Initialize the checkpoint
-            self._processing_context.init_checkpoint()
+    def _run_dataframe(self, dataframe):
+        self._consumer.subscribe(
+            dataframe.topics_to_subscribe,
+            on_assign=self._on_assign,
+            on_revoke=self._on_revoke,
+            on_lost=self._on_lost,
+        )
+        logger.info("Waiting for incoming messages")
+        # Start polling Kafka for messages and callbacks
 
-            dataframe_composed = dataframe.compose()
+        # Initialize the checkpoint
+        self._processing_context.init_checkpoint()
 
-            while self._running:
-                if self._state_manager.recovery_required:
-                    self._state_manager.do_recovery()
-                else:
-                    self._process_message(dataframe_composed)
-                    self._processing_context.commit_checkpoint()
-                    self._processing_context.resume_ready_partitions()
+        dataframe_composed = dataframe.compose()
 
-            logger.info("Stop processing of StreamingDataFrame")
+        while not self._stopping.is_set():
+            if self._state_manager.recovery_required:
+                self._state_manager.do_recovery()
+            else:
+                self._process_message(dataframe_composed)
+                self._processing_context.commit_checkpoint()
+                self._processing_context.resume_ready_partitions()
+
+        logger.info("Stop processing of StreamingDataFrame")
 
     def _quix_runtime_init(self):
         """
