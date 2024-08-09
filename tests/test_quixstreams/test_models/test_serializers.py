@@ -1,5 +1,9 @@
-import pytest
+from functools import partial
+from io import BytesIO
+from struct import unpack
+from typing import Any
 
+import pytest
 import jsonschema
 
 from quixstreams.models import (
@@ -22,9 +26,10 @@ from quixstreams.models.serializers.protobuf import (
     ProtobufSerializer,
     ProtobufDeserializer,
 )
-
 from quixstreams.models.serializers.avro import AvroDeserializer, AvroSerializer
+from quixstreams.schema_registry import SchemaRegistryConfig
 
+from tests.conftest import SchemaRegistryContainer
 from .utils import int_to_bytes, float_to_bytes
 from .protobuf.test_pb2 import Test
 
@@ -48,6 +53,22 @@ JSONSCHEMA_TEST_SCHEMA = {
     },
     "required": ["name"],
 }
+
+CONFLUENT_MAGIC_BYTE = 0
+CONFLUENT_MAGIC_SIZE = 5
+
+
+def get_magic_byte_metadata(payload: bytes, size: int):
+    return unpack(">bI", BytesIO(payload).read(size))
+
+
+@pytest.fixture()
+def serializer_with_schema_registry(
+    request: pytest.FixtureRequest,
+    schema_registry_container: SchemaRegistryContainer,
+) -> SchemaRegistryConfig:
+    config = SchemaRegistryConfig(url=schema_registry_container.schema_registry_address)
+    return request.param(schema_registry_config=config)
 
 
 class TestSerializers:
@@ -138,6 +159,32 @@ class TestSerializers:
             JSONSerializer(
                 validator=jsonschema.Draft202012Validator({"type": "invalid"})
             )
+
+    @pytest.mark.parametrize(
+        "serializer_with_schema_registry, value, ctx, expected",
+        [
+            (
+                partial(AvroSerializer, AVRO_TEST_SCHEMA),
+                {"name": "foo", "id": 123},
+                dummy_context,
+                b"\x06foo\xf6\x01",
+            ),
+        ],
+        indirect=["serializer_with_schema_registry"],
+    )
+    def test_serialize_with_schema_registry_success(
+        self,
+        serializer_with_schema_registry: Serializer,
+        value: Any,
+        ctx: SerializationContext,
+        expected: bytes,
+    ):
+        result = serializer_with_schema_registry(value, ctx)
+
+        magic, schema_id = get_magic_byte_metadata(result, CONFLUENT_MAGIC_SIZE)
+        assert magic == CONFLUENT_MAGIC_BYTE
+        assert isinstance(schema_id, int)
+        assert result[CONFLUENT_MAGIC_SIZE:] == expected
 
 
 class TestDeserializers:

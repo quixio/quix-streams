@@ -1,13 +1,11 @@
 from typing import Literal, Optional, Callable, Tuple, Type
 
-from pydantic import AliasGenerator, SecretStr, AliasChoices, Field
+from pydantic import SecretStr, AliasChoices, Field
 from pydantic.functional_validators import BeforeValidator
-from pydantic_settings import (
-    BaseSettings,
-    SettingsConfigDict,
-    PydanticBaseSettingsSource,
-)
+from pydantic_settings import PydanticBaseSettingsSource
 from typing_extensions import Self, Annotated
+
+from quixstreams.utils.settings import BaseSettings
 
 __all__ = ("ConnectionConfig",)
 
@@ -22,13 +20,6 @@ class ConnectionConfig(BaseSettings):
 
     Also obscures secrets and handles any case sensitivity issues.
     """
-
-    model_config = SettingsConfigDict(
-        alias_generator=AliasGenerator(
-            # used during model_dumps
-            serialization_alias=lambda field_name: field_name.replace("_", "."),
-        ),
-    )
 
     bootstrap_servers: str
     security_protocol: Annotated[
@@ -122,7 +113,7 @@ class ConnectionConfig(BaseSettings):
             config = {k: v for k, v in config.items() if k in valid_keys}
         return cls(**config)
 
-    def as_librdkafka_dict(self, plaintext_secrets=True) -> dict:
+    def as_librdkafka_dict(self, plaintext_secrets: bool = True) -> dict:
         """
         Dump any non-empty config values as a librdkafka dictionary.
 
@@ -131,12 +122,4 @@ class ConnectionConfig(BaseSettings):
         :param plaintext_secrets: whether secret values are plaintext or obscured (***)
         :return: a librdkafka-compatible dictionary
         """
-        dump = self.model_dump(by_alias=True, exclude_none=True)
-        if plaintext_secrets:
-            for field, value in dump.items():
-                if isinstance(value, SecretStr):
-                    dump[field] = dump[field].get_secret_value()
-        return dump
-
-    def __str__(self) -> str:
-        return str(self.as_librdkafka_dict(plaintext_secrets=False))
+        return self.as_dict((plaintext_secrets))
