@@ -6,12 +6,13 @@ import uuid
 from typing import Tuple
 
 from testcontainers.core.container import DockerContainer
-from testcontainers.core.network import Network
+
+from .compat import Network
 
 
 class ContainerHelper:
     @staticmethod
-    def create_kafka_container(network: Network) -> Tuple[DockerContainer, str, str]:
+    def create_kafka_container() -> Tuple[DockerContainer, str, str]:
         """
         Returns (kafka container, internal broker address, external broker address) tuple
         """
@@ -49,18 +50,19 @@ class ContainerHelper:
             .with_env("KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR", "1")
             .with_env("KAFKA_TRANSACTION_STATE_LOG_MIN_ISR", "1")
             .with_bind_ports(kafka_port, kafka_port)
-            .with_network(network)
         )
         return kafka_container, internal_broker_address, external_broker_address
 
     @staticmethod
-    def start_kafka_container(kafka_container: DockerContainer) -> None:
+    def start_kafka_container(
+        kafka_container: DockerContainer, network: Network
+    ) -> None:
         kafka_container.start()
+        network.connect(kafka_container.get_wrapped_container().id)
         wait_for_container_readiness(kafka_container, "Kafka Server started")
 
     @staticmethod
     def create_schema_registry_container(
-        network: Network,
         broker_address: str,
     ) -> Tuple[DockerContainer, str]:
         docker_image_name = "confluentinc/cp-schema-registry"
@@ -77,15 +79,16 @@ class ContainerHelper:
             .with_env("SCHEMA_REGISTRY_LISTENERS", schema_registry_address)
             .with_env("SCHEMA_REGISTRY_HOST_NAME", "localhost")
             .with_bind_ports(schema_registry_port, schema_registry_port)
-            .with_network(network)
         )
         return schema_registry_container, schema_registry_address
 
     @staticmethod
     def start_schema_registry_container(
         schema_registry_container: DockerContainer,
+        network: Network,
     ) -> None:
         schema_registry_container.start()
+        network.connect(schema_registry_container.get_wrapped_container().id)
         wait_for_container_readiness(
             schema_registry_container, "Server started, listening for requests"
         )
