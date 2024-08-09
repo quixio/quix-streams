@@ -3,8 +3,8 @@ from collections import namedtuple
 from typing import Generator
 
 import pytest
-from testcontainers.core.network import Network
 
+from .compat import Network
 from .containerhelper import ContainerHelper
 from .logging import LOGGING_CONFIG, patch_logger_class
 
@@ -54,9 +54,9 @@ def kafka_container(network: Network) -> Generator[KafkaContainer, None, None]:
         container,
         internal_broker_address,
         external_broker_address,
-    ) = ContainerHelper.create_kafka_container(network)
+    ) = ContainerHelper.create_kafka_container()
     test_logger.debug(f"Starting Kafka container on {external_broker_address}")
-    ContainerHelper.start_kafka_container(container)
+    ContainerHelper.start_kafka_container(container, network)
     test_logger.debug(f"Started Kafka container on {external_broker_address}")
     yield KafkaContainer(
         broker_address=external_broker_address,
@@ -71,13 +71,13 @@ def schema_registry_container(
 ) -> Generator[SchemaRegistryContainer, None, None]:
     container, schema_registry_address = (
         ContainerHelper.create_schema_registry_container(
-            network, kafka_container.internal_broker_address
+            kafka_container.internal_broker_address
         )
     )
     test_logger.debug(
         f"Starting Schema Registry container on {schema_registry_address}"
     )
-    ContainerHelper.start_schema_registry_container(container)
+    ContainerHelper.start_schema_registry_container(container, network)
     test_logger.debug(f"Started Schema Registry container on {schema_registry_address}")
     yield SchemaRegistryContainer(schema_registry_address=schema_registry_address)
     container.stop()
