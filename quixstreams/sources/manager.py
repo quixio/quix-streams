@@ -16,17 +16,13 @@ class SourceThread(threading.Thread):
     Class managing the lifecycle of a source inside a thread.
     """
 
-    def __init__(self, source, topic, producer):
+    def __init__(self, source):
         super().__init__()
         self.source: BaseSource = source
-        self.topic: Topic = topic
-        self.producer: RowProducer = producer
-
         self._running = False
 
     def start(self) -> "SourceThread":
         logger.info("starting source %s", self.source)
-        self.source.configure(self.topic, self.producer)
         return super().start()
 
     def run(self) -> None:
@@ -62,13 +58,14 @@ class SourceManager:
     def __init__(self):
         self.threads: List[SourceThread] = []
 
-    def register(self, source: BaseSource, producer: RowProducer, topic: Topic):
-        if topic in self.topics:
-            raise ValueError(f"topic '{topic.name}' already in use")
+    def register(self, source: BaseSource):
+        if not source.configured:
+            raise Exception("Accepts configured Source only")
+        if source.producer_topic in self.topics:
+            raise ValueError(f"topic '{source.producer_topic.name}' already in use")
         elif source in self.sources:
             raise ValueError(f"source '{source}' already registered")
-
-        self.threads.append(SourceThread(source, topic, producer))
+        self.threads.append(SourceThread(source))
 
     @property
     def sources(self) -> List[BaseSource]:
@@ -76,7 +73,7 @@ class SourceManager:
 
     @property
     def topics(self) -> List[Topic]:
-        return [thread.topic for thread in self.threads]
+        return [thread.source.producer_topic for thread in self.threads]
 
     def checkpoint(self):
         for thread in self.threads:

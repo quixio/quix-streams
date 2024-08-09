@@ -609,7 +609,7 @@ class Application:
         if not source and not topic:
             raise TypeError("one of `source` or `topic` is required")
         elif source and not topic:
-            topic = source.default_topic(self._topic_manager)
+            topic = self.topic(source.default_topic())
 
         sdf = StreamingDataFrame(
             topic=topic,
@@ -752,7 +752,7 @@ class Application:
             Default: `None`
         """
         if not topic:
-            topic = source.default_topic(self._topic_manager)
+            topic = self.topic(source.default_topic())
 
         producer = RowProducer(
             broker_address=self._broker_address,
@@ -763,7 +763,8 @@ class Application:
             / 1000,  # convert to seconds
             transactional=self._uses_exactly_once,
         )
-        self._processing_context.source_manager.register(source, producer, topic)
+        source.configure(topic, producer)
+        self._processing_context.source_manager.register(source)
         return topic
 
     def run(

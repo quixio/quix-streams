@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from typing import Optional, Union
 
 
-from quixstreams.models import Topic, TopicManager
+from quixstreams.models import Topic
 from quixstreams.models.messages import KafkaMessage
 from quixstreams.models.types import Headers
 from quixstreams.rowproducer import RowProducer
@@ -32,9 +32,23 @@ class BaseSource(ABC):
     # time in seconds the application will wait for the source to stop.
     shutdown_timeout: int = 10
 
+    def __init__(self):
+        self._producer: Optional[RowProducer] = None
+        self._producer_topic: Optional[Topic] = None
+        self._configured: bool = False
+
+    @property
+    def configured(self):
+        return self._configured
+
+    @property
+    def producer_topic(self):
+        return self._producer_topic
+
     def configure(self, topic: Topic, producer: RowProducer) -> None:
         self._producer = producer
         self._producer_topic = topic
+        self._configured = True
 
     @abstractmethod
     def checkpoint(self) -> None:
@@ -62,7 +76,7 @@ class BaseSource(ABC):
         """
 
     @abstractmethod
-    def default_topic(self, topic_manager: TopicManager) -> Topic:
+    def default_topic(self) -> str:
         """
         This method is triggered when the user hasn't specified a topic for the source.
 
@@ -172,7 +186,7 @@ class Source(BaseSource):
         if self.stopping.wait(seconds):
             raise SourceStoppingException("shutdown")
 
-    def default_topic(self, topic_manager: TopicManager) -> Topic:
+    def default_topic(self) -> str:
         """
         This method is triggered when the user hasn't specified a topic for the source.
 
@@ -180,7 +194,7 @@ class Source(BaseSource):
 
         :return: `:class:`quixstreams.models.topics.Topic`
         """
-        return topic_manager.topic(self.name)
+        return self.name
 
     def stop(self) -> None:
         """
