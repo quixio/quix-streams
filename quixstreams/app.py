@@ -644,7 +644,7 @@ class Application:
 
     def _setup_excepthook(self):
         """
-        Override threading excepthook to handle exceptions hapenning in sources.
+        Override threading excepthook to handle exceptions happening in sources.
         """
         original_excepthook = threading.excepthook
 
@@ -686,9 +686,7 @@ class Application:
             extra_config=self._producer_extra_config,
         )
 
-    def get_consumer(
-        self, auto_commit_enable: bool = True, consummer_group: Optional[str] = None
-    ) -> Consumer:
+    def get_consumer(self, auto_commit_enable: bool = True) -> Consumer:
         """
         Create and return a pre-configured Consumer instance.
         The Consumer is initialized with params passed to Application.
@@ -729,7 +727,7 @@ class Application:
 
         return Consumer(
             broker_address=self._broker_address,
-            consumer_group=consummer_group or self._consumer_group,
+            consumer_group=self._consumer_group,
             auto_offset_reset=self._auto_offset_reset,
             auto_commit_enable=auto_commit_enable,
             extra_config=self._consumer_extra_config,
@@ -761,9 +759,10 @@ class Application:
                 "max.poll.interval.ms", _default_max_poll_interval_ms
             )
             / 1000,  # convert to seconds
-            transactional=self._uses_exactly_once,
+            transactional=False,
         )
-        self._processing_context.source_manager.register(source, producer, topic)
+        source.configure(topic, producer)
+        self._processing_context.source_manager.register(source)
         return topic
 
     def run(

@@ -24,7 +24,9 @@ __all__ = (
 
 class BaseSource(ABC):
     """
-    This is the base class for all sources
+    This is the base class for all sources.
+
+    Source producer only support at-least-once delivery.
 
     Subclass it and implement its methods to create your own source.
     """
@@ -32,9 +34,23 @@ class BaseSource(ABC):
     # time in seconds the application will wait for the source to stop.
     shutdown_timeout: int = 10
 
+    def __init__(self):
+        self._producer: Optional[RowProducer] = None
+        self._producer_topic: Optional[Topic] = None
+        self._configured: bool = False
+
     def configure(self, topic: Topic, producer: RowProducer) -> None:
         self._producer = producer
         self._producer_topic = topic
+        self._configured = True
+
+    @property
+    def configured(self):
+        return self._configured
+
+    @property
+    def producer_topic(self):
+        return self._producer_topic
 
     @abstractmethod
     def checkpoint(self) -> None:
@@ -84,7 +100,7 @@ class Source(BaseSource):
         * produce
         * sleep
 
-    A `stopping` :class:`threading.Event` to handle gracefull shutdown and a lock to handle concurrent `produce` and `checkpoint` calls
+    A `stopping` :class:`threading.Event` to handle graceful shutdown and a lock to handle concurrent `produce` and `checkpoint` calls
     """
 
     def __init__(self, name: str, shutdown_timeout: int = 10) -> None:

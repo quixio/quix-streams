@@ -15,14 +15,20 @@ class TestSourceManager:
         topic1 = Topic("foo", None)
         topic2 = Topic("bar", None)
 
-        manager.register(source1, None, topic1)
+        with pytest.raises(ValueError):
+            manager.register(source1)
+
+        source1.configure(topic1, None)
+        manager.register(source1)
 
         # registering the same source twice fails
         with pytest.raises(ValueError):
-            manager.register(source1, None, topic2)
+            manager.register(source1)
 
+        source2.configure(topic1, None)
         # registering a source with the same topic fails
         with pytest.raises(ValueError):
-            manager.register(source2, None, topic1)
+            manager.register(source2)
 
-        manager.register(source2, None, topic2)
+        source2.configure(topic2, None)
+        manager.register(source2)
