@@ -3,6 +3,9 @@ from collections import namedtuple
 from typing import Generator
 
 import pytest
+from confluent_kafka.schema_registry import SchemaRegistryClient
+
+from quixstreams.schema_registry import SchemaRegistryConfig
 
 from .compat import Network
 from .containerhelper import ContainerHelper
@@ -81,3 +84,17 @@ def schema_registry_container(
     test_logger.debug(f"Started Schema Registry container on {schema_registry_address}")
     yield SchemaRegistryContainer(schema_registry_address=schema_registry_address)
     container.stop()
+
+
+@pytest.fixture(scope="session")
+def schema_registry_config(
+    schema_registry_container: SchemaRegistryContainer,
+) -> SchemaRegistryConfig:
+    return SchemaRegistryConfig(url=schema_registry_container.schema_registry_address)
+
+
+@pytest.fixture(scope="session")
+def schema_registry_client(
+    schema_registry_config: SchemaRegistryConfig,
+) -> SchemaRegistryClient:
+    return SchemaRegistryClient(schema_registry_config.as_dict())

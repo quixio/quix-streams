@@ -1,6 +1,8 @@
+from confluent_kafka.serialization import MessageField
+
 from quixstreams.models import SerializationContext
 
-DUMMY_CONTEXT = SerializationContext(topic="topic")
+DUMMY_CONTEXT = SerializationContext(topic="topic", field=MessageField.VALUE)
 
 AVRO_TEST_SCHEMA = {
     "type": "record",

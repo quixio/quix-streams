@@ -1,10 +1,17 @@
+import json
 from typing import Union, Mapping, Optional, Any, Iterable
 
 from io import BytesIO
 
+from confluent_kafka.schema_registry import SchemaRegistryClient
+from confluent_kafka.schema_registry.avro import (
+    AvroDeserializer as _AvroDeserializer,
+    AvroSerializer as _AvroSerializer,
+)
 from fastavro import schemaless_reader, schemaless_writer, parse_schema
 from fastavro.types import Schema
 
+from quixstreams.schema_registry import SchemaRegistryConfig
 from .base import Serializer, Deserializer, SerializationContext
 from .exceptions import SerializationError
 
@@ -18,6 +25,7 @@ class AvroSerializer(Serializer):
         strict: bool = False,
         strict_allow_default: bool = False,
         disable_tuple_notation: bool = False,
+        schema_registry_config: Optional[SchemaRegistryConfig] = None,
     ):
         """
         Serializer that returns data in Avro format.
@@ -36,8 +44,18 @@ class AvroSerializer(Serializer):
         self._strict = strict
         self._strict_allow_default = strict_allow_default
         self._disable_tuple_notation = disable_tuple_notation
+        self._schema_registry_serializer = None
+        if schema_registry_config:
+            conf = schema_registry_config.as_dict(plaintext_secrets=True)
+            self._schema_registry_serializer = _AvroSerializer(
+                schema_registry_client=SchemaRegistryClient(conf),
+                schema_str=json.dumps(schema),
+            )
 
     def __call__(self, value: Any, ctx: SerializationContext) -> bytes:
+        if self._schema_registry_serializer:
+            return self._schema_registry_serializer(value, ctx.to_confluent_ctx())
+
         data = BytesIO()
 
         with BytesIO() as data:
@@ -59,13 +77,14 @@ class AvroSerializer(Serializer):
 class AvroDeserializer(Deserializer):
     def __init__(
         self,
-        schema: Schema,
+        schema: Optional[Schema] = None,
         reader_schema: Optional[Schema] = None,
         return_record_name: bool = False,
         return_record_name_override: bool = False,
         return_named_type: bool = False,
         return_named_type_override: bool = False,
         handle_unicode_errors: str = "strict",
+        schema_registry_config: Optional[SchemaRegistryConfig] = None,
     ):
         """
         Deserializer that parses data from Avro.
@@ -86,18 +105,32 @@ class AvroDeserializer(Deserializer):
         :param handle_unicode_errors: Should be set to a valid string that can be used in the errors argument of the string decode() function.
             Default - `"strict"`
         """
+        if not schema and not schema_registry_config:
+            raise ValueError(
+                "Either `schema` or `schema_registry_config` must be provided."
+            )
         super().__init__()
-        self._schema = parse_schema(schema)
+        self._schema = parse_schema(schema) if schema else None
         self._reader_schema = parse_schema(reader_schema) if reader_schema else None
         self._return_record_name = return_record_name
         self._return_record_name_override = return_record_name_override
         self._return_named_type = return_named_type
         self._return_named_type_override = return_named_type_override
         self._handle_unicode_errors = handle_unicode_errors
+        self._schema_registry_deserializer = None
+        if schema_registry_config:
+            conf = schema_registry_config.as_dict(plaintext_secrets=True)
+            self._schema_registry_deserializer = _AvroDeserializer(
+                schema_registry_client=SchemaRegistryClient(conf),
+                schema_str=json.dumps(schema) if schema else None,
+            )
 
     def __call__(
         self, value: bytes, ctx: SerializationContext
     ) -> Union[Iterable[Mapping], Mapping]:
+        if self._schema_registry_deserializer:
+            return self._schema_registry_deserializer(value, ctx.to_confluent_ctx())
+
         try:
             return schemaless_reader(
                 BytesIO(value),
