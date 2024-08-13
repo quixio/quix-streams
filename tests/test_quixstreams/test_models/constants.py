@@ -1,6 +1,6 @@
 from quixstreams.models import SerializationContext
 
-dummy_context = SerializationContext(topic="topic")
+DUMMY_CONTEXT = SerializationContext(topic="topic")
 
 AVRO_TEST_SCHEMA = {
     "type": "record",

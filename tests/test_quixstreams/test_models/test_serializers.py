@@ -23,7 +23,7 @@ from quixstreams.models.serializers.protobuf import (
 
 from quixstreams.models.serializers.avro import AvroDeserializer, AvroSerializer
 
-from .constants import AVRO_TEST_SCHEMA, dummy_context, JSONSCHEMA_TEST_SCHEMA
+from .constants import AVRO_TEST_SCHEMA, DUMMY_CONTEXT, JSONSCHEMA_TEST_SCHEMA
 from .utils import int_to_bytes, float_to_bytes
 from .protobuf.test_pb2 import Test
 
@@ -78,7 +78,7 @@ class TestSerializers:
         ],
     )
     def test_serialize_success(self, serializer: Serializer, value, expected):
-        assert serializer(value, ctx=dummy_context) == expected
+        assert serializer(value, ctx=DUMMY_CONTEXT) == expected
 
     @pytest.mark.parametrize(
         "serializer, value",
@@ -109,7 +109,7 @@ class TestSerializers:
     )
     def test_serialize_error(self, serializer: Serializer, value):
         with pytest.raises(SerializationError):
-            serializer(value, ctx=dummy_context)
+            serializer(value, ctx=DUMMY_CONTEXT)
 
     def test_invalid_jsonschema(self):
         with pytest.raises(jsonschema.SchemaError):
@@ -188,7 +188,7 @@ class TestDeserializers:
     def test_deserialize_no_column_name_success(
         self, deserializer: Deserializer, value, expected
     ):
-        assert deserializer(value, ctx=dummy_context) == expected
+        assert deserializer(value, ctx=DUMMY_CONTEXT) == expected
 
     @pytest.mark.parametrize(
         "deserializer, value",
@@ -213,7 +213,7 @@ class TestDeserializers:
     )
     def test_deserialize_error(self, deserializer: Deserializer, value):
         with pytest.raises(SerializationError):
-            deserializer(value, ctx=dummy_context)
+            deserializer(value, ctx=DUMMY_CONTEXT)
 
     def test_invalid_jsonschema(self):
         with pytest.raises(jsonschema.SchemaError):
