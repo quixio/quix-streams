@@ -1,10 +1,10 @@
-from typing import Union, Mapping, Iterable, Dict
+from typing import Dict, Iterable, Mapping, Union
 
-from .base import Serializer, Deserializer, SerializationContext
-from .exceptions import SerializationError
-
-from google.protobuf.message import Message, DecodeError, EncodeError
 from google.protobuf.json_format import MessageToDict, ParseDict, ParseError
+from google.protobuf.message import DecodeError, EncodeError, Message
+
+from .base import Deserializer, SerializationContext, Serializer
+from .exceptions import SerializationError
 
 __all__ = ("ProtobufSerializer", "ProtobufDeserializer")
 
