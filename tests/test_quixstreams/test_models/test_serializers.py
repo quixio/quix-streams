@@ -1,10 +1,8 @@
 import pytest
-
 import jsonschema
 
 from quixstreams.models import (
     IntegerSerializer,
-    SerializationContext,
     DoubleSerializer,
     StringSerializer,
     BytesDeserializer,
@@ -25,29 +23,9 @@ from quixstreams.models.serializers.protobuf import (
 
 from quixstreams.models.serializers.avro import AvroDeserializer, AvroSerializer
 
+from .constants import AVRO_TEST_SCHEMA, dummy_context, JSONSCHEMA_TEST_SCHEMA
 from .utils import int_to_bytes, float_to_bytes
 from .protobuf.test_pb2 import Test
-
-AVRO_TEST_SCHEMA = {
-    "type": "record",
-    "name": "testschema",
-    "fields": [
-        {"name": "name", "type": "string"},
-        {"name": "id", "type": "int", "default": 0},
-    ],
-}
-
-
-dummy_context = SerializationContext(topic="topic")
-
-JSONSCHEMA_TEST_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "name": {"type": "string"},
-        "id": {"type": "number"},
-    },
-    "required": ["name"],
-}
 
 
 class TestSerializers:
