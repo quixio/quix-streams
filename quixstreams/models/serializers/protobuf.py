@@ -36,16 +36,21 @@ class ProtobufSerializer(Serializer):
     def __call__(
         self, value: Union[Dict, Message], ctx: SerializationContext
     ) -> Union[str, bytes]:
+        if isinstance(value, self._msg_type):
+            msg = value
+        else:
+            try:
+                msg = ParseDict(
+                    value,
+                    self._msg_type(),
+                    ignore_unknown_fields=self._ignore_unknown_fields,
+                )
+            except ParseError as exc:
+                raise SerializationError(str(exc)) from exc
 
         try:
-            if isinstance(value, self._msg_type):
-                return value.SerializeToString(deterministic=self._deterministic)
-
-            msg = self._msg_type()
-            return ParseDict(
-                value, msg, ignore_unknown_fields=self._ignore_unknown_fields
-            ).SerializeToString(deterministic=self._deterministic)
-        except (EncodeError, ParseError) as exc:
+            return msg.SerializeToString(deterministic=self._deterministic)
+        except EncodeError as exc:
             raise SerializationError(str(exc)) from exc
 
 
