@@ -4,7 +4,7 @@ from typing import Iterable, Optional, Tuple
 
 from quixstreams.models.messages import KafkaMessage
 
-from .base import PollingSource
+from .base import PollingSource, PollingSourceShutdown
 
 logger = logging.getLogger(__name__)
 
@@ -55,12 +55,9 @@ class ValueIterableSource(PollingSource):
 
     def poll(self) -> KafkaMessage:
         try:
-            value = next(self._values)
+            return self.serialize(key=self._key, value=next(self._values))
         except StopIteration:
-            self.stop()
-            return
-
-        return self.serialize(key=self._key, value=value)
+            raise PollingSourceShutdown()
 
 
 class KeyValueIterableSource(PollingSource):
@@ -106,9 +103,11 @@ class KeyValueIterableSource(PollingSource):
 
     def poll(self) -> KafkaMessage:
         try:
-            key, value = next(self._iterable)
+            data = next(self._iterable)
         except StopIteration:
-            self.stop()
-            return
+            raise PollingSourceShutdown()
 
+        if data is None:
+            return data
+        key, value = data
         return self.serialize(key=key, value=value)

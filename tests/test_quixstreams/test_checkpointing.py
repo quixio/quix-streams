@@ -47,7 +47,6 @@ def checkpoint_factory(state_manager, consumer, row_producer_factory):
             state_manager=state_manager_,
             sink_manager=sink_manager_,
             pausing_manager=pausing_manager_,
-            source_manager=SourceManager(),
             exactly_once=exactly_once,
         )
 

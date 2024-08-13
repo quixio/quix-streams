@@ -1,6 +1,6 @@
 import logging
 from copy import deepcopy
-from typing import Dict, List, Optional, Set, Literal
+from typing import Dict, List, Optional, Set, Literal, TYPE_CHECKING
 
 from quixstreams.models.serializers import DeserializerType, SerializerType
 from quixstreams.utils.dicts import dict_values
@@ -11,6 +11,10 @@ from .exceptions import (
     TopicNotFoundError,
 )
 from .topic import Topic, TopicConfig, TimestampExtractor
+
+if TYPE_CHECKING:
+    from quixstreams.sources.base import BaseSource
+
 
 logger = logging.getLogger(__name__)
 
@@ -241,9 +245,9 @@ class TopicManager:
     def topic(
         self,
         name: str,
-        value_deserializer: Optional[DeserializerType] = "json",
+        value_deserializer: Optional[DeserializerType] = None,
         key_deserializer: Optional[DeserializerType] = "bytes",
-        value_serializer: Optional[SerializerType] = "json",
+        value_serializer: Optional[SerializerType] = None,
         key_serializer: Optional[SerializerType] = "bytes",
         config: Optional[TopicConfig] = None,
         timestamp_extractor: Optional[TimestampExtractor] = None,
@@ -282,6 +286,10 @@ class TopicManager:
         )
         self._topics[name] = topic
         return topic
+
+    def source_topic(self, source: "BaseSource") -> Topic:
+        topic_args = source.default_topic()
+        return self.topic(**topic_args.asdict())
 
     def repartition_topic(
         self,

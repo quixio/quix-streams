@@ -1,3 +1,4 @@
+import dataclasses
 import threading
 import logging
 
@@ -5,34 +6,65 @@ from abc import ABC, abstractmethod
 from typing import Optional, Union
 
 
-from quixstreams.models import Topic, TopicManager
 from quixstreams.models.messages import KafkaMessage
+from quixstreams.models.topics import TimestampExtractor, TopicConfig, Topic
 from quixstreams.models.types import Headers
 from quixstreams.rowproducer import RowProducer
-
+from quixstreams.models.serializers import (
+    BytesSerializer,
+    BytesDeserializer,
+    SerializerType,
+    DeserializerType,
+)
 from quixstreams.checkpointing.exceptions import CheckpointProducerTimeout
+
 
 logger = logging.getLogger(__name__)
 
 __all__ = (
     "BaseSource",
     "Source",
+    "CheckpointingSource",
     "PollingSource",
-    "SourceStoppingException",
+    "PollingSourceShutdown",
 )
+
+
+@dataclasses.dataclass()
+class SourceTopic:
+    """
+    Source topic configuration
+
+    See :class:`quixstrems.models.Topic` for more detailts.
+    """
+
+    name: str
+    config: Optional[TopicConfig] = None
+    value_deserializer: Optional[DeserializerType] = "json"
+    key_deserializer: Optional[DeserializerType] = BytesDeserializer()
+    value_serializer: Optional[SerializerType] = "json"
+    key_serializer: Optional[SerializerType] = BytesSerializer()
+    timestamp_extractor: Optional[TimestampExtractor] = None
+
+    def asdict(self):
+        return dataclasses.asdict(self)
 
 
 class BaseSource(ABC):
     """
     This is the base class for all sources.
 
-    Source producer only support at-least-once delivery.
+    Sources are executed in a sub-process of the main application.
 
-    Subclass it and implement its methods to create your own source.
+    To create your own source you need to implement:
+        * `run`
+        * `cleanup`
+        * `stop`
+        * `default_topic`
     """
 
     # time in seconds the application will wait for the source to stop.
-    shutdown_timeout: int = 10
+    shutdown_timeout: float = 10
 
     def __init__(self):
         self._producer: Optional[RowProducer] = None
@@ -40,6 +72,11 @@ class BaseSource(ABC):
         self._configured: bool = False
 
     def configure(self, topic: Topic, producer: RowProducer) -> None:
+        """
+        This method is triggered when the source is registered to the Application.
+
+        It's used to configure the source with the kafka producer and the topic it should use
+        """
         self._producer = producer
         self._producer_topic = topic
         self._configured = True
@@ -53,60 +90,76 @@ class BaseSource(ABC):
         return self._producer_topic
 
     @abstractmethod
-    def checkpoint(self) -> None:
+    def run(self) -> None:
         """
-        This method is triggered by the application when it commits.
+        This method is triggered in the subprocess when the source is started.
 
-        You can flush the producer here to ensure all messages are successfully produced. This method is triggered in a
-        different thread than the `run` method. Locking can be necessary.
+        The subprocess will run as long as the run method execute. You should use it to fetch data and produce it to kafka.
         """
 
     @abstractmethod
-    def run(self) -> None:
+    def cleanup(self, failed: bool) -> None:
         """
-        This method is triggered once when the source is started.
+        This method is triggered once the `run` method completes.
 
-        The source is considered running for as long as the run method execute.
+        You can use it to perform any kind of shutting down cleanup
         """
 
     @abstractmethod
     def stop(self) -> None:
         """
-        This method is triggered either when the source `run` method as completed or when it needs to complete.
+        This method is triggered when the application is shutting down.
 
-        The SourceManager will wait up to `shutdown_timeout` seconds after calling `stop` for the `run` method to complete.
+        The source should make sure it's `run` method completes soon.
+
+        Example Snippet:
+
+        ```python
+        class MySource(BaseSource):
+            def run(self):
+                self._running = True
+                while self._running:
+                    self._producer.produce(
+                        topic=self._producer_topic,
+                        value="foo",
+                    )
+                    time.sleep(1)
+
+            def stop(self):
+                self._running = False
+        ```
         """
 
     @abstractmethod
-    def default_topic(self, topic_manager: TopicManager) -> Topic:
+    def default_topic(self) -> SourceTopic:
         """
         This method is triggered when the user hasn't specified a topic for the source.
 
-        In this case the source can define a default topic using the topic manager to create one.
+        The source should return a default topic configuration
         """
 
 
 class Source(BaseSource):
     """
-    This is an helper implementation for sources.
+    BaseSource class implementation providing
 
-    It provides implementation for some abstract method.
-        * checkpoint
-        * stop
-        * default_topic
+    Implementation for the abstract method:
+        * `default_topic`
+        * `cleanup`
 
     Helper methods
         * serialize
         * produce
-        * sleep
-
-    A `stopping` :class:`threading.Event` to handle graceful shutdown and a lock to handle concurrent `produce` and `checkpoint` calls
+        * flush
     """
 
-    def __init__(self, name: str, shutdown_timeout: int = 10) -> None:
+    def __init__(
+        self, name: str, shutdown_timeout: float = 10, flush_timeout: float = 5
+    ) -> None:
         """
-        :param name: The source unique name. Used to generate the default topic
+        :param name: The source unique name. Used to generate the topic configurtion
         :param shutdown_timeout: Time in second the application waits for the source to gracefully shutdown
+        :param flush_timeout: Time in second for the flush to complete succesfully
         """
         super().__init__()
 
@@ -114,12 +167,7 @@ class Source(BaseSource):
         self.name = name
 
         self.shutdown_timeout = shutdown_timeout
-
-        self._topic: Optional[Topic] = None
-        self._producer: Optional[RowProducer] = None
-
-        self._lock = threading.Lock()
-        self.stopping = threading.Event()
+        self._flush_timeout = flush_timeout
 
     def serialize(
         self,
@@ -151,75 +199,151 @@ class Source(BaseSource):
         Produce data to kafka using the source topic.
         """
 
-        with self._lock:
-            self._producer.produce(
-                topic=self._producer_topic.name,
-                value=value,
-                key=key,
-                headers=headers,
-                partition=partition,
-                timestamp=timestamp,
-                poll_timeout=poll_timeout,
-                buffer_error_max_tries=buffer_error_max_tries,
+        self._producer.produce(
+            topic=self._producer_topic.name,
+            value=value,
+            key=key,
+            headers=headers,
+            partition=partition,
+            timestamp=timestamp,
+            poll_timeout=poll_timeout,
+            buffer_error_max_tries=buffer_error_max_tries,
+        )
+
+    def flush(self, timeout: Optional[float] = None) -> None:
+        """
+        This method flush the producer.
+
+        It ensure all message are successfully delived to kafka
+
+        :raises CheckpointProducerTimeout: if any message fails to produce before the timeout
+        """
+        logger.debug("flushing source %s", self)
+        unproduced_msg_count = self._producer.flush(
+            self._flush_timeout if timeout is None else timeout
+        )
+        if unproduced_msg_count > 0:
+            raise CheckpointProducerTimeout(
+                f"'{unproduced_msg_count}' messages failed to be produced before the producer flush timeout"
             )
 
-    def checkpoint(self) -> None:
+    def cleanup(self, failed: bool) -> None:
         """
-        This method is triggered by the application when it commits.
-
-        It flushes the kafka producer and raise an error if any message
-        fails to be produced. You can override it to implement any
-        additional operations needed when checkpointing.
+        Flush the producer to ensure message are produced before shutting down
         """
-        with self._lock:
-            logger.debug("checkpoint: checkpointing source %s", self)
-            unproduced_msg_count = self._producer.flush()
-            if unproduced_msg_count > 0:
-                raise CheckpointProducerTimeout(
-                    f"'{unproduced_msg_count}' messages failed to be produced before the producer flush timeout"
-                )
+        super().cleanup(failed)
+        self.flush()
 
-    def sleep(self, seconds: float) -> None:
+    def default_topic(self) -> SourceTopic:
         """
-        Helper method uses to put the source to sleep. It will raise a `SourceStoppingException` whenever the source needs to stop.
-
-        :raises: `SourceStoppingException` when the source needs to stop.
-        """
-        if self.stopping.wait(seconds):
-            raise SourceStoppingException("shutdown")
-
-    def default_topic(self, topic_manager: TopicManager) -> Topic:
-        """
-        This method is triggered when the user hasn't specified a topic for the source.
-
         Return a topic matching the source name.
 
         :return: `:class:`quixstreams.models.topics.Topic`
         """
-        return topic_manager.topic(self.name)
+        return SourceTopic(name=self.name)
 
-    def stop(self) -> None:
-        """
-        This method is triggered when the source needs to be stopped.
-        """
-        logger.info("stopping source %s", self)
-        self.stopping.set()
 
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__}({self.name})>"
+class CheckpointingSource(Source):
+    """
+    Source implementation providing checkpointing
+
+    Implemented using a timer triggering a checkpoint every `checkpoint_interval` seconds.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        shutdown_timeout: float = 10,
+        flush_timeout: float = 5,
+        checkpoint_interval: float = 5,
+    ) -> None:
+        """
+        :param name: The source unique name. Used to generate the topic configurtion
+        :param shutdown_timeout: Time in second the application waits for the source to gracefully shutdown
+        :param flush_timeout: Time in second for the flush to complete succesfully
+        :param checkpoint_interval: Time in second between each checkpoints
+        """
+        super().__init__(name, shutdown_timeout, flush_timeout)
+
+        self._checkpoint_interval = checkpoint_interval
+        self._checkpoint_error: Optional[BaseException] = None
+
+        self.__checkpoint_timer = self.__make_timer()
+
+    def __make_timer(self):
+        return threading.Timer(
+            interval=self._checkpoint_interval, function=self.__checkpoint
+        )
+
+    def __checkpoint(self):
+        try:
+            self.checkpoint()
+        except BaseException as err:
+            logger.exception("Failed checkpoint in source %s", self)
+            self._checkpoint_error = err
+            self.stop()
+            return
+
+        self.__checkpoint_timer = self.__make_timer()
+        self.__checkpoint_timer.start()
+
+    @abstractmethod
+    def run(self):
+        self.__checkpoint_timer.start()
+        super().run()
+
+    def cleanup(self, failed):
+        self.__checkpoint_timer.cancel()
+        if self._checkpoint_error:
+            super().cleanup(True)
+            raise self._checkpoint_error
+        else:
+            super().cleanup(failed)
+
+    @abstractmethod
+    def checkpoint(self):
+        """
+        This method is triggered, in it's own thread, every `checkpoint_interval` seconds.
+
+        Use it to perform any checkpointing related tasks.
+        """
 
 
 class PollingSource(Source):
     """
-    Base source implementation for polling sources.
+    Source implementation for polling sources
 
-    Implementations should override the `poll` method and return a :class:`quixstreams.models.messages.KafkaMessage` on every call.
+    Periodically call the `poll` method to get a new message.
     """
 
+    def __init__(
+        self,
+        name: str,
+        polling_delay: float = 1,
+        shutdown_timeout: float = 10,
+        flush_timeout: float = 5,
+    ) -> None:
+        """
+        :param name: The source unique name. Used to generate the topic configurtion
+        :param polling_delay: Time in second the source will sleep when `poll` returns `None`
+        :param shutdown_timeout: Time in second the application waits for the source to gracefully shutdown
+        :param flush_timeout: Time in second for the flush to complete succesfully
+        """
+        super().__init__(name, shutdown_timeout, flush_timeout)
+
+        self._polling_delay = polling_delay
+        self._stopping = threading.Event()
+
     def run(self) -> None:
-        while not self.stopping.is_set():
-            msg = self.poll()
+        super().run()
+        while not self._stopping.is_set():
+            try:
+                msg = self.poll()
+            except PollingSourceShutdown:
+                return
+
             if msg is None:
+                self.sleep(self._polling_delay)
                 continue
 
             self.produce(
@@ -229,14 +353,30 @@ class PollingSource(Source):
                 timestamp=msg.timestamp,
             )
 
+    def sleep(self, seconds: float):
+        """
+        Sleep up to `seconds` seconds or raise `PollingSourceShutdown` to shutdown the source
+        """
+        if self._stopping.wait(seconds):
+            raise PollingSourceShutdown("shutdown")
+
+    def stop(self) -> None:
+        self._stopping.set()
+        super().stop()
+
     @abstractmethod
     def poll(self) -> Optional[KafkaMessage]:
+        """
+        This method is triggered when the source needs new data
+
+        You can return :
+            * a :class:`quixstreams.models.messages.KafkaMessage` to produce it
+            * `None` to make the source sleep for `polling_delay`
+
+        or raise a `PollingSourceShutdown` to shutdown the source.
+        """
         raise NotImplementedError(self.poll)
 
 
-class SourceStoppingException(Exception):
-    """
-    Exception raised when a source is stopping
-    """
-
+class PollingSourceShutdown(Exception):
     pass

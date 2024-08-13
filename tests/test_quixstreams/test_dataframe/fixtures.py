@@ -10,7 +10,6 @@ from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
 from quixstreams.sinks import SinkManager
 from quixstreams.state import StateStoreManager
-from quixstreams.sources.manager import SourceManager
 
 
 @pytest.fixture()
@@ -36,7 +35,6 @@ def dataframe_factory(topic_manager_topic_factory, topic_manager_factory):
             state_manager=state_manager,
             pausing_manager=pausing_manager,
             sink_manager=sink_manager,
-            source_manager=SourceManager(),
         )
         processing_ctx.init_checkpoint()
 

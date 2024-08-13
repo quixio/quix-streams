@@ -30,7 +30,7 @@ from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
 from quixstreams.sinks import SinkBatch, SinkBackpressureError
 from quixstreams.state import State
-from quixstreams.sources import ValueIterableSource
+from quixstreams.sources import ValueIterableSource, SourceException
 from tests.utils import DummySink
 
 
@@ -2143,7 +2143,6 @@ class TestApplicationSource:
             yield 0
             yield 1
             yield 2
-            app.stop()
 
         source = ValueIterableSource(name="foo", key="foo", values=values())
         app.source(source, topic=app.topic(topic_name))
@@ -2177,4 +2176,5 @@ class TestApplicationSource:
         sdf = app.dataframe(source=source)
 
         # The app stops on source error
-        app.run(sdf)
+        with pytest.raises(SourceException):
+            app.run(sdf)

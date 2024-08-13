@@ -1,65 +1,153 @@
+import time
 import logging
-import threading
+import signal
+import multiprocessing
+import multiprocessing.queues
 
-from typing import List, Dict
+from typing import List, Optional
 
 from quixstreams.models import Topic
-from quixstreams.rowproducer import RowProducer
-
-from .base import SourceStoppingException, BaseSource
+from .base import BaseSource
 
 logger = logging.getLogger(__name__)
 
 
-class SourceThread(threading.Thread):
+class SourceProcess(multiprocessing.Process):
     """
-    Class managing the lifecycle of a source inside a thread.
+    An individual source process
+
+    Used to manage a source and it's process. Handles communication accross the child and parent processes,
+    lifecycle, error handling.
+
+    Part of the methods are designed to be used from the parent process and other from the child process.
     """
 
     def __init__(self, source):
         super().__init__()
         self.source: BaseSource = source
 
-        self._running = False
+        self._exception: Optional[Exception] = None
 
-    def start(self) -> "SourceThread":
-        logger.info("starting source %s", self.source)
-        return super().start()
+        # reader and writer pipe used to communicate from the child to the parent process
+        self._rpipe, self._wpipe = multiprocessing.Pipe(duplex=False)
+
+    # --- CHILD PROCESS METHODS --- #
+
+    def _setup_signal_handlers(self):
+        """
+        Configure the child process signal handlers to handle shutdown gracefully
+        """
+        signal.signal(signal.SIGINT, self._stop)
+        signal.signal(signal.SIGTERM, self._stop)
 
     def run(self) -> None:
-        self._running = True
+        """
+        Entrypoing of the child process
+
+        Responsible for:
+            * Configuring the signal handlers to properly handle shutdown
+            * Execute the source `run` method
+            * Report the source exception to the parent process
+            * Execute cleanup
+        """
+        self._setup_signal_handlers()
+        logger.info("Source %s started with PID %s", self.source, self.pid)
+
         try:
             self.source.run()
-        except SourceStoppingException:
-            raise
-        except BaseException:
-            logger.exception(f"Error in source {self}")
-            raise
+        except BaseException as err:
+            logger.exception(f"Error in source %s", self)
+            self._wpipe.send(err)
+            self._cleanup(failed=True)
+        else:
+            self._cleanup(failed=False)
 
-        if self._running:
-            self.stop()
+        self._wpipe.close()
+        logger.info("Source %s with PID %s completed", self.source, self.pid)
+
+    def _cleanup(self, failed: bool) -> None:
+        """
+        Execute post-run cleanup
+        """
+        try:
+            self.source.cleanup(failed)
+        except BaseException as err:
+            logger.exception(f"Error cleaning up source %s", self)
+            self._wpipe.send(err)
+
+    def _stop(self, *args):
+        """
+        Ask the source to stop execution
+        """
+        try:
+            self.source.stop()
+        except BaseException as err:
+            logger.exception(f"Error stopping source %s", self)
+            self._wpipe.send(err)
+
+    # --- PARENT PROCESS METHODS --- #
+
+    def start(self) -> "SourceProcess":
+        logger.info("Starting source %s", self.source)
+        return super().start()
+
+    def raise_for_error(self) -> bool:
+        """
+        If the child process has terminated with an exception raises a
+        :class:`quixstreams.sources.manager.SourceException`.
+        """
+        if super().is_alive():
+            return
+
+        if self._exception is None:
+            if self._rpipe.poll():
+                try:
+                    self._exception = self._rpipe.recv()
+                except EOFError:
+                    return
+
+        if self._exception is not None:
+            raise SourceException(self) from self._exception
 
     def stop(self):
-        if self._running:
-            self._running = False
-            self.source.stop()
-
-    def wait_stopped(self) -> None:
         """
-        Wait, up to `source.shutdown_timeout` seconds, for the thread to exit.
+        Handle shutdown of the source and the associated process
 
-        :raises: TimeoutError if the thread is still alive after the shutdown timeout
+        First try a graceful shutdown by sending a SIGTERM and waiting up to
+        `source.shutdown_timeout` seconds for the process to exit. If the process
+        is still alive force kill it with a SIGKILL/
         """
-        self.join(self.source.shutdown_timeout)
-        if self.is_alive():
-            raise TimeoutError(f"source '{self.source}' failed to shutdown gracefully")
+        try:
+            if self.is_alive():
+                logger.info("Stopping source %s with PID %s", self.source, self.pid)
+                self.terminate()
+                self.join(self.source.shutdown_timeout)
+                if self.is_alive():
+                    logger.info(
+                        "Force stopping source %s with PID", self.source, self.pid
+                    )
+                    self.kill()
+                    self.join(self.source.shutdown_timeout)
+        finally:
+            self.close()
 
 
 class SourceManager:
+    """
+    Class managing the sources registered with the app
+
+    Sources run in their separate process pay attention about cross-process communication
+    """
+
     def __init__(self):
-        self.threads: List[SourceThread] = []
+        self.processes: List[SourceProcess] = []
 
     def register(self, source: BaseSource):
+        """
+        Register a new source in the manager.
+
+        Each source need to already be configured, can't reuse a topic and must be unique
+        """
         if not source.configured:
             raise ValueError("Accepts configured Source only")
         if source.producer_topic in self.topics:
@@ -67,27 +155,55 @@ class SourceManager:
         elif source in self.sources:
             raise ValueError(f"source '{source}' already registered")
 
-        self.threads.append(SourceThread(source))
+        self.processes.append(SourceProcess(source))
 
     @property
     def sources(self) -> List[BaseSource]:
-        return [thread.source for thread in self.threads]
+        return [process.source for process in self.processes]
 
     @property
     def topics(self) -> List[Topic]:
-        return [thread.source.producer_topic for thread in self.threads]
+        return [process.source.producer_topic for process in self.processes]
 
-    def checkpoint(self):
-        for thread in self.threads:
-            thread.source.checkpoint()
+    def start_sources(self) -> None:
+        for process in self.processes:
+            process.start()
 
-    def start_sources(self):
-        for thread in self.threads:
-            thread.start()
+    def stop_sources(self) -> None:
+        for process in self.processes:
+            process.stop()
 
-    def stop_sources(self):
-        for thread in self.threads:
-            thread.stop()
+    def raise_for_error(self) -> None:
+        """
+        Raise an exception if any process has stopped with an exception
+        """
+        for process in self.processes:
+            process.raise_for_error()
 
-        for thread in self.threads:
-            thread.wait_stopped()
+    def alives(self) -> bool:
+        """
+        Check if any process is alive
+
+        :return: True if at least one process is alive
+        """
+        return any(process.is_alive() for process in self.processes)
+
+    def __enter__(self):
+        self.start_sources()
+        return self
+
+    def __exit__(self, *args, **kwargs):
+        self.stop_sources()
+
+
+class SourceException(Exception):
+    """
+    Raised in the parent process when a source finish with an exception
+    """
+
+    def __init__(self, process: SourceProcess) -> None:
+        self.pid: int = process.pid
+        self.process: SourceProcess = process
+
+    def __str__(self) -> str:
+        return f"{self.process.source} with PID {self.pid} failed"
