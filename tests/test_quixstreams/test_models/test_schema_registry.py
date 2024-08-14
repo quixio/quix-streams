@@ -45,19 +45,21 @@ deserializer = serializer = _inject_schema_registry
 
 
 @pytest.mark.parametrize(
-    "serializer, deserializer, obj, data",
+    "serializer, deserializer, obj_to_serialize, serialized_data, deserialized_obj",
     [
         (
             partial(AvroSerializer, AVRO_TEST_SCHEMA),
             partial(AvroDeserializer),
             {"name": "foo", "id": 123},
             b"\x06foo\xf6\x01",
+            {"name": "foo", "id": 123},
         ),
         (
             partial(AvroSerializer, AVRO_TEST_SCHEMA),
             partial(AvroDeserializer),
             {"name": "foo", "id": 0},
             b"\x06foo\x00",
+            {"name": "foo", "id": 0},
         ),
     ],
     indirect=["serializer", "deserializer"],
@@ -65,14 +67,15 @@ deserializer = serializer = _inject_schema_registry
 def test_schema_registry(
     serializer: Serializer,
     deserializer: Deserializer,
-    obj: Any,
-    data: bytes,
+    obj_to_serialize: Any,
+    serialized_data: bytes,
+    deserialized_obj: Any,
 ):
-    serialized = serializer(obj, DUMMY_CONTEXT)
+    serialized = serializer(obj_to_serialize, DUMMY_CONTEXT)
 
     magic, schema_id = _get_magic_byte_metadata(serialized, CONFLUENT_MAGIC_SIZE)
     assert magic == CONFLUENT_MAGIC_BYTE
     assert isinstance(schema_id, int)
-    assert serialized[CONFLUENT_MAGIC_SIZE:] == data
+    assert serialized[CONFLUENT_MAGIC_SIZE:] == serialized_data
 
-    assert deserializer(serialized, DUMMY_CONTEXT) == obj
+    assert deserializer(serialized, DUMMY_CONTEXT) == deserialized_obj
