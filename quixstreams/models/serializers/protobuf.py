@@ -1,8 +1,14 @@
-from typing import Dict, Iterable, Mapping, Union
+from typing import Dict, Iterable, Mapping, Optional, Union
 
+from confluent_kafka.schema_registry import SchemaRegistryClient
+from confluent_kafka.schema_registry.protobuf import (
+    ProtobufDeserializer as _ProtobufDeserializer,
+    ProtobufSerializer as _ProtobufSerializer,
+)
 from google.protobuf.json_format import MessageToDict, ParseDict, ParseError
 from google.protobuf.message import DecodeError, EncodeError, Message
 
+from quixstreams.schema_registry import SchemaRegistryConfig
 from .base import Deserializer, SerializationContext, Serializer
 from .exceptions import SerializationError
 
@@ -15,6 +21,7 @@ class ProtobufSerializer(Serializer):
         msg_type: Message,
         deterministic: bool = False,
         ignore_unknown_fields: bool = False,
+        schema_registry_config: Optional[SchemaRegistryConfig] = None,
     ):
         """
         Serializer that returns data in protobuf format.
@@ -32,6 +39,18 @@ class ProtobufSerializer(Serializer):
 
         self._deterministic = deterministic
         self._ignore_unknown_fields = ignore_unknown_fields
+        self._schema_registry_serializer = None
+        if schema_registry_config:
+            conf = schema_registry_config.as_dict(plaintext_secrets=True)
+            self._schema_registry_serializer = _ProtobufSerializer(
+                msg_type=msg_type,
+                schema_registry_client=SchemaRegistryClient(conf),
+                conf={
+                    # The use.deprecated.format has been mandatory since Confluent Kafka version 1.8.2.
+                    # https://github.com/confluentinc/confluent-kafka-python/releases/tag/v1.8.2
+                    "use.deprecated.format": False,
+                },
+            )
 
     def __call__(
         self, value: Union[Dict, Message], ctx: SerializationContext
@@ -48,6 +67,9 @@ class ProtobufSerializer(Serializer):
             except ParseError as exc:
                 raise SerializationError(str(exc)) from exc
 
+        if self._schema_registry_serializer:
+            return self._schema_registry_serializer(msg, ctx=ctx.to_confluent_ctx())
+
         try:
             return msg.SerializeToString(deterministic=self._deterministic)
         except EncodeError as exc:
@@ -61,6 +83,7 @@ class ProtobufDeserializer(Deserializer):
         use_integers_for_enums: bool = False,
         preserving_proto_field_name: bool = False,
         to_dict: bool = True,
+        schema_registry_config: Optional[SchemaRegistryConfig] = None,
     ):
         """
         Deserializer that parses protobuf data into a dictionary suitable for a StreamingDataframe.
@@ -84,15 +107,33 @@ class ProtobufDeserializer(Deserializer):
         self._use_integers_for_enums = use_integers_for_enums
         self._preserving_proto_field_name = preserving_proto_field_name
 
+        # Confluent's ProtobufDeserializer is not utilizing the
+        # Schema Registry. However, we still accept a fully qualified
+        # SchemaRegistryConfig to maintain a unified API and ensure future
+        # compatibility in case we choose to bypass Confluent and interact
+        # with the Schema Registry directly.
+        self._schema_registry_deserializer = None
+        if schema_registry_config:
+            self._schema_registry_deserializer = _ProtobufDeserializer(
+                message_type=msg_type,
+                conf={
+                    # The use.deprecated.format has been mandatory since Confluent Kafka version 1.8.2.
+                    # https://github.com/confluentinc/confluent-kafka-python/releases/tag/v1.8.2
+                    "use.deprecated.format": False,
+                },
+            )
+
     def __call__(
         self, value: bytes, ctx: SerializationContext
     ) -> Union[Iterable[Mapping], Mapping, Message]:
-        msg = self._msg_type()
-
-        try:
-            msg.ParseFromString(value)
-        except DecodeError as exc:
-            raise SerializationError(str(exc)) from exc
+        if self._schema_registry_deserializer:
+            msg = self._schema_registry_deserializer(value, ctx.to_confluent_ctx())
+        else:
+            msg = self._msg_type()
+            try:
+                msg.ParseFromString(value)
+            except DecodeError as exc:
+                raise SerializationError(str(exc)) from exc
 
         if not self._to_dict:
             return msg
