@@ -1,6 +1,7 @@
 from typing import Callable, Union, Mapping, Optional, Any, Iterable
 
-from jsonschema import ValidationError, SchemaError, Validator, Draft202012Validator
+from jsonschema import ValidationError, Draft202012Validator
+from jsonschema.protocols import Validator
 
 from quixstreams.utils.json import (
     dumps as default_dumps,
