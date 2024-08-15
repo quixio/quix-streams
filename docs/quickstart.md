@@ -98,7 +98,7 @@ sdf = sdf.apply(
 sdf["length"] = sdf["text"].apply(lambda word: len(word))
 
 # Print the output result
-sdf = sdf.update(lambda word: print(f"Output: {word}"))
+sdf = sdf.update(lambda row: print(f"Output: {row}"))
 
 # Run the streaming application
 if __name__ == "__main__":
