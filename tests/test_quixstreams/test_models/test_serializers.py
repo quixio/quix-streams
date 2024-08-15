@@ -25,7 +25,9 @@ from quixstreams.models.serializers.avro import AvroDeserializer, AvroSerializer
 
 from .constants import AVRO_TEST_SCHEMA, DUMMY_CONTEXT, JSONSCHEMA_TEST_SCHEMA
 from .utils import int_to_bytes, float_to_bytes
+from .protobuf.nested_pb2 import Nested
 from .protobuf.root_pb2 import Root
+from .protobuf.utils import create_timestamp
 
 
 class TestSerializers:
@@ -75,6 +77,28 @@ class TestSerializers:
                 b"\n\x03foo\x10\x02\x18\x01",
             ),
             (ProtobufSerializer(Root), {"name": "foo"}, b"\n\x03foo"),
+            (
+                ProtobufSerializer(Root),
+                {
+                    "name": "foo",
+                    "nested": {
+                        "id": 10,
+                        "time": "2000-01-02T12:34:56Z",
+                    },
+                },
+                b'\n\x03foo"\n\x08\n\x12\x06\x08\xf0\x8b\xbd\xc3\x03',
+            ),
+            (
+                ProtobufSerializer(Root),
+                Root(
+                    name="foo",
+                    nested=Nested(
+                        id=10,
+                        time=create_timestamp("2000-01-02T12:34:56Z"),
+                    ),
+                ),
+                b'\n\x03foo"\n\x08\n\x12\x06\x08\xf0\x8b\xbd\xc3\x03',
+            ),
         ],
     )
     def test_serialize_success(self, serializer: Serializer, value, expected):
@@ -183,6 +207,30 @@ class TestDeserializers:
                 {"enum": "A", "name": "", "id": 3},
             ),
             (ProtobufDeserializer(Root), b"", {"enum": "A", "name": "", "id": 0}),
+            (
+                ProtobufDeserializer(Root),
+                b'\n\x03foo"\n\x08\n\x12\x06\x08\xf0\x8b\xbd\xc3\x03',
+                {
+                    "enum": "A",
+                    "name": "foo",
+                    "id": 0,
+                    "nested": {
+                        "id": 10,
+                        "time": "2000-01-02T12:34:56Z",
+                    },
+                },
+            ),
+            (
+                ProtobufDeserializer(Root, to_dict=False),
+                b'\n\x03foo"\n\x08\n\x12\x06\x08\xf0\x8b\xbd\xc3\x03',
+                Root(
+                    name="foo",
+                    nested=Nested(
+                        id=10,
+                        time=create_timestamp("2000-01-02T12:34:56Z"),
+                    ),
+                ),
+            ),
         ],
     )
     def test_deserialize_no_column_name_success(

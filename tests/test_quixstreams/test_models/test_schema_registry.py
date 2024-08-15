@@ -20,7 +20,10 @@ from quixstreams.models.serializers.protobuf import (
 )
 
 from .constants import AVRO_TEST_SCHEMA, DUMMY_CONTEXT, JSONSCHEMA_TEST_SCHEMA
+from .protobuf.nested_pb2 import Nested
 from .protobuf.root_pb2 import Root
+from .protobuf.utils import create_timestamp
+
 
 CONFLUENT_MAGIC_BYTE = 0
 CONFLUENT_MAGIC_SIZE = 5
@@ -39,8 +42,15 @@ def _clear_schema_registry(
     # To restart schema IDs from 1, a container restart is required,
     # which would significantly increase testing times.
     yield
-    for subject in schema_registry_client.get_subjects():
-        schema_registry_client.delete_subject(subject, permanent=True)
+    while subjects := schema_registry_client.get_subjects():
+        for subject in subjects:
+            try:
+                schema_registry_client.delete_subject(subject, permanent=True)
+            except Exception as exc:
+                if exc.error_code == 42206:
+                    # One or more references exist to the schema. Skip for now.
+                    continue
+                raise
 
 
 @pytest.fixture()
@@ -126,6 +136,67 @@ deserializer = serializer = _inject_schema_registry
             {"name": "foo", "id": 2, "enum": 1},
             b"\x00\n\x03foo\x10\x02\x18\x01",
             {"name": "foo", "id": 2, "enum": "B"},
+        ),
+        (
+            partial(ProtobufSerializer, Root),
+            partial(ProtobufDeserializer, Root),
+            {
+                "name": "foo",
+                "nested": {
+                    "id": 10,
+                    "time": "2000-01-02T12:34:56Z",
+                },
+            },
+            b'\x00\n\x03foo"\n\x08\n\x12\x06\x08\xf0\x8b\xbd\xc3\x03',
+            {
+                "name": "foo",
+                "id": 0,
+                "enum": "A",
+                "nested": {
+                    "id": 10,
+                    "time": "2000-01-02T12:34:56Z",
+                },
+            },
+        ),
+        (
+            partial(ProtobufSerializer, Root),
+            partial(ProtobufDeserializer, Root),
+            Root(
+                name="foo",
+                nested=Nested(
+                    id=10,
+                    time=create_timestamp("2000-01-02T12:34:56Z"),
+                ),
+            ),
+            b'\x00\n\x03foo"\n\x08\n\x12\x06\x08\xf0\x8b\xbd\xc3\x03',
+            {
+                "name": "foo",
+                "id": 0,
+                "enum": "A",
+                "nested": {
+                    "id": 10,
+                    "time": "2000-01-02T12:34:56Z",
+                },
+            },
+        ),
+        (
+            partial(ProtobufSerializer, Root),
+            partial(ProtobufDeserializer, Root, to_dict=False),
+            Root(
+                name="foo",
+                nested=Nested(
+                    id=10,
+                    time=create_timestamp("2000-01-02T12:34:56Z"),
+                ),
+            ),
+            b'\x00\n\x03foo"\n\x08\n\x12\x06\x08\xf0\x8b\xbd\xc3\x03',
+            Root(
+                name="foo",
+                nested=Nested(
+                    id=10,
+                    time=create_timestamp("2000-01-02T12:34:56Z"),
+                ),
+            ),
         ),
     ],
     indirect=["serializer", "deserializer"],
