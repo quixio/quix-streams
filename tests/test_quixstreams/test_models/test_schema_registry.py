@@ -20,7 +20,7 @@ from quixstreams.models.serializers.protobuf import (
 )
 
 from .constants import AVRO_TEST_SCHEMA, DUMMY_CONTEXT, JSONSCHEMA_TEST_SCHEMA
-from .protobuf.test_pb2 import Test
+from .protobuf.root_pb2 import Root
 
 CONFLUENT_MAGIC_BYTE = 0
 CONFLUENT_MAGIC_SIZE = 5
@@ -79,50 +79,50 @@ deserializer = serializer = _inject_schema_registry
             {"name": "foo", "id": 0},
         ),
         (
-            partial(ProtobufSerializer, Test),
-            partial(ProtobufDeserializer, Test),
+            partial(ProtobufSerializer, Root),
+            partial(ProtobufDeserializer, Root),
             {},
             b"\x00",  # Confluent adds this extra byte in _encode_varints step
             {"name": "", "id": 0, "enum": "A"},
         ),
         (
-            partial(ProtobufSerializer, Test),
-            partial(ProtobufDeserializer, Test),
+            partial(ProtobufSerializer, Root),
+            partial(ProtobufDeserializer, Root),
             {"id": 3},
             b"\x00\x10\x03",
             {"name": "", "id": 3, "enum": "A"},
         ),
         (
-            partial(ProtobufSerializer, Test),
-            partial(ProtobufDeserializer, Test),
+            partial(ProtobufSerializer, Root),
+            partial(ProtobufDeserializer, Root),
             {"name": "foo"},
             b"\x00\n\x03foo",
             {"name": "foo", "id": 0, "enum": "A"},
         ),
         (
-            partial(ProtobufSerializer, Test),
-            partial(ProtobufDeserializer, Test),
+            partial(ProtobufSerializer, Root),
+            partial(ProtobufDeserializer, Root),
             {"name": "foo", "id": 2},
             b"\x00\n\x03foo\x10\x02",
             {"name": "foo", "id": 2, "enum": "A"},
         ),
         (
-            partial(ProtobufSerializer, Test),
-            partial(ProtobufDeserializer, Test),
-            Test(name="foo", id=2),
+            partial(ProtobufSerializer, Root),
+            partial(ProtobufDeserializer, Root),
+            Root(name="foo", id=2),
             b"\x00\n\x03foo\x10\x02",
             {"name": "foo", "id": 2, "enum": "A"},
         ),
         (
-            partial(ProtobufSerializer, Test),
-            partial(ProtobufDeserializer, Test),
+            partial(ProtobufSerializer, Root),
+            partial(ProtobufDeserializer, Root),
             {"name": "foo", "id": 2, "enum": "B"},
             b"\x00\n\x03foo\x10\x02\x18\x01",
             {"name": "foo", "id": 2, "enum": "B"},
         ),
         (
-            partial(ProtobufSerializer, Test),
-            partial(ProtobufDeserializer, Test),
+            partial(ProtobufSerializer, Root),
+            partial(ProtobufDeserializer, Root),
             {"name": "foo", "id": 2, "enum": 1},
             b"\x00\n\x03foo\x10\x02\x18\x01",
             {"name": "foo", "id": 2, "enum": "B"},
