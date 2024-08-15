@@ -1,14 +1,14 @@
 syntax = "proto3";
 
-package test;
+package schemas.v1;
 
-enum TestEnum {
+enum Letter {
   A = 0;
   B = 1;
 }
 
-message Test {
+message Root {
   string name = 1;
   int32 id = 2;
-  TestEnum enum = 3;
+  Letter enum = 3;
 }
