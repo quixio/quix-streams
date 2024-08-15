@@ -14,7 +14,7 @@ You'll learn how to:
 
 ## Outline of the Problem
 
-Imagine we are a company with various products. 
+Imagine we are a company with various products.
 
 We want to process text reviews for our various products in real time 
 and see what words are the most popular across all of them.
@@ -29,7 +29,7 @@ the counts of each individually downstream for further processing.
 We will use a simple producer to generate text to be processed by our 
 new Word Counter application.
 
-NOTE: our example uses JSON formatting for Kafka message values.
+NOTE: Our example uses JSON formatting for Kafka message values.
 
 
 
@@ -101,7 +101,7 @@ Next we define our input/output topics, named `product_reviews` and `product_rev
 
 They each return [`Topic`](../../api-reference/topics.md) objects, used later on.
 
-NOTE: the topics will automatically be created for you in Kafka when you run the application should they not exist.
+NOTE: The topics will automatically be created for you in Kafka when you run the application should they not exist.
 
 
 ### The StreamingDataFrame (SDF)
@@ -116,7 +116,7 @@ SDF allows manipulating the message value in a dataframe-like fashion using vari
 
 After initializing, we continue re-assigning to the same `sdf` variable as we add operations.
 
-(Also: notice that we pass our input `Topic` from the previous step to it.)
+(Also, notice that we pass our input `Topic` from the previous step to it.)
 
 ### Tokenizing Text
 
@@ -148,9 +148,9 @@ to this:
 `>>> [('bob', 1), ('likes', 2), ('bananas', 1), ('and', 1), ('frank', 1), ('apples', 1)]`
 
 
-NOTE: two VERY important and related points around the `expand=True` argument:
+NOTE: Two VERY important and related points around the `expand=True` argument:
 
-1. it tells SDF "hey, this .apply() returns _**multiple independent**_ events!"
+1. It tells SDF "hey, this .apply() returns _**multiple independent**_ events!"
 
 2. Our `F` returns a `list` (or a non-dict iterable of some kind), hence the "expand"!
 
@@ -173,7 +173,7 @@ For `SDF.filter(F)`, if the (_**boolean**_-ed) return value of `F` is:
 
 - `False` -> stop ALL further processing of this event (including produces!)
 
-Remember that each word is now an independent event now due to our previous expand, so our
+Remember that each word is an independent event now due to our previous expand, so our
 `F` expects only a single word count pair.
 
 With this filter applied, our "and" event is removed:
@@ -207,6 +207,8 @@ In the end we would produce 5 messages in total, like so:
 # etc...
 ```
 
+NOTE: This is how you would see the values in the Kafka topic `product_review_word_counts`.
+
 ## Try it yourself!
 
 ### 1. Run Kafka
@@ -222,7 +224,7 @@ Just call `python producer.py` and `python application.py` in separate windows.
 
 ### 4. Check out the results!
 
-Look at all those counted works, beautiful!
+Look at all those counted words, beautiful!
 
 
 ## Related topics - Data Aggregation
