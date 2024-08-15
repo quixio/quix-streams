@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+
+package schemas.v1;
+
+message Nested {
+  int32 id = 1;
+  google.protobuf.Timestamp time = 2;
+}
