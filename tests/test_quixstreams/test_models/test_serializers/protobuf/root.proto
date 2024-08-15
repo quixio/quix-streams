@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+import "nested.proto";
+
 package schemas.v1;
 
 enum Letter {
@@ -11,4 +13,5 @@ message Root {
   string name = 1;
   int32 id = 2;
   Letter enum = 3;
+  Nested nested = 4;
 }
