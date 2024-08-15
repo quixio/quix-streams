@@ -7,14 +7,19 @@ import pytest
 from confluent_kafka.schema_registry import SchemaRegistryClient
 
 from quixstreams.schema_registry import SchemaRegistryConfig
-from quixstreams.models import Deserializer, Serializer
+from quixstreams.models import (
+    Deserializer,
+    Serializer,
+    JSONDeserializer,
+    JSONSerializer,
+)
 from quixstreams.models.serializers.avro import AvroDeserializer, AvroSerializer
 from quixstreams.models.serializers.protobuf import (
     ProtobufDeserializer,
     ProtobufSerializer,
 )
 
-from .constants import AVRO_TEST_SCHEMA, DUMMY_CONTEXT
+from .constants import AVRO_TEST_SCHEMA, DUMMY_CONTEXT, JSONSCHEMA_TEST_SCHEMA
 from .protobuf.test_pb2 import Test
 
 CONFLUENT_MAGIC_BYTE = 0
@@ -52,6 +57,13 @@ deserializer = serializer = _inject_schema_registry
 @pytest.mark.parametrize(
     "serializer, deserializer, obj_to_serialize, serialized_data, deserialized_obj",
     [
+        (
+            partial(JSONSerializer, schema=JSONSCHEMA_TEST_SCHEMA),
+            partial(JSONDeserializer, schema=JSONSCHEMA_TEST_SCHEMA),
+            {"id": 10, "name": "foo"},
+            b'{"id": 10, "name": "foo"}',
+            {"id": 10, "name": "foo"},
+        ),
         (
             partial(AvroSerializer, AVRO_TEST_SCHEMA),
             partial(AvroDeserializer),
