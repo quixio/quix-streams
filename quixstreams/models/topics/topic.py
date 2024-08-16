@@ -191,7 +191,7 @@ class Topic:
             value_deserialized = (
                 None
                 if value_bytes is None
-                else self._value_deserializer(value=message.value(), ctx=ctx)
+                else self._value_deserializer(value=value_bytes, ctx=ctx)
             )
         except IgnoreMessage:
             # Ignore message completely if deserializer raised IgnoreValueError.
