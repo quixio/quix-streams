@@ -204,7 +204,7 @@ class Topic:
             return
 
         timestamp_type, timestamp_ms = message.timestamp()
-        ctx = MessageContext(
+        message_context = MessageContext(
             topic=message.topic(),
             partition=message.partition(),
             offset=message.offset(),
@@ -227,7 +227,7 @@ class Topic:
                         key=key_deserialized,
                         timestamp=timestamp_ms,
                         headers=headers,
-                        context=ctx,
+                        context=message_context,
                     )
                 )
             return rows
@@ -242,7 +242,7 @@ class Topic:
             timestamp=timestamp_ms,
             key=key_deserialized,
             headers=headers,
-            context=ctx,
+            context=message_context,
         )
 
     def serialize(
