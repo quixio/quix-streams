@@ -2,7 +2,6 @@ import abc
 from typing import Optional, Any, Union
 from typing_extensions import TypeAlias, Literal
 
-
 from confluent_kafka.serialization import (
     SerializationContext as _SerializationContext,
     MessageField,
@@ -12,6 +11,7 @@ from ..types import MessageHeadersTuples, MessageHeadersMapping
 
 __all__ = (
     "SerializationContext",
+    "MessageField",
     "Deserializer",
     "Serializer",
     "SerializerType",
@@ -19,29 +19,24 @@ __all__ = (
 )
 
 
-class SerializationContext:
+class SerializationContext(_SerializationContext):
     """
     Provides additional context for message serialization/deserialization.
 
     Every `Serializer` and `Deserializer` receives an instance of `SerializationContext`
     """
 
-    __slots__ = ("topic", "headers")
+    __slots__ = ("topic", "field", "headers")
 
-    def __init__(self, topic: str, headers: Optional[MessageHeadersTuples] = None):
+    def __init__(
+        self,
+        topic: str,
+        field: MessageField,
+        headers: Optional[MessageHeadersTuples] = None,
+    ) -> None:
         self.topic = topic
+        self.field = field
         self.headers = headers
-
-    def to_confluent_ctx(self, field: MessageField) -> _SerializationContext:
-        """
-        Convert `SerializationContext` to `confluent_kafka.SerializationContext`
-        in order to re-use serialization already provided by `confluent_kafka` library.
-        :param field: instance of `confluent_kafka.serialization.MessageField`
-        :return: instance of `confluent_kafka.serialization.SerializationContext`
-        """
-        return _SerializationContext(
-            field=field, topic=self.topic, headers=self.headers
-        )
 
 
 class Deserializer(abc.ABC):
