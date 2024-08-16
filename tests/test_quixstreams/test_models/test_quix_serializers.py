@@ -8,6 +8,7 @@ from quixstreams.models.serializers import (
     SerializationError,
     SerializationContext,
     IgnoreMessage,
+    MessageField,
 )
 from quixstreams.models.serializers.quix import (
     QuixDeserializer,
@@ -77,7 +78,10 @@ class TestQuixDeserializersValidation:
         with pytest.raises(SerializationError, match=error):
             list(
                 deserializer(
-                    value=b"", ctx=SerializationContext(topic="topic", headers=headers)
+                    value=b"",
+                    ctx=SerializationContext(
+                        topic="topic", field=MessageField.VALUE, headers=headers
+                    ),
                 )
             )
 
@@ -92,6 +96,7 @@ class TestQuixDeserializersValidation:
                     value=123,
                     ctx=SerializationContext(
                         topic="test",
+                        field=MessageField.VALUE,
                         headers=[
                             ("__Q_ModelKey", b"TimeseriesData"),
                             ("__Q_CodecId", b"JT"),
@@ -110,7 +115,9 @@ class TestQuixDeserializersValidation:
                 deserializer(
                     value=message.value(),
                     ctx=SerializationContext(
-                        topic=message.topic(), headers=message.headers()
+                        topic=message.topic(),
+                        field=MessageField.VALUE,
+                        headers=message.headers(),
                     ),
                 )
             )
@@ -125,7 +132,9 @@ class TestQuixDeserializersValidation:
                 deserializer(
                     value=b"<1234/10/1>" + message.value(),
                     ctx=SerializationContext(
-                        topic=message.topic(), headers=message.headers()
+                        topic=message.topic(),
+                        field=MessageField.VALUE,
+                        headers=message.headers(),
                     ),
                 )
             )
@@ -174,6 +183,7 @@ class TestQuixDeserializer:
                 value=message.value(),
                 ctx=SerializationContext(
                     topic=message.topic(),
+                    field=MessageField.VALUE,
                     headers=message.headers(),
                 ),
             )
@@ -226,6 +236,7 @@ class TestQuixDeserializer:
                 value=value_zipped,
                 ctx=SerializationContext(
                     topic=message.topic(),
+                    field=MessageField.VALUE,
                     headers=message.headers(),
                 ),
             )
@@ -256,6 +267,7 @@ class TestQuixDeserializer:
                     value=message.value(),
                     ctx=SerializationContext(
                         topic=message.topic(),
+                        field=MessageField.VALUE,
                         headers=message.headers(),
                     ),
                 )
@@ -274,7 +286,9 @@ class TestQuixDeserializer:
         rows = list(
             deserializer(
                 value=message.value(),
-                ctx=SerializationContext(topic="test", headers=message.headers()),
+                ctx=SerializationContext(
+                    topic="test", field=MessageField.VALUE, headers=message.headers()
+                ),
             )
         )
         assert len(rows) == 1
@@ -311,7 +325,9 @@ class TestQuixDeserializer:
         rows = list(
             deserializer(
                 value=message.value(),
-                ctx=SerializationContext(topic="test", headers=message.headers()),
+                ctx=SerializationContext(
+                    topic="test", field=MessageField.VALUE, headers=message.headers()
+                ),
             )
         )
         assert len(rows) == 2
@@ -334,7 +350,9 @@ class TestQuixTimeseriesSerializer:
             "Tags": {"tag1": "tag1", "tag2": "tag2"},
             "Timestamp": 1234567890,
         }
-        serialized = serializer(value, ctx=SerializationContext(topic="test"))
+        serialized = serializer(
+            value, ctx=SerializationContext(topic="test", field=MessageField.VALUE)
+        )
 
         expected = {
             "Timestamps": [1234567890],
@@ -369,7 +387,9 @@ class TestQuixTimeseriesSerializer:
             "Tags": {"tag1": "tag1", "tag2": "tag2"},
             "Timestamp": 1234567890,
         }
-        serialized = serializer(value, ctx=SerializationContext(topic="test"))
+        serialized = serializer(
+            value, ctx=SerializationContext(topic="test", field=MessageField.VALUE)
+        )
         expected_value = {
             "BinaryValues": {
                 "bytes": [base64.b64encode(value["bytes"]).decode("ascii")],
@@ -422,7 +442,9 @@ class TestQuixTimeseriesSerializer:
             SerializationError,
             match="Missing required Quix field: 'Timestamp'",
         ):
-            serializer(value, ctx=SerializationContext(topic="test"))
+            serializer(
+                value, ctx=SerializationContext(topic="test", field=MessageField.VALUE)
+            )
 
     @pytest.mark.parametrize(
         "value",
@@ -433,7 +455,9 @@ class TestQuixTimeseriesSerializer:
     )
     def test_serialize_dict_empty_or_none(self, value):
         serializer = QuixTimeseriesSerializer(as_legacy=False)
-        serialized = serializer(value, ctx=SerializationContext(topic="test"))
+        serialized = serializer(
+            value, ctx=SerializationContext(topic="test", field=MessageField.VALUE)
+        )
         expected = {
             "Timestamps": [],
             "BinaryValues": {},
@@ -452,7 +476,9 @@ class TestQuixTimeseriesSerializer:
     )
     def test_serialize_dict_empty_or_none(self, value):
         serializer = QuixTimeseriesSerializer(as_legacy=True)
-        serialized = serializer(value, ctx=SerializationContext(topic="test"))
+        serialized = serializer(
+            value, ctx=SerializationContext(topic="test", field=MessageField.VALUE)
+        )
         expected_value = {
             "BinaryValues": {},
             "StringValues": {},
@@ -480,7 +506,9 @@ class TestQuixTimeseriesSerializer:
     def test_serialize_not_mapping(self, value, as_legacy):
         serializer = QuixTimeseriesSerializer(as_legacy=as_legacy)
         with pytest.raises(SerializationError, match="Expected Mapping"):
-            serializer(value, ctx=SerializationContext(topic="test"))  # noqa
+            serializer(
+                value, ctx=SerializationContext(topic="test", field=MessageField.VALUE)
+            )  # noqa
 
     @pytest.mark.parametrize("as_legacy", [True, False])
     @pytest.mark.parametrize("item", [True, [], (), object()])
@@ -489,7 +517,10 @@ class TestQuixTimeseriesSerializer:
         with pytest.raises(
             SerializationError, match='Item with key "item" has unsupported type'
         ):
-            serializer({"item": item}, ctx=SerializationContext(topic="test"))
+            serializer(
+                {"item": item},
+                ctx=SerializationContext(topic="test", field=MessageField.VALUE),
+            )
 
 
 class TestQuixEventsSerializer:
@@ -507,7 +538,7 @@ class TestQuixEventsSerializer:
             "Tags": {"tag1": "tag1"},
             "Timestamp": 1234567890,
         }
-        ctx = SerializationContext(topic="test")
+        ctx = SerializationContext(topic="test", field=MessageField.VALUE)
         assert json.loads(serializer(value, ctx=ctx)) == expected
 
     def test_legacy_serialize_success(self):
@@ -537,7 +568,7 @@ class TestQuixEventsSerializer:
             "S": s,
             "E": s + len(expected_value_bytes),
         }
-        ctx = SerializationContext(topic="test")
+        ctx = SerializationContext(topic="test", field=MessageField.VALUE)
         serialized = serializer(value, ctx=ctx)
         assert json.loads(serialized) == expected
         assert serialized[expected["S"] : expected["E"]] == expected_value_bytes
@@ -554,14 +585,18 @@ class TestQuixEventsSerializer:
             SerializationError,
             match="Missing required Quix field: 'Timestamp'",
         ):
-            serializer(value, ctx=SerializationContext(topic="test"))
+            serializer(
+                value, ctx=SerializationContext(topic="test", field=MessageField.VALUE)
+            )
 
     @pytest.mark.parametrize("as_legacy", [True, False])
     @pytest.mark.parametrize("value", [0, "", object(), [], (), set()])
     def test_serialize_not_a_mapping(self, value, as_legacy):
         serializer = QuixEventsSerializer(as_legacy=as_legacy)
         with pytest.raises(SerializationError, match="Expected Mapping"):
-            serializer(value, ctx=SerializationContext("test"))  # noqa
+            serializer(
+                value, ctx=SerializationContext("test", field=MessageField.VALUE)
+            )  # noqa
 
     @pytest.mark.parametrize("as_legacy", [True, False])
     def test_serialize_id_isnot_string(self, as_legacy):
@@ -569,7 +604,10 @@ class TestQuixEventsSerializer:
         with pytest.raises(
             SerializationError, match='Field "Id" is expected to be of type "str"'
         ):
-            serializer({"Id": 0, "Value": "abc"}, ctx=SerializationContext("test"))
+            serializer(
+                {"Id": 0, "Value": "abc"},
+                ctx=SerializationContext("test", field=MessageField.VALUE),
+            )
 
     @pytest.mark.parametrize("as_legacy", [True, False])
     def test_serialize_value_isnot_string(self, as_legacy):
@@ -577,7 +615,10 @@ class TestQuixEventsSerializer:
         with pytest.raises(
             SerializationError, match='Field "Value" is expected to be of type "str"'
         ):
-            serializer({"Id": "id", "Value": 1}, ctx=SerializationContext("test"))
+            serializer(
+                {"Id": "id", "Value": 1},
+                ctx=SerializationContext("test", field=MessageField.VALUE),
+            )
 
     @pytest.mark.parametrize("as_legacy", [True, False])
     def test_serialize_tags_isnot_dict(self, as_legacy):
@@ -587,5 +628,5 @@ class TestQuixEventsSerializer:
         ):
             serializer(
                 {"Id": "id", "Value": "value", "Tags": 1},
-                ctx=SerializationContext("test"),
+                ctx=SerializationContext("test", field=MessageField.VALUE),
             )

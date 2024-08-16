@@ -17,6 +17,7 @@ from quixstreams.models import (
     Deserializer,
     DoubleDeserializer,
     StringDeserializer,
+    MessageField,
 )
 from quixstreams.models.serializers.protobuf import (
     ProtobufSerializer,
@@ -38,7 +39,7 @@ AVRO_TEST_SCHEMA = {
 }
 
 
-dummy_context = SerializationContext(topic="topic")
+dummy_context = SerializationContext(topic="topic", field=MessageField.VALUE)
 
 JSONSCHEMA_TEST_SCHEMA = {
     "type": "object",
