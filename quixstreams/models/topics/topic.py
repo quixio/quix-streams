@@ -147,7 +147,10 @@ class Topic:
         # Try to serialize the key only if it's not None
         # If key is None then pass it as is
         # Otherwise, different serializers may serialize None differently
-        key_serialized = None if key is None else self._key_serializer(key, ctx=ctx)
+        if key is None:
+            key_serialized = None
+        else:
+            key_serialized = self._key_serializer(key, ctx=ctx)
 
         # Update message headers with headers supplied by the value serializer.
         extra_headers = self._value_serializer.extra_headers
@@ -180,28 +183,27 @@ class Topic:
         headers = message.headers()
         ctx = SerializationContext(topic=message.topic(), headers=headers)
 
-        key_bytes = message.key()
-        key_deserialized = (
-            None
-            if key_bytes is None
-            else self._key_deserializer(value=key_bytes, ctx=ctx)
-        )
-        value_bytes = message.value()
-        try:
-            value_deserialized = (
-                None
-                if value_bytes is None
-                else self._value_deserializer(value=value_bytes, ctx=ctx)
-            )
-        except IgnoreMessage:
-            # Ignore message completely if deserializer raised IgnoreValueError.
-            logger.debug(
-                'Ignore incoming message: partition="%s[%s]" offset="%s"',
-                message.topic(),
-                message.partition(),
-                message.offset(),
-            )
-            return
+        if (key_bytes := message.key()) is None:
+            key_deserialized = None
+        else:
+            key_deserialized = self._key_deserializer(value=key_bytes, ctx=ctx)
+
+        if (value_bytes := message.value()) is None:
+            value_deserialized = None
+        else:
+            try:
+                value_deserialized = self._value_deserializer(
+                    value=value_bytes, ctx=ctx
+                )
+            except IgnoreMessage:
+                # Ignore message completely if deserializer raised IgnoreValueError.
+                logger.debug(
+                    'Ignore incoming message: partition="%s[%s]" offset="%s"',
+                    message.topic(),
+                    message.partition(),
+                    message.offset(),
+                )
+                return
 
         timestamp_type, timestamp_ms = message.timestamp()
         message_context = MessageContext(
