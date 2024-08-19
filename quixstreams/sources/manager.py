@@ -7,6 +7,7 @@ import multiprocessing.queues
 from pickle import PicklingError
 from typing import List, Optional
 
+from quixstreams.logging import configure_logging, LOGGER_NAME
 from quixstreams.models import Topic
 from .base import BaseSource
 
@@ -29,6 +30,9 @@ class SourceProcess(multiprocessing.Process):
 
         self._exception: Optional[Exception] = None
         self._stopping = False
+
+        # copy parent process loglevel to child process
+        self._loglevel = logging.getLogger(LOGGER_NAME).level
 
         # reader and writer pipe used to communicate from the child to the parent process
         self._rpipe, self._wpipe = multiprocessing.Pipe(duplex=False)
@@ -53,38 +57,37 @@ class SourceProcess(multiprocessing.Process):
             * Execute cleanup
         """
         self._setup_signal_handlers()
-        logger.info("Source %s started with PID %s", self.source, self.pid)
+        configure_logging(self._loglevel, str(self.source), pid=True)
+        logger.info("Source started")
 
         try:
             self.source.run()
         except BaseException as err:
-            logger.exception(f"Error in source %s", self)
+            logger.exception(f"Error in source")
             self._report_exception(err)
             self._cleanup(failed=True)
         else:
             self._cleanup(failed=False)
 
         self._wpipe.close()
-        logger.info("Source %s with PID %s completed", self.source, self.pid)
+        logger.info("Source completed")
 
         threadcount = threading.active_count()
         logger.debug(
-            "%s active thread%s in source %s with PID %s",
+            "%s active thread%s in source",
             threadcount,
             "s" if threadcount > 1 else "",
-            self.source,
-            self.pid,
         )
 
     def _cleanup(self, failed: bool) -> None:
         """
         Execute post-run cleanup
         """
-        logger.debug("Running cleanup on source %s with PID %s", self.source, self.pid)
+        logger.debug("Cleaning up source")
         try:
             self.source.cleanup(failed)
         except BaseException as err:
-            logger.exception(f"Error cleaning up source %s", self)
+            logger.exception("Error cleaning up source")
             self._report_exception(err)
 
     def _stop(self, *args):
@@ -95,14 +98,12 @@ class SourceProcess(multiprocessing.Process):
             return
 
         self._stopping = True
-        logger.debug(
-            "Source %s with PID %s received SIGINT, stopping", self.source, self.pid
-        )
+        logger.debug("Source received SIGINT, stopping")
 
         try:
             self.source.stop()
         except BaseException as err:
-            logger.exception(f"Error stopping source %s", self)
+            logger.exception("Error stopping source")
             self._report_exception(err)
 
     def _report_exception(self, err: Exception) -> None:
@@ -151,12 +152,12 @@ class SourceProcess(multiprocessing.Process):
         is still alive force kill it with a SIGKILL/
         """
         if self.is_alive():
-            logger.info("Stopping source %s with PID %s", self.source, self.pid)
+            logger.info("Stopping source %s", self.source)
             self.terminate()
             self.join(self.source.shutdown_timeout)
 
         if self.is_alive():
-            logger.info("Force stopping source %s with PID %s", self.source, self.pid)
+            logger.info("Force stopping source %s", self.source)
             self.kill()
             self.join(self.source.shutdown_timeout)
 

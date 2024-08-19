@@ -1,3 +1,4 @@
+import os
 import dataclasses
 import threading
 import logging
@@ -26,7 +27,6 @@ __all__ = (
     "Source",
     "CheckpointingSource",
     "PollingSource",
-    "PollingSourceShutdown",
 )
 
 
@@ -219,7 +219,7 @@ class Source(BaseSource):
 
         :raises CheckpointProducerTimeout: if any message fails to produce before the timeout
         """
-        logger.debug("flushing source %s", self)
+        logger.debug("Flushing source")
         unproduced_msg_count = self._producer.flush(timeout)
         if unproduced_msg_count > 0:
             raise CheckpointProducerTimeout(
@@ -233,6 +233,9 @@ class Source(BaseSource):
         :return: `:class:`quixstreams.models.topics.Topic`
         """
         return SourceTopic(name=self.name)
+
+    def __repr__(self):
+        return self.name
 
 
 class CheckpointingSource(Source):
@@ -261,25 +264,32 @@ class CheckpointingSource(Source):
 
     @abstractmethod
     def run(self):
-        self._checkpoint_timer = self._make_timer()
+        self._checkpoint_timer = self._make_checkpoint_timer()
         self._checkpoint_timer.start()
         super().run()
 
-    def _make_timer(self) -> threading.Timer:
+    def _make_checkpoint_timer(self) -> threading.Timer:
         return threading.Timer(
             interval=self._checkpoint_interval, function=self.__checkpoint
         )
 
-    def _checkpoint(self):
+    def __checkpoint(self):
+        """
+        Method triggered by the timer.
+
+        Will trigger the acbstract checkpoint method and recreate a timer for the next checkpoint
+
+        For safety this method is private, to override the checkpointing mechanism please override `_make_checkpoint_timer`.
+        """
         try:
             self.checkpoint()
         except BaseException as err:
-            logger.exception("Failed checkpoint in source %s", self)
+            logger.exception("Checkpointing failed")
             self._checkpoint_error = err
             self.stop()
             return
 
-        self._checkpoint_timer = self._make_timer()
+        self._checkpoint_timer = self._make_checkpoint_timer()
         self._checkpoint_timer.start()
 
     def cleanup(self, failed):
@@ -293,11 +303,11 @@ class CheckpointingSource(Source):
     @abstractmethod
     def checkpoint(self):
         """
-        This method is triggered, in it's own thread, every `checkpoint_interval` seconds.
+        This method is triggered, in a new thread, every `checkpoint_interval` seconds.
 
         Use it to perform any checkpointing related tasks.
         """
-        logger.debug("Checkpointing source %s", self)
+        logger.debug("Checkpointing source")
 
 
 class PollingSource(Source):
@@ -330,7 +340,7 @@ class PollingSource(Source):
         while not self._stopping.is_set():
             try:
                 msg = self.poll()
-            except PollingSourceShutdown:
+            except StopIteration:
                 return
 
             if msg is None:
@@ -346,10 +356,10 @@ class PollingSource(Source):
 
     def sleep(self, seconds: float):
         """
-        Sleep up to `seconds` seconds or raise `PollingSourceShutdown` to shutdown the source
+        Sleep up to `seconds` seconds or raise `StopIteration` to shutdown the source
         """
         if self._stopping.wait(seconds):
-            raise PollingSourceShutdown("shutdown")
+            raise StopIteration(f"{self} shutdown")
 
     def stop(self) -> None:
         if self._stopping is not None:
@@ -369,10 +379,6 @@ class PollingSource(Source):
             * a :class:`quixstreams.models.messages.KafkaMessage` to produce it
             * `None` to make the source sleep for `polling_delay`
 
-        or raise a `PollingSourceShutdown` to shutdown the source.
+        or raise a `StopIteration` to shutdown the source.
         """
         raise NotImplementedError(self.poll)
-
-
-class PollingSourceShutdown(Exception):
-    pass
