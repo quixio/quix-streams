@@ -3982,7 +3982,7 @@ Default - `None`
 ### SerializationContext
 
 ```python
-class SerializationContext()
+class SerializationContext(_SerializationContext)
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/base.py#L22)
@@ -3990,28 +3990,6 @@ class SerializationContext()
 Provides additional context for message serialization/deserialization.
 
 Every `Serializer` and `Deserializer` receives an instance of `SerializationContext`
-
-<a id="quixstreams.models.serializers.base.SerializationContext.to_confluent_ctx"></a>
-
-#### SerializationContext.to\_confluent\_ctx
-
-```python
-def to_confluent_ctx(field: MessageField) -> _SerializationContext
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/base.py#L35)
-
-Convert `SerializationContext` to `confluent_kafka.SerializationContext`
-
-in order to re-use serialization already provided by `confluent_kafka` library.
-
-**Arguments**:
-
-- `field`: instance of `confluent_kafka.serialization.MessageField`
-
-**Returns**:
-
-instance of `confluent_kafka.serialization.SerializationContext`
 
 <a id="quixstreams.models.serializers.base.Deserializer"></a>
 
@@ -4021,7 +3999,7 @@ instance of `confluent_kafka.serialization.SerializationContext`
 class Deserializer(abc.ABC)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/base.py#L47)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/base.py#L42)
 
 <a id="quixstreams.models.serializers.base.Deserializer.__init__"></a>
 
@@ -4031,7 +4009,7 @@ class Deserializer(abc.ABC)
 def __init__(*args, **kwargs)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/base.py#L48)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/base.py#L43)
 
 A base class for all Deserializers
 
@@ -4044,7 +4022,7 @@ A base class for all Deserializers
 def split_values() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/base.py#L54)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/base.py#L49)
 
 Return True if the deserialized message should be considered as Iterable
 and each item in it should be processed as a separate message.
@@ -4057,7 +4035,7 @@ and each item in it should be processed as a separate message.
 class Serializer(abc.ABC)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/base.py#L65)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/base.py#L60)
 
 A base class for all Serializers
 
@@ -4070,7 +4048,7 @@ A base class for all Serializers
 def extra_headers() -> MessageHeadersMapping
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/base.py#L71)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/base.py#L66)
 
 Informs producer to set additional headers
 
@@ -4265,7 +4243,7 @@ a list of (key, value) tuples.
 class TopicConfig()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L42)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L43)
 
 Represents all kafka-level configuration for a kafka topic.
 
@@ -4279,7 +4257,7 @@ Generally used by Topic and any topic creation procedures.
 class Topic()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L83)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L84)
 
 A definition of a Kafka topic.
 
@@ -4302,7 +4280,7 @@ def __init__(
         timestamp_extractor: Optional[TimestampExtractor] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L92)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L93)
 
 **Arguments**:
 
@@ -4324,7 +4302,7 @@ milliseconds from a deserialized message.
 def name() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L121)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L122)
 
 Topic name
 
@@ -4336,7 +4314,7 @@ Topic name
 def row_serialize(row: Row, key: Any) -> KafkaMessage
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L131)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L132)
 
 Serialize Row to a Kafka message structure
 
@@ -4358,7 +4336,7 @@ def row_deserialize(
         message: ConfluentKafkaMessageProto) -> Union[Row, List[Row], None]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L162)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L172)
 
 Deserialize incoming Kafka message to a Row.
 
