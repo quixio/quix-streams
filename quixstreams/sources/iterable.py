@@ -1,6 +1,6 @@
 import logging
 
-from typing import Iterable, Optional, Tuple
+from typing import Iterable, Optional, Tuple, Callable, Generator
 
 from quixstreams.models.messages import KafkaMessage
 
@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 __all__ = (
+    "GeneratorSource",
     "ValueIterableSource",
     "KeyValueIterableSource",
 )
@@ -26,7 +27,7 @@ class ValueIterableSource(PollingSource):
     from quixstreams.sources import ValueIterableSource
 
     app = Application(broker_address='localhost:9092', consumer_group='group')
-    source = ValueIterableSource(name="my_source", values=iter(range(10)))
+    source = ValueIterableSource(name="my_source", values=range(10))
 
     sdf = app.dataframe(source=source)
     sdf.print()
@@ -51,7 +52,7 @@ class ValueIterableSource(PollingSource):
         super().__init__(name, shutdown_timeout)
 
         self._key = key
-        self._values = values
+        self._values = iter(values)
 
     def poll(self) -> KafkaMessage:
         try:
@@ -75,14 +76,9 @@ class KeyValueIterableSource(PollingSource):
     from quixstreams import Application
     from quixstreams.sources import KeyValueIterableSource
 
-    def messages():
-        yield "one", 1
-        yield "two", 2
-        yield "three", 3
-        yield "four", 4
-
+    keys = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"]
     app = Application(broker_address='localhost:9092', consumer_group='group')
-    source = KeyValueIterableSource(name="my_source", iterable=messages())
+    source = KeyValueIterableSource(name="my_source", iterable=zip(keys, range(10)))
 
     sdf = app.dataframe(source=source)
     sdf.print()
@@ -104,11 +100,70 @@ class KeyValueIterableSource(PollingSource):
         """
         super().__init__(name, shutdown_timeout)
 
-        self._iterable = iterable
+        self._iterator = iter(iterable)
 
     def poll(self) -> KafkaMessage:
         try:
-            data = next(self._iterable)
+            data = next(self._iterator)
+        except StopIteration:
+            raise PollingSourceShutdown()
+
+        if data is None:
+            return data
+
+        key, value = data
+        return self.serialize(key=key, value=value)
+
+
+class GeneratorSource(PollingSource):
+    """
+    PollingSource implementation that iterator over a generator of (key, value)
+
+    Example Snippet:
+
+    ```python
+    from quixstreams import Application
+    from quixstreams.sources import GeneratorSource
+
+    def messages():
+        yield "one", 1
+        yield "two", 2
+        yield "three", 3
+        yield "four", 4
+
+    app = Application(broker_address='localhost:9092', consumer_group='group')
+    source = GeneratorSource(name="my_source", generator=messages)
+
+    sdf = app.dataframe(source=source)
+    sdf.print()
+
+    app.run(sdf)
+    ```
+    """
+
+    def __init__(
+        self,
+        name: str,
+        generator: Callable[[], Generator[Optional[Tuple[any, any]], None, None]],
+        polling_delay: float = 1,
+        shutdown_timeout: float = 10,
+    ) -> None:
+        super().__init__(name, polling_delay, shutdown_timeout)
+
+        self._generator = generator
+        self._generator_instance: Optional[
+            Generator[Optional[Tuple[any, any]], None, None]
+        ] = None
+
+    def run(self):
+        self._generator_instance: Generator[Optional[Tuple[any, any]], None, None] = (
+            self._generator()
+        )
+        super().run()
+
+    def poll(self) -> KafkaMessage:
+        try:
+            data = next(self._generator_instance)
         except StopIteration:
             raise PollingSourceShutdown()
 

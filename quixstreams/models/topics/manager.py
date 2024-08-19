@@ -289,7 +289,7 @@ class TopicManager:
 
     def source_topic(self, source: "BaseSource") -> Topic:
         topic_args = source.default_topic()
-        return self.topic(**topic_args.asdict())
+        return self.topic(**topic_args.asargs())
 
     def repartition_topic(
         self,

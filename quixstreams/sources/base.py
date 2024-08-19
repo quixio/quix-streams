@@ -46,7 +46,7 @@ class SourceTopic:
     key_serializer: Optional[SerializerType] = BytesSerializer()
     timestamp_extractor: Optional[TimestampExtractor] = None
 
-    def asdict(self):
+    def asargs(self):
         return {
             field.name: getattr(self, field.name) for field in dataclasses.fields(self)
         }
@@ -257,15 +257,20 @@ class CheckpointingSource(Source):
 
         self._checkpoint_interval = checkpoint_interval
         self._checkpoint_error: Optional[BaseException] = None
+        self._checkpoint_timer: Optional[threading.Timer] = None
 
-        self.__checkpoint_timer = self.__make_timer()
+    @abstractmethod
+    def run(self):
+        self._checkpoint_timer = self._make_timer()
+        self._checkpoint_timer.start()
+        super().run()
 
-    def __make_timer(self):
+    def _make_timer(self) -> threading.Timer:
         return threading.Timer(
             interval=self._checkpoint_interval, function=self.__checkpoint
         )
 
-    def __checkpoint(self):
+    def _checkpoint(self):
         try:
             self.checkpoint()
         except BaseException as err:
@@ -274,16 +279,11 @@ class CheckpointingSource(Source):
             self.stop()
             return
 
-        self.__checkpoint_timer = self.__make_timer()
-        self.__checkpoint_timer.start()
-
-    @abstractmethod
-    def run(self):
-        self.__checkpoint_timer.start()
-        super().run()
+        self._checkpoint_timer = self._make_timer()
+        self._checkpoint_timer.start()
 
     def cleanup(self, failed):
-        self.__checkpoint_timer.cancel()
+        self._checkpoint_timer.cancel()
         if self._checkpoint_error:
             super().cleanup(True)
             raise self._checkpoint_error
@@ -321,10 +321,12 @@ class PollingSource(Source):
         super().__init__(name, shutdown_timeout)
 
         self._polling_delay = polling_delay
-        self._stopping = threading.Event()
+        self._stopping: Optional[threading.Event] = None
 
     def run(self) -> None:
         super().run()
+
+        self._stopping = threading.Event()
         while not self._stopping.is_set():
             try:
                 msg = self.poll()
@@ -350,7 +352,8 @@ class PollingSource(Source):
             raise PollingSourceShutdown("shutdown")
 
     def stop(self) -> None:
-        self._stopping.set()
+        if self._stopping is not None:
+            self._stopping.set()
         super().stop()
 
     def cleanup(self, failed: bool) -> None:

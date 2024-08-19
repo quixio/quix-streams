@@ -291,13 +291,7 @@ class Application:
             extra_config=self._config.consumer_extra_config,
             on_error=on_consumer_error,
         )
-        self._producer = RowProducer(
-            broker_address=self._config.broker_address,
-            extra_config=self._config.producer_extra_config,
-            on_error=on_producer_error,
-            flush_timeout=self._config.flush_timeout,
-            transactional=self._config.exactly_once,
-        )
+        self._producer = self._get_rowproducer(on_error=on_producer_error)
         self._running = False
         self._failed = False
 
@@ -608,7 +602,7 @@ class Application:
         :return: `StreamingDataFrame` object
         """
         if not source and not topic:
-            raise TypeError("one of `source` or `topic` is required")
+            raise ValueError("one of `source` or `topic` is required")
         elif source and not topic:
             topic = self._topic_manager.source_topic(source)
 
@@ -642,6 +636,22 @@ class Application:
 
         if self._state_manager.using_changelogs:
             self._state_manager.stop_recovery()
+
+    def _get_rowproducer(
+        self,
+        on_error: Optional[ProducerErrorCallback] = None,
+        transactional: Optional[bool] = None,
+    ) -> RowProducer:
+        if transactional is None:
+            transactional = self._config.exactly_once
+
+        return RowProducer(
+            broker_address=self._config.broker_address,
+            extra_config=self._config.producer_extra_config,
+            flush_timeout=self._config.flush_timeout,
+            on_error=on_error,
+            transactional=transactional,
+        )
 
     def get_producer(self) -> Producer:
         """
@@ -726,7 +736,7 @@ class Application:
         """
         self._state_manager.clear_stores()
 
-    def source(self, source: BaseSource, topic: Optional[Topic] = None) -> Topic:
+    def add_source(self, source: BaseSource, topic: Optional[Topic] = None) -> Topic:
         """
         Add a source to the application.
 
@@ -739,15 +749,7 @@ class Application:
         if not topic:
             topic = self._topic_manager.source_topic(source)
 
-        producer = RowProducer(
-            broker_address=self._broker_address,
-            extra_config=self._producer_extra_config,
-            flush_timeout=self._consumer_extra_config.get(
-                "max.poll.interval.ms", _default_max_poll_interval_ms
-            )
-            / 1000,  # convert to seconds
-            transactional=False,
-        )
+        producer = self._get_rowproducer(transactional=False)
         source.configure(topic, producer)
         self._source_manager.register(source)
         return topic
@@ -809,7 +811,7 @@ class Application:
         self._setup_topics()
 
         if dataframe is not None and dataframe.source:
-            self.source(dataframe.source, dataframe.topic)
+            self.add_source(dataframe.source, dataframe.topic)
 
         exit_stack = contextlib.ExitStack()
         exit_stack.enter_context(self._processing_context)
@@ -857,7 +859,7 @@ class Application:
         while self._running:
             self._source_manager.raise_for_error()
 
-            if not self._source_manager.alives():
+            if not self._source_manager.is_alive():
                 self.stop()
 
             time.sleep(1)

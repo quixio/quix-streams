@@ -2145,7 +2145,7 @@ class TestApplicationSource:
             yield 2
 
         source = ValueIterableSource(name="foo", key="foo", values=values())
-        app.source(source, topic=app.topic(topic_name))
+        app.add_source(source, topic=app.topic(topic_name))
         app._run()
 
         results = []

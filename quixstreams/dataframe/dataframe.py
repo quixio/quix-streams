@@ -49,7 +49,6 @@ from quixstreams.processing import ProcessingContext
 from quixstreams.sinks import BaseSink
 from quixstreams.state.types import State
 from quixstreams.sources import BaseSource
-from quixstreams.rowproducer import RowProducer
 from .base import BaseStreaming
 from .exceptions import InvalidOperation, GroupByLimitExceeded, DataFrameLocked
 from .series import StreamingSeries

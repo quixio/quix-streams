@@ -211,7 +211,7 @@ class SourceManager:
         for process in self.processes:
             process.raise_for_error()
 
-    def alives(self) -> bool:
+    def is_alive(self) -> bool:
         """
         Check if any process is alive
 
