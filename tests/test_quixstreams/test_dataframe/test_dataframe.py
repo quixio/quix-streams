@@ -533,6 +533,7 @@ class TestStreamingDataFrameUpdate:
         assert sdf_id_4 == sdf_id_5
         assert sdf_tree_4 != sdf_tree_5
 
+    @pytest.mark.skip("will no longer function this way due to splitting")
     def test_chaining_inplace_with_non_inplace(self, dataframe_factory):
         """
         When chaining together inplace and non-inplace, reassigning must happen else
@@ -1714,3 +1715,560 @@ class TestStreamingDataFrameGroupBy:
 
         with pytest.raises(DataFrameLocked):
             operation(sdf)
+
+
+class TestStreamingDataFrameSplitting:
+    def test_basic_split(self, dataframe_factory):
+        calls = []
+
+        def add_n(n):
+            def wrapper(value):
+                calls.append(n)
+                return value + n
+
+            return wrapper
+
+        sdf = dataframe_factory().apply(add_n(1))
+        sdf_2 = sdf.apply(add_n(10))
+        sdf_3 = sdf.apply(add_n(20))
+        sdf = sdf.apply(add_n(100))
+
+        _extras = {"key": b"key", "timestamp": 0, "headers": []}
+        extras = list(_extras.values())
+        expected = [(11, *extras), (21, *extras), (101, *extras)]
+        results = sdf.test(value=0, **_extras)
+
+        # each operation is only called once (no redundant processing)
+        assert len(calls) == 4
+        # each split result is correct
+        assert len(results) == len(expected)
+        for result in results:
+            assert result in expected
+
+    def test_multi_split(self, dataframe_factory):
+        """
+        --< is a split
+        "S'" denotes the continuation of the sdf that was split from
+
+        sdf     ---[ add_120, div_2  ]---<      (sdf', sdf2), 60
+        sdf_2   ---[     div_3       ]---<      (sdf_2', sdf_3, sdf_4), 20
+        sdf_3   ---[ add_10, add_3   ]---|END   33
+        sdf_4   ---[     add_24      ]---|END   44
+        sdf_2'  ---[     add_2       ]---|END   22
+        sdf'    ---[     add_40      ]---<      (sdf'', sdf_5), 100
+        sdf_5   ---[ div_2, add_5    ]---|END   55
+        sdf''   ---[ div_100, add_10 ]---|END   11
+
+        :return:
+        """
+
+        calls = []
+
+        def add_n(n):
+            def wrapper(value):
+                calls.append(f"add_{n}")
+                return value + n
+
+            return wrapper
+
+        def div_n(n):
+            def wrapper(value):
+                calls.append(f"div_{n}")
+                return value // n
+
+            return wrapper
+
+        sdf = dataframe_factory().apply(add_n(120)).apply(div_n(2))  # 60
+        sdf_2 = sdf.apply(div_n(3))  # 20
+        sdf_3 = sdf_2.apply(add_n(10)).apply(add_n(3))  # 33
+        sdf_4 = sdf_2.apply(add_n(24))  # 44
+        sdf_2 = sdf_2.apply(add_n(2))  # 22
+        sdf = sdf.apply(add_n(40))  # 100
+        sdf_5 = sdf.apply(div_n(2)).apply(add_n(5))  # 55
+        sdf = sdf.apply(div_n(100)).apply(add_n(10))  # 11
+
+        _extras = {"key": b"key", "timestamp": 0, "headers": []}
+        extras = list(_extras.values())
+        expected = [(11 * n, *extras) for n in range(1, 6)]
+        results = sdf.test(value=0, **_extras)
+
+        # each operation is only called once (no redundant processing)
+        assert len(calls) == 12
+        # each split result is correct
+        assert len(results) == len(expected)
+        for result in results:
+            assert result in expected
+
+    def test_filter(self, dataframe_factory):
+        calls = []
+
+        def add_n(n):
+            def wrapper(value):
+                calls.append(n)
+                return value + n
+
+            return wrapper
+
+        def less_than(n):
+            def wrapper(value):
+                calls.append(n)
+                return value < n
+
+            return wrapper
+
+        sdf = dataframe_factory().apply(add_n(10))
+        sdf2 = sdf.apply(add_n(5)).filter(less_than(0)).apply(add_n(200))
+        sdf3 = sdf.apply(add_n(7)).filter(less_than(20)).apply(add_n(4))
+        sdf = sdf.apply(add_n(30)).filter(less_than(50))
+        sdf4 = sdf.apply(add_n(60))
+        sdf.apply(add_n(800))
+
+        _extras = {"key": b"key", "timestamp": 0, "headers": []}
+        extras = list(_extras.values())
+        expected = [(21, *extras), (100, *extras), (840, *extras)]
+        results = sdf.test(value=0, **_extras)
+
+        # each operation is only called once (no redundant processing)
+        assert len(calls) == 10
+        # each split result is correct
+        assert len(results) == len(expected)
+        for result in results:
+            assert result in expected
+
+    def test_filter_using_sdf_apply_and_col_select(self, dataframe_factory):
+        calls = []
+
+        def add_n(n):
+            def wrapper(value):
+                calls.append(n)
+                return value + n
+
+            return wrapper
+
+        def less_than(n):
+            def wrapper(value):
+                calls.append(n)
+                return value < n
+
+            return wrapper
+
+        sdf = dataframe_factory().apply(add_n(10))
+        sdf2 = sdf[sdf.apply(less_than(0))].apply(add_n(200))
+        sdf3 = sdf[sdf.apply(add_n(8)).apply(less_than(20))].apply(add_n(33))
+        sdf = sdf[sdf.apply(add_n(30)).apply(less_than(50))].apply(add_n(77))
+        sdf4 = sdf.apply(add_n(60))
+        sdf = sdf.apply(add_n(800))
+
+        _extras = {"key": b"key", "timestamp": 0, "headers": []}
+        extras = list(_extras.values())
+        expected = [(43, *extras), (147, *extras), (887, *extras)]
+        results = sdf.test(value=0, **_extras)
+
+        # each operation is only called once (no redundant processing)
+        assert len(calls) == 10
+        # each split result is correct
+        assert len(results) == len(expected)
+        print(results)
+        print(expected)
+        for result in results:
+            assert result in expected
+
+    def test_filter_using_columns(self, dataframe_factory):
+        calls = []
+
+        def add_n(n):
+            def wrapper(value):
+                calls.append(n)
+                return value + n
+
+            return wrapper
+
+        def add_n_df(n):
+            def wrapper(value):
+                calls.append(n)
+                value["v"] += n
+                return value
+
+            return wrapper
+
+        sdf = dataframe_factory().apply(add_n_df(10))
+        sdf2 = sdf[sdf["v"] < 0].apply(add_n_df(200))
+        sdf3 = sdf[sdf["v"].apply(add_n(1)).apply(add_n(7)) < 20].apply(add_n_df(33))
+        sdf = sdf[sdf["v"].apply(add_n(5)).apply(add_n(25)) < 50].apply(add_n_df(77))
+        sdf4 = sdf.apply(add_n_df(60))
+        sdf = sdf.apply(add_n_df(800))
+
+        _extras = {"key": b"key", "timestamp": 0, "headers": []}
+        extras = list(_extras.values())
+        expected = [({"v": 43}, *extras), ({"v": 147}, *extras), ({"v": 887}, *extras)]
+        results = sdf.test(value={"v": 0}, **_extras)
+
+        # each operation is only called once (no redundant processing)
+        assert len(calls) == 9
+        # each split result is correct
+        assert len(results) == len(expected)
+        for result in results:
+            assert result in expected
+
+    def test_store_series_filter_as_var_and_use(self, dataframe_factory):
+        """
+        NOTE: This is NOT dependent on splitting functionality, but splitting may
+        encourage these sorts of operations (it does NOT copy data).
+
+        NOTE: this kind of operation is only guaranteed to be correct when the stored
+        series is IMMEDIATELY used. If any operations manipulate any of the references
+        used within the series, those manipulations will persist/apply for the stored
+        result as well.
+
+        Basically, storing a series is like using a function with mutable args.
+        """
+        calls = []
+
+        def add_n(n):
+            def wrapper(value):
+                calls.append(n)
+                return value + n
+
+            return wrapper
+
+        def add_n_df(n):
+            def wrapper(value):
+                calls.append(n)
+                value["v"] += n
+                return value
+
+            return wrapper
+
+        sdf = dataframe_factory().apply(add_n_df(10))
+        sdf_filter = sdf["v"].apply(add_n(1)).apply(add_n(7)) < 20  # NOT a split
+        sdf2 = sdf[sdf_filter].apply(add_n_df(33))
+        sdf = sdf.apply(add_n_df(800))
+
+        _extras = {"key": b"key", "timestamp": 0, "headers": []}
+        extras = list(_extras.values())
+        expected = [({"v": 43}, *extras), ({"v": 810}, *extras)]
+        results = sdf.test(value={"v": 0}, **_extras)
+
+        # each operation is only called once (no redundant processing)
+        assert len(calls) == 5
+        # each split result is correct
+        assert len(results) == len(expected)
+        for result in results:
+            assert result in expected
+
+    def test_store_series_result_as_var_and_use(self, dataframe_factory):
+        """
+        NOTE: This is NOT dependent on splitting functionality, but splitting may
+        encourage these sorts of operations (it does NOT copy data).
+
+        NOTE: this kind of operation is only guaranteed to be correct when the stored
+        series is IMMEDIATELY used. If any operations manipulate any of the references
+        used within the series, those manipulations will persist/apply for the stored
+        result as well.
+
+        Basically, storing a series is like using a function with mutable args.
+        """
+        calls = []
+
+        def add_n(n):
+            def wrapper(value):
+                calls.append(n)
+                return value + n
+
+            return wrapper
+
+        def add_n_df(n):
+            def wrapper(value):
+                calls.append(n)
+                value["v"] += n
+                return value
+
+            return wrapper
+
+        sdf = dataframe_factory().apply(add_n_df(10))
+        sdf_sum = sdf["v"].apply(add_n(1)) + 8  # NOT a split (no data cloning)
+        sdf2 = sdf[sdf["v"] + sdf_sum < 30].apply(add_n_df(33))
+        sdf = sdf.apply(add_n_df(800))
+
+        _extras = {"key": b"key", "timestamp": 0, "headers": []}
+        extras = list(_extras.values())
+        expected = [({"v": 43}, *extras), ({"v": 810}, *extras)]
+        results = sdf.test(value={"v": 0}, **_extras)
+
+        # each operation is only called once (no redundant processing)
+        assert len(calls) == 4
+        # each split result is correct
+        assert len(results) == len(expected)
+        for result in results:
+            assert result in expected
+
+    def test_store_sdf_as_var_and_use(self, dataframe_factory):
+        """
+        NOTE: This is NOT dependent on splitting functionality, but splitting may
+        encourage these sorts of operations.
+
+        NOTE: This WILL copy data, so it is basically a more inefficient way of doing
+        a filter using series.
+
+        NOTE: this kind of operation is only guaranteed to be correct when the stored
+        series is IMMEDIATELY used. If any operations manipulate any of the references
+        used within the series, those manipulations will persist/apply for the stored
+        result as well.
+
+        Basically, storing a sdf is like using a function with mutable args.
+        """
+        calls = []
+
+        def add_n(n):
+            def wrapper(value):
+                calls.append(n)
+                return value + n
+
+            return wrapper
+
+        def less_than(n):
+            def wrapper(value):
+                calls.append(n)
+                return value < n
+
+            return wrapper
+
+        sdf = dataframe_factory().apply(add_n(10))
+        sdf_filter = sdf.apply(less_than(20))
+        sdf = sdf[sdf_filter].apply(add_n(33))
+        sdf = sdf.apply(add_n(800))
+
+        _extras = {"key": b"key", "timestamp": 0, "headers": []}
+        extras = list(_extras.values())
+        expected = [(843, *extras)]
+        results = sdf.test(value=0, **_extras)
+
+        # each operation is only called once (no redundant processing)
+        assert len(calls) == 4
+        # each split result is correct
+        assert len(results) == len(expected)
+        for result in results:
+            assert result in expected
+
+    def test_store_sdf_as_var_and_use_in_split(self, dataframe_factory):
+        """
+        NOTE: This WILL copy data, so it is basically a more inefficient way of doing
+        a filter using StreamingSeries.
+
+        NOTE: this kind of operation is only guaranteed to be correct when the stored
+        series is IMMEDIATELY used. If any operations manipulate any of the references
+        used within the series, those manipulations will persist/apply for the stored
+        result as well.
+
+        Basically, storing a sdf is like using a function with mutable args.
+        """
+        calls = []
+
+        def add_n(n):
+            def wrapper(value):
+                calls.append(n)
+                return value + n
+
+            return wrapper
+
+        def less_than(n):
+            def wrapper(value):
+                calls.append(n)
+                return value < n
+
+            return wrapper
+
+        sdf = dataframe_factory().apply(add_n(10))
+        sdf_filter = sdf.apply(less_than(20))
+        sdf2 = sdf[sdf_filter].apply(add_n(33))
+        sdf = sdf.apply(add_n(800))
+
+        _extras = {"key": b"key", "timestamp": 0, "headers": []}
+        extras = list(_extras.values())
+        expected = [(43, *extras), (810, *extras)]
+        results = sdf.test(value=0, **_extras)
+
+        # each operation is only called once (no redundant processing)
+        assert len(calls) == 4
+        # each split result is correct
+        assert len(results) == len(expected)
+        for result in results:
+            assert result in expected
+
+    def test_reuse_sdf_as_filter_fails(self, dataframe_factory):
+        """
+        Attempting to reuse a filtering SDF will fail.
+        """
+        calls = []
+
+        def add_n(n):
+            def wrapper(value):
+                calls.append(n)
+                print(f"{value} + {n}")
+                return value + n
+
+            return wrapper
+
+        def less_than(n):
+            def wrapper(value):
+                calls.append(n)
+                print(f"{value} < {n}")
+                return value < n
+
+            return wrapper
+
+        sdf = dataframe_factory().apply(add_n(10))
+        sdf_filter = sdf.apply(less_than(20))
+        sdf2 = sdf[sdf_filter].apply(add_n(100))
+
+        with pytest.raises(
+            InvalidOperation, match="Cannot filter with the same SDF more than once"
+        ):
+            sdf3 = sdf[sdf_filter].apply(add_n(200))
+
+    def test_use_sdf_as_filter_with_added_operation_fails(self, dataframe_factory):
+        """
+        Using a filtering SDF with further operations added (post-assignment) fails.
+
+        Why:
+        The additional operation is actually included in the filter SDF, which is
+        unintuitive even if you understand how SDF works internally.
+        """
+        calls = []
+
+        def add_n(n):
+            def wrapper(value):
+                calls.append(n)
+                return value + n
+
+            return wrapper
+
+        def less_than(n):
+            def wrapper(value):
+                calls.append(n)
+                return value < n
+
+            return wrapper
+
+        sdf = dataframe_factory().apply(add_n(10))
+        sdf_filter = sdf.apply(less_than(20))
+        sdf = sdf.apply(add_n(50))  # "additional" operation
+
+        with pytest.raises(
+            InvalidOperation,
+            match="SDF's used as filters must originate from the filtered SDF",
+        ):
+            sdf = sdf[sdf_filter].apply(add_n(100))
+
+    def test_use_sdf_as_filter_in_another_split_fails(self, dataframe_factory):
+        """
+        Using a filtering SDF with further operations added (post-assignment) fails.
+
+        This case uses a "split" SDF to filter with (though functionally it's somewhat
+        similar to non-split), with a unique side effect.
+
+        Why:
+        The additional operation on the filtering SDF becomes orphaned, producing no
+        result where one would likely be expected.
+        """
+        calls = []
+
+        def add_n(n):
+            def wrapper(value):
+                calls.append(n)
+                return value + n
+
+            return wrapper
+
+        def less_than(n):
+            def wrapper(value):
+                calls.append(n)
+                return value < n
+
+            return wrapper
+
+        sdf = dataframe_factory().apply(add_n(10))
+        sdf2 = sdf.apply(add_n(5))
+        sdf_filter = sdf2.apply(less_than(20))
+        sdf2 = sdf2.apply(add_n(25))  # this would become orphaned
+
+        with pytest.raises(
+            InvalidOperation,
+            match="SDF's used as filters must originate from the filtered SDF",
+        ):
+            sdf = sdf[sdf_filter].apply(add_n(100))
+
+    def test_update(self, dataframe_factory):
+        """
+        "Update" functions work with split behavior.
+        """
+        calls = []
+
+        def add_n(n):
+            def wrapper(value):
+                calls.append(n)
+                return {"v": value["v"] + n}
+
+            return wrapper
+
+        def mul_n(n):
+            def wrapper(value):
+                calls.append(n)
+                value["v"] *= n
+
+            return wrapper
+
+        sdf = dataframe_factory().apply(add_n(1))
+        sdf2 = sdf.apply(add_n(2)).update(mul_n(2))
+        sdf3 = sdf.apply(add_n(3))
+        sdf3.update(mul_n(3))
+        sdf = sdf.update(mul_n(4)).apply(add_n(100))
+
+        _extras = {"key": b"key", "timestamp": 0, "headers": []}
+        extras = list(_extras.values())
+        expected = [({"v": 6}, *extras), ({"v": 12}, *extras), ({"v": 104}, *extras)]
+        results = sdf.test(value={"v": 0}, **_extras)
+
+        # each operation is only called once (no redundant processing)
+        assert len(calls) == 7
+        # each split result is correct
+        assert len(results) == len(expected)
+        for result in results:
+            assert result in expected
+
+    def test_set_timestamp(self, dataframe_factory):
+        """
+        "Transform" functions work with split behavior.
+        """
+        calls = []
+
+        def add_n(n):
+            def wrapper(value):
+                calls.append(n)
+                return value + n
+
+            return wrapper
+
+        def set_ts(n):
+            def wrapper(value, key, timestamp, headers):
+                calls.append(n)
+                return timestamp + n
+
+            return wrapper
+
+        sdf = dataframe_factory().apply(add_n(1))
+        sdf2 = sdf.apply(add_n(2)).set_timestamp(set_ts(3)).set_timestamp(set_ts(5))
+        sdf3 = sdf.apply(add_n(3))
+        sdf = sdf.set_timestamp(set_ts(4)).apply(add_n(7))
+
+        _extras = {"key": b"key", "timestamp": 0, "headers": []}
+        extras = list(_extras.values())
+        expected = [(3, b"key", 8, []), (4, *extras), (8, b"key", 4, [])]
+        results = sdf.test(value=0, **_extras)
+
+        # each operation is only called once (no redundant processing)
+        assert len(calls) == 7
+        # each split result is correct
+        assert len(results) == len(expected)
+        for result in results:
+            assert result in expected
