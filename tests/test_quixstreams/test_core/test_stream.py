@@ -332,7 +332,7 @@ class TestStream:
         ]
 
 
-class TestStreamSplit:
+class TestStreamSplitting:
 
     def test_basic_split(self):
         calls = []
@@ -617,43 +617,43 @@ class TestStreamSplit:
         for result in sink:
             assert result in expected
 
-    # def test_transforms(self):
-    #     calls = []
-    #
-    #     def add_n(n):
-    #         def wrapper(value):
-    #             calls.append(n)
-    #             return value + [n]
-    #
-    #         return wrapper
-    #
-    #     def transform(n, k, t, h):
-    #         def wrapper(value):
-    #             calls.append(n)
-    #             value.append(n+n, k + str(n), t*4, h)
-    #
-    #         return wrapper
-    #
-    #     stream = Stream().add_apply(add_n(10))
-    #     stream2 = stream.add_transform(transform())
-    #     stream = stream.add_update(update_n(30)).add_apply(add_n(6))
-    #     stream3 = stream.add_update(update_n(100))
-    #     stream4 = stream.add_update(update_n(456))
-    #     stream = stream.add_apply(add_n(700)).add_update(update_n(222))
-    #
-    #     sink = Sink()
-    #     extras = ("key", 0, [])
-    #     stream.compose(sink=sink.append_record)([], *extras)
-    #     expected = [
-    #         ([10, 5], *extras),
-    #         ([10, 30, 6, 100], *extras),
-    #         ([10, 30, 6, 456], *extras),
-    #         ([10, 30, 6, 700, 222], *extras)
-    #     ]
-    #
-    #     # each operation is only called once (no redundant processing)
-    #     assert len(calls) == 8
-    #     # each split result is correct
-    #     assert len(sink) == len(expected)
-    #     for result in sink:
-    #         assert result in expected
+    def test_transform(self):
+        calls = []
+
+        def add_n(n):
+            def wrapper(value):
+                calls.append(n)
+                return value + n
+
+            return wrapper
+
+        def transform(n):
+            def wrapper(value, k, t, h):
+                calls.append(n)
+                return value, k + "_" + str(n), t + n, h
+
+            return wrapper
+
+        stream = Stream().add_apply(add_n(1))
+        stream_2 = stream.add_transform(transform(2))
+        stream = stream.add_transform(transform(3))
+        stream_3 = stream.add_apply(add_n(30)).add_transform(transform(4))
+        stream_4 = stream.add_apply(add_n(40)).add_transform(transform(5))
+        stream = stream.add_apply(add_n(100)).add_transform(transform(6))
+
+        sink = Sink()
+        extras = ("key", 0, [])
+        stream.compose(sink=sink.append_record)(0, *extras)
+        expected = [
+            (1, "key_2", 2, []),
+            (31, "key_3_4", 7, []),
+            (41, "key_3_5", 8, []),
+            (101, "key_3_6", 9, []),
+        ]
+
+        # each operation is only called once (no redundant processing)
+        assert len(calls) == 9
+        # each split result is correct
+        assert len(sink) == len(expected)
+        for result in sink:
+            assert result in expected
