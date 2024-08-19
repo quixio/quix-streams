@@ -1,6 +1,5 @@
 import dataclasses
 import logging
-from functools import partial
 from typing import List, Any, Callable, Union
 from typing import Optional
 
@@ -146,23 +145,27 @@ class Topic:
                 f'Value serializer is not provided for topic "{self.name}"'
             )
 
-        ctx = partial(SerializationContext, topic=self.name, headers=row.headers)
-
         # Try to serialize the key only if it's not None
         # If key is None then pass it as is
         # Otherwise, different serializers may serialize None differently
         if key is None:
             key_serialized = None
         else:
-            key_serialized = self._key_serializer(key, ctx=ctx(field=MessageField.KEY))
+            key_ctx = SerializationContext(
+                topic=self.name, field=MessageField.KEY, headers=row.headers
+            )
+            key_serialized = self._key_serializer(key, ctx=key_ctx)
 
         # Update message headers with headers supplied by the value serializer.
         extra_headers = self._value_serializer.extra_headers
         headers = merge_headers(row.headers, extra_headers)
+        value_ctx = SerializationContext(
+            topic=self.name, field=MessageField.VALUE, headers=row.headers
+        )
 
         return KafkaMessage(
             key=key_serialized,
-            value=self._value_serializer(row.value, ctx=ctx(field=MessageField.VALUE)),
+            value=self._value_serializer(row.value, ctx=value_ctx),
             headers=headers,
         )
 
@@ -185,21 +188,24 @@ class Topic:
             )
 
         headers = message.headers()
-        ctx = partial(SerializationContext, topic=message.topic(), headers=headers)
 
         if (key_bytes := message.key()) is None:
             key_deserialized = None
         else:
-            key_deserialized = self._key_deserializer(
-                value=key_bytes, ctx=ctx(field=MessageField.KEY)
+            key_ctx = SerializationContext(
+                topic=message.topic(), field=MessageField.KEY, headers=headers
             )
+            key_deserialized = self._key_deserializer(value=key_bytes, ctx=key_ctx)
 
         if (value_bytes := message.value()) is None:
             value_deserialized = None
         else:
+            value_ctx = SerializationContext(
+                topic=message.topic(), field=MessageField.VALUE, headers=headers
+            )
             try:
                 value_deserialized = self._value_deserializer(
-                    value=value_bytes, ctx=ctx(field=MessageField.VALUE)
+                    value=value_bytes, ctx=value_ctx
                 )
             except IgnoreMessage:
                 # Ignore message completely if deserializer raised IgnoreValueError.
@@ -260,16 +266,20 @@ class Topic:
         headers: Optional[Headers] = None,
         timestamp_ms: Optional[int] = None,
     ) -> KafkaMessage:
-        ctx = partial(SerializationContext, topic=self.name, headers=headers)
-
         if self._key_serializer:
-            key = self._key_serializer(key, ctx=ctx(field=MessageField.KEY))
+            key_ctx = SerializationContext(
+                topic=self.name, field=MessageField.KEY, headers=headers
+            )
+            key = self._key_serializer(key, ctx=key_ctx)
         elif key is not None:
             raise SerializerIsNotProvidedError(
                 f'Key serializer is not provided for topic "{self.name}"'
             )
         if self._value_serializer:
-            value = self._value_serializer(value, ctx=ctx(field=MessageField.VALUE))
+            value_ctx = SerializationContext(
+                topic=self.name, field=MessageField.VALUE, headers=headers
+            )
+            value = self._value_serializer(value, ctx=value_ctx)
         elif value is not None:
             raise SerializerIsNotProvidedError(
                 f'Value serializer is not provided for topic "{self.name}"'
@@ -282,22 +292,26 @@ class Topic:
         )
 
     def deserialize(self, message: ConfluentKafkaMessageProto):
-        ctx = partial(
-            SerializationContext, topic=message.topic(), headers=message.headers()
-        )
-
         if (key := message.key()) is not None:
             if self._key_deserializer:
-                key = self._key_deserializer(key, ctx=ctx(field=MessageField.KEY))
+                key_ctx = SerializationContext(
+                    topic=message.topic(),
+                    field=MessageField.KEY,
+                    headers=message.headers(),
+                )
+                key = self._key_deserializer(key, ctx=key_ctx)
             else:
                 raise DeserializerIsNotProvidedError(
                     f'Key deserializer is not provided for topic "{self.name}"'
                 )
         if (value := message.value()) is not None:
             if self._value_deserializer:
-                value = self._value_deserializer(
-                    value, ctx=ctx(field=MessageField.VALUE)
+                value_ctx = SerializationContext(
+                    topic=message.topic(),
+                    field=MessageField.VALUE,
+                    headers=message.headers(),
                 )
+                value = self._value_deserializer(value, ctx=value_ctx)
             else:
                 raise DeserializerIsNotProvidedError(
                     f'Value deserializer is not provided for topic "{self.name}"'
