@@ -1,4 +1,3 @@
-import os
 import dataclasses
 import threading
 import logging
@@ -25,7 +24,6 @@ logger = logging.getLogger(__name__)
 __all__ = (
     "BaseSource",
     "Source",
-    "CheckpointingSource",
     "PollingSource",
 )
 
@@ -236,78 +234,6 @@ class Source(BaseSource):
 
     def __repr__(self):
         return self.name
-
-
-class CheckpointingSource(Source):
-    """
-    Source implementation providing checkpointing
-
-    Implemented using a timer triggering a checkpoint every `checkpoint_interval` seconds.
-    """
-
-    def __init__(
-        self,
-        name: str,
-        shutdown_timeout: float = 10,
-        checkpoint_interval: float = 5,
-    ) -> None:
-        """
-        :param name: The source unique name. Used to generate the topic configurtion
-        :param shutdown_timeout: Time in second the application waits for the source to gracefully shutdown
-        :param checkpoint_interval: Time in second between each checkpoints
-        """
-        super().__init__(name, shutdown_timeout)
-
-        self._checkpoint_interval = checkpoint_interval
-        self._checkpoint_error: Optional[BaseException] = None
-        self._checkpoint_timer: Optional[threading.Timer] = None
-
-    @abstractmethod
-    def run(self):
-        self._checkpoint_timer = self._make_checkpoint_timer()
-        self._checkpoint_timer.start()
-        super().run()
-
-    def _make_checkpoint_timer(self) -> threading.Timer:
-        return threading.Timer(
-            interval=self._checkpoint_interval, function=self.__checkpoint
-        )
-
-    def __checkpoint(self):
-        """
-        Method triggered by the timer.
-
-        Will trigger the acbstract checkpoint method and recreate a timer for the next checkpoint
-
-        For safety this method is private, to override the checkpointing mechanism please override `_make_checkpoint_timer`.
-        """
-        try:
-            self.checkpoint()
-        except BaseException as err:
-            logger.exception("Checkpointing failed")
-            self._checkpoint_error = err
-            self.stop()
-            return
-
-        self._checkpoint_timer = self._make_checkpoint_timer()
-        self._checkpoint_timer.start()
-
-    def cleanup(self, failed):
-        self._checkpoint_timer.cancel()
-        if self._checkpoint_error:
-            super().cleanup(True)
-            raise self._checkpoint_error
-        else:
-            super().cleanup(failed)
-
-    @abstractmethod
-    def checkpoint(self):
-        """
-        This method is triggered, in a new thread, every `checkpoint_interval` seconds.
-
-        Use it to perform any checkpointing related tasks.
-        """
-        logger.debug("Checkpointing source")
 
 
 class PollingSource(Source):

@@ -1,17 +1,20 @@
 import threading
 import logging
 import signal
-import multiprocessing
-import multiprocessing.queues
 
+from multiprocessing import get_context
 from pickle import PicklingError
-from typing import List, Optional
+from typing import List
 
 from quixstreams.logging import configure_logging, LOGGER_NAME
 from quixstreams.models import Topic
 from .base import BaseSource
 
 logger = logging.getLogger(__name__)
+
+# always use spawn as it's supported on all major OS
+# see https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods
+multiprocessing = get_context("spawn")
 
 
 class SourceProcess(multiprocessing.Process):
@@ -28,7 +31,7 @@ class SourceProcess(multiprocessing.Process):
         super().__init__()
         self.source: BaseSource = source
 
-        self._exception: Optional[Exception] = None
+        self._exceptions: List[Exception] = []
         self._stopping = False
 
         # copy parent process loglevel to child process
@@ -61,17 +64,18 @@ class SourceProcess(multiprocessing.Process):
         logger.info("Source started")
 
         try:
-            self.source.run()
+            try:
+                self.source.run()
+            except BaseException:
+                self._cleanup(failed=True)
+                raise
+            else:
+                self._cleanup(failed=False)
         except BaseException as err:
             logger.exception(f"Error in source")
             self._report_exception(err)
-            self._cleanup(failed=True)
-        else:
-            self._cleanup(failed=False)
 
-        self._wpipe.close()
         logger.info("Source completed")
-
         threadcount = threading.active_count()
         logger.debug(
             "%s active thread%s in source",
@@ -84,21 +88,18 @@ class SourceProcess(multiprocessing.Process):
         Execute post-run cleanup
         """
         logger.debug("Cleaning up source")
-        try:
-            self.source.cleanup(failed)
-        except BaseException as err:
-            logger.exception("Error cleaning up source")
-            self._report_exception(err)
+        self.source.cleanup(failed)
 
-    def _stop(self, *args):
+    def _stop(self, signum, _):
         """
         Ask the source to stop execution
         """
+        signame = signal.Signals(signum).name
+        logger.debug("Source received %s, stopping", signame)
         if self._stopping:
             return
 
         self._stopping = True
-        logger.debug("Source received SIGINT, stopping")
 
         try:
             self.source.stop()
@@ -130,17 +131,17 @@ class SourceProcess(multiprocessing.Process):
         if super().is_alive():
             return
 
-        if self._exception is None:
-            if self._rpipe.poll():
+        if not self._exceptions:
+            while self._rpipe.poll():
                 try:
-                    self._exception = self._rpipe.recv()
+                    self._exceptions.append(self._rpipe.recv())
                 except EOFError:
                     return
 
-        if self._exception is not None:
-            raise SourceException(self) from self._exception
+        if self._exceptions:
+            raise SourceException(self) from self._exceptions[-1]
 
-        if self.exitcode != 0:
+        if self.exitcode not in (0, -signal.SIGTERM):
             raise SourceException(self)
 
     def stop(self):
@@ -160,8 +161,6 @@ class SourceProcess(multiprocessing.Process):
             logger.info("Force stopping source %s", self.source)
             self.kill()
             self.join(self.source.shutdown_timeout)
-
-        self.close()
 
 
 class SourceManager:
@@ -187,7 +186,9 @@ class SourceManager:
         elif source in self.sources:
             raise ValueError(f"source '{source}' already registered")
 
-        self.processes.append(SourceProcess(source))
+        process = SourceProcess(source)
+        self.processes.append(process)
+        return process
 
     @property
     def sources(self) -> List[BaseSource]:
@@ -205,6 +206,12 @@ class SourceManager:
         for process in self.processes:
             process.stop()
 
+        try:
+            self.raise_for_error()
+        finally:
+            for process in self.processes:
+                process.close()
+
     def raise_for_error(self) -> None:
         """
         Raise an exception if any process has stopped with an exception
@@ -218,7 +225,14 @@ class SourceManager:
 
         :return: True if at least one process is alive
         """
-        return any(process.is_alive() for process in self.processes)
+        for process in self.processes:
+            try:
+                if process.is_alive():
+                    return True
+            except ValueError:
+                continue
+
+        return False
 
     def __enter__(self):
         self.start_sources()

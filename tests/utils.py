@@ -1,13 +1,15 @@
 import dataclasses
 import time
-from typing import List
-from typing import Optional, Tuple, Union
+import threading
+
+from typing import Optional, Tuple, Union, List, Any
 
 from confluent_kafka import OFFSET_INVALID
 
 from quixstreams.sinks import BatchingSink
 from quixstreams.sinks.base import SinkBatch
 from quixstreams.sinks.base.item import SinkItem
+from quixstreams.sources import Source
 
 DEFAULT_TIMEOUT = 10.0
 
@@ -117,3 +119,57 @@ class DummySink(BatchingSink):
     @property
     def total_batched(self) -> int:
         return sum(batch.size for batch in self._batches.values())
+
+
+class DummySource(Source):
+    def __init__(
+        self,
+        name="dummy",
+        values: Optional[List[Any]] = None,
+        finished: threading.Event = None,
+        error_in: Union[str, List[str]] = None,
+        pickeable_error: bool = True,
+    ) -> None:
+        super().__init__(name, 1)
+
+        self.key = "dummy"
+        self.values = values or []
+        self.finished = finished
+        self.error_in = error_in or []
+        self.pickeable_error = pickeable_error
+
+    def run(self):
+        self._running = threading.Event()
+
+        for value in self.values:
+            msg = self.serialize(key=self.key, value=value)
+            self.produce(value=msg.value, key=msg.key)
+
+        if "run" in self.error_in:
+            self.error("test run error")
+
+        if self.finished:
+            self.finished.set()
+
+        self._running.wait()
+
+    def cleanup(self, failed):
+        if "cleanup" in self.error_in:
+            self.error("test cleanup error")
+
+    def stop(self):
+        if "stop" in self.error_in:
+            self.error("test stop error")
+        self._running.set()
+
+    def error(self, msg):
+        if self.pickeable_error:
+            raise ValueError(msg)
+        else:
+            raise UnpickleableError(msg)
+
+
+class UnpickleableError(Exception):
+    def __init__(self, *args: object) -> None:
+        # threading.Lock can't be pickled
+        self._ = threading.Lock()

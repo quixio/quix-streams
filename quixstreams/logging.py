@@ -35,9 +35,10 @@ def configure_logging(
 
     :param loglevel: a valid log level as a string or None.
         If None passed, this function is no-op and no logging will be configured.
+    :param name: the log name included in the output
+    :param pid: if True include the process PID in the logs
     :return: True if logging config has been updated, otherwise False.
     """
-
     if loglevel is None:
         # Skipping logging configuration
         return False
