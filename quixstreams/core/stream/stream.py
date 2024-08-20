@@ -92,7 +92,7 @@ class Stream:
         :return: a string of format
             "<Stream [<total functions>]: <FuncType: func_name> | ... >"
         """
-        tree_funcs = [s.func for s in self.tree_root_path()]
+        tree_funcs = [s.func for s in self.root_path()]
         funcs_repr = " | ".join(
             (f"<{f.__class__.__name__}: {f.func.__qualname__}>" for f in tree_funcs)
         )
@@ -205,9 +205,7 @@ class Stream:
 
         return self._add(TransformFunction(func, expand=expand))
 
-    def diff(
-        self, other: "Stream", prune: bool = False, enforce_direct_split: bool = False
-    ) -> Self:
+    def diff(self, other: "Stream", enforce_direct_split: bool = False) -> Self:
         """
         Takes the difference between Streams `self` and `other` based on their last
         common parent, and returns a new, independent `Stream` that includes only
@@ -219,7 +217,6 @@ class Stream:
             the `other` Stream, and the resulting diff is empty.
 
         :param other: a `Stream` to take a diff from.
-        :param prune: Whether to additionally pop the diff from this Stream
         :param enforce_direct_split: Used by SDF during filtering to ensure
         a diff is allowed to be generated.
         :raises ValueError: if Streams don't have a common parent,
@@ -246,18 +243,17 @@ class Stream:
 
             # With splitting there are some edge cases where the origin is the same,
             # but there are various side effects that can occur that we want to avoid.
-            other_path_start = other.tree_root_path(allow_splits=False)[0]
+            other_path_start = other.root_path(allow_splits=False)[0]
             if other_path_start.parent != diff_origin:
                 # There is a split at the filtering SDF; still potentially valid
-                if self.tree_root_path(allow_splits=False)[0] != other_path_start:
+                if self.root_path(allow_splits=False)[0] != other_path_start:
                     # This split is not shared by the filtered sdf
                     raise InvalidOperation(
                         "SDF's used as filters must originate from the filtered SDF; "
                         "ex: `sdf[sdf.apply()]`, NOT `sdf[other_sdf.apply()]"
                     )
 
-        if prune:
-            self.prune(diff[0])
+        self._prune(diff[0])
 
         parent = None
         for node in diff:
@@ -267,7 +263,7 @@ class Stream:
             parent = node
         return parent
 
-    def tree_root_path(self, allow_splits=True) -> List[Self]:
+    def root_path(self, allow_splits=True) -> List[Self]:
         """
         Return a list of all parent Streams including the node itself.
 
@@ -288,42 +284,12 @@ class Stream:
 
         return tree_
 
-    def prune(self, other: Self):
-        """
-        Removes a stream node by looking for where the "other" node is a child within
-        the current and removing it.
-
-        Note this means "other" must share a direct split point with this Stream.
-        :param other: another Stream
-        :return:
-        """
-        node = self
-        while node:
-            if other in node.children:
-                node.children.remove(other)
-                return
-            node = node.parent
-        raise InvalidOperation("Cannot filter with the same SDF more than once.")
-
-    def tree_all_nodes(
-        self,
-        collected_nodes: Optional[List[Self]] = None,
-        current_node: Optional[Self] = None,
-    ) -> List[Self]:
+    def full_tree(self) -> List[Self]:
         """
         Starts at tree root and finds every Stream in the tree (including splits).
-        :param collected_nodes: collection of all Streams interconnected to this one
-        :param current_node: Stream to add
         :return: The collection of all Streams interconnected to this one
         """
-        if not collected_nodes:
-            collected_nodes = []
-        if not current_node:
-            current_node = self.tree_root_path()[0]
-        collected_nodes.append(current_node)
-        for child in current_node.children:
-            self.tree_all_nodes(collected_nodes, child)
-        return collected_nodes
+        return self._collect_nodes([], self.root_path()[0])
 
     def compose(
         self,
@@ -364,16 +330,17 @@ class Stream:
             allow_transforms=allow_transforms,
         )
 
-        tree_nodes = self.tree_all_nodes()
+        tree_nodes = self.full_tree()
         splits = {s for s in tree_nodes if len(s.children) > 1}
         leaves = [s for s in tree_nodes if not s.children]
         if not splits:
-            return compose(leaves[0].tree_root_path(), composed)
+            assert len(leaves) == 1
+            return compose(leaves[0].root_path(), composed)
 
         # Start all the initial composes
         pending_composes = {stream: [] for stream in reversed(list(splits))}
         for tree_leaf in leaves:
-            tree = tree_leaf.tree_root_path(allow_splits=False)
+            tree = tree_leaf.root_path(allow_splits=False)
             pending_composes[tree[0].parent].append(compose(tree, composed))
 
         # After leaves are composed, at least one split will always have its list of
@@ -385,7 +352,7 @@ class Stream:
                 if len(pending) == len(split.children):
                     # the children at this split are composed and ready to finalize
                     break
-            new_tree = split.tree_root_path(allow_splits=False)
+            new_tree = split.root_path(allow_splits=False)
             # we pass the list of composed children; .compose() and StreamFunction
             # know how to properly compose them (necessary for data copying steps).
             composed = compose(new_tree, pending_composes.pop(split))
@@ -466,8 +433,8 @@ class Stream:
         return composed
 
     def _diff_from_last_common_parent(self, other: Self) -> List[Self]:
-        nodes_self = self.tree_root_path()
-        nodes_other = other.tree_root_path()
+        nodes_self = self.root_path()
+        nodes_other = other.root_path()
 
         diff = []
         last_common_parent = None
@@ -489,3 +456,28 @@ class Stream:
         return new_node
 
     def _default_sink(self, value: Any, key: Any, timestamp: int, headers: Any): ...
+
+    def _prune(self, other: Self):
+        """
+        Removes a stream node by looking for where the "other" node is a child within
+        the current and removing it.
+
+        Note this means "other" must share a direct split point with this Stream.
+        :param other: another Stream
+        :return:
+        """
+        node = self
+        while node:
+            if other in node.children:
+                node.children.remove(other)
+                return
+            node = node.parent
+        raise InvalidOperation("Cannot filter with the same SDF more than once.")
+
+    def _collect_nodes(
+        self, collected_nodes: List[Self], current_node: Self
+    ) -> List[Self]:
+        collected_nodes.append(current_node)
+        for child in current_node.children:
+            self._collect_nodes(collected_nodes, child)
+        return collected_nodes

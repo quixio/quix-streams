@@ -423,9 +423,9 @@ class TestStreamingDataFrame:
         Dropping an empty list is ignored entirely.
         """
         sdf = dataframe_factory()
-        pre_drop_stream = sdf.stream.tree_root_path()
+        pre_drop_stream = sdf.stream.root_path()
         sdf = sdf.drop([])
-        post_drop_stream = sdf.stream.tree_root_path()
+        post_drop_stream = sdf.stream.root_path()
         assert pre_drop_stream == post_drop_stream
 
     def test_drop_missing_columns_errors_raise(self, dataframe_factory):
@@ -502,33 +502,33 @@ class TestStreamingDataFrameUpdate:
         and anything else requires assignment.
         """
         sdf = dataframe_factory()
-        sdf_tree_1 = sdf.stream.tree_root_path()
+        sdf_tree_1 = sdf.stream.root_path()
         sdf_id_1 = id(sdf)
 
         # non-update non-reassignment (no change!)
         sdf.apply(lambda v: v)
-        sdf_tree_2 = sdf.stream.tree_root_path()
+        sdf_tree_2 = sdf.stream.root_path()
         sdf_id_2 = id(sdf)
         assert sdf_id_1 == sdf_id_2
         assert sdf_tree_1 == sdf_tree_2
 
         # non-update reassignment
         sdf = sdf.apply(lambda v: v)
-        sdf_tree_3 = sdf.stream.tree_root_path()
+        sdf_tree_3 = sdf.stream.root_path()
         sdf_id_3 = id(sdf)
         assert sdf_id_2 != sdf_id_3
         assert sdf_tree_2 != sdf_tree_3
 
         # update non-reassignment
         sdf.update(lambda v: v)
-        sdf_tree_4 = sdf.stream.tree_root_path()
+        sdf_tree_4 = sdf.stream.root_path()
         sdf_id_4 = id(sdf)
         assert sdf_id_3 == sdf_id_4
         assert sdf_tree_3 != sdf_tree_4
 
         # update reassignment
         sdf = sdf.update(lambda v: v)
-        sdf_tree_5 = sdf.stream.tree_root_path()
+        sdf_tree_5 = sdf.stream.root_path()
         sdf_id_5 = id(sdf)
         assert sdf_id_4 == sdf_id_5
         assert sdf_tree_4 != sdf_tree_5
