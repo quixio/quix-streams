@@ -3216,6 +3216,40 @@ The last batch may be shorter.
 
 ## quixstreams.utils
 
+<a id="quixstreams.utils.settings"></a>
+
+## quixstreams.utils.settings
+
+<a id="quixstreams.utils.settings.BaseSettings"></a>
+
+### BaseSettings
+
+```python
+class BaseSettings(_BaseSettings)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/utils/settings.py#L7)
+
+<a id="quixstreams.utils.settings.BaseSettings.as_dict"></a>
+
+#### BaseSettings.as\_dict
+
+```python
+def as_dict(plaintext_secrets: bool = False) -> dict
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/utils/settings.py#L16)
+
+Dump any non-empty config values as a dictionary.
+
+**Arguments**:
+
+- `plaintext_secrets`: whether secret values are plaintext or obscured (***)
+
+**Returns**:
+
+a dictionary
+
 <a id="quixstreams.utils.dicts"></a>
 
 ## quixstreams.utils.dicts
@@ -3429,20 +3463,24 @@ see https://github.com/confluentinc/confluent-kafka-python/issues/1535.
 class AvroSerializer(Serializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/avro.py#L14)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/avro.py#L25)
 
 <a id="quixstreams.models.serializers.avro.AvroSerializer.__init__"></a>
 
 #### AvroSerializer.\_\_init\_\_
 
 ```python
-def __init__(schema: Schema,
-             strict: bool = False,
-             strict_allow_default: bool = False,
-             disable_tuple_notation: bool = False)
+def __init__(
+    schema: Schema,
+    strict: bool = False,
+    strict_allow_default: bool = False,
+    disable_tuple_notation: bool = False,
+    schema_registry_client_config: Optional[SchemaRegistryClientConfig] = None,
+    schema_registry_serialization_config: Optional[
+        SchemaRegistrySerializationConfig] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/avro.py#L15)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/avro.py#L26)
 
 Serializer that returns data in Avro format.
 
@@ -3457,6 +3495,11 @@ Default - `False`
 Default - `False`
 - `disable_tuple_notation`: If set to True, tuples will not be treated as a special case. Therefore, using a tuple to indicate the type of a record will not work.
 Default - `False`
+- `schema_registry_client_config`: If provided, serialization is offloaded to Confluent's AvroSerializer.
+Default - `None`
+- `schema_registry_serialization_config`: Additional configuration for Confluent's AvroSerializer.
+Default - `None`
+>***NOTE:*** `schema_registry_client_config` must also be set.
 
 <a id="quixstreams.models.serializers.avro.AvroDeserializer"></a>
 
@@ -3466,23 +3509,26 @@ Default - `False`
 class AvroDeserializer(Deserializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/avro.py#L59)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/avro.py#L104)
 
 <a id="quixstreams.models.serializers.avro.AvroDeserializer.__init__"></a>
 
 #### AvroDeserializer.\_\_init\_\_
 
 ```python
-def __init__(schema: Schema,
-             reader_schema: Optional[Schema] = None,
-             return_record_name: bool = False,
-             return_record_name_override: bool = False,
-             return_named_type: bool = False,
-             return_named_type_override: bool = False,
-             handle_unicode_errors: str = "strict")
+def __init__(
+    schema: Optional[Schema] = None,
+    reader_schema: Optional[Schema] = None,
+    return_record_name: bool = False,
+    return_record_name_override: bool = False,
+    return_named_type: bool = False,
+    return_named_type_override: bool = False,
+    handle_unicode_errors: str = "strict",
+    schema_registry_client_config: Optional[SchemaRegistryClientConfig] = None
+)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/avro.py#L60)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/avro.py#L105)
 
 Deserializer that parses data from Avro.
 
@@ -3503,6 +3549,69 @@ Default - `False`
 Default - `False`
 - `handle_unicode_errors`: Should be set to a valid string that can be used in the errors argument of the string decode() function.
 Default - `"strict"`
+- `schema_registry_client_config`: If provided, deserialization is offloaded to Confluent's AvroDeserializer.
+Default - `None`
+
+<a id="quixstreams.models.serializers.schema_registry"></a>
+
+## quixstreams.models.serializers.schema\_registry
+
+<a id="quixstreams.models.serializers.schema_registry.SchemaRegistryClientConfig"></a>
+
+### SchemaRegistryClientConfig
+
+```python
+class SchemaRegistryClientConfig(BaseSettings)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/schema_registry.py#L17)
+
+Configuration required to establish the connection with a Schema Registry.
+
+**Arguments**:
+
+- `url`: Schema Registry URL.
+- `ssl_ca_location`: Path to CA certificate file used to verify the
+Schema Registry's private key.
+- `ssl_key_location`: Path to the client's private key (PEM) used for
+authentication.
+>***NOTE:*** `ssl_certificate_location` must also be set.
+- `ssl_certificate_location`: Path to the client's public key (PEM) used
+for authentication.
+>***NOTE:*** May be set without `ssl_key_location` if the private key is
+stored within the PEM as well.
+- `basic_auth_user_info`: Client HTTP credentials in the form of
+`username:password`.
+>***NOTE:*** By default, userinfo is extracted from the URL if present.
+
+<a id="quixstreams.models.serializers.schema_registry.SchemaRegistrySerializationConfig"></a>
+
+### SchemaRegistrySerializationConfig
+
+```python
+class SchemaRegistrySerializationConfig(BaseSettings)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/schema_registry.py#L43)
+
+Configuration that instructs Serializer how to handle communication with a
+
+Schema Registry.
+
+**Arguments**:
+
+- `auto_register_schemas`: If True, automatically register the configured schema
+with Confluent Schema Registry if it has not previously been associated with the
+relevant subject (determined via subject.name.strategy). Defaults to True.
+- `normalize_schemas`: Whether to normalize schemas, which will transform schemas
+to have a consistent format, including ordering properties and references.
+- `use_latest_version`: Whether to use the latest subject version for serialization.
+>***NOTE:*** There is no check that the latest schema is backwards compatible with the
+object being serialized. Defaults to False.
+- `subject_name_strategy`: Callable(SerializationContext, str) -> str
+Defines how Schema Registry subject names are constructed. Standard naming
+strategies are defined in the confluent_kafka.schema_registry namespace.
+Defaults to topic_subject_name_strategy.
 
 <a id="quixstreams.models.serializers"></a>
 
@@ -7522,7 +7631,7 @@ instance of `MessageContext`
 class ConnectionConfig(BaseSettings)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/configuration.py#L17)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/configuration.py#L15)
 
 Provides an interface for all librdkafka connection-based configs.
 
@@ -7545,7 +7654,7 @@ def settings_customise_sources(
 ) -> Tuple[PydanticBaseSettingsSource, ...]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/configuration.py#L96)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/configuration.py#L87)
 
 Included to ignore reading/setting values from the environment
 
@@ -7560,7 +7669,7 @@ def from_librdkafka_dict(cls,
                          ignore_extras: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/configuration.py#L110)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/configuration.py#L101)
 
 Create a `ConnectionConfig` from a librdkafka config dictionary.
 
@@ -7578,10 +7687,10 @@ a ConnectionConfig
 #### ConnectionConfig.as\_librdkafka\_dict
 
 ```python
-def as_librdkafka_dict(plaintext_secrets=True) -> dict
+def as_librdkafka_dict(plaintext_secrets: bool = True) -> dict
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/configuration.py#L125)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/configuration.py#L116)
 
 Dump any non-empty config values as a librdkafka dictionary.
 
