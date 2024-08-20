@@ -11,6 +11,7 @@ from .simple_types import (
 )
 from .exceptions import *
 from .json import JSONSerializer, JSONDeserializer
+from .schema_registry import *
 from .quix import (
     QuixEventsSerializer,
     QuixTimeseriesSerializer,
