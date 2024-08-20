@@ -38,8 +38,6 @@ class AvroSerializer(Serializer):
         self._disable_tuple_notation = disable_tuple_notation
 
     def __call__(self, value: Any, ctx: SerializationContext) -> bytes:
-        data = BytesIO()
-
         with BytesIO() as data:
             try:
                 schemaless_writer(
