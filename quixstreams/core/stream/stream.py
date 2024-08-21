@@ -207,7 +207,7 @@ class Stream:
 
         return self._add(TransformFunction(func, expand=expand))
 
-    def diff(self, other: "Stream", enforce_direct_split: bool = False) -> Self:
+    def diff(self, other: "Stream") -> Self:
         """
         Takes the difference between Streams `self` and `other` based on their last
         common parent, and returns a new, independent `Stream` that includes only
@@ -219,43 +219,39 @@ class Stream:
             the `other` Stream, and the resulting diff is empty.
 
         :param other: a `Stream` to take a diff from.
-        :param enforce_direct_split: Used by SDF during filtering to ensure
-        a diff is allowed to be generated.
         :raises ValueError: if Streams don't have a common parent,
             if the diff is empty, or pruning failed.
         :return: a new independent `Stream` instance whose root begins at the diff
         """
         diff = self._diff_from_last_common_parent(other)
 
-        # Enforcing a direct split is related to using one SDF to filter another.
+        # The following operations enforce direct splitting.
+        # Enforcing direct splits relates to using one SDF to filter another.
         # Specifically there are various unintuitive cases, especially when using a
         # "split" SDF, where results will likely not be as expected, so we would
         # rather raise an exception instead.
-        # See StreamingDataFrameSplitting test cases for examples.
-        if enforce_direct_split:
-            diff_origin = diff[0].parent
+        # See TestStreamingDataFrameSplitting test cases for examples.
+        diff_origin = diff[0].parent
 
-            # the easiest check that catches most issues: the "inner" (filtering) sdf
-            # should use same ref as the one being filtered; i.e. sdf[sdf.apply()].
-            if diff_origin != self:
+        # the easiest check that catches most issues: the "inner" (filtering) sdf
+        # should use same ref as the one being filtered; i.e. sdf[sdf.apply()].
+        if diff_origin != self:
+            raise InvalidOperation(
+                "SDF's used as filters must originate from the filtered SDF; "
+                "ex: `sdf[sdf.apply()]`, NOT `sdf[other_sdf.apply()]"
+            )
+
+        # With splitting there are some edge cases where the origin is the same,
+        # but there are various side effects that can occur that we want to avoid.
+        other_path_start = other.root_path(allow_splits=False)[0]
+        if other_path_start.parent != diff_origin:
+            # There is a split at the filtering SDF; still potentially valid
+            if self.root_path(allow_splits=False)[0] != other_path_start:
+                # This split is not shared by the filtered sdf
                 raise InvalidOperation(
                     "SDF's used as filters must originate from the filtered SDF; "
                     "ex: `sdf[sdf.apply()]`, NOT `sdf[other_sdf.apply()]"
                 )
-
-            # With splitting there are some edge cases where the origin is the same,
-            # but there are various side effects that can occur that we want to avoid.
-            other_path_start = other.root_path(allow_splits=False)[0]
-            if other_path_start.parent != diff_origin:
-                # There is a split at the filtering SDF; still potentially valid
-                if self.root_path(allow_splits=False)[0] != other_path_start:
-                    # This split is not shared by the filtered sdf
-                    raise InvalidOperation(
-                        "SDF's used as filters must originate from the filtered SDF; "
-                        "ex: `sdf[sdf.apply()]`, NOT `sdf[other_sdf.apply()]"
-                    )
-
-        self._prune(diff[0])
 
         parent = None
         for node in diff:
@@ -263,6 +259,7 @@ class Stream:
             node = copy.deepcopy(node)
             node.parent = parent
             parent = node
+        self._prune(diff[0])
         return parent
 
     def root_path(self, allow_splits=True) -> List[Self]:

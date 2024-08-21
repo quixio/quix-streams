@@ -1185,7 +1185,7 @@ class StreamingDataFrame(BaseStreaming):
                 metadata=True,
             )
         elif isinstance(item, self.__class__):
-            diff = self.stream.diff(item.stream, enforce_direct_split=True)
+            diff = self.stream.diff(item.stream)
             other_sdf_composed = diff.compose_returning()
             return self.filter(
                 lambda value, key, timestamp, headers: other_sdf_composed(
