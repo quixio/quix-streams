@@ -607,7 +607,11 @@ class TestStreamSplitting:
         sink = Sink()
         extras = ("key", 0, [])
         stream.compose(sink=sink.append_record)([(1, 2), (3, 4), (5, 6)], *extras)
-        expected = [(n, *extras) for n in [23, 24, 36, 37, 49, 50, 16, 17]]
+        expected = [(n, *extras) for n in [23, 24, 36, 37, 49, 16, 50, 17]]
+
+        print()
+        print(sink)
+        print(expected)
 
         # each operation is only called once (no redundant processing)
         assert len(calls) == 11
