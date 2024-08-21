@@ -45,6 +45,11 @@ class ProtobufSerializer(Serializer):
                     self._msg_type(),
                     ignore_unknown_fields=self._ignore_unknown_fields,
                 )
+            except TypeError as exc:
+                raise SerializationError(
+                    "Value to serialize must be of type "
+                    f"`{self._msg_type}` or dict, not `{type(value)}`."
+                ) from exc
             except ParseError as exc:
                 raise SerializationError(str(exc)) from exc
 

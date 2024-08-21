@@ -129,6 +129,7 @@ class TestSerializers:
             (AvroSerializer(AVRO_TEST_SCHEMA), {"id": 123}),
             (AvroSerializer(AVRO_TEST_SCHEMA, strict=True), {"name": "foo"}),
             (ProtobufSerializer(Root), {"bar": 3}),
+            (ProtobufSerializer(Root), Nested()),
         ],
     )
     def test_serialize_error(self, serializer: Serializer, value):
