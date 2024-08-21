@@ -2,6 +2,7 @@ from operator import setitem
 
 import pytest
 
+from quixstreams.dataframe.exceptions import InvalidOperation
 from quixstreams.core.stream import Stream
 from quixstreams.core.stream.functions import (
     ApplyFunction,
@@ -63,8 +64,6 @@ class TestStream:
             .add_filter(lambda v: v)
         )
 
-        stream = stream.add_apply(lambda v: v)
-
         diff = stream.diff(stream2)
 
         diff_tree = diff.root_path()
@@ -72,6 +71,29 @@ class TestStream:
         assert isinstance(diff_tree[0].func, ApplyFunction)
         assert isinstance(diff_tree[1].func, UpdateFunction)
         assert isinstance(diff_tree[2].func, FilterFunction)
+
+    def test_diff_differing_origin_fails(self):
+        stream = Stream()
+        stream = stream.add_apply(lambda v: v)
+        stream2 = (
+            stream.add_apply(lambda v: v)
+            .add_update(lambda v: v)
+            .add_filter(lambda v: v)
+        )
+        stream = stream.add_apply(lambda v: v)
+
+        with pytest.raises(InvalidOperation):
+            stream.diff(stream2)
+
+    def test_diff_shared_origin_with_additional_split_fails(self):
+        stream = Stream()
+        stream = stream.add_apply(lambda v: v)
+        stream2 = stream.add_apply(lambda v: v)
+        stream3 = stream2.add_apply(lambda v: v)
+        stream2 = stream2.add_apply(lambda v: v)
+
+        with pytest.raises(InvalidOperation):
+            stream.diff(stream2)
 
     def test_diff_empty_same_stream_fails(self):
         stream = Stream()
