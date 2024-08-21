@@ -86,6 +86,7 @@ class Stream:
         self.parent = parent
         self.children = set()
         self.generated = monotonic_ns()
+        self.pruned = False
 
     def __repr__(self) -> str:
         """
@@ -231,26 +232,32 @@ class Stream:
         # "split" SDF, where results will likely not be as expected, so we would
         # rather raise an exception instead.
         # See TestStreamingDataFrameSplitting test cases for examples.
-        diff_origin = diff[0].parent
 
         # the easiest check that catches most issues: the "inner" (filtering) sdf
         # should use same ref as the one being filtered; i.e. sdf[sdf.apply()].
-        if diff_origin != self:
+        if diff[0].pruned:
             raise InvalidOperation(
-                "SDF's used as filters must originate from the filtered SDF; "
-                "ex: `sdf[sdf.apply()]`, NOT `sdf[other_sdf.apply()]"
+                "Cannot use a filtering or column-setter SDF more than once"
+            )
+
+        elif diff[0] not in self.children:
+            raise InvalidOperation(
+                "filtering or column-setter SDF must originate from target SDF; "
+                "ex: `sdf[sdf.apply()]`, NOT `sdf[other_sdf.apply()]` "
+                "OR `sdf['x'] = sdf.apply()`, NOT `sdf['x'] = other_sdf.apply()`"
             )
 
         # With splitting there are some edge cases where the origin is the same,
         # but there are various side effects that can occur that we want to avoid.
         other_path_start = other.root_path(allow_splits=False)[0]
-        if other_path_start.parent != diff_origin:
+        if other_path_start.parent != diff[0].parent:
             # There is a split at the filtering SDF; still potentially valid
             if self.root_path(allow_splits=False)[0] != other_path_start:
                 # This split is not shared by the filtered sdf
                 raise InvalidOperation(
-                    "SDF's used as filters must originate from the filtered SDF; "
-                    "ex: `sdf[sdf.apply()]`, NOT `sdf[other_sdf.apply()]"
+                    "filtering or column-setter SDF must originate from target SDF; "
+                    "ex: `sdf[sdf.apply()]`, NOT `sdf[other_sdf.apply()]` "
+                    "OR `sdf['x'] = sdf.apply()`, NOT `sdf['x'] = other_sdf.apply()`"
                 )
 
         parent = None
@@ -452,13 +459,16 @@ class Stream:
         :param other: another Stream
         :return:
         """
+        if other.pruned:
+            raise ValueError("Node has already been pruned")
+        other.pruned = True
         node = self
         while node:
             if other in node.children:
                 node.children.remove(other)
                 return
             node = node.parent
-        raise InvalidOperation("Cannot filter with the same SDF more than once.")
+        raise ValueError("Node to prune is missing")
 
     def _collect_nodes(
         self, collected_nodes: List[Self], current_node: Self

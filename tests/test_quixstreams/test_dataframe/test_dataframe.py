@@ -495,67 +495,6 @@ class TestStreamingDataFrameApplyExpand:
             _ = sdf[sdf.apply(lambda v: [v, v], expand=True)]
 
 
-class TestStreamingDataFrameUpdate:
-    def test_update_no_reassign(self, dataframe_factory):
-        """
-        "Update" operations should be applied regardless of a reassignment,
-        and anything else requires assignment.
-        """
-        sdf = dataframe_factory()
-        sdf_tree_1 = sdf.stream.root_path()
-        sdf_id_1 = id(sdf)
-
-        # non-update non-reassignment (no change!)
-        sdf.apply(lambda v: v)
-        sdf_tree_2 = sdf.stream.root_path()
-        sdf_id_2 = id(sdf)
-        assert sdf_id_1 == sdf_id_2
-        assert sdf_tree_1 == sdf_tree_2
-
-        # non-update reassignment
-        sdf = sdf.apply(lambda v: v)
-        sdf_tree_3 = sdf.stream.root_path()
-        sdf_id_3 = id(sdf)
-        assert sdf_id_2 != sdf_id_3
-        assert sdf_tree_2 != sdf_tree_3
-
-        # update non-reassignment
-        sdf.update(lambda v: v)
-        sdf_tree_4 = sdf.stream.root_path()
-        sdf_id_4 = id(sdf)
-        assert sdf_id_3 == sdf_id_4
-        assert sdf_tree_3 != sdf_tree_4
-
-        # update reassignment
-        sdf = sdf.update(lambda v: v)
-        sdf_tree_5 = sdf.stream.root_path()
-        sdf_id_5 = id(sdf)
-        assert sdf_id_4 == sdf_id_5
-        assert sdf_tree_4 != sdf_tree_5
-
-    @pytest.mark.skip("will no longer function this way due to splitting")
-    def test_chaining_inplace_with_non_inplace(self, dataframe_factory):
-        """
-        When chaining together inplace and non-inplace, reassigning must happen else
-        everything starting with the non-inplace will be lost.
-        """
-        sdf = dataframe_factory()
-        sdf.update(lambda v: v.append(1)).apply(lambda v: v + [2]).update(
-            lambda v: v.append(3)
-        )
-        sdf = sdf.apply(lambda v: v + [4])
-
-        value = []
-        key, timestamp, headers = b"key", 0, []
-
-        assert sdf.test(value, key, timestamp, headers)[0] == (
-            [1, 4],
-            key,
-            timestamp,
-            headers,
-        )
-
-
 class TestStreamingDataFrameToTopic:
     @pytest.mark.parametrize("reassign", [True, False])
     def test_to_topic(
@@ -2002,7 +1941,7 @@ class TestStreamingDataFrameSplitting:
         for result in results:
             assert result in expected
 
-    def test_store_sdf_as_var_and_use(self, dataframe_factory):
+    def test_store_sdf_filter_as_var_and_use(self, dataframe_factory):
         """
         NOTE: This is NOT dependent on splitting functionality, but splitting may
         encourage these sorts of operations.
@@ -2122,11 +2061,12 @@ class TestStreamingDataFrameSplitting:
         sdf2 = sdf[sdf_filter].apply(add_n(100))
 
         with pytest.raises(
-            InvalidOperation, match="Cannot filter with the same SDF more than once"
+            InvalidOperation,
+            match="Cannot use a filtering or column-setter SDF more than once",
         ):
             sdf3 = sdf[sdf_filter].apply(add_n(200))
 
-    def test_use_sdf_as_filter_with_added_operation_fails(self, dataframe_factory):
+    def test_sdf_as_filter_with_added_operation_fails(self, dataframe_factory):
         """
         Using a filtering SDF with further operations added (post-assignment) fails.
 
@@ -2156,11 +2096,11 @@ class TestStreamingDataFrameSplitting:
 
         with pytest.raises(
             InvalidOperation,
-            match="SDF's used as filters must originate from the filtered SDF",
+            match="filtering or column-setter SDF must originate from target SDF;",
         ):
             sdf = sdf[sdf_filter].apply(add_n(100))
 
-    def test_use_sdf_as_filter_in_another_split_fails(self, dataframe_factory):
+    def test_sdf_as_filter_in_another_split_fails(self, dataframe_factory):
         """
         Using a filtering SDF with further operations added (post-assignment) fails.
 
@@ -2194,7 +2134,7 @@ class TestStreamingDataFrameSplitting:
 
         with pytest.raises(
             InvalidOperation,
-            match="SDF's used as filters must originate from the filtered SDF",
+            match="filtering or column-setter SDF must originate from target SDF;",
         ):
             sdf = sdf[sdf_filter].apply(add_n(100))
 
@@ -2268,6 +2208,187 @@ class TestStreamingDataFrameSplitting:
 
         # each operation is only called once (no redundant processing)
         assert len(calls) == 7
+        # each split result is correct
+        assert len(results) == len(expected)
+        for result in results:
+            assert result in expected
+
+    def test_column_assign_reuse_fails(self, dataframe_factory):
+        calls = []
+
+        def add_n_col(n):
+            def wrapper(value):
+                calls.append(n)
+                return value["v"] + n
+
+            return wrapper
+
+        def add_n_df(n):
+            def wrapper(value):
+                calls.append(n)
+                value["v"] += n
+                return value
+
+            return wrapper
+
+        sdf = dataframe_factory().apply(add_n_df(10))
+        new_v = sdf.apply(add_n_df(1)).apply(add_n_col(7))
+        sdf["new_v0"] = new_v
+
+        with pytest.raises(
+            InvalidOperation,
+            match="Cannot use a filtering or column-setter SDF more than once",
+        ):
+            sdf["new_v1"] = new_v
+
+    def test_sdf_as_column_setter_in_another_split_fails(self, dataframe_factory):
+        """
+        Using a filtering SDF with further operations added (post-assignment) fails.
+
+        This case uses a "split" SDF to filter with (though functionally it's somewhat
+        similar to non-split), with a unique side effect.
+
+        Why:
+        The additional operation on the filtering SDF becomes orphaned, producing no
+        result where one would likely be expected.
+        """
+        calls = []
+
+        def add_n_col(n):
+            def wrapper(value):
+                calls.append(n)
+                return value["v"] + n
+
+            return wrapper
+
+        def add_n_df(n):
+            def wrapper(value):
+                calls.append(n)
+                value["v"] += n
+                return value
+
+            return wrapper
+
+        sdf = dataframe_factory().apply(add_n_df(10))
+        sdf2 = sdf.apply(add_n_df(5))
+        new_val = sdf2.apply(add_n_col(30))
+        sdf2 = sdf2.apply(add_n_df(25))  # this would become orphaned
+
+        with pytest.raises(
+            InvalidOperation,
+            match="filtering or column-setter SDF must originate from target SDF;",
+        ):
+            sdf["n_new"] = new_val
+
+    def test_sdf_as_column_setter_with_added_operation_fails(self, dataframe_factory):
+        """
+        Using a filtering SDF with further operations added (post-assignment) fails.
+
+        Why:
+        The additional operation is actually included in the filter SDF, which is
+        unintuitive even if you understand how SDF works internally.
+        """
+        calls = []
+
+        def add_n_col(n):
+            def wrapper(value):
+                calls.append(n)
+                return value["v"] + n
+
+            return wrapper
+
+        def add_n_df(n):
+            def wrapper(value):
+                calls.append(n)
+                value["v"] += n
+                return value
+
+            return wrapper
+
+        sdf = dataframe_factory().apply(add_n_df(10))
+        new_val = sdf.apply(add_n_col(30))
+        sdf = sdf.apply(add_n_df(50))  # "additional" operation
+
+        with pytest.raises(
+            InvalidOperation,
+            match="filtering or column-setter SDF must originate from target SDF;",
+        ):
+            sdf["n_new"] = new_val
+
+    def test_column_setter(self, dataframe_factory):
+
+        calls = []
+
+        def add_n_col(n):
+            def wrapper(value):
+                calls.append(n)
+                return value["v"] + n
+
+            return wrapper
+
+        def add_n_df(n):
+            def wrapper(value):
+                calls.append(n)
+                value["v"] += n
+                return value
+
+            return wrapper
+
+        sdf = dataframe_factory().apply(add_n_df(10))
+        sdf2 = sdf.apply(add_n_df(5))
+        sdf2["v"] = sdf2.apply(add_n_col(1))
+        sdf3 = sdf.apply(add_n_df(7))
+        sdf3["v"] = sdf3.apply(add_n_col(20))
+        sdf["v"] = sdf.apply(add_n_df(25)).apply(add_n_col(55))
+        sdf4 = sdf.apply(add_n_df(100))
+        sdf["v"] = sdf.apply(add_n_col(800))
+
+        _extras = {"key": b"key", "timestamp": 0, "headers": []}
+        extras = list(_extras.values())
+        expected = [({"v": v}, *extras) for v in [16, 37, 190, 890]]
+        results = sdf.test(value={"v": 0}, **_extras)
+
+        # each operation is only called once (no redundant processing)
+        assert len(calls) == 9
+        # each split result is correct
+        assert len(results) == len(expected)
+        for result in results:
+            assert result in expected
+
+    def test_store_sdf_setter_as_var_and_use(self, dataframe_factory):
+        """
+        NOTE: This is NOT dependent on splitting functionality, but splitting may
+        encourage these sorts of operations.
+        """
+        calls = []
+
+        def add_n_col(n):
+            def wrapper(value):
+                calls.append(n)
+                return value["v"] + n
+
+            return wrapper
+
+        def add_n_df(n):
+            def wrapper(value):
+                calls.append(n)
+                value["v"] += n
+                return value
+
+            return wrapper
+
+        sdf = dataframe_factory().apply(add_n_df(10))
+        new_val = sdf.apply(add_n_col(20))
+        sdf = sdf[new_val].apply(add_n_df(33))
+        sdf = sdf.apply(add_n_df(800))
+
+        _extras = {"key": b"key", "timestamp": 0, "headers": []}
+        extras = list(_extras.values())
+        expected = [({"v": 843}, *extras)]
+        results = sdf.test(value={"v": 0}, **_extras)
+
+        # each operation is only called once (no redundant processing)
+        assert len(calls) == 4
         # each split result is correct
         assert len(results) == len(expected)
         for result in results:
