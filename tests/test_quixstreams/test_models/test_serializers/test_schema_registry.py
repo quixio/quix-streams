@@ -140,16 +140,30 @@ def test_schema_registry_success(
 
 
 @pytest.mark.parametrize(
-    "serializer, value",
+    "serializer, value, match",
     [
-        (partial(AvroSerializer, AVRO_TEST_SCHEMA), {"foo": "foo", "id": 123}),
-        (partial(AvroSerializer, AVRO_TEST_SCHEMA), {"id": 123}),
-        (partial(JSONSerializer, schema=JSONSCHEMA_TEST_SCHEMA), {"id": 10}),
+        (
+            partial(AvroSerializer, AVRO_TEST_SCHEMA),
+            {"foo": "foo", "id": 123},
+            "no value and no default for name",
+        ),
+        (
+            partial(AvroSerializer, AVRO_TEST_SCHEMA),
+            {"id": 123},
+            "no value and no default for name",
+        ),
+        (
+            partial(JSONSerializer, schema=JSONSCHEMA_TEST_SCHEMA),
+            {"id": 10},
+            "'name' is a required property",
+        ),
     ],
     indirect=["serializer"],
 )
-def test_schema_registry_serialize_error(serializer: Serializer, value: Any):
-    with pytest.raises(SerializationError):
+def test_schema_registry_serialize_error(
+    serializer: Serializer, value: Any, match: str
+):
+    with pytest.raises(SerializationError, match=match):
         serializer(value, DUMMY_CONTEXT)
 
 
