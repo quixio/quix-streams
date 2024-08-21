@@ -29,9 +29,9 @@ nav:
     - Word Count: 'tutorials/word-count/tutorial.md'
     - Anomaly Detection: 'tutorials/anomaly-detection/tutorial.md'
     - Purchase Filtering: 'tutorials/purchase-filtering/tutorial.md'
-  - Features:
-    - Producing Data to Kafka: producer.md
-    - Processing & Transforming Data: processing.md
+  - How To:
+    - Produce Data to Kafka: producer.md
+    - Process & Transform Data: processing.md
     - GroupBy Operation: groupby.md
     - Windows & Aggregations: windowing.md
     - Configuration: configuration.md
