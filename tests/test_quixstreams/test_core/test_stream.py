@@ -378,10 +378,7 @@ class TestStreamSplitting:
 
         # each operation is only called once (no redundant processing)
         assert len(calls) == 4
-        # each split result is correct
-        assert len(sink) == len(expected)
-        for result in sink:
-            assert result in expected
+        assert sink == expected
 
     def test_split_confirm_data_copied(self):
         """
@@ -404,12 +401,9 @@ class TestStreamSplitting:
         sink = Sink()
         extras = ("key", 0, [])
         stream.compose(sink=sink.append_record)({}, *extras)
-        expected = [({0: [0], 2: [2]}, *extras), ({0: [0, 1], 1: [1]}, *extras)]
+        expected = [({0: [0, 1], 1: [1]}, *extras), ({0: [0], 2: [2]}, *extras)]
 
-        # each split result is correct
-        assert len(sink) == len(expected)
-        for result in sink:
-            assert result in expected
+        assert sink == expected
 
     def test_chained_split(self):
         calls = []
@@ -431,10 +425,7 @@ class TestStreamSplitting:
 
         # each operation is only called once (no redundant processing)
         assert len(calls) == 4
-        # each split result is correct
-        assert len(sink) == len(expected)
-        for result in sink:
-            assert result in expected
+        assert sink == expected
 
     def test_longer_splits(self):
         calls = []
@@ -458,10 +449,7 @@ class TestStreamSplitting:
 
         # each operation is only called once (no redundant processing)
         assert len(calls) == 5
-        # each split result is correct
-        assert len(sink) == len(expected)
-        for result in sink:
-            assert result in expected
+        assert sink == expected
 
     def test_multi_split(self):
         """
@@ -507,14 +495,17 @@ class TestStreamSplitting:
         sink = Sink()
         extras = ("key", 0, [])
         stream.compose(sink=sink.append_record)(0, *extras)
-        expected = [(11 * n, *extras) for n in range(1, 6)]
+        expected = [
+            (33, *extras),
+            (44, *extras),
+            (22, *extras),
+            (55, *extras),
+            (11, *extras),
+        ]
 
         # each operation is only called once (no redundant processing)
         assert len(calls) == 12
-        # each split result is correct
-        assert len(sink) == len(expected)
-        for result in sink:
-            assert result in expected
+        assert sink == expected
 
     def test_filter(self):
         calls = []
@@ -550,10 +541,7 @@ class TestStreamSplitting:
 
         # each operation is only called once (no redundant processing)
         assert len(calls) == 10
-        # each split result is correct
-        assert len(sink) == len(expected)
-        for result in sink:
-            assert result in expected
+        assert sink == expected
 
     def test_update(self):
         calls = []
@@ -591,10 +579,7 @@ class TestStreamSplitting:
 
         # each operation is only called once (no redundant processing)
         assert len(calls) == 8
-        # each split result is correct
-        assert len(sink) == len(expected)
-        for result in sink:
-            assert result in expected
+        assert sink == expected
 
     def test_expand(self):
         calls = []
@@ -622,23 +607,11 @@ class TestStreamSplitting:
         sink = Sink()
         extras = ("key", 0, [])
         stream.compose(sink=sink.append_record)([(1, 2), (3, 4), (5, 6)], *extras)
-        expected = [
-            (23, *extras),
-            (24, *extras),
-            (36, *extras),
-            (37, *extras),
-            (49, *extras),
-            (50, *extras),
-            (16, *extras),
-            (17, *extras),
-        ]
+        expected = [(n, *extras) for n in [23, 24, 36, 37, 49, 50, 16, 17]]
 
         # each operation is only called once (no redundant processing)
         assert len(calls) == 11
-        # each split result is correct
-        assert len(sink) == len(expected)
-        for result in sink:
-            assert result in expected
+        assert sink == expected
 
     def test_transform(self):
         calls = []
@@ -676,7 +649,4 @@ class TestStreamSplitting:
 
         # each operation is only called once (no redundant processing)
         assert len(calls) == 9
-        # each split result is correct
-        assert len(sink) == len(expected)
-        for result in sink:
-            assert result in expected
+        assert sink == expected

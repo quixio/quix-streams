@@ -1679,10 +1679,7 @@ class TestStreamingDataFrameSplitting:
 
         # each operation is only called once (no redundant processing)
         assert len(calls) == 4
-        # each split result is correct
-        assert len(results) == len(expected)
-        for result in results:
-            assert result in expected
+        assert results == expected
 
     def test_multi_split(self, dataframe_factory):
         """
@@ -1728,15 +1725,18 @@ class TestStreamingDataFrameSplitting:
 
         _extras = {"key": b"key", "timestamp": 0, "headers": []}
         extras = list(_extras.values())
-        expected = [(11 * n, *extras) for n in range(1, 6)]
+        expected = [
+            (33, *extras),
+            (44, *extras),
+            (22, *extras),
+            (55, *extras),
+            (11, *extras),
+        ]
         results = sdf.test(value=0, **_extras)
 
         # each operation is only called once (no redundant processing)
         assert len(calls) == 12
-        # each split result is correct
-        assert len(results) == len(expected)
-        for result in results:
-            assert result in expected
+        assert results == expected
 
     def test_filter(self, dataframe_factory):
         calls = []
@@ -1769,10 +1769,7 @@ class TestStreamingDataFrameSplitting:
 
         # each operation is only called once (no redundant processing)
         assert len(calls) == 10
-        # each split result is correct
-        assert len(results) == len(expected)
-        for result in results:
-            assert result in expected
+        assert results == expected
 
     def test_filter_using_sdf_apply_and_col_select(self, dataframe_factory):
         calls = []
@@ -1844,10 +1841,7 @@ class TestStreamingDataFrameSplitting:
 
         # each operation is only called once (no redundant processing)
         assert len(calls) == 9
-        # each split result is correct
-        assert len(results) == len(expected)
-        for result in results:
-            assert result in expected
+        assert results == expected
 
     def test_store_series_filter_as_var_and_use(self, dataframe_factory):
         """
@@ -1890,10 +1884,7 @@ class TestStreamingDataFrameSplitting:
 
         # each operation is only called once (no redundant processing)
         assert len(calls) == 5
-        # each split result is correct
-        assert len(results) == len(expected)
-        for result in results:
-            assert result in expected
+        assert results == expected
 
     def test_store_series_result_as_var_and_use(self, dataframe_factory):
         """
@@ -1936,10 +1927,7 @@ class TestStreamingDataFrameSplitting:
 
         # each operation is only called once (no redundant processing)
         assert len(calls) == 4
-        # each split result is correct
-        assert len(results) == len(expected)
-        for result in results:
-            assert result in expected
+        assert results == expected
 
     def test_store_sdf_filter_as_var_and_use(self, dataframe_factory):
         """
@@ -1984,10 +1972,7 @@ class TestStreamingDataFrameSplitting:
 
         # each operation is only called once (no redundant processing)
         assert len(calls) == 4
-        # each split result is correct
-        assert len(results) == len(expected)
-        for result in results:
-            assert result in expected
+        assert results == expected
 
     def test_store_sdf_as_var_and_use_in_split(self, dataframe_factory):
         """
@@ -2029,10 +2014,7 @@ class TestStreamingDataFrameSplitting:
 
         # each operation is only called once (no redundant processing)
         assert len(calls) == 4
-        # each split result is correct
-        assert len(results) == len(expected)
-        for result in results:
-            assert result in expected
+        assert results == expected
 
     def test_reuse_sdf_as_filter_fails(self, dataframe_factory):
         """
@@ -2171,10 +2153,7 @@ class TestStreamingDataFrameSplitting:
 
         # each operation is only called once (no redundant processing)
         assert len(calls) == 7
-        # each split result is correct
-        assert len(results) == len(expected)
-        for result in results:
-            assert result in expected
+        assert results == expected
 
     def test_set_timestamp(self, dataframe_factory):
         """
@@ -2208,10 +2187,7 @@ class TestStreamingDataFrameSplitting:
 
         # each operation is only called once (no redundant processing)
         assert len(calls) == 7
-        # each split result is correct
-        assert len(results) == len(expected)
-        for result in results:
-            assert result in expected
+        assert results == expected
 
     def test_column_assign_reuse_fails(self, dataframe_factory):
         calls = []
@@ -2350,10 +2326,7 @@ class TestStreamingDataFrameSplitting:
 
         # each operation is only called once (no redundant processing)
         assert len(calls) == 9
-        # each split result is correct
-        assert len(results) == len(expected)
-        for result in results:
-            assert result in expected
+        assert results == expected
 
     def test_store_sdf_setter_as_var_and_use(self, dataframe_factory):
         """
@@ -2389,7 +2362,4 @@ class TestStreamingDataFrameSplitting:
 
         # each operation is only called once (no redundant processing)
         assert len(calls) == 4
-        # each split result is correct
-        assert len(results) == len(expected)
-        for result in results:
-            assert result in expected
+        assert results == expected
