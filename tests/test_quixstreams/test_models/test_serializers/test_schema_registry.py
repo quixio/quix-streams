@@ -18,10 +18,11 @@ from quixstreams.models import (
     SchemaRegistrySerializationConfig,
 )
 
+from quixstreams.models import JSONDeserializer, JSONSerializer
 from quixstreams.models.serializers.avro import AvroDeserializer, AvroSerializer
 
 from tests.conftest import SchemaRegistryContainer
-from .constants import AVRO_TEST_SCHEMA, DUMMY_CONTEXT
+from .constants import AVRO_TEST_SCHEMA, DUMMY_CONTEXT, JSONSCHEMA_TEST_SCHEMA
 
 CONFLUENT_MAGIC_BYTE = 0
 CONFLUENT_MAGIC_SIZE = 5
@@ -111,6 +112,13 @@ deserializer = serializer = _inject_schema_registry
             b"\x06foo\xf6\x01",
             {"name": "foo", "id": 123},
         ),
+        (
+            partial(JSONSerializer, schema=JSONSCHEMA_TEST_SCHEMA),
+            partial(JSONDeserializer, schema=JSONSCHEMA_TEST_SCHEMA),
+            {"id": 10, "name": "foo"},
+            b'{"id": 10, "name": "foo"}',
+            {"id": 10, "name": "foo"},
+        ),
     ],
     indirect=["serializer", "deserializer"],
 )
@@ -136,6 +144,7 @@ def test_schema_registry_success(
     [
         (partial(AvroSerializer, AVRO_TEST_SCHEMA), {"foo": "foo", "id": 123}),
         (partial(AvroSerializer, AVRO_TEST_SCHEMA), {"id": 123}),
+        (partial(JSONSerializer, schema=JSONSCHEMA_TEST_SCHEMA), {"id": 10}),
     ],
     indirect=["serializer"],
 )
@@ -159,6 +168,18 @@ def test_schema_registry_serialize_error(serializer: Serializer, value: Any):
             Schema(schema_str=json.dumps(AVRO_TEST_SCHEMA), schema_type="AVRO"),
             b"\x26foo\x00",
             r"Expected \d+ bytes, read \d+",
+        ),
+        (
+            partial(JSONDeserializer, schema=JSONSCHEMA_TEST_SCHEMA),
+            None,
+            b'{"id":10}',
+            r"Unexpected magic byte \d+. This message was not produced with a Confluent Schema Registry serializer",
+        ),
+        (
+            partial(JSONDeserializer, schema=JSONSCHEMA_TEST_SCHEMA),
+            Schema(schema_str=json.dumps(JSONSCHEMA_TEST_SCHEMA), schema_type="JSON"),
+            b'{"id":10}',
+            "'name' is a required property",
         ),
     ],
     indirect=["deserializer"],

@@ -23,8 +23,8 @@ from quixstreams.models.serializers.protobuf import (
 
 from quixstreams.models.serializers.avro import AvroDeserializer, AvroSerializer
 
+from ..utils import int_to_bytes, float_to_bytes
 from .constants import AVRO_TEST_SCHEMA, DUMMY_CONTEXT, JSONSCHEMA_TEST_SCHEMA
-from .utils import int_to_bytes, float_to_bytes
 from .protobuf.test_pb2 import Test
 
 

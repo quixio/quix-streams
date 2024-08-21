@@ -12,6 +12,7 @@ AVRO_TEST_SCHEMA = {
 }
 
 JSONSCHEMA_TEST_SCHEMA = {
+    "title": "Test",
     "type": "object",
     "properties": {
         "name": {"type": "string"},
