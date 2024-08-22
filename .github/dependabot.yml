@@ -3,8 +3,6 @@
 version: 2
 updates:
   - package-ecosystem: "pip"
-    directories:
-      - "/"
-      - "/tests"
+    directory: "/"
     schedule:
       interval: "weekly"
