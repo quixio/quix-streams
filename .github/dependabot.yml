@@ -1,0 +1,16 @@
+# https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directories:
+      - "/"
+      - "/tests"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "pip"
+    directory: "/"
+    file: "requirements-dev.txt"
+    schedule:
+      interval: "weekly"
