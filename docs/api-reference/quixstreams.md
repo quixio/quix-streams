@@ -4024,19 +4024,23 @@ Default - `True`
 class JSONSerializer(Serializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/json.py#L15)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/json.py#L27)
 
 <a id="quixstreams.models.serializers.json.JSONSerializer.__init__"></a>
 
 #### JSONSerializer.\_\_init\_\_
 
 ```python
-def __init__(dumps: Callable[[Any], Union[str, bytes]] = default_dumps,
-             schema: Optional[Mapping] = None,
-             validator: Optional[Validator] = None)
+def __init__(
+    dumps: Callable[[Any], Union[str, bytes]] = default_dumps,
+    schema: Optional[Mapping] = None,
+    validator: Optional[Validator] = None,
+    schema_registry_client_config: Optional[SchemaRegistryClientConfig] = None,
+    schema_registry_serialization_config: Optional[
+        SchemaRegistrySerializationConfig] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/json.py#L16)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/json.py#L28)
 
 Serializer that returns data in json format.
 
@@ -4048,6 +4052,11 @@ Default - :py:func:`quixstreams.utils.json.dumps`
 Default - `None`
 - `validator`: A jsonschema validator used to validate the data. Takes precedences over the schema.
 Default - `None`
+- `schema_registry_client_config`: If provided, serialization is offloaded to Confluent's JSONSerializer.
+Default - `None`
+- `schema_registry_serialization_config`: Additional configuration for Confluent's JSONSerializer.
+Default - `None`
+>***NOTE:*** `schema_registry_client_config` must also be set.
 
 <a id="quixstreams.models.serializers.json.JSONDeserializer"></a>
 
@@ -4057,19 +4066,22 @@ Default - `None`
 class JSONDeserializer(Deserializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/json.py#L58)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/json.py#L107)
 
 <a id="quixstreams.models.serializers.json.JSONDeserializer.__init__"></a>
 
 #### JSONDeserializer.\_\_init\_\_
 
 ```python
-def __init__(loads: Callable[[Union[bytes, bytearray]], Any] = default_loads,
-             schema: Optional[Mapping] = None,
-             validator: Optional[Validator] = None)
+def __init__(
+    loads: Callable[[Union[bytes, bytearray]], Any] = default_loads,
+    schema: Optional[Mapping] = None,
+    validator: Optional[Validator] = None,
+    schema_registry_client_config: Optional[SchemaRegistryClientConfig] = None
+)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/json.py#L59)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/json.py#L108)
 
 Deserializer that parses data from JSON
 
@@ -4080,6 +4092,8 @@ Default - :py:func:`quixstreams.utils.json.loads`.
 - `schema`: A schema used to validate the data using [`jsonschema.Draft202012Validator`](https://python-jsonschema.readthedocs.io/en/stable/api/jsonschema/validators/`jsonschema.validators.Draft202012Validator`).
 Default - `None`
 - `validator`: A jsonschema validator used to validate the data. Takes precedences over the schema.
+Default - `None`
+- `schema_registry_client_config`: If provided, deserialization is offloaded to Confluent's JSONDeserializer.
 Default - `None`
 
 <a id="quixstreams.models.serializers.base"></a>
