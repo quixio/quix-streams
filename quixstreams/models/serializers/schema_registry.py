@@ -1,7 +1,11 @@
 from typing import Callable, Optional
 
 from pydantic import SecretStr
-from confluent_kafka.schema_registry import topic_subject_name_strategy
+from confluent_kafka.schema_registry import (
+    reference_subject_name_strategy,
+    SchemaReference,
+    topic_subject_name_strategy,
+)
 
 from quixstreams.utils.settings import BaseSettings
 from quixstreams.models.serializers import SerializationContext
@@ -12,6 +16,7 @@ __all__ = [
 ]
 
 SubjectNameStrategy = Callable[[SerializationContext, str], str]
+ReferenceSubjectNameStrategy = Callable[[SerializationContext, SchemaReference], str]
 
 
 class SchemaRegistryClientConfig(BaseSettings):
@@ -57,9 +62,25 @@ class SchemaRegistrySerializationConfig(BaseSettings):
         Defines how Schema Registry subject names are constructed. Standard naming
         strategies are defined in the confluent_kafka.schema_registry namespace.
         Defaults to topic_subject_name_strategy.
+    :param skip_known_types: Whether or not to skip known types when resolving
+        schema dependencies. Defaults to False.
+    :param reference_subject_name_strategy: Defines how Schema Registry subject names
+        for schema references are constructed. Defaults to reference_subject_name_strategy.
+    :param use_deprecated_format: Specifies whether the Protobuf serializer should
+        serialize message indexes without zig-zag encoding. This option must be explicitly
+        configured as older and newer Protobuf producers are incompatible.
+        If the consumers of the topic being produced to are using confluent-kafka-python <1.8,
+        then this property must be set to True until all old consumers have been upgraded.
     """
 
     auto_register_schemas: bool = True
     normalize_schemas: bool = False
     use_latest_version: bool = False
     subject_name_strategy: SubjectNameStrategy = topic_subject_name_strategy
+
+    # Protobuf-only atrributes
+    skip_known_types: bool = False
+    reference_subject_name_strategy: ReferenceSubjectNameStrategy = (
+        reference_subject_name_strategy
+    )
+    use_deprecated_format: bool = False

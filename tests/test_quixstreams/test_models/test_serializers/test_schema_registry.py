@@ -1,8 +1,9 @@
 import json
+import re
 from functools import partial
 from io import BytesIO
 from struct import pack, unpack
-from typing import Any, Generator, Tuple, Union
+from typing import Any, Generator, Set, Tuple, Union
 
 import pytest
 from confluent_kafka.schema_registry import (
@@ -20,9 +21,16 @@ from quixstreams.models import (
 
 from quixstreams.models import JSONDeserializer, JSONSerializer
 from quixstreams.models.serializers.avro import AvroDeserializer, AvroSerializer
+from quixstreams.models.serializers.protobuf import (
+    ProtobufDeserializer,
+    ProtobufSerializer,
+)
 
 from tests.conftest import SchemaRegistryContainer
 from .constants import AVRO_TEST_SCHEMA, DUMMY_CONTEXT, JSONSCHEMA_TEST_SCHEMA
+from .protobuf.nested_pb2 import Nested
+from .protobuf.root_pb2 import Root
+from .protobuf.utils import create_timestamp, get_schema_str
 
 CONFLUENT_MAGIC_BYTE = 0
 CONFLUENT_MAGIC_SIZE = 5
@@ -119,6 +127,116 @@ deserializer = serializer = _inject_schema_registry
             b'{"id": 10, "name": "foo"}',
             {"id": 10, "name": "foo"},
         ),
+        (
+            partial(ProtobufSerializer, Root),
+            partial(ProtobufDeserializer, Root),
+            {},
+            b"\x00",  # Confluent adds this extra byte in _encode_varints step
+            {"name": "", "id": 0, "enum": "A"},
+        ),
+        (
+            partial(ProtobufSerializer, Root),
+            partial(ProtobufDeserializer, Root),
+            {"id": 3},
+            b"\x00\x10\x03",
+            {"name": "", "id": 3, "enum": "A"},
+        ),
+        (
+            partial(ProtobufSerializer, Root),
+            partial(ProtobufDeserializer, Root),
+            {"name": "foo"},
+            b"\x00\n\x03foo",
+            {"name": "foo", "id": 0, "enum": "A"},
+        ),
+        (
+            partial(ProtobufSerializer, Root),
+            partial(ProtobufDeserializer, Root),
+            {"name": "foo", "id": 2},
+            b"\x00\n\x03foo\x10\x02",
+            {"name": "foo", "id": 2, "enum": "A"},
+        ),
+        (
+            partial(ProtobufSerializer, Root),
+            partial(ProtobufDeserializer, Root),
+            Root(name="foo", id=2),
+            b"\x00\n\x03foo\x10\x02",
+            {"name": "foo", "id": 2, "enum": "A"},
+        ),
+        (
+            partial(ProtobufSerializer, Root),
+            partial(ProtobufDeserializer, Root),
+            {"name": "foo", "id": 2, "enum": "B"},
+            b"\x00\n\x03foo\x10\x02\x18\x01",
+            {"name": "foo", "id": 2, "enum": "B"},
+        ),
+        (
+            partial(ProtobufSerializer, Root),
+            partial(ProtobufDeserializer, Root),
+            {"name": "foo", "id": 2, "enum": 1},
+            b"\x00\n\x03foo\x10\x02\x18\x01",
+            {"name": "foo", "id": 2, "enum": "B"},
+        ),
+        (
+            partial(ProtobufSerializer, Root),
+            partial(ProtobufDeserializer, Root),
+            {
+                "name": "foo",
+                "nested": {
+                    "id": 10,
+                    "time": "2000-01-02T12:34:56Z",
+                },
+            },
+            b'\x00\n\x03foo"\n\x08\n\x12\x06\x08\xf0\x8b\xbd\xc3\x03',
+            {
+                "name": "foo",
+                "id": 0,
+                "enum": "A",
+                "nested": {
+                    "id": 10,
+                    "time": "2000-01-02T12:34:56Z",
+                },
+            },
+        ),
+        (
+            partial(ProtobufSerializer, Root),
+            partial(ProtobufDeserializer, Root),
+            Root(
+                name="foo",
+                nested=Nested(
+                    id=10,
+                    time=create_timestamp("2000-01-02T12:34:56Z"),
+                ),
+            ),
+            b'\x00\n\x03foo"\n\x08\n\x12\x06\x08\xf0\x8b\xbd\xc3\x03',
+            {
+                "name": "foo",
+                "id": 0,
+                "enum": "A",
+                "nested": {
+                    "id": 10,
+                    "time": "2000-01-02T12:34:56Z",
+                },
+            },
+        ),
+        (
+            partial(ProtobufSerializer, Root),
+            partial(ProtobufDeserializer, Root, to_dict=False),
+            Root(
+                name="foo",
+                nested=Nested(
+                    id=10,
+                    time=create_timestamp("2000-01-02T12:34:56Z"),
+                ),
+            ),
+            b'\x00\n\x03foo"\n\x08\n\x12\x06\x08\xf0\x8b\xbd\xc3\x03',
+            Root(
+                name="foo",
+                nested=Nested(
+                    id=10,
+                    time=create_timestamp("2000-01-02T12:34:56Z"),
+                ),
+            ),
+        ),
     ],
     indirect=["serializer", "deserializer"],
 )
@@ -156,6 +274,19 @@ def test_schema_registry_success(
             partial(JSONSerializer, schema=JSONSCHEMA_TEST_SCHEMA),
             {"id": 10},
             "'name' is a required property",
+        ),
+        (
+            partial(
+                ProtobufSerializer,
+                Root,
+                schema_registry_serialization_config=SchemaRegistrySerializationConfig(
+                    auto_register_schemas=False,
+                ),
+            ),
+            {},
+            re.escape(
+                "Subject 'google/protobuf/timestamp.proto' not found. (HTTP status code 404, SR code 40401)"
+            ),
         ),
     ],
     indirect=["serializer"],
@@ -195,6 +326,24 @@ def test_schema_registry_serialize_error(
             b'{"id":10}',
             "'name' is a required property",
         ),
+        (
+            partial(ProtobufDeserializer, Root),
+            None,
+            b"\n\x03foo\x10\x02\x13",
+            "Unknown magic byte. This message was not produced with a Confluent Schema Registry serializer",
+        ),
+        (
+            partial(ProtobufDeserializer, Nested),
+            Schema(schema_str=get_schema_str(Nested), schema_type="PROTOBUF"),
+            b"\n\x03foo\x10\x02\x13",
+            "Error parsing message",
+        ),
+        (
+            partial(ProtobufDeserializer, Nested),
+            Schema(schema_str=get_schema_str(Nested), schema_type="PROTOBUF"),
+            b"\x01",
+            "Invalid Protobuf msgidx array length",
+        ),
     ],
     indirect=["deserializer"],
 )
@@ -216,7 +365,7 @@ def test_schema_registry_deserialize_error(
 
 
 @pytest.mark.parametrize(
-    "serializer, schema",
+    "serializer, schema, obj_to_serialize",
     [
         (
             partial(
@@ -227,6 +376,7 @@ def test_schema_registry_deserialize_error(
                 ),
             ),
             Schema(schema_str=json.dumps(AVRO_TEST_SCHEMA), schema_type="AVRO"),
+            {"name": "foo", "id": 123},
         ),
         (
             partial(
@@ -237,6 +387,19 @@ def test_schema_registry_deserialize_error(
                 ),
             ),
             Schema(schema_str=json.dumps(JSONSCHEMA_TEST_SCHEMA), schema_type="JSON"),
+            {"name": "foo", "id": 123},
+        ),
+        (
+            partial(
+                ProtobufSerializer,
+                Nested,
+                schema_registry_serialization_config=SchemaRegistrySerializationConfig(
+                    auto_register_schemas=False,
+                    skip_known_types=True,
+                ),
+            ),
+            Schema(schema_str=get_schema_str(Nested), schema_type="PROTOBUF"),
+            {"id": 123},
         ),
     ],
     indirect=["serializer"],
@@ -245,30 +408,62 @@ def test_do_not_auto_register_schemas(
     schema_registry_client: SchemaRegistryClient,
     serializer: Serializer,
     schema: Schema,
+    obj_to_serialize: Any,
 ):
     # First attempt fails because the schema is not registered
     with pytest.raises(SerializationError, match="Subject '.+' not found"):
-        serializer({"name": "foo", "id": 123}, DUMMY_CONTEXT)
+        serializer(obj_to_serialize, DUMMY_CONTEXT)
 
     schema_registry_client.register_schema(subject_name=SUBJECT, schema=schema)
 
     # Second attempt succeeds because the schema is registered
-    serializer({"name": "foo", "id": 123}, DUMMY_CONTEXT)
+    serializer(obj_to_serialize, DUMMY_CONTEXT)
 
 
-def test_custom_subject_name_strategy(
+@pytest.mark.parametrize(
+    "skip_known_types, subjects",
+    [
+        (False, {"google/protobuf/timestamp.proto", "nested.proto", "topic-value"}),
+        (True, {"nested.proto", "topic-value"}),
+    ],
+)
+def test_skip_known_types(
     schema_registry_client_config: SchemaRegistryClientConfig,
     schema_registry_client: SchemaRegistryClient,
+    skip_known_types: bool,
+    subjects: Set,
 ):
-    serializer = AvroSerializer(
-        AVRO_TEST_SCHEMA,
+    serializer = ProtobufSerializer(
+        Root,
         schema_registry_client_config=schema_registry_client_config,
         schema_registry_serialization_config=SchemaRegistrySerializationConfig(
-            subject_name_strategy=lambda *args: "custom-name"
+            skip_known_types=skip_known_types,
         ),
     )
 
-    serializer({"name": "foo", "id": 123}, DUMMY_CONTEXT)
+    serializer({}, DUMMY_CONTEXT)
 
-    result = schema_registry_client.get_latest_version(subject_name="custom-name")
-    assert json.loads(result.schema.schema_str) == AVRO_TEST_SCHEMA
+    assert set(schema_registry_client.get_subjects()) == subjects
+
+
+def test_custom_subject_name_strategies(
+    schema_registry_client_config: SchemaRegistryClientConfig,
+    schema_registry_client: SchemaRegistryClient,
+):
+    serializer = ProtobufSerializer(
+        Root,
+        schema_registry_client_config=schema_registry_client_config,
+        schema_registry_serialization_config=SchemaRegistrySerializationConfig(
+            skip_known_types=True,
+            subject_name_strategy=lambda *args: "foo",
+            reference_subject_name_strategy=lambda *args: "bar",
+        ),
+    )
+
+    serializer({}, DUMMY_CONTEXT)
+
+    assert set(schema_registry_client.get_subjects()) == {"foo", "bar"}
+    root = schema_registry_client.get_latest_version(subject_name="foo")
+    assert "message Root" in root.schema.schema_str
+    nested = schema_registry_client.get_latest_version(subject_name="bar")
+    assert "message Nested" in nested.schema.schema_str
