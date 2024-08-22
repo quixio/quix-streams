@@ -596,7 +596,7 @@ class StreamingDataFrame(BaseStreaming):
             By default, the current message key will be used.
         :return: the updated StreamingDataFrame instance (reassignment NOT required).
         """
-        return self._add_update(
+        return self.apply(
             lambda value, orig_key, timestamp, headers: self._produce(
                 topic=topic,
                 value=value,
@@ -1066,7 +1066,8 @@ class StreamingDataFrame(BaseStreaming):
                 offset=ctx.offset,
             )
 
-        self.update(_sink_callback, metadata=True)
+        # even though using apply, don't return since we lock afterward anyway
+        self.apply(_sink_callback, metadata=True)
         self._lock()
 
     def _lock(self):
@@ -1088,6 +1089,8 @@ class StreamingDataFrame(BaseStreaming):
             value=value, key=key, timestamp=timestamp, context=ctx, headers=headers
         )
         self._producer.produce_row(row=row, topic=topic, key=key, timestamp=timestamp)
+        # return value so produce can be an "apply" function (no branch copy required)
+        return value
 
     def _add_update(
         self,
