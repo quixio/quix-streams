@@ -8,9 +8,3 @@ updates:
       - "/tests"
     schedule:
       interval: "weekly"
-
-  - package-ecosystem: "pip"
-    directory: "/"
-    file: "requirements-dev.txt"
-    schedule:
-      interval: "weekly"
