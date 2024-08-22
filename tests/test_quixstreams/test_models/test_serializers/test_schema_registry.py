@@ -201,26 +201,32 @@ def test_schema_registry_deserialize_error(
         deserializer(data, DUMMY_CONTEXT)
 
 
-def test_do_not_auto_register_schemas(
-    schema_registry_client_config: SchemaRegistryClientConfig,
-    schema_registry_client: SchemaRegistryClient,
-):
-    serializer = AvroSerializer(
-        AVRO_TEST_SCHEMA,
-        schema_registry_client_config=schema_registry_client_config,
-        schema_registry_serialization_config=SchemaRegistrySerializationConfig(
-            auto_register_schemas=False,
+@pytest.mark.parametrize(
+    "serializer, schema",
+    [
+        (
+            partial(
+                AvroSerializer,
+                AVRO_TEST_SCHEMA,
+                schema_registry_serialization_config=SchemaRegistrySerializationConfig(
+                    auto_register_schemas=False,
+                ),
+            ),
+            Schema(schema_str=json.dumps(AVRO_TEST_SCHEMA), schema_type="AVRO"),
         ),
-    )
-
+    ],
+    indirect=["serializer"],
+)
+def test_do_not_auto_register_schemas(
+    schema_registry_client: SchemaRegistryClient,
+    serializer: Serializer,
+    schema: Schema,
+):
     # First attempt fails because the schema is not registered
     with pytest.raises(SerializationError, match="Subject '.+' not found"):
         serializer({"name": "foo", "id": 123}, DUMMY_CONTEXT)
 
-    schema_registry_client.register_schema(
-        subject_name=SUBJECT,
-        schema=Schema(schema_str=json.dumps(AVRO_TEST_SCHEMA), schema_type="AVRO"),
-    )
+    schema_registry_client.register_schema(subject_name=SUBJECT, schema=schema)
 
     # Second attempt succeeds because the schema is registered
     serializer({"name": "foo", "id": 123}, DUMMY_CONTEXT)
