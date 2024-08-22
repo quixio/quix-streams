@@ -214,6 +214,16 @@ def test_schema_registry_deserialize_error(
             ),
             Schema(schema_str=json.dumps(AVRO_TEST_SCHEMA), schema_type="AVRO"),
         ),
+        (
+            partial(
+                JSONSerializer,
+                schema=JSONSCHEMA_TEST_SCHEMA,
+                schema_registry_serialization_config=SchemaRegistrySerializationConfig(
+                    auto_register_schemas=False,
+                ),
+            ),
+            Schema(schema_str=json.dumps(JSONSCHEMA_TEST_SCHEMA), schema_type="JSON"),
+        ),
     ],
     indirect=["serializer"],
 )
