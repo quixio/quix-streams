@@ -271,6 +271,7 @@ class PollingSource(Source):
 
             if msg is None:
                 self.sleep(self._polling_delay)
+                self._producer.poll()
                 continue
 
             self.produce(
