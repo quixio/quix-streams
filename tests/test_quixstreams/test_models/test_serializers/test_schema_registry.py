@@ -168,7 +168,7 @@ def test_schema_registry_serialize_error(
 
 
 @pytest.mark.parametrize(
-    "deserializer, schema, data, exception_text",
+    "deserializer, schema, data, match",
     [
         (
             partial(AvroDeserializer),
@@ -203,7 +203,7 @@ def test_schema_registry_deserialize_error(
     deserializer: Serializer,
     schema: Schema,
     data: bytes,
-    exception_text: str,
+    match: str,
 ):
     if schema:
         schema_id = schema_registry_client.register_schema(
@@ -211,7 +211,7 @@ def test_schema_registry_deserialize_error(
         )
         data = _set_magic_byte_metadata(data, schema_id)
 
-    with pytest.raises(SerializationError, match=exception_text):
+    with pytest.raises(SerializationError, match=match):
         deserializer(data, DUMMY_CONTEXT)
 
 
