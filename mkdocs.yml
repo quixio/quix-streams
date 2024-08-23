@@ -29,7 +29,7 @@ nav:
     - Word Count: 'tutorials/word-count/tutorial.md'
     - Anomaly Detection: 'tutorials/anomaly-detection/tutorial.md'
     - Purchase Filtering: 'tutorials/purchase-filtering/tutorial.md'
-  - How To:
+  - How to:
     - Produce Data to Kafka: producer.md
     - Process & Transform Data: processing.md
     - GroupBy Operation: groupby.md
