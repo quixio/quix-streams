@@ -19,7 +19,7 @@ class FilterFunction(StreamFunction):
         super().__init__(func)
 
     def get_executor(self, *child_executors: VoidExecutor) -> VoidExecutor:
-        child_executor = self._resolve_splitting(*child_executors)
+        child_executor = self._resolve_branching(*child_executors)
 
         def wrapper(value: Any, key: Any, timestamp: int, headers: Any, func=self.func):
             # Filter a single value
@@ -44,7 +44,7 @@ class FilterWithMetadataFunction(StreamFunction):
         super().__init__(func)
 
     def get_executor(self, *child_executors: VoidExecutor) -> VoidExecutor:
-        child_executor = self._resolve_splitting(*child_executors)
+        child_executor = self._resolve_branching(*child_executors)
 
         def wrapper(value: Any, key: Any, timestamp: int, headers: Any, func=self.func):
             # Filter a single value
