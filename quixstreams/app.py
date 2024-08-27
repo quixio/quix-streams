@@ -642,6 +642,12 @@ class Application:
         on_error: Optional[ProducerErrorCallback] = None,
         transactional: Optional[bool] = None,
     ) -> RowProducer:
+        """
+        Create a RowProducer using the application config
+
+        Used to create the application producer as well as the sources producers
+        """
+
         if transactional is None:
             transactional = self._config.exactly_once
 
@@ -788,6 +794,8 @@ class Application:
     def _exception_handler(self, exc_type, exc_val, exc_tb):
         fail = False
 
+        # Sources and the application are independant, if a source fails
+        # the application can shutdown gracefully.
         if exc_val is not None and exc_type is not SourceException:
             fail = True
 

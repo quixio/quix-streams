@@ -2,19 +2,15 @@ import threading
 import logging
 import signal
 
-from multiprocessing import get_context
 from pickle import PicklingError
 from typing import List
 
 from quixstreams.logging import configure_logging, LOGGER_NAME
 from quixstreams.models import Topic
 from .base import BaseSource
+from .multiprocessing import multiprocessing
 
 logger = logging.getLogger(__name__)
-
-# always use spawn as it's supported on all major OS
-# see https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods
-multiprocessing = get_context("spawn")
 
 
 class SourceProcess(multiprocessing.Process):

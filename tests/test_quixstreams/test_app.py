@@ -30,8 +30,7 @@ from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
 from quixstreams.sinks import SinkBatch, SinkBackpressureError
 from quixstreams.state import State
-from quixstreams.sources import SourceException
-from quixstreams.sources.manager import multiprocessing
+from quixstreams.sources import SourceException, multiprocessing
 from tests.utils import DummySink, DummySource
 
 
