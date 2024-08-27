@@ -4,5 +4,5 @@ rocksdict>=0.3, <0.4
 typing_extensions>=4.8
 orjson>=3.9,<4
 pydantic>=2.7,<2.9
-pydantic-settings>=2.3,<2.4
+pydantic-settings>=2.3,<2.5
 jsonschema>=4.3.0
