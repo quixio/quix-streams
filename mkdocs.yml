@@ -29,11 +29,12 @@ nav:
     - Word Count: 'tutorials/word-count/tutorial.md'
     - Anomaly Detection: 'tutorials/anomaly-detection/tutorial.md'
     - Purchase Filtering: 'tutorials/purchase-filtering/tutorial.md'
-  - Producing Data to Kafka: producer.md
-  - Processing & Transforming Data: processing.md
-  - GroupBy Operation: groupby.md
-  - Windows & Aggregations: windowing.md
-  - Configuration: configuration.md
+  - How to:
+    - Produce Data to Kafka: producer.md
+    - Process & Transform Data: processing.md
+    - GroupBy Operation: groupby.md
+    - Windows & Aggregations: windowing.md
+    - Configuration: configuration.md
   - Advanced Usage:
     - Checkpointing: advanced/checkpointing.md
     - Serialization Formats: advanced/serialization.md
