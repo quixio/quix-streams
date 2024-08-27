@@ -22,6 +22,7 @@ class BaseSettings(_BaseSettings):
         Dump any non-empty config values as a dictionary.
 
         :param plaintext_secrets: whether secret values are plaintext or obscured (***)
+        :param include: optional list of fields to be included in the dictionary
         :return: a dictionary
         """
         dump = self.model_dump(by_alias=True, exclude_none=True, include=include)
