@@ -14,12 +14,12 @@ Then, for each consumer topic `T`, initialize a `SDF` as normal with
 The `Application` will track all `SDF`s generated this way and will execute all of 
 them when `Application.run()` is called.
 
-Note that you cannot use the same topic in multiple `SDF`s.
+Note that you cannot use the same topic across multiple `SDF`s.
 
 ## `StreamingDatFrame` Usage
 
 For each `SDF`, add operations as normal. Each topic's messages will be processed by
-it's respective `SDF`. There are no additional restrictions for multiple `SDF`s.
+its respective `SDF`. There are no additional restrictions for multiple `SDF`s.
 
 However, each `SDF` should be treated like the others do not exist: they cannot 
 interact or share any operations with one another in any way, and their states are 
