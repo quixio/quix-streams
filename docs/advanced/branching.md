@@ -32,6 +32,36 @@ sdf
             └── H
 ```
 
+# Branching Use Cases
+
+The benefits of branching are fairly apparent, but these are perhaps the most important
+aspects:
+
+## Multiple Topic Output
+
+Often, different topics will have different data structures or schemas, which 
+necessitates transforming your data before producing to it.
+
+Without branching, it's impossible to handle two or more schemas at once.
+
+## Conditional Operations
+
+While some conditional operations are still achievable within an `.apply()` 
+function, now `SDF`'s more natively support it, enabling other `SDF` operations to be more
+readily used.
+
+This is especially true for producing to different topics based on different conditions.
+
+## Consolidating Applications
+
+While branching does have some overhead (see [data cloning](#data-cloning)), 
+it may enable what once required multiple applications to be consolidated into one,
+which is likely to outweigh the cost in many situations.
+
+Consolidating may be useful where many similar transformations are repeated in various
+`Applications`, or the context of them overlaps significantly.
+
+
 # Branching Fundamentals
 
 ## Generating Branches
@@ -101,11 +131,134 @@ Most of branching's limitations are around:
 - [using a branch to manipulate another](#branch-interactions)
 - [shared SDF state](#using-with-state)
 
-# Basic Branching Example
+# Branching Example
 
-What does that look like in practice?
+In this example, we have purchase events similar to our [purchase-filtering tutorial](../tutorials/purchase-filtering):
 
-Here is a simple example showcasing branching:
+In short, customers who have either a `Gold`, `Silver`, or `Bronze` membership
+are making purchases at this store.
+
+### Example Value
+```python
+kafka_key: "CUSTOMER_ID_123"
+kafka_value: {
+      "First Name": "Jane",
+      "Last Name": "Doe",
+      "Email": "jdoe@mail.com",
+      "Membership Type": "Gold",
+      "Purchases": [
+          {
+              "Item ID": "abc123",
+              "Price": 13.99,
+              "Quantity": 12
+          },
+          {
+              "Item ID": "def456",
+              "Price": 12.59,
+              "Quantity": 2
+          },
+      ]
+  }
+```
+
+We want to send coupons to `Silver` or `Gold` members whose purchase total exceeds a 
+certain `$` amount.
+
+In addition, _anyone_ who spends at least `$200` becomes eligible to win a car, 
+or if they instead spend at least `$1000`, a chance to win **$1 million**.
+
+Basically, something like:
+
+```
+Purchases
+├── Total >= $200 (prize)
+│   ├── Total >= $1000 (cash prize)
+│   │   └── produce cash message
+│   └── Total < $1000 (car prize)
+│       └── produce car message
+├── Silver & Total >= $75
+│   └── produce coupon message
+└── Gold & Total >= $50
+    └── produce coupon message
+```
+
+### Example Code
+
+```python
+from quixstreams import Application
+
+SALES_TAX = 1.10
+
+
+def get_purchase_totals(items):
+    return sum([i["Price"] * i["Quantity"] for i in items])
+
+
+def message_stub(value):
+    return (f'Congratulations {value["First Name"]} {value["Last Name"]} your recent '
+            f'purchase totaling {value["Total"]} was enough to earn you')
+
+
+def coupon(value):
+    return f"{message_stub(value)} a coupon!"
+
+
+def car_prize(value):
+    return f"{message_stub(value)} a chance to win a car!"
+
+
+def cash_prize(value):
+    return f"f{message_stub(value)} a chance to win $1 million!"
+
+
+app = Application("localhost:9092")
+customer_purchases = app.topic("customer_purchases", value_deserializer="json")
+
+silver_topic = app.topic("silver_coupon", value_serializer="str")
+gold_topic = app.topic("gold_coupon", value_serializer="str")
+car_topic = app.topic("car_prize", value_serializer="str")
+cash_topic = app.topic("cash_prize", value_serializer="str")
+
+purchases = app.dataframe(customer_purchases)
+purchases["Total"] = purchases["Purchases"].apply(get_purchase_totals) * SALES_TAX
+purchases.drop(["Email", "Purchases"])
+
+prizes = purchases[purchases["Total"] >= 200.00]
+car = prizes[prizes["Total"] < 1000.00].apply(car_prize).to_topic(car_topic)
+cash = prizes[prizes["Total"] >= 1000.00].apply(cash_prize).to_topic(cash_topic)
+
+silver_coupon = purchases[
+    (purchases["Membership Type"] == "Silver") & (purchases["Total"] >= 75.00)
+].apply(coupon).to_topic(silver_topic)
+
+gold_coupon = purchases[
+    (purchases["Membership Type"] == "Gold") & (purchases["Total"] >= 50.00)
+].apply(coupon).to_topic(gold_topic)
+
+app.run()
+```
+
+### Example Processing Result
+Processing the [example value](#example-value) would produce 2 values in the following order:
+
+1. `car_prize` topic: 
+    - `"Congratulations Jane Doe, your recent purchase totaling $212.36 was enough to earn you a chance to win a car!"`
+2. `gold_coupon` topic:
+    - `"Congratulations Jane Doe, your recent purchase totaling $212.36 was enough to earn you a coupon!"`
+
+
+# Execution Ordering
+
+Because of the way branches are tracked and interact, ordering can be tricky.
+
+We make a best effort to execute the SDF **in the order the operations were added**,
+or essentially from "top to bottom".
+
+That said, if you have behavior that relies on a specific execution ordering, 
+it is recommended to test it and ensure its occurring in the order you expect, as
+there may be uncaught edge cases. 
+
+## Ordering Example
 
 ```python
 from quixstreams import Application
@@ -140,39 +293,19 @@ following order:
 530  # sdf_0: (10 + 20 + 500)
 ```
 
-or, graphically:
+Interpreted another way, the "last" operation added to each branch occurred in this order.
+
+
+Here is a visual representation (processed top to bottom):
 
 ```
 SDF
 └── 0 (input)
-    └── (+ 10 + 20)
+    └── (+ 10 + 20)D
         ├── (+ 70 + 1) = 101
         ├── (+ 102   ) = 132
         └── (+ 500   ) = 530
 ```
-
-
-# Execution Ordering
-
-Because of the way branches are tracked and interact, ordering can be tricky.
-
-We make a best effort to execute the SDF **in the order the operations were added**,
-or essentially from "top to bottom".
-
-That said, if you have behavior that relies on a specific execution ordering, 
-it is recommended to test it and ensure its occurring in the order you expect, as
-there may be uncaught edge cases. 
-
-## Ordering example
-
-Referring to the [branching example](#simple-example), the branch
-results are produced in the following order:
-
-1. `sdf_1`
-2. `sdf_2`
-3. `sdf_0`
-
-Interpreted another way, the "last" operation added to each branch occurred in this order.
 
 ## Ordering with `expand=True`
 
@@ -287,6 +420,16 @@ Any nodes with branches require cloning the current value at that node `N-1`
 times, where `N` is number of branches at a given node (though any subsequent clones 
 are much cheaper relative to the first).
 
+### Minimizing Performance Loss
+
+Some considerations for mitigating loss in performance due to cloning:
+
+Before (or while) creating a branch:
+1. Reduce the value size (ex: use column projection)
+    - Smaller value = lower clone cost
+2. Filter values upfront
+    - lower data volume = less data to clone
+
 ### Cloning Limitations
 
 Data cloning is done using `pickle`, which does mean that it's possible for
@@ -295,137 +438,89 @@ the value cloning to fail if the data cannot be serialized with `pickle`.
 Though unlikely, if an exception is encountered, try changing the message value to 
 a different format before the branching occurs.
 
-# Advanced Concepts
+# Advanced Usage
 
-An entirely optional section to better understand the internals of branching.
+## Skipping Assignment
 
-## Invalid Interactions
+Assignment is not required to generate branches, which can remove instantiating 
+variables that otherwise wont be referenced again (basically a "leaf" of the tree).
 
-> NOTE: this section gets a bit more technical! 
-> See [branch interactions](#branch-interactions) for a basic ruleset that
-> covers most cases.
+It may still be beneficial to use assignment as a visual aid for those unfamiliar with 
+how branching works, and it makes no difference in terms of performance.
 
-For this section, assume the following example:
+### Rewriting the Example
 
-```python
-sdf_0 = sdf_0.apply(func_q)
-sdf_1 = sdf_0.apply(func_r)
-sdf_2 = sdf_0.apply(func_s)
-sdf_3 = sdf_1.apply(func_t)
-sdf_4 = sdf_1.apply(func_u)
-sdf_5 = sdf_2.apply(func_v)
-```
-
-graph, showing each:
-```
-sdf_0
-├── sdf_1
-│   ├── sdf_3
-│   └── sdf_4
-└── sdf_2
-    └── sdf_5
-```
-
-### Nodes
-
-Each independent `SDF` (`sdf_N`) can be considered a **node**.
-
-### Parent, Children, and Ancestors
-
-A node's **parent** is the node it spawned from, and conversely a node's **children** 
-are all the nodes spawned directly from it.
-
-**Ancestors** are basically all nodes that occur while recursively traversing parents
-until you hit the "end" (node without a parent).
-
-Example:
-
-- `sdf_1`
-  - parent: `sdf_0`
-  - children: \[`sdf_3`, `sdf_4`\]
-  - ancestors: `sdf_0`
-
-- `sdf_0`
-  - parent: `None`
-  - children: \[`sdf_1`, `sdf_2`\]
-  - ancestors: `None`
-
-- `sdf_3`
-  - parent: `sdf_1`
-  - children: `None`
-  - ancestors: \[`sdf_1`, `sdf_0`\]
-
-
-### Branches
-
-A node is a **branch** if its parent has >1 child.
-
-### Node Origin
-
-A node's origin is essentially _its first ancestor that has >1 children_.
-
-Importantly, it may _not_ be a node's parent until it becomes a branch.
-
-A good example of this is `sdf_5` (snippet of example):
-
-```
-sdf_0
-├── sdf_1
-└── sdf_2
-    └── sdf_5
-```
-- parent: `sdf_2`
-- origin: `sdf_0`
-
-but if we added:
+[The original example code above](#example-code) could be re-written as the following:
 
 ```python
-sdf_6 = sdf_2.apply(f)
+from quixstreams import Application
+
+SALES_TAX = 1.10
+
+
+def get_purchase_totals(items):
+    return sum([i["Price"] * i["Quantity"] for i in items])
+
+
+def message_stub(value):
+    return (f'Congratulations {value["First Name"]} {value["Last Name"]} your recent '
+            f'purchase totaling {value["Total"]} was enough to earn you')
+
+
+def coupon(value):
+    return f"{message_stub(value)} a coupon!"
+
+
+def car_prize(value):
+    return f"{message_stub(value)} a chance to win a car!"
+
+
+def cash_prize(value):
+    return f"f{message_stub(value)} a chance to win $1 million!"
+
+
+app = Application("localhost:9092")
+customer_purchases = app.topic("customer_purchases", value_deserializer="json")
+
+silver_topic = app.topic("silver_coupon", value_serializer="str")
+gold_topic = app.topic("gold_coupon", value_serializer="str")
+car_topic = app.topic("car_prize", value_serializer="str")
+cash_topic = app.topic("cash_prize", value_serializer="str")
+
+purchases = app.dataframe(customer_purchases)
+purchases["Total"] = purchases["Purchases"].apply(get_purchase_totals) * SALES_TAX
+purchases.drop(["Email", "Purchases"])
+
+
+prizes = purchases[purchases["Total"] >= 200.00]
+# Removed car and cash assignments
+prizes[prizes["Total"] < 1000.00].apply(car_prize).to_topic(car_topic)
+prizes[prizes["Total"] >= 1000.00].apply(cash_prize).to_topic(cash_topic)
+
+# Removed silver and gold assignments
+purchases[
+    (purchases["Membership Type"] == "Silver") & (purchases["Total"] >= 75.00)
+].apply(coupon).to_topic(silver_topic)
+
+purchases[
+    (purchases["Membership Type"] == "Gold") & (purchases["Total"] >= 50.00)
+].apply(coupon).to_topic(gold_topic)
+
+app.run()
 ```
+
+# Upcoming Features
+
+## Merging
+
+Merging allows you to combine or consolidate branches back into a single processing path.
+
 ```
-sdf_0
-├── sdf_1
-└── sdf_2
-    ├── sdf_5
-    └── sdf_6
+        C ──> D ──> E
+       /             \
+A ──> B               P ──> Q
+       \             /
+        K ──> L --->
 ```
 
-then `sdf_5` origin changes to `sdf_2` which now has `>1` children 
-(also making `sdf_5` a branch).
-
-### Pruning
-
-Pruning is when we remove a node (in its entirety) from the "tree" and compose its
-operations (starting from the pruned node and later). 
-
-This is followed by applying this composition back as a single new operation to the 
-node doing the pruning.
-
-Pruning occurs during filtering and column assignment operations, and **is allowed only
-when two nodes have the same origin**. Why?
-
-Pruned operations are entirely autonomous, as if steps from a recipe were cut 
-and pasted onto another with no edits: they are a context-less collection of functions.
-As such, they must share the same "context" (origin) for their use to make sense.
-
-#### Pruning example
-
-Imagine we had a filtering operation: `sdf_A[sdf_B.apply(f)]`
-
-If `sdf_B` does not share the same origin as `sdf_A`, the pruned operations from 
-`sdf_B` (`.apply(f)`) will result in adding said operations to `sdf_A` that only make 
-sense with the context of `sdf_B`.
-
-
-### Invalid Filtering and Column Assigning
-
-Pruning behavior is basically what invalidates interaction between various
-branches. There are some edge cases that are technically valid, but they can
-basically be accomplished otherwise and are generally not recommended.
-
-### Filters and Assignors as Variables
-
-Pruning is also generally why storing intermediate filters and assignors as variables 
-is not recommended: it's more likely to encounter exceptions and edge cases, as 
-creating branches at certain points can invalidate originally valid prune candidates, 
-or prune them in unexpected ways.
+This feature is on the roadmap.

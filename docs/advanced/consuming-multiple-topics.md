@@ -16,15 +16,33 @@ them when `Application.run()` is called.
 
 Note that you cannot use the same topic across multiple `SDF`s.
 
-## `StreamingDatFrame` Usage
+## Branching vs Multi-SDFs
+
+[Branching](branching.md) is independent of multi-`SDF`;
+branches can be used in each of the `SDF`s from multiple topics, but they cannot
+interact with one another in any way.
+
+
+## `StreamingDataFrame` Usage
 
 For each `SDF`, add operations as normal. Each topic's messages will be processed by
-its respective `SDF`. There are no additional restrictions for multiple `SDF`s.
+its respective `SDF`.
 
-However, each `SDF` should be treated like the others do not exist: they cannot 
-interact or share any operations with one another in any way, and their states are 
-also fully independent.
 
+### Limitations
+There are no additional restrictions for `SDF`'s when used with multiple topics.
+
+_However_, each `SDF` should be treated like the others do not exist: they cannot 
+interact or share any operations with one another in any way. 
+
+### State
+Each `SDF`'s state used in a multi-`SDF` implementation is entirely independent
+(including all `stateful=True` operations), meaning `SDF`s cannot access or manipulate
+the state of another `SDF`.
+
+As a reminder, state is ultimately tied to a given topic (and thus its `SDF`).
+
+[See here to learn more about stateful processing](stateful-processing.md).
 
 ## Multiple Topics: NOT parallel
 
@@ -53,3 +71,12 @@ sdf_b.update(func_y).to_topic(output_topic)
 
 app.run()
 ```
+
+# Upcoming Features 
+
+## Joins
+
+Joins are a way of combining two topics together into one
+data stream using various options and conditions.
+
+They are on the immediate roadmap.
