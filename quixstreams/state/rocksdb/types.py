@@ -1,4 +1,5 @@
 from typing import Protocol, Optional, Literal
+from typing_extensions import runtime_checkable
 
 import rocksdict
 
@@ -7,6 +8,7 @@ from quixstreams.state.types import DumpsFunc, LoadsFunc
 CompressionType = Literal["none", "snappy", "zlib", "bz2", "lz4", "lz4hc", "zstd"]
 
 
+@runtime_checkable
 class RocksDBOptionsType(Protocol):
     write_buffer_size: int
     target_file_size_base: int
