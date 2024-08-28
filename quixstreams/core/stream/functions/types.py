@@ -49,5 +49,22 @@ StreamCallback = Union[
     TransformExpandedCallback,
 ]
 
-VoidExecutor = Callable[[Any, Any, int, Any], None]
-ReturningExecutor = Callable[[Any, Any, int, Any], Tuple[Any, Any, int, Any]]
+
+class VoidExecutor(Protocol):
+    def __call__(
+        self,
+        value: Any,
+        key: Any,
+        timestamp: int,
+        headers: Any,
+    ) -> None: ...
+
+
+class ReturningExecutor(Protocol):
+    def __call__(
+        self,
+        value: Any,
+        key: Any,
+        timestamp: int,
+        headers: Any,
+    ) -> Tuple[Any, Any, int, Any]: ...

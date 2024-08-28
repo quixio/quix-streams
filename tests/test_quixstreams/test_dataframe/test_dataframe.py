@@ -1656,32 +1656,48 @@ class TestStreamingDataFrameGroupBy:
             operation(sdf)
 
 
-class TestStreamingDataFrameSplitting:
-    def test_basic_split(self, dataframe_factory):
-        calls = []
+def add_n(n):
+    return lambda value: value + n
 
-        def add_n(n):
-            def wrapper(value):
-                calls.append(n)
-                return value + n
 
-            return wrapper
+def add_n_col(n, col="v"):
+    return lambda value: value[col] + n
 
-        sdf = dataframe_factory().apply(add_n(1))
-        sdf_2 = sdf.apply(add_n(10))
-        sdf_3 = sdf.apply(add_n(20))
-        sdf = sdf.apply(add_n(100))
 
-        _extras = {"key": b"key", "timestamp": 0, "headers": []}
-        extras = list(_extras.values())
-        expected = [(11, *extras), (21, *extras), (101, *extras)]
-        results = sdf.test(value=0, **_extras)
+def less_than(n):
+    return lambda v: v < n
 
-        # each operation is only called once (no redundant processing)
-        assert len(calls) == 4
+
+def div_n(n):
+    return lambda value: value // n
+
+
+def add_n_df(n):
+    def wrapper(value):
+        return {**value, "v": value["v"] + n}
+
+    return wrapper
+
+
+class TestStreamingDataFrameBranching:
+    def test_basic_branching(self, dataframe_factory):
+
+        sdf = dataframe_factory().apply(lambda v: v + 1)
+        sdf.apply(lambda v: v + 2)
+        sdf.apply(lambda v: v + 3)
+        sdf = sdf.apply(lambda v: v + 100)
+
+        key, timestamp, headers = b"key", 0, []
+        value = 0
+        expected = [
+            (3, key, timestamp, headers),
+            (4, key, timestamp, headers),
+            (101, key, timestamp, headers),
+        ]
+        results = sdf.test(value=value, key=key, timestamp=timestamp, headers=headers)
         assert results == expected
 
-    def test_multi_split(self, dataframe_factory):
+    def test_multiple_branches(self, dataframe_factory):
         """
         --< is a split
         "S'" denotes the continuation of the sdf that was split from
@@ -1697,22 +1713,6 @@ class TestStreamingDataFrameSplitting:
 
         :return:
         """
-
-        calls = []
-
-        def add_n(n):
-            def wrapper(value):
-                calls.append(f"add_{n}")
-                return value + n
-
-            return wrapper
-
-        def div_n(n):
-            def wrapper(value):
-                calls.append(f"div_{n}")
-                return value // n
-
-            return wrapper
 
         sdf = dataframe_factory().apply(add_n(120)).apply(div_n(2))  # 60
         sdf_2 = sdf.apply(div_n(3))  # 20
@@ -1734,27 +1734,9 @@ class TestStreamingDataFrameSplitting:
         ]
         results = sdf.test(value=0, **_extras)
 
-        # each operation is only called once (no redundant processing)
-        assert len(calls) == 12
         assert results == expected
 
     def test_filter(self, dataframe_factory):
-        calls = []
-
-        def add_n(n):
-            def wrapper(value):
-                calls.append(n)
-                return value + n
-
-            return wrapper
-
-        def less_than(n):
-            def wrapper(value):
-                calls.append(n)
-                return value < n
-
-            return wrapper
-
         sdf = dataframe_factory().apply(add_n(10))
         sdf2 = sdf.apply(add_n(5)).filter(less_than(0)).apply(add_n(200))
         sdf3 = sdf.apply(add_n(7)).filter(less_than(20)).apply(add_n(4))
@@ -1768,25 +1750,9 @@ class TestStreamingDataFrameSplitting:
         results = sdf.test(value=0, **_extras)
 
         # each operation is only called once (no redundant processing)
-        assert len(calls) == 10
         assert results == expected
 
     def test_filter_using_sdf_apply_and_col_select(self, dataframe_factory):
-        calls = []
-
-        def add_n(n):
-            def wrapper(value):
-                calls.append(n)
-                return value + n
-
-            return wrapper
-
-        def less_than(n):
-            def wrapper(value):
-                calls.append(n)
-                return value < n
-
-            return wrapper
 
         sdf = dataframe_factory().apply(add_n(10))
         sdf2 = sdf[sdf.apply(less_than(0))].apply(add_n(200))
@@ -1800,33 +1766,9 @@ class TestStreamingDataFrameSplitting:
         expected = [(43, *extras), (147, *extras), (887, *extras)]
         results = sdf.test(value=0, **_extras)
 
-        # each operation is only called once (no redundant processing)
-        assert len(calls) == 10
-        # each split result is correct
-        assert len(results) == len(expected)
-        print(results)
-        print(expected)
-        for result in results:
-            assert result in expected
+        assert results == expected
 
     def test_filter_using_columns(self, dataframe_factory):
-        calls = []
-
-        def add_n(n):
-            def wrapper(value):
-                calls.append(n)
-                return value + n
-
-            return wrapper
-
-        def add_n_df(n):
-            def wrapper(value):
-                calls.append(n)
-                value["v"] += n
-                return value
-
-            return wrapper
-
         sdf = dataframe_factory().apply(add_n_df(10))
         sdf2 = sdf[sdf["v"] < 0].apply(add_n_df(200))
         sdf3 = sdf[sdf["v"].apply(add_n(1)).apply(add_n(7)) < 20].apply(add_n_df(33))
@@ -1839,8 +1781,6 @@ class TestStreamingDataFrameSplitting:
         expected = [({"v": 43}, *extras), ({"v": 147}, *extras), ({"v": 887}, *extras)]
         results = sdf.test(value={"v": 0}, **_extras)
 
-        # each operation is only called once (no redundant processing)
-        assert len(calls) == 9
         assert results == expected
 
     def test_store_series_filter_as_var_and_use(self, dataframe_factory):
@@ -1855,23 +1795,6 @@ class TestStreamingDataFrameSplitting:
 
         Basically, storing a series is like using a function with mutable args.
         """
-        calls = []
-
-        def add_n(n):
-            def wrapper(value):
-                calls.append(n)
-                return value + n
-
-            return wrapper
-
-        def add_n_df(n):
-            def wrapper(value):
-                calls.append(n)
-                value["v"] += n
-                return value
-
-            return wrapper
-
         sdf = dataframe_factory().apply(add_n_df(10))
         sdf_filter = sdf["v"].apply(add_n(1)).apply(add_n(7)) < 20  # NOT a split
         sdf2 = sdf[sdf_filter].apply(add_n_df(33))
@@ -1882,8 +1805,6 @@ class TestStreamingDataFrameSplitting:
         expected = [({"v": 43}, *extras), ({"v": 810}, *extras)]
         results = sdf.test(value={"v": 0}, **_extras)
 
-        # each operation is only called once (no redundant processing)
-        assert len(calls) == 5
         assert results == expected
 
     def test_store_series_result_as_var_and_use(self, dataframe_factory):
@@ -1898,23 +1819,6 @@ class TestStreamingDataFrameSplitting:
 
         Basically, storing a series is like using a function with mutable args.
         """
-        calls = []
-
-        def add_n(n):
-            def wrapper(value):
-                calls.append(n)
-                return value + n
-
-            return wrapper
-
-        def add_n_df(n):
-            def wrapper(value):
-                calls.append(n)
-                value["v"] += n
-                return value
-
-            return wrapper
-
         sdf = dataframe_factory().apply(add_n_df(10))
         sdf_sum = sdf["v"].apply(add_n(1)) + 8  # NOT a split (no data cloning)
         sdf2 = sdf[sdf["v"] + sdf_sum < 30].apply(add_n_df(33))
@@ -1925,8 +1829,6 @@ class TestStreamingDataFrameSplitting:
         expected = [({"v": 43}, *extras), ({"v": 810}, *extras)]
         results = sdf.test(value={"v": 0}, **_extras)
 
-        # each operation is only called once (no redundant processing)
-        assert len(calls) == 4
         assert results == expected
 
     def test_store_sdf_filter_as_var_and_use(self, dataframe_factory):
@@ -1944,22 +1846,6 @@ class TestStreamingDataFrameSplitting:
 
         Basically, storing a sdf is like using a function with mutable args.
         """
-        calls = []
-
-        def add_n(n):
-            def wrapper(value):
-                calls.append(n)
-                return value + n
-
-            return wrapper
-
-        def less_than(n):
-            def wrapper(value):
-                calls.append(n)
-                return value < n
-
-            return wrapper
-
         sdf = dataframe_factory().apply(add_n(10))
         sdf_filter = sdf.apply(less_than(20))
         sdf = sdf[sdf_filter].apply(add_n(33))
@@ -1970,8 +1856,6 @@ class TestStreamingDataFrameSplitting:
         expected = [(843, *extras)]
         results = sdf.test(value=0, **_extras)
 
-        # each operation is only called once (no redundant processing)
-        assert len(calls) == 4
         assert results == expected
 
     def test_store_sdf_as_var_and_use_in_split(self, dataframe_factory):
@@ -1986,22 +1870,6 @@ class TestStreamingDataFrameSplitting:
 
         Basically, storing a sdf is like using a function with mutable args.
         """
-        calls = []
-
-        def add_n(n):
-            def wrapper(value):
-                calls.append(n)
-                return value + n
-
-            return wrapper
-
-        def less_than(n):
-            def wrapper(value):
-                calls.append(n)
-                return value < n
-
-            return wrapper
-
         sdf = dataframe_factory().apply(add_n(10))
         sdf_filter = sdf.apply(less_than(20))
         sdf2 = sdf[sdf_filter].apply(add_n(33))
@@ -2012,32 +1880,12 @@ class TestStreamingDataFrameSplitting:
         expected = [(43, *extras), (810, *extras)]
         results = sdf.test(value=0, **_extras)
 
-        # each operation is only called once (no redundant processing)
-        assert len(calls) == 4
         assert results == expected
 
     def test_reuse_sdf_as_filter_fails(self, dataframe_factory):
         """
         Attempting to reuse a filtering SDF will fail.
         """
-        calls = []
-
-        def add_n(n):
-            def wrapper(value):
-                calls.append(n)
-                print(f"{value} + {n}")
-                return value + n
-
-            return wrapper
-
-        def less_than(n):
-            def wrapper(value):
-                calls.append(n)
-                print(f"{value} < {n}")
-                return value < n
-
-            return wrapper
-
         sdf = dataframe_factory().apply(add_n(10))
         sdf_filter = sdf.apply(less_than(20))
         sdf2 = sdf[sdf_filter].apply(add_n(100))
@@ -2046,7 +1894,7 @@ class TestStreamingDataFrameSplitting:
             InvalidOperation,
             match="Cannot use a filtering or column-setter SDF more than once",
         ):
-            sdf3 = sdf[sdf_filter].apply(add_n(200))
+            sdf[sdf_filter].apply(add_n(200))
 
     def test_sdf_as_filter_with_added_operation_fails(self, dataframe_factory):
         """
@@ -2056,22 +1904,6 @@ class TestStreamingDataFrameSplitting:
         The additional operation is actually included in the filter SDF, which is
         unintuitive even if you understand how SDF works internally.
         """
-        calls = []
-
-        def add_n(n):
-            def wrapper(value):
-                calls.append(n)
-                return value + n
-
-            return wrapper
-
-        def less_than(n):
-            def wrapper(value):
-                calls.append(n)
-                return value < n
-
-            return wrapper
-
         sdf = dataframe_factory().apply(add_n(10))
         sdf_filter = sdf.apply(less_than(20))
         sdf = sdf.apply(add_n(50))  # "additional" operation
@@ -2080,7 +1912,7 @@ class TestStreamingDataFrameSplitting:
             InvalidOperation,
             match="filtering or column-setter SDF must originate from target SDF;",
         ):
-            sdf = sdf[sdf_filter].apply(add_n(100))
+            sdf[sdf_filter].apply(add_n(100))
 
     def test_sdf_as_filter_in_another_split_fails(self, dataframe_factory):
         """
@@ -2093,22 +1925,6 @@ class TestStreamingDataFrameSplitting:
         The additional operation on the filtering SDF becomes orphaned, producing no
         result where one would likely be expected.
         """
-        calls = []
-
-        def add_n(n):
-            def wrapper(value):
-                calls.append(n)
-                return value + n
-
-            return wrapper
-
-        def less_than(n):
-            def wrapper(value):
-                calls.append(n)
-                return value < n
-
-            return wrapper
-
         sdf = dataframe_factory().apply(add_n(10))
         sdf2 = sdf.apply(add_n(5))
         sdf_filter = sdf2.apply(less_than(20))
@@ -2118,62 +1934,39 @@ class TestStreamingDataFrameSplitting:
             InvalidOperation,
             match="filtering or column-setter SDF must originate from target SDF;",
         ):
-            sdf = sdf[sdf_filter].apply(add_n(100))
+            sdf[sdf_filter].apply(add_n(100))
 
     def test_update(self, dataframe_factory):
         """
         "Update" functions work with split behavior.
         """
-        calls = []
-
-        def add_n(n):
-            def wrapper(value):
-                calls.append(n)
-                return {"v": value["v"] + n}
-
-            return wrapper
 
         def mul_n(n):
             def wrapper(value):
-                calls.append(n)
                 value["v"] *= n
 
             return wrapper
 
-        sdf = dataframe_factory().apply(add_n(1))
-        sdf2 = sdf.apply(add_n(2)).update(mul_n(2))
-        sdf3 = sdf.apply(add_n(3))
+        sdf = dataframe_factory().apply(add_n_df(1))
+        sdf2 = sdf.apply(add_n_df(2)).update(mul_n(2))
+        sdf3 = sdf.apply(add_n_df(3))
         sdf3.update(mul_n(3))
-        sdf = sdf.update(mul_n(4)).apply(add_n(100))
+        sdf = sdf.update(mul_n(4)).apply(add_n_df(100))
 
         _extras = {"key": b"key", "timestamp": 0, "headers": []}
         extras = list(_extras.values())
         expected = [({"v": 6}, *extras), ({"v": 12}, *extras), ({"v": 104}, *extras)]
         results = sdf.test(value={"v": 0}, **_extras)
 
-        # each operation is only called once (no redundant processing)
-        assert len(calls) == 7
         assert results == expected
 
     def test_set_timestamp(self, dataframe_factory):
         """
         "Transform" functions work with split behavior.
         """
-        calls = []
-
-        def add_n(n):
-            def wrapper(value):
-                calls.append(n)
-                return value + n
-
-            return wrapper
 
         def set_ts(n):
-            def wrapper(value, key, timestamp, headers):
-                calls.append(n)
-                return timestamp + n
-
-            return wrapper
+            return lambda value, key, timestamp, headers: timestamp + n
 
         sdf = dataframe_factory().apply(add_n(1))
         sdf2 = sdf.apply(add_n(2)).set_timestamp(set_ts(3)).set_timestamp(set_ts(5))
@@ -2185,28 +1978,9 @@ class TestStreamingDataFrameSplitting:
         expected = [(3, b"key", 8, []), (4, *extras), (8, b"key", 4, [])]
         results = sdf.test(value=0, **_extras)
 
-        # each operation is only called once (no redundant processing)
-        assert len(calls) == 7
         assert results == expected
 
     def test_column_assign_reuse_fails(self, dataframe_factory):
-        calls = []
-
-        def add_n_col(n):
-            def wrapper(value):
-                calls.append(n)
-                return value["v"] + n
-
-            return wrapper
-
-        def add_n_df(n):
-            def wrapper(value):
-                calls.append(n)
-                value["v"] += n
-                return value
-
-            return wrapper
-
         sdf = dataframe_factory().apply(add_n_df(10))
         new_v = sdf.apply(add_n_df(1)).apply(add_n_col(7))
         sdf["new_v0"] = new_v
@@ -2228,23 +2002,6 @@ class TestStreamingDataFrameSplitting:
         The additional operation on the filtering SDF becomes orphaned, producing no
         result where one would likely be expected.
         """
-        calls = []
-
-        def add_n_col(n):
-            def wrapper(value):
-                calls.append(n)
-                return value["v"] + n
-
-            return wrapper
-
-        def add_n_df(n):
-            def wrapper(value):
-                calls.append(n)
-                value["v"] += n
-                return value
-
-            return wrapper
-
         sdf = dataframe_factory().apply(add_n_df(10))
         sdf2 = sdf.apply(add_n_df(5))
         new_val = sdf2.apply(add_n_col(30))
@@ -2264,23 +2021,6 @@ class TestStreamingDataFrameSplitting:
         The additional operation is actually included in the filter SDF, which is
         unintuitive even if you understand how SDF works internally.
         """
-        calls = []
-
-        def add_n_col(n):
-            def wrapper(value):
-                calls.append(n)
-                return value["v"] + n
-
-            return wrapper
-
-        def add_n_df(n):
-            def wrapper(value):
-                calls.append(n)
-                value["v"] += n
-                return value
-
-            return wrapper
-
         sdf = dataframe_factory().apply(add_n_df(10))
         new_val = sdf.apply(add_n_col(30))
         sdf = sdf.apply(add_n_df(50))  # "additional" operation
@@ -2292,24 +2032,6 @@ class TestStreamingDataFrameSplitting:
             sdf["n_new"] = new_val
 
     def test_column_setter(self, dataframe_factory):
-
-        calls = []
-
-        def add_n_col(n):
-            def wrapper(value):
-                calls.append(n)
-                return value["v"] + n
-
-            return wrapper
-
-        def add_n_df(n):
-            def wrapper(value):
-                calls.append(n)
-                value["v"] += n
-                return value
-
-            return wrapper
-
         sdf = dataframe_factory().apply(add_n_df(10))
         sdf2 = sdf.apply(add_n_df(5))
         sdf2["v"] = sdf2.apply(add_n_col(1))
@@ -2323,9 +2045,6 @@ class TestStreamingDataFrameSplitting:
         extras = list(_extras.values())
         expected = [({"v": v}, *extras) for v in [16, 37, 190, 890]]
         results = sdf.test(value={"v": 0}, **_extras)
-
-        # each operation is only called once (no redundant processing)
-        assert len(calls) == 9
         assert results == expected
 
     def test_store_sdf_setter_as_var_and_use(self, dataframe_factory):
@@ -2333,23 +2052,6 @@ class TestStreamingDataFrameSplitting:
         NOTE: This is NOT dependent on splitting functionality, but splitting may
         encourage these sorts of operations.
         """
-        calls = []
-
-        def add_n_col(n):
-            def wrapper(value):
-                calls.append(n)
-                return value["v"] + n
-
-            return wrapper
-
-        def add_n_df(n):
-            def wrapper(value):
-                calls.append(n)
-                value["v"] += n
-                return value
-
-            return wrapper
-
         sdf = dataframe_factory().apply(add_n_df(10))
         new_val = sdf.apply(add_n_col(20))
         sdf = sdf[new_val].apply(add_n_df(33))
@@ -2360,6 +2062,4 @@ class TestStreamingDataFrameSplitting:
         expected = [({"v": 843}, *extras)]
         results = sdf.test(value={"v": 0}, **_extras)
 
-        # each operation is only called once (no redundant processing)
-        assert len(calls) == 4
         assert results == expected

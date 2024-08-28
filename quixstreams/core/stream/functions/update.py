@@ -21,7 +21,7 @@ class UpdateFunction(StreamFunction):
         super().__init__(func)
 
     def get_executor(self, *child_executors: VoidExecutor) -> VoidExecutor:
-        child_executor = self._resolve_splitting(*child_executors)
+        child_executor = self._resolve_branching(*child_executors)
 
         def wrapper(value: Any, key: Any, timestamp: int, headers: Any, func=self.func):
             # Update a single value and forward it
@@ -46,8 +46,7 @@ class UpdateWithMetadataFunction(StreamFunction):
         super().__init__(func)
 
     def get_executor(self, *child_executors: VoidExecutor) -> VoidExecutor:
-        # Update a single value and forward it
-        child_executor = self._resolve_splitting(*child_executors)
+        child_executor = self._resolve_branching(*child_executors)
 
         def wrapper(value: Any, key: Any, timestamp: int, headers: Any, func=self.func):
             # Update a single value and forward it
