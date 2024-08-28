@@ -46,7 +46,7 @@ def dataframe_factory(topic_manager_topic_factory, topic_manager_factory):
         sdf = StreamingDataFrame(
             topic=topic,
             topic_manager=topic_manager,
-            stream_registry=registry,
+            registry=registry,
             processing_context=processing_ctx,
         )
         registry.register_root(sdf)

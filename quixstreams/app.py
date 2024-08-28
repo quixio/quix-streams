@@ -612,7 +612,7 @@ class Application:
             topic=topic,
             topic_manager=self._topic_manager,
             processing_context=self._processing_context,
-            stream_registry=self._dataframe_registry,
+            registry=self._dataframe_registry,
         )
         self._dataframe_registry.register_root(sdf)
         return sdf
@@ -842,7 +842,7 @@ class Application:
                 self._run_sources()
 
     def _run_dataframe(self, dataframe):self._consumer.subscribe(
-                self._dataframe_registry.consumer_topics(),
+                self._dataframe_registry.consumer_topics,
             on_assign=self._on_assign,
             on_revoke=self._on_revoke,
             on_lost=self._on_lost,
