@@ -4,10 +4,13 @@ import logging
 import os
 import signal
 import warnings
-from typing import Optional, List, Callable, Union, Literal, get_args
+from typing import Optional, List, Callable, Union, Literal, Tuple, Type
 
 from confluent_kafka import TopicPartition
 from typing_extensions import Self
+from pathlib import Path
+from pydantic import Field, AliasGenerator
+from pydantic_settings import PydanticBaseSettingsSource, SettingsConfigDict
 
 from .context import set_message_context, copy_context
 from .dataframe import StreamingDataFrame
@@ -41,8 +44,9 @@ from .sinks import SinkManager
 from .state import StateStoreManager
 from .state.recovery import RecoveryManager
 from .state.rocksdb import RocksDBOptionsType
+from .utils.settings import BaseSettings
 
-__all__ = ("Application",)
+__all__ = ("Application", "ApplicationConfig")
 
 logger = logging.getLogger(__name__)
 ProcessingGuarantee = Literal["at-least-once", "exactly-once"]
@@ -155,7 +159,7 @@ class Application:
         :param producer_extra_config: A dictionary with additional options that
             will be passed to `confluent_kafka.Producer` as is.
         :param state_dir: path to the application state directory.
-            Default - `".state"`.
+            Default - `"state"`.
         :param rocksdb_options: RocksDB options.
             If `None`, the default options will be used.
         :param consumer_poll_timeout: timeout for `RowConsumer.poll()`. Default - `1.0`s
@@ -195,21 +199,8 @@ class Application:
         """
         configure_logging(loglevel=loglevel)
 
-        if processing_guarantee not in get_args(ProcessingGuarantee):
-            raise ValueError(
-                f'Must provide a valid "processing_guarantee"; expected one of: '
-                f'{get_args(ProcessingGuarantee)}, got "{processing_guarantee}"'
-            )
-
         producer_extra_config = producer_extra_config or {}
         consumer_extra_config = consumer_extra_config or {}
-
-        # Add default values to the producer config, but allow them to be overwritten
-        # by the provided producer_extra_config dict
-        producer_extra_config = {
-            **_default_producer_extra_config,
-            **producer_extra_config,
-        }
 
         # We can't use os.getenv as defaults (and have testing work nicely)
         # since it evaluates getenv when the function is defined.
@@ -263,85 +254,100 @@ class Application:
             consumer_extra_config.update(quix_app_config.librdkafka_extra_config)
             producer_extra_config.update(quix_app_config.librdkafka_extra_config)
 
-        self._broker_address = broker_address
-        self._consumer_group = consumer_group
-        self._auto_offset_reset = auto_offset_reset
-        self._commit_interval = commit_interval
-        self._commit_every = commit_every
-        self._producer_extra_config = producer_extra_config
-        self._consumer_extra_config = consumer_extra_config
-        self._processing_guarantee = processing_guarantee
-        self._consumer = RowConsumer(
+        self._config = ApplicationConfig(
             broker_address=broker_address,
             consumer_group=consumer_group,
             auto_offset_reset=auto_offset_reset,
+            commit_interval=commit_interval,
+            commit_every=commit_every,
+            # Add default values to the producer config, but allow them to be overwritten
+            # by the provided producer_extra_config dict
+            producer_extra_config={
+                **_default_producer_extra_config,
+                **producer_extra_config,
+            },
+            consumer_extra_config=consumer_extra_config,
+            processing_guarantee=processing_guarantee,
+            consumer_poll_timeout=consumer_poll_timeout,
+            producer_poll_timeout=producer_poll_timeout,
+            auto_create_topics=auto_create_topics,
+            request_timeout=request_timeout,
+            topic_create_timeout=topic_create_timeout,
+            state_dir=state_dir,
+            rocksdb_options=rocksdb_options,
+            use_changelog_topics=use_changelog_topics,
+        )
+
+        self._on_message_processed = on_message_processed
+        self._on_processing_error = on_processing_error or default_on_processing_error
+
+        self._consumer = RowConsumer(
+            broker_address=self._config.broker_address,
+            consumer_group=self._config.consumer_group,
+            auto_offset_reset=self._config.auto_offset_reset,
             auto_commit_enable=False,  # Disable auto commit and manage commits manually
-            extra_config=consumer_extra_config,
+            extra_config=self._config.consumer_extra_config,
             on_error=on_consumer_error,
         )
         self._producer = RowProducer(
-            broker_address=broker_address,
-            extra_config=producer_extra_config,
+            broker_address=self._config.broker_address,
+            extra_config=self._config.producer_extra_config,
             on_error=on_producer_error,
-            flush_timeout=consumer_extra_config.get(
-                "max.poll.interval.ms", _default_max_poll_interval_ms
-            )
-            / 1000,  # convert to seconds
-            transactional=self._uses_exactly_once,
+            flush_timeout=self._config.flush_timeout,
+            transactional=self._config.exactly_once,
         )
-        self._consumer_poll_timeout = consumer_poll_timeout
-        self._producer_poll_timeout = producer_poll_timeout
-        self._on_processing_error = on_processing_error or default_on_processing_error
-        self._on_message_processed = on_message_processed
-        self._auto_create_topics = auto_create_topics
         self._running = False
         self._failed = False
 
         if not topic_manager:
             topic_manager = topic_manager_factory(
                 topic_admin=TopicAdmin(
-                    broker_address=broker_address,
-                    extra_config=producer_extra_config,
+                    broker_address=self._config.broker_address,
+                    extra_config=self._config.producer_extra_config,
                 ),
-                consumer_group=consumer_group,
-                timeout=request_timeout,
-                create_timeout=topic_create_timeout,
+                consumer_group=self._config.consumer_group,
+                timeout=self._config.request_timeout,
+                create_timeout=self._config.topic_create_timeout,
             )
         self._topic_manager = topic_manager
+
+        producer = None
+        recovery_manager = None
+        if self._config.use_changelog_topics:
+            producer = self._producer
+            recovery_manager = RecoveryManager(
+                consumer=self._consumer,
+                topic_manager=self._topic_manager,
+            )
+
         self._state_manager = StateStoreManager(
-            group_id=consumer_group,
-            state_dir=state_dir,
-            rocksdb_options=rocksdb_options,
-            producer=self._producer if use_changelog_topics else None,
-            recovery_manager=(
-                RecoveryManager(
-                    consumer=self._consumer,
-                    topic_manager=self._topic_manager,
-                )
-                if use_changelog_topics
-                else None
-            ),
+            group_id=self._config.consumer_group,
+            state_dir=self._config.state_dir,
+            rocksdb_options=self._config.rocksdb_options,
+            producer=producer,
+            recovery_manager=recovery_manager,
         )
+
         self._sink_manager = SinkManager()
         self._pausing_manager = PausingManager(consumer=self._consumer)
         self._processing_context = ProcessingContext(
-            commit_interval=self._commit_interval,
-            commit_every=commit_every,
+            commit_interval=self._config.commit_interval,
+            commit_every=self._config.commit_every,
             producer=self._producer,
             consumer=self._consumer,
             state_manager=self._state_manager,
-            exactly_once=self._uses_exactly_once,
+            exactly_once=self._config.exactly_once,
             sink_manager=self._sink_manager,
             pausing_manager=self._pausing_manager,
         )
 
     @property
-    def is_quix_app(self) -> bool:
-        return self._is_quix_app
+    def config(self) -> "ApplicationConfig":
+        return self._config
 
     @property
-    def _uses_exactly_once(self) -> bool:
-        return self._processing_guarantee == "exactly-once"
+    def is_quix_app(self) -> bool:
+        return self._is_quix_app
 
     @classmethod
     def Quix(
@@ -642,7 +648,7 @@ class Application:
         ```python
         from quixstreams import Application
 
-        app = Application.Quix(...)
+        app = Application(...)
         topic = app.topic("input")
 
         with app.get_producer() as producer:
@@ -653,8 +659,8 @@ class Application:
         self._setup_topics()
 
         return Producer(
-            broker_address=self._broker_address,
-            extra_config=self._producer_extra_config,
+            broker_address=self._config.broker_address,
+            extra_config=self._config.producer_extra_config,
         )
 
     def get_consumer(self, auto_commit_enable: bool = True) -> Consumer:
@@ -680,7 +686,7 @@ class Application:
         ```python
         from quixstreams import Application
 
-        app = Application.Quix(...)
+        app = Application(...)
         topic = app.topic("input")
 
         with app.get_consumer() as consumer:
@@ -697,11 +703,11 @@ class Application:
         self._setup_topics()
 
         return Consumer(
-            broker_address=self._broker_address,
-            consumer_group=self._consumer_group,
-            auto_offset_reset=self._auto_offset_reset,
+            broker_address=self._config.broker_address,
+            consumer_group=self._config.consumer_group,
+            auto_offset_reset=self._config.auto_offset_reset,
             auto_commit_enable=auto_commit_enable,
-            extra_config=self._consumer_extra_config,
+            extra_config=self._config.consumer_extra_config,
         )
 
     def clear_state(self):
@@ -743,12 +749,12 @@ class Application:
 
         logger.info(
             f"Starting the Application with the config: "
-            f'broker_address="{self._broker_address}" '
-            f'consumer_group="{self._consumer_group}" '
-            f'auto_offset_reset="{self._auto_offset_reset}" '
-            f"commit_interval={self._commit_interval}s "
-            f"commit_every={self._commit_every} "
-            f'processing_guarantee="{self._processing_guarantee}"'
+            f'broker_address="{self._config.broker_address}" '
+            f'consumer_group="{self._config.consumer_group}" '
+            f'auto_offset_reset="{self._config.auto_offset_reset}" '
+            f"commit_interval={self._config.commit_interval}s "
+            f"commit_every={self._config.commit_every} "
+            f'processing_guarantee="{self._config.processing_guarantee}"'
         )
         if self.is_quix_app:
             self._quix_runtime_init()
@@ -805,14 +811,14 @@ class Application:
             f'"{topic}"' for topic in self._topic_manager.all_topics
         )
         logger.info(f"Topics required for this application: {topics_list}")
-        if self._auto_create_topics:
+        if self._config.auto_create_topics:
             self._topic_manager.create_all_topics()
         self._topic_manager.validate_all_topics()
 
     def _process_message(self, dataframe_composed):
         # Serve producer callbacks
-        self._producer.poll(self._producer_poll_timeout)
-        rows = self._consumer.poll_row(timeout=self._consumer_poll_timeout)
+        self._producer.poll(self._config.producer_poll_timeout)
+        rows = self._consumer.poll_row(timeout=self._config.consumer_poll_timeout)
 
         if rows is None:
             return
@@ -964,3 +970,72 @@ class Application:
     def _on_sigterm(self, *_):
         logger.debug(f"Received SIGTERM, stopping the processing loop")
         self.stop()
+
+
+class ApplicationConfig(BaseSettings):
+    """
+    Immutable object holding the application configuration
+
+    For details see :class:`quixstreams.Application`
+    """
+
+    model_config = SettingsConfigDict(
+        frozen=True,
+        revalidate_instances="always",
+        alias_generator=AliasGenerator(
+            # used during model_dumps
+            serialization_alias=lambda field_name: field_name.replace("_", "."),
+        ),
+    )
+
+    broker_address: ConnectionConfig
+    consumer_group: str
+    auto_offset_reset: AutoOffsetReset = "latest"
+    commit_interval: float = 5.0
+    commit_every: int = 0
+    producer_extra_config: dict = Field(default_factory=dict)
+    consumer_extra_config: dict = Field(default_factory=dict)
+    processing_guarantee: ProcessingGuarantee = "at-least-once"
+    consumer_poll_timeout: float = 1.0
+    producer_poll_timeout: float = 0.0
+    auto_create_topics: bool = True
+    request_timeout: float = 30
+    topic_create_timeout: float = 60
+    state_dir: Path = "state"
+    rocksdb_options: Optional[RocksDBOptionsType] = None
+    use_changelog_topics: bool = True
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: Type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> Tuple[PydanticBaseSettingsSource, ...]:
+        """
+        Included to ignore reading/setting values from the environment
+        """
+        return (init_settings,)
+
+    def copy(self, **kwargs) -> Self:
+        """
+        Update the application config and return a copy
+        """
+        copy = self.model_copy(update=kwargs)
+        copy.model_validate(copy, strict=True)
+        return copy
+
+    @property
+    def flush_timeout(self) -> float:
+        return (
+            self.consumer_extra_config.get(
+                "max.poll.interval.ms", _default_max_poll_interval_ms
+            )
+            / 1000
+        )  # convert to seconds
+
+    @property
+    def exactly_once(self) -> bool:
+        return self.processing_guarantee == "exactly-once"

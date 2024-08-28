@@ -523,7 +523,7 @@ class TestApplication:
             app = Application(
                 broker_address="my_address", consumer_group=consumer_group
             )
-        assert app._consumer_group == consumer_group
+        assert app.config.consumer_group == consumer_group
 
     def test_consumer_group_default(self):
         """
@@ -531,7 +531,7 @@ class TestApplication:
         """
         with patch.dict(os.environ, {}, clear=True):
             app = Application(broker_address="my_address")
-        assert app._consumer_group == "quixstreams-default"
+        assert app.config.consumer_group == "quixstreams-default"
 
 
 class TestAppGroupBy:
