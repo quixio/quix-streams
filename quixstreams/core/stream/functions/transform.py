@@ -30,7 +30,7 @@ class TransformFunction(StreamFunction):
         self.expand = expand
 
     def get_executor(self, *child_executors: VoidExecutor) -> VoidExecutor:
-        child_executor = self._resolve_splitting(*child_executors)
+        child_executor = self._resolve_branching(*child_executors)
 
         if self.expand:
 

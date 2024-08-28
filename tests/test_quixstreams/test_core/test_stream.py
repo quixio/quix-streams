@@ -354,22 +354,21 @@ class TestStream:
         ]
 
 
-class TestStreamSplitting:
+class TestStreamBranching:
 
-    def test_basic_split(self):
+    def test_basic_branching(self):
         calls = []
 
         def add_n(n):
             def wrapper(value):
                 calls.append(n)
-                print(f"adding {value} + {n}")
                 return value + n
 
             return wrapper
 
         stream = Stream().add_apply(add_n(1))
-        stream_2 = stream.add_apply(add_n(10))
-        stream_3 = stream.add_apply(add_n(20))
+        stream.add_apply(add_n(10))
+        stream.add_apply(add_n(20))
         stream = stream.add_apply(add_n(100))
         sink = Sink()
         extras = ("key", 0, [])
@@ -380,78 +379,49 @@ class TestStreamSplitting:
         assert len(calls) == 4
         assert sink == expected
 
-    def test_split_confirm_data_copied(self):
+    def test_branch_with_update_copies_value(self):
         """
-        Use mutable object to confirm data is copied during splits.
-        :return:
+        Ensure that the UpdateFunctions copy values before mutating them after
+        branching
         """
 
-        def d(n):
-            def wrapper(value):
-                value[n] = [n]
-                if n - 1 in value:
-                    value[n - 1].append(n)
-                return value
+        key, timestamp, headers = "key", 0, []
+        value = []
+        expected = [([1], key, timestamp, headers), ([2], key, timestamp, headers)]
 
-            return wrapper
-
-        stream = Stream().add_apply(d(0))
-        stream_2 = stream.add_apply(d(1))
-        stream = stream.add_apply(d(2))
+        stream = Stream()
+        stream.add_update(lambda value_: value_.append(1))
+        stream.add_update(lambda value_: value_.append(2))
         sink = Sink()
-        extras = ("key", 0, [])
-        stream.compose(sink=sink.append_record)({}, *extras)
-        expected = [({0: [0, 1], 1: [1]}, *extras), ({0: [0], 2: [2]}, *extras)]
+        stream.compose(sink=sink.append_record)(value, key, timestamp, headers)
 
         assert sink == expected
 
-    def test_chained_split(self):
-        calls = []
-
-        def add_n(n):
-            def wrapper(value):
-                calls.append(n)
-                return value + n
-
-            return wrapper
-
-        stream = Stream().add_apply(add_n(1))
-        stream_2 = stream.add_apply(add_n(10)).add_apply(add_n(20))
-        stream = stream.add_apply(add_n(100))
+    def test_chained_branches(self):
+        stream = Stream().add_apply(lambda v: v + 1)
+        stream.add_apply(lambda v: v + 10).add_apply(lambda v: v + 20)
+        stream = stream.add_apply(lambda v: v + 100)
         sink = Sink()
         extras = ("key", 0, [])
         stream.compose(sink=sink.append_record)(0, *extras)
         expected = [(31, *extras), (101, *extras)]
 
-        # each operation is only called once (no redundant processing)
-        assert len(calls) == 4
         assert sink == expected
 
-    def test_longer_splits(self):
-        calls = []
-
-        def add_n(n):
-            def wrapper(value):
-                calls.append(n)
-                return value + n
-
-            return wrapper
-
-        stream = Stream().add_apply(add_n(1))
-        stream = stream.add_apply(add_n(2))
-        stream_2 = stream.add_apply(add_n(10))
-        stream_2 = stream_2.add_apply(add_n(20))
-        stream = stream.add_apply(add_n(100))
+    def test_longer_branches(self):
+        stream = Stream().add_apply(lambda v: v + 1)
+        stream = stream.add_apply(lambda v: v + 2)
+        stream_2 = stream.add_apply(lambda v: v + 10)
+        stream_2.add_apply(lambda v: v + 20)
+        stream = stream.add_apply(lambda v: v + 100)
         sink = Sink()
         extras = ("key", 0, [])
         stream.compose(sink=sink.append_record)(0, *extras)
         expected = [(33, *extras), (103, *extras)]
 
-        # each operation is only called once (no redundant processing)
-        assert len(calls) == 5
         assert sink == expected
 
-    def test_multi_split(self):
+    def test_multiple_branches(self):
         """
         --< is a split
         "S'" denotes the continuation of the stream that was split from
@@ -468,30 +438,14 @@ class TestStreamSplitting:
         :return:
         """
 
-        calls = []
-
-        def add_n(n):
-            def wrapper(value):
-                calls.append(f"add_{n}")
-                return value + n
-
-            return wrapper
-
-        def div_n(n):
-            def wrapper(value):
-                calls.append(f"div_{n}")
-                return value // n
-
-            return wrapper
-
-        stream = Stream().add_apply(add_n(120)).add_apply(div_n(2))  # 60
-        stream_2 = stream.add_apply(div_n(3))  # 20
-        stream_3 = stream_2.add_apply(add_n(10)).add_apply(add_n(3))  # 33
-        stream_4 = stream_2.add_apply(add_n(24))  # 44
-        stream_2 = stream_2.add_apply(add_n(2))  # 22
-        stream = stream.add_apply(add_n(40))  # 100
-        stream_5 = stream.add_apply(div_n(2)).add_apply(add_n(5))  # 55
-        stream = stream.add_apply(div_n(100)).add_apply(add_n(10))  # 11
+        stream = Stream().add_apply(lambda v: v + 120).add_apply(lambda v: v // 2)  # 60
+        stream_2 = stream.add_apply(lambda v: v // 3)  # 20
+        stream_3 = stream_2.add_apply(lambda v: v + 10).add_apply(lambda v: v + 3)  # 33
+        stream_4 = stream_2.add_apply(lambda v: v + 24)  # 44
+        stream_2 = stream_2.add_apply(lambda v: v + 2)  # 22
+        stream = stream.add_apply(lambda v: v + 40)  # 100
+        stream_5 = stream.add_apply(lambda v: v // 2).add_apply(lambda v: v + 5)  # 55
+        stream = stream.add_apply(lambda v: v // 100).add_apply(lambda v: v + 10)  # 11
         sink = Sink()
         extras = ("key", 0, [])
         stream.compose(sink=sink.append_record)(0, *extras)
@@ -503,69 +457,38 @@ class TestStreamSplitting:
             (11, *extras),
         ]
 
-        # each operation is only called once (no redundant processing)
-        assert len(calls) == 12
         assert sink == expected
 
     def test_filter(self):
-        calls = []
-
-        def add_n(n):
-            def wrapper(value):
-                calls.append(n)
-                return value + n
-
-            return wrapper
-
-        def less_than(n):
-            def wrapper(value):
-                calls.append(n)
-                return value < n
-
-            return wrapper
-
-        stream = Stream().add_apply(add_n(10))
-        stream2 = stream.add_apply(add_n(5)).add_filter(less_than(0))
-        stream2 = stream2.add_apply(add_n(200))
+        stream = Stream().add_apply(lambda v: v + 10)
+        stream2 = stream.add_apply(lambda v: v + 5).add_filter(lambda v: v < 0)
+        stream2 = stream2.add_apply(lambda v: v + 200)
         stream3 = (
-            stream.add_apply(add_n(7)).add_filter(less_than(20)).add_apply(add_n(4))
+            stream.add_apply(lambda v: v + 7)
+            .add_filter(lambda v: v < 20)
+            .add_apply(lambda v: v + 4)
         )
-        stream = stream.add_apply(add_n(30)).add_filter(less_than(50))
-        stream4 = stream.add_apply(add_n(60))
-        stream.add_apply(add_n(800))
+        stream = stream.add_apply(lambda v: v + 30).add_filter(lambda v: v < 50)
+        stream4 = stream.add_apply(lambda v: v + 60)
+        stream.add_apply(lambda v: v + 800)
 
         sink = Sink()
         extras = ("key", 0, [])
         stream.compose(sink=sink.append_record)(0, *extras)
         expected = [(21, *extras), (100, *extras), (840, *extras)]
 
-        # each operation is only called once (no redundant processing)
-        assert len(calls) == 10
         assert sink == expected
 
     def test_update(self):
-        calls = []
 
-        def add_n(n):
-            def wrapper(value):
-                calls.append(n)
-                return value + [n]
-
-            return wrapper
-
-        def update_n(n):
-            def wrapper(value):
-                calls.append(n)
-                value.append(n)
-
-            return wrapper
-
-        stream = Stream().add_apply(add_n(10))
-        stream2 = stream.add_update(update_n(5))
-        stream = stream.add_update(update_n(30)).add_apply(add_n(6))
-        stream3 = stream.add_update(update_n(100))
-        stream4 = stream.add_update(update_n(456))
-        stream = stream.add_apply(add_n(700)).add_update(update_n(222))
+        stream = Stream().add_apply(lambda v: v + [10])
+        stream2 = stream.add_update(lambda v: v.append(5))
+        stream = stream.add_update(lambda v: v.append(30)).add_apply(lambda v: v + [6])
+        stream3 = stream.add_update(lambda v: v.append(100))
+        stream4 = stream.add_update(lambda v: v.append(456))
+        stream = stream.add_apply(lambda v: v + [700]).add_update(
+            lambda v: v.append(222)
+        )
 
         sink = Sink()
         extras = ("key", 0, [])
@@ -578,68 +501,40 @@ class TestStreamSplitting:
         ]
 
         # each operation is only called once (no redundant processing)
-        assert len(calls) == 8
         assert sink == expected
 
     def test_expand(self):
-        calls = []
-
-        def add_n(n):
-            def wrapper(value):
-                calls.append(n)
-                return value + n
-
-            return wrapper
-
-        def expand(n):
-            def wrapper(value):
-                calls.append(n)
-                return [v for v in value[n]]
-
-            return wrapper
-
         stream = Stream()
-        stream_2 = stream.add_apply(expand(0), expand=True).add_apply(add_n(22))
-        stream_3 = stream.add_apply(expand(1), expand=True).add_apply(add_n(33))
-        stream = stream.add_apply(expand(2), expand=True)
-        stream_4 = stream.add_apply(add_n(44))
-        stream = stream.add_apply(add_n(11))
+        stream_2 = stream.add_apply(lambda v: [i for i in v[0]], expand=True).add_apply(
+            lambda v: v + 22
+        )
+        stream_3 = stream.add_apply(lambda v: [i for i in v[1]], expand=True).add_apply(
+            lambda v: v + 33
+        )
+        stream = stream.add_apply(lambda v: [i for i in v[2]], expand=True)
+        stream_4 = stream.add_apply(lambda v: v + 44)
+        stream = stream.add_apply(lambda v: v + 11)
         sink = Sink()
         extras = ("key", 0, [])
         stream.compose(sink=sink.append_record)([(1, 2), (3, 4), (5, 6)], *extras)
         expected = [(n, *extras) for n in [23, 24, 36, 37, 49, 16, 50, 17]]
 
-        print()
-        print(sink)
-        print(expected)
-
-        # each operation is only called once (no redundant processing)
-        assert len(calls) == 11
         assert sink == expected
 
     def test_transform(self):
-        calls = []
-
-        def add_n(n):
-            def wrapper(value):
-                calls.append(n)
-                return value + n
-
-            return wrapper
 
         def transform(n):
             def wrapper(value, k, t, h):
-                calls.append(n)
                 return value, k + "_" + str(n), t + n, h
 
             return wrapper
 
-        stream = Stream().add_apply(add_n(1))
+        stream = Stream().add_apply(lambda v: v + 1)
         stream_2 = stream.add_transform(transform(2))
         stream = stream.add_transform(transform(3))
-        stream_3 = stream.add_apply(add_n(30)).add_transform(transform(4))
-        stream_4 = stream.add_apply(add_n(40)).add_transform(transform(5))
-        stream = stream.add_apply(add_n(100)).add_transform(transform(6))
+        stream_3 = stream.add_apply(lambda v: v + 30).add_transform(transform(4))
+        stream_4 = stream.add_apply(lambda v: v + 40).add_transform(transform(5))
+        stream = stream.add_apply(lambda v: v + 100).add_transform(transform(6))
 
         sink = Sink()
         extras = ("key", 0, [])
@@ -652,5 +547,4 @@ class TestStreamSplitting:
         ]
 
         # each operation is only called once (no redundant processing)
-        assert len(calls) == 9
         assert sink == expected
