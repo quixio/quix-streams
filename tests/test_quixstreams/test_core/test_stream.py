@@ -362,7 +362,6 @@ class TestStreamBranching:
         def add_n(n):
             def wrapper(value):
                 calls.append(n)
-                print(f"adding {value} + {n}")
                 return value + n
 
             return wrapper
