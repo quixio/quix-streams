@@ -134,14 +134,14 @@ class StreamingDataFrame(BaseStreaming):
         self,
         topic: Topic,
         topic_manager: TopicManager,
-        stream_registry: DataframeRegistry,
+        registry: DataframeRegistry,
         processing_context: ProcessingContext,
         stream: Optional[Stream] = None,
     ):
         self._stream: Stream = stream or Stream()
         self._topic = topic
         self._topic_manager = topic_manager
-        self._stream_registry = stream_registry
+        self._registry = registry
         self._processing_context = processing_context
         self._producer = processing_context.producer
         self._locked = False
@@ -512,7 +512,6 @@ class StreamingDataFrame(BaseStreaming):
 
         :return: a clone with this operation added (assign to keep its effect).
         """
-        # >= 1 since branches are only added once finalized
         if not key:
             raise ValueError('Parameter "key" cannot be empty')
         if callable(key) and not name:
@@ -530,9 +529,9 @@ class StreamingDataFrame(BaseStreaming):
         )
 
         self.to_topic(topic=groupby_topic, key=self._groupby_key(key))
-        new_branch = self.__dataframe_clone__(topic=groupby_topic)
-        self._stream_registry.register_branch(branched_sdf=self, new_branch=new_branch)
-        return new_branch
+        groupby_sdf = self.__dataframe_clone__(topic=groupby_topic)
+        self._registry.register_groupby(source_sdf=self, new_sdf=groupby_sdf)
+        return groupby_sdf
 
     @staticmethod
     def contains(key: str) -> StreamingSeries:
@@ -775,7 +774,7 @@ class StreamingDataFrame(BaseStreaming):
         :return: a function that accepts "value"
             and returns a result of StreamingDataFrame
         """
-        return self._stream_registry.compose_all(sink)
+        return self._registry.compose_all(sink)
 
     def test(
         self,
@@ -1137,7 +1136,7 @@ class StreamingDataFrame(BaseStreaming):
             topic=topic or self._topic,
             processing_context=self._processing_context,
             topic_manager=self._topic_manager,
-            stream_registry=self._stream_registry,
+            registry=self._registry,
         )
         return clone
 

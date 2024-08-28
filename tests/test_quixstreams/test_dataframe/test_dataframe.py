@@ -8,7 +8,8 @@ import pytest
 from quixstreams import State
 from quixstreams.dataframe.exceptions import (
     InvalidOperation,
-    GroupByLimitExceeded,
+    GroupByNestingLimit,
+    GroupByDuplicate,
     DataFrameLocked,
 )
 from quixstreams.dataframe.registry import DataframeRegistry
@@ -1375,7 +1376,7 @@ class TestStreamingDataFrameGroupBy:
         sdf[col] = col_update
 
         groupby_topic = sdf.topic
-        assert sdf_registry.consumer_topics() == [topic, sdf.topic]
+        assert sdf_registry.consumer_topics == [topic, sdf.topic]
         assert (
             groupby_topic.name == topic_manager.repartition_topic(col, topic.name).name
         )
@@ -1456,7 +1457,7 @@ class TestStreamingDataFrameGroupBy:
         sdf[col] = col_update
 
         groupby_topic = sdf.topic
-        assert sdf_registry.consumer_topics() == [topic, sdf.topic]
+        assert sdf_registry.consumer_topics == [topic, sdf.topic]
         assert (
             groupby_topic.name
             == topic_manager.repartition_topic(op_name, topic.name).name
@@ -1538,7 +1539,7 @@ class TestStreamingDataFrameGroupBy:
         sdf[col] = col_update
 
         groupby_topic = sdf.topic
-        assert sdf_registry.consumer_topics() == [topic, sdf.topic]
+        assert sdf_registry.consumer_topics == [topic, sdf.topic]
         assert (
             groupby_topic.name
             == topic_manager.repartition_topic(op_name, topic.name).name
@@ -1616,16 +1617,30 @@ class TestStreamingDataFrameGroupBy:
 
     def test_group_by_limit_exceeded(self, dataframe_factory, topic_manager_factory):
         """
-        Only 1 GroupBy operation per SDF instance (or, what appears to end users
-        as a "single" SDF instance).
+        Only 1 GroupBy depth per SDF (no nesting of them).
         """
         topic_manager = topic_manager_factory()
         topic = topic_manager.topic(str(uuid.uuid4()))
         sdf = dataframe_factory(topic, topic_manager=topic_manager)
         sdf = sdf.group_by("col_a")
 
-        with pytest.raises(GroupByLimitExceeded):
+        with pytest.raises(GroupByNestingLimit):
             sdf.group_by("col_b")
+
+    def test_group_by_name_clash(self, dataframe_factory, topic_manager_factory):
+        """
+        Each groupby operation per SDF instance (or, what appears to end users
+        as a "single" SDF instance) should be uniquely named.
+
+        Most likely to encounter this if group by is used with the same column name.
+        """
+        topic_manager = topic_manager_factory()
+        topic = topic_manager.topic(str(uuid.uuid4()))
+        sdf = dataframe_factory(topic, topic_manager=topic_manager)
+        sdf.group_by("col_a")
+
+        with pytest.raises(GroupByDuplicate):
+            sdf.group_by("col_a")
 
     @pytest.mark.parametrize(
         "operation",

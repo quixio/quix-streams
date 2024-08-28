@@ -2208,7 +2208,7 @@ class TestApplicationMultipleSdf:
 
             processed_count += 1
             # Stop processing after consuming all the messages
-            if processed_count == total_messages:
+            if processed_count == expected_processed:
                 done.set_result(True)
 
         processed_count = 0
@@ -2228,7 +2228,12 @@ class TestApplicationMultipleSdf:
             value_serializer="json",
         )
         input_topics = [input_topic_a, input_topic_b]
-        output_topic = app.topic(
+        output_topic_user = app.topic(
+            str(uuid.uuid4()),
+            value_deserializer="json",
+            value_serializer="json",
+        )
+        output_topic_account = app.topic(
             str(uuid.uuid4()),
             value_deserializer="json",
             value_serializer="json",
@@ -2236,25 +2241,37 @@ class TestApplicationMultipleSdf:
 
         timestamp = 1000
         user_id = "abc123"
-        value_in = {"user": user_id}
-        messages_per_topic = 1
-        total_input_topics = len(input_topics)
-        total_messages_out = messages_per_topic * total_input_topics
-        total_messages = total_messages_out * 2  # groupby reproduces each message
+        account_id = "def456"
+        value_in = {"user": user_id, "account": account_id}
+        # expected_processed = 1 (input msg per SDF) * 3 (2 groupbys, each reprocesses input) * 2 SDFs
+        expected_processed = 6
+        expected_output_topic_count = 2
 
         sdf_a = app.dataframe(topic=input_topic_a)
-        sdf_a = sdf_a.group_by("user")
-        sdf_a["groupby_timestamp"] = sdf_a.apply(
+        sdf_a_user = sdf_a.group_by("user")
+        sdf_a_user["groupby_timestamp"] = sdf_a_user.apply(
             lambda value, key, timestamp_, headers: timestamp_, metadata=True
         )
-        sdf_a.to_topic(output_topic)
+        sdf_a_user.to_topic(output_topic_user)
+
+        sdf_a_account = sdf_a.group_by("account")
+        sdf_a_account["groupby_timestamp"] = sdf_a_account.apply(
+            lambda value, key, timestamp_, headers: timestamp_, metadata=True
+        )
+        sdf_a_account.to_topic(output_topic_account)
 
         sdf_b = app.dataframe(topic=input_topic_b)
-        sdf_b = sdf_b.group_by("user")
-        sdf_b["groupby_timestamp"] = sdf_b.apply(
+        sdf_b_user = sdf_b.group_by("user")
+        sdf_b_user["groupby_timestamp"] = sdf_b_user.apply(
             lambda value, key, timestamp_, headers: timestamp_, metadata=True
         )
-        sdf_b.to_topic(output_topic)
+        sdf_b_user.to_topic(output_topic_user)
+
+        sdf_b_account = sdf_b.group_by("account")
+        sdf_b_account["groupby_timestamp"] = sdf_b_account.apply(
+            lambda value, key, timestamp_, headers: timestamp_, metadata=True
+        )
+        sdf_b_account.to_topic(output_topic_account)
 
         with app.get_producer() as producer:
             for topic in input_topics:
@@ -2272,25 +2289,29 @@ class TestApplicationMultipleSdf:
         app.run()
 
         # Check that all messages have been processed
-        assert processed_count == total_messages
+        assert processed_count == expected_processed
 
         # Consume the message from the output topic
-        rows = []
-        with row_consumer_factory(auto_offset_reset="earliest") as row_consumer:
-            row_consumer.subscribe([output_topic])
-            while row := row_consumer.poll_row(timeout=5):
-                rows.append(row)
+        for key, output_topic in [
+            (user_id, output_topic_user),
+            (account_id, output_topic_account),
+        ]:
+            rows = []
+            with row_consumer_factory(auto_offset_reset="earliest") as row_consumer:
+                row_consumer.subscribe([output_topic])
+                while row := row_consumer.poll_row(timeout=5):
+                    rows.append(row)
 
-        assert len(rows) == total_messages_out
-        for row in rows:
-            # Check that "user_id" is now used as a message key
-            assert row.key.decode() == user_id
-            # Check that message timestamp of the repartitioned message is the same
-            # as original one
-            assert row.value == {
-                "user": user_id,
-                "groupby_timestamp": timestamp,
-            }
+            assert len(rows) == expected_output_topic_count
+            for row in rows:
+                # Check that "user_id" is now used as a message key
+                assert row.key.decode() == key
+                # Check that message timestamp of the repartitioned message is the same
+                # as original one
+                assert row.value == {
+                    **value_in,
+                    "groupby_timestamp": timestamp,
+                }
 
     def test_stateful(
         self,
