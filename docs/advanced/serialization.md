@@ -19,6 +19,8 @@ The serialization settings are defined per topic using these parameters of the `
 
 By default, message values are serialized with `json`, and message keys are serialized with `bytes` (i.e., passed as they are received from Kafka).
 
+**Note:** JSON Schema, Avro, and Protobuf serialization formats support integration with a Schema Registry. See the [Schema Registry](./schema-registry.md) page to learn more.
+
 **Note:** The legacy `quix` serializer and legacy `quix_events` and `quix_timeseries` deserializers are still supported but may be deprecated in the future. New stream processing applications should avoid using these three formats.
 
 ## Configuring Serialization
