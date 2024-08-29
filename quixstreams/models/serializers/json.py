@@ -74,7 +74,14 @@ class JSONSerializer(Serializer):
 
             serialization_config = {}
             if schema_registry_serialization_config:
-                serialization_config = schema_registry_serialization_config.as_dict()
+                serialization_config = schema_registry_serialization_config.as_dict(
+                    include={
+                        "auto_register_schemas",
+                        "normalize_schemas",
+                        "use_latest_version",
+                        "subject_name_strategy",
+                    },
+                )
 
             self._schema_registry_serializer = _JSONSerializer(
                 schema_str=json.dumps(schema),

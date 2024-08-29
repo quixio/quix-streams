@@ -25,7 +25,9 @@ from quixstreams.models.serializers.avro import AvroDeserializer, AvroSerializer
 
 from ..utils import int_to_bytes, float_to_bytes
 from .constants import AVRO_TEST_SCHEMA, DUMMY_CONTEXT, JSONSCHEMA_TEST_SCHEMA
-from .protobuf.test_pb2 import Test
+from .protobuf.nested_pb2 import Nested
+from .protobuf.root_pb2 import Root
+from .protobuf.utils import create_timestamp
 
 
 class TestSerializers:
@@ -59,22 +61,44 @@ class TestSerializers:
                 b"\x06foo\xf6\x01",
             ),
             (AvroSerializer(AVRO_TEST_SCHEMA), {"name": "foo"}, b"\x06foo\x00"),
-            (ProtobufSerializer(Test), {}, b""),
-            (ProtobufSerializer(Test), {"id": 3}, b"\x10\x03"),
-            (ProtobufSerializer(Test), {"name": "foo", "id": 2}, b"\n\x03foo\x10\x02"),
-            (ProtobufSerializer(Test), Test(name="foo", id=2), b"\n\x03foo\x10\x02"),
+            (ProtobufSerializer(Root), {}, b""),
+            (ProtobufSerializer(Root), {"id": 3}, b"\x10\x03"),
+            (ProtobufSerializer(Root), {"name": "foo", "id": 2}, b"\n\x03foo\x10\x02"),
+            (ProtobufSerializer(Root), Root(name="foo", id=2), b"\n\x03foo\x10\x02"),
             # Both values are supported for enum
             (
-                ProtobufSerializer(Test),
+                ProtobufSerializer(Root),
                 {"name": "foo", "id": 2, "enum": "B"},
                 b"\n\x03foo\x10\x02\x18\x01",
             ),
             (
-                ProtobufSerializer(Test),
+                ProtobufSerializer(Root),
                 {"name": "foo", "id": 2, "enum": 1},
                 b"\n\x03foo\x10\x02\x18\x01",
             ),
-            (ProtobufSerializer(Test), {"name": "foo"}, b"\n\x03foo"),
+            (ProtobufSerializer(Root), {"name": "foo"}, b"\n\x03foo"),
+            (
+                ProtobufSerializer(Root),
+                {
+                    "name": "foo",
+                    "nested": {
+                        "id": 10,
+                        "time": "2000-01-02T12:34:56Z",
+                    },
+                },
+                b'\n\x03foo"\n\x08\n\x12\x06\x08\xf0\x8b\xbd\xc3\x03',
+            ),
+            (
+                ProtobufSerializer(Root),
+                Root(
+                    name="foo",
+                    nested=Nested(
+                        id=10,
+                        time=create_timestamp("2000-01-02T12:34:56Z"),
+                    ),
+                ),
+                b'\n\x03foo"\n\x08\n\x12\x06\x08\xf0\x8b\xbd\xc3\x03',
+            ),
         ],
     )
     def test_serialize_success(self, serializer: Serializer, value, expected):
@@ -104,7 +128,8 @@ class TestSerializers:
             (AvroSerializer(AVRO_TEST_SCHEMA), {"foo": "foo", "id": 123}),
             (AvroSerializer(AVRO_TEST_SCHEMA), {"id": 123}),
             (AvroSerializer(AVRO_TEST_SCHEMA, strict=True), {"name": "foo"}),
-            (ProtobufSerializer(Test), {"bar": 3}),
+            (ProtobufSerializer(Root), {"bar": 3}),
+            (ProtobufSerializer(Root), Nested()),
         ],
     )
     def test_serialize_error(self, serializer: Serializer, value):
@@ -154,22 +179,22 @@ class TestDeserializers:
                 {"name": "foo", "id": 0},
             ),
             (
-                ProtobufDeserializer(Test),
+                ProtobufDeserializer(Root),
                 b"\n\x03foo\x10\x02",
                 {"enum": "A", "name": "foo", "id": 2},
             ),
             (
-                ProtobufDeserializer(Test, to_dict=False),
+                ProtobufDeserializer(Root, to_dict=False),
                 b"\n\x03foo\x10\x02",
-                Test(name="foo", id=2),
+                Root(name="foo", id=2),
             ),
             (
-                ProtobufDeserializer(Test, use_integers_for_enums=True),
+                ProtobufDeserializer(Root, use_integers_for_enums=True),
                 b"\n\x03foo\x10\x02",
                 {"enum": 0, "name": "foo", "id": 2},
             ),
             (
-                ProtobufDeserializer(Test),
+                ProtobufDeserializer(Root),
                 b"\n\x03foo",
                 {
                     "enum": "A",
@@ -178,11 +203,35 @@ class TestDeserializers:
                 },
             ),
             (
-                ProtobufDeserializer(Test),
+                ProtobufDeserializer(Root),
                 b"\x10\x03",
                 {"enum": "A", "name": "", "id": 3},
             ),
-            (ProtobufDeserializer(Test), b"", {"enum": "A", "name": "", "id": 0}),
+            (ProtobufDeserializer(Root), b"", {"enum": "A", "name": "", "id": 0}),
+            (
+                ProtobufDeserializer(Root),
+                b'\n\x03foo"\n\x08\n\x12\x06\x08\xf0\x8b\xbd\xc3\x03',
+                {
+                    "enum": "A",
+                    "name": "foo",
+                    "id": 0,
+                    "nested": {
+                        "id": 10,
+                        "time": "2000-01-02T12:34:56Z",
+                    },
+                },
+            ),
+            (
+                ProtobufDeserializer(Root, to_dict=False),
+                b'\n\x03foo"\n\x08\n\x12\x06\x08\xf0\x8b\xbd\xc3\x03',
+                Root(
+                    name="foo",
+                    nested=Nested(
+                        id=10,
+                        time=create_timestamp("2000-01-02T12:34:56Z"),
+                    ),
+                ),
+            ),
         ],
     )
     def test_deserialize_no_column_name_success(
@@ -208,7 +257,7 @@ class TestDeserializers:
                 b'{"id":10}',
             ),
             (AvroDeserializer(AVRO_TEST_SCHEMA), b"\x26foo\x00"),
-            (ProtobufDeserializer(Test), b"\n\x03foo\x10\x02\x13"),
+            (ProtobufDeserializer(Root), b"\n\x03foo\x10\x02\x13"),
         ],
     )
     def test_deserialize_error(self, deserializer: Deserializer, value):

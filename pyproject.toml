@@ -53,11 +53,7 @@ ignore-init-method-arguments = true
 line-length = 88
 target-version = ['py38']
 include = '\.pyi?$'
-extend-exclude = '''
-/(
-  env
-)/
-'''
+force-exclude = '.*_pb2\.py$'
 
 [tool.isort]
 atomic = true
