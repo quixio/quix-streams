@@ -205,7 +205,6 @@ class Source(BaseSource):
             name=self.name,
             value_deserializer="json",
             value_serializer="json",
-            config=TopicConfig(num_partitions=1, replication_factor=1),
         )
 
     def __repr__(self):

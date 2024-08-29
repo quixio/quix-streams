@@ -12,9 +12,6 @@ from .exceptions import (
 )
 from .topic import Topic, TopicConfig, TimestampExtractor
 
-if TYPE_CHECKING:
-    from quixstreams.sources.base import BaseSource
-
 
 logger = logging.getLogger(__name__)
 
@@ -289,6 +286,12 @@ class TopicManager:
 
     def register(self, topic: Topic):
         topic.name = self._resolve_topic_name(topic.name)
+        if topic.config is None:
+            topic.config = TopicConfig(
+                num_partitions=self.default_num_partitions,
+                replication_factor=self.default_replication_factor,
+                extra_config=self.default_extra_config,
+            )
         self._topics[topic.name] = topic
 
     def repartition_topic(
