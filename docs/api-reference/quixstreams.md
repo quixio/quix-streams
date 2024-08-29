@@ -3228,23 +3228,25 @@ The last batch may be shorter.
 class BaseSettings(_BaseSettings)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/utils/settings.py#L7)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/utils/settings.py#L9)
 
 <a id="quixstreams.utils.settings.BaseSettings.as_dict"></a>
 
 #### BaseSettings.as\_dict
 
 ```python
-def as_dict(plaintext_secrets: bool = False) -> dict
+def as_dict(plaintext_secrets: bool = False,
+            include: Optional[Set[str]] = None) -> dict
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/utils/settings.py#L16)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/utils/settings.py#L18)
 
 Dump any non-empty config values as a dictionary.
 
 **Arguments**:
 
 - `plaintext_secrets`: whether secret values are plaintext or obscured (***)
+- `include`: optional list of fields to be included in the dictionary
 
 **Returns**:
 
@@ -3509,7 +3511,7 @@ Default - `None`
 class AvroDeserializer(Deserializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/avro.py#L104)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/avro.py#L111)
 
 <a id="quixstreams.models.serializers.avro.AvroDeserializer.__init__"></a>
 
@@ -3528,7 +3530,7 @@ def __init__(
 )
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/avro.py#L105)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/avro.py#L112)
 
 Deserializer that parses data from Avro.
 
@@ -3564,7 +3566,7 @@ Default - `None`
 class SchemaRegistryClientConfig(BaseSettings)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/schema_registry.py#L17)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/schema_registry.py#L22)
 
 Configuration required to establish the connection with a Schema Registry.
 
@@ -3592,7 +3594,7 @@ stored within the PEM as well.
 class SchemaRegistrySerializationConfig(BaseSettings)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/schema_registry.py#L43)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/schema_registry.py#L48)
 
 Configuration that instructs Serializer how to handle communication with a
 
@@ -3612,6 +3614,15 @@ object being serialized. Defaults to False.
 Defines how Schema Registry subject names are constructed. Standard naming
 strategies are defined in the confluent_kafka.schema_registry namespace.
 Defaults to topic_subject_name_strategy.
+- `skip_known_types`: Whether or not to skip known types when resolving
+schema dependencies. Defaults to False.
+- `reference_subject_name_strategy`: Defines how Schema Registry subject names
+for schema references are constructed. Defaults to reference_subject_name_strategy.
+- `use_deprecated_format`: Specifies whether the Protobuf serializer should
+serialize message indexes without zig-zag encoding. This option must be explicitly
+configured as older and newer Protobuf producers are incompatible.
+If the consumers of the topic being produced to are using confluent-kafka-python <1.8,
+then this property must be set to True until all old consumers have been upgraded.
 
 <a id="quixstreams.models.serializers"></a>
 
@@ -3947,19 +3958,23 @@ Serializes floats to bytes
 class ProtobufSerializer(Serializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/protobuf.py#L12)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/protobuf.py#L23)
 
 <a id="quixstreams.models.serializers.protobuf.ProtobufSerializer.__init__"></a>
 
 #### ProtobufSerializer.\_\_init\_\_
 
 ```python
-def __init__(msg_type: Message,
-             deterministic: bool = False,
-             ignore_unknown_fields: bool = False)
+def __init__(
+    msg_type: Message,
+    deterministic: bool = False,
+    ignore_unknown_fields: bool = False,
+    schema_registry_client_config: Optional[SchemaRegistryClientConfig] = None,
+    schema_registry_serialization_config: Optional[
+        SchemaRegistrySerializationConfig] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/protobuf.py#L13)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/protobuf.py#L24)
 
 Serializer that returns data in protobuf format.
 
@@ -3972,6 +3987,11 @@ Serialisation from a python dictionary can have a significant performance impact
 Default - `False`
 - `ignore_unknown_fields`: If True, do not raise errors for unknown fields.
 Default - `False`
+- `schema_registry_client_config`: If provided, serialization is offloaded to Confluent's ProtobufSerializer.
+Default - `None`
+- `schema_registry_serialization_config`: Additional configuration for Confluent's ProtobufSerializer.
+Default - `None`
+>***NOTE:*** `schema_registry_client_config` must also be set.
 
 <a id="quixstreams.models.serializers.protobuf.ProtobufDeserializer"></a>
 
@@ -3981,20 +4001,24 @@ Default - `False`
 class ProtobufDeserializer(Deserializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/protobuf.py#L52)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/protobuf.py#L109)
 
 <a id="quixstreams.models.serializers.protobuf.ProtobufDeserializer.__init__"></a>
 
 #### ProtobufDeserializer.\_\_init\_\_
 
 ```python
-def __init__(msg_type: Message,
-             use_integers_for_enums: bool = False,
-             preserving_proto_field_name: bool = False,
-             to_dict: bool = True)
+def __init__(
+    msg_type: Message,
+    use_integers_for_enums: bool = False,
+    preserving_proto_field_name: bool = False,
+    to_dict: bool = True,
+    schema_registry_client_config: Optional[SchemaRegistryClientConfig] = None,
+    schema_registry_serialization_config: Optional[
+        SchemaRegistrySerializationConfig] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/protobuf.py#L53)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/protobuf.py#L110)
 
 Deserializer that parses protobuf data into a dictionary suitable for a StreamingDataframe.
 
@@ -4011,6 +4035,11 @@ lowerCamelCase.
 Default - `False`
 - `to_dict`: If false, return the protobuf message instead of a dict.
 Default - `True`
+- `schema_registry_client_config`: If provided, deserialization is offloaded to Confluent's ProtobufDeserializer.
+Default - `None`
+- `schema_registry_serialization_config`: Additional configuration for Confluent's ProtobufDeserializer.
+Default - `None`
+>***NOTE:*** `schema_registry_client_config` must also be set.
 
 <a id="quixstreams.models.serializers.json"></a>
 
@@ -4066,7 +4095,7 @@ Default - `None`
 class JSONDeserializer(Deserializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/json.py#L107)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/json.py#L114)
 
 <a id="quixstreams.models.serializers.json.JSONDeserializer.__init__"></a>
 
@@ -4081,7 +4110,7 @@ def __init__(
 )
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/json.py#L108)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/json.py#L115)
 
 Deserializer that parses data from JSON
 
@@ -8445,7 +8474,7 @@ Used by the producer during consumer offset sending for an EOS transaction.
 class Application()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L57)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L61)
 
 The main Application class.
 
@@ -8513,7 +8542,7 @@ def __init__(broker_address: Optional[Union[str, ConnectionConfig]] = None,
              processing_guarantee: ProcessingGuarantee = "at-least-once")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L95)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L99)
 
 **Arguments**:
 
@@ -8552,7 +8581,7 @@ will be passed to `confluent_kafka.Consumer` as is.
 - `producer_extra_config`: A dictionary with additional options that
 will be passed to `confluent_kafka.Producer` as is.
 - `state_dir`: path to the application state directory.
-Default - `".state"`.
+Default - `"state"`.
 - `rocksdb_options`: RocksDB options.
 If `None`, the default options will be used.
 - `consumer_poll_timeout`: timeout for `RowConsumer.poll()`. Default - `1.0`s
@@ -8621,7 +8650,7 @@ def Quix(
 ) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L347)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L353)
 
 >***NOTE:*** DEPRECATED: use Application with `quix_sdk_token` argument instead.
 
@@ -8724,7 +8753,7 @@ def topic(name: str,
           timestamp_extractor: Optional[TimestampExtractor] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L488)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L494)
 
 Create a topic definition.
 
@@ -8795,7 +8824,7 @@ topic = app.topic("input-topic", timestamp_extractor=custom_ts_extractor)
 def dataframe(topic: Topic) -> StreamingDataFrame
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L568)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L574)
 
 A simple helper method that generates a `StreamingDataFrame`, which is used
 
@@ -8837,7 +8866,7 @@ to be used as an input topic.
 def stop(fail: bool = False)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L607)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L613)
 
 Stop the internal poll loop and the message processing.
 
@@ -8860,7 +8889,7 @@ to unhandled exception, and it shouldn't commit the current checkpoint.
 def get_producer() -> Producer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L630)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L636)
 
 Create and return a pre-configured Producer instance.
 The Producer is initialized with params passed to Application.
@@ -8875,7 +8904,7 @@ Example Snippet:
 ```python
 from quixstreams import Application
 
-app = Application.Quix(...)
+app = Application(...)
 topic = app.topic("input")
 
 with app.get_producer() as producer:
@@ -8891,7 +8920,7 @@ with app.get_producer() as producer:
 def get_consumer(auto_commit_enable: bool = True) -> Consumer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L660)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L666)
 
 Create and return a pre-configured Consumer instance.
 The Consumer is initialized with params passed to Application.
@@ -8914,7 +8943,7 @@ Example Snippet:
 ```python
 from quixstreams import Application
 
-app = Application.Quix(...)
+app = Application(...)
 topic = app.topic("input")
 
 with app.get_consumer() as consumer:
@@ -8936,7 +8965,7 @@ with app.get_consumer() as consumer:
 def clear_state()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L707)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L713)
 
 Clear the state of the application.
 
@@ -8948,7 +8977,7 @@ Clear the state of the application.
 def run(dataframe: StreamingDataFrame)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L713)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L719)
 
 Start processing data from Kafka using provided `StreamingDataFrame`
 
@@ -8975,6 +9004,51 @@ app.run(dataframe=df)
 **Arguments**:
 
 - `dataframe`: instance of `StreamingDataFrame`
+
+<a id="quixstreams.app.ApplicationConfig"></a>
+
+### ApplicationConfig
+
+```python
+class ApplicationConfig(BaseSettings)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L975)
+
+Immutable object holding the application configuration
+
+For details see :class:`quixstreams.Application`
+
+<a id="quixstreams.app.ApplicationConfig.settings_customise_sources"></a>
+
+#### ApplicationConfig.settings\_customise\_sources
+
+```python
+@classmethod
+def settings_customise_sources(
+    cls, settings_cls: Type[BaseSettings],
+    init_settings: PydanticBaseSettingsSource,
+    env_settings: PydanticBaseSettingsSource,
+    dotenv_settings: PydanticBaseSettingsSource,
+    file_secret_settings: PydanticBaseSettingsSource
+) -> Tuple[PydanticBaseSettingsSource, ...]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1009)
+
+Included to ignore reading/setting values from the environment
+
+<a id="quixstreams.app.ApplicationConfig.copy"></a>
+
+#### ApplicationConfig.copy
+
+```python
+def copy(**kwargs) -> Self
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1022)
+
+Update the application config and return a copy
 
 <a id="quixstreams.rowconsumer"></a>
 
