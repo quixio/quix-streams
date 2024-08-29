@@ -287,9 +287,9 @@ class TopicManager:
         self._topics[name] = topic
         return topic
 
-    def source_topic(self, source: "BaseSource") -> Topic:
-        topic_args = source.default_topic()
-        return self.topic(**topic_args.asargs())
+    def register(self, topic: Topic):
+        topic.name = self._resolve_topic_name(topic.name)
+        self._topics[topic.name] = topic
 
     def repartition_topic(
         self,

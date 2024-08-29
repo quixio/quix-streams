@@ -1,4 +1,3 @@
-import dataclasses
 import threading
 import logging
 
@@ -7,15 +6,9 @@ from typing import Optional, Union
 
 
 from quixstreams.models.messages import KafkaMessage
-from quixstreams.models.topics import TimestampExtractor, TopicConfig, Topic
+from quixstreams.models.topics import TopicConfig, Topic
 from quixstreams.models.types import Headers
 from quixstreams.rowproducer import RowProducer
-from quixstreams.models.serializers import (
-    BytesSerializer,
-    BytesDeserializer,
-    SerializerType,
-    DeserializerType,
-)
 from quixstreams.checkpointing.exceptions import CheckpointProducerTimeout
 
 
@@ -26,28 +19,6 @@ __all__ = (
     "Source",
     "PollingSource",
 )
-
-
-@dataclasses.dataclass()
-class SourceTopic:
-    """
-    Source topic configuration
-
-    See :class:`quixstrems.models.Topic` for more detailts.
-    """
-
-    name: str
-    config: Optional[TopicConfig] = None
-    value_deserializer: Optional[DeserializerType] = "json"
-    key_deserializer: Optional[DeserializerType] = BytesDeserializer()
-    value_serializer: Optional[SerializerType] = "json"
-    key_serializer: Optional[SerializerType] = BytesSerializer()
-    timestamp_extractor: Optional[TimestampExtractor] = None
-
-    def asargs(self):
-        return {
-            field.name: getattr(self, field.name) for field in dataclasses.fields(self)
-        }
 
 
 class BaseSource(ABC):
@@ -132,7 +103,7 @@ class BaseSource(ABC):
         """
 
     @abstractmethod
-    def default_topic(self) -> SourceTopic:
+    def default_topic(self) -> Topic:
         """
         This method is triggered when the user hasn't specified a topic for the source.
 
@@ -224,13 +195,18 @@ class Source(BaseSource):
                 f"'{unproduced_msg_count}' messages failed to be produced before the producer flush timeout"
             )
 
-    def default_topic(self) -> SourceTopic:
+    def default_topic(self) -> Topic:
         """
         Return a topic matching the source name.
 
         :return: `:class:`quixstreams.models.topics.Topic`
         """
-        return SourceTopic(name=self.name)
+        return Topic(
+            name=self.name,
+            value_deserializer="json",
+            value_serializer="json",
+            config=TopicConfig(num_partitions=1, replication_factor=1),
+        )
 
     def __repr__(self):
         return self.name

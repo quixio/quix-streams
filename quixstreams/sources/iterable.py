@@ -150,9 +150,7 @@ class GeneratorSource(PollingSource):
         ] = None
 
     def run(self):
-        self._generator_instance: Generator[Optional[Tuple[any, any]], None, None] = (
-            self._generator()
-        )
+        self._generator_instance = self._generator()
         super().run()
 
     def poll(self) -> KafkaMessage:

@@ -604,7 +604,8 @@ class Application:
         if not source and not topic:
             raise ValueError("one of `source` or `topic` is required")
         elif source and not topic:
-            topic = self._topic_manager.source_topic(source)
+            topic = source.default_topic()
+            self._topic_manager.register(topic)
 
         sdf = StreamingDataFrame(
             topic=topic,
@@ -753,7 +754,8 @@ class Application:
             Default: the source default
         """
         if not topic:
-            topic = self._topic_manager.source_topic(source)
+            topic = source.default_topic()
+            self._topic_manager.register(topic)
 
         producer = self._get_rowproducer(transactional=False)
         source.configure(topic, producer)
