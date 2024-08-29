@@ -80,8 +80,12 @@ doc_map = {
     "serialization.md": {
         k: None
         for k in [
-            "quixstreams.models.serializers.quix",
             "quixstreams.models.serializers.simple_types",
+            "quixstreams.models.serializers.json",
+            "quixstreams.models.serializers.avro",
+            "quixstreams.models.serializers.protobuf",
+            "quixstreams.models.serializers.schema_registry",
+            "quixstreams.models.serializers.quix",
         ]
     },
     "kafka.md": {

@@ -38,6 +38,7 @@ nav:
   - Advanced Usage:
     - Checkpointing: advanced/checkpointing.md
     - Serialization Formats: advanced/serialization.md
+    - Schema Registry: advanced/schema-registry.md
     - Stateful Processing: advanced/stateful-processing.md
     - Managing Kafka Topics: advanced/topics.md
     - Using Producer & Consumer: advanced/producer-consumer-lowlevel.md

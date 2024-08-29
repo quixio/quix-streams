@@ -1,6 +1,6 @@
 # Serialization and Deserialization
 
-Quix Streams supports multiple serialization formats to exchange data between Kafka topics:
+Quix Streams supports multiple serialization formats for exchanging data between Kafka topics:
 
 - `bytes`
 - `string`
@@ -10,20 +10,22 @@ Quix Streams supports multiple serialization formats to exchange data between Ka
 - `avro`
 - `protobuf`
 
-The serialization settings are defined per-topic using these parameters of `Application.topic()` function:
+The serialization settings are defined per topic using these parameters of the `Application.topic()` function:
 
 - `key_serializer`
 - `value_serializer`
 - `key_deserializer`
 - `value_deserializer`
 
-By default, message values are serialized with `json` and message keys are serialized with `bytes` (i.e. passed as they are received from Kafka).
+By default, message values are serialized with `json`, and message keys are serialized with `bytes` (i.e., passed as they are received from Kafka).
 
-Note: The legacy `quix` serializer and legacy `quix_events` and `quix_timeseries` deserializers are still supported but may be deprecated in future. New stream processing applications should avoid using these 3 formats.
+**Note:** JSON Schema, Avro, and Protobuf serialization formats support integration with a Schema Registry. See the [Schema Registry](./schema-registry.md) page to learn more.
+
+**Note:** The legacy `quix` serializer and legacy `quix_events` and `quix_timeseries` deserializers are still supported but may be deprecated in the future. New stream processing applications should avoid using these three formats.
 
 ## Configuring Serialization
-To set a serializer, you may either pass a string shorthand for it, or an instance of `quixstreams.models.serializers.Serializer` and `quixstreams.models.serializers.Deserializer` directly 
-to the `Application.topic()`.
+
+To set a serializer, you can either pass a string shorthand for it or an instance of `quixstreams.models.serializers.Serializer` and `quixstreams.models.serializers.Deserializer` directly to the `Application.topic()` function.
 
 **Example:**
 
@@ -37,7 +39,6 @@ input_topic = app.topic('input', value_deserializer='json', key_deserializer='st
 output_topic = app.topic('output', value_serializer='json', key_deserializer='bytes')
 ```
 
-
 Passing `Serializer` and `Deserializer` instances directly:
 
 ```python
@@ -49,15 +50,13 @@ input_topic = app.topic('input', value_deserializer=JSONDeserializer())
 output_topic = app.topic('output', value_serializer=JSONSerializer())
 ```
 
-You can find all available serializers in `quixstreams.models.serializers` module.
+You can find all available serializers in the `quixstreams.models.serializers` module.
 
-## Jsonschema support
+## JSON Schema Support
 
-The json serializer and deserializer support validation of the data against a jsonschema.
+The JSON serializer and deserializer support data validation against a JSON Schema.
 
 ```python
-from jsonschema import Draft202012Validator
-
 from quixstreams import Application
 from quixstreams.models import JSONDeserializer, JSONSerializer
 
@@ -76,15 +75,14 @@ output_topic = app.topic('output', value_serializer=JSONSerializer(schema=MY_SCH
 ```
 
 ## Avro
-Apache Avro is a row-based binary serialization format data. Avro stores the schema in JSON format alongside the data, enabling efficient processing and schema evolution.
 
-You can learn more the Apache Avro format [here](https://avro.apache.org/docs/).
-The Avro serializer and deserializer need to be passed explicitly.  
+Apache Avro is a row-based binary serialization format. Avro stores the schema in JSON format alongside the data, enabling efficient processing and schema evolution.
 
-In the current version, the schema must be provided manually.
+You can learn more about the Apache Avro format [here](https://avro.apache.org/docs/).
+The Avro serializer and deserializer need to be passed explicitly and must include the schema.
 
-> ***WARNING***: Avro serializer and deserializer require the `fastavro` library.
-> You can install quixstreams with the necessary dependencies using
+> **WARNING**: The Avro serializer and deserializer require the `fastavro` library.  
+> You can install Quix Streams with the necessary dependencies using:  
 > `pip install quixstreams[avro]`
 
 ```python
@@ -106,15 +104,14 @@ output_topic = app.topic('output', value_serializer=AvroSerializer(schema=MY_SCH
 ```
 
 ## Protobuf
+
 Protocol Buffers are language-neutral, platform-neutral extensible mechanisms for serializing structured data.
 
-You can learn more about the Protocol buffers format [here](https://protobuf.dev/)
-The Protobuf serializer and deserializer need to be passed explicitly.
+You can learn more about the Protocol Buffers format [here](https://protobuf.dev/).
+The Protobuf serializer and deserializer need to be passed explicitly and must include the schema.
 
-In the current version, the schema must be provided manually.
-
-> ***WARNING***: The protobuf serializer and deserializer requires the protobuf library.
-> You can install quixstreams with the necessary dependencies using
+> **WARNING**: The Protobuf serializer and deserializer require the `protobuf` library.  
+> You can install Quix Streams with the necessary dependencies using:  
 > `pip install quixstreams[protobuf]`
 
 ```python
@@ -129,4 +126,4 @@ input_topic = app.topic('input', value_deserializer=ProtobufDeserializer(msg_typ
 output_topic = app.topic('output', value_serializer=ProtobufSerializer(msg_type=OutputProto))
 ```
 
-By default the protobuf deserializer will deserialize the message to a python dictionary. Doing it has a big performance impact. You can disable this behavior by initializing the deserializer with `to_dict` set to `False`. The protobuf message object will then be used as the message value limiting the available StreamingDataframe API.
+By default, the Protobuf deserializer will deserialize the message to a Python dictionary. Doing this has a big performance impact. You can disable this behavior by initializing the deserializer with `to_dict` set to `False`. The Protobuf message object will then be used as the message value, limiting the available StreamingDataframe API.
