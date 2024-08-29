@@ -84,6 +84,7 @@ doc_map = {
             "quixstreams.models.serializers.json",
             "quixstreams.models.serializers.avro",
             "quixstreams.models.serializers.protobuf",
+            "quixstreams.models.serializers.schema_registry",
             "quixstreams.models.serializers.quix",
         ]
     },
