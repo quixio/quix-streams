@@ -10,7 +10,6 @@ from quixstreams.dataframe.exceptions import (
     InvalidOperation,
     GroupByNestingLimit,
     GroupByDuplicate,
-    DataFrameLocked,
 )
 from quixstreams.dataframe.registry import DataframeRegistry
 from quixstreams.dataframe.windows import WindowResult
@@ -1642,33 +1641,25 @@ class TestStreamingDataFrameGroupBy:
         with pytest.raises(GroupByDuplicate):
             sdf.group_by("col_a")
 
-    @pytest.mark.parametrize(
-        "operation",
-        [
-            lambda sdf: sdf["a"],
-            lambda sdf: operator.setitem(sdf, "a", 1),
-            lambda sdf: sdf.apply(...),
-            lambda sdf: sdf.update(...),
-            lambda sdf: sdf.filter(...),
-            lambda sdf: sdf.print(),
-            lambda sdf: sdf.drop(),
-            lambda sdf: sdf.group_by(),
-            lambda sdf: sdf.tumbling_window(1),
-            lambda sdf: sdf.hopping_window(1, 1),
-            lambda sdf: sdf.to_topic(...),
-            lambda sdf: sdf.sink(...),
-            lambda sdf: sdf.set_headers(...),
-            lambda sdf: sdf.set_timestamp(...),
-        ],
-    )
-    def test_sink_locks_sdf(self, operation, dataframe_factory, topic_manager_factory):
+    def test_sink_cannot_be_added_to(self, dataframe_factory, topic_manager_factory):
+        """
+        A sink cannot be added to or branched.
+        """
         topic_manager = topic_manager_factory()
         topic = topic_manager.topic(str(uuid.uuid4()))
         sdf = dataframe_factory(topic, topic_manager=topic_manager)
+        assert len(sdf.stream.children) == 0
         sdf.sink(DummySink())
-
-        with pytest.raises(DataFrameLocked):
-            operation(sdf)
+        # sink operation was added
+        assert len(sdf.stream.children) == 1
+        sdf_sink_node = list(sdf.stream.children)[0]
+        # do random stuff
+        sdf.apply(lambda x: x).update(lambda x: x)
+        sdf = sdf.apply(lambda x: x)
+        sdf.update(lambda x: x).apply(lambda x: x)
+        sdf.update(lambda x: x)
+        # no children should be added to the sink operation
+        assert not sdf_sink_node.children
 
 
 def add_n(n):
@@ -1714,19 +1705,15 @@ class TestStreamingDataFrameBranching:
 
     def test_multiple_branches(self, dataframe_factory):
         """
-        --< is a split
-        "S'" denotes the continuation of the sdf that was split from
-
-        sdf     ---[ add_120, div_2  ]---<      (sdf', sdf2), 60
-        sdf_2   ---[     div_3       ]---<      (sdf_2', sdf_3, sdf_4), 20
-        sdf_3   ---[ add_10, add_3   ]---|END   33
-        sdf_4   ---[     add_24      ]---|END   44
-        sdf_2'  ---[     add_2       ]---|END   22
-        sdf'    ---[     add_40      ]---<      (sdf'', sdf_5), 100
-        sdf_5   ---[ div_2, add_5    ]---|END   55
-        sdf''   ---[ div_100, add_10 ]---|END   11
-
-        :return:
+        INPUT: 0
+        └── SDF_1 = (add 120, div 2) -> 60
+            ├── SDF_2 = (div 3) -> 20
+            │   ├── SDF_3 = (add 10, add 3  ) -> 33
+            │   ├── SDF_4 = (    add 24     ) -> 44
+            │   └── SDF_2 = (    add 2      ) -> 22
+            └── SDF_1 = (add 40) -> 100
+                ├── SDF_5 = ( div 2, add 5  ) -> 55
+                └── SDF_1 = (div 100, add 10) -> 11
         """
 
         sdf = dataframe_factory().apply(add_n(120)).apply(div_n(2))  # 60
@@ -1737,6 +1724,41 @@ class TestStreamingDataFrameBranching:
         sdf = sdf.apply(add_n(40))  # 100
         sdf_5 = sdf.apply(div_n(2)).apply(add_n(5))  # 55
         sdf = sdf.apply(div_n(100)).apply(add_n(10))  # 11
+
+        _extras = {"key": b"key", "timestamp": 0, "headers": []}
+        extras = list(_extras.values())
+        expected = [
+            (33, *extras),
+            (44, *extras),
+            (22, *extras),
+            (55, *extras),
+            (11, *extras),
+        ]
+        results = sdf.test(value=0, **_extras)
+
+        assert results == expected
+
+    def test_multiple_branches_skip_assigns(self, dataframe_factory):
+        """
+        INPUT: 0
+        └── SDF_1 = (add 120, div 2) -> 60
+            ├── SDF_2 = (div 3) -> 20
+            │   ├── (add 10, add 3  ) -> 33
+            │   ├── (    add 24     ) -> 44
+            │   └── (    add 2      ) -> 22
+            └── SDF_1 = (add 40) -> 100
+                ├── ( div 2, add 5  ) -> 55
+                └── (div 100, add 10) -> 11
+        """
+
+        sdf = dataframe_factory().apply(add_n(120)).apply(div_n(2))  # 60
+        sdf_2 = sdf.apply(div_n(3))  # 20
+        sdf_2.apply(add_n(10)).apply(add_n(3))  # 33
+        sdf_2.apply(add_n(24))  # 44
+        sdf_2.apply(add_n(2))  # 22
+        sdf = sdf.apply(add_n(40))  # 100
+        sdf.apply(div_n(2)).apply(add_n(5))  # 55
+        sdf.apply(div_n(100)).apply(add_n(10))  # 11
 
         _extras = {"key": b"key", "timestamp": 0, "headers": []}
         extras = list(_extras.values())
