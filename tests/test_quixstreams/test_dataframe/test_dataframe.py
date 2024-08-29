@@ -1800,7 +1800,7 @@ class TestStreamingDataFrameBranching:
 
     def test_store_series_filter_as_var_and_use(self, dataframe_factory):
         """
-        NOTE: This is NOT dependent on splitting functionality, but splitting may
+        NOTE: This is NOT dependent on branching functionality, but branching may
         encourage these sorts of operations (it does NOT copy data).
 
         NOTE: this kind of operation is only guaranteed to be correct when the stored
@@ -1824,7 +1824,7 @@ class TestStreamingDataFrameBranching:
 
     def test_store_series_result_as_var_and_use(self, dataframe_factory):
         """
-        NOTE: This is NOT dependent on splitting functionality, but splitting may
+        NOTE: This is NOT dependent on branching functionality, but branching may
         encourage these sorts of operations (it does NOT copy data).
 
         NOTE: this kind of operation is only guaranteed to be correct when the stored
@@ -1848,7 +1848,7 @@ class TestStreamingDataFrameBranching:
 
     def test_store_sdf_filter_as_var_and_use(self, dataframe_factory):
         """
-        NOTE: This is NOT dependent on splitting functionality, but splitting may
+        NOTE: This is NOT dependent on branching functionality, but branching may
         encourage these sorts of operations.
 
         NOTE: This WILL copy data, so it is basically a more inefficient way of doing
@@ -2064,7 +2064,7 @@ class TestStreamingDataFrameBranching:
 
     def test_store_sdf_setter_as_var_and_use(self, dataframe_factory):
         """
-        NOTE: This is NOT dependent on splitting functionality, but splitting may
+        NOTE: This is NOT dependent on branching functionality, but branching may
         encourage these sorts of operations.
         """
         sdf = dataframe_factory().apply(add_n_df(10))
@@ -2078,3 +2078,32 @@ class TestStreamingDataFrameBranching:
         results = sdf.test(value={"v": 0}, **_extras)
 
         assert results == expected
+
+    def test_column_setting_from_another_sdf_series_fails(self, dataframe_factory):
+        """
+        Attempting to set a column based on another SDF series operation fails,
+        as series are only intended to be applied to the same SDF.
+        :param dataframe_factory:
+        :return:
+        """
+
+        sdf = dataframe_factory().apply(add_n_df(10))
+        sdf2 = sdf.apply(add_n_df(500))
+
+        with pytest.raises(InvalidOperation, match="Column-setting"):
+            sdf["new_col"] = sdf2["v"] + 3
+
+    def test_column_operations_different_sdfs_fails(self, dataframe_factory):
+        """
+        Attempting series operations involving multiple SDFs fails,
+        as series are only intended to be applied to the same SDF.
+        :param dataframe_factory:
+        :return:
+        """
+
+        sdf = dataframe_factory().apply(add_n_df(10))
+        sdf2 = sdf.apply(add_n_df(500))
+        sdf3 = sdf.apply(add_n_df(800))
+
+        with pytest.raises(InvalidOperation, match="All column operations"):
+            sdf["new_col"] = sdf2["v"] + sdf3["v"]

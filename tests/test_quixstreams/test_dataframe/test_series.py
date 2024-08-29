@@ -504,3 +504,31 @@ class TestStreamingSeries:
         key, timestamp, headers = "key", 0, []
         with pytest.raises(InvalidColumnReference):
             StreamingSeries("x").test(2, key, timestamp, headers)
+
+    def test_series_origin_mismatch_fails(self):
+        """
+        Attempting to do operations that originate from two different SDF's fails (
+        arises from SDF branching).
+        """
+        series_1 = StreamingSeries(name="x", sdf_id=1)
+        series_2 = StreamingSeries(name="x", sdf_id=2)
+
+        # _operations calls
+        with pytest.raises(
+            InvalidOperation,
+            match="All column operations must originate from one `StreamingDataFrame`",
+        ):
+            series_1 + series_2
+
+        # others
+        with pytest.raises(
+            InvalidOperation,
+            match="All column operations must originate from one `StreamingDataFrame`",
+        ):
+            series_1 & series_2
+
+        with pytest.raises(
+            InvalidOperation,
+            match="All column operations must originate from one `StreamingDataFrame`",
+        ):
+            series_1 | series_2
