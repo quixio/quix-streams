@@ -3,6 +3,25 @@
 `Applications` now support consuming multiple topics by initializing multiple 
 `StreamingDataFrames` (`SDF`). This may also be referred to as a multi-`SDF` `Application`.
 
+# Multi-Topic Use Cases
+
+The benefits of consuming from multiple topics in one Application are a little more 
+nuanced, but the main benefits are: 
+
+## Consolidating Applications
+
+It may help to consolidate two or more `Applications` that share similar 
+operational contexts.
+
+## Code Sharing
+
+It's now much easier to share/use code that applies to multiple topics by having it 
+all in one `Application`.
+
+## Joining Topics (coming soon)
+
+[Joins](#joins) will vastly simplify many problems that require handling data from 
+multiple topics at once.
 
 # Using Multiple Topics
 

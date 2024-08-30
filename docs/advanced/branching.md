@@ -377,27 +377,26 @@ multiple topic consuming, as _`SDF` state is tied to its topic name_
 **Branches should be treated as independent entities that cannot be "combined" 
 or "interact".**
 
-The most common ways this is likely to occur is filtering and column assigning:
-
-```python
-# Column Assigning
-sdf_b["new_col"] = sdf_a.apply(f)
-
-# Column Filtering
-sdf_b = sdf_b[sdf_a.apply(g)]
-```
+The most common ways this is likely to be attempted is filtering and column assigning.
 
 Since there are still valid manipulations with these approaches (corresponding 
 to non-branching), it may be tricky to identify valid versus invalid usage.
 
 **If you don't wish to go into too much detail, just take these into consideration**:
 1. Use the same `SDF` instance as both the source _and_ operation.
-    - Valid: 
-      - `sdf_1 = sdf_0[sdf_0.apply(f)]` (can even branch if you wish!)
-      - `sdf_0['new_col'] = sdf_0.apply(f)`
-    - Invalid: 
-      - `sdf_2 = sdf_1[sdf_0.apply(f)]` (`sdf_1` != `sdf_0`)
-      - `sdf_1['new_col'] = sdf_0.apply(f)` (`sdf_1` != `sdf_0`)
+    - **Valid**: 
+      - filtering:
+        - `sdf_a = sdf_a[sdf_a.apply(f)]`
+        - `sdf_b = sdf_a[sdf_a.apply(f)]` (can branch with filtering!)
+      - column assigning:
+        - `sdf_a['z'] = sdf_a.apply(f)`
+        - `sdf_a['z'] = sdf_a['x'] + sdf_a['y'] + 1`
+    - **Invalid**:
+      - filtering:
+        - `sdf_c = sdf_b[sdf_a.apply(f)]` (`sdf_b` != `sdf_a`)
+      - column assigning:
+        - `sdf_b['z'] = sdf_a.apply(f)` (`sdf_b` != `sdf_a`)
+        - `sdf_c['z'] = sdf_a['x'] + sdf_b['y']` (ALL `sdf` involved must be the SAME)
 2. Avoid assigning filters or assignors for later use:
     - Example: 
       ```
@@ -407,8 +406,6 @@ to non-branching), it may be tricky to identify valid versus invalid usage.
 3. Most common invalid usage _should_ raise exceptions
     - validate results manually if in question
 
-Optionally, check out the [advanced breakdown](#advanced-concepts) for more details 
-regarding invalid interactions.
 
 # Performance
 
@@ -440,17 +437,25 @@ a different format before the branching occurs.
 
 # Advanced Usage
 
-## Skipping Assignment
+## Terminal Branches (no assignment)
 
-Assignment is not required to generate branches, which can remove instantiating 
-variables that otherwise wont be referenced again (basically a "leaf" of the tree).
+Variable assignment is not required to generate branches; skipping assignment generates 
+a **terminal branch**.
+
+Terminal branches cannot have any further operations added to them, and can alleviate
+the need for instantiating unreferenced variables.
 
 It may still be beneficial to use assignment as a visual aid for those unfamiliar with 
 how branching works, and it makes no difference in terms of performance.
 
+### Terminal Branch Limitations
+
+While probably intuitive, terminal branches cannot be started with [in-place 
+operations](dataframe-assignments.md#valid-in-place-operations).
+
 ### Rewriting the Example
 
-[The original example code above](#example-code) could be re-written as the following:
+[The original example code above](#example-code) could be re-written using terminal branches:
 
 ```python
 from quixstreams import Application
