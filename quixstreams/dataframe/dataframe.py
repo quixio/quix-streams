@@ -507,8 +507,7 @@ class StreamingDataFrame(BaseStreaming):
         self._registry.register_groupby(source_sdf=self, new_sdf=groupby_sdf)
         return groupby_sdf
 
-    @staticmethod
-    def contains(key: str) -> StreamingSeries:
+    def contains(self, key: str) -> StreamingSeries:
         """
         Check if the key is present in the Row value.
 
@@ -530,7 +529,7 @@ class StreamingDataFrame(BaseStreaming):
         """
 
         return StreamingSeries.from_apply_callback(
-            lambda value, key_, timestamp, headers: key in value
+            lambda value, key_, timestamp, headers: key in value, sdf_id=id(self)
         )
 
     def to_topic(
@@ -1112,6 +1111,12 @@ class StreamingDataFrame(BaseStreaming):
             )
         elif isinstance(item, StreamingSeries):
             # Update an item key with a result of another series
+            if id(self) != item.sdf_id:
+                raise InvalidOperation(
+                    "Column-setting operations must originate from target SDF; "
+                    'ex: `sdf1["x"] = sdf1["y"] + 1`, NOT `sdf1["x"] = sdf2["y"] + 1` '
+                )
+
             series_composed = item.compose_returning()
             self._add_update(
                 lambda value, key, timestamp, headers: operator.setitem(
@@ -1155,7 +1160,7 @@ class StreamingDataFrame(BaseStreaming):
             return self.apply(lambda value: {k: value[k] for k in item})
         elif isinstance(item, str):
             # Create a StreamingSeries based on a column name
-            return StreamingSeries(name=item)
+            return StreamingSeries(name=item, sdf_id=id(self))
         else:
             raise TypeError(f'Unsupported key type "{type(item)}"')
 
