@@ -58,9 +58,19 @@ class TestSerializers:
             (
                 AvroSerializer(AVRO_TEST_SCHEMA),
                 {"name": "foo", "id": 123},
-                b"\x06foo\xf6\x01",
+                b"\x06foo\xf6\x01\x00",
             ),
-            (AvroSerializer(AVRO_TEST_SCHEMA), {"name": "foo"}, b"\x06foo\x00"),
+            (AvroSerializer(AVRO_TEST_SCHEMA), {"name": "foo"}, b"\x06foo\x00\x00"),
+            (
+                AvroSerializer(AVRO_TEST_SCHEMA),
+                {"name": "foo", "nested": {}},
+                b"\x06foo\x00\x00",
+            ),
+            (
+                AvroSerializer(AVRO_TEST_SCHEMA),
+                {"name": "foo", "nested": {"id": 123}},
+                b"\x06foo\x00\xf6\x01",
+            ),
             (ProtobufSerializer(Root), {}, b""),
             (ProtobufSerializer(Root), {"id": 3}, b"\x10\x03"),
             (ProtobufSerializer(Root), {"name": "foo", "id": 2}, b"\n\x03foo\x10\x02"),
@@ -127,6 +137,11 @@ class TestSerializers:
             ),
             (AvroSerializer(AVRO_TEST_SCHEMA), {"foo": "foo", "id": 123}),
             (AvroSerializer(AVRO_TEST_SCHEMA), {"id": 123}),
+            (AvroSerializer(AVRO_TEST_SCHEMA), {"name": "foo", "id": "string"}),
+            (
+                AvroSerializer(AVRO_TEST_SCHEMA),
+                {"name": "foo", "nested": {"id": "string"}},
+            ),
             (AvroSerializer(AVRO_TEST_SCHEMA, strict=True), {"name": "foo"}),
             (ProtobufSerializer(Root), {"bar": 3}),
             (ProtobufSerializer(Root), Nested()),
@@ -170,13 +185,18 @@ class TestDeserializers:
             ),
             (
                 AvroDeserializer(AVRO_TEST_SCHEMA),
-                b"\x06foo\xf6\x01",
-                {"name": "foo", "id": 123},
+                b"\x06foo\xf6\x01\x00",
+                {"name": "foo", "id": 123, "nested": {"id": 0}},
             ),
             (
                 AvroDeserializer(AVRO_TEST_SCHEMA),
-                b"\x06foo\x00",
-                {"name": "foo", "id": 0},
+                b"\x06foo\x00\x00",
+                {"name": "foo", "id": 0, "nested": {"id": 0}},
+            ),
+            (
+                AvroDeserializer(AVRO_TEST_SCHEMA),
+                b"\x06foo\x00\xf6\x01",
+                {"name": "foo", "id": 0, "nested": {"id": 123}},
             ),
             (
                 ProtobufDeserializer(Root),
@@ -234,9 +254,7 @@ class TestDeserializers:
             ),
         ],
     )
-    def test_deserialize_no_column_name_success(
-        self, deserializer: Deserializer, value, expected
-    ):
+    def test_deserialize_success(self, deserializer: Deserializer, value, expected):
         assert deserializer(value, ctx=DUMMY_CONTEXT) == expected
 
     @pytest.mark.parametrize(

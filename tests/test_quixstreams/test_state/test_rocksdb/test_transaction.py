@@ -1,6 +1,6 @@
 import contextlib
 import secrets
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import patch
 
 import pytest
@@ -182,8 +182,8 @@ class TestRocksDBPartitionTransaction:
         [
             ("string", object()),
             (object(), "string"),
-            ("string", datetime.utcnow()),
-            (datetime.utcnow(), "string"),
+            ("string", datetime.now(timezone.utc)),
+            (datetime.now(timezone.utc), "string"),
         ],
     )
     def test_set_serialization_error(self, key, value, rocksdb_partition):
@@ -192,7 +192,9 @@ class TestRocksDBPartitionTransaction:
             with pytest.raises(StateSerializationError):
                 tx.set(key, value, prefix=prefix)
 
-    @pytest.mark.parametrize("key", [object(), b"somebytes", datetime.utcnow()])
+    @pytest.mark.parametrize(
+        "key", [object(), b"somebytes", datetime.now(timezone.utc)]
+    )
     def test_delete_serialization_error(self, key, rocksdb_partition):
         prefix = b"__key__"
         with rocksdb_partition.begin() as tx:
@@ -330,7 +332,7 @@ class TestRocksDBPartitionTransaction:
 
     def test_set_datetime_fails(self, rocksdb_partition):
         key = "key"
-        value = datetime.utcnow()
+        value = datetime.now(timezone.utc)
         prefix = b"__key__"
         with rocksdb_partition.begin() as tx:
             with pytest.raises(StateSerializationError):

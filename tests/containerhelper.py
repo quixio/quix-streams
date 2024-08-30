@@ -1,8 +1,8 @@
 import base64
-import datetime
 import random
 import time
 import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Tuple
 
 from testcontainers.core.container import DockerContainer
@@ -95,9 +95,9 @@ class ContainerHelper:
 
 
 def wait_for_container_readiness(container: DockerContainer, text: str) -> None:
-    start = datetime.datetime.utcnow()
-    cut_off = start + datetime.timedelta(seconds=20)
-    while cut_off > datetime.datetime.utcnow():
+    start = datetime.now(timezone.utc)
+    cut_off = start + timedelta(seconds=20)
+    while cut_off > datetime.now(timezone.utc):
         time.sleep(0.5)
         logs = container.get_logs()
         for line in logs:
