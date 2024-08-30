@@ -6,7 +6,6 @@ __all__ = (
     "GroupByNestingLimit",
     "InvalidColumnReference",
     "ColumnDoesNotExist",
-    "DataFrameLocked",
     "StreamingDataFrameDuplicate",
     "GroupByDuplicate",
 )
@@ -25,9 +24,6 @@ class GroupByNestingLimit(QuixException): ...
 
 
 class GroupByDuplicate(QuixException): ...
-
-
-class DataFrameLocked(QuixException): ...
 
 
 class StreamingDataFrameDuplicate(QuixException): ...

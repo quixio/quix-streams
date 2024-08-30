@@ -30,12 +30,46 @@ sdf = app.dataframe(topic)
 sdf.sink(influx_sink)
 ```
 
-## Sinks Are Destinations
-When `.sink()` is called on a StreamingDataFrame instance, it marks the end of the processing pipeline, and 
- the StreamingDataFrame can't be changed anymore.
+## Sinks Are Terminal Operations
+`StreamingDataFrame.sink()` is special in that it's "terminal": 
+**no additional operations can be added to it once called** (with branching, the branch
+becomes terminal).
 
-Make sure you call `StreamingDataFrame.sink()` as the last operation.
+This is to ensure no further mutations can be applied to the outbound data.
 
+_However_, you can continue other operations with other branches, including using
+the same `Sink` to push another value (with another `SDF.sink()` call).
+
+[Learn more about _branching_ here](../../advanced/branching.md).
+
+### Branching after SDF.sink()
+
+It is still possible to branch after using `SDF.sink()` assuming _you do NOT reassign 
+with it_ (it returns `None`):
+
+```python
+sdf = app.dataframe(topic)
+sdf = sdf.apply()
+
+# Approach 1... Allows branching from `sdf`
+sdf.sink()
+
+# Approach 2...Disables branching from `sdf`
+sdf = sdf.sink()
+```
+
+### Suggested Use of SDF.sink()
+
+If further operations are required (or you want to preserve various operations for
+other branches), it's recommended to use `SDF.sink()` as a standalone operation:
+
+```python
+sdf = app.dataframe(topic)
+# [other operations here...]
+sdf = sdf.apply().apply()  # last transforms before a sink
+sdf.sink(influx_sink)  # do sink as a standalone call, no reassignment
+sdf = sdf.apply()  # continue different operations with another branch...
+```
 
 ## Supported Sinks
 

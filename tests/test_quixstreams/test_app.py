@@ -2090,6 +2090,93 @@ class TestApplicationSink:
             )
         assert committed.offset == total_messages
 
+    def test_run_with_sink_branches_success(
+        self,
+        app_factory,
+        executor,
+    ):
+
+        processed_count = 0
+        total_messages = 3
+
+        def on_message_processed(topic_, partition, offset):
+            # Set the callback to track total messages processed
+            # The callback is not triggered if processing fails
+            nonlocal processed_count
+
+            processed_count += 1
+            # Stop processing after consuming all the messages
+            if processed_count == total_messages:
+                done.set_result(True)
+
+        app = app_factory(
+            auto_offset_reset="earliest",
+            on_message_processed=on_message_processed,
+        )
+        sink = DummySink()
+
+        topic = app.topic(
+            str(uuid.uuid4()),
+            value_deserializer="str",
+            config=TopicConfig(num_partitions=3, replication_factor=1),
+        )
+        sdf = app.dataframe(topic)
+        sdf = sdf.apply(lambda x: x + "_branch")
+        sdf.apply(lambda x: x + "0").sink(sink)
+        sdf.apply(lambda x: x + "1").sink(sink)
+        sdf = sdf.apply(lambda x: x + "2")
+        sdf.sink(sink)
+
+        key, value, timestamp_ms = b"key", "value", 1000
+        headers = [("key", b"value")]
+
+        # Produce messages to different topic partitions and flush
+        with app.get_producer() as producer:
+            for i in range(total_messages):
+                producer.produce(
+                    topic=topic.name,
+                    partition=i,
+                    key=key,
+                    value=value,
+                    timestamp=timestamp_ms,
+                    headers=headers,
+                )
+
+        done = Future()
+
+        # Stop app when the future is resolved
+        executor.submit(_stop_app_on_future, app, done, 15.0)
+        app.run(sdf)
+
+        # Check that all messages have been processed
+        assert processed_count == total_messages
+
+        # Ensure all messages were flushed to the sink
+        assert len(sink.results) == 9
+        for i in range(3):
+            assert (
+                len([r for r in sink.results if f"_branch{i}" in r.value])
+                == total_messages
+            )
+        for item in sink.results:
+            assert item.key == key
+            assert value in item.value
+            assert item.timestamp == timestamp_ms
+            assert item.headers == headers
+
+        # Ensure that the offsets are committed
+        with app.get_consumer() as consumer:
+            committed0, committed1, committed2 = consumer.committed(
+                [
+                    TopicPartition(topic=topic.name, partition=0),
+                    TopicPartition(topic=topic.name, partition=1),
+                    TopicPartition(topic=topic.name, partition=2),
+                ]
+            )
+        assert committed0.offset == 1
+        assert committed1.offset == 1
+        assert committed2.offset == 1
+
 
 class TestApplicationMultipleSdf:
     def test_multiple_sdfs(
