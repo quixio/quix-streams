@@ -234,9 +234,7 @@ class TestDeserializers:
             ),
         ],
     )
-    def test_deserialize_no_column_name_success(
-        self, deserializer: Deserializer, value, expected
-    ):
+    def test_deserialize_success(self, deserializer: Deserializer, value, expected):
         assert deserializer(value, ctx=DUMMY_CONTEXT) == expected
 
     @pytest.mark.parametrize(
