@@ -140,6 +140,7 @@ class StreamingSeries(BaseStreaming):
         return cls(stream=Stream(ApplyWithMetadataFunction(func)), sdf_id=sdf_id)
 
     def _from_apply_callback(self, func: ApplyWithMetadataCallback):
+        # TODO - maybe there's a better patten for this? (_method calling classmethod)
         return self.from_apply_callback(func, self._sdf_id)
 
     @property
