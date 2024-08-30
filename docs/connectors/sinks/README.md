@@ -31,14 +31,14 @@ sdf.sink(influx_sink)
 ```
 
 ## Sinks Are Terminal Operations
-`StreamingDataFrame.sink()` is special in that its "terminal": 
+`StreamingDataFrame.sink()` is special in that it's "terminal": 
 **no additional operations can be added to it once called** (with branching, the branch
 becomes terminal).
 
 This is to ensure no further mutations can be applied to the outbound data.
 
 _However_, you can continue other operations with other branches, including using
-the same `Sink` to push another set of data (with another `SDF.sink()` call).
+the same `Sink` to push another value (with another `SDF.sink()` call).
 
 [Learn more about _branching_ here](../../advanced/branching.md).
 
