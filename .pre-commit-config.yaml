@@ -1,9 +1,6 @@
 repos:
-  - repo: https://github.com/psf/black
-    rev: '24.3.0'
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.3
     hooks:
-      - id: black
-        types: [python]
-        language_version: python3
-        args: [ --config=pyproject.toml, --check ]
-        verbose: true
+      - id: ruff
+      - id: ruff-format

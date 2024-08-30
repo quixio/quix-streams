@@ -49,11 +49,14 @@ version = {attr = "quixstreams.__version__"}
 [tool.pydantic-pycharm-plugin]
 ignore-init-method-arguments = true
 
-[tool.black]
-line-length = 88
-target-version = ['py38']
-include = '\.pyi?$'
-force-exclude = '.*_pb2\.py$'
+[tool.ruff]
+fix = true
+lint.select = [
+  "F",  # Pyflakes
+]
+exclude = [
+  "*_pb2.py",  # Protobuf files
+]
 
 [tool.pytest.ini_options]
 minversion = "6.0"
