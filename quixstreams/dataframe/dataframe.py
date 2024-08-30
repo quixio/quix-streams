@@ -567,7 +567,7 @@ class StreamingDataFrame(BaseStreaming):
             By default, the current message key will be used.
         :return: the updated StreamingDataFrame instance (reassignment NOT required).
         """
-        return self.apply(
+        return self._add_update(
             lambda value, orig_key, timestamp, headers: self._produce(
                 topic=topic,
                 value=value,
@@ -1046,8 +1046,6 @@ class StreamingDataFrame(BaseStreaming):
             value=value, key=key, timestamp=timestamp, context=ctx, headers=headers
         )
         self._producer.produce_row(row=row, topic=topic, key=key, timestamp=timestamp)
-        # return value so produce can be an "apply" function (no branch copy required)
-        return value
 
     def _add_update(
         self,
