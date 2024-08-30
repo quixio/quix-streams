@@ -71,11 +71,6 @@ sdf.sink(influx_sink)  # do sink as a standalone call, no reassignment
 sdf = sdf.apply()  # continue different operations with another branch...
 ```
 
-([learn more: branching](../../advanced/branching.md))
-
-
-
-
 ## Supported Sinks
 
 Currently, Quix Streams provides these sinks out of the box:
