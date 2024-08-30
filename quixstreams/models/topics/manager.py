@@ -1,6 +1,6 @@
 import logging
 from copy import deepcopy
-from typing import Dict, List, Optional, Set, Literal, TYPE_CHECKING
+from typing import Dict, List, Optional, Set, Literal
 
 from quixstreams.models.serializers import DeserializerType, SerializerType
 from quixstreams.utils.dicts import dict_values
