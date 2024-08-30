@@ -53,10 +53,20 @@ ignore-init-method-arguments = true
 fix = true
 lint.select = [
   "F",  # Pyflakes
+  "S",  # flake8-bandit
 ]
 exclude = [
   "*_pb2.py",  # Protobuf files
 ]
+
+[tool.ruff.lint.per-file-ignores]
+# S101 Use of `assert` detected
+# S105 Possible hardcoded password assigned to variable
+# S106 Possible hardcoded password assigned to argument
+# S311 Standard pseudo-random generators are not suitable for cryptographic purposes
+"docs/*.py" = ["S311"]
+"examples/*.py" = ["S311"]
+"tests/*.py" = ["S101", "S105", "S106", "S311"]
 
 [tool.pytest.ini_options]
 minversion = "6.0"

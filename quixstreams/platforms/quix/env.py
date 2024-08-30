@@ -9,7 +9,7 @@ class QuixEnvironment:
     Class to access various Quix platform environment settings
     """
 
-    SDK_TOKEN = "Quix__Sdk__Token"
+    SDK_TOKEN = "Quix__Sdk__Token"  # noqa: S105
     PORTAL_API = "Quix__Portal__Api"
     WORKSPACE_ID = "Quix__Workspace__Id"
     DEPLOYMENT_ID = "Quix__Deployment__Id"
