@@ -115,10 +115,10 @@ Here are some of the planned improvements:
 - [x] [Stateful operations and recovery based on Kafka changelog topics](https://quix.io/docs/quix-streams/advanced/stateful-processing.html)
 - [x] [Group-by operation](https://quix.io/docs/quix-streams/groupby.html)
 - [x] ["Exactly Once" delivery guarantees for Kafka message processing (AKA transactions)](https://quix.io/docs/quix-streams/configuration.html#processing-guarantees)
+- [x] Support for [Avro](https://quix.io/docs/quix-streams/advanced/serialization.html#avro) and [Protobuf](https://quix.io/docs/quix-streams/advanced/serialization.html#protobuf) formats
+- [x] [Schema Registry support](https://quix.io/docs/quix-streams/advanced/schema-registry.html)
 - [ ] Joins
 - [ ] Windowed aggregations over Sliding windows
-- [ ] Support for Avro and Protobuf formats
-- [ ] Schema Registry support
 
 
 ## Get Involved 🤝
