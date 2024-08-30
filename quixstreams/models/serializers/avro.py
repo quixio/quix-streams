@@ -102,7 +102,7 @@ class AvroSerializer(Serializer):
                     strict_allow_default=self._strict_allow_default,
                     disable_tuple_notation=self._disable_tuple_notation,
                 )
-            except ValueError as exc:
+            except (ValueError, TypeError) as exc:
                 raise SerializationError(str(exc)) from exc
 
             return data.getvalue()

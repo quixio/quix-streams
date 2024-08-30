@@ -127,6 +127,7 @@ class TestSerializers:
             ),
             (AvroSerializer(AVRO_TEST_SCHEMA), {"foo": "foo", "id": 123}),
             (AvroSerializer(AVRO_TEST_SCHEMA), {"id": 123}),
+            (AvroSerializer(AVRO_TEST_SCHEMA), {"name": "foo", "id": "string"}),
             (AvroSerializer(AVRO_TEST_SCHEMA, strict=True), {"name": "foo"}),
             (ProtobufSerializer(Root), {"bar": 3}),
             (ProtobufSerializer(Root), Nested()),
