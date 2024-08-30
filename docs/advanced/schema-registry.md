@@ -23,7 +23,7 @@ schema_registry_serialization_config = SchemaRegistrySerializationConfig(
 )
 ```
 
-**Note:** For the full list of available options, refer to the [Serializers API](./api-reference/serialization.md).
+**Note:** For the full list of available options, refer to the [Serializers API](../api-reference/serialization.md#quixstreamsmodelsserializersschema_registry).
 
 ## JSON Schema
 
