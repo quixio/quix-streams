@@ -285,6 +285,13 @@ class TopicManager:
         return topic
 
     def register(self, topic: Topic):
+        """
+        Register an already generated :class:`quixstreams.models.topics.Topic` to the topic manager.
+
+        The topic name and config can be updated by the topic manager.
+
+        :param topic: The topic to register
+        """
         topic.name = self._resolve_topic_name(topic.name)
         if topic.config is None:
             topic.config = TopicConfig(
