@@ -51,7 +51,7 @@ See [sinks](../connectors/sinks/README.md#sinks-are-terminal-operations) for det
 
 ## The Impact of Branching
 
-With the introduction of branching, assignment is not longer technically required 
+With the introduction of branching, assignment is no longer technically required 
 for the "assignment" operation to be added: it instead generates a 
 [terminal branch](branching.md#terminal-branches-no-assignment).
 
