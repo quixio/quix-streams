@@ -37,6 +37,7 @@ There are a few operations that are the exception: they are added to the
 - `.to_topic()`
 - `.print()`
 - `.update()`
+- `.drop()`
 
 that said, **they can still be safely assigned** and function as expected, because they
 return the `StreamingDataFrame`, which is why the recommended pattern is to 
