@@ -323,7 +323,7 @@ class TestInfluxDB3Sink:
         )
         topic = "test-topic"
 
-        value1, value2 = {"key": "value1"}, {"key": "value2"}
+        value1 = {"key": "value1"}
         timestamp = 1
         sink.add(
             value=value1,
@@ -351,7 +351,7 @@ class TestInfluxDB3Sink:
         )
         topic = "test-topic"
 
-        value1, value2 = {"key": "value1"}, {"key": "value2"}
+        value1 = {"key": "value1"}
         timestamp = 1
         sink.add(
             value=value1,

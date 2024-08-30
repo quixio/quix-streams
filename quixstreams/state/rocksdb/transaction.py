@@ -431,7 +431,7 @@ class RocksDBPartitionTransaction(PartitionTransaction):
                 and changelog_offset < current_changelog_offset
             ):
                 raise InvalidChangelogOffset(
-                    f"Cannot set changelog offset lower than already saved one"
+                    "Cannot set changelog offset lower than already saved one"
                 )
             self._batch.put(
                 CHANGELOG_OFFSET_KEY,

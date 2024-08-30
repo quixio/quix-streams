@@ -1,13 +1,9 @@
 from json import loads, JSONDecodeError
 from typing import Union, Optional
-from unittest.mock import create_autospec
 
 import pytest
 import requests
 from typing_extensions import Type
-
-from quixstreams.platforms.quix.api import QuixPortalApiService
-from quixstreams.platforms.quix.config import QuixKafkaConfigsBuilder
 
 
 class MockResponse:

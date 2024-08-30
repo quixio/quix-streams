@@ -128,7 +128,7 @@ class RowConsumer(Consumer):
         if msg is None:
             return
 
-        topic_name, partition, offset = msg.topic(), msg.partition(), msg.offset()
+        topic_name = msg.topic()
         try:
             if msg.error():
                 raise KafkaConsumerException(error=msg.error())

@@ -5,3 +5,5 @@ try:
     from testcontainers.core.network import Network
 except ImportError:
     from .network import Network
+
+__all__ = ["Network"]

@@ -423,7 +423,6 @@ class TestCheckpoint:
     def test_incomplete_flush(
         self, checkpoint_factory, consumer, state_manager_factory, rowproducer_mock
     ):
-
         state_manager = state_manager_factory(producer=rowproducer_mock)
         checkpoint = checkpoint_factory(
             consumer_=consumer, state_manager_=state_manager, producer_=rowproducer_mock

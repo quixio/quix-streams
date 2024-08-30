@@ -362,7 +362,6 @@ class TestWindowedRocksDBPartitionTransaction:
         with windowed_rocksdb_partition_factory(
             changelog_producer=changelog_producer_mock
         ) as store_partition:
-
             tx = store_partition.begin()
             tx.delete_window(start_ms=start_ms, end_ms=end_ms, prefix=prefix)
             tx.prepare(processed_offset=processed_offset)

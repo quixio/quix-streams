@@ -460,7 +460,7 @@ class TestStreamingSeries:
 
     def test_abs_not_a_number_fails(self):
         result = StreamingSeries("x").abs()
-        key, timestamp, headers = "key", 0, []
+        key, timestamp = "key", 0
 
         with pytest.raises(TypeError, match="bad operand type for abs()"):
             assert result.test({"x": "string"}, key, timestamp)

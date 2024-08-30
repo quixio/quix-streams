@@ -187,7 +187,7 @@ class TestStream:
             .add_apply(lambda v: [v, v], expand=True)
         )
         result = Sink()
-        value, key, timestamp, headers = 1, "key", 1, None
+        key, timestamp, headers = "key", 1, None
         stream.compose(sink=result.append_record)(1, key, timestamp, headers)
         assert result == [(2, key, timestamp, headers), (2, key, timestamp, headers)]
 

@@ -2,7 +2,6 @@ import enum
 from typing import Protocol, Any, Optional, Callable, Dict, ClassVar, Tuple, List
 
 from quixstreams.models import ConfluentKafkaMessageProto
-from quixstreams.models.types import MessageHeadersMapping
 
 DumpsFunc = Callable[[Any], bytes]
 LoadsFunc = Callable[[bytes], Any]
@@ -365,7 +364,6 @@ class WindowedState(Protocol):
 
 
 class WindowedPartitionTransaction(Protocol):
-
     @property
     def failed(self) -> bool:
         """

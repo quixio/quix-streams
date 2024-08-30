@@ -494,7 +494,7 @@ class TestApplication:
 
         with app.get_consumer() as x:
             assert x._consumer_config["enable.auto.offset.store"] is True
-            assert x._consumer_config["auto.offset.reset"] is "latest"
+            assert x._consumer_config["auto.offset.reset"] == "latest"
 
     def test_producer_extra_config(self, app_factory):
         """
@@ -536,7 +536,6 @@ class TestApplication:
 
 
 class TestAppGroupBy:
-
     def test_group_by(
         self,
         app_factory,
@@ -714,7 +713,6 @@ class TestAppGroupBy:
 
 
 class TestAppExactlyOnce:
-
     def test_exactly_once(
         self,
         app_factory,
@@ -1816,7 +1814,6 @@ class TestApplicationSink:
         app_factory,
         executor,
     ):
-
         processed_count = 0
         total_messages = 3
 

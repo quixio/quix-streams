@@ -3,7 +3,6 @@ import pydantic
 
 
 class TestApplicationConfig:
-
     def test_frozen(self, app_factory):
         app = app_factory()
 

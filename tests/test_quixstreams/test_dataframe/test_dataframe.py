@@ -826,7 +826,6 @@ class TestStreamingDataframeStateful:
 
 
 class TestStreamingDataFrameTumblingWindow:
-
     def test_tumbling_window_define_from_milliseconds(
         self, dataframe_factory, state_manager
     ):

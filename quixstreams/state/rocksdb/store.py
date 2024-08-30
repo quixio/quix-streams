@@ -107,7 +107,7 @@ class RocksDBStore(Store):
 
         self._partitions[partition] = store_partition
         logger.debug(
-            f'Assigned store partition "%s[%s]" (topic "%s")',
+            'Assigned store partition "%s[%s]" (topic "%s")',
             self._name,
             partition,
             self._topic,
