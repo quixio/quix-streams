@@ -283,4 +283,3 @@ class PollingSource(Source):
 
         or raise a `StopIteration` to shutdown the source.
         """
-        raise NotImplementedError(self.poll)
