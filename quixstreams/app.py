@@ -116,7 +116,7 @@ class Application:
         on_message_processed: Optional[MessageProcessedCallback] = None,
         consumer_poll_timeout: float = 1.0,
         producer_poll_timeout: float = 0.0,
-        loglevel: Optional[LogLevel] = "INFO",
+        loglevel: Optional[Union[int, str]] = "INFO",
         auto_create_topics: bool = True,
         use_changelog_topics: bool = True,
         quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
@@ -199,6 +199,9 @@ class Application:
             instead of the default one.
             > NOTE: It is recommended to just use `quix_sdk_token` instead.
         """
+        if isinstance(loglevel, str):
+            loglevel = logging.getLevelNamesMapping().get(loglevel)
+
         configure_logging(loglevel=loglevel)
 
         producer_extra_config = producer_extra_config or {}
@@ -795,8 +798,8 @@ class Application:
     def _exception_handler(self, exc_type, exc_val, exc_tb):
         fail = False
 
-        # Sources and the application are independant, if a source fails
-        # the application can shutdown gracefully.
+        # Sources and the application are independent.
+        # If a source fails, the application can shutdown gracefully.
         if exc_val is not None and exc_type is not SourceException:
             fail = True
 

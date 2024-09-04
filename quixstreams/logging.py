@@ -3,16 +3,7 @@ import logging
 import sys
 from typing import Literal, Optional
 
-__all__ = ("configure_logging", "LogLevel")
-
-LogLevel = Literal[
-    "CRITICAL",
-    "ERROR",
-    "WARNING",
-    "INFO",
-    "DEBUG",
-    "NOTSET",
-]
+__all__ = "configure_logging"
 
 LOGGER_NAME = "quixstreams"
 
@@ -22,7 +13,7 @@ logger = logging.getLogger(LOGGER_NAME)
 
 
 def configure_logging(
-    loglevel: Optional[LogLevel],
+    loglevel: Optional[int],
     name: str = LOGGER_NAME,
     pid: bool = False,
 ) -> bool:
