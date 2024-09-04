@@ -89,7 +89,7 @@ class SourceProcess(multiprocessing.Process):
             logger.exception("Error stopping source")
             self._report_exception(err)
 
-    def _report_exception(self, err: Exception) -> None:
+    def _report_exception(self, err: BaseException) -> None:
         """
         Write an exception to the pipe so the parent process can access it.
         If the exception can't be pickled (for example confluent-kafka C exceptions) raise a RuntimeError.
@@ -140,7 +140,11 @@ class SourceProcess(multiprocessing.Process):
             self.join(self.source.shutdown_timeout)
 
         if self.is_alive():
-            logger.info("Force stopping source %s", self.source)
+            logger.error(
+                "Shutdown timeout (%ss) reached. Force stopping source %s",
+                self.source.shutdown_timeout,
+                self.source,
+            )
             self.kill()
             self.join(self.source.shutdown_timeout)
 
