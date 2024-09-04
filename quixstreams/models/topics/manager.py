@@ -12,7 +12,6 @@ from .exceptions import (
 )
 from .topic import Topic, TopicConfig, TimestampExtractor
 
-
 logger = logging.getLogger(__name__)
 
 __all__ = ("TopicManager",)

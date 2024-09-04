@@ -36,16 +36,19 @@ class BaseSource(ABC):
 
     ```python
     from quixstreams import Application
-    from quixstreams.sources import IterableSource
+    from quixstreams.sources import Source
 
-    def messages():
-        yield "key0", "value0"
-        yield "key1", "value1"
-        yield "key2", "value2"
+    class MySource(Source):
+        def run(self):
+            for _ in range(1000):
+                self.produce(
+                    key="foo",
+                    value=b"foo"
+                )
 
     def main():
         app = Application()
-        source = IterableSource(name="source", callable=messages)
+        source = MySource(name="my_source")
 
         sdf = app.dataframe(source=source)
         sdf.print(metadata=True)
@@ -103,7 +106,7 @@ class BaseSource(ABC):
 
         ```python
         class MySource(BaseSource):
-            def run(self):
+            def start(self):
                 self._running = True
                 while self._running:
                     self._producer.produce(
@@ -170,10 +173,9 @@ class Source(BaseSource):
 
         ```python
         class MySource(Source):
-            def _run(self):
+            def run(self):
                 while self.running:
-                    self._producer.produce(
-                        topic=self._producer_topic,
+                    self.produce(
                         value="foo",
                     )
                     time.sleep(1)
