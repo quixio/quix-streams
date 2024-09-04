@@ -52,16 +52,23 @@ def configure_logging(
         # Skipping logging configuration
         return False
 
-    if logger.handlers:
-        # There's a pre-configured handler for "quixstreams", leave it as it is
-        return False
-
     if pid:
         formatter = (
             f"[%(asctime)s] [%(levelname)s] [{name}] [{os.getpid()}] : %(message)s"
         )
     else:
         formatter = f"[%(asctime)s] [%(levelname)s] [{name}] : %(message)s"
+
+    if logger.handlers:
+        if len(logger.handlers) != 1 or logger.handlers[0] is not _DEFAULT_HANDLER:
+            # There's a pre-configured handler for "quixstreams", leave it as it is
+            return False
+        else:
+            # The pre-configured handler for "quixstreams" is the default handler.
+            # Reconfigure the formatter in case we are in a subprocess and the logger
+            # was configured by mistake by the Application.
+            _DEFAULT_HANDLER.setFormatter(logging.Formatter(formatter))
+            return True
 
     # Configuring logger
     logger.setLevel(loglevel)
