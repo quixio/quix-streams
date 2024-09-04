@@ -1,163 +1,91 @@
 import logging
 
-from typing import Iterable, Optional, Tuple, Callable, Generator
+from typing import Iterator, Callable, Iterable
 
-from quixstreams.models.messages import KafkaMessage
-
-from .base import PollingSource
+from .base import Source
 
 logger = logging.getLogger(__name__)
 
 
-__all__ = (
-    "GeneratorSource",
-    "ValueIterableSource",
-    "KeyValueIterableSource",
-)
+__all__ = ("IterableSource",)
 
 
-class ValueIterableSource(PollingSource):
+class IterableSource(Source):
     """
-    PollingSource implementation that iterate over values with a fix key.
+    Source implementation that iterate over an iterable returned by a callable.
 
     Example Snippet:
 
     ```python
     from quixstreams import Application
-    from quixstreams.sources import ValueIterableSource
+    from quixstreams.sources import IterableSource
 
-    app = Application(broker_address='localhost:9092', consumer_group='group')
-    source = ValueIterableSource(name="my_source", values=range(10))
+    def messages():
+        yield "key0", 0
+        yield "key1", 1
+        yield "key2", 2
 
-    sdf = app.dataframe(source=source)
-    sdf.print()
+    def main():
+        app = Application()
+        source = IterableSource(name="source", callable=messages.items)
 
-    app.run(sdf)
+        sdf = app.dataframe(source=source)
+        sdf.print(metadata=True)
+
+        app.run(sdf)
+
+    if __name__ == "__main__":
+        main()
     ```
+
+    More examples
+
+    ```python
+    messages = {
+        "key0": 0,
+        "key1": 1,
+        "key2": 2,
+    }
+    source = IterableSource(name="source", callable=messages.items)
+    ```
+
+    ```python
+    messages = [("key0", 0), ("key1", 1), ("key2", 2)]
+    source = IterableSource(name="source", callable=lambda: messages)
+    ```
+
     """
 
     def __init__(
         self,
         name: str,
-        values: Iterable[object],
-        key: Optional[object] = None,
-        shutdown_timeout: int = 10,
+        callable: Callable[[], Iterable],
+        key: str = "",
+        shutdown_timeout: float = 10,
     ) -> None:
-        """
-        :param name: The source unique name. Used to generate the default topic
-        :param values: The values iterable.
-        :param key: The fixed key.
-        :param shutdown_timeout: Time in second the application waits for the source to gracefully shutdown
-        """
         super().__init__(name, shutdown_timeout)
 
         self._key = key
-        self._values = iter(values)
+        self._callable = callable
 
-    def poll(self) -> KafkaMessage:
-        data = next(self._values)
+    def _run(self):
+        iterator: Iterator = iter(self._callable())
 
-        if data is None:
-            return data
+        while self.running:
+            try:
+                data = next(iterator)
+            except StopIteration:
+                return
 
-        return self.serialize(key=self._key, value=data)
+            if self._key:
+                key, value = self._key, data
+            else:
+                key, value = data
 
-
-class KeyValueIterableSource(PollingSource):
-    """
-    PollingSource implementation that iterate over an iterable of (key, value)
-
-    Example Snippet:
-
-    ```python
-    from quixstreams import Application
-    from quixstreams.sources import KeyValueIterableSource
-
-    keys = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"]
-    app = Application(broker_address='localhost:9092', consumer_group='group')
-    source = KeyValueIterableSource(name="my_source", iterable=zip(keys, range(10)))
-
-    sdf = app.dataframe(source=source)
-    sdf.print()
-
-    app.run(sdf)
-    ```
-    """
-
-    def __init__(
-        self,
-        name: str,
-        iterable: Iterable[Tuple[object, object]],
-        shutdown_timeout: int = 10,
-    ) -> None:
-        """
-        :param name: The source unique name. Used to generate the default topic
-        :param iterable: The iterable for the (key, value) tuple.
-        :param shutdown_timeout: Time in second the application waits for the source to gracefully shutdown
-        """
-        super().__init__(name, shutdown_timeout)
-
-        self._iterator = iter(iterable)
-
-    def poll(self) -> KafkaMessage:
-        data = next(self._iterator)
-
-        if data is None:
-            return data
-
-        key, value = data
-        return self.serialize(key=key, value=value)
-
-
-class GeneratorSource(PollingSource):
-    """
-    PollingSource implementation that iterator over a generator of (key, value)
-
-    Example Snippet:
-
-    ```python
-    from quixstreams import Application
-    from quixstreams.sources import GeneratorSource
-
-    def messages():
-        yield "one", 1
-        yield "two", 2
-        yield "three", 3
-        yield "four", 4
-
-    app = Application(broker_address='localhost:9092', consumer_group='group')
-    source = GeneratorSource(name="my_source", generator=messages)
-
-    sdf = app.dataframe(source=source)
-    sdf.print()
-
-    app.run(sdf)
-    ```
-    """
-
-    def __init__(
-        self,
-        name: str,
-        generator: Callable[[], Generator[Optional[Tuple[any, any]], None, None]],
-        polling_delay: float = 1,
-        shutdown_timeout: float = 10,
-    ) -> None:
-        super().__init__(name, polling_delay, shutdown_timeout)
-
-        self._generator = generator
-        self._generator_instance: Optional[
-            Generator[Optional[Tuple[any, any]], None, None]
-        ] = None
-
-    def run(self):
-        self._generator_instance = self._generator()
-        super().run()
-
-    def poll(self) -> KafkaMessage:
-        data = next(self._generator_instance)
-
-        if data is None:
-            return data
-
-        key, value = data
-        return self.serialize(key=key, value=value)
+            msg = self.serialize(key=key, value=value)
+            self.produce(
+                value=msg.value,
+                key=msg.key,
+                headers=msg.headers,
+                timestamp=msg.timestamp,
+            )

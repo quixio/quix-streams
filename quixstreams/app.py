@@ -603,13 +603,12 @@ class Application:
         """
         if not source and not topic:
             raise ValueError("one of `source` or `topic` is required")
-        elif source and not topic:
-            topic = source.default_topic()
-            self._topic_manager.register(topic)
+
+        if source:
+            topic = self.add_source(source, topic)
 
         sdf = StreamingDataFrame(
             topic=topic,
-            source=source,
             topic_manager=self._topic_manager,
             processing_context=self._processing_context,
         )
@@ -819,9 +818,6 @@ class Application:
             self._quix_runtime_init()
 
         self._setup_topics()
-
-        if dataframe is not None and dataframe.source:
-            self.add_source(dataframe.source, dataframe.topic)
 
         exit_stack = contextlib.ExitStack()
         exit_stack.enter_context(self._processing_context)

@@ -15,12 +15,12 @@ logger = logging.getLogger(__name__)
 
 class SourceProcess(multiprocessing.Process):
     """
-    An individual source process
+    An implementation of the Source subprocess.
 
-    Used to manage a source and it's process. Handles communication accross the child and parent processes,
-    lifecycle, error handling.
+    It manages a source and its subprocess, handles the communication between the child and parent processes,
+    lifecycle, and error handling.
 
-    Part of the methods are designed to be used from the parent process and other from the child process.
+    Some methods are designed to be used from the parent process, and others from the child process.
     """
 
     def __init__(self, source):
@@ -30,7 +30,7 @@ class SourceProcess(multiprocessing.Process):
         self._exceptions: List[Exception] = []
         self._stopping = False
 
-        # copy parent process loglevel to child process
+        # copy parent process log level to the child process
         self._loglevel = logging.getLogger(LOGGER_NAME).level
 
         # reader and writer pipe used to communicate from the child to the parent process
@@ -47,26 +47,19 @@ class SourceProcess(multiprocessing.Process):
 
     def run(self) -> None:
         """
-        Entrypoing of the child process
+        An entrypoint of the child process.
 
         Responsible for:
-            * Configuring the signal handlers to properly handle shutdown
-            * Execute the source `run` method
-            * Report the source exception to the parent process
-            * Execute cleanup
+            * Configuring the signal handlers to handle shutdown properly
+            * Execution of the source `run` method
+            * Reporting the source exceptions to the parent process
         """
         self._setup_signal_handlers()
         configure_logging(self._loglevel, str(self.source), pid=True)
         logger.info("Source started")
 
         try:
-            try:
-                self.source.run()
-            except BaseException:
-                self._cleanup(failed=True)
-                raise
-            else:
-                self._cleanup(failed=False)
+            self.source.run()
         except BaseException as err:
             logger.exception(f"Error in source")
             self._report_exception(err)
@@ -79,16 +72,9 @@ class SourceProcess(multiprocessing.Process):
             "s" if threadcount > 1 else "",
         )
 
-    def _cleanup(self, failed: bool) -> None:
-        """
-        Execute post-run cleanup
-        """
-        logger.debug("Cleaning up source")
-        self.source.cleanup(failed)
-
     def _stop(self, signum, _):
         """
-        Ask the source to stop execution
+        Stop the source execution.
         """
         signame = signal.Signals(signum).name
         logger.debug("Source received %s, stopping", signame)
@@ -105,7 +91,7 @@ class SourceProcess(multiprocessing.Process):
 
     def _report_exception(self, err: Exception) -> None:
         """
-        Write exception to the pipe so the parent process can access it.
+        Write an exception to the pipe so the parent process can access it.
         If the exception can't be pickled (for example confluent-kafka C exceptions) raise a RuntimeError.
         """
         try:
@@ -119,10 +105,10 @@ class SourceProcess(multiprocessing.Process):
         logger.info("Starting source %s", self.source)
         return super().start()
 
-    def raise_for_error(self) -> bool:
+    def raise_for_error(self) -> None:
         """
-        If the child process has terminated with an exception raises a
-        :class:`quixstreams.sources.manager.SourceException`.
+        Raise a :class:`quixstreams.sources.manager.SourceException`
+        if the child process was terminated with an exception.
         """
         if super().is_alive():
             return
@@ -142,11 +128,11 @@ class SourceProcess(multiprocessing.Process):
 
     def stop(self):
         """
-        Handle shutdown of the source and the associated process
+        Handle shutdown of the source and its subprocess.
 
-        First try a graceful shutdown by sending a SIGTERM and waiting up to
+        First, it tries to shut down gracefully by sending a SIGTERM and waiting up to
         `source.shutdown_timeout` seconds for the process to exit. If the process
-        is still alive force kill it with a SIGKILL/
+        is still alive, it will kill it with a SIGKILL.
         """
         if self.is_alive():
             logger.info("Stopping source %s", self.source)

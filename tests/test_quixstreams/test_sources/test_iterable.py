@@ -1,61 +1,83 @@
 import pytest
 
+from unittest.mock import create_autospec
+
+from quixstreams.rowproducer import RowProducer
 from quixstreams.models.topics import Topic
-from quixstreams.models.messages import KafkaMessage
-from quixstreams.sources.iterable import ValueIterableSource, KeyValueIterableSource
+from quixstreams.sources.iterable import IterableSource
 
 
 class TestIterableSource:
-    def test_valueiterable_source(self):
-        source = ValueIterableSource(
-            name="test-source", key="test", values=iter(range(10))
+    @pytest.fixture
+    def producer(self):
+        producer = create_autospec(RowProducer)
+        producer.flush.return_value = 0
+        return producer
+
+    def test_iterable_source_fixed_key(self, producer):
+        messages = [0, 1, 2]
+
+        source = IterableSource(
+            name="test-source", key="test", callable=lambda: messages
         )
-        source.configure(Topic("test-topic", None, value_serializer="json"), None)
-
-        result = []
-        while len(result) < 10:
-            result.append(source.poll())
-
-        assert len(result) == 10
-        assert isinstance(result[0], KafkaMessage)
-        assert result[0].key == "test"
-        assert result[0].value == b"0"
-        assert result[9].key == "test"
-        assert result[9].value == b"9"
-
-    def test_keyvalueiterable_source(self):
-        source = KeyValueIterableSource(
-            name="test-source", iterable=zip(range(10), range(10))
+        source.configure(
+            producer=producer, topic=Topic("test-topic", None, value_serializer="json")
         )
-        source.configure(Topic("test-topic", None, value_serializer="json"), None)
+        source.run()
 
-        result = []
-        while len(result) < 10:
-            result.append(source.poll())
+        producer.produce.assert_called()
+        producer.produce.call_count == 3
 
-        assert len(result) == 10
-        assert isinstance(result[0], KafkaMessage)
-        assert result[0].key == 0
-        assert result[0].value == b"0"
-        assert result[9].key == 9
-        assert result[9].value == b"9"
+        calls = producer.produce.call_args_list
+        assert calls[0].kwargs["key"] == "test"
+        assert calls[0].kwargs["value"] == b"0"
+        assert calls[2].kwargs["key"] == "test"
+        assert calls[2].kwargs["value"] == b"2"
 
-    def test_valueiterable_source_with_error(self):
+    def test_iterable_source(self, producer):
+        messages = {
+            "key0": 0,
+            "key1": 1,
+            "key2": 2,
+        }
+
+        source = IterableSource(name="test-source", callable=messages.items)
+        source.configure(
+            producer=producer, topic=Topic("test-topic", None, value_serializer="json")
+        )
+        source.run()
+
+        producer.produce.assert_called()
+        producer.produce.call_count == 3
+
+        calls = producer.produce.call_args_list
+        assert calls[0].kwargs["key"] == "key0"
+        assert calls[0].kwargs["value"] == b"0"
+        assert calls[2].kwargs["key"] == "key2"
+        assert calls[2].kwargs["value"] == b"2"
+
+    def test_iterable_source_with_error(self, producer):
         def values():
-            yield 0
-            yield 1
-            yield 2
+            yield "test", 0
+            yield "test", 1
+            yield "test", 2
             raise RuntimeError("test error")
 
-        source = ValueIterableSource(name="test-source", key="test", values=values())
-        source.configure(Topic("test-topic", None, value_serializer="json"), None)
+        source = IterableSource(name="test-source", callable=values)
+        source.configure(
+            producer=producer, topic=Topic("test-topic", None, value_serializer="json")
+        )
 
-        result = []
-        with pytest.raises(RuntimeError):
-            while len(result) < 4:
-                result.append(source.poll())
+        with pytest.raises(RuntimeError) as exc_info:
+            source.run()
 
-        assert len(result) == 3
-        assert isinstance(result[0], KafkaMessage)
-        assert result[0].key == "test"
-        assert result[0].value == b"0"
+        assert str(exc_info.value) == "test error"
+
+        producer.produce.assert_called()
+        producer.produce.call_count == 3
+
+        calls = producer.produce.call_args_list
+        assert calls[0].kwargs["key"] == "test"
+        assert calls[0].kwargs["value"] == b"0"
+        assert calls[2].kwargs["key"] == "test"
+        assert calls[2].kwargs["value"] == b"2"

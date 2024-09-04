@@ -138,9 +138,7 @@ class DummySource(Source):
         self.error_in = error_in or []
         self.pickeable_error = pickeable_error
 
-    def run(self):
-        self._running = threading.Event()
-
+    def _run(self):
         for value in self.values:
             msg = self.serialize(key=self.key, value=value)
             self.produce(value=msg.value, key=msg.key)
@@ -151,16 +149,18 @@ class DummySource(Source):
         if self.finished:
             self.finished.set()
 
-        self._running.wait()
+        while self.running:
+            time.sleep(0.1)
 
     def cleanup(self, failed):
         if "cleanup" in self.error_in:
             self.error("test cleanup error")
+        super().cleanup(failed)
 
     def stop(self):
         if "stop" in self.error_in:
             self.error("test stop error")
-        self._running.set()
+        super().stop()
 
     def error(self, msg):
         if self.pickeable_error:

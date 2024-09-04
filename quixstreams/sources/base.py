@@ -1,4 +1,3 @@
-import threading
 import logging
 
 from abc import ABC, abstractmethod
@@ -6,7 +5,7 @@ from typing import Optional, Union
 
 
 from quixstreams.models.messages import KafkaMessage
-from quixstreams.models.topics import TopicConfig, Topic
+from quixstreams.models.topics import Topic
 from quixstreams.models.types import Headers
 from quixstreams.rowproducer import RowProducer
 from quixstreams.checkpointing.exceptions import CheckpointProducerTimeout
@@ -17,7 +16,6 @@ logger = logging.getLogger(__name__)
 __all__ = (
     "BaseSource",
     "Source",
-    "PollingSource",
 )
 
 
@@ -29,9 +27,34 @@ class BaseSource(ABC):
 
     To create your own source you need to implement:
         * `run`
-        * `cleanup`
         * `stop`
         * `default_topic`
+
+    You can connect a source to a StreamingDataframe using the Application.
+
+    Example snippet:
+
+    ```python
+    from quixstreams import Application
+    from quixstreams.sources import IterableSource
+
+    def messages():
+        yield "key0", "value0"
+        yield "key1", "value1"
+        yield "key2", "value2"
+
+    def main():
+        app = Application()
+        source = IterableSource(name="source", callable=messages)
+
+        sdf = app.dataframe(source=source)
+        sdf.print(metadata=True)
+
+        app.run(sdf)
+
+    if __name__ == "__main__":
+        main()
+    ```
     """
 
     # time in seconds the application will wait for the source to stop.
@@ -46,7 +69,7 @@ class BaseSource(ABC):
         """
         This method is triggered when the source is registered to the Application.
 
-        It's used to configure the source with the kafka producer and the topic it should use
+        It configures the source's Kafka producer and the topic it will produce to.
         """
         self._producer = producer
         self._producer_topic = topic
@@ -65,16 +88,8 @@ class BaseSource(ABC):
         """
         This method is triggered in the subprocess when the source is started.
 
-        The subprocess will run as long as the run method execute. You should use it to fetch data and produce it to kafka.
-        """
-
-    @abstractmethod
-    def cleanup(self, failed: bool) -> None:
-        """
-        This method is triggered once the `run` method completes.
-
-        You can use it to perform any kind of shutting down cleanup. For example
-        flushing the producer.
+        The subprocess will run as long as the run method executes.
+        Use it to fetch data and produce it to Kafka.
         """
 
     @abstractmethod
@@ -82,7 +97,7 @@ class BaseSource(ABC):
         """
         This method is triggered when the application is shutting down.
 
-        The source should make sure it's `run` method completes soon.
+        The source must ensure that the `run` method is completed soon.
 
         Example Snippet:
 
@@ -105,9 +120,9 @@ class BaseSource(ABC):
     @abstractmethod
     def default_topic(self) -> Topic:
         """
-        This method is triggered when the user hasn't specified a topic for the source.
+        This method is triggered when the topic is not provided to the source.
 
-        The source should return a default topic configuration
+        The source must return a default topic configuration.
         """
 
 
@@ -117,11 +132,18 @@ class Source(BaseSource):
 
     Implementation for the abstract method:
         * `default_topic`
+        * `run`
+        * `stop`
 
     Helper methods
         * serialize
         * produce
         * flush
+
+    Helper property
+        * running
+
+    Subclass it and implement the `_run` method to fetch data and produce it to Kafka.
     """
 
     def __init__(self, name: str, shutdown_timeout: float = 10) -> None:
@@ -135,6 +157,73 @@ class Source(BaseSource):
         self.name = name
 
         self.shutdown_timeout = shutdown_timeout
+        self._running = False
+
+    @property
+    def running(self) -> bool:
+        """
+        Property indicating if the source is running.
+
+        The `stop` method will set it to `False`. Use it to stop the source gracefully.
+
+        Example snippet:
+
+        ```python
+        class MySource(Source):
+            def _run(self):
+                while self.running:
+                    self._producer.produce(
+                        topic=self._producer_topic,
+                        value="foo",
+                    )
+                    time.sleep(1)
+        ```
+        """
+        return self._running
+
+    def cleanup(self, failed: bool) -> None:
+        """
+        This method is triggered once the `_run` method completes.
+
+        Use it to clean up the resources and shut down the source gracefully.
+
+        It flush the producer when `_run` completes successfully.
+        """
+        if not failed:
+            self.flush(self.shutdown_timeout / 2)
+
+    def stop(self) -> None:
+        """
+        This method is triggered when the application is shutting down.
+
+        It sets the `running` property to `False`.
+        """
+        self._running = False
+        super().stop()
+
+    def run(self):
+        """
+        This method is triggered in the subprocess when the source is started.
+
+        It marks the source as running, execute it and ensure cleanup happens.
+        """
+        self._running = True
+        try:
+            self._run()
+        except BaseException:
+            self.cleanup(failed=True)
+            raise
+        else:
+            self.cleanup(failed=False)
+
+    @abstractmethod
+    def _run(self):
+        """
+        This method is triggered in the subprocess when the source is started.
+
+        The subprocess will run as long as the run method executes.
+        Use it to fetch data and produce it to Kafka.
+        """
 
     def serialize(
         self,
@@ -144,7 +233,7 @@ class Source(BaseSource):
         timestamp_ms: Optional[int] = None,
     ) -> KafkaMessage:
         """
-        Serialize data into a :class:`quixstreams.models.messages.KafkaMessage` using the producer topic serializers.
+        Serialize data to bytes using the producer topic serializers and return a :class:`quixstreams.models.messages.KafkaMessage` .
 
         :return: :class:`quixstreams.models.messages.KafkaMessage`
         """
@@ -163,7 +252,7 @@ class Source(BaseSource):
         buffer_error_max_tries: int = 3,
     ) -> None:
         """
-        Produce data to kafka using the source topic.
+        Produce a message to the configured source topic in Kafka.
         """
 
         self._producer.produce(
@@ -181,7 +270,7 @@ class Source(BaseSource):
         """
         This method flush the producer.
 
-        It ensure all message are successfully delived to kafka
+        It ensures all messages are successfully delivered to Kafka.
 
         :param float timeout: time to attempt flushing (seconds).
             None use producer default or -1 is infinite. Default: None
@@ -197,7 +286,8 @@ class Source(BaseSource):
 
     def default_topic(self) -> Topic:
         """
-        Return a topic matching the source name.
+        Return a default topic matching the source name.
+        The default topic will not be used if the topic has already been provided to the source.
 
         :return: `:class:`quixstreams.models.topics.Topic`
         """
@@ -209,77 +299,3 @@ class Source(BaseSource):
 
     def __repr__(self):
         return self.name
-
-
-class PollingSource(Source):
-    """
-    Source implementation for polling sources
-
-    Periodically call the `poll` method to get a new message.
-    """
-
-    def __init__(
-        self,
-        name: str,
-        polling_delay: float = 1,
-        shutdown_timeout: float = 10,
-    ) -> None:
-        """
-        :param name: The source unique name. Used to generate the topic configurtion
-        :param polling_delay: Time in second the source will sleep when `poll` returns `None`
-        :param shutdown_timeout: Time in second the application waits for the source to gracefully shutdown
-        """
-        super().__init__(name, shutdown_timeout)
-
-        self._polling_delay = polling_delay
-        self._stopping: Optional[threading.Event] = None
-
-    def run(self) -> None:
-        super().run()
-
-        self._stopping = threading.Event()
-        while not self._stopping.is_set():
-            try:
-                msg = self.poll()
-            except StopIteration:
-                return
-
-            if msg is None:
-                self.sleep(self._polling_delay)
-                self._producer.poll()
-                continue
-
-            self.produce(
-                key=msg.key,
-                value=msg.value,
-                headers=msg.headers,
-                timestamp=msg.timestamp,
-            )
-
-    def sleep(self, seconds: float):
-        """
-        Sleep up to `seconds` seconds or raise `StopIteration` to shutdown the source
-        """
-        if self._stopping.wait(seconds):
-            raise StopIteration(f"{self} shutdown")
-
-    def stop(self) -> None:
-        if self._stopping is not None:
-            self._stopping.set()
-        super().stop()
-
-    def cleanup(self, failed: bool) -> None:
-        super().cleanup(failed)
-        self.flush(self.shutdown_timeout / 2)
-
-    @abstractmethod
-    def poll(self) -> Optional[KafkaMessage]:
-        """
-        This method is triggered when the source needs new data
-
-        You can return :
-            * a :class:`quixstreams.models.messages.KafkaMessage` to produce it
-            * `None` to make the source sleep for `polling_delay`
-
-        or raise a `StopIteration` to shutdown the source.
-        """

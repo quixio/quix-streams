@@ -138,7 +138,6 @@ class StreamingDataFrame(BaseStreaming):
         processing_context: ProcessingContext,
         stream: Optional[Stream] = None,
         branches: Optional[Dict[str, Stream]] = None,
-        source: Optional[BaseSource] = None,
     ):
         self._stream: Stream = stream or Stream()
         self._topic = topic
@@ -147,7 +146,6 @@ class StreamingDataFrame(BaseStreaming):
         self._processing_context = processing_context
         self._producer = processing_context.producer
         self._locked = False
-        self._source = source
 
     @property
     def processing_context(self) -> ProcessingContext:
@@ -160,10 +158,6 @@ class StreamingDataFrame(BaseStreaming):
     @property
     def topic(self) -> Topic:
         return self._topic
-
-    @property
-    def source(self) -> BaseSource:
-        return self._source
 
     @property
     def topics_to_subscribe(self) -> List[Topic]:
@@ -1168,7 +1162,6 @@ class StreamingDataFrame(BaseStreaming):
             processing_context=self._processing_context,
             topic_manager=self._topic_manager,
             branches=deepcopy(self._branches),
-            source=self._source,
         )
         return clone
 
