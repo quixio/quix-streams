@@ -84,11 +84,11 @@ class BaseSource(ABC):
         return self._producer_topic
 
     @abstractmethod
-    def run(self) -> None:
+    def start(self) -> None:
         """
         This method is triggered in the subprocess when the source is started.
 
-        The subprocess will run as long as the run method executes.
+        The subprocess will run as long as the start method executes.
         Use it to fetch data and produce it to Kafka.
         """
 
@@ -201,15 +201,15 @@ class Source(BaseSource):
         self._running = False
         super().stop()
 
-    def run(self):
+    def start(self):
         """
         This method is triggered in the subprocess when the source is started.
 
-        It marks the source as running, execute it and ensure cleanup happens.
+        It marks the source as running, execute it's run method and ensure cleanup happens.
         """
         self._running = True
         try:
-            self._run()
+            self.run()
         except BaseException:
             self.cleanup(failed=True)
             raise
@@ -217,7 +217,7 @@ class Source(BaseSource):
             self.cleanup(failed=False)
 
     @abstractmethod
-    def _run(self):
+    def run(self):
         """
         This method is triggered in the subprocess when the source is started.
 

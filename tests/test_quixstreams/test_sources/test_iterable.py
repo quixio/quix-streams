@@ -23,7 +23,7 @@ class TestIterableSource:
         source.configure(
             producer=producer, topic=Topic("test-topic", None, value_serializer="json")
         )
-        source.run()
+        source.start()
 
         producer.produce.assert_called()
         producer.produce.call_count == 3
@@ -45,7 +45,7 @@ class TestIterableSource:
         source.configure(
             producer=producer, topic=Topic("test-topic", None, value_serializer="json")
         )
-        source.run()
+        source.start()
 
         producer.produce.assert_called()
         producer.produce.call_count == 3
@@ -69,7 +69,7 @@ class TestIterableSource:
         )
 
         with pytest.raises(RuntimeError) as exc_info:
-            source.run()
+            source.start()
 
         assert str(exc_info.value) == "test error"
 

@@ -59,7 +59,7 @@ class SourceProcess(multiprocessing.Process):
         logger.info("Source started")
 
         try:
-            self.source.run()
+            self.source.start()
         except BaseException as err:
             logger.exception(f"Error in source")
             self._report_exception(err)

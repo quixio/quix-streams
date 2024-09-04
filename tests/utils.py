@@ -138,7 +138,7 @@ class DummySource(Source):
         self.error_in = error_in or []
         self.pickeable_error = pickeable_error
 
-    def _run(self):
+    def run(self):
         for value in self.values:
             msg = self.serialize(key=self.key, value=value)
             self.produce(value=msg.value, key=msg.key)
