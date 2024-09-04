@@ -14,6 +14,15 @@ LogLevel = Literal[
     "NOTSET",
 ]
 
+LogLevelMapping = {
+    "CRITICAL": 50,
+    "ERROR": 40,
+    "WARNING": 30,
+    "INFO": 20,
+    "DEBUG": 10,
+    "NOSET": 0,
+}
+
 LOGGER_NAME = "quixstreams"
 
 _DEFAULT_HANDLER = logging.StreamHandler(stream=sys.stderr)
