@@ -93,7 +93,7 @@ class Topic:
     def __init__(
         self,
         name: str,
-        config: TopicConfig,
+        config: Optional[TopicConfig] = None,
         value_deserializer: Optional[DeserializerType] = None,
         key_deserializer: Optional[DeserializerType] = BytesDeserializer(),
         value_serializer: Optional[SerializerType] = None,
@@ -110,24 +110,13 @@ class Topic:
         :param timestamp_extractor: a callable that returns a timestamp in
             milliseconds from a deserialized message.
         """
-        self._name = name
-        self._config = config
+        self.name = name
+        self.config = config
         self._key_serializer = _get_serializer(key_serializer)
         self._key_deserializer = _get_deserializer(key_deserializer)
         self._value_serializer = _get_serializer(value_serializer)
         self._value_deserializer = _get_deserializer(value_deserializer)
         self._timestamp_extractor = timestamp_extractor
-
-    @property
-    def name(self) -> str:
-        """
-        Topic name
-        """
-        return self._name
-
-    @property
-    def config(self) -> TopicConfig:
-        return self._config
 
     def row_serialize(self, row: Row, key: Any) -> KafkaMessage:
         """

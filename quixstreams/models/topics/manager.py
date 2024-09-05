@@ -283,6 +283,23 @@ class TopicManager:
         self._topics[name] = topic
         return topic
 
+    def register(self, topic: Topic):
+        """
+        Register an already generated :class:`quixstreams.models.topics.Topic` to the topic manager.
+
+        The topic name and config can be updated by the topic manager.
+
+        :param topic: The topic to register
+        """
+        topic.name = self._resolve_topic_name(topic.name)
+        if topic.config is None:
+            topic.config = TopicConfig(
+                num_partitions=self.default_num_partitions,
+                replication_factor=self.default_replication_factor,
+                extra_config=self.default_extra_config,
+            )
+        self._topics[topic.name] = topic
+
     def repartition_topic(
         self,
         operation: str,

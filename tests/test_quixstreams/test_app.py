@@ -30,7 +30,8 @@ from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
 from quixstreams.sinks import SinkBatch, SinkBackpressureError
 from quixstreams.state import State
-from tests.utils import DummySink
+from quixstreams.sources import SourceException, multiprocessing
+from tests.utils import DummySink, DummySource
 
 
 def _stop_app_on_future(app: Application, future: Future, timeout: float):
@@ -2089,3 +2090,112 @@ class TestApplicationSink:
                 [TopicPartition(topic=topic.name, partition=0)]
             )
         assert committed.offset == total_messages
+
+
+class TestApplicationSource:
+
+    MESSAGES_COUNT = 3
+
+    def wait_finished(self, app, event, timeout=15.0):
+        try:
+            event.wait(timeout)
+        finally:
+            app.stop()
+
+    def test_run_with_source_success(
+        self,
+        app_factory,
+        executor,
+    ):
+
+        done = Future()
+        processed_count = 0
+
+        def on_message_processed(topic_, partition, offset):
+            # Set the callback to track total messages processed
+            # The callback is not triggered if processing fails
+            nonlocal processed_count
+
+            processed_count += 1
+            # Stop processing after consuming all the messages
+            if processed_count == self.MESSAGES_COUNT:
+                done.set_result(True)
+
+        app = app_factory(
+            auto_offset_reset="earliest", on_message_processed=on_message_processed
+        )
+        source = DummySource(values=range(self.MESSAGES_COUNT))
+        sdf = app.dataframe(source=source)
+
+        executor.submit(_stop_app_on_future, app, done, 10.0)
+
+        values = []
+        sdf = sdf.apply(lambda value: values.append(value))
+        app.run(sdf)
+
+        assert values == [0, 1, 2]
+
+    def test_run_source_only(self, app_factory, executor):
+
+        done = multiprocessing.Event()
+
+        topic_name = str(uuid.uuid4())
+        app = app_factory(
+            auto_offset_reset="earliest",
+        )
+
+        source = DummySource(values=range(self.MESSAGES_COUNT), finished=done)
+        app.add_source(source, topic=app.topic(topic_name))
+
+        executor.submit(self.wait_finished, app, done, 15.0)
+
+        app._run()
+
+        results = []
+        with app.get_consumer() as consumer:
+            consumer.subscribe(topics=[topic_name])
+
+            for _ in range(self.MESSAGES_COUNT):
+                msg = consumer.poll()
+                results.append(msg.value())
+
+        assert results == [b"0", b"1", b"2"]
+
+    @pytest.mark.parametrize(
+        "raise_is,exitcode", [("run", 0), ("cleanup", 0), ("stop", -9)]
+    )
+    @pytest.mark.parametrize("pickleable", [True, False])
+    def test_source_with_error(
+        self, app_factory, executor, raise_is, exitcode, pickleable
+    ):
+        done = multiprocessing.Event()
+
+        app = app_factory(
+            auto_offset_reset="earliest",
+        )
+
+        source = DummySource(
+            values=range(self.MESSAGES_COUNT),
+            finished=done,
+            error_in=raise_is,
+            pickeable_error=pickleable,
+        )
+        sdf = app.dataframe(source=source)
+
+        executor.submit(self.wait_finished, app, done, 15.0)
+
+        # The app stops on source error
+        try:
+            with pytest.raises(SourceException) as exc:
+                app.run(sdf)
+        finally:
+            # shutdown the thread waiting for exit
+            done.set()
+
+        assert exc.value.exitcode == exitcode
+        assert exc.value.__cause__
+        if pickleable:
+            assert isinstance(exc.value.__cause__, ValueError)
+        else:
+            assert isinstance(exc.value.__cause__, RuntimeError)
+        assert str(exc.value.__cause__) == f"test {raise_is} error"

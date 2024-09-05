@@ -19,6 +19,7 @@ from quixstreams.state import StateStoreManager
 from quixstreams.state.exceptions import StoreNotRegisteredError, StoreTransactionFailed
 from quixstreams.state.rocksdb import RocksDBPartitionTransaction
 from tests.utils import DummySink
+from quixstreams.sources.manager import SourceManager
 
 
 @pytest.fixture()
