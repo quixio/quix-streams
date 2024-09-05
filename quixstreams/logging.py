@@ -1,7 +1,7 @@
 import os
 import logging
 import sys
-from typing import Literal, Optional
+from typing import Literal, Optional, Union
 
 __all__ = ("configure_logging", "LogLevel")
 
@@ -14,15 +14,6 @@ LogLevel = Literal[
     "NOTSET",
 ]
 
-LogLevelMapping = {
-    "CRITICAL": 50,
-    "ERROR": 40,
-    "WARNING": 30,
-    "INFO": 20,
-    "DEBUG": 10,
-    "NOSET": 0,
-}
-
 LOGGER_NAME = "quixstreams"
 
 _DEFAULT_HANDLER = logging.StreamHandler(stream=sys.stderr)
@@ -31,7 +22,7 @@ logger = logging.getLogger(LOGGER_NAME)
 
 
 def configure_logging(
-    loglevel: Optional[LogLevel],
+    loglevel: Optional[Union[int, LogLevel]],
     name: str = LOGGER_NAME,
     pid: bool = False,
 ) -> bool:

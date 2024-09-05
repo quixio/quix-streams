@@ -22,7 +22,7 @@ from .error_callbacks import (
     default_on_processing_error,
 )
 from .kafka import AutoOffsetReset, Producer, Consumer, ConnectionConfig
-from .logging import configure_logging, LogLevel, LogLevelMapping
+from .logging import configure_logging, LogLevel
 from .models import (
     Topic,
     TopicConfig,
@@ -199,9 +199,6 @@ class Application:
             instead of the default one.
             > NOTE: It is recommended to just use `quix_sdk_token` instead.
         """
-        if isinstance(loglevel, str):
-            loglevel = LogLevelMapping[loglevel]
-
         configure_logging(loglevel=loglevel)
 
         producer_extra_config = producer_extra_config or {}
