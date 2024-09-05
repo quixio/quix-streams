@@ -67,7 +67,7 @@ class SourceProcess(multiprocessing.Process):
         try:
             self.source.start()
         except BaseException as err:
-            logger.exception(f"Error in source")
+            logger.exception("Error in source")
             self._report_exception(err)
 
         logger.info("Source completed")

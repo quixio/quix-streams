@@ -44,7 +44,6 @@ class IgnoreDivisibleBy3Deserializer(IntegerDeserializer):
 
 
 class TestTopic:
-
     def test_repr(self, topic_manager_topic_factory):
         topic = topic_manager_topic_factory(name="foo")
         assert str(topic) == '<Topic name="foo">'

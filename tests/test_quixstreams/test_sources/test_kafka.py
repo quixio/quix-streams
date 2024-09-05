@@ -294,7 +294,6 @@ class TestKafkaReplicatorSource(Base):
 
 
 class TestQuixEnvironmentSource(Base):
-
     QUIX_WORKSPACE_ID = "my_workspace_id"
 
     def source(self, config, topic):

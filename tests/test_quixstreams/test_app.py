@@ -2045,7 +2045,6 @@ class TestApplicationSink:
 
 
 class TestApplicationSource:
-
     MESSAGES_COUNT = 3
 
     def wait_finished(self, app, event, timeout=15.0):
@@ -2059,7 +2058,6 @@ class TestApplicationSource:
         app_factory,
         executor,
     ):
-
         done = Future()
         processed_count = 0
 
@@ -2088,7 +2086,6 @@ class TestApplicationSource:
         assert values == [0, 1, 2]
 
     def test_run_source_only(self, app_factory, executor):
-
         done = multiprocessing.Event()
 
         topic_name = str(uuid.uuid4())
