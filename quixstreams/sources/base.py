@@ -30,6 +30,9 @@ class BaseSource(ABC):
         * `stop`
         * `default_topic`
 
+    `BaseSource` is the most basic interface, and the framework expects every
+    sources to implement it. Use `Source` to benefit from a base implementation.
+
     You can connect a source to a StreamingDataframe using the Application.
 
     Example snippet:
@@ -135,7 +138,7 @@ class Source(BaseSource):
 
     Implementation for the abstract method:
         * `default_topic`
-        * `run`
+        * `start`
         * `stop`
 
     Helper methods
