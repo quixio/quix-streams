@@ -54,10 +54,15 @@ class CSVSource(Source):
                 except StopIteration:
                     return
 
+                # if a timestamp column exist with no value timestamp is ""
+                timestamp = item.get("timestamp") or None
+                if timestamp is not None:
+                    timestamp = int(timestamp)
+
                 msg = self.serialize(
                     key=key_deserializer(item["key"]),
                     value=value_deserializer(item["value"]),
-                    timestamp_ms=int(item["timestamp"]) if item["timestamp"] else None,
+                    timestamp_ms=timestamp,
                 )
 
                 self.produce(
