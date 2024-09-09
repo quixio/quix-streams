@@ -149,7 +149,7 @@ class Source(BaseSource):
     Helper property
         * running
 
-    Subclass it and implement the `_run` method to fetch data and produce it to Kafka.
+    Subclass it and implement the `run` method to fetch data and produce it to Kafka.
     """
 
     def __init__(self, name: str, shutdown_timeout: float = 10) -> None:
@@ -188,7 +188,7 @@ class Source(BaseSource):
 
     def cleanup(self, failed: bool) -> None:
         """
-        This method is triggered once the `_run` method completes.
+        This method is triggered once the `run` method completes.
 
         Use it to clean up the resources and shut down the source gracefully.
 
