@@ -16,12 +16,10 @@ class TestGetWindowRanges:
         ],
     )
     def test_get_window_ranges_with_step(self, timestamp, duration, step, expected):
-        assert (
-            get_window_ranges(
-                timestamp_ms=timestamp, duration_ms=duration, step_ms=step
-            )
-            == expected
+        result = get_window_ranges(
+            timestamp_ms=timestamp, duration_ms=duration, step_ms=step
         )
+        assert list(result) == expected
 
     @pytest.mark.parametrize(
         "timestamp, duration, expected",
@@ -31,4 +29,5 @@ class TestGetWindowRanges:
         ],
     )
     def test_get_window_ranges_no_step(self, timestamp, duration, expected):
-        assert get_window_ranges(timestamp, duration) == expected
+        result = get_window_ranges(timestamp, duration)
+        assert list(result) == expected
