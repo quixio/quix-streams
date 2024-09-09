@@ -22,16 +22,16 @@ class CSVSource(Source):
         A base CSV source that reads data from a single CSV file.
         Best used with :class:`quixstreams.sinks.csv.CSVSink`.
 
-        Required column: key, value
-        Optional column: timestamp
+        Required columns: key, value
+        Optional columns: timestamp
 
         :param path: path to the CSV file
         :param dialect: a CSV dialect to use. It affects quoting and delimiters.
             See the ["csv" module docs](https://docs.python.org/3/library/csv.html#csv-fmt-params) for more info.
             Default - `"excel"`.
-        :param key_deseralizer: a callable to convert keys to strings.
+        :param key_deseralizer: a callable to convert strings to key.
             Default - `str`
-        :param value_deserializer: a callable to convert values to strings.
+        :param value_deserializer: a callable to convert strings to value.
             Default - `json.loads`
         """
         super().__init__(name or path, shutdown_timeout)
