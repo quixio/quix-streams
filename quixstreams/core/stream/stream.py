@@ -85,6 +85,7 @@ class Stream:
         self.func = func if func is not None else ApplyFunction(lambda value: value)
         self.parent = parent
         self.merges = []
+        self.merged_by = None
         self.children = set()
         self.generated = monotonic_ns()
         self.pruned = False
@@ -453,7 +454,9 @@ class Stream:
         new_node = self.__class__(func=func, parent=self)
         self.children.add(new_node)
         for node in self.merges:
-            new_node.merges.append(node.__add_func__(func))
+            node.merged_by = node.merged_by or self
+            new_merge_node = node.__add_func__(func)
+            new_node.merges.append(new_merge_node)
         return new_node
 
     def _default_sink(self, value: Any, key: Any, timestamp: int, headers: Any): ...

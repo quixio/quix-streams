@@ -6,3 +6,4 @@ orjson>=3.9,<4
 pydantic>=2.7,<2.8
 pydantic-settings>=2.3,<2.4
 jsonschema>=4.3.0
+graphviz>=0.20.3

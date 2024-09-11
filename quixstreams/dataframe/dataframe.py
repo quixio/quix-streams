@@ -19,6 +19,7 @@ from typing import (
     Collection,
 )
 
+import graphviz
 from typing_extensions import Self
 
 from quixstreams.context import (
@@ -1035,6 +1036,41 @@ class StreamingDataFrame(BaseStreaming):
     def merge(self, *others: Self):
         self._stream = self.stream.merge([other.stream for other in others])
         return self
+
+    def graph(self, filename: str = "./sdf_graph.gv"):
+
+        dag = graphviz.Digraph(comment="SDF")
+        merged_by_dict = {}
+
+        def stream_id(stream):
+            return str(id(stream))
+
+        def add_dag_node(stream):
+            dag.node(
+                stream_id(stream),
+                f"{stream.func.__class__.__name__}: {stream.func.func.__name__}",
+            )
+
+        def add_dag_edge(parent, child):
+            dag.edge(stream_id(parent), stream_id(child))
+
+        def graph_tree(stream):
+            for child in sorted(stream.children, key=lambda node: node.generated):
+                add_dag_node(child)
+                add_dag_edge(stream, child)
+                if child.merged_by:
+                    merged_by_dict[child] = child.merged_by
+                else:
+                    graph_tree(child)
+
+        tree_root = self.stream.full_tree()[0]
+        add_dag_node(tree_root)
+        graph_tree(tree_root)
+        for stream, merger in merged_by_dict.items():
+            for child in merger.children:
+                add_dag_edge(stream, child)
+
+        dag.render(filename, view=True)
 
     def _produce(
         self,
