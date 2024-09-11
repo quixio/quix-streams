@@ -823,7 +823,7 @@ class Application:
         exit_stack.enter_context(self._processing_context)
         exit_stack.enter_context(self._state_manager)
         exit_stack.enter_context(self._consumer)
-        exit_stack.push(self._source_manager.__exit__)
+        exit_stack.enter_context(self._source_manager)
         exit_stack.push(self._exception_handler)
 
         with exit_stack:

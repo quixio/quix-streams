@@ -229,7 +229,6 @@ class SourceManager:
         return False
 
     def __enter__(self):
-        self.start_sources()
         return self
 
     def __exit__(self, *args, **kwargs):
