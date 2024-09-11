@@ -1032,6 +1032,10 @@ class StreamingDataFrame(BaseStreaming):
         # uses apply without returning to make this operation terminal
         self.apply(_sink_callback, metadata=True)
 
+    def merge(self, *others: Self):
+        self._stream = self.stream.merge([other.stream for other in others])
+        return self
+
     def _produce(
         self,
         topic: Topic,

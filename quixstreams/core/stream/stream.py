@@ -83,10 +83,18 @@ class Stream:
             raise ValueError("Provided function must be a subclass of StreamFunction")
 
         self.func = func if func is not None else ApplyFunction(lambda value: value)
+        # self._parent = [parent]
         self.parent = parent
+        self.merges = []
         self.children = set()
         self.generated = monotonic_ns()
         self.pruned = False
+
+    # @property
+    # def parent(self) -> Optional[Self]:
+    #     if self._parent:
+    #         return self._parent[0]
+    #     return self._parent
 
     def __repr__(self) -> str:
         """
@@ -391,6 +399,22 @@ class Stream:
 
         return wrapper
 
+    class MergeFunction(StreamFunction):
+
+        def get_executor(self, *child_executors: VoidExecutor) -> VoidExecutor: ...
+
+    # def merge(self, others: List[Self]):
+    #     new_node = self._add(self.MergeFunction(lambda x: x))
+    #     for other in others:
+    #         new_node._parent.append(other)
+    #         other.children.add(new_node)
+    #     return new_node
+
+    def merge(self, others: List[Self]):
+        for other in others:
+            self.merges.append(other)
+        return self
+
     def _compose(
         self,
         tree: List[Self],
@@ -419,9 +443,10 @@ class Stream:
             elif not allow_expands and func.expand:
                 raise ValueError("Expand functions are not allowed")
 
-            composed = func.get_executor(
-                *composed if isinstance(composed, list) else [composed]
-            )
+            if not isinstance(func, self.MergeFunction):
+                composed = func.get_executor(
+                    *composed if isinstance(composed, list) else [composed]
+                )
 
         return composed
 
@@ -446,6 +471,8 @@ class Stream:
     def _add(self, func: StreamFunction) -> Self:
         new_node = self.__class__(func=func, parent=self)
         self.children.add(new_node)
+        for node in self.merges:
+            new_node.merges.append(node._add(func))
         return new_node
 
     def _default_sink(self, value: Any, key: Any, timestamp: int, headers: Any): ...
