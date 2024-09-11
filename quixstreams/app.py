@@ -823,7 +823,7 @@ class Application:
         exit_stack.enter_context(self._processing_context)
         exit_stack.enter_context(self._state_manager)
         exit_stack.enter_context(self._consumer)
-        exit_stack.enter_context(self._source_manager)
+        exit_stack.push(self._source_manager.__exit__)
         exit_stack.push(self._exception_handler)
 
         with exit_stack:
@@ -862,6 +862,7 @@ class Application:
 
     def _run_sources(self):
         self._running = True
+        self._source_manager.start_sources()
         while self._running:
             self._source_manager.raise_for_error()
 
@@ -946,6 +947,12 @@ class Application:
         if not topic_partitions:
             return
         logger.debug(f"Rebalancing: assigning partitions")
+
+        # Only start the sources once the consumer is assigned. Otherwise a source
+        # can produce data before the consumer starts. If that happens on a new
+        # consumer with `auto_offset_reset` set to `latest` the consumer will not
+        # get the source data.
+        self._source_manager.start_sources()
 
         # First commit everything processed so far because assignment can take a while
         # and fail
