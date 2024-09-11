@@ -238,9 +238,9 @@ class Source(BaseSource):
         timestamp_ms: Optional[int] = None,
     ) -> KafkaMessage:
         """
-        Serialize data to bytes using the producer topic serializers and return a :class:`quixstreams.models.messages.KafkaMessage` .
+        Serialize data to bytes using the producer topic serializers and return a `quixstreams.models.messages.KafkaMessage`.
 
-        :return: :class:`quixstreams.models.messages.KafkaMessage`
+        :return: `quixstreams.models.messages.KafkaMessage`
         """
         return self._producer_topic.serialize(
             key=key, value=value, headers=headers, timestamp_ms=timestamp_ms
@@ -294,7 +294,7 @@ class Source(BaseSource):
         Return a default topic matching the source name.
         The default topic will not be used if the topic has already been provided to the source.
 
-        :return: `:class:`quixstreams.models.topics.Topic`
+        :return: `quixstreams.models.topics.Topic`
         """
         return Topic(
             name=self.name,

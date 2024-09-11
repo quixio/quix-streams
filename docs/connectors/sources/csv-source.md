@@ -4,7 +4,7 @@ A basic source that reads data from a single CSV file.
 
 The CSV source reads the file, produce the data and exit. It doesn't keep any state. On restart, the whole file will be re-consumed.
 
-## How to use CSV Sourceth
+## How to use CSV Source
 
 To use a CSV Source, you need to create and instance of `CSVSource` and pass it to the `app.dataframe()` method.
 

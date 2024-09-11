@@ -114,7 +114,7 @@ class SourceProcess(multiprocessing.Process):
 
     def raise_for_error(self) -> None:
         """
-        Raise a :class:`quixstreams.sources.manager.SourceException`
+        Raise a `quixstreams.sources.manager.SourceException`
         if the child process was terminated with an exception.
         """
         if super().is_alive():
