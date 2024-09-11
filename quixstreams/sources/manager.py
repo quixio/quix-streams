@@ -28,6 +28,7 @@ class SourceProcess(multiprocessing.Process):
         self.source: BaseSource = source
 
         self._exceptions: List[Exception] = []
+        self._started = False
         self._stopping = False
 
         # copy parent process log level to the child process
@@ -35,6 +36,10 @@ class SourceProcess(multiprocessing.Process):
 
         # reader and writer pipe used to communicate from the child to the parent process
         self._rpipe, self._wpipe = multiprocessing.Pipe(duplex=False)
+
+    @property
+    def started(self):
+        return self._started
 
     # --- CHILD PROCESS METHODS --- #
 
@@ -54,6 +59,7 @@ class SourceProcess(multiprocessing.Process):
             * Execution of the source `run` method
             * Reporting the source exceptions to the parent process
         """
+        self._started = True
         self._setup_signal_handlers()
         configure_logging(self._loglevel, str(self.source), pid=True)
         logger.info("Source started")
@@ -103,6 +109,7 @@ class SourceProcess(multiprocessing.Process):
 
     def start(self) -> "SourceProcess":
         logger.info("Starting source %s", self.source)
+        self._started = True
         return super().start()
 
     def raise_for_error(self) -> None:
@@ -186,7 +193,8 @@ class SourceManager:
 
     def start_sources(self) -> None:
         for process in self.processes:
-            process.start()
+            if not process.started:
+                process.start()
 
     def stop_sources(self) -> None:
         for process in self.processes:
@@ -221,7 +229,6 @@ class SourceManager:
         return False
 
     def __enter__(self):
-        self.start_sources()
         return self
 
     def __exit__(self, *args, **kwargs):
