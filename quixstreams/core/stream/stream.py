@@ -83,18 +83,11 @@ class Stream:
             raise ValueError("Provided function must be a subclass of StreamFunction")
 
         self.func = func if func is not None else ApplyFunction(lambda value: value)
-        # self._parent = [parent]
         self.parent = parent
         self.merges = []
         self.children = set()
         self.generated = monotonic_ns()
         self.pruned = False
-
-    # @property
-    # def parent(self) -> Optional[Self]:
-    #     if self._parent:
-    #         return self._parent[0]
-    #     return self._parent
 
     def __repr__(self) -> str:
         """
@@ -132,7 +125,7 @@ class Stream:
             filter_func = FilterWithMetadataFunction(func)
         else:
             filter_func = FilterFunction(func)
-        return self._add(filter_func)
+        return self.__add_func__(filter_func)
 
     def add_apply(
         self,
@@ -165,7 +158,7 @@ class Stream:
             apply_func = ApplyWithMetadataFunction(func, expand=expand)
         else:
             apply_func = ApplyFunction(func, expand=expand)
-        return self._add(apply_func)
+        return self.__add_func__(apply_func)
 
     def add_update(
         self,
@@ -189,7 +182,7 @@ class Stream:
             update_func = UpdateWithMetadataFunction(func)
         else:
             update_func = UpdateFunction(func)
-        return self._add(update_func)
+        return self.__add_func__(update_func)
 
     def add_transform(
         self,
@@ -214,7 +207,7 @@ class Stream:
         :return: a new Stream derived from the current one
         """
 
-        return self._add(TransformFunction(func, expand=expand))
+        return self.__add_func__(TransformFunction(func, expand=expand))
 
     def diff(self, other: "Stream") -> Self:
         """
@@ -399,17 +392,6 @@ class Stream:
 
         return wrapper
 
-    class MergeFunction(StreamFunction):
-
-        def get_executor(self, *child_executors: VoidExecutor) -> VoidExecutor: ...
-
-    # def merge(self, others: List[Self]):
-    #     new_node = self._add(self.MergeFunction(lambda x: x))
-    #     for other in others:
-    #         new_node._parent.append(other)
-    #         other.children.add(new_node)
-    #     return new_node
-
     def merge(self, others: List[Self]):
         for other in others:
             self.merges.append(other)
@@ -443,10 +425,9 @@ class Stream:
             elif not allow_expands and func.expand:
                 raise ValueError("Expand functions are not allowed")
 
-            if not isinstance(func, self.MergeFunction):
-                composed = func.get_executor(
-                    *composed if isinstance(composed, list) else [composed]
-                )
+            composed = func.get_executor(
+                *composed if isinstance(composed, list) else [composed]
+            )
 
         return composed
 
@@ -468,11 +449,11 @@ class Stream:
             raise ValueError("The diff is empty")
         return diff
 
-    def _add(self, func: StreamFunction) -> Self:
+    def __add_func__(self, func: StreamFunction) -> Self:
         new_node = self.__class__(func=func, parent=self)
         self.children.add(new_node)
         for node in self.merges:
-            new_node.merges.append(node._add(func))
+            new_node.merges.append(node.__add_func__(func))
         return new_node
 
     def _default_sink(self, value: Any, key: Any, timestamp: int, headers: Any): ...
