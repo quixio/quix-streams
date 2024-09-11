@@ -33,7 +33,7 @@ You can also implement your own, have a look at [Creating a Custom Source](custo
 
 For good performance, each source runs in a subprocess. Quix Streams automatically manages the subprocess's setting up, monitoring, and tearing down. 
 
-For multiplatform support, Quix Streams starts the source process using the [spawn](https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods) approach. As a side effect, each Source instance must be pickleable. If a source needs to handle unpickleable objects, it's best to initialize those in the source subprocess (in the source `start` method).  
+For multiplatform support, Quix Streams starts the source process using the [spawn](https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods) approach. As a side effect, each Source instance must be pickleable. If a source needs to handle unpickleable objects, it's best to initialize those in the source subprocess (in the `BaseSource.start` or `Source.run` methods).  
 
 ## Topics
 
