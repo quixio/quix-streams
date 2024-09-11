@@ -119,6 +119,12 @@ doc_map = {
             "quixstreams.sinks.base.sink",
         ]
     },
+    "sources.md": {
+        k: None
+        for k in [
+            "quixstreams.sources.base",
+        ]
+    },
 }
 
 # Go over all modules and assign them to doc files
