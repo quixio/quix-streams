@@ -10,7 +10,7 @@
 class BaseSource(ABC)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/docs/sources/quixstreams/sources/base.py#L22)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L22)
 
 This is the base class for all sources.
 
@@ -63,7 +63,7 @@ if __name__ == "__main__":
 def configure(topic: Topic, producer: RowProducer) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/docs/sources/quixstreams/sources/base.py#L74)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L74)
 
 This method is triggered when the source is registered to the Application.
 
@@ -80,7 +80,7 @@ It configures the source's Kafka producer and the topic it will produce to.
 def start() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/docs/sources/quixstreams/sources/base.py#L93)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L93)
 
 This method is triggered in the subprocess when the source is started.
 
@@ -98,7 +98,7 @@ Use it to fetch data and produce it to Kafka.
 def stop() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/docs/sources/quixstreams/sources/base.py#L102)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L102)
 
 This method is triggered when the application is shutting down.
 
@@ -134,7 +134,7 @@ class MySource(BaseSource):
 def default_topic() -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/docs/sources/quixstreams/sources/base.py#L127)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L127)
 
 This method is triggered when the topic is not provided to the source.
 
@@ -148,7 +148,7 @@ The source must return a default topic configuration.
 class Source(BaseSource)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/docs/sources/quixstreams/sources/base.py#L135)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L135)
 
 BaseSource class implementation providing
 
@@ -165,7 +165,7 @@ Helper methods
 Helper property
     * running
 
-Subclass it and implement the `_run` method to fetch data and produce it to Kafka.
+Subclass it and implement the `run` method to fetch data and produce it to Kafka.
 
 <a id="quixstreams.sources.base.Source.__init__"></a>
 
@@ -177,7 +177,7 @@ Subclass it and implement the `_run` method to fetch data and produce it to Kafk
 def __init__(name: str, shutdown_timeout: float = 10) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/docs/sources/quixstreams/sources/base.py#L155)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L155)
 
 
 <br>
@@ -197,7 +197,7 @@ def __init__(name: str, shutdown_timeout: float = 10) -> None
 def running() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/docs/sources/quixstreams/sources/base.py#L169)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L169)
 
 Property indicating if the source is running.
 
@@ -225,9 +225,9 @@ class MySource(Source):
 def cleanup(failed: bool) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/docs/sources/quixstreams/sources/base.py#L189)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L189)
 
-This method is triggered once the `_run` method completes.
+This method is triggered once the `run` method completes.
 
 Use it to clean up the resources and shut down the source gracefully.
 
@@ -243,7 +243,7 @@ It flush the producer when `_run` completes successfully.
 def stop() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/docs/sources/quixstreams/sources/base.py#L200)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L200)
 
 This method is triggered when the application is shutting down.
 
@@ -259,7 +259,7 @@ It sets the `running` property to `False`.
 def start()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/docs/sources/quixstreams/sources/base.py#L209)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L209)
 
 This method is triggered in the subprocess when the source is started.
 
@@ -276,7 +276,7 @@ It marks the source as running, execute it's run method and ensure cleanup happe
 def run()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/docs/sources/quixstreams/sources/base.py#L225)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L225)
 
 This method is triggered in the subprocess when the source is started.
 
@@ -296,7 +296,7 @@ def serialize(key: Optional[object] = None,
               timestamp_ms: Optional[int] = None) -> KafkaMessage
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/docs/sources/quixstreams/sources/base.py#L233)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L233)
 
 Serialize data to bytes using the producer topic serializers and return a :class:`quixstreams.models.messages.KafkaMessage` .
 
@@ -322,7 +322,7 @@ def produce(value: Optional[Union[str, bytes]] = None,
             buffer_error_max_tries: int = 3) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/docs/sources/quixstreams/sources/base.py#L249)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L249)
 
 Produce a message to the configured source topic in Kafka.
 
@@ -336,7 +336,7 @@ Produce a message to the configured source topic in Kafka.
 def flush(timeout: Optional[float] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/docs/sources/quixstreams/sources/base.py#L274)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L274)
 
 This method flush the producer.
 
@@ -363,7 +363,7 @@ None use producer default or -1 is infinite. Default: None
 def default_topic() -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/docs/sources/quixstreams/sources/base.py#L292)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L292)
 
 Return a default topic matching the source name.
 
