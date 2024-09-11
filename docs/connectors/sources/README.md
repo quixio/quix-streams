@@ -39,8 +39,7 @@ For multiplatform support, Quix Streams starts the source process using the [spa
 
 Sources work by sending data to Kafka topics. Then StreamingDataFrames consume these topics.
 
-Each source provides a default topic based on its configuration. You can override the default topic by  
-specifying a topic using the `app.dataframe()` method. 
+Each source provides a default topic based on its configuration. You can override the default topic by specifying a topic using the `app.dataframe()` method. 
 
 **Example**
 

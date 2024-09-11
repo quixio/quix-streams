@@ -20,7 +20,7 @@ class CSVSource(Source):
     ) -> None:
         """
         A base CSV source that reads data from a single CSV file.
-        Best used with :class:`quixstreams.sinks.csv.CSVSink`.
+        Best used with `quixstreams.sinks.csv.CSVSink`.
 
         Required columns: key, value
         Optional columns: timestamp
