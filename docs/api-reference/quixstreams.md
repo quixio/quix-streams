@@ -9115,7 +9115,7 @@ def __init__(path: str,
 
 A base CSV source that reads data from a single CSV file.
 
-Best used with :class:`quixstreams.sinks.csv.CSVSink`.
+Best used with `quixstreams.sinks.csv.CSVSink`.
 
 Required columns: key, value
 Optional columns: timestamp
@@ -9179,7 +9179,7 @@ def raise_for_error() -> None
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/manager.py#L115)
 
-Raise a :class:`quixstreams.sources.manager.SourceException`
+Raise a `quixstreams.sources.manager.SourceException`
 if the child process was terminated with an exception.
 
 <a id="quixstreams.sources.manager.SourceProcess.stop"></a>
@@ -9544,11 +9544,11 @@ def serialize(key: Optional[object] = None,
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L233)
 
-Serialize data to bytes using the producer topic serializers and return a :class:`quixstreams.models.messages.KafkaMessage` .
+Serialize data to bytes using the producer topic serializers and return a `quixstreams.models.messages.KafkaMessage`.
 
 **Returns**:
 
-:class:`quixstreams.models.messages.KafkaMessage`
+`quixstreams.models.messages.KafkaMessage`
 
 <a id="quixstreams.sources.base.Source.produce"></a>
 
@@ -9607,7 +9607,7 @@ The default topic will not be used if the topic has already been provided to the
 
 **Returns**:
 
-`:class:`quixstreams.models.topics.Topic`
+`quixstreams.models.topics.Topic`
 
 <a id="quixstreams.rowconsumer"></a>
 

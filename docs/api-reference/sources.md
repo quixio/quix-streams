@@ -298,13 +298,13 @@ def serialize(key: Optional[object] = None,
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L233)
 
-Serialize data to bytes using the producer topic serializers and return a :class:`quixstreams.models.messages.KafkaMessage` .
+Serialize data to bytes using the producer topic serializers and return a `quixstreams.models.messages.KafkaMessage`.
 
 
 <br>
 ***Returns:***
 
-:class:`quixstreams.models.messages.KafkaMessage`
+`quixstreams.models.messages.KafkaMessage`
 
 <a id="quixstreams.sources.base.Source.produce"></a>
 
@@ -373,5 +373,5 @@ The default topic will not be used if the topic has already been provided to the
 <br>
 ***Returns:***
 
-`:class:`quixstreams.models.topics.Topic`
+`quixstreams.models.topics.Topic`
 
