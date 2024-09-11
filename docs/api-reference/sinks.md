@@ -137,9 +137,9 @@ Column format:
 See the ["csv" module docs](https://docs.python.org/3/library/csv.html#csv-fmt-params) for more info.
 Default - `"excel"`.
 - `key_serializer`: a callable to convert keys to strings.
-Default - `str()`.
+Default - `str`.
 - `value_serializer`: a callable to convert values to strings.
-Default - `json.dumps()`.
+Default - `json.dumps`.
 
 <a id="quixstreams.sinks.base.sink"></a>
 

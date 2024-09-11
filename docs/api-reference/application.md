@@ -10,7 +10,7 @@
 class Application()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L61)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L63)
 
 The main Application class.
 
@@ -74,7 +74,7 @@ def __init__(broker_address: Optional[Union[str, ConnectionConfig]] = None,
              on_message_processed: Optional[MessageProcessedCallback] = None,
              consumer_poll_timeout: float = 1.0,
              producer_poll_timeout: float = 0.0,
-             loglevel: Optional[LogLevel] = "INFO",
+             loglevel: Optional[Union[int, LogLevel]] = "INFO",
              auto_create_topics: bool = True,
              use_changelog_topics: bool = True,
              quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
@@ -84,7 +84,7 @@ def __init__(broker_address: Optional[Union[str, ConnectionConfig]] = None,
              processing_guarantee: ProcessingGuarantee = "at-least-once")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L99)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L101)
 
 
 <br>
@@ -184,7 +184,7 @@ def Quix(
     on_message_processed: Optional[MessageProcessedCallback] = None,
     consumer_poll_timeout: float = 1.0,
     producer_poll_timeout: float = 0.0,
-    loglevel: Optional[LogLevel] = "INFO",
+    loglevel: Optional[Union[int, LogLevel]] = "INFO",
     quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
     auto_create_topics: bool = True,
     use_changelog_topics: bool = True,
@@ -196,7 +196,7 @@ def Quix(
 ) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L353)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L350)
 
 >***NOTE:*** DEPRECATED: use Application with `quix_sdk_token` argument instead.
 
@@ -307,7 +307,7 @@ def topic(name: str,
           timestamp_extractor: Optional[TimestampExtractor] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L494)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L491)
 
 Create a topic definition.
 
@@ -385,10 +385,11 @@ topic = app.topic("input-topic", timestamp_extractor=custom_ts_extractor)
 #### Application.dataframe
 
 ```python
-def dataframe(topic: Topic) -> StreamingDataFrame
+def dataframe(topic: Optional[Topic] = None,
+              source: Optional[BaseSource] = None) -> StreamingDataFrame
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L574)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L571)
 
 A simple helper method that generates a `StreamingDataFrame`, which is used
 
@@ -438,7 +439,7 @@ to be used as an input topic.
 def stop(fail: bool = False)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L613)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L617)
 
 Stop the internal poll loop and the message processing.
 
@@ -465,7 +466,7 @@ to unhandled exception, and it shouldn't commit the current checkpoint.
 def get_producer() -> Producer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L636)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L662)
 
 Create and return a pre-configured Producer instance.
 The Producer is initialized with params passed to Application.
@@ -500,7 +501,7 @@ with app.get_producer() as producer:
 def get_consumer(auto_commit_enable: bool = True) -> Consumer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L666)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L692)
 
 Create and return a pre-configured Consumer instance.
 The Consumer is initialized with params passed to Application.
@@ -549,9 +550,33 @@ with app.get_consumer() as consumer:
 def clear_state()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L713)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L739)
 
 Clear the state of the application.
+
+<a id="quixstreams.app.Application.add_source"></a>
+
+<br><br>
+
+#### Application.add\_source
+
+```python
+def add_source(source: BaseSource, topic: Optional[Topic] = None) -> Topic
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L745)
+
+Add a source to the application.
+
+See :class:`quixstreams.sources.base.BaseSource` for more details.
+
+
+<br>
+***Arguments:***
+
+- `source`: a :class:`quixstreams.sources.BaseSource` instance
+- `topic`: the :class:`quixstreams.models.Topic` instance the source will produce to
+Default: the source default
 
 <a id="quixstreams.app.Application.run"></a>
 
@@ -563,7 +588,7 @@ Clear the state of the application.
 def run(dataframe: StreamingDataFrame)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L719)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L764)
 
 Start processing data from Kafka using provided `StreamingDataFrame`
 
@@ -603,7 +628,7 @@ app.run(dataframe=df)
 class ApplicationConfig(BaseSettings)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L975)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1049)
 
 Immutable object holding the application configuration
 
@@ -626,7 +651,7 @@ def settings_customise_sources(
 ) -> Tuple[PydanticBaseSettingsSource, ...]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1009)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1083)
 
 Included to ignore reading/setting values from the environment
 
@@ -640,7 +665,7 @@ Included to ignore reading/setting values from the environment
 def copy(**kwargs) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1022)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1096)
 
 Update the application config and return a copy
 

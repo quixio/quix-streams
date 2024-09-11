@@ -11,10 +11,12 @@
 #### configure\_logging
 
 ```python
-def configure_logging(loglevel: Optional[LogLevel]) -> bool
+def configure_logging(loglevel: Optional[Union[int, LogLevel]],
+                      name: str = LOGGER_NAME,
+                      pid: bool = False) -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/logging.py#L26)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/logging.py#L24)
 
 Configure "quixstreams" logger.
 
@@ -26,6 +28,8 @@ is called twice), it will skip configuration and return `False`.
 
 - `loglevel`: a valid log level as a string or None.
 If None passed, this function is no-op and no logging will be configured.
+- `name`: the log name included in the output
+- `pid`: if True include the process PID in the logs
 
 **Returns**:
 
@@ -622,7 +626,7 @@ generated for you.
 class StreamingDataFrame(BaseStreaming)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L86)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L87)
 
 `StreamingDataFrame` is the main object you will use for ETL work.
 
@@ -686,7 +690,7 @@ def apply(func: Union[
           metadata: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L203)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L204)
 
 Apply a function to transform the value and return a new value.
 
@@ -739,7 +743,7 @@ def update(func: Union[
            metadata: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L293)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L294)
 
 Apply a function to mutate value in-place or to perform a side effect
 
@@ -800,7 +804,7 @@ def filter(func: Union[
            metadata: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L386)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L387)
 
 Filter value using provided function.
 
@@ -847,7 +851,7 @@ def group_by(key: Union[str, Callable[[Any], Any]],
              key_serializer: Optional[SerializerType] = "json") -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L473)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L474)
 
 "Groups" messages by re-keying them via the provided group_by operation
 
@@ -904,7 +908,7 @@ a clone with this operation added (assign to keep its effect).
 def contains(key: str) -> StreamingSeries
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L551)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L552)
 
 Check if the key is present in the Row value.
 
@@ -936,7 +940,7 @@ or False otherwise.
 def to_topic(topic: Topic, key: Optional[Callable[[Any], Any]] = None) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L577)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L578)
 
 Produce current value to a topic. You can optionally specify a new key.
 
@@ -982,7 +986,7 @@ the updated StreamingDataFrame instance (reassignment NOT required).
 def set_timestamp(func: Callable[[Any, Any, int, Any], int]) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L623)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L624)
 
 Set a new timestamp based on the current message value and its metadata.
 
@@ -1028,7 +1032,7 @@ def set_headers(
 ) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L665)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L666)
 
 Set new message headers based on the current message value and metadata.
 
@@ -1070,7 +1074,7 @@ a new StreamingDataFrame instance
 def print(pretty: bool = True, metadata: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L717)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L718)
 
 Print out the current message value (and optionally, the message metadata) to
 
@@ -1118,7 +1122,7 @@ def compose(
 ) -> Dict[str, VoidExecutor]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L759)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L760)
 
 Compose all functions of this StreamingDataFrame into one big closure.
 
@@ -1164,7 +1168,7 @@ def test(value: Any,
          topic: Optional[Topic] = None) -> List[Any]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L796)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L797)
 
 A shorthand to test `StreamingDataFrame` with provided value
 
@@ -1196,7 +1200,7 @@ def tumbling_window(duration_ms: Union[int, timedelta],
                     name: Optional[str] = None) -> TumblingWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L834)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L835)
 
 Create a tumbling window transformation on this StreamingDataFrame.
 
@@ -1274,7 +1278,7 @@ def hopping_window(duration_ms: Union[int, timedelta],
                    name: Optional[str] = None) -> HoppingWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L911)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L912)
 
 Create a hopping window transformation on this StreamingDataFrame.
 
@@ -1359,7 +1363,7 @@ def drop(columns: Union[str, List[str]],
          errors: Literal["ignore", "raise"] = "raise") -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1004)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1005)
 
 Drop column(s) from the message value (value must support `del`, like a dict).
 
@@ -1396,7 +1400,7 @@ a new StreamingDataFrame instance
 def sink(sink: BaseSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1049)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1050)
 
 Sink the processed data to the specified destination.
 
@@ -2152,10 +2156,10 @@ regardless of whether the window is closed or not.
 ```python
 def get_window_ranges(timestamp_ms: int,
                       duration_ms: int,
-                      step_ms: Optional[int] = None) -> List[Tuple[int, int]]
+                      step_ms: Optional[int] = None) -> Deque[Tuple[int, int]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/base.py#L18)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/base.py#L19)
 
 Get a list of window ranges for the given timestamp.
 
@@ -3015,9 +3019,9 @@ Column format:
 See the ["csv" module docs](https://docs.python.org/3/library/csv.html#csv-fmt-params) for more info.
 Default - `"excel"`.
 - `key_serializer`: a callable to convert keys to strings.
-Default - `str()`.
+Default - `str`.
 - `value_serializer`: a callable to convert values to strings.
-Default - `json.dumps()`.
+Default - `json.dumps`.
 
 <a id="quixstreams.sinks.exceptions"></a>
 
@@ -4424,7 +4428,7 @@ instance.
 ```python
 def __init__(
         name: str,
-        config: TopicConfig,
+        config: Optional[TopicConfig] = None,
         value_deserializer: Optional[DeserializerType] = None,
         key_deserializer: Optional[DeserializerType] = BytesDeserializer(),
         value_serializer: Optional[SerializerType] = None,
@@ -4445,19 +4449,6 @@ def __init__(
 - `timestamp_extractor`: a callable that returns a timestamp in
 milliseconds from a deserialized message.
 
-<a id="quixstreams.models.topics.topic.Topic.name"></a>
-
-#### Topic.name
-
-```python
-@property
-def name() -> str
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L122)
-
-Topic name
-
 <a id="quixstreams.models.topics.topic.Topic.row_serialize"></a>
 
 #### Topic.row\_serialize
@@ -4466,7 +4457,7 @@ Topic name
 def row_serialize(row: Row, key: Any) -> KafkaMessage
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L132)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L121)
 
 Serialize Row to a Kafka message structure
 
@@ -4488,7 +4479,7 @@ def row_deserialize(
         message: ConfluentKafkaMessageProto) -> Union[Row, List[Row], None]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L172)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L161)
 
 Deserialize incoming Kafka message to a Row.
 
@@ -4651,6 +4642,24 @@ milliseconds from a deserialized message.
 
 Topic object with creation configs
 
+<a id="quixstreams.models.topics.manager.TopicManager.register"></a>
+
+#### TopicManager.register
+
+```python
+def register(topic: Topic)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L286)
+
+Register an already generated :class:`quixstreams.models.topics.Topic` to the topic manager.
+
+The topic name and config can be updated by the topic manager.
+
+**Arguments**:
+
+- `topic`: The topic to register
+
 <a id="quixstreams.models.topics.manager.TopicManager.repartition_topic"></a>
 
 #### TopicManager.repartition\_topic
@@ -4665,7 +4674,7 @@ def repartition_topic(operation: str,
                       timeout: Optional[float] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L286)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L303)
 
 Create an internal repartition topic.
 
@@ -4693,7 +4702,7 @@ def changelog_topic(topic_name: str,
                     timeout: Optional[float] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L326)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L343)
 
 Performs all the logic necessary to generate a changelog topic based on a
 
@@ -4734,7 +4743,7 @@ def create_topics(topics: List[Topic],
                   create_timeout: Optional[float] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L383)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L400)
 
 Creates topics via an explicit list of provided `Topics`.
 
@@ -4756,7 +4765,7 @@ def create_all_topics(timeout: Optional[float] = None,
                       create_timeout: Optional[float] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L411)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L428)
 
 A convenience method to create all Topic objects stored on this TopicManager.
 
@@ -4773,7 +4782,7 @@ A convenience method to create all Topic objects stored on this TopicManager.
 def validate_all_topics(timeout: Optional[float] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L424)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L441)
 
 Validates all topics exist and changelogs have correct topic and rep factor.
 
@@ -8474,7 +8483,7 @@ Used by the producer during consumer offset sending for an EOS transaction.
 class Application()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L61)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L63)
 
 The main Application class.
 
@@ -8532,7 +8541,7 @@ def __init__(broker_address: Optional[Union[str, ConnectionConfig]] = None,
              on_message_processed: Optional[MessageProcessedCallback] = None,
              consumer_poll_timeout: float = 1.0,
              producer_poll_timeout: float = 0.0,
-             loglevel: Optional[LogLevel] = "INFO",
+             loglevel: Optional[Union[int, LogLevel]] = "INFO",
              auto_create_topics: bool = True,
              use_changelog_topics: bool = True,
              quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
@@ -8542,7 +8551,7 @@ def __init__(broker_address: Optional[Union[str, ConnectionConfig]] = None,
              processing_guarantee: ProcessingGuarantee = "at-least-once")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L99)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L101)
 
 **Arguments**:
 
@@ -8638,7 +8647,7 @@ def Quix(
     on_message_processed: Optional[MessageProcessedCallback] = None,
     consumer_poll_timeout: float = 1.0,
     producer_poll_timeout: float = 0.0,
-    loglevel: Optional[LogLevel] = "INFO",
+    loglevel: Optional[Union[int, LogLevel]] = "INFO",
     quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
     auto_create_topics: bool = True,
     use_changelog_topics: bool = True,
@@ -8650,7 +8659,7 @@ def Quix(
 ) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L353)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L350)
 
 >***NOTE:*** DEPRECATED: use Application with `quix_sdk_token` argument instead.
 
@@ -8753,7 +8762,7 @@ def topic(name: str,
           timestamp_extractor: Optional[TimestampExtractor] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L494)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L491)
 
 Create a topic definition.
 
@@ -8821,10 +8830,11 @@ topic = app.topic("input-topic", timestamp_extractor=custom_ts_extractor)
 #### Application.dataframe
 
 ```python
-def dataframe(topic: Topic) -> StreamingDataFrame
+def dataframe(topic: Optional[Topic] = None,
+              source: Optional[BaseSource] = None) -> StreamingDataFrame
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L574)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L571)
 
 A simple helper method that generates a `StreamingDataFrame`, which is used
 
@@ -8866,7 +8876,7 @@ to be used as an input topic.
 def stop(fail: bool = False)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L613)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L617)
 
 Stop the internal poll loop and the message processing.
 
@@ -8889,7 +8899,7 @@ to unhandled exception, and it shouldn't commit the current checkpoint.
 def get_producer() -> Producer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L636)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L662)
 
 Create and return a pre-configured Producer instance.
 The Producer is initialized with params passed to Application.
@@ -8920,7 +8930,7 @@ with app.get_producer() as producer:
 def get_consumer(auto_commit_enable: bool = True) -> Consumer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L666)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L692)
 
 Create and return a pre-configured Consumer instance.
 The Consumer is initialized with params passed to Application.
@@ -8965,9 +8975,29 @@ with app.get_consumer() as consumer:
 def clear_state()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L713)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L739)
 
 Clear the state of the application.
+
+<a id="quixstreams.app.Application.add_source"></a>
+
+#### Application.add\_source
+
+```python
+def add_source(source: BaseSource, topic: Optional[Topic] = None) -> Topic
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L745)
+
+Add a source to the application.
+
+See :class:`quixstreams.sources.base.BaseSource` for more details.
+
+**Arguments**:
+
+- `source`: a :class:`quixstreams.sources.BaseSource` instance
+- `topic`: the :class:`quixstreams.models.Topic` instance the source will produce to
+Default: the source default
 
 <a id="quixstreams.app.Application.run"></a>
 
@@ -8977,7 +9007,7 @@ Clear the state of the application.
 def run(dataframe: StreamingDataFrame)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L719)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L764)
 
 Start processing data from Kafka using provided `StreamingDataFrame`
 
@@ -9013,7 +9043,7 @@ app.run(dataframe=df)
 class ApplicationConfig(BaseSettings)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L975)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1049)
 
 Immutable object holding the application configuration
 
@@ -9034,7 +9064,7 @@ def settings_customise_sources(
 ) -> Tuple[PydanticBaseSettingsSource, ...]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1009)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1083)
 
 Included to ignore reading/setting values from the environment
 
@@ -9046,9 +9076,538 @@ Included to ignore reading/setting values from the environment
 def copy(**kwargs) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1022)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1096)
 
 Update the application config and return a copy
+
+<a id="quixstreams.sources"></a>
+
+## quixstreams.sources
+
+<a id="quixstreams.sources.csv"></a>
+
+## quixstreams.sources.csv
+
+<a id="quixstreams.sources.csv.CSVSource"></a>
+
+### CSVSource
+
+```python
+class CSVSource(Source)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/csv.py#L11)
+
+<a id="quixstreams.sources.csv.CSVSource.__init__"></a>
+
+#### CSVSource.\_\_init\_\_
+
+```python
+def __init__(path: str,
+             dialect: str = "excel",
+             name: Optional[str] = None,
+             shutdown_timeout: float = 10,
+             key_deserializer: Callable[[Any], str] = str,
+             value_deserializer: Callable[[Any], str] = json.loads) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/csv.py#L12)
+
+A base CSV source that reads data from a single CSV file.
+
+Best used with :class:`quixstreams.sinks.csv.CSVSink`.
+
+Required columns: key, value
+Optional columns: timestamp
+
+**Arguments**:
+
+- `path`: path to the CSV file
+- `dialect`: a CSV dialect to use. It affects quoting and delimiters.
+See the ["csv" module docs](https://docs.python.org/3/library/csv.html#csv-fmt-params) for more info.
+Default - `"excel"`.
+- `key_deseralizer`: a callable to convert strings to key.
+Default - `str`
+- `value_deserializer`: a callable to convert strings to value.
+Default - `json.loads`
+
+<a id="quixstreams.sources.manager"></a>
+
+## quixstreams.sources.manager
+
+<a id="quixstreams.sources.manager.SourceProcess"></a>
+
+### SourceProcess
+
+```python
+class SourceProcess(multiprocessing.Process)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/manager.py#L16)
+
+An implementation of the Source subprocess.
+
+It manages a source and its subprocess, handles the communication between the child and parent processes,
+lifecycle, and error handling.
+
+Some methods are designed to be used from the parent process, and others from the child process.
+
+<a id="quixstreams.sources.manager.SourceProcess.run"></a>
+
+#### SourceProcess.run
+
+```python
+def run() -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/manager.py#L48)
+
+An entrypoint of the child process.
+
+Responsible for:
+    * Configuring the signal handlers to handle shutdown properly
+    * Execution of the source `run` method
+    * Reporting the source exceptions to the parent process
+
+<a id="quixstreams.sources.manager.SourceProcess.raise_for_error"></a>
+
+#### SourceProcess.raise\_for\_error
+
+```python
+def raise_for_error() -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/manager.py#L108)
+
+Raise a :class:`quixstreams.sources.manager.SourceException`
+if the child process was terminated with an exception.
+
+<a id="quixstreams.sources.manager.SourceProcess.stop"></a>
+
+#### SourceProcess.stop
+
+```python
+def stop()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/manager.py#L129)
+
+Handle shutdown of the source and its subprocess.
+
+First, it tries to shut down gracefully by sending a SIGTERM and waiting up to
+`source.shutdown_timeout` seconds for the process to exit. If the process
+is still alive, it will kill it with a SIGKILL.
+
+<a id="quixstreams.sources.manager.SourceManager"></a>
+
+### SourceManager
+
+```python
+class SourceManager()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/manager.py#L152)
+
+Class managing the sources registered with the app
+
+Sources run in their separate process pay attention about cross-process communication
+
+<a id="quixstreams.sources.manager.SourceManager.register"></a>
+
+#### SourceManager.register
+
+```python
+def register(source: BaseSource)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/manager.py#L162)
+
+Register a new source in the manager.
+
+Each source need to already be configured, can't reuse a topic and must be unique
+
+<a id="quixstreams.sources.manager.SourceManager.raise_for_error"></a>
+
+#### SourceManager.raise\_for\_error
+
+```python
+def raise_for_error() -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/manager.py#L201)
+
+Raise an exception if any process has stopped with an exception
+
+<a id="quixstreams.sources.manager.SourceManager.is_alive"></a>
+
+#### SourceManager.is\_alive
+
+```python
+def is_alive() -> bool
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/manager.py#L208)
+
+Check if any process is alive
+
+**Returns**:
+
+True if at least one process is alive
+
+<a id="quixstreams.sources.manager.SourceException"></a>
+
+### SourceException
+
+```python
+class SourceException(Exception)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/manager.py#L231)
+
+Raised in the parent process when a source finish with an exception
+
+<a id="quixstreams.sources.multiprocessing"></a>
+
+## quixstreams.sources.multiprocessing
+
+<a id="quixstreams.sources.base"></a>
+
+## quixstreams.sources.base
+
+<a id="quixstreams.sources.base.BaseSource"></a>
+
+### BaseSource
+
+```python
+class BaseSource(ABC)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L22)
+
+This is the base class for all sources.
+
+Sources are executed in a sub-process of the main application.
+
+To create your own source you need to implement:
+    * `run`
+    * `stop`
+    * `default_topic`
+
+`BaseSource` is the most basic interface, and the framework expects every
+sources to implement it. Use `Source` to benefit from a base implementation.
+
+You can connect a source to a StreamingDataframe using the Application.
+
+Example snippet:
+
+```python
+from quixstreams import Application
+from quixstreams.sources import Source
+
+class MySource(Source):
+    def run(self):
+        for _ in range(1000):
+            self.produce(
+                key="foo",
+                value=b"foo"
+            )
+
+def main():
+    app = Application()
+    source = MySource(name="my_source")
+
+    sdf = app.dataframe(source=source)
+    sdf.print(metadata=True)
+
+    app.run(sdf)
+
+if __name__ == "__main__":
+    main()
+```
+
+<a id="quixstreams.sources.base.BaseSource.configure"></a>
+
+#### BaseSource.configure
+
+```python
+def configure(topic: Topic, producer: RowProducer) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L74)
+
+This method is triggered when the source is registered to the Application.
+
+It configures the source's Kafka producer and the topic it will produce to.
+
+<a id="quixstreams.sources.base.BaseSource.start"></a>
+
+#### BaseSource.start
+
+```python
+@abstractmethod
+def start() -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L93)
+
+This method is triggered in the subprocess when the source is started.
+
+The subprocess will run as long as the start method executes.
+Use it to fetch data and produce it to Kafka.
+
+<a id="quixstreams.sources.base.BaseSource.stop"></a>
+
+#### BaseSource.stop
+
+```python
+@abstractmethod
+def stop() -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L102)
+
+This method is triggered when the application is shutting down.
+
+The source must ensure that the `run` method is completed soon.
+
+Example Snippet:
+
+```python
+class MySource(BaseSource):
+    def start(self):
+        self._running = True
+        while self._running:
+            self._producer.produce(
+                topic=self._producer_topic,
+                value="foo",
+            )
+            time.sleep(1)
+
+    def stop(self):
+        self._running = False
+```
+
+<a id="quixstreams.sources.base.BaseSource.default_topic"></a>
+
+#### BaseSource.default\_topic
+
+```python
+@abstractmethod
+def default_topic() -> Topic
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L127)
+
+This method is triggered when the topic is not provided to the source.
+
+The source must return a default topic configuration.
+
+<a id="quixstreams.sources.base.Source"></a>
+
+### Source
+
+```python
+class Source(BaseSource)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L135)
+
+BaseSource class implementation providing
+
+Implementation for the abstract method:
+    * `default_topic`
+    * `start`
+    * `stop`
+
+Helper methods
+    * serialize
+    * produce
+    * flush
+
+Helper property
+    * running
+
+Subclass it and implement the `run` method to fetch data and produce it to Kafka.
+
+<a id="quixstreams.sources.base.Source.__init__"></a>
+
+#### Source.\_\_init\_\_
+
+```python
+def __init__(name: str, shutdown_timeout: float = 10) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L155)
+
+**Arguments**:
+
+- `name`: The source unique name. Used to generate the topic configurtion
+- `shutdown_timeout`: Time in second the application waits for the source to gracefully shutdown
+
+<a id="quixstreams.sources.base.Source.running"></a>
+
+#### Source.running
+
+```python
+@property
+def running() -> bool
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L169)
+
+Property indicating if the source is running.
+
+The `stop` method will set it to `False`. Use it to stop the source gracefully.
+
+Example snippet:
+
+```python
+class MySource(Source):
+    def run(self):
+        while self.running:
+            self.produce(
+                value="foo",
+            )
+            time.sleep(1)
+```
+
+<a id="quixstreams.sources.base.Source.cleanup"></a>
+
+#### Source.cleanup
+
+```python
+def cleanup(failed: bool) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L189)
+
+This method is triggered once the `run` method completes.
+
+Use it to clean up the resources and shut down the source gracefully.
+
+It flush the producer when `_run` completes successfully.
+
+<a id="quixstreams.sources.base.Source.stop"></a>
+
+#### Source.stop
+
+```python
+def stop() -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L200)
+
+This method is triggered when the application is shutting down.
+
+It sets the `running` property to `False`.
+
+<a id="quixstreams.sources.base.Source.start"></a>
+
+#### Source.start
+
+```python
+def start()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L209)
+
+This method is triggered in the subprocess when the source is started.
+
+It marks the source as running, execute it's run method and ensure cleanup happens.
+
+<a id="quixstreams.sources.base.Source.run"></a>
+
+#### Source.run
+
+```python
+@abstractmethod
+def run()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L225)
+
+This method is triggered in the subprocess when the source is started.
+
+The subprocess will run as long as the run method executes.
+Use it to fetch data and produce it to Kafka.
+
+<a id="quixstreams.sources.base.Source.serialize"></a>
+
+#### Source.serialize
+
+```python
+def serialize(key: Optional[object] = None,
+              value: Optional[object] = None,
+              headers: Optional[Headers] = None,
+              timestamp_ms: Optional[int] = None) -> KafkaMessage
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L233)
+
+Serialize data to bytes using the producer topic serializers and return a :class:`quixstreams.models.messages.KafkaMessage` .
+
+**Returns**:
+
+:class:`quixstreams.models.messages.KafkaMessage`
+
+<a id="quixstreams.sources.base.Source.produce"></a>
+
+#### Source.produce
+
+```python
+def produce(value: Optional[Union[str, bytes]] = None,
+            key: Optional[Union[str, bytes]] = None,
+            headers: Optional[Headers] = None,
+            partition: Optional[int] = None,
+            timestamp: Optional[int] = None,
+            poll_timeout: float = 5.0,
+            buffer_error_max_tries: int = 3) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L249)
+
+Produce a message to the configured source topic in Kafka.
+
+<a id="quixstreams.sources.base.Source.flush"></a>
+
+#### Source.flush
+
+```python
+def flush(timeout: Optional[float] = None) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L274)
+
+This method flush the producer.
+
+It ensures all messages are successfully delivered to Kafka.
+
+**Arguments**:
+
+- `timeout` (`float`): time to attempt flushing (seconds).
+None use producer default or -1 is infinite. Default: None
+
+**Raises**:
+
+- `CheckpointProducerTimeout`: if any message fails to produce before the timeout
+
+<a id="quixstreams.sources.base.Source.default_topic"></a>
+
+#### Source.default\_topic
+
+```python
+def default_topic() -> Topic
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L292)
+
+Return a default topic matching the source name.
+
+The default topic will not be used if the topic has already been provided to the source.
+
+**Returns**:
+
+`:class:`quixstreams.models.topics.Topic`
 
 <a id="quixstreams.rowconsumer"></a>
 
