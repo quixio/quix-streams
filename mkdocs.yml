@@ -49,6 +49,10 @@ nav:
         - CSV Sink: connectors/sinks/csv-sink.md
         - InfluxDB v3 Sink: connectors/sinks/influxdb3-sink.md
         - Creating a Custom Sink: connectors/sinks/custom-sinks.md
+    - Sources:
+        - 'connectors/sources/README.md'
+        - CSV Source: connectors/sources/csv-source.md
+        - Creating a Custom Source: connectors/sources/custom-sources.md
   - Upgrading Guide:
     - Upgrading from Quix Streams v0.5: upgrading-legacy.md
 
