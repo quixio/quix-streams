@@ -31,15 +31,20 @@ You can also implement your own, have a look at [Creating a Custom Source](custo
 
 ## Multiprocessing
 
-For good performances, sources are run in a separate process. Setting up, monitoring, and tearing down the process is handled by Quix streams. For multiplatform support, the [spawn](https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods) start method is used to create the source process and as a side-effect, the source object needs to be pickleable. If a source needs to handle un-pickleable objects, it's best to initialize those in the source subprocess (in the source `start` method).
+For good performance, each source runs in a subprocess. Quix Streams automatically manages the subprocess's setting up, monitoring, and tearing down. 
+
+For multiplatform support, Quix Streams starts the source process using the [spawn](https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods) approach. As a side effect, each Source instance must be pickleable. If a source needs to handle unpickleable objects, it's best to initialize those in the source subprocess (in the source `start` method).  
 
 ## Topics
 
-Sources work by sending data to a Kafka topic. Then the StreamingDataframe consume from that topic.
-Each source provides a default topic based on it's configuration. You can override the topic used by
-specyfying a topic in the `app.dataframe()` method.
+Sources work by sending data to Kafka topics. Then StreamingDataFrames consume these topics.
 
-For example, a topic with 4 partitions
+Each source provides a default topic based on its configuration. You can override the default topic by  
+specifying a topic using the `app.dataframe()` method. 
+
+**Example**
+
+Provide a custom topic with four partitions to the source. 
 
 ```python
 from quixstreams import Application

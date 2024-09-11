@@ -2,6 +2,8 @@
 
 A basic source that reads data from a single CSV file.
 
+The CSV Source doesn't keep any state. On restart, the file will be re-consumed from the start.
+
 ## How to use CSV Source
 
 To use a CSV Source, you need to create and instance of `CSVSource` and pass it to the `app.dataframe()` method.
@@ -46,4 +48,4 @@ By default the CSV source expect the `key` is a string and the `value` a json ob
 
 ## Topic
 
-The default topic used for the CSV source will use the `path` as name and expect keys are strings and values are json objects.
+The default topic used for the CSV source will use the `path` as a name and expect keys to be strings and values to be JSON objects.  
