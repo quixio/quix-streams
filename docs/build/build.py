@@ -123,6 +123,9 @@ doc_map = {
         k: None
         for k in [
             "quixstreams.sources.base",
+            "quixstreams.sources.csv",
+            "quixstreams.sources.kafka.kafka",
+            "quixstreams.sources.kafka.quix",
         ]
     },
 }
