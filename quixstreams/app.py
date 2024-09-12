@@ -1,5 +1,4 @@
 import contextlib
-import dataclasses
 import functools
 import logging
 import os
@@ -729,8 +728,6 @@ class Application:
 
         :param auto_commit_enable: Enable or disable auto commit
             Default - True
-        :param consumer_group_suffix: Suffix added to the application consumer group
-            Default - ""
         """
         self.setup_topics()
 
