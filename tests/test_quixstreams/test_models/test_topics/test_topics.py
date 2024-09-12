@@ -499,7 +499,6 @@ class TestTopic:
         topic = topic_manager_topic_factory(
             key_serializer="string",
             value_serializer=None,
-            use_serdes_nones=True,
         )
         with pytest.raises(SerializerIsNotProvidedError):
             topic.serialize(

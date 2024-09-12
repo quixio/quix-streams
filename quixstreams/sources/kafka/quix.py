@@ -2,6 +2,7 @@ from typing import Optional, TYPE_CHECKING
 
 from quixstreams.error_callbacks import default_on_consumer_error, ConsumerErrorCallback
 from quixstreams.kafka import AutoOffsetReset
+from quixstreams.models.serializers import DeserializerType
 from quixstreams.platforms.quix import QuixKafkaConfigsBuilder
 from quixstreams.platforms.quix.api import QuixPortalApiService
 
@@ -58,6 +59,8 @@ class QuixEnvironmentSource(KafkaSource):
         consumer_poll_timeout: Optional[float] = None,
         shutdown_timeout: float = 10,
         on_consumer_error: Optional[ConsumerErrorCallback] = default_on_consumer_error,
+        value_deserializer: DeserializerType = "json",
+        key_deserializer: DeserializerType = "bytes",
     ) -> None:
         """
         :param quix_workspace_id: The Quix workspace ID of the source data.
@@ -65,7 +68,7 @@ class QuixEnvironmentSource(KafkaSource):
         :param quix_portal_api: The Quix portal API URL of the source environment.
             Default - `Quix__Portal__Api` environment or Quix cloud production URL
 
-        For other parameters See :class:`quixstreams.sources.kafka.KafkaSource`
+        For other parameters See `quixstreams.sources.kafka.KafkaSource`
         """
 
         if consumer_extra_config is None:
@@ -97,6 +100,8 @@ class QuixEnvironmentSource(KafkaSource):
             consumer_poll_timeout=consumer_poll_timeout,
             shutdown_timeout=shutdown_timeout,
             on_consumer_error=on_consumer_error,
+            value_deserializer=value_deserializer,
+            key_deserializer=key_deserializer,
         )
 
     def __repr__(self) -> str:
