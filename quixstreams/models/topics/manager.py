@@ -454,11 +454,11 @@ class TopicManager:
         if missing := [t for t in all_topic_names if actual_configs[t] is None]:
             raise TopicNotFoundError(f"Topics {missing} not found on the broker")
 
-        for source_name, topic in self._non_changelog_topics.items():
+        for source_name in self._non_changelog_topics.keys():
             source_cfg = actual_configs[source_name]
             # For any changelog topics, validate the amount of partitions and
             # replication factor match with the source topic
-            for changelog in self.changelog_topics.get(topic.name, {}).values():
+            for changelog in self.changelog_topics.get(source_name, {}).values():
                 changelog_cfg = actual_configs[changelog.name]
 
                 if changelog_cfg.num_partitions != source_cfg.num_partitions:
