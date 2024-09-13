@@ -28,3 +28,7 @@ def main():
 if __name__ == "__main__":
   main()
 ```
+
+## Token
+
+The Quix Environment Source requires the sdk token of the source environment. [Click here](../../../develop/authentication/streaming-token.md) for more information on SDK tokens.
