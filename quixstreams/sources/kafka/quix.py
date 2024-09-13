@@ -63,10 +63,10 @@ class QuixEnvironmentSource(KafkaSource):
         key_deserializer: DeserializerType = "bytes",
     ) -> None:
         """
-        :param quix_workspace_id: The Quix workspace ID of the source data.
-        :param quix_sdk_token: Quix cloud sdk token used to connect to the source data.
+        :param quix_workspace_id: The Quix workspace ID of the source environment.
+        :param quix_sdk_token: Quix cloud sdk token used to connect to the source environment.
         :param quix_portal_api: The Quix portal API URL of the source environment.
-            Default - `Quix__Portal__Api` environment or Quix cloud production URL
+            Default - `Quix__Portal__Api` environment variable or Quix cloud production URL
 
         For other parameters See `quixstreams.sources.kafka.KafkaSource`
         """
