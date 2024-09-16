@@ -32,4 +32,5 @@ if __name__ == "__main__":
 
 ## Topic
 
-The Kafka Replicator source only deal with bytes. It read the remote keys and values as bytes and produce them directly as bytes. You can configure the key and value deserializer used by the Streaming Dataframe with the `key_deserializer` and `value_deserializer` paramaters.
+The Kafka Replicator source only deals with bytes. It reads the remote keys and values as bytes and produces them directly as bytes.
+You can configure the key and value deserializer used by the Streaming Dataframe with the `key_deserializer` and `value_deserializer` paramaters.

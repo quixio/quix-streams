@@ -4,7 +4,7 @@ A specialised [Kafka Source](kafka-source.md) that simplify copying data from a 
 
 ## How to use the Quix Environment Source
 
-To use a Quix Environment source, you need to create an instance of `QuixSource` and pass it to the `app.dataframe()` method.
+To use a Quix Environment source, you need to create an instance of `QuixEnvironmentSource` and pass it to the `app.dataframe()` method.
 
 ```python
 from quixstreams import Application
