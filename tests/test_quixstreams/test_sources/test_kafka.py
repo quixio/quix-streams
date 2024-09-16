@@ -294,7 +294,7 @@ class TestKafkaReplicatorSource(Base):
         start_offset = 4
         with Consumer(
             broker_address=app.config.broker_address,
-            consumer_group=f"{app.config.consumer_group}-offsets",
+            consumer_group=f"{app.config.consumer_group}-source-test source-offsets",
             auto_offset_reset=app.config.auto_offset_reset,
             auto_commit_enable=False,
             extra_config=app.config.consumer_extra_config,

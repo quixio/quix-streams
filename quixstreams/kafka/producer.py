@@ -174,16 +174,6 @@ class Producer:
         self.flush()
         logger.debug("Kafka producer flushed")
 
-    # support pickling by dropping the inner producer
-    def __getstate__(self) -> object:
-        state = self.__dict__.copy()
-        state.pop("_inner_producer", None)
-        return state
-
-    def __setstate__(self, state):
-        self.__dict__.update(state)
-        self._inner_producer = None
-
 
 class TransactionalProducer(Producer):
     """

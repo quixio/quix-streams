@@ -54,7 +54,6 @@ class QuixEnvironmentSource(KafkaReplicatorSource):
         quix_sdk_token: str,
         quix_workspace_id: str,
         quix_portal_api: Optional[str] = None,
-        consumer_group: Optional[str] = None,
         auto_offset_reset: Optional[AutoOffsetReset] = None,
         consumer_extra_config: Optional[dict] = None,
         consumer_poll_timeout: Optional[float] = None,
@@ -75,9 +74,6 @@ class QuixEnvironmentSource(KafkaReplicatorSource):
         if consumer_extra_config is None:
             consumer_extra_config = {}
 
-        if consumer_group is None:
-            consumer_group = name
-
         quix_config = QuixKafkaConfigsBuilder(
             quix_portal_api_service=QuixPortalApiService(
                 default_workspace_id=quix_workspace_id,
@@ -95,7 +91,6 @@ class QuixEnvironmentSource(KafkaReplicatorSource):
             app_config=app_config,
             topic=quix_config.prepend_workspace_id(topic),
             broker_address=quix_config.librdkafka_connection_config,
-            consumer_group=quix_config.prepend_workspace_id(consumer_group),
             auto_offset_reset=auto_offset_reset,
             consumer_extra_config=consumer_extra_config,
             consumer_poll_timeout=consumer_poll_timeout,

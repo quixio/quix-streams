@@ -34,3 +34,9 @@ if __name__ == "__main__":
 
 The Kafka Replicator source only deals with bytes. It reads the remote keys and values as bytes and produces them directly as bytes.
 You can configure the key and value deserializer used by the Streaming Dataframe with the `key_deserializer` and `value_deserializer` paramaters.
+
+## Consumer group
+
+The Kafka Replicator consumer group is build from the application consumer group and the source name. It is used to store the processed messages offset. Changing either the application consumer group or the source name will reset the Kafka Replicator state. For more information see [the glossary](https://quix.io/docs/kb/glossary.html?h=consumer+group#consumer-group)
+
+The Kafka Replicator commit the messages offset on the destination cluster. Only read access on the source cluser is necessary.

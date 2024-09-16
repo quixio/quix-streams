@@ -1,7 +1,7 @@
 import time
 import logging
 
-from typing import Union, Optional, Dict, TYPE_CHECKING
+from typing import Union, Optional, Dict, List, TYPE_CHECKING
 
 from confluent_kafka import TopicPartition, Message
 
@@ -58,7 +58,6 @@ class KafkaReplicatorSource(Source):
         app_config: "ApplicationConfig",
         topic: str,
         broker_address: Union[str, ConnectionConfig],
-        consumer_group: Optional[str] = None,
         auto_offset_reset: Optional[AutoOffsetReset] = None,
         consumer_extra_config: Optional[dict] = None,
         consumer_poll_timeout: Optional[float] = None,
@@ -72,8 +71,6 @@ class KafkaReplicatorSource(Source):
         :param app_config: The configuration of the application. Used by the source to connect to the application kafka broker.
         :param topic: The topic to replicate.
         :param broker_address: The connection settings for the source Kafka.
-        :param consumer_group: The source Kafka consumer group
-            Default - The source name
         :param auto_offset_reset: Consumer `auto.offset.reset` setting.
             Default - Use the Application `auto_offset_reset` setting.
         :param consumer_extra_config: A dictionary with additional options that
@@ -93,9 +90,6 @@ class KafkaReplicatorSource(Source):
         if consumer_extra_config is None:
             consumer_extra_config = {}
 
-        if consumer_group is None:
-            consumer_group = name
-
         if auto_offset_reset is None:
             auto_offset_reset = app_config.auto_offset_reset
 
@@ -111,12 +105,11 @@ class KafkaReplicatorSource(Source):
         self._value_deserializer = value_deserializer
         self._key_deserializer = key_deserializer
         self._broker_address = broker_address
-        self._consumer_group = consumer_group
         self._auto_offset_reset = auto_offset_reset
         self._consumer_extra_config = consumer_extra_config
 
         self._running = True
-        self._error: Optional[Exception] = None
+        self._failed = False
         self._checkpoint: Optional[Checkpoint] = None
 
         self._source_cluster_consumer: Optional[Consumer] = None
@@ -128,7 +121,7 @@ class KafkaReplicatorSource(Source):
     def run(self) -> None:
         self._source_cluster_consumer = Consumer(
             broker_address=self._broker_address,
-            consumer_group=self._consumer_group,
+            consumer_group=f"{self._config.consumer_group}-source-{self.name}",
             auto_offset_reset=self._auto_offset_reset,
             auto_commit_enable=False,
             extra_config=self._consumer_extra_config,
@@ -140,7 +133,7 @@ class KafkaReplicatorSource(Source):
 
         self._target_cluster_consumer = Consumer(
             broker_address=self._config.broker_address,
-            consumer_group=f"{self._config.consumer_group}-offsets",
+            consumer_group=f"{self._config.consumer_group}-source-{self.name}-offsets",
             auto_offset_reset=self._config.auto_offset_reset,
             auto_commit_enable=False,
             extra_config=self._config.consumer_extra_config,
@@ -162,22 +155,14 @@ class KafkaReplicatorSource(Source):
         super().run()
 
         self.init_checkpoint()
-        try:
-            while self._running:
-                if self._error:
-                    raise self._error
+        while self._running:
+            self._producer.poll()
+            msg = self.poll_source()
+            if msg is None:
+                continue
 
-                msg = self.poll_source()
-                if msg is None:
-                    continue
-
-                self.produce_message(msg)
-                self.commit_checkpoint()
-        except Exception:
-            self._checkpoint.close()
-            raise
-
-        self.commit_checkpoint(force=True)
+            self.produce_message(msg)
+            self.commit_checkpoint()
 
     def produce_message(self, msg: Message):
         topic_name, partition, offset = msg.topic(), msg.partition(), msg.offset()
@@ -197,12 +182,10 @@ class KafkaReplicatorSource(Source):
             )
         except Exception as exc:
             if self._on_consumer_error(exc, None, logger):
-                self._producer.poll()
                 return
             raise
 
         if msg is None:
-            self._producer.poll()
             return
 
         try:
@@ -272,7 +255,9 @@ class KafkaReplicatorSource(Source):
         elif source_topic_config.num_partitions < target_topic_config.num_partitions:
             logger.warning("Source topic has less partitions than destination topic")
 
-    def _target_cluster_offsets(self, partitions) -> Dict[int, int]:
+    def _target_cluster_offsets(
+        self, partitions: List[TopicPartition]
+    ) -> Dict[int, int]:
         partitions = [
             TopicPartition(
                 topic=self._producer_topic.name, partition=partition.partition
@@ -285,26 +270,24 @@ class KafkaReplicatorSource(Source):
         a = {partition.partition: partition.offset for partition in partitions_commited}
         return a
 
-    def on_assign(self, _, source_partitions) -> None:
-        try:
-            target_cluster_offset = self._target_cluster_offsets(source_partitions)
-            for partition in source_partitions:
-                partition.offset = target_cluster_offset.get(partition.partition, None)
-                logger.debug(
-                    "using offset %s for topic partition %s[%s]",
-                    partition.offset,
-                    partition.topic,
-                    partition.partition,
-                )
+    def on_assign(self, _, source_partitions: List[TopicPartition]) -> None:
+        target_cluster_offset = self._target_cluster_offsets(source_partitions)
+        for partition in source_partitions:
+            partition.offset = target_cluster_offset.get(partition.partition, None)
+            logger.debug(
+                "using offset %s for topic partition %s[%s]",
+                partition.offset,
+                partition.topic,
+                partition.partition,
+            )
 
-            self._source_cluster_consumer.incremental_assign(source_partitions)
-        except Exception as exc:
-            logger.exception("Error assigning partitions")
-            self._error = exc
+        self._source_cluster_consumer.incremental_assign(source_partitions)
 
-    def on_revoke(self, _, partitions) -> None:
-        if not self._error:
-            self.commit_checkpoint()
+    def on_revoke(self, *_) -> None:
+        if self._failed:
+            self._checkpoint.close()
+        else:
+            self.commit_checkpoint(force=True)
 
     def on_lost(self, _, partitions) -> None:
         pass
@@ -314,7 +297,7 @@ class KafkaReplicatorSource(Source):
         self._running = False
 
     def cleanup(self, failed: bool) -> None:
-        super().cleanup(failed)
+        self._failed = failed
         self._source_cluster_consumer.close()
         self._target_cluster_consumer.close()
 
