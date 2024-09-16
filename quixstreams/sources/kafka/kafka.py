@@ -100,7 +100,6 @@ class KafkaSource(Source):
             auto_offset_reset = app_config.auto_offset_reset
 
         self._config = app_config
-
         self._topic = topic
         self._on_consumer_error = on_consumer_error
         self._consumer_poll_timeout = (
@@ -111,17 +110,32 @@ class KafkaSource(Source):
         )
         self._value_deserializer = value_deserializer
         self._key_deserializer = key_deserializer
+        self._broker_address = broker_address
+        self._consumer_group = consumer_group
+        self._auto_offset_reset = auto_offset_reset
+        self._consumer_extra_config = consumer_extra_config
 
+        self._running = True
+        self._error: Optional[Exception] = None
+        self._checkpoint: Optional[Checkpoint] = None
+
+        self._source_cluster_consumer: Optional[Consumer] = None
+        self._source_cluster_admin: Optional[TopicAdmin] = None
+
+        self._target_cluster_consumer: Optional[Consumer] = None
+        self._target_cluster_admin: Optional[TopicAdmin] = None
+
+    def run(self) -> None:
         self._source_cluster_consumer = Consumer(
-            broker_address=broker_address,
-            consumer_group=consumer_group,
-            auto_offset_reset=auto_offset_reset,
+            broker_address=self._broker_address,
+            consumer_group=self._consumer_group,
+            auto_offset_reset=self._auto_offset_reset,
             auto_commit_enable=False,
-            extra_config=consumer_extra_config,
+            extra_config=self._consumer_extra_config,
         )
         self._source_cluster_admin = TopicAdmin(
-            broker_address=broker_address,
-            extra_config=consumer_extra_config,
+            broker_address=self._broker_address,
+            extra_config=self._consumer_extra_config,
         )
 
         self._target_cluster_consumer = Consumer(
@@ -136,11 +150,6 @@ class KafkaSource(Source):
             extra_config=self._config.consumer_extra_config,
         )
 
-        self._running = True
-        self._error: Optional[Exception] = None
-        self._checkpoint: Optional[Checkpoint] = None
-
-    def run(self) -> None:
         self._validate_topics()
 
         self._source_cluster_consumer.subscribe(
@@ -173,12 +182,6 @@ class KafkaSource(Source):
     def produce_message(self, msg: Message):
         topic_name, partition, offset = msg.topic(), msg.partition(), msg.offset()
         self._checkpoint.store_offset(topic_name, partition, offset)
-        logger.log(
-            5,
-            "producing message to partition %s with offset %s",
-            partition,
-            offset,
-        )
         self.produce(
             value=msg.value(),
             key=msg.key(),
@@ -316,7 +319,12 @@ class KafkaSource(Source):
         self._target_cluster_consumer.close()
 
     def default_topic(self) -> Topic:
-        config = self._source_cluster_admin.inspect_topics(
+        admin = TopicAdmin(
+            broker_address=self._broker_address,
+            extra_config=self._consumer_extra_config,
+        )
+
+        config = admin.inspect_topics(
             topic_names=[self._topic], timeout=self._config.request_timeout
         ).get(self._topic)
         if config is None:
