@@ -6,7 +6,7 @@ from quixstreams.models.serializers import DeserializerType
 from quixstreams.platforms.quix import QuixKafkaConfigsBuilder
 from quixstreams.platforms.quix.api import QuixPortalApiService
 
-from .kafka import KafkaSource
+from .kafka import KafkaReplicatorSource
 
 if TYPE_CHECKING:
     from quixstreams.app import ApplicationConfig
@@ -15,9 +15,9 @@ if TYPE_CHECKING:
 __all__ = ["QuixEnvironmentSource"]
 
 
-class QuixEnvironmentSource(KafkaSource):
+class QuixEnvironmentSource(KafkaReplicatorSource):
     """
-    Source implementation that replicates a topic from a Quix Cloud environment to your application cluster.
+    Source implementation that replicates a topic from a Quix Cloud environment to your application broker.
     It can copy messages for development and testing without risking producing them back or affecting the consumer groups.
 
     Running multiple instances of this source is supported.
@@ -69,7 +69,7 @@ class QuixEnvironmentSource(KafkaSource):
         :param quix_portal_api: The Quix portal API URL of the source environment.
             Default - `Quix__Portal__Api` environment variable or Quix cloud production URL
 
-        For other parameters See `quixstreams.sources.kafka.KafkaSource`
+        For other parameters See `quixstreams.sources.kafka.KafkaReplicatorSource`
         """
 
         if consumer_extra_config is None:

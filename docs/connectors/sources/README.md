@@ -26,6 +26,8 @@ if __name__ == "__main__":
 Quix streams provide a source out of the box.
 
 * [CSVSource](./csv-source.md): A source that reads data from a single CSV file.
+* [KafkaReplicatorSource](./kafka-source.md): A source that replicates a topic from a Kafka broker to your application broker.
+* [QuixEnvironmentSource](./quix-source.md): A source that replicates a topic from a Quix Cloud environment to your application broker.
 
 You can also implement your own, have a look at [Creating a Custom Source](custom-sources.md) for documentation on how to do that.
 

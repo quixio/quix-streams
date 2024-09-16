@@ -20,10 +20,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["KafkaSource"]
+__all__ = ["KafkaReplicatorSource"]
 
 
-class KafkaSource(Source):
+class KafkaReplicatorSource(Source):
     """
     Source implementation that replicates a topic from a Kafka broker to your application broker.
 
@@ -33,13 +33,13 @@ class KafkaSource(Source):
 
     ```python
     from quixstreams import Application
-    from quixstreams.sources.kafka import KafkaSource
+    from quixstreams.sources.kafka import KafkaReplicatorSource
 
     app = Application(
         consumer_group="group",
     )
 
-    source = KafkaSource(
+    source = KafkaReplicatorSource(
         name="source-second-kafka",
         app_config=app.config,
         topic="second-kafka-topic",

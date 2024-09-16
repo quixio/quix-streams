@@ -10,7 +10,11 @@ from quixstreams.platforms.quix.config import ConnectionConfig
 from quixstreams.kafka.consumer import Consumer
 from quixstreams.kafka.producer import Producer
 from quixstreams.models.topics import TopicAdmin, Topic, TopicConfig
-from quixstreams.sources import KafkaSource, SourceException, QuixEnvironmentSource
+from quixstreams.sources import (
+    KafkaReplicatorSource,
+    SourceException,
+    QuixEnvironmentSource,
+)
 
 logger = logging.getLogger("quixstreams")
 
@@ -31,7 +35,7 @@ class Base:
         return app_factory(auto_offset_reset="earliest", request_timeout=1)
 
 
-class TestKafkaSource(Base):
+class TestKafkaReplicatorSource(Base):
     def create_source_topic(self, num_partitions=1):
         source_topic = Topic(
             str(uuid.uuid4()),
@@ -48,7 +52,7 @@ class TestKafkaSource(Base):
         if broker_address is None:
             broker_address = self._external_broker_address
 
-        return KafkaSource(
+        return KafkaReplicatorSource(
             "test source",
             app_config=config,
             topic=topic.name,

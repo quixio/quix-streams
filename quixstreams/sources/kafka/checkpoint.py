@@ -12,7 +12,7 @@ from quixstreams.rowproducer import RowProducer
 
 class Checkpoint(BaseCheckpoint):
     """
-    Checkpoint implementation used by the KafkaSource
+    Checkpoint implementation used by the KafkaReplicatorSource
     """
 
     def __init__(
