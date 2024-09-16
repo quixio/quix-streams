@@ -17,7 +17,8 @@ __all__ = ["QuixEnvironmentSource"]
 
 class QuixEnvironmentSource(KafkaSource):
     """
-    Source implementation that replicate a topic from a quix workspace to your application cluster.
+    Source implementation that replicates a topic from a Quix Cloud environment to your application cluster.
+    It can copy messages for development and testing without risking producing them back or affecting the consumer groups.
 
     Running multiple instances of this source is supported.
 

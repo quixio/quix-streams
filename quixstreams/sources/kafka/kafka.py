@@ -25,7 +25,7 @@ __all__ = ["KafkaSource"]
 
 class KafkaSource(Source):
     """
-    Source implementation that replicate a topic from a kafka cluster to your application cluster.
+    Source implementation that replicates a topic from a Kafka broker to your application broker.
 
     Running multiple instances of this source is supported.
 
