@@ -94,12 +94,6 @@ class Stream:
         self.generated = monotonic_ns()
         self.pruned = False
 
-    @property
-    def all_parents(self) -> List[Self]:
-        if self.parent:
-            return [self.parent, *self.merge_parents]
-        return []
-
     def __repr__(self) -> str:
         """
         Generate a nice repr with all functions in the stream and its parents.
@@ -295,7 +289,7 @@ class Stream:
         tree_ = [node]
         while (
             (parent := node.parent)
-            and (allow_merges or len(node.all_parents) == 1)
+            and (allow_merges or not node.merge_parents)
             and (allow_splits or len(parent.children) < 2)
         ):
             tree_.append(parent)
@@ -356,10 +350,8 @@ class Stream:
         def _split_compose(composed, node):
             children = node.children
 
-            if len(children) == 1 and len(next(iter(children)).all_parents) < 2:
-                child = list(children)[0]
-                if len(child.all_parents) < 2:
-                    return _split_compose(composed, child)
+            if len(children) == 1 and not (child := next(iter(children))).merge_parents:
+                return _split_compose(composed, child)
 
             for idx, child in enumerate(
                 sorted(children, key=lambda node: node.generated)
@@ -368,12 +360,12 @@ class Stream:
 
             tree = node.root_path(allow_splits=False, allow_merges=False)
             composed = composer(tree, pending_composes.pop(node, composed))
-            if parents := tree[0].all_parents:
-                if len(parents) < 2:  # is split
-                    pending_composes.setdefault(tree[0].parent, []).append(composed)
-                else:  # is merge
-                    for parent in parents:
-                        pending_composes[parent] = composed
+            if parent := tree[0].parent:
+                if merges := tree[0].merge_parents:
+                    for p in [parent, *merges]:
+                        pending_composes[p] = composed
+                else:
+                    pending_composes.setdefault(parent, []).append(composed)
             else:
                 return composed
 
