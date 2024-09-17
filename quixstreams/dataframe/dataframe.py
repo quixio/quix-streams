@@ -117,13 +117,20 @@ class StreamingDataFrame(BaseStreaming):
         processing_context: ProcessingContext,
         stream: Optional[Stream] = None,
     ):
-        self._stream: Stream = stream or Stream()
         self._topic = topic
+        self._stream: Stream = stream or Stream()
+        self.merges = []
+        self.merges_into = None
         self._topic_manager = topic_manager
         self._registry = registry
         self._processing_context = processing_context
         self._producer = processing_context.producer
         self._locked = False
+
+    def _do_merge_ops(self, clone: Self, op: str, *args, **kwargs):
+        clone.merges = [getattr(sdf, op)(*args, **kwargs) for sdf in self.merges]
+        for sdf in clone.merges:
+            sdf.merges_into = sdf.merges_into if sdf.merges_into is not None else self
 
     @property
     def processing_context(self) -> ProcessingContext:
@@ -233,7 +240,11 @@ class StreamingDataFrame(BaseStreaming):
                 expand=expand,
                 metadata=metadata,
             )
-        return self.__dataframe_clone__(stream=stream)
+        clone = self.__dataframe_clone__(stream=stream)
+        self._do_merge_ops(
+            clone, "apply", func, stateful=stateful, expand=expand, metadata=metadata
+        )
+        return clone
 
     @overload
     def update(self, func: UpdateCallback) -> Self: ...
@@ -411,7 +422,9 @@ class StreamingDataFrame(BaseStreaming):
                 cast(Union[FilterCallback, FilterWithMetadataCallback], func),
                 metadata=metadata,
             )
-        return self.__dataframe_clone__(stream=stream)
+        clone = self.__dataframe_clone__(stream=stream)
+        self._do_merge_ops(clone, "filter", func, stateful=stateful, metadata=metadata)
+        return clone
 
     @overload
     def group_by(
@@ -503,9 +516,17 @@ class StreamingDataFrame(BaseStreaming):
             value_deserializer=value_deserializer,
         )
 
-        self.to_topic(topic=groupby_topic, key=self._groupby_key(key))
+        self._to_topic(topic=groupby_topic, key=self._groupby_key(key), merge=False)
         groupby_sdf = self.__dataframe_clone__(topic=groupby_topic)
         self._registry.register_groupby(source_sdf=self, new_sdf=groupby_sdf)
+        self._do_merge_ops(
+            groupby_sdf,
+            "group_by",
+            value_deserializer=value_deserializer,
+            key_deserializer=key_deserializer,
+            value_serializer=value_serializer,
+            key_serializer=key_serializer,
+        )
         return groupby_sdf
 
     def contains(self, key: str) -> StreamingSeries:
@@ -531,6 +552,24 @@ class StreamingDataFrame(BaseStreaming):
 
         return StreamingSeries.from_apply_callback(
             lambda value, key_, timestamp, headers: key in value, sdf_id=id(self)
+        )
+
+    def _to_topic(
+        self,
+        topic: Topic,
+        key: Optional[Callable[[Any], Any]] = None,
+        merge: bool = True,
+    ) -> Self:
+        return self._add_update(
+            lambda value, orig_key, timestamp, headers: self._produce(
+                topic=topic,
+                value=value,
+                key=orig_key if key is None else key(value),
+                timestamp=timestamp,
+                headers=headers,
+            ),
+            metadata=True,
+            merge=merge,
         )
 
     def to_topic(
@@ -567,16 +606,7 @@ class StreamingDataFrame(BaseStreaming):
             By default, the current message key will be used.
         :return: the updated StreamingDataFrame instance (reassignment NOT required).
         """
-        return self._add_update(
-            lambda value, orig_key, timestamp, headers: self._produce(
-                topic=topic,
-                value=value,
-                key=orig_key if key is None else key(value),
-                timestamp=timestamp,
-                headers=headers,
-            ),
-            metadata=True,
-        )
+        return self._to_topic(topic=topic, key=key, merge=True)
 
     def set_timestamp(self, func: Callable[[Any, Any, int, Any], int]) -> Self:
         """
@@ -617,7 +647,9 @@ class StreamingDataFrame(BaseStreaming):
             return value, key, new_timestamp, headers
 
         stream = self.stream.add_transform(func=_set_timestamp_callback)
-        return self.__dataframe_clone__(stream=stream)
+        clone = self.__dataframe_clone__(stream=stream)
+        self._do_merge_ops(clone, "set_timestamp", func)
+        return clone
 
     def set_headers(
         self,
@@ -668,7 +700,9 @@ class StreamingDataFrame(BaseStreaming):
             return value, key, timestamp, new_headers
 
         stream = self.stream.add_transform(func=_set_headers_callback)
-        return self.__dataframe_clone__(stream=stream)
+        clone = self.__dataframe_clone__(stream=stream)
+        self._do_merge_ops(clone, "set_timestamp", func)
+        return clone
 
     def print(self, pretty: bool = True, metadata: bool = False) -> Self:
         """
@@ -1031,10 +1065,12 @@ class StreamingDataFrame(BaseStreaming):
             )
 
         # uses apply without returning to make this operation terminal
-        self.apply(_sink_callback, metadata=True)
+        clone = self.apply(_sink_callback, metadata=True)
+        self._do_merge_ops(clone, "sink", sink)
 
     def merge(self, *others: Self):
-        self._stream = self.stream.merge([other.stream for other in others])
+        for other in others:
+            self.merges.append(other)
         return self
 
     def graph(self, filename: str = "./sdf_graph.gv"):
@@ -1090,7 +1126,14 @@ class StreamingDataFrame(BaseStreaming):
         self,
         func: Union[UpdateCallback, UpdateWithMetadataCallback],
         metadata: bool = False,
+        merge: bool = True,
     ):
+        if merge:
+            for sdf in self.merges:
+                sdf._add_update(func, metadata=metadata)
+                sdf.merges_into = (
+                    sdf.merges_into if sdf.merges_into is not None else self
+                )
         self._stream = self._stream.add_update(func, metadata=metadata)
         return self
 

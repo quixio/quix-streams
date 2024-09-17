@@ -171,16 +171,24 @@ class FixedTimeWindow:
         return self._apply_window(func=window_callback, name=self._name)
 
     def register_store(self):
-        self._dataframe.processing_context.state_manager.register_windowed_store(
-            topic_name=self._dataframe.topic.name, store_name=self._name
+        self._register_store()
+
+    def _register_store(self, dataframe: Optional["StreamingDataFrame"] = None):
+        if not dataframe:
+            dataframe = self._dataframe
+        dataframe.processing_context.state_manager.register_windowed_store(
+            topic_name=dataframe.topic.name, store_name=self._name
         )
 
     def _apply_window(
         self,
         func: TransformRecordCallbackExpandedWindowed,
         name: str,
+        dataframe: Optional["StreamingDataFrame"] = None,
     ) -> "StreamingDataFrame":
-        self.register_store()
+        if not dataframe:
+            dataframe = self._dataframe
+        self._register_store(dataframe)
 
         windowed_func = _as_windowed(
             func=func,
@@ -192,7 +200,13 @@ class FixedTimeWindow:
         # Transform callbacks can modify record key and timestamp,
         # and it's prone to misuse.
         stream = self._dataframe.stream.add_transform(func=windowed_func, expand=True)
-        return self._dataframe.__dataframe_clone__(stream=stream)
+        clone = self._dataframe.__dataframe_clone__(stream=stream)
+        clone.merges = [
+            self._apply_window(func, name, sdf) for sdf in self._dataframe.merges
+        ]
+        for sdf in clone.merges:
+            sdf.merges_into = sdf.merges_into if sdf.merges_into is not None else self
+        return clone
 
 
 def _noop() -> Any:

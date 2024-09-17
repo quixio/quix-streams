@@ -40,6 +40,8 @@ class Stream:
         self,
         func: Optional[StreamFunction] = None,
         parent: Optional[Self] = None,
+        # sdf_origin: Optional[str] = None,
+        # sdf_call: Tuple = ()
     ):
         """
         A base class for all streaming operations.
@@ -75,7 +77,7 @@ class Stream:
 
         :param func: a function to be called on the stream.
             It is expected to be wrapped into one of "Apply", "Filter", "Update" or
-            "Trasform" from `quixstreams.core.stream.functions` package.
+            "Transform" from `quixstreams.core.stream.functions` package.
             Default - "ApplyFunction(lambda value: value)".
         :param parent: a parent `Stream`
         """
@@ -83,6 +85,8 @@ class Stream:
             raise ValueError("Provided function must be a subclass of StreamFunction")
 
         self.func = func if func is not None else ApplyFunction(lambda value: value)
+        # self.sdf_origin = sdf_origin
+        # self.sdf_call = sdf_call
         self.parent = parent
         self.merges = []
         self.merged_by = None
@@ -450,13 +454,23 @@ class Stream:
             raise ValueError("The diff is empty")
         return diff
 
-    def __add_func__(self, func: StreamFunction) -> Self:
-        new_node = self.__class__(func=func, parent=self)
+    def __add_func__(
+        self,
+        func: StreamFunction,
+        # sdf_origin: Optional[str] = None,
+        # sdf_call: Tuple = (),
+    ) -> Self:
+        new_node = self.__class__(
+            func=func,
+            parent=self,
+            # sdf_origin=sdf_origin or self.sdf_origin,
+            # sdf_call=sdf_call
+        )
         self.children.add(new_node)
-        for node in self.merges:
-            node.merged_by = node.merged_by or self
-            new_merge_node = node.__add_func__(func)
-            new_node.merges.append(new_merge_node)
+        # for node in self.merges:
+        #     node.merged_by = node.merged_by or self
+        #     new_merge_node = node.__add_func__(func, self.sdf_origin, sdf_call)
+        #     new_node.merges.append(new_merge_node)
         return new_node
 
     def _default_sink(self, value: Any, key: Any, timestamp: int, headers: Any): ...
