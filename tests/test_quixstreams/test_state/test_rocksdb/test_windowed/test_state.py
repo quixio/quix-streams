@@ -53,6 +53,21 @@ def test_expire_windows(transaction_state):
         assert state.get_window(start_ms=20, end_ms=30) == 3
 
 
+def test_same_keys_in_db_and_update_cache(transaction_state):
+    with transaction_state() as state:
+        state.update_window(start_ms=0, end_ms=10, value=1, timestamp_ms=2)
+
+    with transaction_state() as state:
+        # The same window already exists in the db
+        state.update_window(start_ms=0, end_ms=10, value=3, timestamp_ms=8)
+
+        state.update_window(start_ms=10, end_ms=20, value=2, timestamp_ms=10)
+        expired = state.expire_windows(duration_ms=10)
+
+        # Value from the cache takes precedence over the value in the db
+        assert expired == [((0, 10), 3)]
+
+
 def test_get_latest_timestamp(windowed_rocksdb_store_factory):
     store = windowed_rocksdb_store_factory()
     partition = store.assign_partition(0)
