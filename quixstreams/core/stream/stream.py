@@ -287,7 +287,7 @@ class Stream:
         for node in diff:
             # Copy the node to ensure we don't alter the previously created Nodes
             node = copy.deepcopy(node)
-            node.parents = [parent] if parent else []
+            node.parent = parent
             parent = node
         self._prune(diff[0])
         return parent
@@ -370,9 +370,7 @@ class Stream:
             if len(children) == 1 and not (child := next(iter(children))).merge_parents:
                 return _split_compose(composed, child)
 
-            for idx, child in enumerate(
-                sorted(children, key=lambda node: node.generated)
-            ):
+            for child in sorted(children, key=lambda node: node.generated):
                 _split_compose(composed, child)
 
             tree = node.root_path(allow_splits=False, allow_merges=False)
@@ -426,6 +424,9 @@ class Stream:
         return wrapper
 
     def merge(self, others: List[Self]):
+        # This allows us to "unify" the streams with a new operation, which will be
+        # ignored during compose.
+        # There is probably a way to it without this, but it makes it easier for now
         new_node = self._add(IdentityFunction())
         new_node.merge_parents.extend(others)
         for other in others:
@@ -447,7 +448,9 @@ class Stream:
         # Iterate over a reversed list of functions
         for func in reversed(functions):
             # Validate that only allowed functions are passed
-            if isinstance(func, IdentityFunction) and composed is not None:
+            if isinstance(func, IdentityFunction) and not composed:
+                # These are added either when making a new Stream or doing a merge
+                # They do not need to be included as part of execution.
                 continue
             if isinstance(func, RegisterStoreFunction):
                 func(self.topic)
