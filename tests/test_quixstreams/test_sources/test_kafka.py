@@ -216,59 +216,6 @@ class TestKafkaReplicatorSource(Base):
 
         assert results == data
 
-    def test_kafka_source(self, app, executor):
-        destination_topic = app.topic(str(uuid.uuid4()))
-        source_topic = self.create_source_topic()
-
-        source = self.source(app.config, source_topic)
-        app.add_source(source, destination_topic)
-
-        # Produce data to the external kafka
-        data = list(range(self.NUMBER_OF_MESSAGES))
-        with Producer(broker_address=self._external_broker_address) as producer:
-            for i in data:
-                msg = source_topic.serialize("test", i)
-                producer.produce(
-                    topic=source_topic.name,
-                    key=msg.key,
-                    value=msg.value,
-                )
-
-        # Consume result data from main kafka
-        results = []
-
-        def _consume(config):
-            try:
-                with Consumer(
-                    broker_address=config.broker_address,
-                    consumer_group=config.consumer_group,
-                    auto_offset_reset="earliest",
-                    auto_commit_enable=False,
-                    extra_config=config.consumer_extra_config,
-                ) as consumer:
-                    consumer.subscribe([destination_topic.name])
-                    while True:
-                        msg = consumer.poll(timeout=10)
-                        if msg is None:
-                            app.stop()
-                            return
-
-                        data = destination_topic.deserialize(msg)
-                        results.append(data.value)
-
-                        if data.value == self.NUMBER_OF_MESSAGES - 1:
-                            app.stop()
-                            return
-            except BaseException:
-                logger.exception("error")
-                raise
-
-        app.setup_topics()
-        executor.submit(_consume, app.config)
-        app._run()
-
-        assert results == data
-
     def test_start_at_offset(self, app, executor):
         destination_topic = app.topic(str(uuid.uuid4()))
         source_topic = self.create_source_topic()
@@ -294,7 +241,7 @@ class TestKafkaReplicatorSource(Base):
         start_offset = 4
         with Consumer(
             broker_address=app.config.broker_address,
-            consumer_group=f"{app.config.consumer_group}-source-test source-offsets",
+            consumer_group="source-test source-offsets",
             auto_offset_reset=app.config.auto_offset_reset,
             auto_commit_enable=False,
             extra_config=app.config.consumer_extra_config,

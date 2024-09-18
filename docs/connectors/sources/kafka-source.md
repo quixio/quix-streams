@@ -37,6 +37,6 @@ You can configure the key and value deserializer used by the Streaming Dataframe
 
 ## Consumer group
 
-The Kafka Replicator consumer group is build from the application consumer group and the source name. It is used to store the processed messages offset. Changing either the application consumer group or the source name will reset the Kafka Replicator state. For more information see [the glossary](https://quix.io/docs/kb/glossary.html?h=consumer+group#consumer-group)
+The Kafka Replicator consumer group is the source name prefixed by `source-`. Changing the name will reset the source state and it will re-replicate the data based on the configured `auto_offset_reset`. It is not based on the application consumer group, changing the application consumer group will not reset the source.
 
-The Kafka Replicator commit the messages offset on the destination cluster. Only read access on the source cluser is necessary.
+For more information about consumer group [see the glosary](https://quix.io/docs/kb/glossary.html?h=consumer+group#consumer-group)

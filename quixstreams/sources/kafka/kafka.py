@@ -58,7 +58,7 @@ class KafkaReplicatorSource(Source):
         app_config: "ApplicationConfig",
         topic: str,
         broker_address: Union[str, ConnectionConfig],
-        auto_offset_reset: Optional[AutoOffsetReset] = None,
+        auto_offset_reset: AutoOffsetReset = "latest",
         consumer_extra_config: Optional[dict] = None,
         consumer_poll_timeout: Optional[float] = None,
         shutdown_timeout: float = 10,
@@ -121,7 +121,7 @@ class KafkaReplicatorSource(Source):
     def run(self) -> None:
         self._source_cluster_consumer = Consumer(
             broker_address=self._broker_address,
-            consumer_group=f"{self._config.consumer_group}-source-{self.name}",
+            consumer_group=f"source-{self.name}",
             auto_offset_reset=self._auto_offset_reset,
             auto_commit_enable=False,
             extra_config=self._consumer_extra_config,
@@ -133,7 +133,7 @@ class KafkaReplicatorSource(Source):
 
         self._target_cluster_consumer = Consumer(
             broker_address=self._config.broker_address,
-            consumer_group=f"{self._config.consumer_group}-source-{self.name}-offsets",
+            consumer_group=f"source-{self.name}-offsets",
             auto_offset_reset=self._config.auto_offset_reset,
             auto_commit_enable=False,
             extra_config=self._config.consumer_extra_config,
