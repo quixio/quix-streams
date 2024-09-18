@@ -516,16 +516,24 @@ class StreamingDataFrame(BaseStreaming):
         self._to_topic(topic=groupby_topic, key=self._groupby_key(key), merge=False)
         groupby_sdf = self.__dataframe_clone__(topic=groupby_topic)
         self._registry.register_groupby(source_sdf=self, new_sdf=groupby_sdf)
-        self._do_merge_ops(
-            groupby_sdf,
-            "group_by",
-            key,
-            name=name,
-            value_deserializer=value_deserializer,
-            key_deserializer=key_deserializer,
-            value_serializer=value_serializer,
-            key_serializer=key_serializer,
-        )
+        merges = []
+        for merge in self.merges:
+            if merge.topic.name == self.topic.name:
+                merges.append(
+                    merge.to_topic(topic=groupby_topic, key=self._groupby_key(key))
+                )
+            else:
+                merges.append(
+                    merge.group_by(
+                        key,
+                        name=name,
+                        value_deserializer=value_deserializer,
+                        key_deserializer=key_deserializer,
+                        value_serializer=value_serializer,
+                        key_serializer=key_serializer,
+                    )
+                )
+        groupby_sdf.merges = merges
         return groupby_sdf
 
     def contains(self, key: str) -> StreamingSeries:
