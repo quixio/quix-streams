@@ -145,7 +145,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
 
         # Use the latest expired timestamp to limit the iteration over
         # only those windows that have not been expired before
-        expired_windows = self._get_windows(
+        expired_windows = self.get_windows(
             start_from_ms=start_from,
             start_to_ms=start_to,
             prefix=prefix,
@@ -170,7 +170,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         key_bytes = key if isinstance(key, bytes) else serialize(key, dumps=self._dumps)
         return prefix + PREFIX_SEPARATOR + key_bytes
 
-    def _get_windows(
+    def get_windows(
         self, start_from_ms: int, start_to_ms: int, prefix: bytes
     ) -> List[Tuple[Tuple[int, int], Any]]:
         """
