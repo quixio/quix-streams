@@ -517,14 +517,12 @@ class StreamingDataFrame(BaseStreaming):
         groupby_sdf = self.__dataframe_clone__(topic=groupby_topic)
         self._registry.register_groupby(source_sdf=self, new_sdf=groupby_sdf)
         merges = []
-        for merge in self.merges:
-            if merge.topic.name == self.topic.name:
-                merges.append(
-                    merge.to_topic(topic=groupby_topic, key=self._groupby_key(key))
-                )
+        for sdf in self.merges:
+            if sdf.topic.name == self.topic.name:
+                sdf.to_topic(topic=groupby_topic, key=self._groupby_key(key))
             else:
                 merges.append(
-                    merge.group_by(
+                    sdf.group_by(
                         key,
                         name=name,
                         value_deserializer=value_deserializer,
