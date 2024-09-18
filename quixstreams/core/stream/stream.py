@@ -75,7 +75,7 @@ class Stream:
 
         :param func: a function to be called on the stream.
             It is expected to be wrapped into one of "Apply", "Filter", "Update" or
-            "Transform" from `quixstreams.core.stream.functions` package.
+            "Trasform" from `quixstreams.core.stream.functions` package.
             Default - "ApplyFunction(lambda value: value)".
         :param parent: a parent `Stream`
         """
@@ -84,8 +84,6 @@ class Stream:
 
         self.func = func if func is not None else ApplyFunction(lambda value: value)
         self.parent = parent
-        self.merges = []
-        self.merged_by = None
         self.children = set()
         self.generated = monotonic_ns()
         self.pruned = False
@@ -392,11 +390,6 @@ class Stream:
                 buffer.clear()
 
         return wrapper
-
-    def merge(self, others: List[Self]):
-        for other in others:
-            self.merges.append(other)
-        return self
 
     def _compose(
         self,
