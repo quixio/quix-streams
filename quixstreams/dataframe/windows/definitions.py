@@ -164,7 +164,7 @@ class FixedTimeWindowDefinition(abc.ABC):
         def reducer(agg: dict, current: int):
             aggregated = {
                 'min': min(agg['min'], current),
-                'max': max(agg['max'], current)
+                'max': max(agg['max'], current),
                 'count': agg['count'] + 1
             }
             return aggregated
