@@ -154,6 +154,7 @@ class KafkaSource(Source):
 
         self.init_checkpoint()
         try:
+            logger.log(5, "starting run loop")
             while self._running:
                 if self._error:
                     raise self._error
