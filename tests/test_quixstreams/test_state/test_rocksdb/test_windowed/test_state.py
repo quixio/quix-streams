@@ -81,3 +81,106 @@ def test_get_latest_timestamp(windowed_rocksdb_store_factory):
     partition = store.assign_partition(0)
     with partition.begin() as tx:
         assert tx.get_latest_timestamp() == timestamp
+
+
+@pytest.mark.parametrize(
+    "db_windows, cached_windows, deleted_windows, get_windows_args, expected_windows",
+    [
+        pytest.param(
+            [
+                dict(start_ms=1, end_ms=11, value=1, timestamp_ms=1),
+                dict(start_ms=2, end_ms=12, value=2, timestamp_ms=2),
+                dict(start_ms=3, end_ms=13, value=3, timestamp_ms=3),
+            ],
+            [],
+            [],
+            dict(start_from_ms=1, start_to_ms=2),
+            [((2, 12), 2)],
+            id="start-from-exclusive-start-to-inclusive",
+        ),
+        pytest.param(
+            [
+                dict(start_ms=2, end_ms=12, value=3, timestamp_ms=3),
+                dict(start_ms=0, end_ms=10, value=1, timestamp_ms=1),
+                dict(start_ms=1, end_ms=11, value=2, timestamp_ms=2),
+            ],
+            [],
+            [],
+            dict(start_from_ms=-1, start_to_ms=2),
+            [((0, 10), 1), ((1, 11), 2), ((2, 12), 3)],
+            id="messages-in-db",
+        ),
+        pytest.param(
+            [],
+            [
+                dict(start_ms=2, end_ms=12, value=3, timestamp_ms=3),
+                dict(start_ms=0, end_ms=10, value=1, timestamp_ms=1),
+                dict(start_ms=1, end_ms=11, value=2, timestamp_ms=2),
+            ],
+            [],
+            dict(start_from_ms=-1, start_to_ms=2),
+            [((0, 10), 1), ((1, 11), 2), ((2, 12), 3)],
+            id="messages-in-cache",
+        ),
+        pytest.param(
+            [
+                dict(start_ms=2, end_ms=12, value=3, timestamp_ms=3),
+                dict(start_ms=0, end_ms=10, value=1, timestamp_ms=1),
+            ],
+            [
+                dict(start_ms=1, end_ms=11, value=2, timestamp_ms=2),
+            ],
+            [],
+            dict(start_from_ms=-1, start_to_ms=2),
+            [((0, 10), 1), ((1, 11), 2), ((2, 12), 3)],
+            id="messages-both-in-db-and-in-cache",
+        ),
+        pytest.param(
+            [
+                dict(start_ms=2, end_ms=12, value=3, timestamp_ms=3),
+                dict(start_ms=0, end_ms=10, value=1, timestamp_ms=1),
+                dict(start_ms=3, end_ms=13, value=4, timestamp_ms=4),
+            ],
+            [
+                dict(start_ms=1, end_ms=11, value=2, timestamp_ms=2),
+                dict(start_ms=0, end_ms=10, value=5, timestamp_ms=1),
+            ],
+            [],
+            dict(start_from_ms=-1, start_to_ms=3),
+            [((0, 10), 5), ((1, 11), 2), ((2, 12), 3), ((3, 13), 4)],
+            id="cache-message-overrides-db-message",
+        ),
+        pytest.param(
+            [
+                dict(start_ms=0, end_ms=10, value=1, timestamp_ms=1),
+                dict(start_ms=1, end_ms=11, value=2, timestamp_ms=2),
+                dict(start_ms=2, end_ms=12, value=3, timestamp_ms=3),
+            ],
+            [],
+            [dict(start_ms=0, end_ms=10)],
+            dict(start_from_ms=-1, start_to_ms=2),
+            [((1, 11), 2), ((2, 12), 3)],
+            id="ignore-deleted-windows",
+        ),
+    ],
+)
+def test_get_windows(
+    db_windows,
+    cached_windows,
+    deleted_windows,
+    get_windows_args,
+    expected_windows,
+    transaction_state,
+):
+    with transaction_state() as state:
+        for window in db_windows:
+            state.update_window(**window)
+
+    with transaction_state() as state:
+        for window in cached_windows:
+            state.update_window(**window)
+        for window in deleted_windows:
+            state._transaction.delete_window(**window, prefix=state._prefix)
+
+        windows = state.get_windows(**get_windows_args)
+        assert list(windows) == expected_windows

@@ -83,3 +83,12 @@ class WindowedTransactionState(WindowedState):
         return self._transaction.expire_windows(
             duration_ms=duration_ms, grace_ms=grace_ms, prefix=self._prefix
         )
+
+    def get_windows(
+        self, start_from_ms: int, start_to_ms: int
+    ) -> List[Tuple[Tuple[int, int], Any]]:
+        return self._transaction.get_windows(
+            start_from_ms=start_from_ms,
+            start_to_ms=start_to_ms,
+            prefix=self._prefix,
+        )
