@@ -188,17 +188,20 @@ class KafkaSource(Source):
         )
 
     def poll_source(self) -> Optional[Message]:
+        logger.log(5, "polling source with timeout %s", self._consumer_poll_timeout)
         try:
             msg = self._source_cluster_consumer.poll(
                 timeout=self._consumer_poll_timeout
             )
         except Exception as exc:
+            logger.log("polling source: failed with %s", exc)
             if self._on_consumer_error(exc, None, logger):
                 self._producer.poll()
                 return
             raise
 
         if msg is None:
+            logger.log("polling source: no message", exc)
             self._producer.poll()
             return
 
@@ -206,6 +209,7 @@ class KafkaSource(Source):
             if err := msg.error():
                 raise KafkaConsumerException(error=err)
         except Exception as exc:
+            logger.log("polling source: msg failed with %s", exc)
             if self._on_consumer_error(exc, msg, logger):
                 return
             raise
