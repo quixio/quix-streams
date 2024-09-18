@@ -167,15 +167,20 @@ class StateStoreManager:
         :param store_name: store name
         """
         store = self._stores.get(topic_name, {}).get(store_name)
-        if store:
-            raise WindowedStoreAlreadyRegisteredError()
-        self._stores.setdefault(topic_name, {})[store_name] = WindowedRocksDBStore(
-            name=store_name,
-            topic=topic_name,
-            base_dir=str(self._state_dir),
-            changelog_producer_factory=self._setup_changelogs(topic_name, store_name),
-            options=self._rocksdb_options,
-        )
+        # TODO: Might want to add additional checks here to stop attempts at adding a
+        #   "duplicate" window...might just need to store user-added ones in another
+        #   variable (_pending_stores?) on StateStoreManager or something.
+        print("TODO: do additional checks to stop duplicate windowing attempts")
+        if not store:
+            self._stores.setdefault(topic_name, {})[store_name] = WindowedRocksDBStore(
+                name=store_name,
+                topic=topic_name,
+                base_dir=str(self._state_dir),
+                changelog_producer_factory=self._setup_changelogs(
+                    topic_name, store_name
+                ),
+                options=self._rocksdb_options,
+            )
 
     def clear_stores(self):
         """

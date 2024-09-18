@@ -116,8 +116,8 @@ class StreamingDataFrame(BaseStreaming):
         processing_context: ProcessingContext,
         stream: Optional[Stream] = None,
     ):
-        self._stream: Stream = stream or Stream()
         self._topic = topic
+        self._stream: Stream = stream or Stream(topic=self._topic.name)
         self._topic_manager = topic_manager
         self._registry = registry
         self._processing_context = processing_context
@@ -1059,12 +1059,17 @@ class StreamingDataFrame(BaseStreaming):
         return self
 
     def _register_store(self):
-        """
-        Register the default store for input topic in StateStoreManager
-        """
-        self._processing_context.state_manager.register_store(
-            topic_name=self._topic.name
+        func = self._processing_context.state_manager.register_store
+        self._stream = self._stream.add_store_registration(func)
+        return self
+
+    def __register_windowed_store__(self, name: str):
+        func = functools.partial(
+            self._processing_context.state_manager.register_windowed_store,
+            store_name=name,
         )
+        self._stream = self._stream.add_store_registration(func)
+        return self
 
     def _groupby_key(
         self, key: Union[str, Callable[[Any], Any]]

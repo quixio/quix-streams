@@ -745,6 +745,7 @@ class Application:
                 DeprecationWarning,
             )
         self._setup_signal_handlers()
+        dataframes_composed = self._dataframe_registry.compose_all()
 
         logger.info(
             f"Starting the Application with the config: "
@@ -782,8 +783,6 @@ class Application:
 
             # Initialize the checkpoint
             self._processing_context.init_checkpoint()
-
-            dataframes_composed = self._dataframe_registry.compose_all()
 
             while self._running:
                 if self._state_manager.recovery_required:
