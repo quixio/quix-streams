@@ -519,6 +519,8 @@ class StreamingDataFrame(BaseStreaming):
         self._do_merge_ops(
             groupby_sdf,
             "group_by",
+            key,
+            name=name,
             value_deserializer=value_deserializer,
             key_deserializer=key_deserializer,
             value_serializer=value_serializer,
