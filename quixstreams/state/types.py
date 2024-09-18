@@ -363,6 +363,12 @@ class WindowedState(Protocol):
         """
         ...
 
+    def get_windows(
+        self, start_from_ms: int, start_to_ms: int
+    ) -> List[Tuple[Tuple[int, int], Any]]:
+        # TODO: docstring
+        ...
+
 
 class WindowedPartitionTransaction(Protocol):
 
@@ -473,6 +479,12 @@ class WindowedPartitionTransaction(Protocol):
         :param prefix: a key prefix
         :param grace_ms: grace period in milliseconds. Default - "0"
         """
+        ...
+
+    def get_windows(
+        self, start_from_ms: int, start_to_ms: int, prefix: bytes
+    ) -> List[Tuple[Tuple[int, int], Any]]:
+        # TODO: docstring
         ...
 
     def flush(
