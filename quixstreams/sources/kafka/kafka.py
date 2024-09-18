@@ -67,7 +67,10 @@ class KafkaReplicatorSource(Source):
         key_deserializer: DeserializerType = "bytes",
     ) -> None:
         """
-        :param name: The source unique name. Used to generate the default topic name.
+        :param name: The source unique name.  
+            It is used to generate the default topic name and consumer group name on the source broker.
+            Running multiple instances of `KafkaReplicatorSource` with the same name connected 
+            to the same broker will make them share the same consumer group.
         :param app_config: The configuration of the application. Used by the source to connect to the application kafka broker.
         :param topic: The topic to replicate.
         :param broker_address: The connection settings for the source Kafka.
