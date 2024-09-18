@@ -40,8 +40,6 @@ class Stream:
         self,
         func: Optional[StreamFunction] = None,
         parent: Optional[Self] = None,
-        # sdf_origin: Optional[str] = None,
-        # sdf_call: Tuple = ()
     ):
         """
         A base class for all streaming operations.
@@ -85,8 +83,6 @@ class Stream:
             raise ValueError("Provided function must be a subclass of StreamFunction")
 
         self.func = func if func is not None else ApplyFunction(lambda value: value)
-        # self.sdf_origin = sdf_origin
-        # self.sdf_call = sdf_call
         self.parent = parent
         self.merges = []
         self.merged_by = None
@@ -130,7 +126,7 @@ class Stream:
             filter_func = FilterWithMetadataFunction(func)
         else:
             filter_func = FilterFunction(func)
-        return self.__add_func__(filter_func)
+        return self._add(filter_func)
 
     def add_apply(
         self,
@@ -163,7 +159,7 @@ class Stream:
             apply_func = ApplyWithMetadataFunction(func, expand=expand)
         else:
             apply_func = ApplyFunction(func, expand=expand)
-        return self.__add_func__(apply_func)
+        return self._add(apply_func)
 
     def add_update(
         self,
@@ -187,7 +183,7 @@ class Stream:
             update_func = UpdateWithMetadataFunction(func)
         else:
             update_func = UpdateFunction(func)
-        return self.__add_func__(update_func)
+        return self._add(update_func)
 
     def add_transform(
         self,
@@ -212,7 +208,7 @@ class Stream:
         :return: a new Stream derived from the current one
         """
 
-        return self.__add_func__(TransformFunction(func, expand=expand))
+        return self._add(TransformFunction(func, expand=expand))
 
     def diff(self, other: "Stream") -> Self:
         """
@@ -454,23 +450,9 @@ class Stream:
             raise ValueError("The diff is empty")
         return diff
 
-    def __add_func__(
-        self,
-        func: StreamFunction,
-        # sdf_origin: Optional[str] = None,
-        # sdf_call: Tuple = (),
-    ) -> Self:
-        new_node = self.__class__(
-            func=func,
-            parent=self,
-            # sdf_origin=sdf_origin or self.sdf_origin,
-            # sdf_call=sdf_call
-        )
+    def _add(self, func: StreamFunction) -> Self:
+        new_node = self.__class__(func=func, parent=self)
         self.children.add(new_node)
-        # for node in self.merges:
-        #     node.merged_by = node.merged_by or self
-        #     new_merge_node = node.__add_func__(func, self.sdf_origin, sdf_call)
-        #     new_node.merges.append(new_merge_node)
         return new_node
 
     def _default_sink(self, value: Any, key: Any, timestamp: int, headers: Any): ...

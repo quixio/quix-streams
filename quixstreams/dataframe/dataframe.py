@@ -120,7 +120,6 @@ class StreamingDataFrame(BaseStreaming):
         self._topic = topic
         self._stream: Stream = stream or Stream()
         self.merges = []
-        self.merges_into = None
         self._topic_manager = topic_manager
         self._registry = registry
         self._processing_context = processing_context
@@ -129,8 +128,6 @@ class StreamingDataFrame(BaseStreaming):
 
     def _do_merge_ops(self, clone: Self, op: str, *args, **kwargs):
         clone.merges = [getattr(sdf, op)(*args, **kwargs) for sdf in self.merges]
-        for sdf in clone.merges:
-            sdf.merges_into = sdf.merges_into if sdf.merges_into is not None else self
 
     @property
     def processing_context(self) -> ProcessingContext:
@@ -1073,41 +1070,6 @@ class StreamingDataFrame(BaseStreaming):
             self.merges.append(other)
         return self
 
-    def graph(self, filename: str = "./sdf_graph.gv"):
-
-        dag = graphviz.Digraph(comment="SDF")
-        merged_by_dict = {}
-
-        def stream_id(stream):
-            return str(id(stream))
-
-        def add_dag_node(stream):
-            dag.node(
-                stream_id(stream),
-                f"{stream.func.__class__.__name__}: {stream.func.func.__name__}",
-            )
-
-        def add_dag_edge(parent, child):
-            dag.edge(stream_id(parent), stream_id(child))
-
-        def graph_tree(stream):
-            for child in sorted(stream.children, key=lambda node: node.generated):
-                add_dag_node(child)
-                add_dag_edge(stream, child)
-                if child.merged_by:
-                    merged_by_dict[child] = child.merged_by
-                else:
-                    graph_tree(child)
-
-        tree_root = self.stream.full_tree()[0]
-        add_dag_node(tree_root)
-        graph_tree(tree_root)
-        for stream, merger in merged_by_dict.items():
-            for child in merger.children:
-                add_dag_edge(stream, child)
-
-        dag.render(filename, view=True)
-
     def _produce(
         self,
         topic: Topic,
@@ -1131,9 +1093,6 @@ class StreamingDataFrame(BaseStreaming):
         if merge:
             for sdf in self.merges:
                 sdf._add_update(func, metadata=metadata)
-                sdf.merges_into = (
-                    sdf.merges_into if sdf.merges_into is not None else self
-                )
         self._stream = self._stream.add_update(func, metadata=metadata)
         return self
 

@@ -174,7 +174,7 @@ class FixedTimeWindow:
         self._register_store()
 
     def _register_store(self, dataframe: Optional["StreamingDataFrame"] = None):
-        if not dataframe:
+        if dataframe is None:
             dataframe = self._dataframe
         dataframe.processing_context.state_manager.register_windowed_store(
             topic_name=dataframe.topic.name, store_name=self._name
@@ -186,7 +186,7 @@ class FixedTimeWindow:
         name: str,
         dataframe: Optional["StreamingDataFrame"] = None,
     ) -> "StreamingDataFrame":
-        if not dataframe:
+        if dataframe is None:
             dataframe = self._dataframe
         self._register_store(dataframe)
 
@@ -199,13 +199,9 @@ class FixedTimeWindow:
         # to avoid adding "transform" API to it.
         # Transform callbacks can modify record key and timestamp,
         # and it's prone to misuse.
-        stream = self._dataframe.stream.add_transform(func=windowed_func, expand=True)
-        clone = self._dataframe.__dataframe_clone__(stream=stream)
-        clone.merges = [
-            self._apply_window(func, name, sdf) for sdf in self._dataframe.merges
-        ]
-        for sdf in clone.merges:
-            sdf.merges_into = sdf.merges_into if sdf.merges_into is not None else self
+        stream = dataframe.stream.add_transform(func=windowed_func, expand=True)
+        clone = dataframe.__dataframe_clone__(stream=stream)
+        clone.merges = [self._apply_window(func, name, sdf) for sdf in dataframe.merges]
         return clone
 
 
