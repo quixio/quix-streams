@@ -1,0 +1,3 @@
+python-dateutil
+websockets
+quixstreams>=2.11, <3.0
