@@ -117,6 +117,9 @@ class SourceProcess(multiprocessing.Process):
         Raise a `quixstreams.sources.manager.SourceException`
         if the child process was terminated with an exception.
         """
+        if not self.started:
+            return
+
         if super().is_alive():
             return
 
