@@ -2010,7 +2010,7 @@ sdf = StreamingDataFrame(...)
 def reducer(agg: dict, current: int):
     aggregated = {
         'min': min(agg['min'], current),
-        'max': max(agg['max'], current)
+        'max': max(agg['max'], current),
         'count': agg['count'] + 1
     }
     return aggregated
@@ -2245,7 +2245,7 @@ If this method fails, it will trigger the provided "on_error" callback.
 #### RowProducer.poll
 
 ```python
-def poll(timeout: float = None)
+def poll(timeout: float = 0)
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowproducer.py#L161)
@@ -8933,6 +8933,7 @@ def get_consumer(auto_commit_enable: bool = True) -> Consumer
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L692)
 
 Create and return a pre-configured Consumer instance.
+
 The Consumer is initialized with params passed to Application.
 
 It's useful for consuming data from Kafka outside the standard
@@ -8967,6 +8968,11 @@ with app.get_consumer() as consumer:
 
 ```
 
+**Arguments**:
+
+- `auto_commit_enable`: Enable or disable auto commit
+Default - True
+
 <a id="quixstreams.app.Application.clear_state"></a>
 
 #### Application.clear\_state
@@ -8975,7 +8981,7 @@ with app.get_consumer() as consumer:
 def clear_state()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L739)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L742)
 
 Clear the state of the application.
 
@@ -8987,7 +8993,7 @@ Clear the state of the application.
 def add_source(source: BaseSource, topic: Optional[Topic] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L745)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L748)
 
 Add a source to the application.
 
@@ -9007,7 +9013,7 @@ Default: the source default
 def run(dataframe: StreamingDataFrame)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L764)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L767)
 
 Start processing data from Kafka using provided `StreamingDataFrame`
 
@@ -9035,6 +9041,18 @@ app.run(dataframe=df)
 
 - `dataframe`: instance of `StreamingDataFrame`
 
+<a id="quixstreams.app.Application.setup_topics"></a>
+
+#### Application.setup\_topics
+
+```python
+def setup_topics()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L887)
+
+Validate and create the topics
+
 <a id="quixstreams.app.ApplicationConfig"></a>
 
 ### ApplicationConfig
@@ -9043,7 +9061,7 @@ app.run(dataframe=df)
 class ApplicationConfig(BaseSettings)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1056)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1063)
 
 Immutable object holding the application configuration
 
@@ -9064,7 +9082,7 @@ def settings_customise_sources(
 ) -> Tuple[PydanticBaseSettingsSource, ...]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1090)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1097)
 
 Included to ignore reading/setting values from the environment
 
@@ -9076,13 +9094,221 @@ Included to ignore reading/setting values from the environment
 def copy(**kwargs) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1103)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1110)
 
 Update the application config and return a copy
 
 <a id="quixstreams.sources"></a>
 
 ## quixstreams.sources
+
+<a id="quixstreams.sources.kafka.checkpoint"></a>
+
+## quixstreams.sources.kafka.checkpoint
+
+<a id="quixstreams.sources.kafka.checkpoint.Checkpoint"></a>
+
+### Checkpoint
+
+```python
+class Checkpoint(BaseCheckpoint)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/kafka/checkpoint.py#L15)
+
+Checkpoint implementation used by the KafkaReplicatorSource
+
+<a id="quixstreams.sources.kafka.checkpoint.Checkpoint.close"></a>
+
+#### Checkpoint.close
+
+```python
+def close()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/kafka/checkpoint.py#L41)
+
+Perform cleanup (when the checkpoint is empty) instead of committing.
+
+Needed for exactly-once, as Kafka transactions are timeboxed.
+
+<a id="quixstreams.sources.kafka.checkpoint.Checkpoint.commit"></a>
+
+#### Checkpoint.commit
+
+```python
+def commit()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/kafka/checkpoint.py#L50)
+
+Commit the checkpoint.
+
+This method will:
+ 1. Flush the producer to ensure everything is delivered.
+ 2. Commit topic offsets.
+
+<a id="quixstreams.sources.kafka"></a>
+
+## quixstreams.sources.kafka
+
+<a id="quixstreams.sources.kafka.kafka"></a>
+
+## quixstreams.sources.kafka.kafka
+
+<a id="quixstreams.sources.kafka.kafka.KafkaReplicatorSource"></a>
+
+### KafkaReplicatorSource
+
+```python
+class KafkaReplicatorSource(Source)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/kafka/kafka.py#L26)
+
+Source implementation that replicates a topic from a Kafka broker to your application broker.
+
+Running multiple instances of this source is supported.
+
+Example Snippet:
+
+```python
+from quixstreams import Application
+from quixstreams.sources.kafka import KafkaReplicatorSource
+
+app = Application(
+    consumer_group="group",
+)
+
+source = KafkaReplicatorSource(
+    name="source-second-kafka",
+    app_config=app.config,
+    topic="second-kafka-topic",
+    broker_address="localhost:9092",
+)
+
+sdf = app.dataframe(source=source)
+sdf = sdf.print()
+app.run(sdf)
+```
+
+<a id="quixstreams.sources.kafka.kafka.KafkaReplicatorSource.__init__"></a>
+
+#### KafkaReplicatorSource.\_\_init\_\_
+
+```python
+def __init__(name: str,
+             app_config: "ApplicationConfig",
+             topic: str,
+             broker_address: Union[str, ConnectionConfig],
+             auto_offset_reset: AutoOffsetReset = "latest",
+             consumer_extra_config: Optional[dict] = None,
+             consumer_poll_timeout: Optional[float] = None,
+             shutdown_timeout: float = 10,
+             on_consumer_error: Optional[
+                 ConsumerErrorCallback] = default_on_consumer_error,
+             value_deserializer: DeserializerType = "json",
+             key_deserializer: DeserializerType = "bytes") -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/kafka/kafka.py#L55)
+
+**Arguments**:
+
+- `name`: The source unique name.
+It is used to generate the default topic name and consumer group name on the source broker.
+Running multiple instances of `KafkaReplicatorSource` with the same name connected
+to the same broker will make them share the same consumer group.
+- `app_config`: The configuration of the application. Used by the source to connect to the application kafka broker.
+- `topic`: The topic to replicate.
+- `broker_address`: The connection settings for the source Kafka.
+- `auto_offset_reset`: Consumer `auto.offset.reset` setting.
+Default - Use the Application `auto_offset_reset` setting.
+- `consumer_extra_config`: A dictionary with additional options that
+will be passed to `confluent_kafka.Consumer` as is.
+Default - `None`
+- `consumer_poll_timeout`: timeout for `RowConsumer.poll()`
+Default - Use the Application `consumer_poll_timeout` setting.
+- `shutdown_timeout`: Time in second the application waits for the source to gracefully shutdown.
+- `on_consumer_error`: Triggered when the source `Consumer` fails to poll Kafka.
+- `value_deserializer`: The default topic value deserializer, used by StreamingDataframe connected to the source.
+Default - `json`
+- `key_deserializer`: The default topic key deserializer, used by StreamingDataframe connected to the source.
+Default - `json`
+
+<a id="quixstreams.sources.kafka.quix"></a>
+
+## quixstreams.sources.kafka.quix
+
+<a id="quixstreams.sources.kafka.quix.QuixEnvironmentSource"></a>
+
+### QuixEnvironmentSource
+
+```python
+class QuixEnvironmentSource(KafkaReplicatorSource)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/kafka/quix.py#L18)
+
+Source implementation that replicates a topic from a Quix Cloud environment to your application broker.
+It can copy messages for development and testing without risking producing them back or affecting the consumer groups.
+
+Running multiple instances of this source is supported.
+
+Example Snippet:
+
+```python
+from quixstreams import Application
+from quixstreams.sources.kafka import QuixEnvironmentSource
+
+app = Application(
+    consumer_group="group",
+)
+
+source = QuixEnvironmentSource(
+    name="source-quix",
+    app_config=app.config,
+    quix_workspace_id="WORKSPACE_ID",
+    quix_sdk_token="WORKSPACE_SDK_TOKEN",
+    topic="quix-source-topic",
+)
+
+sdf = app.dataframe(source=source)
+sdf = sdf.print()
+app.run(sdf)
+```
+
+<a id="quixstreams.sources.kafka.quix.QuixEnvironmentSource.__init__"></a>
+
+#### QuixEnvironmentSource.\_\_init\_\_
+
+```python
+def __init__(name: str,
+             app_config: "ApplicationConfig",
+             topic: str,
+             quix_sdk_token: str,
+             quix_workspace_id: str,
+             quix_portal_api: Optional[str] = None,
+             auto_offset_reset: Optional[AutoOffsetReset] = None,
+             consumer_extra_config: Optional[dict] = None,
+             consumer_poll_timeout: Optional[float] = None,
+             shutdown_timeout: float = 10,
+             on_consumer_error: Optional[
+                 ConsumerErrorCallback] = default_on_consumer_error,
+             value_deserializer: DeserializerType = "json",
+             key_deserializer: DeserializerType = "bytes") -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/kafka/quix.py#L49)
+
+**Arguments**:
+
+- `quix_workspace_id`: The Quix workspace ID of the source environment.
+- `quix_sdk_token`: Quix cloud sdk token used to connect to the source environment.
+- `quix_portal_api`: The Quix portal API URL of the source environment.
+Default - `Quix__Portal__Api` environment variable or Quix cloud production URL
+
+For other parameters See `quixstreams.sources.kafka.KafkaReplicatorSource`
 
 <a id="quixstreams.sources.csv"></a>
 
@@ -9190,7 +9416,7 @@ if the child process was terminated with an exception.
 def stop()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/manager.py#L136)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/manager.py#L139)
 
 Handle shutdown of the source and its subprocess.
 
@@ -9206,7 +9432,7 @@ is still alive, it will kill it with a SIGKILL.
 class SourceManager()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/manager.py#L159)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/manager.py#L162)
 
 Class managing the sources registered with the app
 
@@ -9220,7 +9446,7 @@ Sources run in their separate process pay attention about cross-process communic
 def register(source: BaseSource)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/manager.py#L169)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/manager.py#L172)
 
 Register a new source in the manager.
 
@@ -9234,7 +9460,7 @@ Each source need to already be configured, can't reuse a topic and must be uniqu
 def raise_for_error() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/manager.py#L209)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/manager.py#L212)
 
 Raise an exception if any process has stopped with an exception
 
@@ -9246,7 +9472,7 @@ Raise an exception if any process has stopped with an exception
 def is_alive() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/manager.py#L216)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/manager.py#L219)
 
 Check if any process is alive
 
@@ -9262,7 +9488,7 @@ True if at least one process is alive
 class SourceException(Exception)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/manager.py#L238)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/manager.py#L241)
 
 Raised in the parent process when a source finish with an exception
 
@@ -9730,55 +9956,59 @@ single Row, list of Rows or None
 
 ## quixstreams.checkpointing.checkpoint
 
-<a id="quixstreams.checkpointing.checkpoint.Checkpoint"></a>
+<a id="quixstreams.checkpointing.checkpoint.BaseCheckpoint"></a>
 
-### Checkpoint
+### BaseCheckpoint
 
 ```python
-class Checkpoint()
+class BaseCheckpoint()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L27)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L28)
 
-Class to keep track of state updates and consumer offsets and to checkpoint these
+Base class to keep track of state updates and consumer offsets and to checkpoint these
 updates on schedule.
 
-<a id="quixstreams.checkpointing.checkpoint.Checkpoint.expired"></a>
+Two implementations exist:
+    * one for checkpointing the Application in quixstreams/checkpoint/checkpoint.py
+    * one for checkpointing the kafka source in quixstreams/sources/kafka/checkpoint.py
 
-#### Checkpoint.expired
+<a id="quixstreams.checkpointing.checkpoint.BaseCheckpoint.expired"></a>
+
+#### BaseCheckpoint.expired
 
 ```python
 def expired() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L67)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L57)
 
 Returns `True` if checkpoint deadline has expired OR
 if the total number of processed offsets exceeded the "commit_every" limit
 when it's defined.
 
-<a id="quixstreams.checkpointing.checkpoint.Checkpoint.empty"></a>
+<a id="quixstreams.checkpointing.checkpoint.BaseCheckpoint.empty"></a>
 
-#### Checkpoint.empty
+#### BaseCheckpoint.empty
 
 ```python
 def empty() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L77)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L67)
 
 Returns `True` if checkpoint doesn't have any offsets stored yet.
 
 
-<a id="quixstreams.checkpointing.checkpoint.Checkpoint.store_offset"></a>
+<a id="quixstreams.checkpointing.checkpoint.BaseCheckpoint.store_offset"></a>
 
-#### Checkpoint.store\_offset
+#### BaseCheckpoint.store\_offset
 
 ```python
 def store_offset(topic: str, partition: int, offset: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L84)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L74)
 
 Store the offset of the processed message to the checkpoint.
 
@@ -9787,6 +10017,46 @@ Store the offset of the processed message to the checkpoint.
 - `topic`: topic name
 - `partition`: partition number
 - `offset`: message offset
+
+<a id="quixstreams.checkpointing.checkpoint.BaseCheckpoint.close"></a>
+
+#### BaseCheckpoint.close
+
+```python
+@abstractmethod
+def close()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L101)
+
+Perform cleanup (when the checkpoint is empty) instead of committing.
+
+Needed for exactly-once, as Kafka transactions are timeboxed.
+
+<a id="quixstreams.checkpointing.checkpoint.BaseCheckpoint.commit"></a>
+
+#### BaseCheckpoint.commit
+
+```python
+@abstractmethod
+def commit()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L109)
+
+Commit the checkpoint.
+
+<a id="quixstreams.checkpointing.checkpoint.Checkpoint"></a>
+
+### Checkpoint
+
+```python
+class Checkpoint(BaseCheckpoint)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L116)
+
+Checkpoint implementation used by the application
 
 <a id="quixstreams.checkpointing.checkpoint.Checkpoint.get_store_transaction"></a>
 
@@ -9799,7 +10069,7 @@ def get_store_transaction(
         store_name: str = DEFAULT_STATE_STORE_NAME) -> PartitionTransaction
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L110)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L146)
 
 Get a PartitionTransaction for the given store, topic and partition.
 
@@ -9823,7 +10093,7 @@ instance of `PartitionTransaction`
 def close()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L133)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L169)
 
 Perform cleanup (when the checkpoint is empty) instead of committing.
 
@@ -9837,7 +10107,7 @@ Needed for exactly-once, as Kafka transactions are timeboxed.
 def commit()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L142)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/checkpointing/checkpoint.py#L178)
 
 Commit the checkpoint.
 

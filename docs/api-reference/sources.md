@@ -375,3 +375,224 @@ The default topic will not be used if the topic has already been provided to the
 
 `quixstreams.models.topics.Topic`
 
+<a id="quixstreams.sources.csv"></a>
+
+## quixstreams.sources.csv
+
+<a id="quixstreams.sources.csv.CSVSource"></a>
+
+### CSVSource
+
+```python
+class CSVSource(Source)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/csv.py#L11)
+
+<a id="quixstreams.sources.csv.CSVSource.__init__"></a>
+
+<br><br>
+
+#### CSVSource.\_\_init\_\_
+
+```python
+def __init__(path: str,
+             dialect: str = "excel",
+             name: Optional[str] = None,
+             shutdown_timeout: float = 10,
+             key_deserializer: Callable[[Any], str] = str,
+             value_deserializer: Callable[[Any], str] = json.loads) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/csv.py#L12)
+
+A base CSV source that reads data from a single CSV file.
+
+Best used with `quixstreams.sinks.csv.CSVSink`.
+
+Required columns: key, value
+Optional columns: timestamp
+
+
+<br>
+***Arguments:***
+
+- `path`: path to the CSV file
+- `dialect`: a CSV dialect to use. It affects quoting and delimiters.
+See the ["csv" module docs](https://docs.python.org/3/library/csv.html#csv-fmt-params) for more info.
+Default - `"excel"`.
+- `key_deseralizer`: a callable to convert strings to key.
+Default - `str`
+- `value_deserializer`: a callable to convert strings to value.
+Default - `json.loads`
+
+<a id="quixstreams.sources.kafka.kafka"></a>
+
+## quixstreams.sources.kafka.kafka
+
+<a id="quixstreams.sources.kafka.kafka.KafkaReplicatorSource"></a>
+
+### KafkaReplicatorSource
+
+```python
+class KafkaReplicatorSource(Source)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/kafka/kafka.py#L26)
+
+Source implementation that replicates a topic from a Kafka broker to your application broker.
+
+Running multiple instances of this source is supported.
+
+
+<br>
+***Example Snippet:***
+
+```python
+from quixstreams import Application
+from quixstreams.sources.kafka import KafkaReplicatorSource
+
+app = Application(
+    consumer_group="group",
+)
+
+source = KafkaReplicatorSource(
+    name="source-second-kafka",
+    app_config=app.config,
+    topic="second-kafka-topic",
+    broker_address="localhost:9092",
+)
+
+sdf = app.dataframe(source=source)
+sdf = sdf.print()
+app.run(sdf)
+```
+
+<a id="quixstreams.sources.kafka.kafka.KafkaReplicatorSource.__init__"></a>
+
+<br><br>
+
+#### KafkaReplicatorSource.\_\_init\_\_
+
+```python
+def __init__(name: str,
+             app_config: "ApplicationConfig",
+             topic: str,
+             broker_address: Union[str, ConnectionConfig],
+             auto_offset_reset: AutoOffsetReset = "latest",
+             consumer_extra_config: Optional[dict] = None,
+             consumer_poll_timeout: Optional[float] = None,
+             shutdown_timeout: float = 10,
+             on_consumer_error: Optional[
+                 ConsumerErrorCallback] = default_on_consumer_error,
+             value_deserializer: DeserializerType = "json",
+             key_deserializer: DeserializerType = "bytes") -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/kafka/kafka.py#L55)
+
+
+<br>
+***Arguments:***
+
+- `name`: The source unique name.
+It is used to generate the default topic name and consumer group name on the source broker.
+Running multiple instances of `KafkaReplicatorSource` with the same name connected
+to the same broker will make them share the same consumer group.
+- `app_config`: The configuration of the application. Used by the source to connect to the application kafka broker.
+- `topic`: The topic to replicate.
+- `broker_address`: The connection settings for the source Kafka.
+- `auto_offset_reset`: Consumer `auto.offset.reset` setting.
+Default - Use the Application `auto_offset_reset` setting.
+- `consumer_extra_config`: A dictionary with additional options that
+will be passed to `confluent_kafka.Consumer` as is.
+Default - `None`
+- `consumer_poll_timeout`: timeout for `RowConsumer.poll()`
+Default - Use the Application `consumer_poll_timeout` setting.
+- `shutdown_timeout`: Time in second the application waits for the source to gracefully shutdown.
+- `on_consumer_error`: Triggered when the source `Consumer` fails to poll Kafka.
+- `value_deserializer`: The default topic value deserializer, used by StreamingDataframe connected to the source.
+Default - `json`
+- `key_deserializer`: The default topic key deserializer, used by StreamingDataframe connected to the source.
+Default - `json`
+
+<a id="quixstreams.sources.kafka.quix"></a>
+
+## quixstreams.sources.kafka.quix
+
+<a id="quixstreams.sources.kafka.quix.QuixEnvironmentSource"></a>
+
+### QuixEnvironmentSource
+
+```python
+class QuixEnvironmentSource(KafkaReplicatorSource)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/kafka/quix.py#L18)
+
+Source implementation that replicates a topic from a Quix Cloud environment to your application broker.
+It can copy messages for development and testing without risking producing them back or affecting the consumer groups.
+
+Running multiple instances of this source is supported.
+
+
+<br>
+***Example Snippet:***
+
+```python
+from quixstreams import Application
+from quixstreams.sources.kafka import QuixEnvironmentSource
+
+app = Application(
+    consumer_group="group",
+)
+
+source = QuixEnvironmentSource(
+    name="source-quix",
+    app_config=app.config,
+    quix_workspace_id="WORKSPACE_ID",
+    quix_sdk_token="WORKSPACE_SDK_TOKEN",
+    topic="quix-source-topic",
+)
+
+sdf = app.dataframe(source=source)
+sdf = sdf.print()
+app.run(sdf)
+```
+
+<a id="quixstreams.sources.kafka.quix.QuixEnvironmentSource.__init__"></a>
+
+<br><br>
+
+#### QuixEnvironmentSource.\_\_init\_\_
+
+```python
+def __init__(name: str,
+             app_config: "ApplicationConfig",
+             topic: str,
+             quix_sdk_token: str,
+             quix_workspace_id: str,
+             quix_portal_api: Optional[str] = None,
+             auto_offset_reset: Optional[AutoOffsetReset] = None,
+             consumer_extra_config: Optional[dict] = None,
+             consumer_poll_timeout: Optional[float] = None,
+             shutdown_timeout: float = 10,
+             on_consumer_error: Optional[
+                 ConsumerErrorCallback] = default_on_consumer_error,
+             value_deserializer: DeserializerType = "json",
+             key_deserializer: DeserializerType = "bytes") -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/kafka/quix.py#L49)
+
+
+<br>
+***Arguments:***
+
+- `quix_workspace_id`: The Quix workspace ID of the source environment.
+- `quix_sdk_token`: Quix cloud sdk token used to connect to the source environment.
+- `quix_portal_api`: The Quix portal API URL of the source environment.
+Default - `Quix__Portal__Api` environment variable or Quix cloud production URL
+
+For other parameters See `quixstreams.sources.kafka.KafkaReplicatorSource`
+
