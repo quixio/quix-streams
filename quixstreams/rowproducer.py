@@ -158,7 +158,7 @@ class RowProducer:
                 return
             raise
 
-    def poll(self, timeout: float = None):
+    def poll(self, timeout: float = 0):
         """
         Polls the producer for events and calls `on_delivery` callbacks.
 

@@ -49,23 +49,6 @@ def network():
 
 
 @pytest.fixture(scope="session")
-def kafka_container(network: Network) -> Generator[KafkaContainer, None, None]:
-    (
-        container,
-        internal_broker_address,
-        external_broker_address,
-    ) = ContainerHelper.create_kafka_container()
-    test_logger.debug(f"Starting Kafka container on {external_broker_address}")
-    ContainerHelper.start_kafka_container(container, network)
-    test_logger.debug(f"Started Kafka container on {external_broker_address}")
-    yield KafkaContainer(
-        broker_address=external_broker_address,
-        internal_broker_address=internal_broker_address,
-    )
-    container.stop()
-
-
-@pytest.fixture(scope="session")
 def schema_registry_container(
     network: Network, kafka_container: KafkaContainer
 ) -> Generator[SchemaRegistryContainer, None, None]:
@@ -81,3 +64,28 @@ def schema_registry_container(
     test_logger.debug(f"Started Schema Registry container on {schema_registry_address}")
     yield SchemaRegistryContainer(schema_registry_address=schema_registry_address)
     container.stop()
+
+
+@pytest.fixture(scope="session")
+def kafka_container_factory(network: Network) -> KafkaContainer:
+    def factory():
+        (
+            kafka_container,
+            internal_broker_address,
+            external_broker_address,
+        ) = ContainerHelper.create_kafka_container()
+        test_logger.debug(f"Starting Kafka container on {external_broker_address}")
+        ContainerHelper.start_kafka_container(kafka_container, network)
+        test_logger.debug(f"Started Kafka container on {external_broker_address}")
+        yield KafkaContainer(
+            broker_address=external_broker_address,
+            internal_broker_address=internal_broker_address,
+        )
+        kafka_container.stop()
+
+    return factory
+
+
+@pytest.fixture(scope="session")
+def kafka_container(kafka_container_factory) -> KafkaContainer:
+    yield from kafka_container_factory()
