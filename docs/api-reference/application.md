@@ -504,6 +504,7 @@ def get_consumer(auto_commit_enable: bool = True) -> Consumer
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L692)
 
 Create and return a pre-configured Consumer instance.
+
 The Consumer is initialized with params passed to Application.
 
 It's useful for consuming data from Kafka outside the standard
@@ -523,6 +524,13 @@ the consumer config when creating the app.
 <br>
 ***Example Snippet:***
 
+
+
+<br>
+***Arguments:***
+
+- `auto_commit_enable`: Enable or disable auto commit
+Default - True
 ```python
 from quixstreams import Application
 
@@ -550,7 +558,7 @@ with app.get_consumer() as consumer:
 def clear_state()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L739)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L742)
 
 Clear the state of the application.
 
@@ -564,7 +572,7 @@ Clear the state of the application.
 def add_source(source: BaseSource, topic: Optional[Topic] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L745)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L748)
 
 Add a source to the application.
 
@@ -588,7 +596,7 @@ Default: the source default
 def run(dataframe: StreamingDataFrame)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L764)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L767)
 
 Start processing data from Kafka using provided `StreamingDataFrame`
 
@@ -620,6 +628,20 @@ app.run(dataframe=df)
 
 - `dataframe`: instance of `StreamingDataFrame`
 
+<a id="quixstreams.app.Application.setup_topics"></a>
+
+<br><br>
+
+#### Application.setup\_topics
+
+```python
+def setup_topics()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L887)
+
+Validate and create the topics
+
 <a id="quixstreams.app.ApplicationConfig"></a>
 
 ### ApplicationConfig
@@ -628,7 +650,7 @@ app.run(dataframe=df)
 class ApplicationConfig(BaseSettings)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1056)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1063)
 
 Immutable object holding the application configuration
 
@@ -651,7 +673,7 @@ def settings_customise_sources(
 ) -> Tuple[PydanticBaseSettingsSource, ...]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1090)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1097)
 
 Included to ignore reading/setting values from the environment
 
@@ -665,7 +687,7 @@ Included to ignore reading/setting values from the environment
 def copy(**kwargs) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1103)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1110)
 
 Update the application config and return a copy
 
