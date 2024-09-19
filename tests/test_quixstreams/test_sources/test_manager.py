@@ -99,7 +99,7 @@ class TestSourceManager:
         "when,exitcode", [("run", 0), ("cleanup", 0), ("stop", -9)]
     )
     @pytest.mark.parametrize("pickleable", [True, False])
-    def test_raise_for_error_run(self, when, exitcode, pickleable):
+    def test_raise_for_error(self, when, exitcode, pickleable):
         manager = SourceManager()
 
         finished = multiprocessing.Event()
@@ -109,6 +109,9 @@ class TestSourceManager:
 
         source.configure(Topic("topic", None), None)
         process = manager.register(source)
+
+        # never raise when not started
+        manager.raise_for_error()
 
         manager.start_sources()
 
