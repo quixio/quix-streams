@@ -211,7 +211,8 @@ class SourceManager:
         Raise an exception if any process has stopped with an exception
         """
         for process in self.processes:
-            process.raise_for_error()
+            if process.started:
+                process.raise_for_error()
 
     def is_alive(self) -> bool:
         """
