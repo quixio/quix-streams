@@ -7,7 +7,7 @@ Quix Streams also provides a set of classes to help users implement custom sourc
 
 ## Source
 
-The recomended parent class to create a new source. It handles configuring, starting and stopping the source, as well as implementing a serie of helpers.
+The recomended parent class to create a new source. It handles configuring, starting and stopping the source, as well as implementing a series of helpers.
 
 To get started, implement the `run` method and return when `self.running` is `False`.
 
