@@ -162,6 +162,41 @@ def test_get_latest_timestamp(windowed_rocksdb_store_factory):
             [((1, 11), 2), ((2, 12), 3)],
             id="ignore-deleted-windows",
         ),
+        # Useful for refactoring, to `timeit` against previous implementations.
+        # number_of_windows is set to a small number to not blow up test times in CI
+        # For development, bump it to something like 10000 or 100000
+        # and plug in timeit at the end of the test:
+        #
+        # from timeit import timeit
+        # func = lambda: list(state.get_windows(**get_windows_args))
+        # print("Execution time", timeit(func, number=100))
+        (number_of_windows := 100)
+        and pytest.param(
+            (
+                db_windows := [
+                    dict(start_ms=i, end_ms=i + 10, value=i, timestamp_ms=i + 1)
+                    for i in range(number_of_windows)
+                ]
+            ),
+            [
+                dict(start_ms=i, end_ms=i + 10, value=i, timestamp_ms=i + 1)
+                for i in range(0, number_of_windows, 2)
+            ],
+            (
+                deleted_windows := [
+                    dict(start_ms=i, end_ms=i + 10)
+                    for i in range(0, number_of_windows, 4)
+                ]
+            ),
+            dict(start_from_ms=-1, start_to_ms=number_of_windows),
+            [
+                ((window["start_ms"], window["end_ms"]), window["value"])
+                for window in db_windows
+                if {"start_ms": window["start_ms"], "end_ms": window["end_ms"]}
+                not in deleted_windows
+            ],
+            id="shitload-of-windows",
+        ),
     ],
 )
 def test_get_windows(
