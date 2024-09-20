@@ -1,5 +1,5 @@
 import logging
-from typing import Protocol, Any, Optional, Tuple, List
+from typing import Any, Generator, List, Optional, Protocol, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +66,7 @@ class WindowedState(Protocol):
 
     def get_windows(
         self, start_from_ms: int, start_to_ms: int
-    ) -> List[Tuple[Tuple[int, int], Any]]:
+    ) -> Generator[Tuple[Tuple[int, int], Any], None, None]:
         # TODO: docstring
         ...
 
@@ -183,7 +183,7 @@ class WindowedPartitionTransaction(Protocol):
 
     def get_windows(
         self, start_from_ms: int, start_to_ms: int, prefix: bytes
-    ) -> List[Tuple[Tuple[int, int], Any]]:
+    ) -> Generator[Tuple[Tuple[int, int], Any], None, None]:
         # TODO: docstring
         ...
 

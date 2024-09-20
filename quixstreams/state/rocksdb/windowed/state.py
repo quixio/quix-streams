@@ -1,4 +1,4 @@
-from typing import Any, Optional, List, Tuple, TYPE_CHECKING
+from typing import Any, Generator, Optional, List, Tuple, TYPE_CHECKING
 
 from quixstreams.state.types import WindowedState
 
@@ -86,7 +86,7 @@ class WindowedTransactionState(WindowedState):
 
     def get_windows(
         self, start_from_ms: int, start_to_ms: int
-    ) -> List[Tuple[Tuple[int, int], Any]]:
+    ) -> Generator[Tuple[Tuple[int, int], Any], None, None]:
         return self._transaction.get_windows(
             start_from_ms=start_from_ms,
             start_to_ms=start_to_ms,
