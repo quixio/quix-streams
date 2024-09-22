@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Generator, List, Optional, Protocol, Tuple
+from typing import Any, Generator, Optional, Protocol, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,7 @@ class WindowedState(Protocol):
 
     def expire_windows(
         self, duration_ms: int, grace_ms: int = 0
-    ) -> List[Tuple[Tuple[int, int], Any]]:
+    ) -> Generator[Tuple[Tuple[int, int], Any], None, None]:
         """
         Get a list of expired windows from RocksDB considering the current
         latest timestamp, window duration and grace period.
@@ -166,7 +166,9 @@ class WindowedPartitionTransaction(Protocol):
         """
         ...
 
-    def expire_windows(self, duration_ms: int, prefix: bytes, grace_ms: int = 0):
+    def expire_windows(
+        self, duration_ms: int, prefix: bytes, grace_ms: int = 0
+    ) -> Generator[Tuple[Tuple[int, int], Any], None, None]:
         """
         Get a list of expired windows from RocksDB considering the current
         latest timestamp, window duration and grace period.

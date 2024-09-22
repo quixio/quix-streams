@@ -1,4 +1,4 @@
-from typing import Any, Generator, Optional, List, Tuple, TYPE_CHECKING, cast
+from typing import Any, Generator, Optional, Tuple, TYPE_CHECKING, cast
 
 from rocksdict import ReadOptions
 
@@ -110,7 +110,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
 
     def expire_windows(
         self, duration_ms: int, prefix: bytes, grace_ms: int = 0
-    ) -> List[Tuple[Tuple[int, int], Any]]:
+    ) -> Generator[Tuple[Tuple[int, int], Any], None, None]:
         """
         Get a list of expired windows from RocksDB considering latest timestamp,
         window size and grace period.
@@ -145,27 +145,27 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
 
         # Use the latest expired timestamp to limit the iteration over
         # only those windows that have not been expired before
-        expired_windows = list(
-            self.get_windows(
-                start_from_ms=start_from,
-                start_to_ms=start_to,
-                prefix=prefix,
-            )
+        expired_windows = self.get_windows(
+            start_from_ms=start_from,
+            start_to_ms=start_to,
+            prefix=prefix,
         )
-        if expired_windows:
-            # Save the start of the latest expired window to the expiration index
-            latest_window = expired_windows[-1]
-            last_expired__gt = latest_window[0][0]
+
+        last_expired__gt = None
+        for (start, end), aggregated in expired_windows:
+            last_expired__gt = start
+            # Delete expired window from the state
+            self.delete_window(start, end, prefix=prefix)
+            yield (start, end), aggregated
+
+        # Save the start of the latest expired window to the expiration index
+        if last_expired__gt:
             self.set(
                 key=LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY,
                 value=last_expired__gt,
                 prefix=prefix,
                 cf_name=LATEST_EXPIRED_WINDOW_CF_NAME,
             )
-            # Delete expired windows from the state
-            for (start, end), _ in expired_windows:
-                self.delete_window(start, end, prefix=prefix)
-        return expired_windows
 
     def _serialize_key(self, key: Any, prefix: bytes) -> bytes:
         # Allow bytes keys in WindowedStore
