@@ -1,4 +1,4 @@
-from typing import Any, Generator, Optional, List, Tuple, TYPE_CHECKING
+from typing import Any, Generator, Optional, Tuple, TYPE_CHECKING
 
 from quixstreams.state.types import WindowedState
 
@@ -71,7 +71,7 @@ class WindowedTransactionState(WindowedState):
 
     def expire_windows(
         self, duration_ms: int, grace_ms: int = 0
-    ) -> List[Tuple[Tuple[int, int], Any]]:
+    ) -> Generator[Tuple[Tuple[int, int], Any], None, None]:
         """
         Get a list of expired windows from RocksDB considering the current
         latest timestamp, window duration and grace period.

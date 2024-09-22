@@ -59,10 +59,10 @@ class TestWindowedRocksDBPartitionTransaction:
             tx.update_window(
                 start_ms=20, end_ms=30, value=3, timestamp_ms=20, prefix=prefix
             )
-            expired = tx.expire_windows(duration_ms=10, prefix=prefix)
+            expired = list(tx.expire_windows(duration_ms=10, prefix=prefix))
             # "expire_windows" must update the expiration index so that the same
             # windows are not expired twice
-            assert not tx.expire_windows(duration_ms=10, prefix=prefix)
+            assert not list(tx.expire_windows(duration_ms=10, prefix=prefix))
 
         assert len(expired) == 2
         assert expired == [
@@ -93,10 +93,10 @@ class TestWindowedRocksDBPartitionTransaction:
             tx.update_window(
                 start_ms=20, end_ms=30, value=3, timestamp_ms=20, prefix=prefix
             )
-            expired = tx.expire_windows(duration_ms=10, prefix=prefix)
+            expired = list(tx.expire_windows(duration_ms=10, prefix=prefix))
             # "expire_windows" must update the expiration index so that the same
             # windows are not expired twice
-            assert not tx.expire_windows(duration_ms=10, prefix=prefix)
+            assert not list(tx.expire_windows(duration_ms=10, prefix=prefix))
             assert len(expired) == 2
             assert expired == [
                 ((0, 10), 1),
@@ -122,7 +122,7 @@ class TestWindowedRocksDBPartitionTransaction:
             tx.update_window(
                 start_ms=3, end_ms=13, value=1, timestamp_ms=3, prefix=prefix
             )
-            assert not tx.expire_windows(duration_ms=10, prefix=prefix)
+            assert not list(tx.expire_windows(duration_ms=10, prefix=prefix))
 
     def test_expire_windows_with_grace_expired(self, windowed_rocksdb_store_factory):
         store = windowed_rocksdb_store_factory()
@@ -137,7 +137,7 @@ class TestWindowedRocksDBPartitionTransaction:
             tx.update_window(
                 start_ms=15, end_ms=25, value=1, timestamp_ms=15, prefix=prefix
             )
-            expired = tx.expire_windows(duration_ms=10, grace_ms=5, prefix=prefix)
+            expired = list(tx.expire_windows(duration_ms=10, grace_ms=5, prefix=prefix))
 
         assert len(expired) == 1
         assert expired == [((0, 10), 1)]
@@ -155,7 +155,7 @@ class TestWindowedRocksDBPartitionTransaction:
             tx.update_window(
                 start_ms=13, end_ms=23, value=1, timestamp_ms=13, prefix=prefix
             )
-            expired = tx.expire_windows(duration_ms=10, grace_ms=5, prefix=prefix)
+            expired = list(tx.expire_windows(duration_ms=10, grace_ms=5, prefix=prefix))
 
         assert not expired
 
@@ -231,7 +231,7 @@ class TestWindowedRocksDBPartitionTransaction:
             )
             # "expire_windows" must update the expiration index so that the same
             # windows are not expired twice
-            assert not tx.expire_windows(duration_ms=10, prefix=prefix)
+            assert not list(tx.expire_windows(duration_ms=10, prefix=prefix))
 
     def test_expire_windows_multiple_windows(self, windowed_rocksdb_store_factory):
         store = windowed_rocksdb_store_factory()
@@ -254,7 +254,7 @@ class TestWindowedRocksDBPartitionTransaction:
             )
             # "expire_windows" must update the expiration index so that the same
             # windows are not expired twice
-            expired = tx.expire_windows(duration_ms=10, prefix=prefix)
+            expired = list(tx.expire_windows(duration_ms=10, prefix=prefix))
 
         assert len(expired) == 3
         assert expired[0] == ((0, 10), 1)
