@@ -14,7 +14,6 @@ __all__ = (
     "FilterWithMetadataCallback",
     "TransformCallback",
     "TransformExpandedCallback",
-    "RegisterStoreCallback",
 )
 
 
