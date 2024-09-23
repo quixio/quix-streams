@@ -2,16 +2,16 @@ import contextlib
 import functools
 import logging
 import os
-import time
 import signal
+import time
 import warnings
+from pathlib import Path
 from typing import Optional, List, Callable, Union, Literal, Tuple, Type
 
 from confluent_kafka import TopicPartition
-from typing_extensions import Self
-from pathlib import Path
 from pydantic import Field, AliasGenerator
 from pydantic_settings import PydanticBaseSettingsSource, SettingsConfigDict
+from typing_extensions import Self
 
 from .context import set_message_context, copy_context
 from .dataframe import StreamingDataFrame, DataframeRegistry
@@ -42,10 +42,10 @@ from .processing import ProcessingContext, PausingManager
 from .rowconsumer import RowConsumer
 from .rowproducer import RowProducer
 from .sinks import SinkManager
+from .sources.manager import SourceManager, BaseSource, SourceException
 from .state import StateStoreManager
 from .state.recovery import RecoveryManager
 from .state.rocksdb import RocksDBOptionsType
-from .sources.manager import SourceManager, BaseSource, SourceException
 from .utils.settings import BaseSettings
 
 __all__ = ("Application", "ApplicationConfig")
@@ -108,7 +108,7 @@ class Application:
         commit_every: int = 0,
         consumer_extra_config: Optional[dict] = None,
         producer_extra_config: Optional[dict] = None,
-        state_dir: str = "state",
+        state_dir: Union[str, Path] = Path("state"),
         rocksdb_options: Optional[RocksDBOptionsType] = None,
         on_consumer_error: Optional[ConsumerErrorCallback] = None,
         on_processing_error: Optional[ProcessingErrorCallback] = None,
@@ -248,6 +248,7 @@ class Application:
                 QuixTopicManager, quix_config_builder=quix_config_builder
             )
             # Check if the state dir points to the mounted PVC while running on Quix
+            state_dir = Path(state_dir)
             check_state_dir(state_dir=state_dir)
             quix_app_config = quix_config_builder.get_application_config(consumer_group)
 
@@ -791,7 +792,14 @@ class Application:
         app.run()
         ```
         """
-        self._run(dataframe)
+        if dataframe is not None:
+            warnings.warn(
+                "Application.run() received a `dataframe` argument which is "
+                "no longer used (StreamingDataFrames are now tracked automatically); "
+                "the argument should be removed.",
+                DeprecationWarning,
+            )
+        self._run()
 
     def _exception_handler(self, exc_type, exc_val, exc_tb):
         fail = False
@@ -803,14 +811,7 @@ class Application:
 
         self.stop(fail=fail)
 
-    def _run(self, dataframe: Optional[StreamingDataFrame] = None):
-        if dataframe is not None:
-            warnings.warn(
-                "Application.run() received a `dataframe` argument which is "
-                "no longer used (StreamingDataFrames are now tracked automatically); "
-                "the argument should be removed.",
-                DeprecationWarning,
-            )
+    def _run(self):
         self._setup_signal_handlers()
 
         logger.info(
@@ -836,13 +837,14 @@ class Application:
 
         with exit_stack:
             # Subscribe to topics in Kafka and start polling
-            if dataframe is not None:
-                self._run_dataframe(dataframe)
+            if self._dataframe_registry.consumer_topics:
+                self._run_dataframe()
             else:
                 self._run_sources()
 
-    def _run_dataframe(self, dataframe):self._consumer.subscribe(
-                self._dataframe_registry.consumer_topics,
+    def _run_dataframe(self):
+        self._consumer.subscribe(
+            self._dataframe_registry.consumer_topics,
             on_assign=self._on_assign,
             on_revoke=self._on_revoke,
             on_lost=self._on_lost,
@@ -1093,7 +1095,7 @@ class ApplicationConfig(BaseSettings):
     auto_create_topics: bool = True
     request_timeout: float = 30
     topic_create_timeout: float = 60
-    state_dir: Path = "state"
+    state_dir: Path = Path("state")
     rocksdb_options: Optional[RocksDBOptionsType] = None
     use_changelog_topics: bool = True
 
