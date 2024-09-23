@@ -509,9 +509,11 @@ class StreamingDataFrame(BaseStreaming):
                 'group_by requires "name" parameter when "key" is a function'
             )
         key = name or key
-        unique_topics = self.__all_topics__
-        repartition_names = {
-            topic_name: self._topic_manager.repartition_topic(
+        topic_names = self.__all_topics__
+        final_sdf = None
+        while topic_names:
+            topic_name = topic_names.pop()
+            topic = self._topic_manager.repartition_topic(
                 operation=key,
                 topic_name=topic_name,
                 key_serializer=key_serializer,
@@ -519,23 +521,13 @@ class StreamingDataFrame(BaseStreaming):
                 key_deserializer=key_deserializer,
                 value_deserializer=value_deserializer,
             )
-            for topic_name in unique_topics
-        }
-        final_sdf = self.__dataframe_clone__(
-            topic=repartition_names[self._topic.name], merges=[]
-        )
-        self._registry.register_groupby(
-            source_sdf_topic=self._topic.name, new_sdf=final_sdf
-        )
-        self._to_groupby_topic(key=_groupby_key(key))
-        unique_topics.remove(self._topic.name)
-        while unique_topics:
-            topic = unique_topics.pop()
-            new_sdf = self.__dataframe_clone__(
-                topic=repartition_names[topic], merges=[]
-            )
-            self._registry.register_groupby(source_sdf_topic=topic, new_sdf=new_sdf)
-            final_sdf.merge(new_sdf)
+            new_sdf = self.__dataframe_clone__(topic=topic, merges=[])
+            self._registry.register_groupby(source_topic=topic_name, new_sdf=new_sdf)
+            if final_sdf is None:
+                final_sdf = new_sdf
+            else:
+                final_sdf = final_sdf.merge(new_sdf)
+        self._to_groupby_topics(key=_groupby_key(key))
         return final_sdf
 
     def contains(self, key: str) -> StreamingSeries:
@@ -608,37 +600,7 @@ class StreamingDataFrame(BaseStreaming):
             metadata=True,
         )
 
-    def _to_groupby_topic(self, key: Optional[Callable[[Any], Any]] = None) -> Self:
-        """
-        Produce current value to a topic. You can optionally specify a new key.
-
-        This operation occurs in-place, meaning reassignment is entirely OPTIONAL: the
-        original `StreamingDataFrame` is returned for chaining (`sdf.update().print()`).
-
-        Example Snippet:
-
-        ```python
-        from quixstreams import Application
-
-        # Produce to two different topics, changing the key for one of them.
-
-        app = Application()
-        input_topic = app.topic("input_x")
-        output_topic_0 = app.topic("output_a")
-        output_topic_1 = app.topic("output_b")
-
-        sdf = app.dataframe(input_topic)
-        sdf = sdf.to_topic(output_topic_0)
-        # does not require reassigning
-        sdf.to_topic(output_topic_1, key=lambda data: data["a_field"])
-        ```
-
-        :param key: a callable to generate a new message key, optional.
-            If passed, the return type of this callable must be serializable
-            by `key_serializer` defined for this Topic object.
-            By default, the current message key will be used.
-        :return: the updated StreamingDataFrame instance (reassignment NOT required).
-        """
+    def _to_groupby_topics(self, key: Optional[Callable[[Any], Any]] = None) -> Self:
         return self._add_update(
             lambda value, orig_key, timestamp, headers: self._produce_groupby(
                 value=value,
