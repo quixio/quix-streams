@@ -120,6 +120,7 @@ Here are some of the planned improvements:
 - [ ] Joins
 - [ ] Windowed aggregations over Sliding windows
 
+For a more detailed overview of the planned features, please look at [the Roadmap Board](https://github.com/orgs/quixio/projects/1).
 
 ## Get Involved 🤝
 
