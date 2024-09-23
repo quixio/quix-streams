@@ -9,7 +9,7 @@ Under the hood, the Application will start the source as a subprocess, and it wi
 
 Streaming DataFrame will connect to this topic and process the data.
 
-To find more info about Sources, please see the docs page [TODO: ADD THE PAGE URL]
+To find more info about Sources, please see [the Sources docs](https://quix.io/docs/quix-streams/connectors/sources/index.html).
 
 ## How to run
 
