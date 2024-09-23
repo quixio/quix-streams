@@ -30,10 +30,9 @@ from .functions import (
     TransformExpandedCallback,
     ApplyWithMetadataExpandedCallback,
     ApplyExpandedCallback,
-    RegisterStoreCallback,
 )
 
-__all__ = ("Stream", "IdentityFunction", "RegisterStoreFunction")
+__all__ = ("Stream",)
 
 
 class IdentityFunction(ApplyFunction):
@@ -41,23 +40,11 @@ class IdentityFunction(ApplyFunction):
         super().__init__(func=lambda x: x)
 
 
-class RegisterStoreFunction(StreamFunction):
-
-    def __init__(self, func: RegisterStoreCallback):
-        super().__init__(func)
-
-    def __call__(self, topic):
-        self.func(topic)
-
-    def get_executor(self, *child_executors: VoidExecutor) -> VoidExecutor: ...
-
-
 class Stream:
     def __init__(
         self,
         func: Optional[StreamFunction] = None,
         parent: Optional[Self] = None,
-        topic: Optional[str] = None,
     ):
         """
         A base class for all streaming operations.
@@ -101,7 +88,6 @@ class Stream:
             raise ValueError("Provided function must be a subclass of StreamFunction")
 
         self.func = func if func is not None else IdentityFunction()
-        self.topic = topic
         self.parent = parent
         self.merge_parents = []
         self.children = set()
@@ -227,9 +213,6 @@ class Stream:
         """
 
         return self._add(TransformFunction(func, expand=expand))
-
-    def add_store_registration(self, func: RegisterStoreCallback):
-        return self._add(RegisterStoreFunction(func))
 
     def diff(self, other: "Stream") -> Self:
         """
@@ -424,7 +407,7 @@ class Stream:
         return wrapper
 
     def merge(self, others: List[Self]):
-        # This allows us to "unify" the streams with a new operation, which will be
+        # This allows us to "unify" streams with a new operation, which will be
         # ignored during compose.
         # There is probably a way to it without this, but it makes it easier for now
         new_node = self._add(IdentityFunction())
@@ -451,9 +434,6 @@ class Stream:
             if isinstance(func, IdentityFunction) and not composed:
                 # These are added either when making a new Stream or doing a merge
                 # They do not need to be included as part of execution.
-                continue
-            if isinstance(func, RegisterStoreFunction):
-                func(self.topic)
                 continue
             if not allow_updates and isinstance(
                 func, (UpdateFunction, UpdateWithMetadataFunction)

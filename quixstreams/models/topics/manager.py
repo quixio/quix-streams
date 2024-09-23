@@ -68,6 +68,7 @@ class TopicManager:
         self._topics: Dict[str, Topic] = {}
         self._repartition_topics: Dict[str, Topic] = {}
         self._changelog_topics: Dict[str, Dict[str, Topic]] = {}
+        self._topic_to_repartition_names: Dict[str, str] = {}
         self._timeout = timeout
         self._create_timeout = create_timeout
 
@@ -116,6 +117,10 @@ class TopicManager:
         returns: full topic dict, {topic_name: Topic}
         """
         return {topic.name: topic for topic in self._all_topics_list}
+
+    @property
+    def topic_to_repartition_names(self) -> Dict[str, str]:
+        return self._topic_to_repartition_names
 
     def _resolve_topic_name(self, name: str) -> str:
         """
@@ -321,6 +326,7 @@ class TopicManager:
             ),
         )
         self._repartition_topics[name] = topic
+        self._topic_to_repartition_names[topic_name] = name
         return topic
 
     def changelog_topic(
