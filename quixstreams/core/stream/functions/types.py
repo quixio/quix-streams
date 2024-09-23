@@ -37,8 +37,6 @@ TransformExpandedCallback = Callable[
     [Any, Any, int, Any], Iterable[Tuple[Any, Any, int, Any]]
 ]
 
-RegisterStoreCallback = Callable[[Any], None]
-
 StreamCallback = Union[
     ApplyCallback,
     ApplyExpandedCallback,
@@ -50,7 +48,6 @@ StreamCallback = Union[
     FilterWithMetadataCallback,
     TransformCallback,
     TransformExpandedCallback,
-    RegisterStoreCallback,
 ]
 
 

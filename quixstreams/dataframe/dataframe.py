@@ -118,8 +118,8 @@ class StreamingDataFrame(BaseStreaming):
         stream: Optional[Stream] = None,
         merges: Optional[List[Self]] = None,
     ):
-        self._topic = topic
         self._stream: Stream = stream or Stream()
+        self._topic = topic
         self._topic_manager = topic_manager
         self._registry = registry
         self._merges = merges or []
@@ -127,18 +127,10 @@ class StreamingDataFrame(BaseStreaming):
         self._producer = processing_context.producer
 
     @property
-    def __sdfs__(self) -> List[Self]:
-        return [self, *self._merges]
-
-    @property
     def __all_topics__(self) -> Set[str]:
         topics = {self._topic.name}
         topics.update([topic for sdf in self._merges for topic in sdf.__all_topics__])
         return topics
-
-    @property
-    def merges(self) -> List[Self]:
-        return self._merges
 
     @property
     def processing_context(self) -> ProcessingContext:
