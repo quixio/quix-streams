@@ -173,12 +173,12 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
         Get all windows starting between "start_from" and "start_to"
         within the given prefix.
 
-
         This function also checks the update cache in case some updates have not
         been committed to RocksDB yet.
 
         :param start_from_ms: minimal window start time, exclusive
         :param start_to_ms: maximum window start time, inclusive
+        :param prefix: a key prefix
         :return: generator yielding sorted tuples in format `((start, end), value)`
         """
 
