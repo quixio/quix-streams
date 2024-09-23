@@ -83,29 +83,34 @@ class CoinbaseSource(Source):
             )
 
 
-# Initialize an Application with Kafka configuration
-app = Application(
-    broker_address="localhost:9092",  # Specify your Kafka broker address here
-    auto_offset_reset="earliest",
-)
+def main():
 
-# Configure the CoinbaseSource instance
-coinbase_source = CoinbaseSource(
-    # Pick the unique name for the source instance.
-    # It will be used as a part of the default topic name.
-    name="coinbase-source",
-    url="wss://ws-feed-public.sandbox.exchange.coinbase.com",
-    product_ids=[
-        "ETH-BTC",
-    ],
-)
+    # Initialize an Application with Kafka configuration
+    app = Application(
+        broker_address="localhost:9092",  # Specify your Kafka broker address here
+        auto_offset_reset="earliest",
+    )
 
-# Connect the CoinbaseSource to a StreamingDataFrame
-sdf = app.dataframe(source=coinbase_source)
+    # Configure the CoinbaseSource instance
+    coinbase_source = CoinbaseSource(
+        # Pick the unique name for the source instance.
+        # It will be used as a part of the default topic name.
+        name="coinbase-source",
+        url="wss://ws-feed-public.sandbox.exchange.coinbase.com",
+        product_ids=[
+            "ETH-BTC",
+        ],
+    )
 
-# Print the incoming messages from the source
-sdf.print()
+    # Connect the CoinbaseSource to a StreamingDataFrame
+    sdf = app.dataframe(source=coinbase_source)
 
-# Start the application
-if __name__ == "__main__":
+    # Print the incoming messages from the source
+    sdf.print()
+
+    # Start the application
     app.run(sdf)
+
+
+if __name__ == "__main__":
+    main()
