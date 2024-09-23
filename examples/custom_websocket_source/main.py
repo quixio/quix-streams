@@ -65,22 +65,22 @@ class CoinbaseSource(Source):
 
             # Parse the message and send only "ticker" data to the topic
             msg_json = json.loads(msg)
-            if msg_json["type"] == "ticker":
-                key = msg_json["product_id"]
-                dt = isoparse(msg_json["time"])
-                timestamp = int(dt.timestamp() * 1000)
+            if msg_json["type"] != "ticker":
+                continue
 
-                # Serialize message data to bytes to produce to Kafka
-                kafka_msg = self.serialize(
-                    key=key, value=msg_json, timestamp_ms=timestamp
-                )
+            key = msg_json["product_id"]
+            dt = isoparse(msg_json["time"])
+            timestamp = int(dt.timestamp() * 1000)
 
-                # Produce a serialized message to the Kafka topic
-                self.produce(
-                    value=kafka_msg.value,
-                    key=kafka_msg.key,
-                    timestamp=kafka_msg.timestamp,
-                )
+            # Serialize message data to bytes to produce to Kafka
+            kafka_msg = self.serialize(key=key, value=msg_json, timestamp_ms=timestamp)
+
+            # Produce a serialized message to the Kafka topic
+            self.produce(
+                value=kafka_msg.value,
+                key=kafka_msg.key,
+                timestamp=kafka_msg.timestamp,
+            )
 
 
 # Initialize an Application with Kafka configuration
@@ -91,7 +91,9 @@ app = Application(
 
 # Configure the CoinbaseSource instance
 coinbase_source = CoinbaseSource(
-    name="coinbase-source",  # Pick the unique name for the source. It will
+    # Pick the unique name for the source instance.
+    # It will be used as a part of the default topic name.
+    name="coinbase-source",
     url="wss://ws-feed-public.sandbox.exchange.coinbase.com",
     product_ids=[
         "ETH-BTC",
