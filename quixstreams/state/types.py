@@ -23,7 +23,14 @@ class WindowedState(Protocol):
         """
         ...
 
-    def update_window(self, start_ms: int, end_ms: int, value: Any, timestamp_ms: int):
+    def update_window(
+        self,
+        start_ms: int,
+        end_ms: int,
+        value: Any,
+        timestamp_ms: int,
+        window_timestamp_ms: Optional[int] = None,
+    ):
         """
         Set a value for the window.
 
@@ -34,6 +41,7 @@ class WindowedState(Protocol):
         :param end_ms: end of the window in milliseconds
         :param value: value of the window
         :param timestamp_ms: current message timestamp in milliseconds
+        :param window_timestamp_ms: arbitrary timestamp stored with the window value
         """
         ...
 
