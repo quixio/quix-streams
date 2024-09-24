@@ -582,8 +582,13 @@ class Application:
         A simple helper method that generates a `StreamingDataFrame`, which is used
         to define your message processing pipeline.
 
-        See :class:`quixstreams.dataframe.StreamingDataFrame` for more details.
+        The topic is what the `StreamingDataFrame` will use as its input, unless
+        a source is provided (`topic` is optional when using a `source`).
 
+        If both `topic` AND `source` are provided, the source will write to that topic
+        instead of its default topic (which the `StreamingDataFrame` then consumes).
+
+        See :class:`quixstreams.dataframe.StreamingDataFrame` for more details.
 
         Example Snippet:
 
@@ -604,6 +609,7 @@ class Application:
 
         :param topic: a `quixstreams.models.Topic` instance
             to be used as an input topic.
+        :param source: a `quixstreams.sources` "BaseSource" instance
         :return: `StreamingDataFrame` object
         """
         if not source and not topic:
@@ -619,6 +625,7 @@ class Application:
             registry=self._dataframe_registry,
         )
         self._dataframe_registry.register_root(sdf)
+
         return sdf
 
     def stop(self, fail: bool = False):
@@ -755,6 +762,8 @@ class Application:
     def add_source(self, source: BaseSource, topic: Optional[Topic] = None) -> Topic:
         """
         Add a source to the application.
+
+        Use when no transformations (which requires a `StreamingDataFrame`) are needed.
 
         See :class:`quixstreams.sources.base.BaseSource` for more details.
 
