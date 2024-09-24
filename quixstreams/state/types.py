@@ -364,7 +364,7 @@ class WindowedState(Protocol):
         ...
 
     def get_windows(
-        self, start_from_ms: int, start_to_ms: int
+        self, start_from_ms: int, start_to_ms: int, backwards: bool = False
     ) -> List[Tuple[Tuple[int, int], Any]]:
         # TODO: docstring
         ...

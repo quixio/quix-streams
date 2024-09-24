@@ -1,3 +1,4 @@
+from operator import ge, le
 from typing import Any, Generator, Optional, Tuple, TYPE_CHECKING, cast
 
 from rocksdict import ReadOptions
@@ -167,7 +168,11 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
         return prefix + PREFIX_SEPARATOR + key_bytes
 
     def get_windows(
-        self, start_from_ms: int, start_to_ms: int, prefix: bytes
+        self,
+        start_from_ms: int,
+        start_to_ms: int,
+        prefix: bytes,
+        backwards: bool = False,
     ) -> Generator[Tuple[Tuple[int, int], Any], None, None]:
         """
         Get all windows starting between "start_from" and "start_to"
@@ -179,6 +184,7 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
         :param start_from_ms: minimal window start time, exclusive
         :param start_to_ms: maximum window start time, inclusive
         :param prefix: a key prefix
+        :param backwards: if True, yield windows in reverse order
         :return: generator yielding sorted tuples in format `((start, end), value)`
         """
 
@@ -196,8 +202,17 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
         read_opt.set_iterate_lower_bound(seek_from_key)
         read_opt.set_iterate_upper_bound(seek_to_key)
 
+        if backwards:
+            from_key = seek_to_key
+            reverse = False
+            precedence_check = ge  # greater than or equal
+        else:
+            from_key = seek_from_key
+            reverse = True
+            precedence_check = le  # less than or equal
+
         db_windows = self._partition.iter_items(
-            read_opt=read_opt, from_key=seek_from_key
+            read_opt=read_opt, from_key=from_key, backwards=backwards
         )
 
         # If the cache is empty then take this shortcut to yield only db windows
@@ -208,14 +223,14 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
                     yield (start, end), self._deserialize_value(db_value)
             return
 
-        cached_windows = sorted(cache.items(), reverse=True)
+        cached_windows = sorted(cache.items(), reverse=reverse)
         cached_key, cached_value = cached_windows.pop()
 
         for db_key, db_value in db_windows:
             yield_db_window = True
             if cached_key:
-                # Yield all cached windows with lower or equal timestamp
-                while cached_key <= db_key:
+                # Yield all cached windows that have higher precedence
+                while precedence_check(cached_key, db_key):
                     if cached_value is not DELETED:
                         _, start, end = parse_window_key(cached_key)
                         if start_from_ms < start <= start_to_ms:

@@ -46,10 +46,14 @@ class WindowedRocksDBStorePartition(RocksDBStorePartition):
         self._ensure_column_family(LATEST_EXPIRED_WINDOW_CF_NAME)
 
     def iter_items(
-        self, from_key: bytes, read_opt: ReadOptions, cf_name: str = "default"
+        self,
+        from_key: bytes,
+        read_opt: ReadOptions,
+        cf_name: str = "default",
+        backwards: bool = False,
     ) -> RdictItems:
         cf = self.get_column_family(cf_name=cf_name)
-        return cf.items(from_key=from_key, read_opt=read_opt)
+        return cf.items(backwards=backwards, from_key=from_key, read_opt=read_opt)
 
     def begin(self) -> "WindowedRocksDBPartitionTransaction":
         return WindowedRocksDBPartitionTransaction(
