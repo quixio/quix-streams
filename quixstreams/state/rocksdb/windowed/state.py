@@ -85,10 +85,11 @@ class WindowedTransactionState(WindowedState):
         )
 
     def get_windows(
-        self, start_from_ms: int, start_to_ms: int
+        self, start_from_ms: int, start_to_ms: int, backwards: bool = False
     ) -> Generator[Tuple[Tuple[int, int], Any], None, None]:
         return self._transaction.get_windows(
             start_from_ms=start_from_ms,
             start_to_ms=start_to_ms,
             prefix=self._prefix,
+            backwards=backwards,
         )
