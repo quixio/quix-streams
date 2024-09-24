@@ -2,9 +2,6 @@ import abc
 from abc import abstractmethod
 from typing import Any, Optional, Callable, Tuple, TYPE_CHECKING
 
-from quixstreams.state import (
-    WindowedState,
-)
 from .base import WindowAggregateFunc, WindowMergeFunc
 from .time_based import FixedTimeWindow
 
@@ -49,6 +46,7 @@ class FixedTimeWindowDefinition(abc.ABC):
         self,
         func_name: str,
         aggregate_func: WindowAggregateFunc,
+        aggregate_default: Optional[Any] = None,
         merge_func: Optional[WindowMergeFunc] = None,
     ) -> "FixedTimeWindow": ...
 
@@ -72,24 +70,12 @@ class FixedTimeWindowDefinition(abc.ABC):
         :return: an instance of `FixedTimeWindow` configured to perform sum aggregation.
         """
 
-        def func(
-            start_ms: int,
-            end_ms: int,
-            timestamp_ms: int,
-            value: Any,
-            state: WindowedState,
-        ):
-            current_value = state.get_window(
-                start_ms=start_ms, end_ms=end_ms, default=0
-            )
-            updated_value = current_value + value
+        def func(old: Any, new: Any) -> Any:
+            return old + new
 
-            state.update_window(
-                start_ms, end_ms, timestamp_ms=timestamp_ms, value=updated_value
-            )
-            return updated_value
-
-        return self._create_window(func_name="sum", aggregate_func=func)
+        return self._create_window(
+            func_name="sum", aggregate_func=func, aggregate_default=0
+        )
 
     def count(self) -> "FixedTimeWindow":
         """
@@ -99,24 +85,12 @@ class FixedTimeWindowDefinition(abc.ABC):
         :return: an instance of `FixedTimeWindow` configured to perform record count.
         """
 
-        def func(
-            start_ms: int,
-            end_ms: int,
-            timestamp_ms: int,
-            _: Any,
-            state: WindowedState,
-        ):
-            current_value = state.get_window(
-                start_ms=start_ms, end_ms=end_ms, default=0
-            )
-            updated_value = current_value + 1
+        def func(old: Any, _: Any) -> Any:
+            return old + 1
 
-            state.update_window(
-                start_ms, end_ms, timestamp_ms=timestamp_ms, value=updated_value
-            )
-            return updated_value
-
-        return self._create_window(func_name="count", aggregate_func=func)
+        return self._create_window(
+            func_name="count", aggregate_func=func, aggregate_default=0
+        )
 
     def mean(self) -> "FixedTimeWindow":
         """
@@ -127,26 +101,15 @@ class FixedTimeWindowDefinition(abc.ABC):
             of the values.
         """
 
-        def func(
-            start_ms: int,
-            end_ms: int,
-            timestamp_ms: int,
-            value: Any,
-            state: WindowedState,
-        ):
-            sum_, count_ = state.get_window(
-                start_ms=start_ms, end_ms=end_ms, default=(0.0, 0)
-            )
-
-            sum_ += +value
-            count_ += +1
-            state.update_window(
-                start_ms, end_ms, timestamp_ms=timestamp_ms, value=(sum_, count_)
-            )
-            return sum_, count_
+        def func(old: Any, new: Any) -> Any:
+            sum_, count_ = old
+            return sum_ + new, count_ + 1
 
         return self._create_window(
-            func_name="mean", aggregate_func=func, merge_func=_mean_merge_func
+            func_name="mean",
+            aggregate_func=func,
+            merge_func=_mean_merge_func,
+            aggregate_default=(0.0, 0),
         )
 
     def reduce(
@@ -188,24 +151,8 @@ class FixedTimeWindowDefinition(abc.ABC):
         :return: A window configured to perform custom reduce aggregation on the data.
         """
 
-        def func(
-            start_ms: int,
-            end_ms: int,
-            timestamp_ms: int,
-            value: Any,
-            state: WindowedState,
-        ):
-            current_value = state.get_window(start_ms=start_ms, end_ms=end_ms)
-
-            if current_value is None:
-                updated_value = initializer(value)
-            else:
-                updated_value = reducer(current_value, value)
-
-            state.update_window(
-                start_ms, end_ms, timestamp_ms=timestamp_ms, value=updated_value
-            )
-            return updated_value
+        def func(old: Any, new: Any) -> Any:
+            return initializer(new) if old is None else reducer(old, new)
 
         return self._create_window(func_name="reduce", aggregate_func=func)
 
@@ -217,24 +164,8 @@ class FixedTimeWindowDefinition(abc.ABC):
             value within each window period.
         """
 
-        def func(
-            start_ms: int,
-            end_ms: int,
-            timestamp_ms: int,
-            value: Any,
-            state: WindowedState,
-        ):
-            current_value = state.get_window(start_ms=start_ms, end_ms=end_ms)
-
-            if current_value is None:
-                updated_value = value
-            else:
-                updated_value = max(current_value, value)
-
-            state.update_window(
-                start_ms, end_ms, timestamp_ms=timestamp_ms, value=updated_value
-            )
-            return updated_value
+        def func(old: Any, new: Any) -> Any:
+            return new if old is None else max(old, new)
 
         return self._create_window(func_name="max", aggregate_func=func)
 
@@ -246,24 +177,8 @@ class FixedTimeWindowDefinition(abc.ABC):
             value within each window period.
         """
 
-        def func(
-            start_ms: int,
-            end_ms: int,
-            timestamp_ms: int,
-            value: Any,
-            state: WindowedState,
-        ):
-            current_value = state.get_window(start_ms=start_ms, end_ms=end_ms)
-
-            if current_value is None:
-                updated_value = value
-            else:
-                updated_value = min(current_value, value)
-
-            state.update_window(
-                start_ms, end_ms, timestamp_ms=timestamp_ms, value=updated_value
-            )
-            return updated_value
+        def func(old: Any, new: Any) -> Any:
+            return new if old is None else min(old, new)
 
         return self._create_window(func_name="min", aggregate_func=func)
 
@@ -295,6 +210,7 @@ class HoppingWindowDefinition(FixedTimeWindowDefinition):
         self,
         func_name: str,
         aggregate_func: WindowAggregateFunc,
+        aggregate_default: Optional[Any] = None,
         merge_func: Optional[WindowMergeFunc] = None,
     ) -> "FixedTimeWindow":
         return FixedTimeWindow(
@@ -303,6 +219,7 @@ class HoppingWindowDefinition(FixedTimeWindowDefinition):
             step_ms=self._step_ms,
             name=self._get_name(func_name=func_name),
             aggregate_func=aggregate_func,
+            aggregate_default=aggregate_default,
             merge_func=merge_func,
             dataframe=self._dataframe,
         )
@@ -327,6 +244,7 @@ class TumblingWindowDefinition(FixedTimeWindowDefinition):
         self,
         func_name: str,
         aggregate_func: WindowAggregateFunc,
+        aggregate_default: Optional[Any] = None,
         merge_func: Optional[WindowMergeFunc] = None,
     ) -> "FixedTimeWindow":
         return FixedTimeWindow(
@@ -334,6 +252,7 @@ class TumblingWindowDefinition(FixedTimeWindowDefinition):
             grace_ms=self._grace_ms,
             name=self._get_name(func_name=func_name),
             aggregate_func=aggregate_func,
+            aggregate_default=aggregate_default,
             merge_func=merge_func,
             dataframe=self._dataframe,
         )
