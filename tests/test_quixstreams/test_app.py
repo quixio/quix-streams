@@ -1120,7 +1120,6 @@ class TestDeprecatedApplicationDotQuix:
 
         def get_cfg_builder(quix_sdk_token):
             cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
-            cfg_builder.workspace_id = "abcd"
             cfg_builder.librdkafka_connection_config = connection_config
             cfg_builder.prepend_workspace_id.return_value = expected_workspace_cgroup
             cfg_builder.quix_sdk_token = quix_sdk_token

@@ -31,10 +31,10 @@ def count_transactions(value: dict, state: State):
 
 # Define your application and settings
 # Quix application is automatically configured to work with Quix platform
-app = Application.Quix(
-    "qts__purchase_notifier",
+app = Application(
+    consumer_group="qts__purchase_notifier",
     auto_offset_reset="earliest",
-    auto_create_topics=True,  # Quix app has an option to auto create topics
+    auto_create_topics=True,
 )
 
 # Define an input topic with Quix deserializer
