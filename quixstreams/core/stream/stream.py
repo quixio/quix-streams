@@ -431,7 +431,7 @@ class Stream:
         # Iterate over a reversed list of functions
         for func in reversed(functions):
             # Validate that only allowed functions are passed
-            if isinstance(func, IdentityFunction) and not composed:
+            if isinstance(func, IdentityFunction) and composed:
                 # These are added either when making a new Stream or doing a merge
                 # They do not need to be included as part of execution.
                 continue
