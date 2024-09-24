@@ -13,3 +13,8 @@ export QUIXSTREAMS_VERSION=$(grep '__version__' ./quixstreams/__init__.py | cut 
 conda install --yes conda-build anaconda-client
 conda build --channel conda-forge --user quixio ./conda
 ```
+
+# How to upgrade requirements
+
+1. Bump requirements in `conda/meta.yaml` and/or in `conda/post-link.sh`.
+2. Run `./conda/test.sh` to make sure everything works.
