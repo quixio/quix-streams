@@ -1,6 +1,8 @@
 from typing import List
 
-from .base import BaseSink
+from quixstreams.sinks.base import BaseSink
+
+__all__ = ("SinkManager",)
 
 
 class SinkManager:

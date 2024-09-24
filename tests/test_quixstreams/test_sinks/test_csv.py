@@ -1,7 +1,7 @@
 import csv
 import json
 
-from quixstreams.sinks.csv import CSVSink
+from quixstreams.sinks.core.csv import CSVSink
 
 
 class TestCSVSink:

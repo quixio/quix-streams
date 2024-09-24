@@ -3,7 +3,7 @@ import json
 import os
 from typing import Callable, Any
 
-from .base import BatchingSink, SinkBatch
+from ..base import BatchingSink, SinkBatch
 
 
 class CSVSink(BatchingSink):

@@ -8,7 +8,7 @@ An example using InfluxDB Sink:
 
 ```python
 from quixstreams import Application
-from quixstreams.sinks.influxdb3 import InfluxDB3Sink
+from quixstreams.sinks.core.influxdb3 import InfluxDB3Sink
 
 app = Application(broker_address="localhost:9092")
 topic = app.topic("numbers-topic")
@@ -93,13 +93,13 @@ Note that it only limits the amount of incoming messages, and not the number of 
 
 ```python
 from quixstreams import Application
-from quixstreams.sinks.influxdb3 import InfluxDB3Sink
+from quixstreams.sinks.core.influxdb3 import InfluxDB3Sink
 
 # Commit the checkpoints after processing 1000 messages or after a 5 second interval has elapsed (whichever is sooner).
 app = Application(
     broker_address="localhost:9092",
-    commit_interval=5.0, 
-    commit_every=1000,  
+    commit_interval=5.0,
+    commit_every=1000,
 )
 topic = app.topic('numbers-topic')
 sdf = app.dataframe(topic)

@@ -11,7 +11,7 @@ it to the `StreamingDataFrame.sink()` method:
 
 ```python
 from quixstreams import Application
-from quixstreams.sinks.csv import CSVSink
+from quixstreams.sinks.core.csv import CSVSink
 
 app = Application(broker_address="localhost:9092")
 topic = app.topic("input-topic")
@@ -42,7 +42,7 @@ To use your own serializer, pass `key_serializer` and `value_serializer` to `CSV
 
 ```python
 import json
-from quixstreams.sinks.csv import CSVSink
+from quixstreams.sinks.core.csv import CSVSink
 
 # Initialize a CSVSink with a file path 
 csv_sink = CSVSink(
@@ -50,7 +50,7 @@ csv_sink = CSVSink(
     # Define custom serializers for keys and values here.
     # The callables must accept one argument for key/value, and return a string
     key_serializer=lambda key: json.dumps(key),
-    value_serializer=lambda value: str(value), 
+    value_serializer=lambda value: str(value),
 )
 ```
 
