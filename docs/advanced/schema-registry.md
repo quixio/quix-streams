@@ -59,7 +59,7 @@ serializer = JSONSerializer(
 The serializer requires a `schema`, but the deserializer can automatically fetch the required schema from the Schema Registry.
 
 ```python
-from quixstreams.models.serialize.avro import AvroDeserializer, AvroSerializer
+from quixstreams.models.serializers.avro import AvroDeserializer, AvroSerializer
 
 MY_SCHEMA = {
     "type": "record",
@@ -86,7 +86,7 @@ serializer = AvroSerializer(
 For both the serializer and deserializer, `msg_type` must be provided.
 
 ```python
-from quixstreams.models.serialize.protobuf import ProtobufDeserializer, ProtobufSerializer
+from quixstreams.models.serializers.protobuf import ProtobufDeserializer, ProtobufSerializer
 
 from my_input_models_pb2 import InputProto
 from my_output_models_pb2 import OutputProto
