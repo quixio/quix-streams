@@ -27,7 +27,11 @@ Use Quix Streams to build simple Kafka producer/consumer applications or leverag
 ### Install Quix Streams
 
 ```shell
+# PyPI
 python -m pip install quixstreams
+
+# or conda
+conda install -c conda-forge quixio::quixstreams
 ```
 
 #### Requirements
