@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from quixstreams.app import ApplicationConfig
 
 
-__all__ = ["QuixEnvironmentSource"]
+__all__ = ("QuixEnvironmentSource",)
 
 
 class QuixEnvironmentSource(KafkaReplicatorSource):
@@ -85,11 +85,16 @@ class QuixEnvironmentSource(KafkaReplicatorSource):
         self._short_topic = topic
         self._quix_workspace_id = quix_workspace_id
 
+        # Prefix topic and source names (name is used as a consumer group) to connect
+        # to the Quix environment
+        topic = quix_config.prepend_workspace_id(topic)
+        name = quix_config.prepend_workspace_id(name)
+
         consumer_extra_config.update(quix_config.librdkafka_extra_config)
         super().__init__(
             name=name,
             app_config=app_config,
-            topic=quix_config.prepend_workspace_id(topic),
+            topic=topic,
             broker_address=quix_config.librdkafka_connection_config,
             auto_offset_reset=auto_offset_reset,
             consumer_extra_config=consumer_extra_config,
