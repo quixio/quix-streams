@@ -38,7 +38,9 @@ First, let's do an overview of the alerting approach we'll take with our Anomaly
 Basically, we want to look at temperatures for a given MACHINE_ID over a shifting window of time (and as close to "now" as possible) and see if the mean temperature in that window surpasses our allowed threshold of 90C.
 
 This approach is desirable since temperatures fluctuate quickly; it enables more accurate alerting since it: 
+
 - is more tolerant to erroneous sensor readings/spikes
+
 - allows more time for the machine to cool back down (as part of normal operation)
 
 
