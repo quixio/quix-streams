@@ -162,6 +162,70 @@ def test_get_latest_timestamp(windowed_rocksdb_store_factory):
             [((1, 11), 2), ((2, 12), 3)],
             id="ignore-deleted-windows",
         ),
+        pytest.param(
+            [
+                dict(start_ms=2, end_ms=12, value=3, timestamp_ms=3),
+                dict(start_ms=0, end_ms=10, value=1, timestamp_ms=1),
+                dict(start_ms=1, end_ms=11, value=2, timestamp_ms=2),
+            ],
+            [],
+            [],
+            dict(start_from_ms=-1, start_to_ms=2, backwards=True),
+            [((2, 12), 3), ((1, 11), 2), ((0, 10), 1)],
+            id="messages-in-db-backwards",
+        ),
+        pytest.param(
+            [],
+            [
+                dict(start_ms=2, end_ms=12, value=3, timestamp_ms=3),
+                dict(start_ms=0, end_ms=10, value=1, timestamp_ms=1),
+                dict(start_ms=1, end_ms=11, value=2, timestamp_ms=2),
+            ],
+            [],
+            dict(start_from_ms=-1, start_to_ms=2, backwards=True),
+            [((2, 12), 3), ((1, 11), 2), ((0, 10), 1)],
+            id="messages-in-cache-backwards",
+        ),
+        pytest.param(
+            [
+                dict(start_ms=2, end_ms=12, value=3, timestamp_ms=3),
+                dict(start_ms=0, end_ms=10, value=1, timestamp_ms=1),
+            ],
+            [
+                dict(start_ms=1, end_ms=11, value=2, timestamp_ms=2),
+            ],
+            [],
+            dict(start_from_ms=-1, start_to_ms=2, backwards=True),
+            [((2, 12), 3), ((1, 11), 2), ((0, 10), 1)],
+            id="messages-both-in-db-and-in-cache-backwards",
+        ),
+        pytest.param(
+            [
+                dict(start_ms=2, end_ms=12, value=3, timestamp_ms=3),
+                dict(start_ms=0, end_ms=10, value=1, timestamp_ms=1),
+                dict(start_ms=3, end_ms=13, value=4, timestamp_ms=4),
+            ],
+            [
+                dict(start_ms=1, end_ms=11, value=2, timestamp_ms=2),
+                dict(start_ms=0, end_ms=10, value=5, timestamp_ms=1),
+            ],
+            [],
+            dict(start_from_ms=-1, start_to_ms=3, backwards=True),
+            [((3, 13), 4), ((2, 12), 3), ((1, 11), 2), ((0, 10), 5)],
+            id="cache-message-overrides-db-message",
+        ),
+        pytest.param(
+            [
+                dict(start_ms=0, end_ms=10, value=1, timestamp_ms=1),
+                dict(start_ms=1, end_ms=11, value=2, timestamp_ms=2),
+                dict(start_ms=2, end_ms=12, value=3, timestamp_ms=3),
+            ],
+            [],
+            [dict(start_ms=0, end_ms=10)],
+            dict(start_from_ms=-1, start_to_ms=2, backwards=True),
+            [((2, 12), 3), ((1, 11), 2)],
+            id="ignore-deleted-windows",
+        ),
         # Useful for refactoring, to `timeit` against previous implementations.
         # number_of_windows is set to a small number to not blow up test times in CI
         # For development, bump it to something like 10000 or 100000
