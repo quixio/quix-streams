@@ -65,7 +65,7 @@ class WindowedState(Protocol):
         ...
 
     def get_windows(
-        self, start_from_ms: int, start_to_ms: int
+        self, start_from_ms: int, start_to_ms: int, backwards: bool = False
     ) -> Generator[Tuple[Tuple[int, int], Any], None, None]:
         # TODO: docstring
         ...
@@ -182,7 +182,11 @@ class WindowedPartitionTransaction(Protocol):
         ...
 
     def get_windows(
-        self, start_from_ms: int, start_to_ms: int, prefix: bytes
+        self,
+        start_from_ms: int,
+        start_to_ms: int,
+        prefix: bytes,
+        backwards: bool = False,
     ) -> Generator[Tuple[Tuple[int, int], Any], None, None]:
         # TODO: docstring
         ...
