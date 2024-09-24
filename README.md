@@ -35,7 +35,7 @@ conda install -c conda-forge quixio::quixstreams
 ```
 
 #### Requirements
-Python 3.8+, Apache Kafka 0.10+
+Python 3.9+, Apache Kafka 0.10+
 
 See [requirements.txt](https://github.com/quixio/quix-streams/blob/main/requirements.txt) for the full list of requirements
 
