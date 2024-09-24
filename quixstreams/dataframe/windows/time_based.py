@@ -37,6 +37,7 @@ class FixedTimeWindow:
         grace_ms: int,
         name: str,
         aggregate_func: WindowAggregateFunc,
+        aggregate_default: Any,
         dataframe: "StreamingDataFrame",
         merge_func: Optional[WindowMergeFunc] = None,
         step_ms: Optional[int] = None,
@@ -48,6 +49,7 @@ class FixedTimeWindow:
         self._grace_ms = grace_ms
         self._name = name
         self._aggregate_func = aggregate_func
+        self._aggregate_default = aggregate_default
         self._merge_func = merge_func or _default_merge_func
         self._dataframe = dataframe
         self._step_ms = step_ms
@@ -64,6 +66,7 @@ class FixedTimeWindow:
     ) -> Tuple[List[WindowResult], List[WindowResult]]:
         duration_ms = self._duration_ms
         grace_ms = self._grace_ms
+        default = self._aggregate_default
 
         latest_timestamp = state.get_latest_timestamp()
         ranges = get_window_ranges(
@@ -87,7 +90,9 @@ class FixedTimeWindow:
                 )
                 continue
 
-            aggregated = self._aggregate_func(start, end, timestamp_ms, value, state)
+            current_value = state.get_window(start, end, default=default)
+            aggregated = self._aggregate_func(current_value, value)
+            state.update_window(start, end, timestamp_ms=timestamp_ms, value=aggregated)
             updated_windows.append(
                 {
                     "start": start,
