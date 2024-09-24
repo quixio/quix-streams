@@ -124,6 +124,19 @@ class KafkaReplicatorSource(Source):
     def run(self) -> None:
         source_consumer_group = f"{self.name}-source"
         target_consumer_group = f"{self.name}-source-offsets"
+        logger.info(
+            f'Starting the source "{self.name}" with the config: '
+            f'source_broker_address="{self._broker_address}" '
+            f'source_consumer_group="{source_consumer_group}" '
+            f'source_auto_offset_reset="{self._auto_offset_reset}" '
+            f'target_broker_address="{self._config.broker_address}" '
+            f'target_consumer_group="{target_consumer_group}" '
+            f'target_auto_offset_reset="{self._config.auto_offset_reset}" '
+            f"commit_interval={self._config.commit_interval}s "
+            f"commit_every={self._config.commit_every} "
+            f'processing_guarantee="{self._config.processing_guarantee}"'
+        )
+
         self._source_cluster_consumer = Consumer(
             broker_address=self._broker_address,
             consumer_group=source_consumer_group,
