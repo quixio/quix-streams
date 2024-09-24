@@ -30,6 +30,17 @@ def test_update_window(transaction_state):
         assert state.get_window(start_ms=0, end_ms=10) == 1
 
 
+def test_update_window_with_window_timestamp(transaction_state):
+    with transaction_state() as state:
+        state.update_window(
+            start_ms=0, end_ms=10, value=1, timestamp_ms=2, window_timestamp_ms=3
+        )
+        assert state.get_window(start_ms=0, end_ms=10) == [3, 1]
+
+    with transaction_state() as state:
+        assert state.get_window(start_ms=0, end_ms=10) == [3, 1]
+
+
 def test_expire_windows(transaction_state):
     with transaction_state() as state:
         state.update_window(start_ms=0, end_ms=10, value=1, timestamp_ms=2)
