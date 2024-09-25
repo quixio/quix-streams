@@ -843,6 +843,7 @@ class TestQuixApplication:
 
         def get_cfg_builder(quix_sdk_token):
             cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
+            cfg_builder.workspace_id = "abcd"
             cfg_builder.librdkafka_connection_config = connection_config
             cfg_builder.prepend_workspace_id.return_value = expected_workspace_cgroup
             cfg_builder.quix_sdk_token = quix_sdk_token
@@ -906,6 +907,7 @@ class TestQuixApplication:
 
         def get_cfg_builder(quix_sdk_token):
             cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
+            cfg_builder.workspace_id = "abcd"
             cfg_builder.librdkafka_connection_config = connection_config
             cfg_builder.prepend_workspace_id.return_value = expected_workspace_cgroup
             cfg_builder.quix_sdk_token = quix_sdk_token
@@ -967,6 +969,7 @@ class TestQuixApplication:
 
         def get_cfg_builder(quix_sdk_token):
             cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
+            cfg_builder.workspace_id = "abcd"
             cfg_builder.librdkafka_connection_config = connection_config
             cfg_builder.prepend_workspace_id.return_value = expected_workspace_cgroup
             cfg_builder.quix_sdk_token = quix_sdk_token
@@ -999,9 +1002,12 @@ class TestQuixApplication:
         assert consumer_call_kwargs["extra_config"] == expected_consumer_extra_config
 
     def test_init_with_broker_id_dont_raises(self):
+        cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
+        cfg_builder.workspace_id = "abcd"
+
         app = Application(
             broker_address="address",
-            quix_config_builder=create_autospec(QuixKafkaConfigsBuilder),
+            quix_config_builder=cfg_builder,
         )
 
         assert not app.is_quix_app
@@ -1114,6 +1120,7 @@ class TestDeprecatedApplicationDotQuix:
 
         def get_cfg_builder(quix_sdk_token):
             cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
+            cfg_builder.workspace_id = "abcd"
             cfg_builder.librdkafka_connection_config = connection_config
             cfg_builder.prepend_workspace_id.return_value = expected_workspace_cgroup
             cfg_builder.quix_sdk_token = quix_sdk_token
