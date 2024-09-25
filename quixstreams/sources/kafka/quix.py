@@ -74,7 +74,9 @@ class QuixEnvironmentSource(KafkaReplicatorSource):
         if consumer_extra_config is None:
             consumer_extra_config = {}
 
-        quix_config = QuixKafkaConfigsBuilder(
+        self._short_topic = topic
+        self._quix_workspace_id = quix_workspace_id
+        self._quix_config = QuixKafkaConfigsBuilder(
             quix_portal_api_service=QuixPortalApiService(
                 default_workspace_id=quix_workspace_id,
                 auth_token=quix_sdk_token,
@@ -82,15 +84,12 @@ class QuixEnvironmentSource(KafkaReplicatorSource):
             )
         )
 
-        self._short_topic = topic
-        self._quix_workspace_id = quix_workspace_id
-
-        consumer_extra_config.update(quix_config.librdkafka_extra_config)
+        consumer_extra_config.update(self._quix_config.librdkafka_extra_config)
         super().__init__(
             name=name,
             app_config=app_config,
-            topic=quix_config.prepend_workspace_id(topic),
-            broker_address=quix_config.librdkafka_connection_config,
+            topic=self._quix_config.prepend_workspace_id(topic),
+            broker_address=self._quix_config.librdkafka_connection_config,
             auto_offset_reset=auto_offset_reset,
             consumer_extra_config=consumer_extra_config,
             consumer_poll_timeout=consumer_poll_timeout,
@@ -99,6 +98,10 @@ class QuixEnvironmentSource(KafkaReplicatorSource):
             value_deserializer=value_deserializer,
             key_deserializer=key_deserializer,
         )
+
+    @property
+    def source_customer_group(self):
+        return self._quix_config.prepend_workspace_id(super().source_customer_group)
 
     def __repr__(self) -> str:
         return (

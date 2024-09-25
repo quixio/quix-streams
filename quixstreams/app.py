@@ -259,6 +259,9 @@ class Application:
         self._config = ApplicationConfig(
             broker_address=broker_address,
             consumer_group=consumer_group,
+            consumer_group_prefix=(
+                quix_config_builder.workspace_id if quix_config_builder else ""
+            ),
             auto_offset_reset=auto_offset_reset,
             commit_interval=commit_interval,
             commit_every=commit_every,
@@ -1078,6 +1081,7 @@ class ApplicationConfig(BaseSettings):
 
     broker_address: ConnectionConfig
     consumer_group: str
+    consumer_group_prefix: str
     auto_offset_reset: AutoOffsetReset = "latest"
     commit_interval: float = 5.0
     commit_every: int = 0

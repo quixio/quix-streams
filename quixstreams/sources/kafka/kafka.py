@@ -121,10 +121,20 @@ class KafkaReplicatorSource(Source):
         self._target_cluster_consumer: Optional[Consumer] = None
         self._target_cluster_admin: Optional[TopicAdmin] = None
 
+    @property
+    def source_customer_group(self):
+        return f"source-{self.name}"
+
+    @property
+    def target_customer_group(self):
+        if self._config.consumer_group_prefix:
+            return f"{self._config.consumer_group_prefix}-source-{self.name}-offsets"
+        return f"source-{self.name}-offsets"
+
     def run(self) -> None:
         self._source_cluster_consumer = Consumer(
             broker_address=self._broker_address,
-            consumer_group=f"source-{self.name}",
+            consumer_group=self.source_customer_group,
             auto_offset_reset=self._auto_offset_reset,
             auto_commit_enable=False,
             extra_config=self._consumer_extra_config,
@@ -136,7 +146,7 @@ class KafkaReplicatorSource(Source):
 
         self._target_cluster_consumer = Consumer(
             broker_address=self._config.broker_address,
-            consumer_group=f"source-{self.name}-offsets",
+            consumer_group=self.target_customer_group,
             auto_offset_reset=self._config.auto_offset_reset,
             auto_commit_enable=False,
             extra_config=self._config.consumer_extra_config,
