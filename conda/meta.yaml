@@ -15,7 +15,7 @@ requirements:
     - python >=3.8,<3.13
   run:
     - python >=3.8,<3.13
-    - python-confluent-kafka >=2.2,<2.6
+    - python-confluent-kafka >=2.2,<2.5
     - requests >=2.32
     - typing_extensions >=4.8
     - orjson >=3.9,<4
