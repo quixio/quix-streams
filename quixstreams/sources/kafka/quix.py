@@ -100,8 +100,8 @@ class QuixEnvironmentSource(KafkaReplicatorSource):
         )
 
     @property
-    def source_customer_group(self):
-        return self._quix_config.prepend_workspace_id(super().source_customer_group)
+    def source_consumer_group(self):
+        return self._quix_config.prepend_workspace_id(super().source_consumer_group)
 
     def __repr__(self) -> str:
         return (
