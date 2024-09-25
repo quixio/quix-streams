@@ -6,6 +6,8 @@ import signal
 import warnings
 from typing import Optional, List, Callable, Union, Literal, get_args
 
+import graphviz
+
 from confluent_kafka import TopicPartition
 from typing_extensions import Self
 
@@ -794,6 +796,12 @@ class Application:
                     self._processing_context.resume_ready_partitions()
 
             logger.info("Stop processing of StreamingDataFrame")
+
+    def view_graph(self, filename: str = "./sdf_graph.gv"):
+        graph = graphviz.Digraph(comment="app_graph")
+        for stream in self._dataframe_registry.streams:
+            graph = stream.build_graph(graph)
+        graph.render(filename, view=True)
 
     def _quix_runtime_init(self):
         """

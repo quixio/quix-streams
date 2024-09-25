@@ -7,6 +7,8 @@ from typing import List, Callable, Optional, Any, Union
 
 from typing_extensions import Self
 
+import graphviz
+
 from quixstreams.dataframe.exceptions import InvalidOperation
 
 from .functions import (
@@ -415,6 +417,35 @@ class Stream:
         for other in others:
             other.children.add(new_node)
         return new_node
+
+    def build_graph(self, graph=None):
+        if not graph:
+            graph = graphviz.Digraph(comment="stream_graph")
+
+        def stream_id(stream):
+            return str(id(stream))
+
+        def add_graph_node(stream):
+            if stream.parent:
+                label = f"{stream.func.__class__.__name__}: {stream.func.func.__name__}"
+            else:
+                label = f"Consume topic"
+            graph.node(stream_id(stream), label=label)
+
+        def add_graph_edge(parent, child):
+            graph.edge(stream_id(parent), stream_id(child))
+
+        def graph_tree(stream):
+            for child in sorted(stream.children, key=lambda node: node.generated):
+                add_graph_node(child)
+                add_graph_edge(stream, child)
+                graph_tree(child)
+
+        tree_root = self.full_tree()[0]
+        add_graph_node(tree_root)
+        graph_tree(tree_root)
+
+        return graph
 
     def _compose(
         self,

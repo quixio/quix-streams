@@ -1,4 +1,4 @@
-from typing import List, Dict, Optional, Callable, Any, TYPE_CHECKING
+from typing import List, Dict, Optional, Callable, Any, TYPE_CHECKING, Iterable
 
 from .exceptions import (
     StreamingDataFrameDuplicate,
@@ -33,6 +33,10 @@ class DataframeRegistry:
         :return: a list of Topics a consumer should subscribe to.
         """
         return self._topics
+
+    @property
+    def streams(self) -> Iterable[Stream]:
+        return self._registry.values()
 
     def register_root(
         self,
