@@ -106,7 +106,7 @@ Traceback (most recent call last):
 AttributeError: Can't get attribute 'MySource' on <module '__main__' (<class '_frozen_importlib.BuiltinImporter'>)>
 ```
 
-We can fix this with a small workaround. Your custom source must be defined in a separate file.
+To fix that, you need to define your custom source in a separate file.
 
 ```python
 %%writefile source.py
