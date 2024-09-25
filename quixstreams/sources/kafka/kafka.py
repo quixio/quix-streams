@@ -127,9 +127,10 @@ class KafkaReplicatorSource(Source):
 
     @property
     def target_customer_group(self):
+        consumer_group = f'source-{self.name}-offsets'
         if self._config.consumer_group_prefix:
-            return f"{self._config.consumer_group_prefix}-source-{self.name}-offsets"
-        return f"source-{self.name}-offsets"
+            consumer_group = f"{self._config.consumer_group_prefix}-{consumer_group}"
+        return consumer_group
 
     def run(self) -> None:
         self._source_cluster_consumer = Consumer(
