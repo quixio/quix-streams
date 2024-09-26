@@ -25,7 +25,7 @@ def check_state_management_enabled():
         )
 
 
-def check_state_dir(state_dir: str):
+def check_state_dir(state_dir: Path):
     """
     Check if Application "state_dir" matches the state dir on Quix platform.
 
@@ -34,7 +34,7 @@ def check_state_dir(state_dir: str):
     :param state_dir: application state_dir path
     """
 
-    state_dir_abs = str(Path(state_dir).absolute())
+    state_dir_abs = str(state_dir.absolute())
     if QUIX_ENVIRONMENT.deployment_id and state_dir_abs != QUIX_ENVIRONMENT.state_dir:
         warnings.warn(
             f'Path to state directory "{state_dir_abs}" does not match '

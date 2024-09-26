@@ -1,7 +1,7 @@
 import logging
 import shutil
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Union
 
 from quixstreams.rowproducer import RowProducer
 from .exceptions import (
@@ -34,7 +34,7 @@ class StateStoreManager:
     def __init__(
         self,
         group_id: str,
-        state_dir: str,
+        state_dir: Union[str, Path],
         rocksdb_options: Optional[RocksDBOptionsType] = None,
         producer: Optional[RowProducer] = None,
         recovery_manager: Optional[RecoveryManager] = None,

@@ -8,9 +8,10 @@ import pytest
 from quixstreams import State
 from quixstreams.dataframe.exceptions import (
     InvalidOperation,
-    GroupByLimitExceeded,
-    DataFrameLocked,
+    GroupByNestingLimit,
+    GroupByDuplicate,
 )
+from quixstreams.dataframe.registry import DataframeRegistry
 from quixstreams.dataframe.windows import WindowResult
 from tests.utils import DummySink
 
@@ -422,9 +423,9 @@ class TestStreamingDataFrame:
         Dropping an empty list is ignored entirely.
         """
         sdf = dataframe_factory()
-        pre_drop_stream = sdf.stream.tree()
+        pre_drop_stream = sdf.stream.root_path()
         sdf = sdf.drop([])
-        post_drop_stream = sdf.stream.tree()
+        post_drop_stream = sdf.stream.root_path()
         assert pre_drop_stream == post_drop_stream
 
     def test_drop_missing_columns_errors_raise(self, dataframe_factory):
@@ -492,66 +493,6 @@ class TestStreamingDataFrameApplyExpand:
         sdf = dataframe_factory()
         with pytest.raises(ValueError, match="Expand functions are not allowed"):
             _ = sdf[sdf.apply(lambda v: [v, v], expand=True)]
-
-
-class TestStreamingDataFrameUpdate:
-    def test_update_no_reassign(self, dataframe_factory):
-        """
-        "Update" operations should be applied regardless of a reassignment,
-        and anything else requires assignment.
-        """
-        sdf = dataframe_factory()
-        sdf_tree_1 = sdf.stream.tree()
-        sdf_id_1 = id(sdf)
-
-        # non-update non-reassignment (no change!)
-        sdf.apply(lambda v: v)
-        sdf_tree_2 = sdf.stream.tree()
-        sdf_id_2 = id(sdf)
-        assert sdf_id_1 == sdf_id_2
-        assert sdf_tree_1 == sdf_tree_2
-
-        # non-update reassignment
-        sdf = sdf.apply(lambda v: v)
-        sdf_tree_3 = sdf.stream.tree()
-        sdf_id_3 = id(sdf)
-        assert sdf_id_2 != sdf_id_3
-        assert sdf_tree_2 != sdf_tree_3
-
-        # update non-reassignment
-        sdf.update(lambda v: v)
-        sdf_tree_4 = sdf.stream.tree()
-        sdf_id_4 = id(sdf)
-        assert sdf_id_3 == sdf_id_4
-        assert sdf_tree_3 != sdf_tree_4
-
-        # update reassignment
-        sdf = sdf.update(lambda v: v)
-        sdf_tree_5 = sdf.stream.tree()
-        sdf_id_5 = id(sdf)
-        assert sdf_id_4 == sdf_id_5
-        assert sdf_tree_4 != sdf_tree_5
-
-    def test_chaining_inplace_with_non_inplace(self, dataframe_factory):
-        """
-        When chaining together inplace and non-inplace, reassigning must happen else
-        everything starting with the non-inplace will be lost.
-        """
-        sdf = dataframe_factory()
-        sdf.update(lambda v: v.append(1)).apply(lambda v: v + [2]).update(
-            lambda v: v.append(3)
-        )
-        sdf = sdf.apply(lambda v: v + [4])
-
-        value = []
-        key, timestamp, headers = b"key", 0, []
-
-        assert sdf.test(value, key, timestamp, headers)[0] == (
-            [1, 4],
-            key,
-            timestamp,
-            headers,
-        )
 
 
 class TestStreamingDataFrameToTopic:
@@ -1426,12 +1367,15 @@ class TestStreamingDataFrameGroupBy:
         col_update = "updated_col"
         headers = [("key", b"value")]
 
-        sdf = dataframe_factory(topic, topic_manager=topic_manager, producer=producer)
+        sdf_registry = DataframeRegistry()
+        sdf = dataframe_factory(
+            topic, topic_manager=topic_manager, producer=producer, registry=sdf_registry
+        )
         sdf = sdf.group_by(col)
         sdf[col] = col_update
 
         groupby_topic = sdf.topic
-        assert sdf.topics_to_subscribe == [topic, sdf.topic]
+        assert sdf_registry.consumer_topics == [topic, sdf.topic]
         assert (
             groupby_topic.name == topic_manager.repartition_topic(col, topic.name).name
         )
@@ -1504,12 +1448,15 @@ class TestStreamingDataFrameGroupBy:
         col_update = "updated_col"
         headers = [("key", b"value")]
 
-        sdf = dataframe_factory(topic, topic_manager=topic_manager, producer=producer)
+        sdf_registry = DataframeRegistry()
+        sdf = dataframe_factory(
+            topic, topic_manager=topic_manager, producer=producer, registry=sdf_registry
+        )
         sdf = sdf.group_by(col, name=op_name)
         sdf[col] = col_update
 
         groupby_topic = sdf.topic
-        assert sdf.topics_to_subscribe == [topic, sdf.topic]
+        assert sdf_registry.consumer_topics == [topic, sdf.topic]
         assert (
             groupby_topic.name
             == topic_manager.repartition_topic(op_name, topic.name).name
@@ -1583,12 +1530,15 @@ class TestStreamingDataFrameGroupBy:
         col_update = "updated_col"
         headers = [("key", b"value")]
 
-        sdf = dataframe_factory(topic, topic_manager=topic_manager, producer=producer)
+        sdf_registry = DataframeRegistry()
+        sdf = dataframe_factory(
+            topic, topic_manager=topic_manager, producer=producer, registry=sdf_registry
+        )
         sdf = sdf.group_by(lambda v: v[col], name=op_name)
         sdf[col] = col_update
 
         groupby_topic = sdf.topic
-        assert [topic, sdf.topic] == sdf.topics_to_subscribe
+        assert sdf_registry.consumer_topics == [topic, sdf.topic]
         assert (
             groupby_topic.name
             == topic_manager.repartition_topic(op_name, topic.name).name
@@ -1666,41 +1616,516 @@ class TestStreamingDataFrameGroupBy:
 
     def test_group_by_limit_exceeded(self, dataframe_factory, topic_manager_factory):
         """
-        Only 1 GroupBy operation per SDF instance (or, what appears to end users
-        as a "single" SDF instance).
+        Only 1 GroupBy depth per SDF (no nesting of them).
         """
         topic_manager = topic_manager_factory()
         topic = topic_manager.topic(str(uuid.uuid4()))
         sdf = dataframe_factory(topic, topic_manager=topic_manager)
         sdf = sdf.group_by("col_a")
 
-        with pytest.raises(GroupByLimitExceeded):
+        with pytest.raises(GroupByNestingLimit):
             sdf.group_by("col_b")
 
-    @pytest.mark.parametrize(
-        "operation",
-        [
-            lambda sdf: sdf["a"],
-            lambda sdf: operator.setitem(sdf, "a", 1),
-            lambda sdf: sdf.apply(...),
-            lambda sdf: sdf.update(...),
-            lambda sdf: sdf.filter(...),
-            lambda sdf: sdf.print(),
-            lambda sdf: sdf.drop(),
-            lambda sdf: sdf.group_by(),
-            lambda sdf: sdf.tumbling_window(1),
-            lambda sdf: sdf.hopping_window(1, 1),
-            lambda sdf: sdf.to_topic(...),
-            lambda sdf: sdf.sink(...),
-            lambda sdf: sdf.set_headers(...),
-            lambda sdf: sdf.set_timestamp(...),
-        ],
-    )
-    def test_sink_locks_sdf(self, operation, dataframe_factory, topic_manager_factory):
+    def test_group_by_name_clash(self, dataframe_factory, topic_manager_factory):
+        """
+        Each groupby operation per SDF instance (or, what appears to end users
+        as a "single" SDF instance) should be uniquely named.
+
+        Most likely to encounter this if group by is used with the same column name.
+        """
         topic_manager = topic_manager_factory()
         topic = topic_manager.topic(str(uuid.uuid4()))
         sdf = dataframe_factory(topic, topic_manager=topic_manager)
-        sdf.sink(DummySink())
+        sdf.group_by("col_a")
 
-        with pytest.raises(DataFrameLocked):
-            operation(sdf)
+        with pytest.raises(GroupByDuplicate):
+            sdf.group_by("col_a")
+
+    def test_sink_cannot_be_added_to(self, dataframe_factory, topic_manager_factory):
+        """
+        A sink cannot be added to or branched.
+        """
+        topic_manager = topic_manager_factory()
+        topic = topic_manager.topic(str(uuid.uuid4()))
+        sdf = dataframe_factory(topic, topic_manager=topic_manager)
+        assert len(sdf.stream.children) == 0
+        sdf.sink(DummySink())
+        # sink operation was added
+        assert len(sdf.stream.children) == 1
+        sdf_sink_node = list(sdf.stream.children)[0]
+        # do random stuff
+        sdf.apply(lambda x: x).update(lambda x: x)
+        sdf = sdf.apply(lambda x: x)
+        sdf.update(lambda x: x).apply(lambda x: x)
+        sdf.update(lambda x: x)
+        # no children should be added to the sink operation
+        assert not sdf_sink_node.children
+
+
+def add_n(n):
+    return lambda value: value + n
+
+
+def add_n_col(n, col="v"):
+    return lambda value: value[col] + n
+
+
+def less_than(n):
+    return lambda v: v < n
+
+
+def div_n(n):
+    return lambda value: value // n
+
+
+def add_n_df(n):
+    def wrapper(value):
+        return {**value, "v": value["v"] + n}
+
+    return wrapper
+
+
+class TestStreamingDataFrameBranching:
+    def test_basic_branching(self, dataframe_factory):
+
+        sdf = dataframe_factory().apply(lambda v: v + 1)
+        sdf.apply(lambda v: v + 2)
+        sdf.apply(lambda v: v + 3)
+        sdf = sdf.apply(lambda v: v + 100)
+
+        key, timestamp, headers = b"key", 0, []
+        value = 0
+        expected = [
+            (3, key, timestamp, headers),
+            (4, key, timestamp, headers),
+            (101, key, timestamp, headers),
+        ]
+        results = sdf.test(value=value, key=key, timestamp=timestamp, headers=headers)
+        assert results == expected
+
+    def test_multiple_branches(self, dataframe_factory):
+        """
+        INPUT: 0
+        └── SDF_1 = (add 120, div 2) -> 60
+            ├── SDF_2 = (div 3) -> 20
+            │   ├── SDF_3 = (add 10, add 3  ) -> 33
+            │   ├── SDF_4 = (    add 24     ) -> 44
+            │   └── SDF_2 = (    add 2      ) -> 22
+            └── SDF_1 = (add 40) -> 100
+                ├── SDF_5 = ( div 2, add 5  ) -> 55
+                └── SDF_1 = (div 100, add 10) -> 11
+        """
+
+        sdf = dataframe_factory().apply(add_n(120)).apply(div_n(2))  # 60
+        sdf_2 = sdf.apply(div_n(3))  # 20
+        sdf_3 = sdf_2.apply(add_n(10)).apply(add_n(3))  # 33
+        sdf_4 = sdf_2.apply(add_n(24))  # 44
+        sdf_2 = sdf_2.apply(add_n(2))  # 22
+        sdf = sdf.apply(add_n(40))  # 100
+        sdf_5 = sdf.apply(div_n(2)).apply(add_n(5))  # 55
+        sdf = sdf.apply(div_n(100)).apply(add_n(10))  # 11
+
+        _extras = {"key": b"key", "timestamp": 0, "headers": []}
+        extras = list(_extras.values())
+        expected = [
+            (33, *extras),
+            (44, *extras),
+            (22, *extras),
+            (55, *extras),
+            (11, *extras),
+        ]
+        results = sdf.test(value=0, **_extras)
+
+        assert results == expected
+
+    def test_multiple_branches_skip_assigns(self, dataframe_factory):
+        """
+        INPUT: 0
+        └── SDF_1 = (add 120, div 2) -> 60
+            ├── SDF_2 = (div 3) -> 20
+            │   ├── (add 10, add 3  ) -> 33
+            │   ├── (    add 24     ) -> 44
+            │   └── (    add 2      ) -> 22
+            └── SDF_1 = (add 40) -> 100
+                ├── ( div 2, add 5  ) -> 55
+                └── (div 100, add 10) -> 11
+        """
+
+        sdf = dataframe_factory().apply(add_n(120)).apply(div_n(2))  # 60
+        sdf_2 = sdf.apply(div_n(3))  # 20
+        sdf_2.apply(add_n(10)).apply(add_n(3))  # 33
+        sdf_2.apply(add_n(24))  # 44
+        sdf_2.apply(add_n(2))  # 22
+        sdf = sdf.apply(add_n(40))  # 100
+        sdf.apply(div_n(2)).apply(add_n(5))  # 55
+        sdf.apply(div_n(100)).apply(add_n(10))  # 11
+
+        _extras = {"key": b"key", "timestamp": 0, "headers": []}
+        extras = list(_extras.values())
+        expected = [
+            (33, *extras),
+            (44, *extras),
+            (22, *extras),
+            (55, *extras),
+            (11, *extras),
+        ]
+        results = sdf.test(value=0, **_extras)
+
+        assert results == expected
+
+    def test_filter(self, dataframe_factory):
+        sdf = dataframe_factory().apply(add_n(10))
+        sdf2 = sdf.apply(add_n(5)).filter(less_than(0)).apply(add_n(200))
+        sdf3 = sdf.apply(add_n(7)).filter(less_than(20)).apply(add_n(4))
+        sdf = sdf.apply(add_n(30)).filter(less_than(50))
+        sdf4 = sdf.apply(add_n(60))
+        sdf.apply(add_n(800))
+
+        _extras = {"key": b"key", "timestamp": 0, "headers": []}
+        extras = list(_extras.values())
+        expected = [(21, *extras), (100, *extras), (840, *extras)]
+        results = sdf.test(value=0, **_extras)
+
+        # each operation is only called once (no redundant processing)
+        assert results == expected
+
+    def test_filter_using_sdf_apply_and_col_select(self, dataframe_factory):
+
+        sdf = dataframe_factory().apply(add_n(10))
+        sdf2 = sdf[sdf.apply(less_than(0))].apply(add_n(200))
+        sdf3 = sdf[sdf.apply(add_n(8)).apply(less_than(20))].apply(add_n(33))
+        sdf = sdf[sdf.apply(add_n(30)).apply(less_than(50))].apply(add_n(77))
+        sdf4 = sdf.apply(add_n(60))
+        sdf = sdf.apply(add_n(800))
+
+        _extras = {"key": b"key", "timestamp": 0, "headers": []}
+        extras = list(_extras.values())
+        expected = [(43, *extras), (147, *extras), (887, *extras)]
+        results = sdf.test(value=0, **_extras)
+
+        assert results == expected
+
+    def test_filter_using_columns(self, dataframe_factory):
+        sdf = dataframe_factory().apply(add_n_df(10))
+        sdf2 = sdf[sdf["v"] < 0].apply(add_n_df(200))
+        sdf3 = sdf[sdf["v"].apply(add_n(1)).apply(add_n(7)) < 20].apply(add_n_df(33))
+        sdf = sdf[sdf["v"].apply(add_n(5)).apply(add_n(25)) < 50].apply(add_n_df(77))
+        sdf4 = sdf.apply(add_n_df(60))
+        sdf = sdf.apply(add_n_df(800))
+
+        _extras = {"key": b"key", "timestamp": 0, "headers": []}
+        extras = list(_extras.values())
+        expected = [({"v": 43}, *extras), ({"v": 147}, *extras), ({"v": 887}, *extras)]
+        results = sdf.test(value={"v": 0}, **_extras)
+
+        assert results == expected
+
+    def test_store_series_filter_as_var_and_use(self, dataframe_factory):
+        """
+        NOTE: This is NOT dependent on branching functionality, but branching may
+        encourage these sorts of operations (it does NOT copy data).
+
+        NOTE: this kind of operation is only guaranteed to be correct when the stored
+        series is IMMEDIATELY used. If any operations manipulate any of the references
+        used within the series, those manipulations will persist/apply for the stored
+        result as well.
+
+        Basically, storing a series is like using a function with mutable args.
+        """
+        sdf = dataframe_factory().apply(add_n_df(10))
+        sdf_filter = sdf["v"].apply(add_n(1)).apply(add_n(7)) < 20  # NOT a split
+        sdf2 = sdf[sdf_filter].apply(add_n_df(33))
+        sdf = sdf.apply(add_n_df(800))
+
+        _extras = {"key": b"key", "timestamp": 0, "headers": []}
+        extras = list(_extras.values())
+        expected = [({"v": 43}, *extras), ({"v": 810}, *extras)]
+        results = sdf.test(value={"v": 0}, **_extras)
+
+        assert results == expected
+
+    def test_store_series_result_as_var_and_use(self, dataframe_factory):
+        """
+        NOTE: This is NOT dependent on branching functionality, but branching may
+        encourage these sorts of operations (it does NOT copy data).
+
+        NOTE: this kind of operation is only guaranteed to be correct when the stored
+        series is IMMEDIATELY used. If any operations manipulate any of the references
+        used within the series, those manipulations will persist/apply for the stored
+        result as well.
+
+        Basically, storing a series is like using a function with mutable args.
+        """
+        sdf = dataframe_factory().apply(add_n_df(10))
+        sdf_sum = sdf["v"].apply(add_n(1)) + 8  # NOT a split (no data cloning)
+        sdf2 = sdf[sdf["v"] + sdf_sum < 30].apply(add_n_df(33))
+        sdf = sdf.apply(add_n_df(800))
+
+        _extras = {"key": b"key", "timestamp": 0, "headers": []}
+        extras = list(_extras.values())
+        expected = [({"v": 43}, *extras), ({"v": 810}, *extras)]
+        results = sdf.test(value={"v": 0}, **_extras)
+
+        assert results == expected
+
+    def test_store_sdf_filter_as_var_and_use(self, dataframe_factory):
+        """
+        NOTE: This is NOT dependent on branching functionality, but branching may
+        encourage these sorts of operations.
+
+        NOTE: This WILL copy data, so it is basically a more inefficient way of doing
+        a filter using series.
+
+        NOTE: this kind of operation is only guaranteed to be correct when the stored
+        series is IMMEDIATELY used. If any operations manipulate any of the references
+        used within the series, those manipulations will persist/apply for the stored
+        result as well.
+
+        Basically, storing a sdf is like using a function with mutable args.
+        """
+        sdf = dataframe_factory().apply(add_n(10))
+        sdf_filter = sdf.apply(less_than(20))
+        sdf = sdf[sdf_filter].apply(add_n(33))
+        sdf = sdf.apply(add_n(800))
+
+        _extras = {"key": b"key", "timestamp": 0, "headers": []}
+        extras = list(_extras.values())
+        expected = [(843, *extras)]
+        results = sdf.test(value=0, **_extras)
+
+        assert results == expected
+
+    def test_store_sdf_as_var_and_use_in_split(self, dataframe_factory):
+        """
+        NOTE: This WILL copy data, so it is basically a more inefficient way of doing
+        a filter using StreamingSeries.
+
+        NOTE: this kind of operation is only guaranteed to be correct when the stored
+        series is IMMEDIATELY used. If any operations manipulate any of the references
+        used within the series, those manipulations will persist/apply for the stored
+        result as well.
+
+        Basically, storing a sdf is like using a function with mutable args.
+        """
+        sdf = dataframe_factory().apply(add_n(10))
+        sdf_filter = sdf.apply(less_than(20))
+        sdf2 = sdf[sdf_filter].apply(add_n(33))
+        sdf = sdf.apply(add_n(800))
+
+        _extras = {"key": b"key", "timestamp": 0, "headers": []}
+        extras = list(_extras.values())
+        expected = [(43, *extras), (810, *extras)]
+        results = sdf.test(value=0, **_extras)
+
+        assert results == expected
+
+    def test_reuse_sdf_as_filter_fails(self, dataframe_factory):
+        """
+        Attempting to reuse a filtering SDF will fail.
+        """
+        sdf = dataframe_factory().apply(add_n(10))
+        sdf_filter = sdf.apply(less_than(20))
+        sdf2 = sdf[sdf_filter].apply(add_n(100))
+
+        with pytest.raises(
+            InvalidOperation,
+            match="Cannot use a filtering or column-setter SDF more than once",
+        ):
+            sdf[sdf_filter].apply(add_n(200))
+
+    def test_sdf_as_filter_with_added_operation_fails(self, dataframe_factory):
+        """
+        Using a filtering SDF with further operations added (post-assignment) fails.
+
+        Why:
+        The additional operation is actually included in the filter SDF, which is
+        unintuitive even if you understand how SDF works internally.
+        """
+        sdf = dataframe_factory().apply(add_n(10))
+        sdf_filter = sdf.apply(less_than(20))
+        sdf = sdf.apply(add_n(50))  # "additional" operation
+
+        with pytest.raises(
+            InvalidOperation,
+            match="filtering or column-setter SDF must originate from target SDF;",
+        ):
+            sdf[sdf_filter].apply(add_n(100))
+
+    def test_sdf_as_filter_in_another_split_fails(self, dataframe_factory):
+        """
+        Using a filtering SDF with further operations added (post-assignment) fails.
+
+        This case uses a "split" SDF to filter with (though functionally it's somewhat
+        similar to non-split), with a unique side effect.
+
+        Why:
+        The additional operation on the filtering SDF becomes orphaned, producing no
+        result where one would likely be expected.
+        """
+        sdf = dataframe_factory().apply(add_n(10))
+        sdf2 = sdf.apply(add_n(5))
+        sdf_filter = sdf2.apply(less_than(20))
+        sdf2 = sdf2.apply(add_n(25))  # this would become orphaned
+
+        with pytest.raises(
+            InvalidOperation,
+            match="filtering or column-setter SDF must originate from target SDF;",
+        ):
+            sdf[sdf_filter].apply(add_n(100))
+
+    def test_update(self, dataframe_factory):
+        """
+        "Update" functions work with split behavior.
+        """
+
+        def mul_n(n):
+            def wrapper(value):
+                value["v"] *= n
+
+            return wrapper
+
+        sdf = dataframe_factory().apply(add_n_df(1))
+        sdf2 = sdf.apply(add_n_df(2)).update(mul_n(2))
+        sdf3 = sdf.apply(add_n_df(3))
+        sdf3.update(mul_n(3))
+        sdf = sdf.update(mul_n(4)).apply(add_n_df(100))
+
+        _extras = {"key": b"key", "timestamp": 0, "headers": []}
+        extras = list(_extras.values())
+        expected = [({"v": 6}, *extras), ({"v": 12}, *extras), ({"v": 104}, *extras)]
+        results = sdf.test(value={"v": 0}, **_extras)
+
+        assert results == expected
+
+    def test_set_timestamp(self, dataframe_factory):
+        """
+        "Transform" functions work with split behavior.
+        """
+
+        def set_ts(n):
+            return lambda value, key, timestamp, headers: timestamp + n
+
+        sdf = dataframe_factory().apply(add_n(1))
+        sdf2 = sdf.apply(add_n(2)).set_timestamp(set_ts(3)).set_timestamp(set_ts(5))
+        sdf3 = sdf.apply(add_n(3))
+        sdf = sdf.set_timestamp(set_ts(4)).apply(add_n(7))
+
+        _extras = {"key": b"key", "timestamp": 0, "headers": []}
+        extras = list(_extras.values())
+        expected = [(3, b"key", 8, []), (4, *extras), (8, b"key", 4, [])]
+        results = sdf.test(value=0, **_extras)
+
+        assert results == expected
+
+    def test_column_assign_reuse_fails(self, dataframe_factory):
+        sdf = dataframe_factory().apply(add_n_df(10))
+        new_v = sdf.apply(add_n_df(1)).apply(add_n_col(7))
+        sdf["new_v0"] = new_v
+
+        with pytest.raises(
+            InvalidOperation,
+            match="Cannot use a filtering or column-setter SDF more than once",
+        ):
+            sdf["new_v1"] = new_v
+
+    def test_sdf_as_column_setter_in_another_split_fails(self, dataframe_factory):
+        """
+        Using a filtering SDF with further operations added (post-assignment) fails.
+
+        This case uses a "split" SDF to filter with (though functionally it's somewhat
+        similar to non-split), with a unique side effect.
+
+        Why:
+        The additional operation on the filtering SDF becomes orphaned, producing no
+        result where one would likely be expected.
+        """
+        sdf = dataframe_factory().apply(add_n_df(10))
+        sdf2 = sdf.apply(add_n_df(5))
+        new_val = sdf2.apply(add_n_col(30))
+        sdf2 = sdf2.apply(add_n_df(25))  # this would become orphaned
+
+        with pytest.raises(
+            InvalidOperation,
+            match="filtering or column-setter SDF must originate from target SDF;",
+        ):
+            sdf["n_new"] = new_val
+
+    def test_sdf_as_column_setter_with_added_operation_fails(self, dataframe_factory):
+        """
+        Using a filtering SDF with further operations added (post-assignment) fails.
+
+        Why:
+        The additional operation is actually included in the filter SDF, which is
+        unintuitive even if you understand how SDF works internally.
+        """
+        sdf = dataframe_factory().apply(add_n_df(10))
+        new_val = sdf.apply(add_n_col(30))
+        sdf = sdf.apply(add_n_df(50))  # "additional" operation
+
+        with pytest.raises(
+            InvalidOperation,
+            match="filtering or column-setter SDF must originate from target SDF;",
+        ):
+            sdf["n_new"] = new_val
+
+    def test_column_setter(self, dataframe_factory):
+        sdf = dataframe_factory().apply(add_n_df(10))
+        sdf2 = sdf.apply(add_n_df(5))
+        sdf2["v"] = sdf2.apply(add_n_col(1))
+        sdf3 = sdf.apply(add_n_df(7))
+        sdf3["v"] = sdf3.apply(add_n_col(20))
+        sdf["v"] = sdf.apply(add_n_df(25)).apply(add_n_col(55))
+        sdf4 = sdf.apply(add_n_df(100))
+        sdf["v"] = sdf.apply(add_n_col(800))
+
+        _extras = {"key": b"key", "timestamp": 0, "headers": []}
+        extras = list(_extras.values())
+        expected = [({"v": v}, *extras) for v in [16, 37, 190, 890]]
+        results = sdf.test(value={"v": 0}, **_extras)
+        assert results == expected
+
+    def test_store_sdf_setter_as_var_and_use(self, dataframe_factory):
+        """
+        NOTE: This is NOT dependent on branching functionality, but branching may
+        encourage these sorts of operations.
+        """
+        sdf = dataframe_factory().apply(add_n_df(10))
+        new_val = sdf.apply(add_n_col(20))
+        sdf = sdf[new_val].apply(add_n_df(33))
+        sdf = sdf.apply(add_n_df(800))
+
+        _extras = {"key": b"key", "timestamp": 0, "headers": []}
+        extras = list(_extras.values())
+        expected = [({"v": 843}, *extras)]
+        results = sdf.test(value={"v": 0}, **_extras)
+
+        assert results == expected
+
+    def test_column_setting_from_another_sdf_series_fails(self, dataframe_factory):
+        """
+        Attempting to set a column based on another SDF series operation fails,
+        as series are only intended to be applied to the same SDF.
+        :param dataframe_factory:
+        :return:
+        """
+
+        sdf = dataframe_factory().apply(add_n_df(10))
+        sdf2 = sdf.apply(add_n_df(500))
+
+        with pytest.raises(InvalidOperation, match="Column-setting"):
+            sdf["new_col"] = sdf2["v"] + 3
+
+    def test_column_operations_different_sdfs_fails(self, dataframe_factory):
+        """
+        Attempting series operations involving multiple SDFs fails,
+        as series are only intended to be applied to the same SDF.
+        :param dataframe_factory:
+        :return:
+        """
+
+        sdf = dataframe_factory().apply(add_n_df(10))
+        sdf2 = sdf.apply(add_n_df(500))
+        sdf3 = sdf.apply(add_n_df(800))
+
+        with pytest.raises(InvalidOperation, match="All column operations"):
+            sdf["new_col"] = sdf2["v"] + sdf3["v"]

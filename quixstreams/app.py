@@ -2,19 +2,19 @@ import contextlib
 import functools
 import logging
 import os
-import time
 import signal
+import time
 import warnings
+from pathlib import Path
 from typing import Optional, List, Callable, Union, Literal, Tuple, Type
 
 from confluent_kafka import TopicPartition
-from typing_extensions import Self
-from pathlib import Path
 from pydantic import Field, AliasGenerator
 from pydantic_settings import PydanticBaseSettingsSource, SettingsConfigDict
+from typing_extensions import Self
 
 from .context import set_message_context, copy_context
-from .dataframe import StreamingDataFrame
+from .dataframe import StreamingDataFrame, DataframeRegistry
 from .error_callbacks import (
     ConsumerErrorCallback,
     ProcessingErrorCallback,
@@ -42,10 +42,10 @@ from .processing import ProcessingContext, PausingManager
 from .rowconsumer import RowConsumer
 from .rowproducer import RowProducer
 from .sinks import SinkManager
+from .sources.manager import SourceManager, BaseSource, SourceException
 from .state import StateStoreManager
 from .state.recovery import RecoveryManager
 from .state.rocksdb import RocksDBOptionsType
-from .sources.manager import SourceManager, BaseSource, SourceException
 from .utils.settings import BaseSettings
 
 __all__ = ("Application", "ApplicationConfig")
@@ -108,7 +108,7 @@ class Application:
         commit_every: int = 0,
         consumer_extra_config: Optional[dict] = None,
         producer_extra_config: Optional[dict] = None,
-        state_dir: str = "state",
+        state_dir: Union[str, Path] = Path("state"),
         rocksdb_options: Optional[RocksDBOptionsType] = None,
         on_consumer_error: Optional[ConsumerErrorCallback] = None,
         on_processing_error: Optional[ProcessingErrorCallback] = None,
@@ -248,6 +248,7 @@ class Application:
                 QuixTopicManager, quix_config_builder=quix_config_builder
             )
             # Check if the state dir points to the mounted PVC while running on Quix
+            state_dir = Path(state_dir)
             check_state_dir(state_dir=state_dir)
             quix_app_config = quix_config_builder.get_application_config(consumer_group)
 
@@ -340,6 +341,7 @@ class Application:
             sink_manager=self._sink_manager,
             pausing_manager=self._pausing_manager,
         )
+        self._dataframe_registry = DataframeRegistry()
 
     @property
     def config(self) -> "ApplicationConfig":
@@ -614,7 +616,9 @@ class Application:
             topic=topic,
             topic_manager=self._topic_manager,
             processing_context=self._processing_context,
+            registry=self._dataframe_registry,
         )
+        self._dataframe_registry.register_root(sdf)
         return sdf
 
     def stop(self, fail: bool = False):
@@ -767,10 +771,7 @@ class Application:
         self._source_manager.register(source)
         return topic
 
-    def run(
-        self,
-        dataframe: StreamingDataFrame,
-    ):
+    def run(self, dataframe: Optional[StreamingDataFrame] = None):
         """
         Start processing data from Kafka using provided `StreamingDataFrame`
 
@@ -791,12 +792,17 @@ class Application:
         df = app.dataframe(topic)
         df.apply(lambda value, context: print('New message', value)
 
-        app.run(dataframe=df)
+        app.run()
         ```
-
-        :param dataframe: instance of `StreamingDataFrame`
         """
-        self._run(dataframe)
+        if dataframe is not None:
+            warnings.warn(
+                "Application.run() received a `dataframe` argument which is "
+                "no longer used (StreamingDataFrames are now tracked automatically); "
+                "the argument should be removed.",
+                DeprecationWarning,
+            )
+        self._run()
 
     def _exception_handler(self, exc_type, exc_val, exc_tb):
         fail = False
@@ -808,7 +814,7 @@ class Application:
 
         self.stop(fail=fail)
 
-    def _run(self, dataframe: Optional[StreamingDataFrame] = None):
+    def _run(self):
         self._setup_signal_handlers()
 
         logger.info(
@@ -834,14 +840,14 @@ class Application:
 
         with exit_stack:
             # Subscribe to topics in Kafka and start polling
-            if dataframe is not None:
-                self._run_dataframe(dataframe)
+            if self._dataframe_registry.consumer_topics:
+                self._run_dataframe()
             else:
                 self._run_sources()
 
-    def _run_dataframe(self, dataframe):
+    def _run_dataframe(self):
         self._consumer.subscribe(
-            dataframe.topics_to_subscribe,
+            self._dataframe_registry.consumer_topics,
             on_assign=self._on_assign,
             on_revoke=self._on_revoke,
             on_lost=self._on_lost,
@@ -853,13 +859,13 @@ class Application:
         # Initialize the checkpoint
         self._processing_context.init_checkpoint()
 
-        dataframe_composed = dataframe.compose()
+        dataframes_composed = self._dataframe_registry.compose_all()
 
         while self._running:
             if self._state_manager.recovery_required:
                 self._state_manager.do_recovery()
             else:
-                self._process_message(dataframe_composed)
+                self._process_message(dataframes_composed)
                 self._processing_context.commit_checkpoint()
                 self._processing_context.resume_ready_partitions()
                 self._source_manager.raise_for_error()
@@ -1093,7 +1099,7 @@ class ApplicationConfig(BaseSettings):
     auto_create_topics: bool = True
     request_timeout: float = 30
     topic_create_timeout: float = 60
-    state_dir: Path = "state"
+    state_dir: Path = Path("state")
     rocksdb_options: Optional[RocksDBOptionsType] = None
     use_changelog_topics: bool = True
 

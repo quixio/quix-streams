@@ -42,6 +42,7 @@ nav:
     - Stateful Processing: advanced/stateful-processing.md
     - Managing Kafka Topics: advanced/topics.md
     - Using Producer & Consumer: advanced/producer-consumer-lowlevel.md
+    - StreamingDataFrame Assignment Rules: advanced/dataframe-assignments.md
   - Connecting to Quix Cloud: quix-platform.md
   - 'Connectors [beta]':
     -  Sinks:

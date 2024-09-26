@@ -1,8 +1,9 @@
 import contextvars
+import functools
 import operator
-from typing import Optional, Union, Callable, Container, Any, Mapping
+from typing import Optional, Union, Callable, Container, Any, Mapping, TypeVar
 
-from typing_extensions import Self
+from typing_extensions import Self, ParamSpec
 
 from quixstreams.context import set_message_context
 from quixstreams.core.stream.functions import (
@@ -19,6 +20,9 @@ from .base import BaseStreaming
 from .exceptions import InvalidOperation, ColumnDoesNotExist, InvalidColumnReference
 
 __all__ = ("StreamingSeries",)
+
+_T = TypeVar("_T")
+_P = ParamSpec("_P")
 
 
 def _getitem(d: Mapping, column_name: Union[str, int]) -> object:
@@ -42,6 +46,24 @@ def _getitem(d: Mapping, column_name: Union[str, int]) -> object:
             f"column referencing expects message value type 'dict', "
             f"not '{d.__class__.__name__}'"
         )
+
+
+def _validate_operation(func: Callable[_P, _T]) -> Callable[_P, _T]:
+    """
+    Ensure `StreamingSeries` involved in operations originate from the same SDF.
+    Can occur during `StreamingDataFrame` branching.
+    """
+
+    @functools.wraps(func)
+    def wrapper(self: "StreamingSeries", other: Any, *args, **kwargs):
+        if isinstance(other, StreamingSeries):
+            if self.sdf_id != other.sdf_id:
+                raise InvalidOperation(
+                    "All column operations must originate from one `StreamingDataFrame`"
+                )
+        return func(self, other, *args, **kwargs)
+
+    return wrapper
 
 
 class StreamingSeries(BaseStreaming):
@@ -98,25 +120,36 @@ class StreamingSeries(BaseStreaming):
         self,
         name: Optional[str] = None,
         stream: Optional[Stream] = None,
+        sdf_id: Optional[int] = None,
     ):
         if not (name or stream):
             raise ValueError('Either "name" or "stream" must be passed')
         self._stream = stream or Stream(func=ApplyFunction(lambda v: _getitem(v, name)))
+        self._sdf_id = sdf_id
 
     @classmethod
-    def from_apply_callback(cls, func: ApplyWithMetadataCallback) -> Self:
+    def from_apply_callback(cls, func: ApplyWithMetadataCallback, sdf_id: int) -> Self:
         """
         Create a StreamingSeries from a function.
 
         The provided function will be wrapped into `Apply`
         :param func: a function to apply
+        :param sdf_id: the id of the calling `SDF`.
         :return: instance of `StreamingSeries`
         """
-        return cls(stream=Stream(ApplyWithMetadataFunction(func)))
+        return cls(stream=Stream(ApplyWithMetadataFunction(func)), sdf_id=sdf_id)
+
+    def _from_apply_callback(self, func: ApplyWithMetadataCallback):
+        # TODO - maybe there's a better patten for this? (_method calling classmethod)
+        return self.from_apply_callback(func, self._sdf_id)
 
     @property
     def stream(self) -> Stream:
         return self._stream
+
+    @property
+    def sdf_id(self) -> Optional[int]:
+        return self._sdf_id
 
     def apply(self, func: ApplyCallback) -> Self:
         """
@@ -150,7 +183,7 @@ class StreamingSeries(BaseStreaming):
         :return: a new `StreamingSeries` with the new callable added
         """
         child = self._stream.add_apply(func)
-        return self.__class__(stream=child)
+        return self.__class__(stream=child, sdf_id=self._sdf_id)
 
     def compose_returning(self) -> ReturningExecutor:
         """
@@ -241,6 +274,7 @@ class StreamingSeries(BaseStreaming):
         context.run(composed, value, key, timestamp, headers)
         return result
 
+    @_validate_operation
     def _operation(
         self,
         other: Union[Self, str, int, object],
@@ -253,14 +287,14 @@ class StreamingSeries(BaseStreaming):
         if isinstance(other, self.__class__):
             other_composed = other.compose_returning()
 
-            return self.from_apply_callback(
+            return self._from_apply_callback(
                 func=lambda value, key, timestamp, headers, op=operator_: op(
                     self_composed(value, key, timestamp, headers)[0],
                     other_composed(value, key, timestamp, headers)[0],
                 )
             )
         else:
-            return self.from_apply_callback(
+            return self._from_apply_callback(
                 func=lambda value, key, timestamp, headers, op=operator_: op(
                     self_composed(value, key, timestamp, headers)[0], other
                 )
@@ -475,6 +509,7 @@ class StreamingSeries(BaseStreaming):
     def __ge__(self, other: Union[Self, object]) -> Self:
         return self._operation(other, operator.ge)
 
+    @_validate_operation
     def __and__(self, other: Union[Self, object]) -> Self:
         """
         Do a logical "and" comparison.
@@ -493,20 +528,21 @@ class StreamingSeries(BaseStreaming):
 
         if isinstance(other, self.__class__):
             other_composed = other.compose_returning()
-            return self.from_apply_callback(
+            return self._from_apply_callback(
                 func=lambda value, key, timestamp, headers: self_composed(
                     value, key, timestamp, headers
                 )[0]
                 and other_composed(value, key, timestamp, headers)[0]
             )
         else:
-            return self.from_apply_callback(
+            return self._from_apply_callback(
                 func=lambda value, key, timestamp, headers: self_composed(
                     value, key, timestamp, headers
                 )[0]
                 and other
             )
 
+    @_validate_operation
     def __or__(self, other: Union[Self, object]) -> Self:
         """
         Do a logical "or" comparison.
@@ -524,14 +560,14 @@ class StreamingSeries(BaseStreaming):
         self_composed = self.compose_returning()
         if isinstance(other, self.__class__):
             other_composed = other.compose_returning()
-            return self.from_apply_callback(
+            return self._from_apply_callback(
                 func=lambda value, key, timestamp, headers: self_composed(
                     value, key, timestamp, headers
                 )[0]
                 or other_composed(value, key, timestamp, headers)[0]
             )
         else:
-            return self.from_apply_callback(
+            return self._from_apply_callback(
                 func=lambda value, key, timestamp, headers: self_composed(
                     value, key, timestamp, headers
                 )[0]

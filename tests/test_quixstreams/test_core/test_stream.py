@@ -2,6 +2,7 @@ from operator import setitem
 
 import pytest
 
+from quixstreams.dataframe.exceptions import InvalidOperation
 from quixstreams.core.stream import Stream
 from quixstreams.core.stream.functions import (
     ApplyFunction,
@@ -38,7 +39,7 @@ class TestStream:
         stream.compose(sink=result.append_record)(value, key, timestamp, headers)
         assert result == expected
 
-    def test_tree(self):
+    def test_root_path(self):
         stream = (
             Stream()
             .add_apply(lambda v: ...)
@@ -46,7 +47,7 @@ class TestStream:
             .add_update(lambda v: ...)
             .add_transform(lambda v, k, t, h: ...)
         )
-        tree = stream.tree()
+        tree = stream.root_path()
         assert len(tree) == 5
         assert isinstance(tree[0].func, ApplyFunction)
         assert isinstance(tree[1].func, ApplyFunction)
@@ -63,15 +64,36 @@ class TestStream:
             .add_filter(lambda v: v)
         )
 
-        stream = stream.add_apply(lambda v: v)
-
         diff = stream.diff(stream2)
 
-        diff_tree = diff.tree()
+        diff_tree = diff.root_path()
         assert len(diff_tree) == 3
         assert isinstance(diff_tree[0].func, ApplyFunction)
         assert isinstance(diff_tree[1].func, UpdateFunction)
         assert isinstance(diff_tree[2].func, FilterFunction)
+
+    def test_diff_differing_origin_fails(self):
+        stream = Stream()
+        stream = stream.add_apply(lambda v: v)
+        stream2 = (
+            stream.add_apply(lambda v: v)
+            .add_update(lambda v: v)
+            .add_filter(lambda v: v)
+        )
+        stream = stream.add_apply(lambda v: v)
+
+        with pytest.raises(InvalidOperation):
+            stream.diff(stream2)
+
+    def test_diff_shared_origin_with_additional_split_fails(self):
+        stream = Stream()
+        stream = stream.add_apply(lambda v: v)
+        stream2 = stream.add_apply(lambda v: v)
+        stream3 = stream2.add_apply(lambda v: v)
+        stream2 = stream2.add_apply(lambda v: v)
+
+        with pytest.raises(InvalidOperation):
+            stream.diff(stream2)
 
     def test_diff_empty_same_stream_fails(self):
         stream = Stream()
@@ -330,3 +352,199 @@ class TestStream:
             (1, "key1", 1, [("key", b"value")]),
             (2, "key2", 2, [("key", b"value2")]),
         ]
+
+
+class TestStreamBranching:
+
+    def test_basic_branching(self):
+        calls = []
+
+        def add_n(n):
+            def wrapper(value):
+                calls.append(n)
+                return value + n
+
+            return wrapper
+
+        stream = Stream().add_apply(add_n(1))
+        stream.add_apply(add_n(10))
+        stream.add_apply(add_n(20))
+        stream = stream.add_apply(add_n(100))
+        sink = Sink()
+        extras = ("key", 0, [])
+        stream.compose(sink=sink.append_record)(0, *extras)
+        expected = [(11, *extras), (21, *extras), (101, *extras)]
+
+        # each operation is only called once (no redundant processing)
+        assert len(calls) == 4
+        assert sink == expected
+
+    def test_branch_with_update_copies_value(self):
+        """
+        Ensure that the UpdateFunctions copy values before mutating them after
+        branching
+        """
+
+        key, timestamp, headers = "key", 0, []
+        value = []
+        expected = [([1], key, timestamp, headers), ([2], key, timestamp, headers)]
+
+        stream = Stream()
+        stream.add_update(lambda value_: value_.append(1))
+        stream.add_update(lambda value_: value_.append(2))
+        sink = Sink()
+        stream.compose(sink=sink.append_record)(value, key, timestamp, headers)
+
+        assert sink == expected
+
+    def test_chained_branches(self):
+        stream = Stream().add_apply(lambda v: v + 1)
+        stream.add_apply(lambda v: v + 10).add_apply(lambda v: v + 20)
+        stream = stream.add_apply(lambda v: v + 100)
+        sink = Sink()
+        extras = ("key", 0, [])
+        stream.compose(sink=sink.append_record)(0, *extras)
+        expected = [(31, *extras), (101, *extras)]
+
+        assert sink == expected
+
+    def test_longer_branches(self):
+        stream = Stream().add_apply(lambda v: v + 1)
+        stream = stream.add_apply(lambda v: v + 2)
+        stream_2 = stream.add_apply(lambda v: v + 10)
+        stream_2.add_apply(lambda v: v + 20)
+        stream = stream.add_apply(lambda v: v + 100)
+        sink = Sink()
+        extras = ("key", 0, [])
+        stream.compose(sink=sink.append_record)(0, *extras)
+        expected = [(33, *extras), (103, *extras)]
+
+        assert sink == expected
+
+    def test_multiple_branches(self):
+        """
+        --< is a split
+        "S'" denotes the continuation of the stream that was split from
+
+        stream     ---[ add_120, div_2  ]---<      (stream', stream2), 60
+        stream_2   ---[     div_3       ]---<      (stream_2', stream_3, stream_4), 20
+        stream_3   ---[ add_10, add_3   ]---|END   33
+        stream_4   ---[     add_24      ]---|END   44
+        stream_2'  ---[     add_2       ]---|END   22
+        stream'    ---[     add_40      ]---<      (stream'', stream_5), 100
+        stream_5   ---[ div_2, add_5    ]---|END   55
+        stream''   ---[ div_100, add_10 ]---|END   11
+
+        :return:
+        """
+
+        stream = Stream().add_apply(lambda v: v + 120).add_apply(lambda v: v // 2)  # 60
+        stream_2 = stream.add_apply(lambda v: v // 3)  # 20
+        stream_3 = stream_2.add_apply(lambda v: v + 10).add_apply(lambda v: v + 3)  # 33
+        stream_4 = stream_2.add_apply(lambda v: v + 24)  # 44
+        stream_2 = stream_2.add_apply(lambda v: v + 2)  # 22
+        stream = stream.add_apply(lambda v: v + 40)  # 100
+        stream_5 = stream.add_apply(lambda v: v // 2).add_apply(lambda v: v + 5)  # 55
+        stream = stream.add_apply(lambda v: v // 100).add_apply(lambda v: v + 10)  # 11
+        sink = Sink()
+        extras = ("key", 0, [])
+        stream.compose(sink=sink.append_record)(0, *extras)
+        expected = [
+            (33, *extras),
+            (44, *extras),
+            (22, *extras),
+            (55, *extras),
+            (11, *extras),
+        ]
+
+        assert sink == expected
+
+    def test_filter(self):
+        stream = Stream().add_apply(lambda v: v + 10)
+        stream2 = stream.add_apply(lambda v: v + 5).add_filter(lambda v: v < 0)
+        stream2 = stream2.add_apply(lambda v: v + 200)
+        stream3 = (
+            stream.add_apply(lambda v: v + 7)
+            .add_filter(lambda v: v < 20)
+            .add_apply(lambda v: v + 4)
+        )
+        stream = stream.add_apply(lambda v: v + 30).add_filter(lambda v: v < 50)
+        stream4 = stream.add_apply(lambda v: v + 60)
+        stream.add_apply(lambda v: v + 800)
+
+        sink = Sink()
+        extras = ("key", 0, [])
+        stream.compose(sink=sink.append_record)(0, *extras)
+        expected = [(21, *extras), (100, *extras), (840, *extras)]
+
+        assert sink == expected
+
+    def test_update(self):
+
+        stream = Stream().add_apply(lambda v: v + [10])
+        stream2 = stream.add_update(lambda v: v.append(5))
+        stream = stream.add_update(lambda v: v.append(30)).add_apply(lambda v: v + [6])
+        stream3 = stream.add_update(lambda v: v.append(100))
+        stream4 = stream.add_update(lambda v: v.append(456))
+        stream = stream.add_apply(lambda v: v + [700]).add_update(
+            lambda v: v.append(222)
+        )
+
+        sink = Sink()
+        extras = ("key", 0, [])
+        stream.compose(sink=sink.append_record)([], *extras)
+        expected = [
+            ([10, 5], *extras),
+            ([10, 30, 6, 100], *extras),
+            ([10, 30, 6, 456], *extras),
+            ([10, 30, 6, 700, 222], *extras),
+        ]
+
+        # each operation is only called once (no redundant processing)
+        assert sink == expected
+
+    def test_expand(self):
+        stream = Stream()
+        stream_2 = stream.add_apply(lambda v: [i for i in v[0]], expand=True).add_apply(
+            lambda v: v + 22
+        )
+        stream_3 = stream.add_apply(lambda v: [i for i in v[1]], expand=True).add_apply(
+            lambda v: v + 33
+        )
+        stream = stream.add_apply(lambda v: [i for i in v[2]], expand=True)
+        stream_4 = stream.add_apply(lambda v: v + 44)
+        stream = stream.add_apply(lambda v: v + 11)
+        sink = Sink()
+        extras = ("key", 0, [])
+        stream.compose(sink=sink.append_record)([(1, 2), (3, 4), (5, 6)], *extras)
+        expected = [(n, *extras) for n in [23, 24, 36, 37, 49, 16, 50, 17]]
+
+        assert sink == expected
+
+    def test_transform(self):
+
+        def transform(n):
+            def wrapper(value, k, t, h):
+                return value, k + "_" + str(n), t + n, h
+
+            return wrapper
+
+        stream = Stream().add_apply(lambda v: v + 1)
+        stream_2 = stream.add_transform(transform(2))
+        stream = stream.add_transform(transform(3))
+        stream_3 = stream.add_apply(lambda v: v + 30).add_transform(transform(4))
+        stream_4 = stream.add_apply(lambda v: v + 40).add_transform(transform(5))
+        stream = stream.add_apply(lambda v: v + 100).add_transform(transform(6))
+
+        sink = Sink()
+        extras = ("key", 0, [])
+        stream.compose(sink=sink.append_record)(0, *extras)
+        expected = [
+            (1, "key_2", 2, []),
+            (31, "key_3_4", 7, []),
+            (41, "key_3_5", 8, []),
+            (101, "key_3_6", 9, []),
+        ]
+
+        # each operation is only called once (no redundant processing)
+        assert sink == expected

@@ -8517,7 +8517,7 @@ topic = app.topic('test-topic')
 df = app.dataframe(topic)
 df.apply(lambda value, context: print('New message', value))
 
-app.run(dataframe=df)
+app.run()
 ```
 
 <a id="quixstreams.app.Application.__init__"></a>
@@ -8692,7 +8692,7 @@ output_topic = app.topic("topic-out", value_serializer="quix_timeseries")
 df = app.dataframe(topic_in)
 df = df.to_topic(output_topic)
 
-app.run(dataframe=df)
+app.run()
 ```
 
 **Arguments**:
@@ -8856,7 +8856,7 @@ topic = app.topic('test-topic')
 df = app.dataframe(topic)
 df.apply(lambda value, context: print('New message', value)
 
-app.run(dataframe=df)
+app.run()
 ```
 
 **Arguments**:
@@ -9034,7 +9034,7 @@ topic = app.topic('test-topic')
 df = app.dataframe(topic)
 df.apply(lambda value, context: print('New message', value)
 
-app.run(dataframe=df)
+app.run()
 ```
 
 **Arguments**:

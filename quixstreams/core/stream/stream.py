@@ -1,9 +1,13 @@
 import collections
 import copy
+import functools
 import itertools
+from time import monotonic_ns
 from typing import List, Callable, Optional, Any, Union
 
 from typing_extensions import Self
+
+from quixstreams.dataframe.exceptions import InvalidOperation
 
 from .functions import (
     ApplyFunction,
@@ -80,6 +84,9 @@ class Stream:
 
         self.func = func if func is not None else ApplyFunction(lambda value: value)
         self.parent = parent
+        self.children = set()
+        self.generated = monotonic_ns()
+        self.pruned = False
 
     def __repr__(self) -> str:
         """
@@ -88,7 +95,7 @@ class Stream:
         :return: a string of format
             "<Stream [<total functions>]: <FuncType: func_name> | ... >"
         """
-        tree_funcs = [s.func for s in self.tree()]
+        tree_funcs = [s.func for s in self.root_path()]
         funcs_repr = " | ".join(
             (f"<{f.__class__.__name__}: {f.func.__qualname__}>" for f in tree_funcs)
         )
@@ -201,13 +208,11 @@ class Stream:
 
         return self._add(TransformFunction(func, expand=expand))
 
-    def diff(
-        self,
-        other: "Stream",
-    ) -> Self:
+    def diff(self, other: "Stream") -> Self:
         """
         Takes the difference between Streams `self` and `other` based on their last
-        common parent, and returns a new `Stream` that includes only this difference.
+        common parent, and returns a new, independent `Stream` that includes only
+        this difference (the start of the "diff" will have no parent).
 
         It's impossible to calculate a diff when:
          - Streams don't have a common parent.
@@ -215,39 +220,139 @@ class Stream:
             the `other` Stream, and the resulting diff is empty.
 
         :param other: a `Stream` to take a diff from.
-        :raises ValueError: if Streams don't have a common parent
-            or if the diff is empty.
-        :return: new `Stream` instance including all the Streams from the diff
+        :raises ValueError: if Streams don't have a common parent,
+            if the diff is empty, or pruning failed.
+        :return: a new independent `Stream` instance whose root begins at the diff
         """
         diff = self._diff_from_last_common_parent(other)
+
+        # The following operations enforce direct splitting.
+        # Enforcing direct splits relates to using one SDF to filter another.
+        # Specifically there are various unintuitive cases, especially when using a
+        # "split" SDF, where results will likely not be as expected, so we would
+        # rather raise an exception instead.
+        # See TestStreamingDataFrameSplitting test cases for examples.
+
+        # the easiest check that catches most issues: the "inner" (filtering) sdf
+        # should use same ref as the one being filtered; i.e. sdf[sdf.apply()].
+        if diff[0].pruned:
+            raise InvalidOperation(
+                "Cannot use a filtering or column-setter SDF more than once"
+            )
+
+        elif diff[0] not in self.children:
+            raise InvalidOperation(
+                "filtering or column-setter SDF must originate from target SDF; "
+                "ex: `sdf[sdf.apply()]`, NOT `sdf[other_sdf.apply()]` "
+                "OR `sdf['x'] = sdf.apply()`, NOT `sdf['x'] = other_sdf.apply()`"
+            )
+
+        # With splitting there are some edge cases where the origin is the same,
+        # but there are various side effects that can occur that we want to avoid.
+        other_path_start = other.root_path(allow_splits=False)[0]
+        if other_path_start.parent != diff[0].parent:
+            # There is a split at the filtering SDF; still potentially valid
+            if self.root_path(allow_splits=False)[0] != other_path_start:
+                # This split is not shared by the filtered sdf
+                raise InvalidOperation(
+                    "filtering or column-setter SDF must originate from target SDF; "
+                    "ex: `sdf[sdf.apply()]`, NOT `sdf[other_sdf.apply()]` "
+                    "OR `sdf['x'] = sdf.apply()`, NOT `sdf['x'] = other_sdf.apply()`"
+                )
+
         parent = None
-        head = None
         for node in diff:
             # Copy the node to ensure we don't alter the previously created Nodes
             node = copy.deepcopy(node)
             node.parent = parent
             parent = node
-            head = node
-        return head
+        self._prune(diff[0])
+        return parent
 
-    def tree(self) -> List[Self]:
+    def root_path(self, allow_splits=True) -> List[Self]:
         """
         Return a list of all parent Streams including the node itself.
+
+        Can optionally stop at a first encountered split with allow_splits=False
 
         The tree is ordered from parent to child (current node comes last).
         :return: a list of `Stream` objects
         """
 
-        tree_ = [self]
         node = self
-        while node.parent:
-            tree_.append(node.parent)
+        tree_ = [node]
+        while (parent := node.parent) and (allow_splits or len(parent.children) < 2):
+            tree_.append(parent)
             node = node.parent
 
         # Reverse to get expected ordering.
         tree_.reverse()
 
         return tree_
+
+    def full_tree(self) -> List[Self]:
+        """
+        Starts at tree root and finds every Stream in the tree (including splits).
+        :return: The collection of all Streams interconnected to this one
+        """
+        return self._collect_nodes([], self.root_path()[0])
+
+    def compose(
+        self,
+        allow_filters=True,
+        allow_expands=True,
+        allow_updates=True,
+        allow_transforms=True,
+        sink: Optional[Callable[[Any, Any, int, Any], None]] = None,
+    ) -> VoidExecutor:
+        """
+        Generate an "executor" closure by mapping all relatives of this `Stream` and
+        composing their functions together.
+
+        The resulting "executor" can be called with a given
+        value, key, timestamp, and headers (i.e. a Kafka message).
+
+        By default, executor doesn't return the result of the execution.
+        To accumulate the results, pass the `sink` parameter.
+
+        :param allow_filters: If False, this function will fail with `ValueError` if
+            the stream has filter functions in the tree. Default - True.
+        :param allow_updates: If False, this function will fail with `ValueError` if
+            the stream has update functions in the tree. Default - True.
+        :param allow_expands: If False, this function will fail with `ValueError` if
+            the stream has functions with "expand=True" in the tree. Default - True.
+        :param allow_transforms: If False, this function will fail with `ValueError` if
+            the stream has transform functions in the tree. Default - True.
+        :param sink: callable to accumulate the results of the execution, optional.
+
+        """
+
+        composed = sink or self._default_sink
+        composer = functools.partial(
+            self._compose,
+            allow_filters=allow_filters,
+            allow_expands=allow_expands,
+            allow_updates=allow_updates,
+            allow_transforms=allow_transforms,
+        )
+
+        def _split_compose(pending_composes, composed, node):
+            children = node.children
+
+            if len(children) == 1:
+                return _split_compose(pending_composes, composed, list(children)[0])
+
+            for child in sorted(children, key=lambda node: node.generated):
+                _split_compose(pending_composes, composed, child)
+            tree = node.root_path(allow_splits=False)
+            composed = composer(tree, pending_composes.pop(node, composed))
+
+            if split := tree[0].parent:
+                pending_composes.setdefault(split, []).append(composed)
+            else:
+                return composed
+
+        return _split_compose({}, composed, self.full_tree()[0])
 
     def compose_returning(self) -> ReturningExecutor:
         """
@@ -286,41 +391,17 @@ class Stream:
 
         return wrapper
 
-    def compose(
+    def _compose(
         self,
-        allow_filters: bool = True,
-        allow_updates: bool = True,
-        allow_expands: bool = True,
-        allow_transforms: bool = True,
-        sink: Optional[Callable[[Any, Any, int, Any], None]] = None,
+        tree: List[Self],
+        composed: List[Callable[[Any, Any, int, Any], None]],
+        allow_filters: bool,
+        allow_updates: bool,
+        allow_expands: bool,
+        allow_transforms: bool,
     ) -> VoidExecutor:
-        """
-        Compose a list of functions from this `Stream` and its parents into one
-        big closure using a "composer" function.
 
-        This "executor" closure is to be used to execute all functions in the stream for the given
-        key, value and timestamps.
-
-        By default, executor doesn't return the result of the execution.
-        To accumulate the results, pass the `sink` parameter.
-
-        :param allow_filters: If False, this function will fail with `ValueError` if
-            the stream has filter functions in the tree. Default - True.
-        :param allow_updates: If False, this function will fail with `ValueError` if
-            the stream has update functions in the tree. Default - True.
-        :param allow_expands: If False, this function will fail with `ValueError` if
-            the stream has functions with "expand=True" in the tree. Default - True.
-        :param allow_transforms: If False, this function will fail with `ValueError` if
-            the stream has transform functions in the tree. Default - True.
-        :param sink: callable to accumulate the results of the execution, optional.
-
-        :raises ValueError: if disallowed functions are present in the stream tree.
-        """
-
-        tree = self.tree()
         functions = [node.func for node in tree]
-
-        composed = sink or self._default_sink
 
         # Iterate over a reversed list of functions
         for func in reversed(functions):
@@ -338,15 +419,15 @@ class Stream:
             elif not allow_expands and func.expand:
                 raise ValueError("Expand functions are not allowed")
 
-            # Compose functions from the tree together so the top function calls
-            # the bottom one
-            composed = func.get_executor(composed)
+            composed = func.get_executor(
+                *composed if isinstance(composed, list) else [composed]
+            )
 
         return composed
 
     def _diff_from_last_common_parent(self, other: Self) -> List[Self]:
-        nodes_self = self.tree()
-        nodes_other = other.tree()
+        nodes_self = self.root_path()
+        nodes_other = other.root_path()
 
         diff = []
         last_common_parent = None
@@ -363,6 +444,36 @@ class Stream:
         return diff
 
     def _add(self, func: StreamFunction) -> Self:
-        return self.__class__(func=func, parent=self)
+        new_node = self.__class__(func=func, parent=self)
+        self.children.add(new_node)
+        return new_node
 
     def _default_sink(self, value: Any, key: Any, timestamp: int, headers: Any): ...
+
+    def _prune(self, other: Self):
+        """
+        Removes a stream node by looking for where the "other" node is a child within
+        the current and removing it.
+
+        Note this means "other" must share a direct split point with this Stream.
+        :param other: another Stream
+        :return:
+        """
+        if other.pruned:
+            raise ValueError("Node has already been pruned")
+        other.pruned = True
+        node = self
+        while node:
+            if other in node.children:
+                node.children.remove(other)
+                return
+            node = node.parent
+        raise ValueError("Node to prune is missing")
+
+    def _collect_nodes(
+        self, collected_nodes: List[Self], current_node: Self
+    ) -> List[Self]:
+        collected_nodes.append(current_node)
+        for child in current_node.children:
+            self._collect_nodes(collected_nodes, child)
+        return collected_nodes
