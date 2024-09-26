@@ -32,14 +32,10 @@ from .functions import (
     TransformExpandedCallback,
     ApplyWithMetadataExpandedCallback,
     ApplyExpandedCallback,
+    IdentityFunction,
 )
 
 __all__ = ("Stream",)
-
-
-class IdentityFunction(ApplyFunction):
-    def __init__(self):
-        super().__init__(func=lambda x: x)
 
 
 class Stream:
@@ -109,11 +105,20 @@ class Stream:
         )
         return f"<{self.__class__.__name__} [{len(tree_funcs)}]: {funcs_repr}>"
 
+    @classmethod
+    def with_name(cls, name: str) -> Self:
+        return Stream(func=IdentityFunction(name=name))
+
+    @property
+    def name(self):
+        return self.func.name
+
     def add_filter(
         self,
         func: Union[FilterCallback, FilterWithMetadataCallback],
         *,
         metadata: bool = False,
+        name: Optional[str] = None,
     ) -> Self:
         """
         Add a function to filter values from the Stream.
@@ -129,9 +134,9 @@ class Stream:
         :return: a new `Stream` derived from the current one
         """
         if metadata:
-            filter_func = FilterWithMetadataFunction(func)
+            filter_func = FilterWithMetadataFunction(func, name=name)
         else:
-            filter_func = FilterFunction(func)
+            filter_func = FilterFunction(func, name=name)
         return self._add(filter_func)
 
     def add_apply(
@@ -145,6 +150,7 @@ class Stream:
         *,
         expand: bool = False,
         metadata: bool = False,
+        name: Optional[str] = None,
     ) -> Self:
         """
         Add an "apply" function to the Stream.
@@ -161,10 +167,11 @@ class Stream:
             Default - `False`.
         :return: a new `Stream` derived from the current one
         """
+        print(func.__qualname__)
         if metadata:
-            apply_func = ApplyWithMetadataFunction(func, expand=expand)
+            apply_func = ApplyWithMetadataFunction(func, expand=expand, name=name)
         else:
-            apply_func = ApplyFunction(func, expand=expand)
+            apply_func = ApplyFunction(func, expand=expand, name=name)
         return self._add(apply_func)
 
     def add_update(
@@ -172,6 +179,7 @@ class Stream:
         func: Union[UpdateCallback, UpdateWithMetadataCallback],
         *,
         metadata: bool = False,
+        name: Optional[str] = None,
     ) -> Self:
         """
         Add an "update" function to the Stream, that will mutate the input value.
@@ -186,9 +194,9 @@ class Stream:
         :return: a new Stream derived from the current one
         """
         if metadata:
-            update_func = UpdateWithMetadataFunction(func)
+            update_func = UpdateWithMetadataFunction(func, name=name)
         else:
-            update_func = UpdateFunction(func)
+            update_func = UpdateFunction(func, name=name)
         return self._add(update_func)
 
     def add_transform(
@@ -196,6 +204,7 @@ class Stream:
         func: Union[TransformCallback, TransformExpandedCallback],
         *,
         expand: bool = False,
+        name: Optional[str] = None,
     ) -> Self:
         """
         Add a "transform" function to the Stream, that will mutate the input value.
@@ -214,7 +223,7 @@ class Stream:
         :return: a new Stream derived from the current one
         """
 
-        return self._add(TransformFunction(func, expand=expand))
+        return self._add(TransformFunction(func, expand=expand, name=name))
 
     def diff(self, other: "Stream") -> Self:
         """
@@ -412,7 +421,7 @@ class Stream:
         # This allows us to "unify" streams with a new operation, which will be
         # ignored during compose.
         # There is probably a way to it without this, but it makes it easier for now
-        new_node = self._add(IdentityFunction())
+        new_node = self._add(IdentityFunction(name="MERGE"))
         new_node.merge_parents.extend(others)
         for other in others:
             other.children.add(new_node)
@@ -426,11 +435,7 @@ class Stream:
             return str(id(stream))
 
         def add_graph_node(stream):
-            if stream.parent:
-                label = f"{stream.func.__class__.__name__}: {stream.func.func.__name__}"
-            else:
-                label = f"Consume topic"
-            graph.node(stream_id(stream), label=label)
+            graph.node(stream_id(stream), label=stream.name)
 
         def add_graph_edge(parent, child):
             graph.edge(stream_id(parent), stream_id(child))

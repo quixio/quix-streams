@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Optional
 
 from .base import StreamFunction
 from .types import FilterCallback, VoidExecutor, FilterWithMetadataCallback
@@ -15,8 +15,8 @@ class FilterFunction(StreamFunction):
     value is filtered out.
     """
 
-    def __init__(self, func: FilterCallback):
-        super().__init__(func)
+    def __init__(self, func: FilterCallback, name: Optional[str] = None):
+        super().__init__(func, name=name)
 
     def get_executor(self, *child_executors: VoidExecutor) -> VoidExecutor:
         child_executor = self._resolve_branching(*child_executors)
@@ -40,8 +40,8 @@ class FilterWithMetadataFunction(StreamFunction):
     Otherwise, the value will be filtered out.
     """
 
-    def __init__(self, func: FilterWithMetadataCallback):
-        super().__init__(func)
+    def __init__(self, func: FilterWithMetadataCallback, name: Optional[str] = None):
+        super().__init__(func, name=name)
 
     def get_executor(self, *child_executors: VoidExecutor) -> VoidExecutor:
         child_executor = self._resolve_branching(*child_executors)

@@ -1,4 +1,4 @@
-from typing import Any, Union
+from typing import Any, Union, Optional
 
 from .base import StreamFunction
 from .types import TransformCallback, TransformExpandedCallback, VoidExecutor
@@ -25,8 +25,9 @@ class TransformFunction(StreamFunction):
         self,
         func: Union[TransformCallback, TransformExpandedCallback],
         expand: bool = False,
+        name: Optional[str] = None,
     ):
-        super().__init__(func)
+        super().__init__(func, name=name)
         self.expand = expand
 
     def get_executor(self, *child_executors: VoidExecutor) -> VoidExecutor:

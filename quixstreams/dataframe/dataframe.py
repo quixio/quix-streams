@@ -118,8 +118,8 @@ class StreamingDataFrame(BaseStreaming):
         stream: Optional[Stream] = None,
         merges: Optional[List[Self]] = None,
     ):
-        self._stream: Stream = stream or Stream()
         self._topic = topic
+        self._stream: Stream = stream or Stream.with_name(f"TOPIC: {self._topic.name}")
         self._topic_manager = topic_manager
         self._registry = registry
         self._merges = merges or []
@@ -221,6 +221,7 @@ class StreamingDataFrame(BaseStreaming):
             along with the value.
             Default - `False`.
         """
+        name = f"SDF_apply: {func.__qualname__}"
         if stateful:
             self._register_store()
             # Force the callback to accept metadata
@@ -233,12 +234,15 @@ class StreamingDataFrame(BaseStreaming):
                 func=with_metadata_func,
                 processing_context=self._processing_context,
             )
-            stream = self.stream.add_apply(stateful_func, expand=expand, metadata=True)
+            stream = self.stream.add_apply(
+                stateful_func, expand=expand, metadata=True, name=name
+            )
         else:
             stream = self.stream.add_apply(
                 cast(Union[ApplyCallback, ApplyWithMetadataCallback], func),
                 expand=expand,
                 metadata=metadata,
+                name=name,
             )
         return self.__dataframe_clone__(stream=stream)
 
@@ -313,6 +317,7 @@ class StreamingDataFrame(BaseStreaming):
             Default - `False`.
         :return: the updated StreamingDataFrame instance (reassignment NOT required).
         """
+        name = f"SDF_update: {func.__qualname__}"
         if stateful:
             self._register_store()
             # Force the callback to accept metadata
@@ -326,12 +331,15 @@ class StreamingDataFrame(BaseStreaming):
                 processing_context=self._processing_context,
             )
             return self._add_update(
-                cast(UpdateWithMetadataCallback, stateful_func), metadata=True
+                cast(UpdateWithMetadataCallback, stateful_func),
+                metadata=True,
+                name=name,
             )
         else:
             return self._add_update(
                 cast(Union[UpdateCallback, UpdateWithMetadataCallback], func),
                 metadata=metadata,
+                name=name,
             )
 
     @overload
@@ -399,7 +407,7 @@ class StreamingDataFrame(BaseStreaming):
             along with the value.
             Default - `False`.
         """
-
+        name = f"SDF_filter: {func.__qualname__}"
         if stateful:
             self._register_store()
             # Force the callback to accept metadata
@@ -412,11 +420,12 @@ class StreamingDataFrame(BaseStreaming):
                 func=cast(FilterWithMetadataCallbackStateful, with_metadata_func),
                 processing_context=self._processing_context,
             )
-            stream = self.stream.add_filter(stateful_func, metadata=True)
+            stream = self.stream.add_filter(stateful_func, metadata=True, name=name)
         else:
             stream = self.stream.add_filter(
                 cast(Union[FilterCallback, FilterWithMetadataCallback], func),
                 metadata=metadata,
+                name=name,
             )
         return self.__dataframe_clone__(stream=stream)
 
@@ -501,6 +510,7 @@ class StreamingDataFrame(BaseStreaming):
                 'group_by requires "name" parameter when "key" is a function'
             )
         key = name or key
+        name = f"GROUPBY {'key' if isinstance(key, str) else 'func'} '{key}':"
         topic_names = self.__all_topics__
         final_sdf = None
         while topic_names:
@@ -513,13 +523,14 @@ class StreamingDataFrame(BaseStreaming):
                 key_deserializer=key_deserializer,
                 value_deserializer=value_deserializer,
             )
+            name = name + f"\n{topic_name} --> {topic.name}"
             new_sdf = self.__dataframe_clone__(topic=topic, merges=[])
             self._registry.register_groupby(source_topic=topic_name, new_sdf=new_sdf)
             if final_sdf is None:
                 final_sdf = new_sdf
             else:
                 final_sdf = final_sdf.merge(new_sdf)
-        self._to_groupby_topics(key=_groupby_key(key))
+        self._to_groupby_topics(name, key=_groupby_key(key))
         return final_sdf
 
     def contains(self, key: str) -> StreamingSeries:
@@ -592,7 +603,9 @@ class StreamingDataFrame(BaseStreaming):
             metadata=True,
         )
 
-    def _to_groupby_topics(self, key: Optional[Callable[[Any], Any]] = None) -> Self:
+    def _to_groupby_topics(
+        self, name: str, key: Optional[Callable[[Any], Any]] = None
+    ) -> Self:
         return self._add_update(
             lambda value, orig_key, timestamp, headers: self._produce_groupby(
                 value=value,
@@ -601,6 +614,7 @@ class StreamingDataFrame(BaseStreaming):
                 headers=headers,
             ),
             metadata=True,
+            name=name,
         )
 
     def set_timestamp(self, func: Callable[[Any, Any, int, Any], int]) -> Self:
@@ -1099,8 +1113,9 @@ class StreamingDataFrame(BaseStreaming):
         self,
         func: Union[UpdateCallback, UpdateWithMetadataCallback],
         metadata: bool = False,
+        name: Optional[str] = None,
     ):
-        self._stream = self._stream.add_update(func, metadata=metadata)
+        self._stream = self._stream.add_update(func, metadata=metadata, name=name)
         return self
 
     def _register_store(self):

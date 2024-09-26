@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Optional
 
 from .base import StreamFunction
 from .types import ApplyCallback, VoidExecutor, ApplyWithMetadataCallback
@@ -15,11 +15,9 @@ class ApplyFunction(StreamFunction):
     """
 
     def __init__(
-        self,
-        func: ApplyCallback,
-        expand: bool = False,
+        self, func: ApplyCallback, expand: bool = False, name: Optional[str] = None
     ):
-        super().__init__(func)
+        super().__init__(func, name=name)
         self.expand = expand
 
     def get_executor(self, *child_executors: VoidExecutor) -> VoidExecutor:
@@ -61,8 +59,9 @@ class ApplyWithMetadataFunction(StreamFunction):
         self,
         func: ApplyWithMetadataCallback,
         expand: bool = False,
+        name: Optional[str] = None,
     ):
-        super().__init__(func)
+        super().__init__(func, name=name)
         self.expand = expand
 
     def get_executor(self, *child_executors: VoidExecutor) -> VoidExecutor:

@@ -4,3 +4,4 @@ from .apply import *
 from .update import *
 from .filter import *
 from .transform import *
+from .identity import IdentityFunction

@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Optional
 
 from .base import StreamFunction
 from .types import UpdateCallback, UpdateWithMetadataCallback, VoidExecutor
@@ -17,8 +17,8 @@ class UpdateFunction(StreamFunction):
     downstream.
     """
 
-    def __init__(self, func: UpdateCallback):
-        super().__init__(func)
+    def __init__(self, func: UpdateCallback, name: Optional[str] = None):
+        super().__init__(func, name=name)
 
     def get_executor(self, *child_executors: VoidExecutor) -> VoidExecutor:
         child_executor = self._resolve_branching(*child_executors)
@@ -42,8 +42,8 @@ class UpdateWithMetadataFunction(StreamFunction):
     downstream.
     """
 
-    def __init__(self, func: UpdateWithMetadataCallback):
-        super().__init__(func)
+    def __init__(self, func: UpdateWithMetadataCallback, name: Optional[str] = None):
+        super().__init__(func, name=name)
 
     def get_executor(self, *child_executors: VoidExecutor) -> VoidExecutor:
         child_executor = self._resolve_branching(*child_executors)

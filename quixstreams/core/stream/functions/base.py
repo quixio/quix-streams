@@ -1,5 +1,5 @@
 import abc
-from typing import Any
+from typing import Any, Optional
 
 from .types import StreamCallback, VoidExecutor
 from .utils import pickle_copier
@@ -17,8 +17,9 @@ class StreamFunction(abc.ABC):
 
     expand: bool = False
 
-    def __init__(self, func: StreamCallback):
+    def __init__(self, func: StreamCallback, name: Optional[str] = None):
         self.func = func
+        self.name = name or func.__qualname__
 
     @abc.abstractmethod
     def get_executor(self, *child_executors: VoidExecutor) -> VoidExecutor:
@@ -35,7 +36,7 @@ class StreamFunction(abc.ABC):
         and we need to copy the value for the downstream branches
         in case they mutate it.
 
-        If there's only one executor - copying is not neccessary, and the executor
+        If there's only one executor - copying is not necessary, and the executor
         is returned as is.
         """
         if len(child_executors) > 1:
