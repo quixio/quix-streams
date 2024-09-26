@@ -73,8 +73,8 @@ sdf = sdf[sdf["temperature_F"] > 150]
 # Produce alerts to the output topic
 sdf = sdf.to_topic(alerts_topic)
 
-# Run the streaming application 
-app.run(sdf)
+# Run the streaming application (app automatically tracks the sdf!)
+app.run()
 ```
 
 ### Tutorials
