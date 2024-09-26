@@ -15,7 +15,7 @@ def main():
   sdf = app.dataframe(source=source)
   sdf.print(metadata=True)
 
-  app.run(sdf)
+  app.run()
 
 if __name__ == "__main__":
   main()
@@ -60,7 +60,7 @@ def main():
   sdf = app.dataframe(topic=topic, source=source)
   sdf.print(metadata=True)
 
-  app.run(sdf)
+  app.run()
 
 if __name__ == "__main__":
   main()

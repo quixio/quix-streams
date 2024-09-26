@@ -94,7 +94,7 @@ class Application:
     df = app.dataframe(topic)
     df.apply(lambda value, context: print('New message', value))
 
-    app.run(dataframe=df)
+    app.run()
     ```
     """
 
@@ -477,7 +477,7 @@ class Application:
         df = app.dataframe(topic)
         df.apply(lambda value, context: print('New message', value)
 
-        app.run(dataframe=df)
+        app.run()
         ```
 
 

@@ -102,7 +102,7 @@ sdf = sdf.update(lambda row: print(f"Output: {row}"))
 
 # Run the streaming application
 if __name__ == "__main__":
-    app.run(sdf)
+    app.run()
 ```
 
 ### Step 4. Running the Producer

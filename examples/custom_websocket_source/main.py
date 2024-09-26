@@ -109,7 +109,7 @@ def main():
     sdf.print()
 
     # Start the application
-    app.run(sdf)
+    app.run()
 
 
 if __name__ == "__main__":

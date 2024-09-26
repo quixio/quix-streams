@@ -32,4 +32,4 @@ sdf = sdf.to_topic(customers_qualified_topic)
 
 
 if __name__ == "__main__":
-    app.run(sdf)
+    app.run()

@@ -28,4 +28,4 @@ sdf = sdf.to_topic(alerts_topic)
 
 
 if __name__ == "__main__":
-    app.run(sdf)
+    app.run()

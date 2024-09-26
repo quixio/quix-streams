@@ -42,7 +42,7 @@ class QuixEnvironmentSource(KafkaReplicatorSource):
 
     sdf = app.dataframe(source=source)
     sdf = sdf.print()
-    app.run(sdf)
+    app.run()
     ```
     """
 

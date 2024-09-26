@@ -48,7 +48,7 @@ class KafkaReplicatorSource(Source):
 
     sdf = app.dataframe(source=source)
     sdf = sdf.print()
-    app.run(sdf)
+    app.run()
     ```
     """
 
