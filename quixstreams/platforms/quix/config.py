@@ -75,7 +75,7 @@ class QuixKafkaConfigsBuilder:
     using a known topic name, but note the search space is limited to the access level
     of your token.
 
-    It also currently handles the app_auto_create_topics setting for Application.Quix.
+    It also currently handles the app_auto_create_topics setting for Quix Applications.
     """
 
     # TODO: Consider a workspace class?

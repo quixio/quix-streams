@@ -35,7 +35,7 @@ conda install -c conda-forge quixio::quixstreams
 ```
 
 #### Requirements
-Python 3.8+, Apache Kafka 0.10+
+Python 3.9+, Apache Kafka 0.10+
 
 See [requirements.txt](https://github.com/quixio/quix-streams/blob/main/requirements.txt) for the full list of requirements
 
@@ -73,8 +73,8 @@ sdf = sdf[sdf["temperature_F"] > 150]
 # Produce alerts to the output topic
 sdf = sdf.to_topic(alerts_topic)
 
-# Run the streaming application 
-app.run(sdf)
+# Run the streaming application (app automatically tracks the sdf!)
+app.run()
 ```
 
 ### Tutorials

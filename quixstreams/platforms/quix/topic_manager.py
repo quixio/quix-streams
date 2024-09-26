@@ -10,9 +10,9 @@ class QuixTopicManager(TopicManager):
     """
     The source of all topic management with quixstreams.
 
-    This is specifically for Applications using the Quix platform.
+    This is specifically for Applications using the Quix Cloud.
 
-    Generally initialized and managed automatically by an `Application.Quix`,
+    Generally initialized and managed automatically by a Quix Application,
     but allows a user to work with it directly when needed, such as using it alongside
     a plain `Producer` to create its topics.
 

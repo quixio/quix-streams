@@ -8,7 +8,7 @@ dynamic = ["version", "dependencies"]
 description = "Python library for building stream processing applications with Apache Kafka"
 license = {file = "LICENSE"}
 readme = "README.md"
-requires-python = ">=3.8, <4"
+requires-python = ">=3.9, <4"
 keywords = ["streaming", "processing", "pipeline", "event", "real-time", "time series", "DataFrame", "Kafka", "Quix"]
 authors = [
     { name = "Quix Analytics Ltd", email = "devs@quix.io" },

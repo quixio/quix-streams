@@ -18,6 +18,17 @@ Using Quix Streams with Quix Cloud is entirely optional.
 You could, for example, connect to Redpanda Cloud, or another supported broker, or connect to a self-hosted broker.
 
 
+### Can I Use a Schema Registry Alongside Quix Cloud?
+
+Assuming you have a Schema Registry instance, you can use it alongside Quix Cloud using 
+Quix Streams.
+
+Currently, Quix Cloud does not offer a Schema Registry or support configuring one directly, 
+which means it does not support visualizing messages serialized using one. Everything 
+else should function as expected.
+
+[Learn how to connect to a Schema Registry here](./advanced/schema-registry.md).
+
 ## Connecting with Quix Streams
 
 Here is how to connect to the Quix Cloud Kafka brokers using Quix Streams:

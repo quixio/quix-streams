@@ -1039,14 +1039,14 @@ class TestQuixApplication:
 
 class TestQuixApplicationWithState:
     def test_quix_app_no_state_management_warning(
-        self, app_dot_quix_factory, monkeypatch, topic_factory, executor
+        self, quix_app_factory, monkeypatch, topic_factory, executor
     ):
         """
         Ensure that Application.run() prints a warning if the app is stateful,
         runs on Quix (the "Quix__Deployment__Id" env var is set),
         but the "State Management" flag is disabled for the deployment.
         """
-        app = app_dot_quix_factory()
+        app = quix_app_factory()
         topic = app.topic(str(uuid.uuid4()))
         sdf = app.dataframe(topic)
         sdf = sdf.apply(lambda x, state: x, stateful=True)
@@ -1069,7 +1069,7 @@ class TestQuixApplicationWithState:
         assert "State Management feature is disabled" in warning
 
     def test_quix_app_state_dir_mismatch_warning(
-        self, app_dot_quix_factory, monkeypatch, caplog
+        self, quix_app_factory, monkeypatch, caplog
     ):
         """
         Ensure that Application.Quix() logs a warning
@@ -1081,146 +1081,7 @@ class TestQuixApplicationWithState:
             "123",
         )
         with pytest.warns(RuntimeWarning) as warned:
-            app_dot_quix_factory()
-        warnings = [w for w in warned.list if w.category is RuntimeWarning]
-        warning = str(warnings[0].message)
-        assert "does not match the state directory" in warning
-
-
-class TestDeprecatedApplicationDotQuix:
-    """
-    We can remove this class after we remove Application.Quix().
-    """
-
-    def test_init(self):
-        consumer_group = "c_group"
-        expected_workspace_cgroup = f"my_ws-{consumer_group}"
-        quix_sdk_token = "my_sdk_token"
-        extra_config = {"extra": "config"}
-        quix_extras = {"quix": "extras"}
-        connection_config = ConnectionConfig.from_librdkafka_dict(
-            {
-                "bootstrap.servers": "address1,address2",
-                "sasl.mechanisms": "SCRAM-SHA-256",
-                "security.protocol": "SASL_SSL",
-                "sasl.username": "my-username",
-                "sasl.password": "my-password",
-                "ssl.ca.location": "/mock/dir/ca.cert",
-            }
-        )
-        expected_producer_extra_config = {
-            "enable.idempotence": True,
-            **extra_config,
-            **quix_extras,
-        }
-        expected_consumer_extra_config = {
-            **extra_config,
-            **quix_extras,
-        }
-
-        def get_cfg_builder(quix_sdk_token):
-            cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
-            cfg_builder.workspace_id = "abcd"
-            cfg_builder.librdkafka_connection_config = connection_config
-            cfg_builder.prepend_workspace_id.return_value = expected_workspace_cgroup
-            cfg_builder.quix_sdk_token = quix_sdk_token
-            cfg_builder.get_application_config.side_effect = lambda cg: (
-                QuixApplicationConfig(
-                    connection_config, quix_extras, cfg_builder.prepend_workspace_id(cg)
-                )
-            )
-            return cfg_builder
-
-        with patch("quixstreams.app.RowConsumer") as consumer_init_mock, patch(
-            "quixstreams.app.RowProducer"
-        ) as producer_init_mock:
-            Application.Quix(
-                quix_config_builder=get_cfg_builder(quix_sdk_token),
-                consumer_group="c_group",
-                consumer_extra_config=extra_config,
-                producer_extra_config=extra_config,
-            )
-
-        # Check if items from the Quix config have been passed
-        # to the low-level configs of producer and consumer
-        producer_call_kwargs = producer_init_mock.call_args.kwargs
-        assert producer_call_kwargs["broker_address"] == connection_config
-        assert producer_call_kwargs["extra_config"] == expected_producer_extra_config
-
-        consumer_call_kwargs = consumer_init_mock.call_args.kwargs
-        assert consumer_call_kwargs["broker_address"] == connection_config
-        assert consumer_call_kwargs["consumer_group"] == expected_workspace_cgroup
-        assert consumer_call_kwargs["extra_config"] == expected_consumer_extra_config
-
-    def test_topic_name_and_config(self, app_dot_quix_factory):
-        """
-        Topic names created from Quix apps are prefixed by the workspace id
-        Topic config has provided values else defaults
-        """
-        workspace_id = "my-workspace"
-        app = app_dot_quix_factory(workspace_id=workspace_id)
-        topic_manager = app._topic_manager
-
-        initial_topic_name = "input_topic"
-        topic_partitions = 5
-        topic = app.topic(
-            initial_topic_name,
-            config=topic_manager.topic_config(num_partitions=topic_partitions),
-        )
-        expected_name = f"{workspace_id}-{initial_topic_name}"
-        expected_topic = topic_manager.topics[expected_name]
-        assert topic.name == expected_name
-        assert expected_name in topic_manager.topics
-        assert (
-            expected_topic.config.replication_factor
-            == topic_manager.default_replication_factor
-        )
-        assert expected_topic.config.num_partitions == topic_partitions
-
-    def test_quix_app_stateful_quix_deployment_no_state_management_warning(
-        self, app_dot_quix_factory, monkeypatch, topic_factory, executor
-    ):
-        """
-        Ensure that Application.run() prints a warning if the app is stateful,
-        runs on Quix (the "Quix__Deployment__Id" env var is set),
-        but the "State Management" flag is disabled for the deployment.
-        """
-        app = app_dot_quix_factory()
-        topic = app.topic(str(uuid.uuid4()))
-        sdf = app.dataframe(topic)
-        sdf = sdf.apply(lambda x, state: x, stateful=True)
-
-        monkeypatch.setenv(
-            QuixEnvironment.DEPLOYMENT_ID,
-            "123",
-        )
-        monkeypatch.setenv(
-            QuixEnvironment.STATE_MANAGEMENT_ENABLED,
-            "",
-        )
-
-        with pytest.warns(RuntimeWarning) as warned:
-            executor.submit(_stop_app_on_timeout, app, 5.0)
-            app.run(sdf)
-
-        warnings = [w for w in warned.list if w.category is RuntimeWarning]
-        warning = str(warnings[0].message)
-        assert "State Management feature is disabled" in warning
-
-    def test_quix_app_stateful_quix_deployment_state_dir_mismatch_warning(
-        self, app_dot_quix_factory, monkeypatch, caplog
-    ):
-        """
-        Ensure that Application.Quix() logs a warning
-        if the app runs on Quix (the "Quix__Deployment__Id" env var is set),
-        but the "state_dir" path doesn't match the one on Quix.
-        """
-        monkeypatch.setenv(
-            QuixEnvironment.DEPLOYMENT_ID,
-            "123",
-        )
-        with pytest.warns(RuntimeWarning) as warned:
-            app_dot_quix_factory()
+            quix_app_factory()
         warnings = [w for w in warned.list if w.category is RuntimeWarning]
         warning = str(warnings[0].message)
         assert "does not match the state directory" in warning

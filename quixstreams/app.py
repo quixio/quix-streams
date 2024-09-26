@@ -352,146 +352,20 @@ class Application:
         return self._is_quix_app
 
     @classmethod
-    def Quix(
-        cls,
-        consumer_group: Optional[str] = None,
-        auto_offset_reset: AutoOffsetReset = "latest",
-        consumer_extra_config: Optional[dict] = None,
-        producer_extra_config: Optional[dict] = None,
-        state_dir: str = "state",
-        rocksdb_options: Optional[RocksDBOptionsType] = None,
-        on_consumer_error: Optional[ConsumerErrorCallback] = None,
-        on_processing_error: Optional[ProcessingErrorCallback] = None,
-        on_producer_error: Optional[ProducerErrorCallback] = None,
-        on_message_processed: Optional[MessageProcessedCallback] = None,
-        consumer_poll_timeout: float = 1.0,
-        producer_poll_timeout: float = 0.0,
-        loglevel: Optional[Union[int, LogLevel]] = "INFO",
-        quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
-        auto_create_topics: bool = True,
-        use_changelog_topics: bool = True,
-        topic_manager: Optional[QuixTopicManager] = None,
-        request_timeout: float = 30,
-        topic_create_timeout: float = 60,
-        processing_guarantee: Literal["at-least-once", "exactly-once"] = "exactly-once",
-    ) -> Self:
+    def Quix(cls, *args, **kwargs):
         """
-        >***NOTE:*** DEPRECATED: use Application with `quix_sdk_token` argument instead.
+        RAISES EXCEPTION: DEPRECATED.
 
-        Initialize an Application to work with Quix Cloud,
-        assuming environment is properly configured (by default in Quix Cloud).
-
-        It takes the credentials from the environment and configures consumer and
-        producer to properly connect to the Quix Cloud.
-
-        >***NOTE:*** Quix Cloud requires `consumer_group` and topic names to be
-            prefixed with workspace id.
-            If the application is created via `Application.Quix()`, the real consumer
-            group will be `<workspace_id>-<consumer_group>`,
-            and the real topic names will be `<workspace_id>-<topic_name>`.
-
-
-
-        Example Snippet:
-
-        ```python
-        from quixstreams import Application
-
-        # Set up an `app = Application.Quix` and `sdf = StreamingDataFrame`;
-        # add some operations to `sdf` and then run everything. Also shows off how to
-        # use the quix-specific serializers and deserializers.
-
-        app = Application.Quix()
-        input_topic = app.topic("topic-in", value_deserializer="quix")
-        output_topic = app.topic("topic-out", value_serializer="quix_timeseries")
-        df = app.dataframe(topic_in)
-        df = df.to_topic(output_topic)
-
-        app.run(dataframe=df)
-        ```
-
-        :param consumer_group: Kafka consumer group.
-            Passed as `group.id` to `confluent_kafka.Consumer`.
-            Linked Environment Variable: `Quix__Consumer__Group`.
-            Default - "quixstreams-default" (set during init).
-              >***NOTE:*** Quix Applications will prefix it with the Quix workspace id.
-        :param auto_offset_reset: Consumer `auto.offset.reset` setting
-        :param consumer_extra_config: A dictionary with additional options that
-            will be passed to `confluent_kafka.Consumer` as is.
-        :param producer_extra_config: A dictionary with additional options that
-            will be passed to `confluent_kafka.Producer` as is.
-        :param state_dir: path to the application state directory.
-            Default - `".state"`.
-        :param rocksdb_options: RocksDB options.
-            If `None`, the default options will be used.
-        :param consumer_poll_timeout: timeout for `RowConsumer.poll()`. Default - `1.0`s
-        :param producer_poll_timeout: timeout for `RowProducer.poll()`. Default - `0`s.
-        :param on_message_processed: a callback triggered when message is successfully
-            processed.
-        :param loglevel: a log level for "quixstreams" logger.
-            Should be a string or `None`.
-            If `None` is passed, no logging will be configured.
-            You may pass `None` and configure "quixstreams" logger
-            externally using `logging` library.
-            Default - `"INFO"`.
-        :param auto_create_topics: Create all `Topic`s made via `Application.topic()`
-            Default - `True`
-        :param use_changelog_topics: Use changelog topics to back stateful operations
-            Default - `True`
-        :param topic_manager: A `QuixTopicManager` instance
-        :param request_timeout: timeout (seconds) for REST-based requests
-        :param topic_create_timeout: timeout (seconds) for topic create finalization
-        :param processing_guarantee: Use "exactly-once" or "at-least-once" processing.
-
-        <br><br>***Error Handlers***<br>
-        To handle errors, `Application` accepts callbacks triggered when
-            exceptions occur on different stages of stream processing. If the callback
-            returns `True`, the exception will be ignored. Otherwise, the exception
-            will be propagated and the processing will eventually stop.
-        :param on_consumer_error: triggered when internal `RowConsumer` fails to poll
-            Kafka or cannot deserialize a message.
-        :param on_processing_error: triggered when exception is raised within
-            `StreamingDataFrame.process()`.
-        :param on_producer_error: triggered when RowProducer fails to serialize
-            or to produce a message to Kafka.
-        <br><br>***Quix Cloud Parameters***<br>
-        :param quix_config_builder: instance of `QuixKafkaConfigsBuilder` to be used
-            instead of the default one.
-
-        :return: `Application` object
+        use Application() with "quix_sdk_token" parameter or set the "Quix__Sdk__Token"
+        environment variable.
         """
-        warnings.warn(
-            "Application.Quix() is being deprecated; "
+
+        raise AttributeError(
+            "Application.Quix() is now deprecated; "
             "To connect to Quix Cloud, "
             'use Application() with "quix_sdk_token" parameter or set the '
-            '"Quix__Sdk__Token" environment variable (like with Application.Quix).',
-            DeprecationWarning,
+            '"Quix__Sdk__Token" environment variable'
         )
-        app = cls(
-            broker_address=None,
-            quix_sdk_token=os.getenv("Quix__Sdk__Token"),
-            consumer_group=consumer_group,
-            consumer_extra_config=consumer_extra_config,
-            producer_extra_config=producer_extra_config,
-            auto_offset_reset=auto_offset_reset,
-            on_consumer_error=on_consumer_error,
-            on_processing_error=on_processing_error,
-            on_producer_error=on_producer_error,
-            on_message_processed=on_message_processed,
-            consumer_poll_timeout=consumer_poll_timeout,
-            producer_poll_timeout=producer_poll_timeout,
-            loglevel=loglevel,
-            state_dir=state_dir,
-            rocksdb_options=rocksdb_options,
-            auto_create_topics=auto_create_topics,
-            use_changelog_topics=use_changelog_topics,
-            topic_manager=topic_manager,
-            request_timeout=request_timeout,
-            topic_create_timeout=topic_create_timeout,
-            quix_config_builder=quix_config_builder,
-            processing_guarantee=processing_guarantee,
-        )
-        return app
 
     def topic(
         self,
@@ -582,8 +456,13 @@ class Application:
         A simple helper method that generates a `StreamingDataFrame`, which is used
         to define your message processing pipeline.
 
-        See :class:`quixstreams.dataframe.StreamingDataFrame` for more details.
+        The topic is what the `StreamingDataFrame` will use as its input, unless
+        a source is provided (`topic` is optional when using a `source`).
 
+        If both `topic` AND `source` are provided, the source will write to that topic
+        instead of its default topic (which the `StreamingDataFrame` then consumes).
+
+        See :class:`quixstreams.dataframe.StreamingDataFrame` for more details.
 
         Example Snippet:
 
@@ -604,6 +483,7 @@ class Application:
 
         :param topic: a `quixstreams.models.Topic` instance
             to be used as an input topic.
+        :param source: a `quixstreams.sources` "BaseSource" instance
         :return: `StreamingDataFrame` object
         """
         if not source and not topic:
@@ -619,6 +499,7 @@ class Application:
             registry=self._dataframe_registry,
         )
         self._dataframe_registry.register_root(sdf)
+
         return sdf
 
     def stop(self, fail: bool = False):
@@ -756,6 +637,8 @@ class Application:
         """
         Add a source to the application.
 
+        Use when no transformations (which requires a `StreamingDataFrame`) are needed.
+
         See :class:`quixstreams.sources.base.BaseSource` for more details.
 
         :param source: a :class:`quixstreams.sources.BaseSource` instance
@@ -885,7 +768,7 @@ class Application:
 
     def _quix_runtime_init(self):
         """
-        Do a runtime setup only applicable to an Application.Quix instance
+        Do a runtime setup only applicable to a Quix Application instance
         - Ensure that "State management" flag is enabled for deployment if the app
           is stateful and is running in Quix Cloud
         """

@@ -180,7 +180,9 @@ We additionally showcase one of our built-in column operations `.isin()`, a way 
 `if x in y` check (SDF is declaratively defined, invalidating that approach).
 
 **NOTE**: some operations (like `.isin()`) are only available when manipulating a column.
+
   - if you're unsure what's possible, autocomplete often covers you!
+
   - _ADVANCED_: [complete list of column operations](../../api-reference/dataframe.md#streamingseries).
 
 <br>
@@ -300,5 +302,6 @@ operations by default.
 
 To get visual outputs around message processing, you can either:
 - use [recommended way of printing/logging stuff](../../processing.md#debugging)
+ 
 - use `DEBUG` mode via `Application(loglevel="DEBUG")`
   - WARNING: you should NOT run your applications in `DEBUG` mode in production.

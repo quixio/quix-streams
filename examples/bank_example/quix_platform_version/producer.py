@@ -13,7 +13,7 @@ from quixstreams.models.serializers import (
 load_dotenv("./bank_example/quix_platform_version/quix_vars.env")
 
 
-app = Application.Quix()
+app = Application()
 serializer = QuixTimeseriesSerializer()
 topic = app.topic(name="qts__purchase_events", value_serializer=serializer)
 

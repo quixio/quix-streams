@@ -87,7 +87,7 @@ The Avro serializer and deserializer need to be passed explicitly and must inclu
 
 ```python
 from quixstreams import Application
-from quixstreams.models.serialize.avro import AvroSerializer, AvroDeserializer
+from quixstreams.models.serializers.avro import AvroSerializer, AvroDeserializer
 
 MY_SCHEMA = {
     "type": "record",
@@ -116,7 +116,7 @@ The Protobuf serializer and deserializer need to be passed explicitly and must i
 
 ```python
 from quixstreams import Application
-from quixstreams.models.serialize.protobuf import ProtobufSerializer, ProtobufDeserializer
+from quixstreams.models.serializers.protobuf import ProtobufSerializer, ProtobufDeserializer
 
 from my_input_models_pb2 import InputProto
 from my_output_models_pb2 import OutputProto
