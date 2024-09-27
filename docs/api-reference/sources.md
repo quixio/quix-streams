@@ -450,7 +450,7 @@ Running multiple instances of this source is supported.
 
 ```python
 from quixstreams import Application
-from quixstreams.sources.kafka import KafkaReplicatorSource
+from quixstreams.sources.core.kafka import KafkaReplicatorSource
 
 app = Application(
     consumer_group="group",
@@ -541,7 +541,7 @@ Running multiple instances of this source is supported.
 
 ```python
 from quixstreams import Application
-from quixstreams.sources.kafka import QuixEnvironmentSource
+from quixstreams.sources.core.kafka import QuixEnvironmentSource
 
 app = Application(
     consumer_group="group",

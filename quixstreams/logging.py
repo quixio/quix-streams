@@ -1,9 +1,9 @@
-import os
 import logging
+import os
 import sys
 from typing import Literal, Optional, Union
 
-__all__ = ("configure_logging", "LogLevel")
+__all__ = ("configure_logging", "LogLevel", "LOGGER_NAME")
 
 LogLevel = Literal[
     "CRITICAL",

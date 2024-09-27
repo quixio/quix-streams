@@ -9174,7 +9174,7 @@ Example Snippet:
 
 ```python
 from quixstreams import Application
-from quixstreams.sources.kafka import KafkaReplicatorSource
+from quixstreams.sources.core.kafka import KafkaReplicatorSource
 
 app = Application(
     consumer_group="group",
@@ -9259,7 +9259,7 @@ Example Snippet:
 
 ```python
 from quixstreams import Application
-from quixstreams.sources.kafka import QuixEnvironmentSource
+from quixstreams.sources.core.kafka import QuixEnvironmentSource
 
 app = Application(
     consumer_group="group",

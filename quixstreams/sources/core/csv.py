@@ -1,11 +1,9 @@
 import csv
 import json
-
 from typing import Optional, Callable, Any
 
 from quixstreams.models.topics import Topic
-
-from .base import Source
+from quixstreams.sources.base import Source
 
 
 class CSVSource(Source):
