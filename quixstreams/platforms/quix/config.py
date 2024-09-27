@@ -371,6 +371,7 @@ class QuixKafkaConfigsBuilder:
         topics: List[Topic],
         timeout: Optional[float] = None,
         finalize_timeout: Optional[float] = None,
+        prepend: bool = True,
     ):
         """
         Create topics in a Quix cluster.
@@ -379,17 +380,18 @@ class QuixKafkaConfigsBuilder:
         :param timeout: response timeout (seconds); Default 30
         :param finalize_timeout: topic finalization timeout (seconds); Default 60
         marked as "Ready" (and thus ready to produce to/consume from).
+        :param prepend: whether to prepend workspace_id during creation attempt.
         """
         logger.info("Attempting to create topics...")
         current_topics = {t["id"]: t for t in self.get_topics(timeout=timeout)}
         finalize = set()
         for topic in topics:
-            topic_name = self.prepend_workspace_id(topic.name)
-            exists = self.prepend_workspace_id(topic_name) in current_topics
-            if not exists or current_topics[topic_name]["status"] != "Ready":
+            name = self.prepend_workspace_id(topic.name) if prepend else topic.name
+            exists = name in current_topics
+            if not exists or current_topics[name]["status"] != "Ready":
                 if exists:
                     logger.debug(
-                        f"Topic {self.strip_workspace_id_prefix(topic_name)} exists but does "
+                        f"Topic {self.strip_workspace_id_prefix(name)} exists but does "
                         f"not have 'Ready' status. Added to finalize check."
                     )
                 else:
@@ -398,14 +400,14 @@ class QuixKafkaConfigsBuilder:
                     # TODO: more robust error handling to better identify issues
                     # See how it's handled in the admin client and maybe consolidate
                     # logic via TopicManager
-                    except HTTPError as e:
+                    except QuixApiRequestFailure as e:
                         # Topic was maybe created by another instance
-                        if "already exists" not in e.response.text:
+                        if "already exists" not in e.error_text:
                             raise
-                finalize.add(topic_name)
+                finalize.add(name)
             else:
                 logger.debug(
-                    f"Topic {self.strip_workspace_id_prefix(topic_name)} exists and is Ready"
+                    f"Topic {self.strip_workspace_id_prefix(name)} exists and is Ready"
                 )
         logger.info(
             "Topic creations acknowledged; waiting for 'Ready' statuses..."
