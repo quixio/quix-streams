@@ -1,8 +1,8 @@
-<a id="quixstreams.sources.base"></a>
+<a id="quixstreams.sources.base.source"></a>
 
-## quixstreams.sources.base
+## quixstreams.sources.base.source
 
-<a id="quixstreams.sources.base.BaseSource"></a>
+<a id="quixstreams.sources.base.source.BaseSource"></a>
 
 ### BaseSource
 
@@ -10,7 +10,7 @@
 class BaseSource(ABC)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L22)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/sources/base/source.py#L22)
 
 This is the base class for all sources.
 
@@ -53,7 +53,7 @@ if __name__ == "__main__":
     main()
 ```
 
-<a id="quixstreams.sources.base.BaseSource.configure"></a>
+<a id="quixstreams.sources.base.source.BaseSource.configure"></a>
 
 <br><br>
 
@@ -63,13 +63,13 @@ if __name__ == "__main__":
 def configure(topic: Topic, producer: RowProducer) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L74)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/sources/base/source.py#L74)
 
 This method is triggered when the source is registered to the Application.
 
 It configures the source's Kafka producer and the topic it will produce to.
 
-<a id="quixstreams.sources.base.BaseSource.start"></a>
+<a id="quixstreams.sources.base.source.BaseSource.start"></a>
 
 <br><br>
 
@@ -80,14 +80,14 @@ It configures the source's Kafka producer and the topic it will produce to.
 def start() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L93)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/sources/base/source.py#L93)
 
 This method is triggered in the subprocess when the source is started.
 
 The subprocess will run as long as the start method executes.
 Use it to fetch data and produce it to Kafka.
 
-<a id="quixstreams.sources.base.BaseSource.stop"></a>
+<a id="quixstreams.sources.base.source.BaseSource.stop"></a>
 
 <br><br>
 
@@ -98,7 +98,7 @@ Use it to fetch data and produce it to Kafka.
 def stop() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L102)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/sources/base/source.py#L102)
 
 This method is triggered when the application is shutting down.
 
@@ -123,7 +123,7 @@ class MySource(BaseSource):
         self._running = False
 ```
 
-<a id="quixstreams.sources.base.BaseSource.default_topic"></a>
+<a id="quixstreams.sources.base.source.BaseSource.default_topic"></a>
 
 <br><br>
 
@@ -134,13 +134,13 @@ class MySource(BaseSource):
 def default_topic() -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L127)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/sources/base/source.py#L127)
 
 This method is triggered when the topic is not provided to the source.
 
 The source must return a default topic configuration.
 
-<a id="quixstreams.sources.base.Source"></a>
+<a id="quixstreams.sources.base.source.Source"></a>
 
 ### Source
 
@@ -148,7 +148,7 @@ The source must return a default topic configuration.
 class Source(BaseSource)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L135)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/sources/base/source.py#L135)
 
 BaseSource class implementation providing
 
@@ -167,7 +167,7 @@ Helper property
 
 Subclass it and implement the `run` method to fetch data and produce it to Kafka.
 
-<a id="quixstreams.sources.base.Source.__init__"></a>
+<a id="quixstreams.sources.base.source.Source.__init__"></a>
 
 <br><br>
 
@@ -177,7 +177,7 @@ Subclass it and implement the `run` method to fetch data and produce it to Kafka
 def __init__(name: str, shutdown_timeout: float = 10) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L155)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/sources/base/source.py#L155)
 
 
 <br>
@@ -186,7 +186,7 @@ def __init__(name: str, shutdown_timeout: float = 10) -> None
 - `name`: The source unique name. Used to generate the topic configurtion
 - `shutdown_timeout`: Time in second the application waits for the source to gracefully shutdown
 
-<a id="quixstreams.sources.base.Source.running"></a>
+<a id="quixstreams.sources.base.source.Source.running"></a>
 
 <br><br>
 
@@ -197,7 +197,7 @@ def __init__(name: str, shutdown_timeout: float = 10) -> None
 def running() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L169)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/sources/base/source.py#L169)
 
 Property indicating if the source is running.
 
@@ -215,7 +215,7 @@ class MySource(Source):
             time.sleep(1)
 ```
 
-<a id="quixstreams.sources.base.Source.cleanup"></a>
+<a id="quixstreams.sources.base.source.Source.cleanup"></a>
 
 <br><br>
 
@@ -225,7 +225,7 @@ class MySource(Source):
 def cleanup(failed: bool) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L189)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/sources/base/source.py#L189)
 
 This method is triggered once the `run` method completes.
 
@@ -233,7 +233,7 @@ Use it to clean up the resources and shut down the source gracefully.
 
 It flush the producer when `_run` completes successfully.
 
-<a id="quixstreams.sources.base.Source.stop"></a>
+<a id="quixstreams.sources.base.source.Source.stop"></a>
 
 <br><br>
 
@@ -243,13 +243,13 @@ It flush the producer when `_run` completes successfully.
 def stop() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L200)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/sources/base/source.py#L200)
 
 This method is triggered when the application is shutting down.
 
 It sets the `running` property to `False`.
 
-<a id="quixstreams.sources.base.Source.start"></a>
+<a id="quixstreams.sources.base.source.Source.start"></a>
 
 <br><br>
 
@@ -259,13 +259,13 @@ It sets the `running` property to `False`.
 def start()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L209)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/sources/base/source.py#L209)
 
 This method is triggered in the subprocess when the source is started.
 
 It marks the source as running, execute it's run method and ensure cleanup happens.
 
-<a id="quixstreams.sources.base.Source.run"></a>
+<a id="quixstreams.sources.base.source.Source.run"></a>
 
 <br><br>
 
@@ -276,14 +276,14 @@ It marks the source as running, execute it's run method and ensure cleanup happe
 def run()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L225)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/sources/base/source.py#L225)
 
 This method is triggered in the subprocess when the source is started.
 
 The subprocess will run as long as the run method executes.
 Use it to fetch data and produce it to Kafka.
 
-<a id="quixstreams.sources.base.Source.serialize"></a>
+<a id="quixstreams.sources.base.source.Source.serialize"></a>
 
 <br><br>
 
@@ -296,7 +296,7 @@ def serialize(key: Optional[object] = None,
               timestamp_ms: Optional[int] = None) -> KafkaMessage
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L233)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/sources/base/source.py#L233)
 
 Serialize data to bytes using the producer topic serializers and return a `quixstreams.models.messages.KafkaMessage`.
 
@@ -306,7 +306,7 @@ Serialize data to bytes using the producer topic serializers and return a `quixs
 
 `quixstreams.models.messages.KafkaMessage`
 
-<a id="quixstreams.sources.base.Source.produce"></a>
+<a id="quixstreams.sources.base.source.Source.produce"></a>
 
 <br><br>
 
@@ -322,11 +322,11 @@ def produce(value: Optional[Union[str, bytes]] = None,
             buffer_error_max_tries: int = 3) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L249)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/sources/base/source.py#L249)
 
 Produce a message to the configured source topic in Kafka.
 
-<a id="quixstreams.sources.base.Source.flush"></a>
+<a id="quixstreams.sources.base.source.Source.flush"></a>
 
 <br><br>
 
@@ -336,7 +336,7 @@ Produce a message to the configured source topic in Kafka.
 def flush(timeout: Optional[float] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L274)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/sources/base/source.py#L274)
 
 This method flush the producer.
 
@@ -353,7 +353,7 @@ None use producer default or -1 is infinite. Default: None
 
 - `CheckpointProducerTimeout`: if any message fails to produce before the timeout
 
-<a id="quixstreams.sources.base.Source.default_topic"></a>
+<a id="quixstreams.sources.base.source.Source.default_topic"></a>
 
 <br><br>
 
@@ -363,7 +363,7 @@ None use producer default or -1 is infinite. Default: None
 def default_topic() -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base.py#L292)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/sources/base/source.py#L292)
 
 Return a default topic matching the source name.
 
@@ -375,11 +375,11 @@ The default topic will not be used if the topic has already been provided to the
 
 `quixstreams.models.topics.Topic`
 
-<a id="quixstreams.sources.csv"></a>
+<a id="quixstreams.sources.core.csv"></a>
 
-## quixstreams.sources.csv
+## quixstreams.sources.core.csv
 
-<a id="quixstreams.sources.csv.CSVSource"></a>
+<a id="quixstreams.sources.core.csv.CSVSource"></a>
 
 ### CSVSource
 
@@ -387,9 +387,9 @@ The default topic will not be used if the topic has already been provided to the
 class CSVSource(Source)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/csv.py#L11)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/sources/core/csv.py#L9)
 
-<a id="quixstreams.sources.csv.CSVSource.__init__"></a>
+<a id="quixstreams.sources.core.csv.CSVSource.__init__"></a>
 
 <br><br>
 
@@ -404,7 +404,7 @@ def __init__(path: str,
              value_deserializer: Callable[[Any], str] = json.loads) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/csv.py#L12)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/sources/core/csv.py#L10)
 
 A base CSV source that reads data from a single CSV file.
 
@@ -426,11 +426,11 @@ Default - `str`
 - `value_deserializer`: a callable to convert strings to value.
 Default - `json.loads`
 
-<a id="quixstreams.sources.kafka.kafka"></a>
+<a id="quixstreams.sources.core.kafka.kafka"></a>
 
-## quixstreams.sources.kafka.kafka
+## quixstreams.sources.core.kafka.kafka
 
-<a id="quixstreams.sources.kafka.kafka.KafkaReplicatorSource"></a>
+<a id="quixstreams.sources.core.kafka.kafka.KafkaReplicatorSource"></a>
 
 ### KafkaReplicatorSource
 
@@ -438,7 +438,7 @@ Default - `json.loads`
 class KafkaReplicatorSource(Source)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/kafka/kafka.py#L26)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/sources/core/kafka/kafka.py#L26)
 
 Source implementation that replicates a topic from a Kafka broker to your application broker.
 
@@ -450,7 +450,7 @@ Running multiple instances of this source is supported.
 
 ```python
 from quixstreams import Application
-from quixstreams.sources.core.kafka import KafkaReplicatorSource
+from quixstreams.sources.kafka import KafkaReplicatorSource
 
 app = Application(
     consumer_group="group",
@@ -468,7 +468,7 @@ sdf = sdf.print()
 app.run(sdf)
 ```
 
-<a id="quixstreams.sources.kafka.kafka.KafkaReplicatorSource.__init__"></a>
+<a id="quixstreams.sources.core.kafka.kafka.KafkaReplicatorSource.__init__"></a>
 
 <br><br>
 
@@ -489,7 +489,7 @@ def __init__(name: str,
              key_deserializer: DeserializerType = "bytes") -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/kafka/kafka.py#L55)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/sources/core/kafka/kafka.py#L55)
 
 
 <br>
@@ -516,11 +516,11 @@ Default - `json`
 - `key_deserializer`: The default topic key deserializer, used by StreamingDataframe connected to the source.
 Default - `json`
 
-<a id="quixstreams.sources.kafka.quix"></a>
+<a id="quixstreams.sources.core.kafka.quix"></a>
 
-## quixstreams.sources.kafka.quix
+## quixstreams.sources.core.kafka.quix
 
-<a id="quixstreams.sources.kafka.quix.QuixEnvironmentSource"></a>
+<a id="quixstreams.sources.core.kafka.quix.QuixEnvironmentSource"></a>
 
 ### QuixEnvironmentSource
 
@@ -528,7 +528,7 @@ Default - `json`
 class QuixEnvironmentSource(KafkaReplicatorSource)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/kafka/quix.py#L18)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/sources/core/kafka/quix.py#L18)
 
 Source implementation that replicates a topic from a Quix Cloud environment to your application broker.
 It can copy messages for development and testing without risking producing them back or affecting the consumer groups.
@@ -541,7 +541,7 @@ Running multiple instances of this source is supported.
 
 ```python
 from quixstreams import Application
-from quixstreams.sources.core.kafka import QuixEnvironmentSource
+from quixstreams.sources.kafka import QuixEnvironmentSource
 
 app = Application(
     consumer_group="group",
@@ -560,7 +560,7 @@ sdf = sdf.print()
 app.run(sdf)
 ```
 
-<a id="quixstreams.sources.kafka.quix.QuixEnvironmentSource.__init__"></a>
+<a id="quixstreams.sources.core.kafka.quix.QuixEnvironmentSource.__init__"></a>
 
 <br><br>
 
@@ -583,7 +583,7 @@ def __init__(name: str,
              key_deserializer: DeserializerType = "bytes") -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/kafka/quix.py#L49)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/sources/core/kafka/quix.py#L49)
 
 
 <br>
