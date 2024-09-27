@@ -853,11 +853,11 @@ class TestQuixApplication:
             return cfg_builder
 
         # Mock consumer and producer to check the init args
-        with patch("quixstreams.app.QuixKafkaConfigsBuilder", get_cfg_builder), patch(
-            "quixstreams.app.RowConsumer"
-        ) as consumer_init_mock, patch(
-            "quixstreams.app.RowProducer"
-        ) as producer_init_mock:
+        with (
+            patch("quixstreams.app.QuixKafkaConfigsBuilder", get_cfg_builder),
+            patch("quixstreams.app.RowConsumer") as consumer_init_mock,
+            patch("quixstreams.app.RowProducer") as producer_init_mock,
+        ):
             app = Application(
                 consumer_group=consumer_group,
                 quix_sdk_token=quix_sdk_token,
@@ -917,11 +917,11 @@ class TestQuixApplication:
             return cfg_builder
 
         monkeypatch.setenv("Quix__Sdk__Token", quix_sdk_token)
-        with patch("quixstreams.app.QuixKafkaConfigsBuilder", get_cfg_builder), patch(
-            "quixstreams.app.RowConsumer"
-        ) as consumer_init_mock, patch(
-            "quixstreams.app.RowProducer"
-        ) as producer_init_mock:
+        with (
+            patch("quixstreams.app.QuixKafkaConfigsBuilder", get_cfg_builder),
+            patch("quixstreams.app.RowConsumer") as consumer_init_mock,
+            patch("quixstreams.app.RowProducer") as producer_init_mock,
+        ):
             Application(
                 consumer_group=consumer_group,
                 consumer_extra_config=extra_config,
@@ -978,9 +978,10 @@ class TestQuixApplication:
             )
             return cfg_builder
 
-        with patch("quixstreams.app.RowConsumer") as consumer_init_mock, patch(
-            "quixstreams.app.RowProducer"
-        ) as producer_init_mock:
+        with (
+            patch("quixstreams.app.RowConsumer") as consumer_init_mock,
+            patch("quixstreams.app.RowProducer") as producer_init_mock,
+        ):
             Application(
                 consumer_group=consumer_group,
                 quix_config_builder=get_cfg_builder(quix_sdk_token),
@@ -1739,12 +1740,13 @@ class TestApplicationRecovery:
             return app, sdf, topic
 
         def validate_state():
-            with state_manager_factory(
-                group_id=consumer_group,
-                state_dir=state_dir,
-            ) as state_manager, consumer_factory(
-                consumer_group=consumer_group
-            ) as consumer:
+            with (
+                state_manager_factory(
+                    group_id=consumer_group,
+                    state_dir=state_dir,
+                ) as state_manager,
+                consumer_factory(consumer_group=consumer_group) as consumer,
+            ):
                 committed_offset = consumer.committed(
                     [TopicPartition(topic=topic_name, partition=0)]
                 )[0].offset
@@ -1961,7 +1963,6 @@ class TestApplicationSink:
         app_factory,
         executor,
     ):
-
         processed_count = 0
         total_messages = 3
 

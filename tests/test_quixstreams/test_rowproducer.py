@@ -76,9 +76,10 @@ class TestRowProducer:
         value = {"field": "value"}
         headers = [("header1", b"1")]
 
-        with row_consumer_factory(
-            auto_offset_reset="earliest"
-        ) as consumer, row_producer_factory() as producer:
+        with (
+            row_consumer_factory(auto_offset_reset="earliest") as consumer,
+            row_producer_factory() as producer,
+        ):
             row = row_factory(
                 topic=topic.name,
                 value=value,

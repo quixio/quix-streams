@@ -306,10 +306,13 @@ class TestCheckpoint:
 
         # Simulate a failed transaction
         tx = checkpoint.get_store_transaction("topic", 0)
-        with contextlib.suppress(ValueError), patch.object(
-            RocksDBPartitionTransaction,
-            "_serialize_key",
-            side_effect=ValueError("test"),
+        with (
+            contextlib.suppress(ValueError),
+            patch.object(
+                RocksDBPartitionTransaction,
+                "_serialize_key",
+                side_effect=ValueError("test"),
+            ),
         ):
             tx.set(key=key, value=value, prefix=prefix)
         assert tx.failed

@@ -89,7 +89,7 @@ class TestStream:
         stream = Stream()
         stream = stream.add_apply(lambda v: v)
         stream2 = stream.add_apply(lambda v: v)
-        stream3 = stream2.add_apply(lambda v: v)
+        stream3 = stream2.add_apply(lambda v: v)  # noqa: F841
         stream2 = stream2.add_apply(lambda v: v)
 
         with pytest.raises(InvalidOperation):
@@ -355,7 +355,6 @@ class TestStream:
 
 
 class TestStreamBranching:
-
     def test_basic_branching(self):
         calls = []
 
@@ -440,11 +439,15 @@ class TestStreamBranching:
 
         stream = Stream().add_apply(lambda v: v + 120).add_apply(lambda v: v // 2)  # 60
         stream_2 = stream.add_apply(lambda v: v // 3)  # 20
-        stream_3 = stream_2.add_apply(lambda v: v + 10).add_apply(lambda v: v + 3)  # 33
-        stream_4 = stream_2.add_apply(lambda v: v + 24)  # 44
+        stream_3 = stream_2.add_apply(lambda v: v + 10).add_apply(  # noqa: F841
+            lambda v: v + 3
+        )  # 33
+        stream_4 = stream_2.add_apply(lambda v: v + 24)  # 44  # noqa: F841
         stream_2 = stream_2.add_apply(lambda v: v + 2)  # 22
         stream = stream.add_apply(lambda v: v + 40)  # 100
-        stream_5 = stream.add_apply(lambda v: v // 2).add_apply(lambda v: v + 5)  # 55
+        stream_5 = stream.add_apply(lambda v: v // 2).add_apply(  # noqa: F841
+            lambda v: v + 5
+        )  # 55
         stream = stream.add_apply(lambda v: v // 100).add_apply(lambda v: v + 10)  # 11
         sink = Sink()
         extras = ("key", 0, [])
@@ -463,13 +466,13 @@ class TestStreamBranching:
         stream = Stream().add_apply(lambda v: v + 10)
         stream2 = stream.add_apply(lambda v: v + 5).add_filter(lambda v: v < 0)
         stream2 = stream2.add_apply(lambda v: v + 200)
-        stream3 = (
+        stream3 = (  # noqa: F841
             stream.add_apply(lambda v: v + 7)
             .add_filter(lambda v: v < 20)
             .add_apply(lambda v: v + 4)
         )
         stream = stream.add_apply(lambda v: v + 30).add_filter(lambda v: v < 50)
-        stream4 = stream.add_apply(lambda v: v + 60)
+        stream4 = stream.add_apply(lambda v: v + 60)  # noqa: F841
         stream.add_apply(lambda v: v + 800)
 
         sink = Sink()
@@ -480,12 +483,11 @@ class TestStreamBranching:
         assert sink == expected
 
     def test_update(self):
-
         stream = Stream().add_apply(lambda v: v + [10])
-        stream2 = stream.add_update(lambda v: v.append(5))
+        stream2 = stream.add_update(lambda v: v.append(5))  # noqa: F841
         stream = stream.add_update(lambda v: v.append(30)).add_apply(lambda v: v + [6])
-        stream3 = stream.add_update(lambda v: v.append(100))
-        stream4 = stream.add_update(lambda v: v.append(456))
+        stream3 = stream.add_update(lambda v: v.append(100))  # noqa: F841
+        stream4 = stream.add_update(lambda v: v.append(456))  # noqa: F841
         stream = stream.add_apply(lambda v: v + [700]).add_update(
             lambda v: v.append(222)
         )
@@ -505,14 +507,14 @@ class TestStreamBranching:
 
     def test_expand(self):
         stream = Stream()
-        stream_2 = stream.add_apply(lambda v: [i for i in v[0]], expand=True).add_apply(
+        stream_2 = stream.add_apply(lambda v: [i for i in v[0]], expand=True).add_apply(  # noqa: F841
             lambda v: v + 22
         )
-        stream_3 = stream.add_apply(lambda v: [i for i in v[1]], expand=True).add_apply(
+        stream_3 = stream.add_apply(lambda v: [i for i in v[1]], expand=True).add_apply(  # noqa: F841
             lambda v: v + 33
         )
         stream = stream.add_apply(lambda v: [i for i in v[2]], expand=True)
-        stream_4 = stream.add_apply(lambda v: v + 44)
+        stream_4 = stream.add_apply(lambda v: v + 44)  # noqa: F841
         stream = stream.add_apply(lambda v: v + 11)
         sink = Sink()
         extras = ("key", 0, [])
@@ -522,7 +524,6 @@ class TestStreamBranching:
         assert sink == expected
 
     def test_transform(self):
-
         def transform(n):
             def wrapper(value, k, t, h):
                 return value, k + "_" + str(n), t + n, h
@@ -530,10 +531,10 @@ class TestStreamBranching:
             return wrapper
 
         stream = Stream().add_apply(lambda v: v + 1)
-        stream_2 = stream.add_transform(transform(2))
+        stream_2 = stream.add_transform(transform(2))  # noqa: F841
         stream = stream.add_transform(transform(3))
-        stream_3 = stream.add_apply(lambda v: v + 30).add_transform(transform(4))
-        stream_4 = stream.add_apply(lambda v: v + 40).add_transform(transform(5))
+        stream_3 = stream.add_apply(lambda v: v + 30).add_transform(transform(4))  # noqa: F841
+        stream_4 = stream.add_apply(lambda v: v + 40).add_transform(transform(5))  # noqa: F841
         stream = stream.add_apply(lambda v: v + 100).add_transform(transform(6))
 
         sink = Sink()

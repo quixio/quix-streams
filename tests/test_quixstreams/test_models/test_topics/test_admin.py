@@ -72,9 +72,10 @@ class TestTopicAdmin:
         topic_manager = topic_manager_factory()
         existing_topic = topic_manager.topic(name=topic_name)
 
-        with caplog.at_level(level=logging.INFO), patch.object(
-            topic_admin, "list_topics"
-        ) as list_topics_mock:
+        with (
+            caplog.at_level(level=logging.INFO),
+            patch.object(topic_admin, "list_topics") as list_topics_mock,
+        ):
             # Mock "list_topics" call to simulate a topic being created
             # simultaneously by multiple instances
             list_topics_mock.return_value = {}
