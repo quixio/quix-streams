@@ -48,7 +48,7 @@ topic = app.topic('test-topic')
 df = app.dataframe(topic)
 df.apply(lambda value, context: print('New message', value))
 
-app.run(dataframe=df)
+app.run()
 ```
 
 <a id="quixstreams.app.Application.__init__"></a>
@@ -307,7 +307,7 @@ topic = app.topic('test-topic')
 df = app.dataframe(topic)
 df.apply(lambda value, context: print('New message', value)
 
-app.run(dataframe=df)
+app.run()
 ```
 
 

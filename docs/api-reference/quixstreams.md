@@ -8701,7 +8701,7 @@ topic = app.topic('test-topic')
 df = app.dataframe(topic)
 df.apply(lambda value, context: print('New message', value))
 
-app.run(dataframe=df)
+app.run()
 ```
 
 <a id="quixstreams.app.Application.__init__"></a>
@@ -8940,7 +8940,7 @@ topic = app.topic('test-topic')
 df = app.dataframe(topic)
 df.apply(lambda value, context: print('New message', value)
 
-app.run(dataframe=df)
+app.run()
 ```
 
 **Arguments**:
@@ -9272,7 +9272,7 @@ source = KafkaReplicatorSource(
 
 sdf = app.dataframe(source=source)
 sdf = sdf.print()
-app.run(sdf)
+app.run()
 ```
 
 <a id="quixstreams.sources.core.kafka.kafka.KafkaReplicatorSource.__init__"></a>
@@ -9358,7 +9358,7 @@ source = QuixEnvironmentSource(
 
 sdf = app.dataframe(source=source)
 sdf = sdf.print()
-app.run(sdf)
+app.run()
 ```
 
 <a id="quixstreams.sources.core.kafka.quix.QuixEnvironmentSource.__init__"></a>
@@ -9513,7 +9513,7 @@ def main():
     sdf = app.dataframe(source=source)
     sdf.print(metadata=True)
 
-    app.run(sdf)
+    app.run()
 
 if __name__ == "__main__":
     main()
