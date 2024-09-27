@@ -28,4 +28,4 @@ sdf = sdf.to_topic(word_counts_topic, key=lambda word_count_pair: word_count_pai
 
 
 if __name__ == "__main__":
-    app.run(sdf)
+    app.run()

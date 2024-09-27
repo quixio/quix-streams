@@ -95,7 +95,7 @@ sdf = (
 sdf = sdf.to_topic(output_topic)
 
 # Run the pipeline
-app.run(sdf)
+app.run()
 ```
 
 ### Data Types
@@ -480,7 +480,7 @@ sdf['average_is_null'] = sdf["average"].isnull()
 Under the good, when you access a column on `StreamingDataFrame` it generates the new `StreamingSeries` instance that refers to the value of the passed key.
 
 These objects are also lazy, and they are evaluated only when the `StreamingDataFrame`is
-executed by `app.run(sdf)`.
+executed by `app.run()`.
 
 When you set them back to the StreamingDataFrame or use them to filter data, it creates
 a new step in the pipeline to be evaluated later.

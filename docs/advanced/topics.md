@@ -43,7 +43,7 @@ sdf = app.dataframe(input_topic).to_topic(output_topic)
 
 # Run the Application. 
 # The topics will be validated and created during this function call.
-app.run(sdf)
+app.run()
 ```
 
 ## Topic Configuration
@@ -83,5 +83,5 @@ sdf = app.dataframe(input_topic).to_topic(output_topic)
 # Run the Application. 
 # The topics will be validated and created during this function call.
 # Note: if the topics already exist, the configs will remain intact.
-app.run(sdf)
+app.run()
 ```

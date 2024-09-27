@@ -69,4 +69,4 @@ sdf = sdf.to_topic(output_topic)
 
 if __name__ == "__main__":
     # Start message processing
-    app.run(sdf)
+    app.run()
