@@ -74,6 +74,7 @@ sdf = sdf.apply()  # continue different operations with another branch...
 ## Supported Sinks
 
 Currently, Quix Streams provides these sinks out of the box:
+
 - [CSV Sink](csv-sink.md) - a simple CSV sinks that writes data to a single CSV file.
 - [InfluxDB 3 Sink](influxdb3-sink.md) - a sink to write data to InfluxDB 3.
 
