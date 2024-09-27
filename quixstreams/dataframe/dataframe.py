@@ -46,7 +46,6 @@ from quixstreams.models.serializers import SerializerType, DeserializerType
 from quixstreams.processing import ProcessingContext
 from quixstreams.sinks import BaseSink
 from quixstreams.state.types import State
-from quixstreams.sources import BaseSource
 from .base import BaseStreaming
 from .exceptions import InvalidOperation
 from .registry import DataframeRegistry
@@ -983,7 +982,7 @@ class StreamingDataFrame(BaseStreaming):
             if not columns:
                 return self
             if not all(isinstance(s, str) for s in columns):
-                raise TypeError(f"column list must contain strings only")
+                raise TypeError("column list must contain strings only")
         elif isinstance(columns, str):
             columns = [columns]
         else:
@@ -1189,7 +1188,7 @@ def _drop(value: Dict, columns: List[str], ignore_missing: bool = False):
 
 
 def _as_metadata_func(
-    func: Union[ApplyCallbackStateful, FilterCallbackStateful, UpdateCallbackStateful]
+    func: Union[ApplyCallbackStateful, FilterCallbackStateful, UpdateCallbackStateful],
 ) -> Union[
     ApplyWithMetadataCallbackStateful,
     FilterWithMetadataCallbackStateful,

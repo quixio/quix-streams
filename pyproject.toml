@@ -49,17 +49,26 @@ version = {attr = "quixstreams.__version__"}
 [tool.pydantic-pycharm-plugin]
 ignore-init-method-arguments = true
 
-[tool.black]
-line-length = 88
-target-version = ['py38']
-include = '\.pyi?$'
-force-exclude = '.*_pb2\.py$'
+[tool.ruff]
+fix = true
+lint.select = [
+  "F",  # Pyflakes
+  "S",  # flake8-bandit
+  "SLF",  # flake8-self
+]
+exclude = [
+  "*_pb2.py",  # Protobuf files
+]
 
-[tool.isort]
-atomic = true
-profile = "black"
-line_length = 88
-
+[tool.ruff.lint.per-file-ignores]
+# S101 Use of `assert` detected
+# S105 Possible hardcoded password assigned to variable
+# S106 Possible hardcoded password assigned to argument
+# S311 Standard pseudo-random generators are not suitable for cryptographic purposes
+# SLF001 Private member accessed
+"docs/*.py" = ["S311"]
+"examples/*.py" = ["S311"]
+"tests/*.py" = ["S101", "S105", "S106", "S311", "SLF001"]
 
 [tool.pytest.ini_options]
 minversion = "6.0"

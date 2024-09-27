@@ -482,7 +482,7 @@ class TestRocksDBPartitionTransaction:
     def test_delete_and_prepare(
         self, rocksdb_partition_factory, changelog_producer_mock
     ):
-        key, value = "key", "value"
+        key = "key"
         cf = "default"
         prefix = b"__key__"
         processed_offset = 1
@@ -490,7 +490,6 @@ class TestRocksDBPartitionTransaction:
         with rocksdb_partition_factory(
             changelog_producer=changelog_producer_mock
         ) as partition:
-
             tx = partition.begin()
             tx.delete(key=key, cf_name=cf, prefix=prefix)
 

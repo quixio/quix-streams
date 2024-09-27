@@ -845,7 +845,7 @@ class Application:
         # sometimes "empty" calls happen, probably updating the consumer epoch
         if not topic_partitions:
             return
-        logger.debug(f"Rebalancing: assigning partitions")
+        logger.debug("Rebalancing: assigning partitions")
 
         # Only start the sources once the consumer is assigned. Otherwise a source
         # can produce data before the consumer starts. If that happens on a new
@@ -903,7 +903,7 @@ class Application:
         # because of the unhandled exception.
         # In this case, we should drop the checkpoint and let another consumer
         # pick up from the latest one
-        logger.debug(f"Rebalancing: revoking partitions")
+        logger.debug("Rebalancing: revoking partitions")
         if self._failed:
             logger.warning(
                 "Application is stopping due to failure, "
@@ -926,7 +926,7 @@ class Application:
         """
         Dropping lost partitions from consumer and state
         """
-        logger.debug(f"Rebalancing: dropping lost partitions")
+        logger.debug("Rebalancing: dropping lost partitions")
         for tp in topic_partitions:
             if self._state_manager.stores:
                 self._state_manager.on_partition_revoke(
@@ -944,11 +944,11 @@ class Application:
         # Re-install the default SIGINT handler so doing Ctrl+C twice
         # raises KeyboardInterrupt
         signal.signal(signal.SIGINT, signal.default_int_handler)
-        logger.debug(f"Received SIGINT, stopping the processing loop")
+        logger.debug("Received SIGINT, stopping the processing loop")
         self.stop()
 
     def _on_sigterm(self, *_):
-        logger.debug(f"Received SIGTERM, stopping the processing loop")
+        logger.debug("Received SIGTERM, stopping the processing loop")
         self.stop()
 
 

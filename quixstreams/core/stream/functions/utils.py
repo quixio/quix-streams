@@ -19,4 +19,4 @@ def pickle_copier(obj: T) -> Callable[[], T]:
     """
 
     serialized = dumps(obj, protocol=_PICKLE_PROTOCOL, fix_imports=False)
-    return lambda: loads(serialized, fix_imports=False)
+    return lambda: loads(serialized, fix_imports=False)  # noqa: S301

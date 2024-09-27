@@ -16,9 +16,12 @@ class TestRowConsumer:
         self, row_consumer_factory, topic_json_serdes_factory, producer
     ):
         topic = topic_json_serdes_factory()
-        with row_consumer_factory(
-            auto_offset_reset="earliest",
-        ) as consumer, producer:
+        with (
+            row_consumer_factory(
+                auto_offset_reset="earliest",
+            ) as consumer,
+            producer,
+        ):
             producer.produce(topic=topic.name, key=b"key", value=b'{"field":"value"}')
             producer.flush()
             consumer.subscribe([topic])
@@ -35,9 +38,12 @@ class TestRowConsumer:
         self, row_consumer_factory, topic_json_serdes_factory, producer
     ):
         topics = [topic_json_serdes_factory(), topic_json_serdes_factory()]
-        with row_consumer_factory(
-            auto_offset_reset="earliest",
-        ) as consumer, producer:
+        with (
+            row_consumer_factory(
+                auto_offset_reset="earliest",
+            ) as consumer,
+            producer,
+        ):
             for topic in topics:
                 producer.produce(
                     topic=topic.name, key=b"key", value=b'{"field":"value"}'
@@ -74,9 +80,12 @@ class TestRowConsumer:
                 raise IgnoreMessage()
 
         topic = topic_manager_topic_factory(value_deserializer=_Deserializer())
-        with row_consumer_factory(
-            auto_offset_reset="earliest",
-        ) as consumer, producer:
+        with (
+            row_consumer_factory(
+                auto_offset_reset="earliest",
+            ) as consumer,
+            producer,
+        ):
             producer.produce(topic.name, key=b"key", value=b"value")
             producer.flush()
             consumer.subscribe([topic])
@@ -93,9 +102,12 @@ class TestRowConsumer:
         self, row_consumer_factory, topic_json_serdes_factory, producer
     ):
         topic = topic_json_serdes_factory()
-        with row_consumer_factory(
-            auto_offset_reset="earliest",
-        ) as consumer, producer:
+        with (
+            row_consumer_factory(
+                auto_offset_reset="earliest",
+            ) as consumer,
+            producer,
+        ):
             producer.produce(topic.name, key=b"key", value=b"value")
             producer.flush()
             consumer.subscribe([topic])
@@ -106,9 +118,12 @@ class TestRowConsumer:
         self, row_consumer_factory, topic_json_serdes_factory, producer
     ):
         topic = topic_json_serdes_factory()
-        with row_consumer_factory(
-            auto_offset_reset="error",
-        ) as consumer, producer:
+        with (
+            row_consumer_factory(
+                auto_offset_reset="error",
+            ) as consumer,
+            producer,
+        ):
             producer.produce(topic.name, key=b"key", value=b"value")
             producer.flush()
             consumer.subscribe([topic])
@@ -128,10 +143,13 @@ class TestRowConsumer:
             suppressed = True
             return True
 
-        with row_consumer_factory(
-            auto_offset_reset="earliest",
-            on_error=on_error,
-        ) as consumer, producer:
+        with (
+            row_consumer_factory(
+                auto_offset_reset="earliest",
+                on_error=on_error,
+            ) as consumer,
+            producer,
+        ):
             producer.produce(topic.name, key=b"key", value=b"value")
             producer.flush()
             consumer.subscribe([topic])
@@ -152,10 +170,13 @@ class TestRowConsumer:
             suppressed = True
             return True
 
-        with row_consumer_factory(
-            auto_offset_reset="error",
-            on_error=on_error,
-        ) as consumer, producer:
+        with (
+            row_consumer_factory(
+                auto_offset_reset="error",
+                on_error=on_error,
+            ) as consumer,
+            producer,
+        ):
             producer.produce(topic.name, key=b"key", value=b"value")
             producer.flush()
             consumer.subscribe([topic])
@@ -174,10 +195,13 @@ class TestRowConsumer:
         def on_assign(*_):
             raise ValueError("Test")
 
-        with row_consumer_factory(
-            auto_offset_reset="error",
-            on_error=on_error,
-        ) as consumer, producer:
+        with (
+            row_consumer_factory(
+                auto_offset_reset="error",
+                on_error=on_error,
+            ) as consumer,
+            producer,
+        ):
             producer.produce(topic.name, key=b"key", value=b"value")
             producer.flush()
             consumer.subscribe([topic], on_assign=on_assign)

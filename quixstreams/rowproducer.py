@@ -97,7 +97,6 @@ class RowProducer:
         flush_timeout: Optional[float] = None,
         transactional: bool = False,
     ):
-
         if transactional:
             self._producer = TransactionalProducer(
                 broker_address=broker_address,

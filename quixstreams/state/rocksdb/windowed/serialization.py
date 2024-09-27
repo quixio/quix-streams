@@ -30,8 +30,9 @@ def parse_window_key(key: bytes) -> Tuple[bytes, int, int]:
         timestamps_bytes[_TIMESTAMP_BYTE_LENGTH + 1 :],
     )
 
-    start_ms, end_ms = int_from_int64_bytes(start_bytes), int_from_int64_bytes(
-        end_bytes
+    start_ms, end_ms = (
+        int_from_int64_bytes(start_bytes),
+        int_from_int64_bytes(end_bytes),
     )
     return message_key, start_ms, end_ms
 

@@ -323,7 +323,7 @@ class TopicManager:
 
         :return: `Topic` object (which is also stored on the TopicManager)
         """
-        name = self._internal_name(f"repartition", topic_name, operation)
+        name = self._internal_name("repartition", topic_name, operation)
 
         topic = Topic(
             name=name,
@@ -444,7 +444,7 @@ class TopicManager:
 
         Issues are pooled and raised as an Exception once inspections are complete.
         """
-        logger.info(f"Validating Kafka topics exist and are configured correctly...")
+        logger.info("Validating Kafka topics exist and are configured correctly...")
         all_topic_names = [t.name for t in self._all_topics_list]
         actual_configs = self._admin.inspect_topics(
             all_topic_names,
@@ -476,4 +476,4 @@ class TopicManager:
                         f'got {changelog_cfg.replication_factor}"'
                     )
 
-        logger.info(f"Kafka topics validation complete")
+        logger.info("Kafka topics validation complete")

@@ -7,7 +7,6 @@ __all__ = ["BaseSettings"]
 
 
 class BaseSettings(_BaseSettings):
-
     model_config = SettingsConfigDict(
         alias_generator=AliasGenerator(
             # used during model_dumps

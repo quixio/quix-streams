@@ -54,5 +54,4 @@ This guide will assume you're using Visual Studio Code, but most of the guide is
 3. Ensure you don't have `quixstreams` installed using `python3 -m pip uninstall quixstreams` to avoid using that when testing
 4. By executing `python3 -m pip install --editable .` you will be able to use the source code as a module for local testing without having to install new versions
 5. Add commit pre-hook: `pre-commit install`
-6. Configure Black code formatter.
-7. Run test from project root with `pytest`
+6. Run test from project root with `pytest`

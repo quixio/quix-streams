@@ -19,7 +19,6 @@ from quixstreams.state import StateStoreManager
 from quixstreams.state.exceptions import StoreNotRegisteredError, StoreTransactionFailed
 from quixstreams.state.rocksdb import RocksDBPartitionTransaction
 from tests.utils import DummySink
-from quixstreams.sources.manager import SourceManager
 
 
 @pytest.fixture()
@@ -307,10 +306,13 @@ class TestCheckpoint:
 
         # Simulate a failed transaction
         tx = checkpoint.get_store_transaction("topic", 0)
-        with contextlib.suppress(ValueError), patch.object(
-            RocksDBPartitionTransaction,
-            "_serialize_key",
-            side_effect=ValueError("test"),
+        with (
+            contextlib.suppress(ValueError),
+            patch.object(
+                RocksDBPartitionTransaction,
+                "_serialize_key",
+                side_effect=ValueError("test"),
+            ),
         ):
             tx.set(key=key, value=value, prefix=prefix)
         assert tx.failed
@@ -423,7 +425,6 @@ class TestCheckpoint:
     def test_incomplete_flush(
         self, checkpoint_factory, consumer, state_manager_factory, rowproducer_mock
     ):
-
         state_manager = state_manager_factory(producer=rowproducer_mock)
         checkpoint = checkpoint_factory(
             consumer_=consumer, state_manager_=state_manager, producer_=rowproducer_mock

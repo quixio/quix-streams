@@ -1,3 +1,11 @@
 from .base import BatchingSink, SinkBatch, BaseSink
-from .exceptions import SinkBackpressureError as SinkBackpressureError
-from .manager import SinkManager as SinkManager
+from .exceptions import SinkBackpressureError
+from .manager import SinkManager
+
+__all__ = [
+    "BaseSink",
+    "BatchingSink",
+    "SinkBackpressureError",
+    "SinkBatch",
+    "SinkManager",
+]

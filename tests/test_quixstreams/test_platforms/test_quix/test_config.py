@@ -1,8 +1,6 @@
 import base64
 from contextlib import ExitStack
 from copy import deepcopy
-from os import getcwd
-from pathlib import Path
 from unittest.mock import patch, call, create_autospec, PropertyMock
 
 import pytest

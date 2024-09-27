@@ -140,7 +140,7 @@ class QuixPortalApiService:
                 return f.read()
 
     def get_auth_token_details(self, timeout: float = 30) -> dict:
-        return self.session.get(f"/auth/token/details", timeout=timeout).json()
+        return self.session.get("/auth/token/details", timeout=timeout).json()
 
     def get_workspace(
         self, workspace_id: Optional[str] = None, timeout: float = 30

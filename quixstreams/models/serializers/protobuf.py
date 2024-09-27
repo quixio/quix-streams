@@ -154,7 +154,6 @@ class ProtobufDeserializer(Deserializer):
         # conf dict with a single key: `use.deprecated.format`.
         self._schema_registry_deserializer = None
         if schema_registry_client_config:
-
             # The use.deprecated.format has been mandatory since Confluent Kafka version 1.8.2.
             # https://github.com/confluentinc/confluent-kafka-python/releases/tag/v1.8.2
             serialization_config = (

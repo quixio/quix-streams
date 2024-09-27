@@ -22,9 +22,9 @@ logger = logging.getLogger(__name__)
 IGNORED_KAFKA_ERRORS = (
     # This error seems to be thrown despite brokers being available.
     # Seems linked to `connections.max.idle.ms`.
-    KafkaError._ALL_BROKERS_DOWN,
+    KafkaError._ALL_BROKERS_DOWN,  # noqa: SLF001
     # Broker handle destroyed - common/typical behavior, often seen via AdminClient
-    KafkaError._DESTROY,
+    KafkaError._DESTROY,  # noqa: SLF001
 )
 
 

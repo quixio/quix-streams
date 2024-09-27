@@ -826,7 +826,6 @@ class TestStreamingDataframeStateful:
 
 
 class TestStreamingDataFrameTumblingWindow:
-
     def test_tumbling_window_define_from_milliseconds(
         self, dataframe_factory, state_manager
     ):
@@ -1687,7 +1686,6 @@ def add_n_df(n):
 
 class TestStreamingDataFrameBranching:
     def test_basic_branching(self, dataframe_factory):
-
         sdf = dataframe_factory().apply(lambda v: v + 1)
         sdf.apply(lambda v: v + 2)
         sdf.apply(lambda v: v + 3)
@@ -1718,11 +1716,11 @@ class TestStreamingDataFrameBranching:
 
         sdf = dataframe_factory().apply(add_n(120)).apply(div_n(2))  # 60
         sdf_2 = sdf.apply(div_n(3))  # 20
-        sdf_3 = sdf_2.apply(add_n(10)).apply(add_n(3))  # 33
-        sdf_4 = sdf_2.apply(add_n(24))  # 44
+        sdf_3 = sdf_2.apply(add_n(10)).apply(add_n(3))  # 33  # noqa: F841
+        sdf_4 = sdf_2.apply(add_n(24))  # 44  # noqa: F841
         sdf_2 = sdf_2.apply(add_n(2))  # 22
         sdf = sdf.apply(add_n(40))  # 100
-        sdf_5 = sdf.apply(div_n(2)).apply(add_n(5))  # 55
+        sdf_5 = sdf.apply(div_n(2)).apply(add_n(5))  # 55  # noqa: F841
         sdf = sdf.apply(div_n(100)).apply(add_n(10))  # 11
 
         _extras = {"key": b"key", "timestamp": 0, "headers": []}
@@ -1775,10 +1773,10 @@ class TestStreamingDataFrameBranching:
 
     def test_filter(self, dataframe_factory):
         sdf = dataframe_factory().apply(add_n(10))
-        sdf2 = sdf.apply(add_n(5)).filter(less_than(0)).apply(add_n(200))
-        sdf3 = sdf.apply(add_n(7)).filter(less_than(20)).apply(add_n(4))
+        sdf2 = sdf.apply(add_n(5)).filter(less_than(0)).apply(add_n(200))  # noqa: F841
+        sdf3 = sdf.apply(add_n(7)).filter(less_than(20)).apply(add_n(4))  # noqa: F841
         sdf = sdf.apply(add_n(30)).filter(less_than(50))
-        sdf4 = sdf.apply(add_n(60))
+        sdf4 = sdf.apply(add_n(60))  # noqa: F841
         sdf.apply(add_n(800))
 
         _extras = {"key": b"key", "timestamp": 0, "headers": []}
@@ -1790,12 +1788,11 @@ class TestStreamingDataFrameBranching:
         assert results == expected
 
     def test_filter_using_sdf_apply_and_col_select(self, dataframe_factory):
-
         sdf = dataframe_factory().apply(add_n(10))
-        sdf2 = sdf[sdf.apply(less_than(0))].apply(add_n(200))
-        sdf3 = sdf[sdf.apply(add_n(8)).apply(less_than(20))].apply(add_n(33))
+        sdf2 = sdf[sdf.apply(less_than(0))].apply(add_n(200))  # noqa: F841
+        sdf3 = sdf[sdf.apply(add_n(8)).apply(less_than(20))].apply(add_n(33))  # noqa: F841
         sdf = sdf[sdf.apply(add_n(30)).apply(less_than(50))].apply(add_n(77))
-        sdf4 = sdf.apply(add_n(60))
+        sdf4 = sdf.apply(add_n(60))  # noqa: F841
         sdf = sdf.apply(add_n(800))
 
         _extras = {"key": b"key", "timestamp": 0, "headers": []}
@@ -1807,10 +1804,10 @@ class TestStreamingDataFrameBranching:
 
     def test_filter_using_columns(self, dataframe_factory):
         sdf = dataframe_factory().apply(add_n_df(10))
-        sdf2 = sdf[sdf["v"] < 0].apply(add_n_df(200))
-        sdf3 = sdf[sdf["v"].apply(add_n(1)).apply(add_n(7)) < 20].apply(add_n_df(33))
+        sdf2 = sdf[sdf["v"] < 0].apply(add_n_df(200))  # noqa: F841
+        sdf3 = sdf[sdf["v"].apply(add_n(1)).apply(add_n(7)) < 20].apply(add_n_df(33))  # noqa: F841
         sdf = sdf[sdf["v"].apply(add_n(5)).apply(add_n(25)) < 50].apply(add_n_df(77))
-        sdf4 = sdf.apply(add_n_df(60))
+        sdf4 = sdf.apply(add_n_df(60))  # noqa: F841
         sdf = sdf.apply(add_n_df(800))
 
         _extras = {"key": b"key", "timestamp": 0, "headers": []}
@@ -1834,7 +1831,7 @@ class TestStreamingDataFrameBranching:
         """
         sdf = dataframe_factory().apply(add_n_df(10))
         sdf_filter = sdf["v"].apply(add_n(1)).apply(add_n(7)) < 20  # NOT a split
-        sdf2 = sdf[sdf_filter].apply(add_n_df(33))
+        sdf2 = sdf[sdf_filter].apply(add_n_df(33))  # noqa: F841
         sdf = sdf.apply(add_n_df(800))
 
         _extras = {"key": b"key", "timestamp": 0, "headers": []}
@@ -1858,7 +1855,7 @@ class TestStreamingDataFrameBranching:
         """
         sdf = dataframe_factory().apply(add_n_df(10))
         sdf_sum = sdf["v"].apply(add_n(1)) + 8  # NOT a split (no data cloning)
-        sdf2 = sdf[sdf["v"] + sdf_sum < 30].apply(add_n_df(33))
+        sdf2 = sdf[sdf["v"] + sdf_sum < 30].apply(add_n_df(33))  # noqa: F841
         sdf = sdf.apply(add_n_df(800))
 
         _extras = {"key": b"key", "timestamp": 0, "headers": []}
@@ -1909,7 +1906,7 @@ class TestStreamingDataFrameBranching:
         """
         sdf = dataframe_factory().apply(add_n(10))
         sdf_filter = sdf.apply(less_than(20))
-        sdf2 = sdf[sdf_filter].apply(add_n(33))
+        sdf2 = sdf[sdf_filter].apply(add_n(33))  # noqa: F841
         sdf = sdf.apply(add_n(800))
 
         _extras = {"key": b"key", "timestamp": 0, "headers": []}
@@ -1925,7 +1922,7 @@ class TestStreamingDataFrameBranching:
         """
         sdf = dataframe_factory().apply(add_n(10))
         sdf_filter = sdf.apply(less_than(20))
-        sdf2 = sdf[sdf_filter].apply(add_n(100))
+        sdf2 = sdf[sdf_filter].apply(add_n(100))  # noqa: F841
 
         with pytest.raises(
             InvalidOperation,
@@ -1985,7 +1982,7 @@ class TestStreamingDataFrameBranching:
             return wrapper
 
         sdf = dataframe_factory().apply(add_n_df(1))
-        sdf2 = sdf.apply(add_n_df(2)).update(mul_n(2))
+        sdf2 = sdf.apply(add_n_df(2)).update(mul_n(2))  # noqa: F841
         sdf3 = sdf.apply(add_n_df(3))
         sdf3.update(mul_n(3))
         sdf = sdf.update(mul_n(4)).apply(add_n_df(100))
@@ -2006,8 +2003,8 @@ class TestStreamingDataFrameBranching:
             return lambda value, key, timestamp, headers: timestamp + n
 
         sdf = dataframe_factory().apply(add_n(1))
-        sdf2 = sdf.apply(add_n(2)).set_timestamp(set_ts(3)).set_timestamp(set_ts(5))
-        sdf3 = sdf.apply(add_n(3))
+        sdf2 = sdf.apply(add_n(2)).set_timestamp(set_ts(3)).set_timestamp(set_ts(5))  # noqa: F841
+        sdf3 = sdf.apply(add_n(3))  # noqa: F841
         sdf = sdf.set_timestamp(set_ts(4)).apply(add_n(7))
 
         _extras = {"key": b"key", "timestamp": 0, "headers": []}
@@ -2075,7 +2072,7 @@ class TestStreamingDataFrameBranching:
         sdf3 = sdf.apply(add_n_df(7))
         sdf3["v"] = sdf3.apply(add_n_col(20))
         sdf["v"] = sdf.apply(add_n_df(25)).apply(add_n_col(55))
-        sdf4 = sdf.apply(add_n_df(100))
+        sdf4 = sdf.apply(add_n_df(100))  # noqa: F841
         sdf["v"] = sdf.apply(add_n_col(800))
 
         _extras = {"key": b"key", "timestamp": 0, "headers": []}

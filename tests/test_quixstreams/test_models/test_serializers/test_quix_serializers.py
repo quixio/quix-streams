@@ -453,7 +453,7 @@ class TestQuixTimeseriesSerializer:
             {"a": None, "b": None},  # all values are None
         ],
     )
-    def test_serialize_dict_empty_or_none(self, value):
+    def test_serialize_dict_empty_or_none_as_legacy_false(self, value):
         serializer = QuixTimeseriesSerializer(as_legacy=False)
         serialized = serializer(
             value, ctx=SerializationContext(topic="test", field=MessageField.VALUE)
@@ -474,7 +474,7 @@ class TestQuixTimeseriesSerializer:
             {"a": None, "b": None},  # all values are None
         ],
     )
-    def test_serialize_dict_empty_or_none(self, value):
+    def test_serialize_dict_empty_or_none_as_legacy_true(self, value):
         serializer = QuixTimeseriesSerializer(as_legacy=True)
         serialized = serializer(
             value, ctx=SerializationContext(topic="test", field=MessageField.VALUE)

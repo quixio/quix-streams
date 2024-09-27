@@ -400,7 +400,6 @@ class Stream:
         allow_expands: bool,
         allow_transforms: bool,
     ) -> VoidExecutor:
-
         functions = [node.func for node in tree]
 
         # Iterate over a reversed list of functions

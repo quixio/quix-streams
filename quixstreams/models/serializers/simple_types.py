@@ -1,5 +1,5 @@
 import functools
-from typing import Optional, Union, Mapping
+from typing import Union, Mapping
 
 from confluent_kafka.serialization import (
     StringDeserializer as _StringDeserializer,

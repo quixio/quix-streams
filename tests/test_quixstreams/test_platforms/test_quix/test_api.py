@@ -29,9 +29,9 @@ class TestApi:
         ws = "12345"
         api = QuixPortalApiService(portal_api="http://portal.com", auth_token="token")
         api.session = create_autospec(QuixPortalApiService.SessionWithUrlBase)
-        api.session.get(f"/workspaces/{ws}/certificates").content = (
-            zip_in_mem.getvalue()
-        )
+        api.session.get(
+            f"/workspaces/{ws}/certificates"
+        ).content = zip_in_mem.getvalue()
 
         result = api.get_workspace_certificate(ws)
         assert result == b"my cool cert stuff"

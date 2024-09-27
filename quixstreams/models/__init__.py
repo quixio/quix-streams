@@ -1,3 +1,4 @@
+# ruff: noqa: F403
 from .rows import *
 from .serializers import *
 from .timestamps import *

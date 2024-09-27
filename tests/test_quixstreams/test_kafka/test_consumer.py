@@ -369,9 +369,10 @@ class TestConsumerStoreOffsets:
             "value": b"test1",
         }
 
-        with consumer_factory(
-            auto_offset_reset="earliest"
-        ) as consumer, producer_factory() as producer:
+        with (
+            consumer_factory(auto_offset_reset="earliest") as consumer,
+            producer_factory() as producer,
+        ):
             consumer.subscribe(topics=[topic])
             # Produce a message
             producer.produce(
@@ -388,9 +389,10 @@ class TestConsumerStoreOffsets:
             consumer.store_offsets(message=msg)
 
         # Start new consumer and producer
-        with consumer_factory(
-            auto_offset_reset="latest"
-        ) as consumer, producer_factory() as producer:
+        with (
+            consumer_factory(auto_offset_reset="latest") as consumer,
+            producer_factory() as producer,
+        ):
             consumer.subscribe(topics=[topic])
             # Produce a new message
             producer.produce(
@@ -429,9 +431,12 @@ class TestConsumerStoreOffsets:
             "value": b"test1",
         }
 
-        with consumer_factory(
-            auto_offset_reset="earliest", auto_commit_enable=False
-        ) as consumer, producer_factory() as producer:
+        with (
+            consumer_factory(
+                auto_offset_reset="earliest", auto_commit_enable=False
+            ) as consumer,
+            producer_factory() as producer,
+        ):
             consumer.subscribe(topics=[topic])
             # Produce a message
             producer.produce(
@@ -477,9 +482,12 @@ class TestConsumerCommit:
             "value": b"test1",
         }
 
-        with consumer_factory(
-            auto_offset_reset="earliest", auto_commit_enable=False
-        ) as consumer, producer_factory() as producer:
+        with (
+            consumer_factory(
+                auto_offset_reset="earliest", auto_commit_enable=False
+            ) as consumer,
+            producer_factory() as producer,
+        ):
             consumer.subscribe(topics=[topic])
             # Produce a message
             producer.produce(
@@ -512,9 +520,12 @@ class TestConsumerCommit:
             "value": b"test1",
         }
 
-        with consumer_factory(
-            auto_offset_reset="earliest", auto_commit_enable=False
-        ) as consumer, producer_factory() as producer:
+        with (
+            consumer_factory(
+                auto_offset_reset="earliest", auto_commit_enable=False
+            ) as consumer,
+            producer_factory() as producer,
+        ):
             consumer.subscribe(topics=[topic])
             # Produce a message
             producer.produce(

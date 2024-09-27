@@ -7,7 +7,6 @@ from .base import BatchingSink, SinkBatch
 
 
 class CSVSink(BatchingSink):
-
     def __init__(
         self,
         path: str,

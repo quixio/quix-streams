@@ -84,7 +84,6 @@ class CoinbaseSource(Source):
 
 
 def main():
-
     # Initialize an Application with Kafka configuration
     app = Application(
         broker_address="localhost:9092",  # Specify your Kafka broker address here

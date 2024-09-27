@@ -9,7 +9,6 @@ from quixstreams.rowproducer import RowProducer
 
 
 class TestCSVSource:
-
     @pytest.fixture
     def producer(self):
         producer = MagicMock(spec=RowProducer)
