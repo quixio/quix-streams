@@ -68,23 +68,22 @@ class FixedTimeWindow:
         grace_ms = self._grace_ms
         default = self._aggregate_default
 
-        latest_timestamp = state.get_latest_timestamp()
         ranges = get_window_ranges(
             timestamp_ms=timestamp_ms,
             duration_ms=duration_ms,
             step_ms=self._step_ms,
         )
 
+        max_expired_window_start = state.get_latest_timestamp() - duration_ms - grace_ms
         updated_windows = []
         for start, end in ranges:
-            min_valid_window_end = latest_timestamp - self._grace_ms + 1
-            if end < min_valid_window_end:
+            if start <= max_expired_window_start:
                 ctx = message_context()
                 logger.warning(
                     f"Skipping window processing for expired window "
                     f"timestamp={timestamp_ms} "
                     f"window=[{start},{end}) "
-                    f"min_valid_window_end={min_valid_window_end} "
+                    f"max_expired_window_start={max_expired_window_start} "
                     f"partition={ctx.topic}[{ctx.partition}] "
                     f"offset={ctx.offset}"
                 )
