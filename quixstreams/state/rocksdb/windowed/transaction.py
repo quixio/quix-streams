@@ -118,11 +118,11 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         )
 
     def expire_windows(
-        self, duration_ms: int, prefix: bytes, grace_ms: int = 0
+        self, watermark: int, prefix: bytes
     ) -> Generator[Tuple[Tuple[int, int], Any], None, None]:
         """
-        Get a list of expired windows from RocksDB considering latest timestamp,
-        window size and grace period.
+        Get a list of expired windows from RocksDB up to the `watermark` timestamp.
+
         It marks the latest found window as expired in the expiration index, so
         calling this method multiple times will yield different results for the same
         "latest timestamp".
@@ -139,24 +139,19 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         :return: sorted list of tuples in format `((start, end), value)`
         """
 
-        latest_timestamp = self._latest_timestamp_ms
-        start_to = latest_timestamp - duration_ms - grace_ms
-        start_from = -1
-
         # Find the latest start timestamp of the expired windows for the given key
-        last_expired = self.get(
+        start_from = self.get(
             key=LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY,
             prefix=prefix,
             cf_name=LATEST_EXPIRED_WINDOW_CF_NAME,
+            default=-1,
         )
-        if last_expired is not None:
-            start_from = max(start_from, last_expired)
 
         # Use the latest expired timestamp to limit the iteration over
         # only those windows that have not been expired before
         expired_windows = self.get_windows(
             start_from_ms=start_from,
-            start_to_ms=start_to,
+            start_to_ms=watermark,
             prefix=prefix,
         )
 

@@ -57,18 +57,16 @@ class WindowedState(Protocol):
         ...
 
     def expire_windows(
-        self, duration_ms: int, grace_ms: int = 0
+        self, watermark: int
     ) -> Generator[Tuple[Tuple[int, int], Any], None, None]:
         """
-        Get a list of expired windows from RocksDB considering the current
-        latest timestamp, window duration and grace period.
+        Get a list of expired windows from RocksDB up to the `watermark` timestamp.
 
         It also marks the latest found window as expired in the expiration index, so
         calling this method multiple times will yield different results for the same
         "latest timestamp".
 
-        :param duration_ms: duration of the windows in milliseconds
-        :param grace_ms: grace period in milliseconds. Default - "0"
+        :param watermark: maximum expired window start
         """
         ...
 
@@ -175,19 +173,17 @@ class WindowedPartitionTransaction(Protocol):
         ...
 
     def expire_windows(
-        self, duration_ms: int, prefix: bytes, grace_ms: int = 0
+        self, watermark: int, prefix: bytes
     ) -> Generator[Tuple[Tuple[int, int], Any], None, None]:
         """
-        Get a list of expired windows from RocksDB considering the current
-        latest timestamp, window duration and grace period.
+        Get a list of expired windows from RocksDB up to the `watermark` timestamp.
 
         It also marks the latest found window as expired in the expiration index, so
         calling this method multiple times will yield different results for the same
         "latest timestamp".
 
-        :param duration_ms: duration of the windows in milliseconds
+        :param watermark: maximum expired window start
         :param prefix: a key prefix
-        :param grace_ms: grace period in milliseconds. Default - "0"
         """
         ...
 

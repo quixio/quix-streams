@@ -31,16 +31,19 @@ def test_update_window(transaction_state):
 
 
 def test_expire_windows(transaction_state):
+    duration_ms = 10
+
     with transaction_state() as state:
         state.update_window(start_ms=0, end_ms=10, value=1, timestamp_ms=2)
         state.update_window(start_ms=10, end_ms=20, value=2, timestamp_ms=10)
 
     with transaction_state() as state:
         state.update_window(start_ms=20, end_ms=30, value=3, timestamp_ms=20)
-        expired = list(state.expire_windows(duration_ms=10))
+        watermark = state.get_latest_timestamp() - duration_ms
+        expired = list(state.expire_windows(watermark=watermark))
         # "expire_windows" must update the expiration index so that the same
         # windows are not expired twice
-        assert not list(state.expire_windows(duration_ms=10))
+        assert not list(state.expire_windows(watermark=watermark))
 
     assert len(expired) == 2
     assert expired == [
@@ -55,6 +58,8 @@ def test_expire_windows(transaction_state):
 
 
 def test_same_keys_in_db_and_update_cache(transaction_state):
+    duration_ms = 10
+
     with transaction_state() as state:
         state.update_window(start_ms=0, end_ms=10, value=1, timestamp_ms=2)
 
@@ -63,7 +68,8 @@ def test_same_keys_in_db_and_update_cache(transaction_state):
         state.update_window(start_ms=0, end_ms=10, value=3, timestamp_ms=8)
 
         state.update_window(start_ms=10, end_ms=20, value=2, timestamp_ms=10)
-        expired = list(state.expire_windows(duration_ms=10))
+        watermark = state.get_latest_timestamp() - duration_ms
+        expired = list(state.expire_windows(watermark=watermark))
 
         # Value from the cache takes precedence over the value in the db
         assert expired == [((0, 10), 3)]
