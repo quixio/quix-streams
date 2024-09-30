@@ -105,11 +105,10 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         self.delete(key=key, prefix=prefix)
 
     def expire_windows(
-        self, duration_ms: int, prefix: bytes, grace_ms: int = 0
+        self, watermark: int, prefix: bytes
     ) -> list[tuple[tuple[int, int], Any]]:
         """
-        Get all expired windows from RocksDB based on the latest timestamp,
-        window duration, and an optional grace period.
+        Get all expired windows from RocksDB up to the specified `watermark` timestamp.
 
         This method marks the latest found window as expired in the expiration index,
         so consecutive calls may yield different results for the same "latest timestamp".
@@ -123,14 +122,11 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         - Finally, it updates the expiration cache with the start time of the latest
           windows found.
 
-        :param duration_ms: The duration of each window in milliseconds.
+        :param watermark: The timestamp up to which windows are considered expired, inclusive.
         :param prefix: The key prefix for filtering windows.
-        :param grace_ms: An optional grace period in milliseconds to delay expiration.
-            Defaults to 0, meaning no grace period is applied.
-        :return: A generator that yields sorted tuples in the format `((start, end), value)`.
+        :return: A sorted list of tuples in the format `((start, end), value)`.
         """
         latest_timestamp = self.get_latest_timestamp(prefix=prefix)
-        start_to = latest_timestamp - duration_ms - grace_ms
         start_from = -1
 
         # Find the latest start timestamp of the expired windows for the given key
@@ -140,12 +136,10 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
 
         # Use the latest expired timestamp to limit the iteration over
         # only those windows that have not been expired before
-        expired_windows = list(
-            self.get_windows(
-                start_from_ms=start_from,
-                start_to_ms=start_to,
-                prefix=prefix,
-            )
+        expired_windows = self.get_windows(
+            start_from_ms=start_from,
+            start_to_ms=watermark,
+            prefix=prefix,
         )
         if expired_windows:
             # Save the start of the latest expired window to the expiration index

@@ -78,23 +78,18 @@ class WindowedTransactionState(WindowedState):
 
         return self._transaction.get_latest_timestamp(prefix=self._prefix)
 
-    def expire_windows(
-        self, duration_ms: int, grace_ms: int = 0
-    ) -> list[tuple[tuple[int, int], Any]]:
+    def expire_windows(self, watermark: int) -> list[tuple[tuple[int, int], Any]]:
         """
-        Get all expired windows from RocksDB based on the latest timestamp,
-        window duration, and an optional grace period.
+        Get all expired windows from RocksDB up to the specified `watermark` timestamp.
 
         This method marks the latest found window as expired in the expiration index,
         so consecutive calls may yield different results for the same "latest timestamp".
 
-        :param duration_ms: The duration of each window in milliseconds.
-        :param grace_ms: An optional grace period in milliseconds to delay expiration.
-            Defaults to 0, meaning no grace period is applied.
+        :param watermark: The timestamp up to which windows are considered expired, inclusive.
         :return: A sorted list of tuples in the format `((start, end), value)`.
         """
         return self._transaction.expire_windows(
-            duration_ms=duration_ms, grace_ms=grace_ms, prefix=self._prefix
+            watermark=watermark, prefix=self._prefix
         )
 
     def get_windows(
