@@ -6,7 +6,11 @@ from rocksdict import WriteBatch, ReadOptions, RdictItems  # type: ignore
 from quixstreams.state.serialization import int_from_int64_bytes, int_to_int64_bytes
 from quixstreams.state.recovery import ChangelogProducer
 
-from .metadata import LATEST_EXPIRED_WINDOW_CF_NAME, LATEST_TIMESTAMP_KEY
+from .metadata import (
+    LATEST_DELETED_WINDOW_CF_NAME,
+    LATEST_EXPIRED_WINDOW_CF_NAME,
+    LATEST_TIMESTAMP_KEY,
+)
 from .transaction import WindowedRocksDBPartitionTransaction
 from .. import ColumnFamilyDoesNotExist
 from ..metadata import METADATA_CF_NAME
@@ -38,6 +42,7 @@ class WindowedRocksDBStorePartition(RocksDBStorePartition):
             path=path, options=options, changelog_producer=changelog_producer
         )
         self._latest_timestamp_ms = self._get_latest_timestamp_from_db()
+        self._ensure_column_family(LATEST_DELETED_WINDOW_CF_NAME)
         self._ensure_column_family(LATEST_EXPIRED_WINDOW_CF_NAME)
 
     def iter_items(

@@ -1603,11 +1603,14 @@ class TestApplicationRecovery:
                         topic=topic.name, store_name=actual_store_name
                     )
 
-                    # in this test, each expiration check only deletes one window,
-                    # simplifying the offset counting.
+                    # In this test, each expiration check deletes only one window, which
+                    # simplifies the offset counting. The offset is multiplied by 3
+                    # because the changelog receives two additional helper metadata keys:
+                    # __expired_start_gt__
+                    # __deleted_start_gt__
                     expected_offset = (
                         sum(expected_window_updates[p_num].values())
-                        + 2 * len(expected_expired_windows[p_num])
+                        + 3 * len(expected_expired_windows[p_num])
                         - 1
                     )
                     if processing_guarantee == "exactly-once":

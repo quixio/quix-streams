@@ -43,7 +43,7 @@ class WindowedTransactionState(WindowedState):
         value: Any,
         timestamp_ms: int,
         window_timestamp_ms: Optional[int] = None,
-    ):
+    ) -> None:
         """
         Set a value for the window.
 
@@ -110,4 +110,18 @@ class WindowedTransactionState(WindowedState):
             start_to_ms=start_to_ms,
             prefix=self._prefix,
             backwards=backwards,
+        )
+
+    def delete_windows(self, watermark: int) -> None:
+        """
+        Delete windows from RocksDB up to the specified `watermark` timestamp.
+
+        This method removes all window entries that have a start time less than or equal to the given
+        `watermark`. It ensures that expired data is cleaned up efficiently without affecting
+        unexpired windows.
+
+        :param watermark: The timestamp up to which windows should be deleted, inclusive.
+        """
+        return self._transaction.delete_windows(
+            watermark=watermark, prefix=self._prefix
         )

@@ -70,6 +70,18 @@ class WindowedState(Protocol):
         """
         ...
 
+    def delete_windows(self, watermark: int) -> None:
+        """
+        Delete windows from RocksDB up to the specified `watermark` timestamp.
+
+        This method removes all window entries that have a start time less than or equal to the given
+        `watermark`. It ensures that expired data is cleaned up efficiently without affecting
+        unexpired windows.
+
+        :param watermark: The timestamp up to which windows should be deleted, inclusive.
+        """
+        ...
+
     def get_windows(
         self, start_from_ms: int, start_to_ms: int, backwards: bool = False
     ) -> Generator[Tuple[Tuple[int, int], Any], None, None]:
@@ -191,6 +203,19 @@ class WindowedPartitionTransaction(Protocol):
         :param watermark: The timestamp up to which windows are considered expired, inclusive.
         :param prefix: The key prefix for filtering windows.
         :return: A generator that yields sorted tuples in the format `((start, end), value)`.
+        """
+        ...
+
+    def delete_windows(self, watermark: int, prefix: bytes) -> None:
+        """
+        Delete windows from RocksDB up to the specified `watermark` timestamp.
+
+        This method removes all window entries that have a start time less than or equal to the given
+        `watermark`. It ensures that expired data is cleaned up efficiently without affecting
+        unexpired windows.
+
+        :param watermark: The timestamp up to which windows should be deleted, inclusive.
+        :param prefix: The key prefix used to identify and filter relevant windows.
         """
         ...
 
