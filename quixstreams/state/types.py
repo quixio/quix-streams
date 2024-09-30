@@ -57,18 +57,15 @@ class WindowedState(Protocol):
         ...
 
     def expire_windows(
-        self, duration_ms: int, grace_ms: int = 0
+        self, watermark: int
     ) -> Generator[Tuple[Tuple[int, int], Any], None, None]:
         """
-        Get all expired windows from RocksDB based on the latest timestamp,
-        window duration, and an optional grace period.
+        Get all expired windows from RocksDB up to the specified `watermark` timestamp.
 
         This method marks the latest found window as expired in the expiration index,
         so consecutive calls may yield different results for the same "latest timestamp".
 
-        :param duration_ms: The duration of each window in milliseconds.
-        :param grace_ms: An optional grace period in milliseconds to delay expiration.
-            Defaults to 0, meaning no grace period is applied.
+        :param watermark: The timestamp up to which windows are considered expired, inclusive.
         :return: A generator that yields sorted tuples in the format `((start, end), value)`.
         """
         ...
@@ -183,19 +180,16 @@ class WindowedPartitionTransaction(Protocol):
         ...
 
     def expire_windows(
-        self, duration_ms: int, prefix: bytes, grace_ms: int = 0
+        self, watermark: int, prefix: bytes
     ) -> Generator[Tuple[Tuple[int, int], Any], None, None]:
         """
-        Get all expired windows from RocksDB based on the latest timestamp,
-        window duration, and an optional grace period.
+        Get all expired windows from RocksDB up to the specified `watermark` timestamp.
 
         This method marks the latest found window as expired in the expiration index,
         so consecutive calls may yield different results for the same "latest timestamp".
 
-        :param duration_ms: The duration of each window in milliseconds.
+        :param watermark: The timestamp up to which windows are considered expired, inclusive.
         :param prefix: The key prefix for filtering windows.
-        :param grace_ms: An optional grace period in milliseconds to delay expiration.
-            Defaults to 0, meaning no grace period is applied.
         :return: A generator that yields sorted tuples in the format `((start, end), value)`.
         """
         ...
