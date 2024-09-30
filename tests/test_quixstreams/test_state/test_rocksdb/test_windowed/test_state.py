@@ -52,8 +52,8 @@ def test_expire_windows(transaction_state):
     ]
 
     with transaction_state() as state:
-        assert state.get_window(start_ms=0, end_ms=10) is None
-        assert state.get_window(start_ms=10, end_ms=20) is None
+        assert state.get_window(start_ms=0, end_ms=10) == 1
+        assert state.get_window(start_ms=10, end_ms=20) == 2
         assert state.get_window(start_ms=20, end_ms=30) == 3
 
 

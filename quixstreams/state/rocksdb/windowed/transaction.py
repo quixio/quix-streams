@@ -12,7 +12,12 @@ from quixstreams.state.serialization import (
 from quixstreams.state.base.transaction import PartitionTransaction
 from quixstreams.state.exceptions import InvalidChangelogOffset
 
-from .metadata import LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY, LATEST_EXPIRED_WINDOW_CF_NAME
+from .metadata import (
+    LATEST_DELETED_WINDOW_CF_NAME,
+    LATEST_DELETED_WINDOW_TIMESTAMP_KEY,
+    LATEST_EXPIRED_WINDOW_CF_NAME,
+    LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY,
+)
 from .serialization import encode_window_key, encode_window_prefix, parse_window_key
 from .state import WindowedTransactionState
 
@@ -158,8 +163,6 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         last_expired__gt = None
         for (start, end), aggregated in expired_windows:
             last_expired__gt = start
-            # Delete expired window from the state
-            self.delete_window(start, end, prefix=prefix)
             yield (start, end), aggregated
 
         # Save the start of the latest expired window to the expiration index
@@ -169,6 +172,37 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
                 value=last_expired__gt,
                 prefix=prefix,
                 cf_name=LATEST_EXPIRED_WINDOW_CF_NAME,
+            )
+
+    def delete_windows(self, watermark: int, prefix: bytes) -> None:
+        # TODO: docstring
+        # TODO: tests
+
+        start_from = self.get(
+            key=LATEST_DELETED_WINDOW_TIMESTAMP_KEY,
+            prefix=prefix,
+            cf_name=LATEST_DELETED_WINDOW_CF_NAME,
+            default=-1,
+        )
+
+        windows = self.get_windows(
+            start_from_ms=start_from,
+            start_to_ms=watermark,
+            prefix=prefix,
+        )
+
+        last_deleted__gt = None
+        for (start, end), _ in windows:
+            last_deleted__gt = start
+            self.delete_window(start, end, prefix=prefix)
+
+        # Save the start of the latest deleted window to the deletion index
+        if last_deleted__gt:
+            self.set(
+                key=LATEST_DELETED_WINDOW_TIMESTAMP_KEY,
+                value=last_deleted__gt,
+                prefix=prefix,
+                cf_name=LATEST_DELETED_WINDOW_CF_NAME,
             )
 
     def _serialize_key(self, key: Any, prefix: bytes) -> bytes:

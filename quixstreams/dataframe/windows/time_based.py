@@ -106,6 +106,7 @@ class FixedTimeWindow:
             expired_windows.append(
                 {"start": start, "end": end, "value": self._merge_func(aggregated)}
             )
+        state.delete_windows(watermark=watermark)
         return updated_windows, expired_windows
 
     def final(self) -> "StreamingDataFrame":

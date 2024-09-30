@@ -101,3 +101,8 @@ class WindowedTransactionState(WindowedState):
             prefix=self._prefix,
             backwards=backwards,
         )
+
+    def delete_windows(self, watermark: int) -> None:
+        return self._transaction.delete_windows(
+            watermark=watermark, prefix=self._prefix
+        )

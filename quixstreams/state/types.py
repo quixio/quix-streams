@@ -70,6 +70,10 @@ class WindowedState(Protocol):
         """
         ...
 
+    def delete_windows(self, watermark: int) -> None:
+        # TODO: docstring
+        ...
+
     def get_windows(
         self, start_from_ms: int, start_to_ms: int, backwards: bool = False
     ) -> Generator[Tuple[Tuple[int, int], Any], None, None]:
@@ -185,6 +189,10 @@ class WindowedPartitionTransaction(Protocol):
         :param watermark: maximum expired window start
         :param prefix: a key prefix
         """
+        ...
+
+    def delete_windows(self, watermark: int, prefix: bytes) -> None:
+        # TODO: docstring
         ...
 
     def get_windows(

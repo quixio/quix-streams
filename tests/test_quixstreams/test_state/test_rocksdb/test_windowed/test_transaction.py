@@ -74,8 +74,8 @@ class TestWindowedRocksDBPartitionTransaction:
         ]
 
         with store.start_partition_transaction(0) as tx:
-            assert tx.get_window(start_ms=0, end_ms=10, prefix=prefix) is None
-            assert tx.get_window(start_ms=10, end_ms=20, prefix=prefix) is None
+            assert tx.get_window(start_ms=0, end_ms=10, prefix=prefix) == 1
+            assert tx.get_window(start_ms=10, end_ms=20, prefix=prefix) == 2
             assert tx.get_window(start_ms=20, end_ms=30, prefix=prefix) == 3
 
     def test_expire_windows_cached(self, windowed_rocksdb_store_factory):
@@ -108,8 +108,8 @@ class TestWindowedRocksDBPartitionTransaction:
                 ((0, 10), 1),
                 ((10, 20), 2),
             ]
-            assert tx.get_window(start_ms=0, end_ms=10, prefix=prefix) is None
-            assert tx.get_window(start_ms=10, end_ms=20, prefix=prefix) is None
+            assert tx.get_window(start_ms=0, end_ms=10, prefix=prefix) == 1
+            assert tx.get_window(start_ms=10, end_ms=20, prefix=prefix) == 2
             assert tx.get_window(start_ms=20, end_ms=30, prefix=prefix) == 3
 
     def test_expire_windows_empty(self, windowed_rocksdb_store_factory):
