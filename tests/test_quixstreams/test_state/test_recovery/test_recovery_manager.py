@@ -7,6 +7,8 @@ from quixstreams.kafka import Consumer
 from quixstreams.models import TopicManager, TopicConfig
 from quixstreams.state.exceptions import InvalidStoreChangelogOffset
 from quixstreams.state.metadata import CHANGELOG_CF_MESSAGE_HEADER
+from quixstreams.state.base import StorePartition
+from quixstreams.state.manager import StoreTypes
 from quixstreams.state.rocksdb import RocksDBStorePartition
 from tests.utils import ConfluentKafkaMessageStub
 
@@ -21,6 +23,7 @@ class TestRecoveryManager:
 
         make_changelog.assert_called_with(topic_name=topic, store_name=store_name)
 
+    @pytest.mark.parametrize("store_type", StoreTypes, indirect=True)
     def test_assign_partition(
         self, state_manager_factory, recovery_manager_factory, topic_manager_factory
     ):
@@ -121,7 +124,7 @@ class TestRecoveryManager:
 
         # Mock StorePartition
         changelog_offset = 22
-        store_partition = MagicMock(spec_set=RocksDBStorePartition)
+        store_partition = MagicMock(spec_set=StorePartition)
         store_partition.get_changelog_offset.return_value = changelog_offset
 
         recovery_manager = recovery_manager_factory(
@@ -174,7 +177,7 @@ class TestRecoveryManager:
         )
 
         # Assign first partition that needs recovery
-        store_partition = MagicMock(spec_set=RocksDBStorePartition)
+        store_partition = MagicMock(spec_set=StorePartition)
         consumer.get_watermark_offsets.return_value = (lowwater, highwater)
         store_partition.get_changelog_offset.return_value = changelog_offset
         recovery_manager.assign_partition(
@@ -191,7 +194,7 @@ class TestRecoveryManager:
         assert recovery_manager.recovering
 
         # Assign second partition that also needs recovery
-        store_partition = MagicMock(spec_set=RocksDBStorePartition)
+        store_partition = MagicMock(spec_set=StorePartition)
         store_partition.get_changelog_offset.return_value = 5
         recovery_manager.assign_partition(
             topic=topic_name,
@@ -243,7 +246,7 @@ class TestRecoveryManager:
         )
 
         # Assign partitions that need recovery
-        store_partition = MagicMock(spec_set=RocksDBStorePartition)
+        store_partition = MagicMock(spec_set=StorePartition)
         consumer.get_watermark_offsets.return_value = (lowwater, highwater)
         store_partition.get_changelog_offset.return_value = changelog_offset
         recovery_manager.assign_partition(
@@ -287,8 +290,9 @@ class TestRecoveryManager:
         recovery_manager.revoke_partition(partition_num=0)
         assert not consumer.incremental_unassign.call_count
 
+    @pytest.mark.parametrize("store_type", StoreTypes, indirect=True)
     def test_do_recovery(
-        self, recovery_manager_factory, topic_manager_factory, rocksdb_partition
+        self, recovery_manager_factory, topic_manager_factory, store_partition
     ):
         """
         Test that RecoveryManager.do_recovery():
@@ -340,7 +344,7 @@ class TestRecoveryManager:
             topic=topic_name,
             partition=0,
             committed_offset=-1001,
-            store_partitions={store_name: rocksdb_partition},
+            store_partitions={store_name: store_partition},
         )
 
         # Trigger a recovery

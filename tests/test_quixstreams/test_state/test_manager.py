@@ -10,6 +10,7 @@ from quixstreams.state.exceptions import (
     PartitionStoreIsUsed,
     WindowedStoreAlreadyRegisteredError,
 )
+from quixstreams.state import StoreTypes
 from tests.utils import TopicPartitionStub
 
 
@@ -101,7 +102,8 @@ class TestStateStoreManager:
         state_manager.clear_stores()
         assert not state_manager.stores
 
-    def test_clear_stores(self, state_manager):
+    @pytest.mark.parametrize("store_type", [StoreTypes.ROCKSDB], indirect=True)
+    def test_clear_rocksdb_stores(self, state_manager):
         # Register stores
         state_manager.register_store("topic1", store_name="store1")
         state_manager.register_store("topic1", store_name="extra_store")

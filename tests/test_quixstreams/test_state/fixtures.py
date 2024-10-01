@@ -1,13 +1,24 @@
 import uuid
 from typing import Optional
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, PropertyMock
 
 import pytest
+from quixstreams.state.base import StorePartition
 
 from quixstreams.kafka import Consumer
 from quixstreams.models import TopicManager
-from quixstreams.state.recovery import RecoveryPartition, RecoveryManager
-from quixstreams.state.base import StorePartition
+from quixstreams.state.recovery import (
+    RecoveryPartition,
+    RecoveryManager,
+    ChangelogProducerFactory,
+    ChangelogProducer,
+)
+from quixstreams.state.manager import StoreTypes
+from quixstreams.state.rocksdb import (
+    RocksDBStore,
+    RocksDBStorePartition,
+    RocksDBOptions,
+)
 
 
 @pytest.fixture()
@@ -45,3 +56,80 @@ def recovery_partition_factory():
         return recovery_partition
 
     return factory
+
+
+@pytest.fixture(params=[StoreTypes.ROCKSDB])
+def store_type(request):
+    return request.param
+
+
+def rocksdb_store_factory(tmp_path):
+    def factory(
+        topic: Optional[str] = None,
+        name: str = "default",
+        changelog_producer_factory: Optional[ChangelogProducerFactory] = None,
+    ) -> RocksDBStore:
+        topic = topic or str(uuid.uuid4())
+        return RocksDBStore(
+            topic=topic,
+            name=name,
+            base_dir=str(tmp_path),
+            changelog_producer_factory=changelog_producer_factory,
+        )
+
+    return factory
+
+
+@pytest.fixture()
+def store_factory(store_type, tmp_path):
+    if store_type == StoreTypes.ROCKSDB:
+        return rocksdb_store_factory(tmp_path)
+    else:
+        raise ValueError(f"invalid store type {store_type}")
+
+
+@pytest.fixture()
+def store(store_factory):
+    store = store_factory()
+    yield store
+    store.close()
+
+
+def rocksdb_partition_factory(tmp_path, changelog_producer_mock):
+    def factory(
+        name: str = "db",
+        options: Optional[RocksDBOptions] = None,
+        changelog_producer: Optional[ChangelogProducer] = None,
+    ) -> RocksDBStorePartition:
+        path = (tmp_path / name).as_posix()
+        _options = options or RocksDBOptions(open_max_retries=0, open_retry_backoff=3.0)
+        return RocksDBStorePartition(
+            path,
+            changelog_producer=changelog_producer or changelog_producer_mock,
+            options=_options,
+        )
+
+    return factory
+
+
+@pytest.fixture()
+def store_partition_factory(store_type, tmp_path, changelog_producer_mock):
+    if store_type == StoreTypes.ROCKSDB:
+        return rocksdb_partition_factory(tmp_path, changelog_producer_mock)
+    else:
+        raise ValueError(f"invalid store type {store_type}")
+
+
+@pytest.fixture()
+def store_partition(store_partition_factory) -> StorePartition:
+    partition = store_partition_factory()
+    yield partition
+    partition.close()
+
+
+@pytest.fixture()
+def changelog_producer_mock():
+    producer = MagicMock(spec_set=ChangelogProducer)
+    type(producer).changelog_name = PropertyMock(return_value="test-changelog-topic")
+    type(producer).partition = PropertyMock(return_value=0)
+    return producer
