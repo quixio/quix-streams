@@ -318,6 +318,7 @@ def app_factory(kafka_container, random_consumer_group, tmp_path, store_type):
             topic_manager=topic_manager,
             processing_guarantee=processing_guarantee,
             request_timeout=request_timeout,
+            state_store_type=store_type,
         )
 
     with patch(

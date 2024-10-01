@@ -125,6 +125,7 @@ class Application:
         request_timeout: float = 30,
         topic_create_timeout: float = 60,
         processing_guarantee: ProcessingGuarantee = "at-least-once",
+        state_store_type: StoreTypes = StoreTypes.ROCKSDB,
     ):
         """
         :param broker_address: Connection settings for Kafka.
@@ -183,6 +184,8 @@ class Application:
         :param request_timeout: timeout (seconds) for REST-based requests
         :param topic_create_timeout: timeout (seconds) for topic create finalization
         :param processing_guarantee: Use "exactly-once" or "at-least-once" processing.
+        :param state_store_type: Default backend used for storing the state.
+            Default: RocksDB
 
         <br><br>***Error Handlers***<br>
         To handle errors, `Application` accepts callbacks triggered when
@@ -327,6 +330,7 @@ class Application:
             rocksdb_options=self._config.rocksdb_options,
             producer=producer,
             recovery_manager=recovery_manager,
+            default_store_type=state_store_type,
         )
 
         self._source_manager = SourceManager()

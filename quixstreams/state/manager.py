@@ -1,5 +1,6 @@
 import logging
 import shutil
+import enum
 from pathlib import Path
 from typing import Dict, List, Optional, Type, Union, get_args
 
@@ -23,6 +24,10 @@ DEFAULT_STATE_STORE_NAME = "default"
 
 StoreTypes = Union[Type[RocksDBStore]]
 SUPPORTED_STORES = get_args(StoreTypes)
+
+
+class StoreTypes(enum.Enum):
+    ROCKSDB = 0
 
 
 class StateStoreManager:
