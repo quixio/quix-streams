@@ -1,6 +1,6 @@
 import pytest
 
-from quixstreams.state.rocksdb.metadata import (
+from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER,
 )

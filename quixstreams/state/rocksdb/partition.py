@@ -5,28 +5,23 @@ from typing import Any, Union, Optional, List, Dict
 from rocksdict import WriteBatch, Rdict, ColumnFamily, AccessType
 
 from quixstreams.models import ConfluentKafkaMessageProto
-from quixstreams.utils.json import loads as json_loads
+from quixstreams.state.metadata import DELETED
 from quixstreams.state.recovery import ChangelogProducer
-from quixstreams.state.types import (
-    StorePartition,
+from quixstreams.state.base import StorePartition
+from quixstreams.state.serialization import (
+    int_from_int64_bytes,
+    int_to_int64_bytes,
 )
 from .exceptions import (
     ColumnFamilyAlreadyExists,
     ColumnFamilyDoesNotExist,
-    ColumnFamilyHeaderMissing,
 )
 from .metadata import (
     METADATA_CF_NAME,
     PROCESSED_OFFSET_KEY,
     CHANGELOG_OFFSET_KEY,
-    CHANGELOG_CF_MESSAGE_HEADER,
-    CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER,
 )
 from .options import RocksDBOptions
-from .serialization import (
-    int_from_int64_bytes,
-    int_to_int64_bytes,
-)
 from .transaction import (
     RocksDBPartitionTransaction,
 )
@@ -60,6 +55,7 @@ class RocksDBStorePartition(StorePartition):
         options: Optional[RocksDBOptionsType] = None,
         changelog_producer: Optional[ChangelogProducer] = None,
     ):
+        super().__init__()
         self._path = path
         self._options = options or RocksDBOptions()
         self._rocksdb_options = self._options.to_options()
@@ -76,10 +72,10 @@ class RocksDBStorePartition(StorePartition):
         self,
     ) -> RocksDBPartitionTransaction:
         """
-        Create a new `RocksDBTransaction` object.
-        Using `RocksDBTransaction` is a recommended way for accessing the data.
+        Create a new `RocksDBPartitionTransaction` object.
+        Using `RocksDBPartitionTransaction` is a recommended way for accessing the data.
 
-        :return: an instance of `RocksDBTransaction`
+        :return: an instance of `RocksDBPartitionTransaction`
         """
         return RocksDBPartitionTransaction(
             partition=self,
@@ -97,36 +93,14 @@ class RocksDBStorePartition(StorePartition):
             int_to_int64_bytes(changelog_offset),
             self.get_column_family_handle(METADATA_CF_NAME),
         )
-        self.write(batch)
+        self._write(batch)
 
-    def _should_apply_changelog(
-        self, headers: Dict[str, bytes], committed_offset: int
-    ) -> bool:
-        """
-        Determine whether the changelog update should be skipped.
-
-        :param headers: changelog message headers
-        :param committed_offset: latest committed offset of the source topic partition
-        :return: True if update should be applied, else False.
-        """
-        # Parse the processed topic-partition-offset info from the changelog message
-        # headers to determine whether the update should be applied or skipped.
-        # It can be empty if the message was produced by the older version of the lib.
-        processed_offset_header = headers.get(
-            CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER, b"null"
-        )
-        processed_offset = json_loads(processed_offset_header)
-        if processed_offset is not None:
-            # Skip recovering from the message if its processed offset is ahead of the
-            # current committed offset.
-            # This way it will recover to a consistent state if the checkpointing code
-            # produced the changelog messages but failed to commit
-            # the source topic offset.
-            return processed_offset < committed_offset
-        return True
-
-    def recover_from_changelog_message(
-        self, changelog_message: ConfluentKafkaMessageProto, committed_offset: int
+    def _recover_from_changelog_message(
+        self,
+        changelog_message: ConfluentKafkaMessageProto,
+        cf_name: str,
+        processed_offset: Optional[int],
+        committed_offset: int,
     ):
         """
         Updates state from a given changelog message.
@@ -143,21 +117,11 @@ class RocksDBStorePartition(StorePartition):
         :param changelog_message: A raw Confluent message read from a changelog topic.
         :param committed_offset: latest committed offset for the partition
         """
-        headers = dict(changelog_message.headers() or ())
-        # Parse the column family name from message headers
-        cf_name = headers.get(CHANGELOG_CF_MESSAGE_HEADER, b"").decode()
-        if not cf_name:
-            raise ColumnFamilyHeaderMissing(
-                f"Header '{CHANGELOG_CF_MESSAGE_HEADER}' missing from changelog message"
-            )
-        cf_handle = self.get_column_family_handle(cf_name)
-
         batch = WriteBatch(raw_mode=True)
-        # Determine whether the update should be applied or skipped based on the
-        # latest committed offset and processed offset from the changelog message header
-        if self._should_apply_changelog(
-            headers=headers, committed_offset=committed_offset
-        ):
+        if self._should_apply_changelog(processed_offset, committed_offset):
+            cf_handle = self.get_column_family_handle(cf_name)
+            # Determine whether the update should be applied or skipped based on the
+            # latest committed offset and processed offset from the changelog message header
             key = changelog_message.key()
             if value := changelog_message.value():
                 batch.put(key, value, cf_handle)
@@ -166,17 +130,60 @@ class RocksDBStorePartition(StorePartition):
 
         self._changelog_recover_flush(changelog_message.offset(), batch)
 
-    def set_changelog_offset(self, changelog_offset: int):
+    def write(
+        self,
+        data: Dict,
+        processed_offset: Optional[int],
+        changelog_offset: Optional[int],
+        batch: Optional[WriteBatch] = None,
+    ):
         """
-        Set the changelog offset based on a message (usually an "offset-only" message).
+        Write data to RocksDB
 
-        Used during recovery.
-
-        :param changelog_offset: A changelog offset
+        :param data: The modified data
+        :param processed_offset: The offset processed to generate the data.
+        :param changelog_offset: The changelog message offset of the data.
         """
-        self._changelog_recover_flush(changelog_offset, WriteBatch(raw_mode=True))
+        if batch is None:
+            batch = WriteBatch(raw_mode=True)
 
-    def write(self, batch: WriteBatch):
+        meta_cf_handle = self.get_column_family_handle(METADATA_CF_NAME)
+        # Iterate over the transaction update cache
+        for cf_name, cf_update_cache in data.items():
+            cf_handle = self.get_column_family_handle(cf_name)
+            for _prefix, prefix_update_cache in cf_update_cache.items():
+                for key, value in prefix_update_cache.items():
+                    # Apply changes to the Writebatch
+                    if value is DELETED:
+                        batch.delete(key, cf_handle)
+                    else:
+                        batch.put(key, value, cf_handle)
+
+        # Save the latest processed input topic offset
+        if processed_offset is not None:
+            batch.put(
+                PROCESSED_OFFSET_KEY,
+                int_to_int64_bytes(processed_offset),
+                meta_cf_handle,
+            )
+        # Save the latest changelog topic offset to know where to recover from
+        # It may be None if changelog topics are disabled
+        if changelog_offset is not None:
+            batch.put(
+                CHANGELOG_OFFSET_KEY,
+                int_to_int64_bytes(changelog_offset),
+                meta_cf_handle,
+            )
+        logger.debug(
+            f"Flushing state changes to the disk "
+            f'path="{self.path}" '
+            f"processed_offset={processed_offset} "
+            f"changelog_offset={changelog_offset}"
+        )
+
+        self._write(batch)
+
+    def _write(self, batch: WriteBatch):
         """
         Write `WriteBatch` to RocksDB
         :param batch: an instance of `rocksdict.WriteBatch`
@@ -376,9 +383,3 @@ class RocksDBStorePartition(StorePartition):
 
                 attempt += 1
                 time.sleep(self._open_retry_backoff)
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()

@@ -45,7 +45,7 @@ from quixstreams.models import (
 from quixstreams.models.serializers import SerializerType, DeserializerType
 from quixstreams.processing import ProcessingContext
 from quixstreams.sinks import BaseSink
-from quixstreams.state.types import State
+from quixstreams.state.base import State
 from .base import BaseStreaming
 from .exceptions import InvalidOperation
 from .registry import DataframeRegistry

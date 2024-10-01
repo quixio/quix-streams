@@ -1,7 +1,6 @@
-from typing import Optional, cast
+from typing import Optional
 
 from .partition import WindowedRocksDBStorePartition
-from .transaction import WindowedRocksDBPartitionTransaction
 from ..store import RocksDBStore
 from ..types import RocksDBOptionsType
 from ...recovery import ChangelogProducerFactory, ChangelogProducer
@@ -39,23 +38,15 @@ class WindowedRocksDBStore(RocksDBStore):
             options=options,
         )
 
-    def create_new_partition(
-        self, path: str, changelog_producer: Optional[ChangelogProducer] = None
-    ) -> WindowedRocksDBStorePartition:
-        db_partition = WindowedRocksDBStorePartition(
+    def create_new_partition(self, partition) -> WindowedRocksDBStorePartition:
+        path = str((self._partitions_dir / str(partition)).absolute())
+
+        changelog_producer: Optional[ChangelogProducer] = None
+        if self._changelog_producer_factory:
+            changelog_producer = (
+                self._changelog_producer_factory.get_partition_producer(partition)
+            )
+
+        return WindowedRocksDBStorePartition(
             path=path, options=self._options, changelog_producer=changelog_producer
-        )
-        return db_partition
-
-    def assign_partition(self, partition: int) -> WindowedRocksDBStorePartition:
-        return cast(
-            WindowedRocksDBStorePartition, super().assign_partition(partition=partition)
-        )
-
-    def start_partition_transaction(
-        self, partition: int
-    ) -> WindowedRocksDBPartitionTransaction:
-        return cast(
-            WindowedRocksDBPartitionTransaction,
-            super().start_partition_transaction(partition=partition),
         )

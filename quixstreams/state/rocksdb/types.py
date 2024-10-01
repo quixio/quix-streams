@@ -3,7 +3,7 @@ from typing_extensions import runtime_checkable
 
 import rocksdict
 
-from quixstreams.state.types import DumpsFunc, LoadsFunc
+from quixstreams.state.serialization import DumpsFunc, LoadsFunc
 
 CompressionType = Literal["none", "snappy", "zlib", "bz2", "lz4", "lz4hc", "zstd"]
 

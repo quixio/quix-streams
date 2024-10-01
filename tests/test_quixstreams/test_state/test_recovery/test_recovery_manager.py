@@ -6,8 +6,8 @@ from confluent_kafka import TopicPartition as ConfluentPartition
 from quixstreams.kafka import Consumer
 from quixstreams.models import TopicManager, TopicConfig
 from quixstreams.state.exceptions import InvalidStoreChangelogOffset
+from quixstreams.state.metadata import CHANGELOG_CF_MESSAGE_HEADER
 from quixstreams.state.rocksdb import RocksDBStorePartition
-from quixstreams.state.rocksdb.metadata import CHANGELOG_CF_MESSAGE_HEADER
 from tests.utils import ConfluentKafkaMessageStub
 
 

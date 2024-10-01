@@ -4,7 +4,7 @@ from typing import Optional, Mapping
 import rocksdict
 from rocksdict import DBCompressionType
 
-from quixstreams.state.types import DumpsFunc, LoadsFunc
+from quixstreams.state.serialization import DumpsFunc, LoadsFunc
 from quixstreams.utils.json import dumps, loads
 from .types import RocksDBOptionsType, CompressionType
 

@@ -1,7 +1,10 @@
 from typing import Tuple
 
-from ..metadata import PREFIX_SEPARATOR
-from ..serialization import int_from_int64_bytes, int_to_int64_bytes
+from quixstreams.state.metadata import PREFIX_SEPARATOR
+from quixstreams.state.serialization import (
+    int_from_int64_bytes,
+    int_to_int64_bytes,
+)
 
 __all__ = ("parse_window_key", "encode_window_key", "encode_window_prefix")
 

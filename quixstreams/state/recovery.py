@@ -8,7 +8,7 @@ from quixstreams.models import ConfluentKafkaMessageProto, Topic
 from quixstreams.models.topics import TopicManager
 from quixstreams.models.types import MessageHeadersMapping
 from quixstreams.rowproducer import RowProducer
-from quixstreams.state.types import StorePartition
+from quixstreams.state.base import StorePartition
 from quixstreams.utils.dicts import dict_values
 from .exceptions import InvalidStoreChangelogOffset
 
