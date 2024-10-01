@@ -10,16 +10,15 @@ from quixstreams.state.exceptions import (
     StateTransactionError,
     InvalidChangelogOffset,
 )
-from quixstreams.state.rocksdb import (
-    RocksDBStorePartition,
-    RocksDBOptions,
-    RocksDBPartitionTransaction,
-)
+from quixstreams.state.manager import StoreTypes
 from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER,
 )
-from quixstreams.state.serialization import serialize
+from quixstreams.state.serialization import (
+    serialize,
+)
+from quixstreams.state.base import PartitionTransaction
 from quixstreams.utils.json import dumps
 
 TEST_KEYS = [
@@ -48,15 +47,16 @@ TEST_PREFIXES = [
 ]
 
 
-class TestRocksDBPartitionTransaction:
-    def test_transaction_complete(self, rocksdb_partition):
-        with rocksdb_partition.begin() as tx:
+@pytest.mark.parametrize("store_type", StoreTypes, indirect=True)
+class TestPartitionTransaction:
+    def test_transaction_complete(self, store_partition):
+        with store_partition.begin() as tx:
             ...
 
         assert tx.completed
 
     def test_transaction_doesnt_write_empty_batch(
-        self, changelog_producer_mock, rocksdb_partition_factory
+        self, changelog_producer_mock, store_partition_factory
     ):
         """
         Test that transaction doesn't call "StateStore.write()" if the internal
@@ -65,10 +65,10 @@ class TestRocksDBPartitionTransaction:
         """
 
         prefix = b"__key__"
-        with rocksdb_partition_factory(
+        with store_partition_factory(
             changelog_producer=changelog_producer_mock
         ) as partition:
-            with patch.object(RocksDBStorePartition, "write") as mocked:
+            with patch.object(partition, "write") as mocked:
                 with partition.begin() as tx:
                     tx.get("key", prefix=prefix)
 
@@ -78,9 +78,9 @@ class TestRocksDBPartitionTransaction:
         assert not mocked.called
         assert not changelog_producer_mock.produce.called
 
-    def test_delete_key_doesnt_exist(self, rocksdb_partition):
+    def test_delete_key_doesnt_exist(self, store_partition):
         prefix = b"__key__"
-        with rocksdb_partition.begin() as tx:
+        with store_partition.begin() as tx:
             tx.delete("key", prefix=prefix)
 
     @pytest.mark.parametrize(
@@ -91,9 +91,9 @@ class TestRocksDBPartitionTransaction:
         "value",
         TEST_VALUES,
     )
-    def test_get_key_exists_cached(self, key, value, rocksdb_partition):
+    def test_get_key_exists_cached(self, key, value, store_partition):
         prefix = b"__key__"
-        with rocksdb_partition.begin() as tx:
+        with store_partition.begin() as tx:
             tx.set(key, value, prefix=prefix)
             stored = tx.get(key, prefix=prefix)
             assert stored == value
@@ -106,74 +106,74 @@ class TestRocksDBPartitionTransaction:
         "value",
         TEST_VALUES,
     )
-    def test_get_key_exists_no_cache(self, key, value, rocksdb_partition):
+    def test_get_key_exists_no_cache(self, key, value, store_partition):
         prefix = b"__key__"
-        with rocksdb_partition.begin() as tx:
+        with store_partition.begin() as tx:
             tx.set(key, value, prefix=prefix)
 
-        with rocksdb_partition.begin() as tx:
+        with store_partition.begin() as tx:
             stored = tx.get(key, prefix=prefix)
             assert stored == value
 
-    def test_get_key_doesnt_exist_default(self, rocksdb_partition):
+    def test_get_key_doesnt_exist_default(self, store_partition):
         prefix = b"__key__"
-        with rocksdb_partition.begin() as tx:
+        with store_partition.begin() as tx:
             value = tx.get("key", default=123, prefix=prefix)
             assert value == 123
 
-    def test_delete_key_cached_no_flush(self, rocksdb_partition):
+    def test_delete_key_cached_no_flush(self, store_partition):
         prefix = b"__key__"
-        with rocksdb_partition.begin() as tx:
+        with store_partition.begin() as tx:
             tx.set("key", "value", prefix=prefix)
             assert tx.get("key", prefix=prefix) == "value"
             tx.delete("key", prefix=prefix)
             assert tx.get("key", prefix=prefix) is None
 
-    def test_delete_key_cached(self, rocksdb_partition):
+    def test_delete_key_cached(self, store_partition):
         prefix = b"__key__"
-        with rocksdb_partition.begin() as tx:
+        with store_partition.begin() as tx:
             tx.set("key", "value", prefix=prefix)
 
-        with rocksdb_partition.begin() as tx:
+        with store_partition.begin() as tx:
             assert tx.get("key", prefix=prefix) == "value"
             tx.delete("key", prefix=prefix)
             assert tx.get("key", prefix=prefix) is None
 
-    def test_delete_key_no_cache(self, rocksdb_partition):
+    def test_delete_key_no_cache(self, store_partition):
         prefix = b"__key__"
-        with rocksdb_partition.begin() as tx:
+        with store_partition.begin() as tx:
             tx.set("key", "value", prefix=prefix)
             assert tx.get("key", prefix=prefix) == "value"
 
-        with rocksdb_partition.begin() as tx:
+        with store_partition.begin() as tx:
             tx.delete("key", prefix=prefix)
 
-        with rocksdb_partition.begin() as tx:
+        with store_partition.begin() as tx:
             assert tx.get("key", prefix=prefix) is None
 
-    def test_key_exists_cached(self, rocksdb_partition):
+    def test_key_exists_cached(self, store_partition):
         prefix = b"__key__"
-        with rocksdb_partition.begin() as tx:
+        with store_partition.begin() as tx:
             tx.set("key", "value", prefix=prefix)
             assert tx.exists("key", prefix=prefix)
             assert not tx.exists("key123", prefix=prefix)
 
-    def test_key_exists_no_cache(self, rocksdb_partition):
+    def test_key_exists_no_cache(self, store_partition):
         prefix = b"__key__"
 
-        with rocksdb_partition.begin() as tx:
+        with store_partition.begin() as tx:
             tx.set("key", "value", prefix=prefix)
 
-        with rocksdb_partition.begin() as tx:
+        with store_partition.begin() as tx:
             assert tx.exists("key", prefix=prefix)
             assert not tx.exists("key123", prefix=prefix)
 
-    def test_key_exists_deleted_in_cache(self, rocksdb_partition):
+    def test_key_exists_deleted_in_cache(self, store_partition):
         prefix = b"__key__"
-        with rocksdb_partition.begin() as tx:
+        with store_partition.begin() as tx:
             tx.set("key", "value", prefix=prefix)
 
-        with rocksdb_partition.begin() as tx:
+        with store_partition.begin() as tx:
             assert tx.exists("key", prefix=prefix)
             tx.delete("key", prefix=prefix)
             assert not tx.exists("key", prefix=prefix)
@@ -187,25 +187,25 @@ class TestRocksDBPartitionTransaction:
             (datetime.now(timezone.utc), "string"),
         ],
     )
-    def test_set_serialization_error(self, key, value, rocksdb_partition):
+    def test_set_serialization_error(self, key, value, store_partition):
         prefix = b"__key__"
-        with rocksdb_partition.begin() as tx:
+        with store_partition.begin() as tx:
             with pytest.raises(StateSerializationError):
                 tx.set(key, value, prefix=prefix)
 
     @pytest.mark.parametrize(
         "key", [object(), b"somebytes", datetime.now(timezone.utc)]
     )
-    def test_delete_serialization_error(self, key, rocksdb_partition):
+    def test_delete_serialization_error(self, key, store_partition):
         prefix = b"__key__"
-        with rocksdb_partition.begin() as tx:
+        with store_partition.begin() as tx:
             with pytest.raises(StateSerializationError):
                 tx.delete(key, prefix=prefix)
 
-    def test_get_deserialization_error(self, rocksdb_partition):
+    def test_get_deserialization_error(self, store_partition):
         bytes_ = secrets.token_bytes(10)
         string_ = "string"
-        rocksdb_partition.write(
+        store_partition.write(
             data={
                 "default": {
                     "": {
@@ -220,22 +220,22 @@ class TestRocksDBPartitionTransaction:
             changelog_offset=None,
         )
 
-        with rocksdb_partition.begin() as tx:
+        with store_partition.begin() as tx:
             with pytest.raises(StateSerializationError):
                 tx.get(string_, prefix=b"")
             with pytest.raises(StateSerializationError):
                 tx.get(bytes_, prefix=b"")
 
-    def test_set_key_different_prefixes(self, rocksdb_partition):
+    def test_set_key_different_prefixes(self, store_partition):
         prefix1, prefix2 = b"__key1__", b"__key2__"
-        with rocksdb_partition.begin() as tx:
+        with store_partition.begin() as tx:
             tx.set("key", "value", prefix=prefix1)
             assert tx.get("key", prefix=prefix1) == "value"
             assert tx.get("key", prefix=prefix2) is None
 
-    def test_delete_key_different_prefixes_no_cache(self, rocksdb_partition):
+    def test_delete_key_different_prefixes_no_cache(self, store_partition):
         prefix1, prefix2 = b"__key1__", b"__key2__"
-        with rocksdb_partition.begin() as tx:
+        with store_partition.begin() as tx:
             tx.set("key", "value", prefix=prefix1)
             tx.set("key", "value", prefix=prefix2)
             assert tx.get("key", prefix=prefix1) == "value"
@@ -251,7 +251,7 @@ class TestRocksDBPartitionTransaction:
             lambda tx, prefix: tx.delete("key", prefix=prefix),
         ],
     )
-    def test_update_key_failed_transaction_failed(self, operation, rocksdb_partition):
+    def test_update_key_failed_transaction_failed(self, operation, store_partition):
         """
         Test that if the update operation (set or delete) fails the transaction is
         marked as failed and cannot be re-used anymore.
@@ -259,11 +259,11 @@ class TestRocksDBPartitionTransaction:
 
         prefix = b"__key__"
         with patch.object(
-            RocksDBPartitionTransaction,
+            PartitionTransaction,
             "_serialize_key",
             side_effect=ValueError("test"),
         ):
-            with rocksdb_partition.begin() as tx:
+            with store_partition.begin() as tx:
                 with contextlib.suppress(ValueError):
                     operation(tx=tx, prefix=prefix)
 
@@ -287,14 +287,14 @@ class TestRocksDBPartitionTransaction:
 
             assert not tx.completed
 
-    def test_update_key_prepared_transaction_fails(self, rocksdb_partition):
+    def test_update_key_prepared_transaction_fails(self, store_partition):
         """
         Test that any update operation (set or delete) fails if the transaction is
         marked as prepared.
         """
 
         prefix = b"__key__"
-        tx = rocksdb_partition.begin()
+        tx = store_partition.begin()
 
         tx.set(key="key", value="value", prefix=prefix)
         tx.prepare(processed_offset=1)
@@ -306,99 +306,41 @@ class TestRocksDBPartitionTransaction:
         with pytest.raises(StateTransactionError):
             tx.delete("key", prefix=prefix)
 
-    def test_transaction_not_flushed_on_error(self, rocksdb_partition):
+    def test_transaction_not_flushed_on_error(self, store_partition):
         prefix = b"__key__"
         with contextlib.suppress(ValueError):
-            with rocksdb_partition.begin() as tx:
+            with store_partition.begin() as tx:
                 tx.set("key", "value", prefix=prefix)
                 raise ValueError("test")
 
-        with rocksdb_partition.begin() as tx:
+        with store_partition.begin() as tx:
             assert tx.get("key", prefix=prefix) is None
 
-    def test_custom_dumps_loads(self, rocksdb_partition_factory):
-        key = secrets.token_bytes(10)
-        value = secrets.token_bytes(10)
-        prefix = b"__key__"
-
-        with rocksdb_partition_factory(
-            options=RocksDBOptions(loads=lambda v: v, dumps=lambda v: v)
-        ) as db:
-            with db.begin() as tx:
-                tx.set(key, value, prefix=prefix)
-
-            with db.begin() as tx:
-                assert tx.get(key, prefix=prefix) == value
-
-    def test_set_dict_nonstr_keys_fails(self, rocksdb_partition):
+    def test_set_dict_nonstr_keys_fails(self, store_partition):
         key = "key"
         value = {0: 1}
         prefix = b"__key__"
-        with rocksdb_partition.begin() as tx:
+        with store_partition.begin() as tx:
             with pytest.raises(StateSerializationError):
                 tx.set(key, value, prefix=prefix)
 
-    def test_set_datetime_fails(self, rocksdb_partition):
+    def test_set_datetime_fails(self, store_partition):
         key = "key"
         value = datetime.now(timezone.utc)
         prefix = b"__key__"
-        with rocksdb_partition.begin() as tx:
+        with store_partition.begin() as tx:
             with pytest.raises(StateSerializationError):
                 tx.set(key, value, prefix=prefix)
 
-    def test_set_get_with_column_family(self, rocksdb_partition):
-        key = "key"
-        value = "value"
-        prefix = b"__key__"
-        rocksdb_partition.create_column_family("cf")
-
-        with rocksdb_partition.begin() as tx:
-            tx.set(key, value, cf_name="cf", prefix=prefix)
-            assert tx.get(key, cf_name="cf", prefix=prefix) == value
-
-        with rocksdb_partition.begin() as tx:
-            assert tx.get(key, cf_name="cf", prefix=prefix) == value
-
-    def test_set_delete_get_with_column_family(self, rocksdb_partition):
-        key = "key"
-        value = "value"
-        prefix = b"__key__"
-        rocksdb_partition.create_column_family("cf")
-
-        with rocksdb_partition.begin() as tx:
-            tx.set(key, value, cf_name="cf", prefix=prefix)
-            assert tx.get(key, cf_name="cf", prefix=prefix) == value
-            tx.delete(key, cf_name="cf", prefix=prefix)
-            assert tx.get(key, cf_name="cf", prefix=prefix) is None
-
-        with rocksdb_partition.begin() as tx:
-            assert tx.get(key, cf_name="cf", prefix=prefix) is None
-
-    def test_set_exists_get_with_column_family(self, rocksdb_partition):
-        key = "key"
-        value = "value"
-        rocksdb_partition.create_column_family("cf")
-        prefix = b"__key__"
-
-        with rocksdb_partition.begin() as tx:
-            assert not tx.exists(key, cf_name="cf", prefix=prefix)
-            tx.set(key, value, cf_name="cf", prefix=prefix)
-            assert tx.exists(key, cf_name="cf", prefix=prefix)
-
-        with rocksdb_partition.begin() as tx:
-            assert tx.exists(key, cf_name="cf", prefix=prefix)
-
-    def test_flush_failed_transaction_failed(self, rocksdb_partition):
+    def test_flush_failed_transaction_failed(self, store_partition):
         """
         Test that if the "flush()" fails the transaction is also marked
         as failed and cannot be re-used.
         """
 
         prefix = b"__key__"
-        with patch.object(
-            RocksDBStorePartition, "write", side_effect=ValueError("test")
-        ):
-            with rocksdb_partition.begin() as tx:
+        with patch.object(store_partition, "write", side_effect=ValueError("test")):
+            with store_partition.begin() as tx:
                 tx.set("key", "value", prefix=prefix)
 
                 with contextlib.suppress(ValueError):
@@ -422,8 +364,8 @@ class TestRocksDBPartitionTransaction:
     @pytest.mark.parametrize(
         "processed_offset, changelog_offset", [(None, None), (1, 1)]
     )
-    def test_flush_success(self, processed_offset, changelog_offset, rocksdb_partition):
-        tx = rocksdb_partition.begin()
+    def test_flush_success(self, processed_offset, changelog_offset, store_partition):
+        tx = store_partition.begin()
 
         # Set some key to probe the transaction
         tx.set(key="key", value="value", prefix=b"__key__")
@@ -431,11 +373,11 @@ class TestRocksDBPartitionTransaction:
         tx.flush(processed_offset=processed_offset, changelog_offset=changelog_offset)
         assert tx.completed
 
-        assert rocksdb_partition.get_changelog_offset() == changelog_offset
-        assert rocksdb_partition.get_processed_offset() == processed_offset
+        assert store_partition.get_changelog_offset() == changelog_offset
+        assert store_partition.get_processed_offset() == processed_offset
 
-    def test_flush_invalid_changelog_offset(self, rocksdb_partition):
-        tx1 = rocksdb_partition.begin()
+    def test_flush_invalid_changelog_offset(self, store_partition):
+        tx1 = store_partition.begin()
         # Set some key to probe the transaction
         tx1.set(key="key", value="value", prefix=b"__key__")
 
@@ -443,14 +385,14 @@ class TestRocksDBPartitionTransaction:
         tx1.flush(changelog_offset=9999)
         assert tx1.completed
 
-        tx2 = rocksdb_partition.begin()
+        tx2 = store_partition.begin()
         tx2.set(key="key", value="value", prefix=b"__key__")
         # Flush second transaction with a smaller changelog offset
         with pytest.raises(InvalidChangelogOffset):
             tx2.flush(changelog_offset=1)
         assert tx2.failed
 
-    def test_set_and_prepare(self, rocksdb_partition_factory, changelog_producer_mock):
+    def test_set_and_prepare(self, store_partition_factory, changelog_producer_mock):
         data = [
             ("key1", "value1"),
             ("key2", "value2"),
@@ -460,7 +402,7 @@ class TestRocksDBPartitionTransaction:
         prefix = b"__key__"
         processed_offset = 1
 
-        with rocksdb_partition_factory(
+        with store_partition_factory(
             changelog_producer=changelog_producer_mock
         ) as partition:
             tx = partition.begin()
@@ -487,15 +429,13 @@ class TestRocksDBPartitionTransaction:
 
             assert tx.prepared
 
-    def test_delete_and_prepare(
-        self, rocksdb_partition_factory, changelog_producer_mock
-    ):
+    def test_delete_and_prepare(self, store_partition_factory, changelog_producer_mock):
         key = "key"
         cf = "default"
         prefix = b"__key__"
         processed_offset = 1
 
-        with rocksdb_partition_factory(
+        with store_partition_factory(
             changelog_producer=changelog_producer_mock
         ) as partition:
             tx = partition.begin()
@@ -517,7 +457,7 @@ class TestRocksDBPartitionTransaction:
         }
 
     def test_set_delete_and_prepare(
-        self, rocksdb_partition_factory, changelog_producer_mock
+        self, store_partition_factory, changelog_producer_mock
     ):
         """
         Test that only "delete" changelog message is emited if the key is set
@@ -528,7 +468,7 @@ class TestRocksDBPartitionTransaction:
         prefix = b"__key__"
         processed_offset = 1
 
-        with rocksdb_partition_factory(
+        with store_partition_factory(
             changelog_producer=changelog_producer_mock
         ) as partition:
             tx = partition.begin()

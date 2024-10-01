@@ -5,11 +5,12 @@ from confluent_kafka import TopicPartition as ConfluentPartition
 
 from quixstreams.kafka import Consumer
 from quixstreams.models import TopicManager, TopicConfig
-from quixstreams.state.exceptions import InvalidStoreChangelogOffset
 from quixstreams.state.metadata import CHANGELOG_CF_MESSAGE_HEADER
+from quixstreams.state.exceptions import InvalidStoreChangelogOffset
 from quixstreams.state.base import StorePartition
 from quixstreams.state.manager import StoreTypes
-from quixstreams.state.rocksdb import RocksDBStorePartition
+from quixstreams.state.rocksdb import RocksDBStore, RocksDBStorePartition
+from quixstreams.state.memory import MemoryStorePartition
 from tests.utils import ConfluentKafkaMessageStub
 
 
@@ -65,7 +66,9 @@ class TestRecoveryManager:
 
         # Assign a RecoveryPartition
         with patch.object(
-            RocksDBStorePartition,
+            RocksDBStorePartition
+            if isinstance(store, RocksDBStore)
+            else MemoryStorePartition,
             "get_changelog_offset",
             return_value=stored_changelog_offset,
         ):

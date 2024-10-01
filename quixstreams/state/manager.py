@@ -12,6 +12,7 @@ from .exceptions import (
 )
 from .recovery import RecoveryManager, ChangelogProducerFactory
 from .rocksdb import RocksDBStore, RocksDBOptionsType
+from .memory import MemoryStore
 from .rocksdb.windowed.store import WindowedRocksDBStore
 from .base import Store, StorePartition
 
@@ -24,6 +25,7 @@ DEFAULT_STATE_STORE_NAME = "default"
 
 class StoreTypes(enum.Enum):
     ROCKSDB = 0
+    MEMORY = 1
 
 
 class StateStoreManager:
@@ -166,6 +168,12 @@ class StateStoreManager:
                     base_dir=str(self._state_dir),
                     changelog_producer_factory=changlog_producer_factory,
                     options=self._rocksdb_options,
+                )
+            elif store_type == StoreTypes.MEMORY:
+                factory = MemoryStore(
+                    name=store_name,
+                    topic=topic_name,
+                    changelog_producer_factory=changlog_producer_factory,
                 )
             else:
                 raise ValueError(f"invalid store type: {store_type}")

@@ -105,9 +105,15 @@ class TestStateStoreManager:
     @pytest.mark.parametrize("store_type", [StoreTypes.ROCKSDB], indirect=True)
     def test_clear_rocksdb_stores(self, state_manager):
         # Register stores
-        state_manager.register_store("topic1", store_name="store1")
-        state_manager.register_store("topic1", store_name="extra_store")
-        state_manager.register_store("topic2", store_name="store1")
+        state_manager.register_store(
+            "topic1", store_name="store1", store_type=StoreTypes.ROCKSDB
+        )
+        state_manager.register_store(
+            "topic1", store_name="extra_store", store_type=StoreTypes.ROCKSDB
+        )
+        state_manager.register_store(
+            "topic2", store_name="store1", store_type=StoreTypes.ROCKSDB
+        )
 
         # Define partitions
         partitions = [
