@@ -1,5 +1,6 @@
 import logging
 import shutil
+import enum
 from pathlib import Path
 from typing import List, Dict, Optional, Union
 
@@ -14,11 +15,15 @@ from .rocksdb import RocksDBStore, RocksDBOptionsType
 from .rocksdb.windowed.store import WindowedRocksDBStore
 from .base import Store, StorePartition
 
-__all__ = ("StateStoreManager", "DEFAULT_STATE_STORE_NAME")
+__all__ = ("StateStoreManager", "DEFAULT_STATE_STORE_NAME", "StoreTypes")
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_STATE_STORE_NAME = "default"
+
+
+class StoreTypes(enum.Enum):
+    ROCKSDB = 0
 
 
 class StateStoreManager:
@@ -38,12 +43,14 @@ class StateStoreManager:
         rocksdb_options: Optional[RocksDBOptionsType] = None,
         producer: Optional[RowProducer] = None,
         recovery_manager: Optional[RecoveryManager] = None,
+        default_store_type: StoreTypes = StoreTypes.ROCKSDB,
     ):
         self._state_dir = (Path(state_dir) / group_id).absolute()
         self._rocksdb_options = rocksdb_options
         self._stores: Dict[str, Dict[str, Store]] = {}
         self._producer = producer
         self._recovery_manager = recovery_manager
+        self._default_store_type = default_store_type
 
     def _init_state_dir(self):
         logger.info(f'Initializing state directory at "{self._state_dir}"')
@@ -130,7 +137,10 @@ class StateStoreManager:
             )
 
     def register_store(
-        self, topic_name: str, store_name: str = DEFAULT_STATE_STORE_NAME
+        self,
+        topic_name: str,
+        store_name: str = DEFAULT_STATE_STORE_NAME,
+        store_type: Optional[StoreTypes] = None,
     ):
         """
         Register a state store to be managed by StateStoreManager.
@@ -142,17 +152,25 @@ class StateStoreManager:
 
         :param topic_name: topic name
         :param store_name: store name
+        :param store_type: the storage type used for this store.
+            Default to StateStoreManager `default_store_type`
         """
         if self._stores.get(topic_name, {}).get(store_name) is None:
-            self._stores.setdefault(topic_name, {})[store_name] = RocksDBStore(
-                name=store_name,
-                topic=topic_name,
-                base_dir=str(self._state_dir),
-                changelog_producer_factory=self._setup_changelogs(
-                    topic_name, store_name
-                ),
-                options=self._rocksdb_options,
-            )
+            changlog_producer_factory = self._setup_changelogs(topic_name, store_name)
+
+            store_type = store_type or self._default_store_type
+            if store_type == StoreTypes.ROCKSDB:
+                factory = RocksDBStore(
+                    name=store_name,
+                    topic=topic_name,
+                    base_dir=str(self._state_dir),
+                    changelog_producer_factory=changlog_producer_factory,
+                    options=self._rocksdb_options,
+                )
+            else:
+                raise ValueError(f"invalid store type: {store_type}")
+
+            self._stores.setdefault(topic_name, {})[store_name] = factory
 
     def register_windowed_store(self, topic_name: str, store_name: str):
         """

@@ -10,9 +10,11 @@ from quixstreams.state.exceptions import (
     PartitionStoreIsUsed,
     WindowedStoreAlreadyRegisteredError,
 )
+from quixstreams.state import StoreTypes
 from tests.utils import TopicPartitionStub
 
 
+@pytest.mark.parametrize("store_type", StoreTypes, indirect=True)
 class TestStateStoreManager:
     def test_init_close(self, state_manager_factory):
         with state_manager_factory():
@@ -153,6 +155,7 @@ class TestStateStoreManager:
             state_manager.clear_stores()
 
 
+@pytest.mark.parametrize("store_type", StoreTypes, indirect=True)
 class TestStateStoreManagerWithRecovery:
     def test_rebalance_partitions_stores_not_registered(
         self, state_manager_factory, recovery_manager_factory
