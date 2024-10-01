@@ -63,8 +63,10 @@ class QuixTopicManager(TopicManager):
         :param timeout: creation acknowledge timeout (seconds)
         :param create_timeout: topic finalization timeout (seconds)
         """
+        # note: prepending was already performed as needed, so we skip doing it
+        # within `create_topics`
         self._quix_config_builder.create_topics(
-            topics, timeout=timeout, finalize_timeout=create_timeout
+            topics, timeout=timeout, finalize_timeout=create_timeout, prepend=False
         )
 
     def _resolve_topic_name(self, name: str) -> str:

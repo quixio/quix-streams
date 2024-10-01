@@ -596,6 +596,7 @@ class TestQuixKafkaConfigsBuilder:
 
         mock_response = create_autospec(Response)
         mock_response.text = "already exists"
+        mock_response.status_code = 400
 
         timeout = 4.5
         finalize_timeout = 9.5
@@ -605,7 +606,11 @@ class TestQuixKafkaConfigsBuilder:
         )
         stack = ExitStack()
         create_topic = stack.enter_context(patch.object(cfg_builder, "_create_topic"))
-        create_topic.side_effect = HTTPError(response=mock_response)
+        create_topic.side_effect = QuixApiRequestFailure(
+            url="url",
+            status_code=mock_response.status_code,
+            error_text=mock_response.text,
+        )
         get_topics = stack.enter_context(patch.object(cfg_builder, "get_topics"))
         get_topics.return_value = get_topics_return
         finalize = stack.enter_context(patch.object(cfg_builder, "_finalize_create"))
