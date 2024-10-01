@@ -5,18 +5,20 @@ from unittest.mock import patch
 
 import pytest
 
+from quixstreams.state.manager import StoreTypes
 from quixstreams.state.base import PartitionTransaction
 from quixstreams.state.exceptions import (
     StateSerializationError,
     StateTransactionError,
     InvalidChangelogOffset,
 )
-from quixstreams.state.rocksdb import RocksDBOptions
 from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER,
 )
-from quixstreams.state.serialization import serialize
+from quixstreams.state.serialization import (
+    serialize,
+)
 from quixstreams.utils.json import dumps
 
 TEST_KEYS = [
@@ -45,6 +47,7 @@ TEST_PREFIXES = [
 ]
 
 
+@pytest.mark.parametrize("store_type", StoreTypes, indirect=True)
 class TestPartitionTransaction:
     def test_transaction_complete(self, store_partition):
         with store_partition.begin() as tx:
@@ -313,20 +316,6 @@ class TestPartitionTransaction:
         with store_partition.begin() as tx:
             assert tx.get("key", prefix=prefix) is None
 
-    def test_custom_dumps_loads(self, store_partition_factory):
-        key = secrets.token_bytes(10)
-        value = secrets.token_bytes(10)
-        prefix = b"__key__"
-
-        with store_partition_factory(
-            options=RocksDBOptions(loads=lambda v: v, dumps=lambda v: v)
-        ) as db:
-            with db.begin() as tx:
-                tx.set(key, value, prefix=prefix)
-
-            with db.begin() as tx:
-                assert tx.get(key, prefix=prefix) == value
-
     def test_set_dict_nonstr_keys_fails(self, store_partition):
         key = "key"
         value = {0: 1}
@@ -342,48 +331,6 @@ class TestPartitionTransaction:
         with store_partition.begin() as tx:
             with pytest.raises(StateSerializationError):
                 tx.set(key, value, prefix=prefix)
-
-    def test_set_get_with_column_family(self, store_partition):
-        key = "key"
-        value = "value"
-        prefix = b"__key__"
-        store_partition.create_column_family("cf")
-
-        with store_partition.begin() as tx:
-            tx.set(key, value, cf_name="cf", prefix=prefix)
-            assert tx.get(key, cf_name="cf", prefix=prefix) == value
-
-        with store_partition.begin() as tx:
-            assert tx.get(key, cf_name="cf", prefix=prefix) == value
-
-    def test_set_delete_get_with_column_family(self, store_partition):
-        key = "key"
-        value = "value"
-        prefix = b"__key__"
-        store_partition.create_column_family("cf")
-
-        with store_partition.begin() as tx:
-            tx.set(key, value, cf_name="cf", prefix=prefix)
-            assert tx.get(key, cf_name="cf", prefix=prefix) == value
-            tx.delete(key, cf_name="cf", prefix=prefix)
-            assert tx.get(key, cf_name="cf", prefix=prefix) is None
-
-        with store_partition.begin() as tx:
-            assert tx.get(key, cf_name="cf", prefix=prefix) is None
-
-    def test_set_exists_get_with_column_family(self, store_partition):
-        key = "key"
-        value = "value"
-        store_partition.create_column_family("cf")
-        prefix = b"__key__"
-
-        with store_partition.begin() as tx:
-            assert not tx.exists(key, cf_name="cf", prefix=prefix)
-            tx.set(key, value, cf_name="cf", prefix=prefix)
-            assert tx.exists(key, cf_name="cf", prefix=prefix)
-
-        with store_partition.begin() as tx:
-            assert tx.exists(key, cf_name="cf", prefix=prefix)
 
     def test_flush_failed_transaction_failed(self, store_partition):
         """
