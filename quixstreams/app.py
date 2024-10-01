@@ -51,6 +51,7 @@ from .utils.settings import BaseSettings
 __all__ = ("Application", "ApplicationConfig")
 
 logger = logging.getLogger(__name__)
+warnings.simplefilter("always", DeprecationWarning)
 ProcessingGuarantee = Literal["at-least-once", "exactly-once"]
 MessageProcessedCallback = Callable[[str, int, int], None]
 
