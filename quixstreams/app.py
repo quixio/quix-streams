@@ -42,7 +42,7 @@ from .processing import ProcessingContext, PausingManager
 from .rowconsumer import RowConsumer
 from .rowproducer import RowProducer
 from .sinks import SinkManager
-from .sources.manager import SourceManager, BaseSource, SourceException
+from .sources import SourceManager, BaseSource, SourceException
 from .state import StateStoreManager
 from .state.recovery import RecoveryManager
 from .state.rocksdb import RocksDBOptionsType

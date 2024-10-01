@@ -9,7 +9,7 @@ from quixstreams.kafka import Consumer
 from quixstreams.processing.pausing import PausingManager
 from quixstreams.rowproducer import RowProducer
 from quixstreams.sinks import SinkManager
-from quixstreams.sinks.exceptions import SinkBackpressureError
+from quixstreams.sinks.base import SinkBackpressureError
 from quixstreams.state import (
     StateStoreManager,
     PartitionTransaction,

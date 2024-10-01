@@ -10,7 +10,7 @@
 class StreamingDataFrame(BaseStreaming)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L87)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/dataframe/dataframe.py#L64)
 
 `StreamingDataFrame` is the main object you will use for ETL work.
 
@@ -69,7 +69,6 @@ sdf = sdf.to_topic(topic_obj)
 #### StreamingDataFrame.apply
 
 ```python
-@_ensure_unlocked
 def apply(func: Union[
     ApplyCallback,
     ApplyCallbackStateful,
@@ -82,7 +81,7 @@ def apply(func: Union[
           metadata: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L204)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/dataframe/dataframe.py#L170)
 
 Apply a function to transform the value and return a new value.
 
@@ -129,7 +128,6 @@ Default - `False`.
 #### StreamingDataFrame.update
 
 ```python
-@_ensure_unlocked
 def update(func: Union[
     UpdateCallback,
     UpdateCallbackStateful,
@@ -141,7 +139,7 @@ def update(func: Union[
            metadata: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L294)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/dataframe/dataframe.py#L259)
 
 Apply a function to mutate value in-place or to perform a side effect
 
@@ -198,7 +196,6 @@ the updated StreamingDataFrame instance (reassignment NOT required).
 #### StreamingDataFrame.filter
 
 ```python
-@_ensure_unlocked
 def filter(func: Union[
     FilterCallback,
     FilterCallbackStateful,
@@ -210,7 +207,7 @@ def filter(func: Union[
            metadata: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L387)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/dataframe/dataframe.py#L351)
 
 Filter value using provided function.
 
@@ -254,7 +251,6 @@ Default - `False`.
 #### StreamingDataFrame.group\_by
 
 ```python
-@_ensure_unlocked
 def group_by(key: Union[str, Callable[[Any], Any]],
              name: Optional[str] = None,
              value_deserializer: Optional[DeserializerType] = "json",
@@ -263,7 +259,7 @@ def group_by(key: Union[str, Callable[[Any], Any]],
              key_serializer: Optional[SerializerType] = "json") -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L474)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/dataframe/dataframe.py#L437)
 
 "Groups" messages by re-keying them via the provided group_by operation
 
@@ -324,11 +320,10 @@ a clone with this operation added (assign to keep its effect).
 #### StreamingDataFrame.contains
 
 ```python
-@staticmethod
 def contains(key: str) -> StreamingSeries
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L552)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/dataframe/dataframe.py#L510)
 
 Check if the key is present in the Row value.
 
@@ -364,11 +359,10 @@ or False otherwise.
 #### StreamingDataFrame.to\_topic
 
 ```python
-@_ensure_unlocked
 def to_topic(topic: Topic, key: Optional[Callable[[Any], Any]] = None) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L578)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/dataframe/dataframe.py#L535)
 
 Produce current value to a topic. You can optionally specify a new key.
 
@@ -418,11 +412,10 @@ the updated StreamingDataFrame instance (reassignment NOT required).
 #### StreamingDataFrame.set\_timestamp
 
 ```python
-@_ensure_unlocked
 def set_timestamp(func: Callable[[Any, Any, int, Any], int]) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L624)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/dataframe/dataframe.py#L580)
 
 Set a new timestamp based on the current message value and its metadata.
 
@@ -467,7 +460,6 @@ a new StreamingDataFrame instance
 #### StreamingDataFrame.set\_headers
 
 ```python
-@_ensure_unlocked
 def set_headers(
     func: Callable[
         [Any, Any, int, List[Tuple[str, HeaderValue]]],
@@ -476,7 +468,7 @@ def set_headers(
 ) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L666)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/dataframe/dataframe.py#L621)
 
 Set new message headers based on the current message value and metadata.
 
@@ -522,11 +514,10 @@ a new StreamingDataFrame instance
 #### StreamingDataFrame.print
 
 ```python
-@_ensure_unlocked
 def print(pretty: bool = True, metadata: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L718)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/dataframe/dataframe.py#L672)
 
 Print out the current message value (and optionally, the message metadata) to
 
@@ -582,7 +573,7 @@ def compose(
 ) -> Dict[str, VoidExecutor]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L760)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/dataframe/dataframe.py#L714)
 
 Compose all functions of this StreamingDataFrame into one big closure.
 
@@ -636,7 +627,7 @@ def test(value: Any,
          topic: Optional[Topic] = None) -> List[Any]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L797)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/dataframe/dataframe.py#L748)
 
 A shorthand to test `StreamingDataFrame` with provided value
 
@@ -668,13 +659,12 @@ result of `StreamingDataFrame`
 #### StreamingDataFrame.tumbling\_window
 
 ```python
-@_ensure_unlocked
 def tumbling_window(duration_ms: Union[int, timedelta],
                     grace_ms: Union[int, timedelta] = 0,
                     name: Optional[str] = None) -> TumblingWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L835)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/dataframe/dataframe.py#L785)
 
 Create a tumbling window transformation on this StreamingDataFrame.
 
@@ -754,14 +744,13 @@ sdf = (
 #### StreamingDataFrame.hopping\_window
 
 ```python
-@_ensure_unlocked
 def hopping_window(duration_ms: Union[int, timedelta],
                    step_ms: Union[int, timedelta],
                    grace_ms: Union[int, timedelta] = 0,
                    name: Optional[str] = None) -> HoppingWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L912)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/dataframe/dataframe.py#L861)
 
 Create a hopping window transformation on this StreamingDataFrame.
 
@@ -850,12 +839,11 @@ sdf = (
 #### StreamingDataFrame.drop
 
 ```python
-@_ensure_unlocked
 def drop(columns: Union[str, List[str]],
          errors: Literal["ignore", "raise"] = "raise") -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1005)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/dataframe/dataframe.py#L953)
 
 Drop column(s) from the message value (value must support `del`, like a dict).
 
@@ -896,11 +884,10 @@ a new StreamingDataFrame instance
 #### StreamingDataFrame.sink
 
 ```python
-@_ensure_unlocked
 def sink(sink: BaseSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1050)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/dataframe/dataframe.py#L997)
 
 Sink the processed data to the specified destination.
 
@@ -915,8 +902,8 @@ When this happens, the application will pause the corresponding topic partition
 and resume again after the timeout.
 The backpressure handling and timeouts are defined by the specific sinks.
 
-Note: `sink()` is a terminal operation, and you cannot add new operations
-to the same StreamingDataFrame after it's called.
+Note: `sink()` is a terminal operation - it cannot receive any additional
+operations, but branches can still be generated from its originating SDF.
 
 <a id="quixstreams.dataframe.series"></a>
 
@@ -930,7 +917,7 @@ to the same StreamingDataFrame after it's called.
 class StreamingSeries(BaseStreaming)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L47)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/dataframe/series.py#L69)
 
 `StreamingSeries` are typically generated by `StreamingDataframes` when getting
 elements from, or performing certain operations on, a `StreamingDataframe`,
@@ -993,10 +980,11 @@ sdf = sdf[["column_a"] & (sdf["new_sum_field"] >= 10)]
 
 ```python
 @classmethod
-def from_apply_callback(cls, func: ApplyWithMetadataCallback) -> Self
+def from_apply_callback(cls, func: ApplyWithMetadataCallback,
+                        sdf_id: int) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L107)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/dataframe/series.py#L131)
 
 Create a StreamingSeries from a function.
 
@@ -1007,6 +995,7 @@ The provided function will be wrapped into `Apply`
 ***Arguments:***
 
 - `func`: a function to apply
+- `sdf_id`: the id of the calling `SDF`.
 
 
 <br>
@@ -1024,7 +1013,7 @@ instance of `StreamingSeries`
 def apply(func: ApplyCallback) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L121)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/dataframe/series.py#L154)
 
 Add a callable to the execution list for this series.
 
@@ -1076,7 +1065,7 @@ a new `StreamingSeries` with the new callable added
 def compose_returning() -> ReturningExecutor
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L155)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/dataframe/series.py#L188)
 
 Compose a list of functions from this StreamingSeries and its parents into one
 
@@ -1107,7 +1096,7 @@ def compose(
                             None]] = None) -> VoidExecutor
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L170)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/dataframe/series.py#L203)
 
 Compose all functions of this StreamingSeries into one big closure.
 
@@ -1165,7 +1154,7 @@ def test(value: Any,
          ctx: Optional[MessageContext] = None) -> Any
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L214)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/dataframe/series.py#L247)
 
 A shorthand to test `StreamingSeries` with provided value
 
@@ -1197,7 +1186,7 @@ result of `StreamingSeries`
 def isin(other: Container) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L269)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/dataframe/series.py#L303)
 
 Check if series value is in "other".
 
@@ -1242,7 +1231,7 @@ new StreamingSeries
 def contains(other: Union[Self, object]) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L296)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/dataframe/series.py#L330)
 
 Check if series value contains "other"
 
@@ -1287,7 +1276,7 @@ new StreamingSeries
 def is_(other: Union[Self, object]) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L321)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/dataframe/series.py#L355)
 
 Check if series value refers to the same object as `other`
 
@@ -1329,7 +1318,7 @@ new StreamingSeries
 def isnot(other: Union[Self, object]) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L344)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/dataframe/series.py#L378)
 
 Check if series value does not refer to the same object as `other`
 
@@ -1372,7 +1361,7 @@ new StreamingSeries
 def isnull() -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L368)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/dataframe/series.py#L402)
 
 Check if series value is None.
 
@@ -1409,7 +1398,7 @@ new StreamingSeries
 def notnull() -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L391)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/dataframe/series.py#L425)
 
 Check if series value is not None.
 
@@ -1446,7 +1435,7 @@ new StreamingSeries
 def abs() -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L414)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/reorganize-connectors/quixstreams/dataframe/series.py#L448)
 
 Get absolute value of the series value.
 

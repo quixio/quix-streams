@@ -15,8 +15,7 @@ except ImportError as exc:
         "run pip install quixstreams[influxdb3] to fix it"
     ) from exc
 
-from .base import BatchingSink, SinkBatch
-from .exceptions import SinkBackpressureError
+from ..base import BatchingSink, SinkBatch, SinkBackpressureError
 
 logger = logging.getLogger(__name__)
 

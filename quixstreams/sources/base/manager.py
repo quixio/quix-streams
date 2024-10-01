@@ -1,14 +1,14 @@
-import threading
 import logging
 import signal
-
+import threading
 from pickle import PicklingError
 from typing import List
 
 from quixstreams.logging import configure_logging, LOGGER_NAME
 from quixstreams.models import Topic
-from .base import BaseSource
+from .exceptions import SourceException
 from .multiprocessing import multiprocessing
+from .source import BaseSource
 
 logger = logging.getLogger(__name__)
 
@@ -236,20 +236,3 @@ class SourceManager:
 
     def __exit__(self, *args, **kwargs):
         self.stop_sources()
-
-
-class SourceException(Exception):
-    """
-    Raised in the parent process when a source finish with an exception
-    """
-
-    def __init__(self, process: SourceProcess) -> None:
-        self.pid: int = process.pid
-        self.process: SourceProcess = process
-        self.exitcode = self.process.exitcode
-
-    def __str__(self) -> str:
-        msg = f"{self.process.source} with PID {self.pid} failed"
-        if self.exitcode == 0:
-            return msg
-        return f"{msg} with exitcode {self.exitcode}"

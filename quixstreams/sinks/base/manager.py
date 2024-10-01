@@ -1,6 +1,8 @@
 from typing import List
 
-from .base import BaseSink
+from .sink import BaseSink
+
+__all__ = ("SinkManager",)
 
 
 class SinkManager:

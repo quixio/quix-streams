@@ -114,18 +114,20 @@ doc_map = {
     "sinks.md": {
         k: None
         for k in [
-            "quixstreams.sinks.influxdb3",
-            "quixstreams.sinks.csv",
+            "quixstreams.sinks.core.influxdb3",
+            "quixstreams.sinks.core.csv",
             "quixstreams.sinks.base.sink",
+            "quixstreams.sinks.base.exceptions",
+            "quixstreams.sinks.base.batch",
         ]
     },
     "sources.md": {
         k: None
         for k in [
-            "quixstreams.sources.base",
-            "quixstreams.sources.csv",
-            "quixstreams.sources.kafka.kafka",
-            "quixstreams.sources.kafka.quix",
+            "quixstreams.sources.base.source",
+            "quixstreams.sources.core.csv",
+            "quixstreams.sources.core.kafka.kafka",
+            "quixstreams.sources.core.kafka.quix",
         ]
     },
 }

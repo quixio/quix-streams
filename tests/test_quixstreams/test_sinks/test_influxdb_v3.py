@@ -6,7 +6,7 @@ import pytest
 from influxdb_client_3 import InfluxDBClient3, WritePrecision
 
 from quixstreams.sinks import SinkBackpressureError
-from quixstreams.sinks.influxdb3 import InfluxDB3Sink
+from quixstreams.sinks.core.influxdb3 import InfluxDB3Sink
 
 
 @pytest.fixture()

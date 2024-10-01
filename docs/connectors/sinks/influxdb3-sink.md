@@ -13,7 +13,7 @@ it to the `StreamingDataFrame.sink()` method:
 
 ```python
 from quixstreams import Application
-from quixstreams.sinks.influxdb3 import InfluxDB3Sink
+from quixstreams.sinks.core.influxdb3 import InfluxDB3Sink
 
 app = Application(broker_address="localhost:9092")
 topic = app.topic("numbers-topic")

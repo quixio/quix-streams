@@ -9,6 +9,15 @@ __all__ = ("SinkBatch",)
 
 
 class SinkBatch:
+    """
+    A batch to accumulate processed data by `BatchingSink` between the checkpoints.
+
+    Batches are created automatically by the implementations of `BatchingSink`.
+
+    :param topic: a topic name
+    :param partition: a partition number
+    """
+
     _buffer: Deque[SinkItem]
 
     def __init__(self, topic: str, partition: int):
