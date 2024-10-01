@@ -1,5 +1,6 @@
 import dataclasses
 import time
+import uuid
 import threading
 
 from typing import Optional, Tuple, Union, List, Any
@@ -124,13 +125,13 @@ class DummySink(BatchingSink):
 class DummySource(Source):
     def __init__(
         self,
-        name="dummy",
+        name: Optional[str] = None,
         values: Optional[List[Any]] = None,
         finished: threading.Event = None,
         error_in: Union[str, List[str]] = None,
         pickeable_error: bool = True,
     ) -> None:
-        super().__init__(name, 1)
+        super().__init__(name or str(uuid.uuid4()), 1)
 
         self.key = "dummy"
         self.values = values or []
