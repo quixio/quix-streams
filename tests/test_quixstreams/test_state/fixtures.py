@@ -7,7 +7,7 @@ import pytest
 from quixstreams.kafka import Consumer
 from quixstreams.models import TopicManager
 from quixstreams.state.recovery import RecoveryPartition, RecoveryManager
-from quixstreams.state.types import StorePartition
+from quixstreams.state.base import StorePartition
 
 
 @pytest.fixture()

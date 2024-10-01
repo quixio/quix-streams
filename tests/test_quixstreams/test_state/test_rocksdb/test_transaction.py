@@ -4,21 +4,22 @@ from datetime import datetime, timezone
 from unittest.mock import patch
 
 import pytest
-import rocksdict
 
-from quixstreams.state.rocksdb import (
+from quixstreams.state.exceptions import (
     StateSerializationError,
     StateTransactionError,
+    InvalidChangelogOffset,
+)
+from quixstreams.state.rocksdb import (
     RocksDBStorePartition,
     RocksDBOptions,
     RocksDBPartitionTransaction,
-    InvalidChangelogOffset,
 )
-from quixstreams.state.rocksdb.metadata import (
+from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER,
 )
-from quixstreams.state.rocksdb.serialization import serialize
+from quixstreams.state.serialization import serialize
 from quixstreams.utils.json import dumps
 
 TEST_KEYS = [
@@ -204,13 +205,20 @@ class TestRocksDBPartitionTransaction:
     def test_get_deserialization_error(self, rocksdb_partition):
         bytes_ = secrets.token_bytes(10)
         string_ = "string"
-
-        batch = rocksdict.WriteBatch(raw_mode=True)
-        # Set non-deserializable key and valid value
-        batch.put(bytes_, serialize(string_, dumps=dumps))
-        # Set valid key and non-deserializable value
-        batch.put(serialize(string_, dumps=dumps), bytes_)
-        rocksdb_partition.write(batch)
+        rocksdb_partition.write(
+            data={
+                "default": {
+                    "": {
+                        # Set non-deserializable key and valid value
+                        bytes_: serialize(string_, dumps=dumps),
+                        # Set valid key and non-deserializable value
+                        serialize(string_, dumps=dumps): bytes_,
+                    }
+                }
+            },
+            processed_offset=None,
+            changelog_offset=None,
+        )
 
         with rocksdb_partition.begin() as tx:
             with pytest.raises(StateSerializationError):
