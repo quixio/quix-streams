@@ -1,8 +1,7 @@
 import logging
 import shutil
-import enum
 from pathlib import Path
-from typing import Dict, List, Optional, Type, Union, get_args
+from typing import List, Dict, Optional, Union, Type, get_args
 
 from quixstreams.rowproducer import RowProducer
 
@@ -14,6 +13,7 @@ from .exceptions import (
 )
 from .recovery import ChangelogProducerFactory, RecoveryManager
 from .rocksdb import RocksDBOptionsType, RocksDBStore
+from .memory import MemoryStore
 from .rocksdb.windowed.store import WindowedRocksDBStore
 
 __all__ = ("StateStoreManager", "DEFAULT_STATE_STORE_NAME", "StoreTypes")
@@ -22,12 +22,8 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_STATE_STORE_NAME = "default"
 
-StoreTypes = Union[Type[RocksDBStore]]
-SUPPORTED_STORES = get_args(StoreTypes)
-
-
-class StoreTypes(enum.Enum):
-    ROCKSDB = 0
+StoreTypes = Union[Type[RocksDBStore], Type[MemoryStore]]
+SUPPORTED_STORES = [RocksDBStore, MemoryStore]
 
 
 class StateStoreManager:
@@ -174,6 +170,12 @@ class StateStoreManager:
                     base_dir=str(self._state_dir),
                     changelog_producer_factory=changelog_producer_factory,
                     options=self._rocksdb_options,
+                )
+            elif store_type == MemoryStore:
+                factory = MemoryStore(
+                    name=store_name,
+                    topic=topic_name,
+                    changelog_producer_factory=changelog_producer_factory,
                 )
             else:
                 raise ValueError(f"invalid store type: {store_type}")

@@ -10,6 +10,7 @@ from quixstreams.state.exceptions import (
     StoreNotRegisteredError,
     WindowedStoreAlreadyRegisteredError,
 )
+from quixstreams.state.rocksdb import RocksDBStore
 from quixstreams.state.manager import SUPPORTED_STORES
 from tests.utils import TopicPartitionStub
 
@@ -105,9 +106,15 @@ class TestStateStoreManager:
 
     def test_clear_stores(self, state_manager):
         # Register stores
-        state_manager.register_store("topic1", store_name="store1")
-        state_manager.register_store("topic1", store_name="extra_store")
-        state_manager.register_store("topic2", store_name="store1")
+        state_manager.register_store(
+            "topic1", store_name="store1", store_type=RocksDBStore
+        )
+        state_manager.register_store(
+            "topic1", store_name="extra_store", store_type=RocksDBStore
+        )
+        state_manager.register_store(
+            "topic2", store_name="store1", store_type=RocksDBStore
+        )
 
         # Define partitions
         partitions = [

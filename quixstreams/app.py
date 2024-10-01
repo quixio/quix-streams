@@ -44,6 +44,8 @@ from .rowproducer import RowProducer
 from .sinks import SinkManager
 from .sources import BaseSource, SourceException, SourceManager
 from .state import StateStoreManager
+from .sources import SourceManager, BaseSource, SourceException
+from .state import StateStoreManager, Store, DEFAULT_STATE_STORE_NAME
 from .state.recovery import RecoveryManager
 from .state.rocksdb import RocksDBOptionsType
 from .utils.settings import BaseSettings
@@ -125,7 +127,6 @@ class Application:
         request_timeout: float = 30,
         topic_create_timeout: float = 60,
         processing_guarantee: ProcessingGuarantee = "at-least-once",
-        state_store_type: StoreTypes = StoreTypes.ROCKSDB,
     ):
         """
         :param broker_address: Connection settings for Kafka.
@@ -184,8 +185,6 @@ class Application:
         :param request_timeout: timeout (seconds) for REST-based requests
         :param topic_create_timeout: timeout (seconds) for topic create finalization
         :param processing_guarantee: Use "exactly-once" or "at-least-once" processing.
-        :param state_store_type: Default backend used for storing the state.
-            Default: RocksDB
 
         <br><br>***Error Handlers***<br>
         To handle errors, `Application` accepts callbacks triggered when
@@ -330,7 +329,6 @@ class Application:
             rocksdb_options=self._config.rocksdb_options,
             producer=producer,
             recovery_manager=recovery_manager,
-            default_store_type=state_store_type,
         )
 
         self._source_manager = SourceManager()
@@ -631,6 +629,17 @@ class Application:
             auto_commit_enable=auto_commit_enable,
             extra_config=self._config.consumer_extra_config,
         )
+
+    def get_store(
+        self, topic: str, store_name: str = DEFAULT_STATE_STORE_NAME
+    ) -> Store:
+        """
+        Get a store for given name and topic
+        :param topic: topic name
+        :param store_name: store name
+        :return: instance of `Store`
+        """
+        return self._state_manager.get_store(topic, store_name)
 
     def clear_state(self):
         """

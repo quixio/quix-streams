@@ -31,6 +31,7 @@ from quixstreams.rowproducer import RowProducer
 from quixstreams.sinks import SinkBackpressureError, SinkBatch
 from quixstreams.sources import SourceException, multiprocessing
 from quixstreams.state import State
+from quixstreams.state.rocksdb import RocksDBStore
 from quixstreams.state.manager import SUPPORTED_STORES
 from tests.utils import DummySink, DummySource
 
@@ -1151,20 +1152,28 @@ class TestApplicationWithState:
 
         # Stop app when the future is resolved
         executor.submit(_stop_app_on_future, app, total_consumed, 10.0)
-        app.run(sdf)
+        with patch("quixstreams.state.base.Store.revoke_partition"):
+            app.run(sdf)
 
-        # Check that the values are actually in the DB
-        state_manager = state_manager_factory(
-            group_id=consumer_group, state_dir=state_dir
-        )
-        state_manager.register_store(topic_in.name, "default")
-        state_manager.on_partition_assign(
-            topic=topic_in.name, partition=partition_num, committed_offset=-1001
-        )
-        store = state_manager.get_store(topic=topic_in.name, store_name="default")
-        with store.start_partition_transaction(partition=partition_num) as tx:
-            # All keys in state must be prefixed with the message key
+        store = app.get_store(topic=topic_in.name, store_name="default")
+        partition = store.partitions[partition_num]
+        with partition.begin() as tx:
             assert tx.get("total", prefix=message_key) == total_consumed.result()
+        store.revoke_partition(partition_num)
+
+        if isinstance(store, RocksDBStore):
+            # Check that the values are actually in the DB
+            state_manager = state_manager_factory(
+                group_id=consumer_group, state_dir=state_dir
+            )
+            state_manager.register_store(topic_in.name, "default")
+            state_manager.on_partition_assign(
+                topic=topic_in.name, partition=partition_num, committed_offset=-1001
+            )
+            store = state_manager.get_store(topic=topic_in.name, store_name="default")
+            with store.start_partition_transaction(partition=partition_num) as tx:
+                # All keys in state must be prefixed with the message key
+                assert tx.get("total", prefix=message_key) == total_consumed.result()
 
     def test_run_stateful_fails_no_commit(
         self,
@@ -1273,78 +1282,28 @@ class TestApplicationWithState:
         # Stop app when the future is resolved
         executor.submit(_stop_app_on_future, app, total_consumed, 10.0)
         # Run the application
-        app.run(sdf)
-
-        # Ensure that data is committed to the DB
-        state_manager = state_manager_factory(
-            group_id=consumer_group, state_dir=state_dir
-        )
-        state_manager.register_store(topic_in.name, "default")
-        state_manager.on_partition_assign(
-            topic=topic_in.name, partition=partition_num, committed_offset=-1001
-        )
-        store = state_manager.get_store(topic=topic_in.name, store_name="default")
-        with store.start_partition_transaction(partition=partition_num) as tx:
-            assert tx.get("total", prefix=message_key) == total_consumed.result()
-
-    def test_on_assign_topic_offset_behind_warning(
-        self,
-        app_factory,
-        executor,
-        state_manager_factory,
-        tmp_path,
-    ):
-        consumer_group = str(uuid.uuid4())
-        state_dir = (tmp_path / "state").absolute()
-        partition_num = 0
-        app = app_factory(
-            consumer_group=consumer_group,
-            auto_offset_reset="earliest",
-            state_dir=state_dir,
-        )
-
-        topic_in = app.topic(str(uuid.uuid4()), value_deserializer=JSONDeserializer())
-
-        # Set the store partition offset to 9999
-        state_manager = state_manager_factory(
-            group_id=consumer_group, state_dir=state_dir
-        )
-        with state_manager:
-            state_manager.register_store(topic_in.name, "default")
-            state_partitions = state_manager.on_partition_assign(
-                topic=topic_in.name, partition=partition_num, committed_offset=-1001
-            )
-            store = state_manager.get_store(topic_in.name, "default")
-            tx = store.start_partition_transaction(partition_num)
-            # Do some change to probe the Writebatch
-            tx.set("key", "value", prefix=b"__key__")
-            tx.flush(processed_offset=9999)
-            assert state_partitions[partition_num].get_processed_offset() == 9999
-
-        # Define some stateful function so the App assigns store partitions
-        done = Future()
-
-        sdf = app.dataframe(topic_in).update(
-            lambda *_: done.set_result(True), stateful=True
-        )
-
-        # Produce a message to the topic and flush
-        data = {
-            "key": b"key",
-            "value": dumps({"key": "value"}),
-            "partition": partition_num,
-        }
-        with app.get_producer() as producer:
-            producer.produce(topic_in.name, **data)
-
-        # Stop app when the future is resolved
-        executor.submit(_stop_app_on_future, app, done, 10.0)
-        # Run the application
-        with patch.object(logging.getLoggerClass(), "warning") as mock:
+        with patch("quixstreams.state.base.Store.revoke_partition"):
             app.run(sdf)
 
-        assert mock.called
-        assert "is behind the stored offset" in mock.call_args[0][0]
+        store = app.get_store(topic=topic_in.name, store_name="default")
+        partition = store.partitions[partition_num]
+        with partition.begin() as tx:
+            assert tx.get("total", prefix=message_key) == total_consumed.result()
+        store.revoke_partition(partition_num)
+
+        if isinstance(store, RocksDBStore):
+            # Check that the values are actually in the DB
+            state_manager = state_manager_factory(
+                group_id=consumer_group, state_dir=state_dir
+            )
+            state_manager.register_store(topic_in.name, "default")
+            state_manager.on_partition_assign(
+                topic=topic_in.name, partition=partition_num, committed_offset=-1001
+            )
+            store = state_manager.get_store(topic=topic_in.name, store_name="default")
+            with store.start_partition_transaction(partition=partition_num) as tx:
+                # All keys in state must be prefixed with the message key
+                assert tx.get("total", prefix=message_key) == total_consumed.result()
 
     def test_clear_state(
         self,
@@ -1407,6 +1366,67 @@ class TestApplicationWithState:
         assert not app._state_manager.using_changelogs
 
 
+class TestApplicationWithRocksDBState:
+    def test_on_assign_topic_offset_behind_warning(
+        self,
+        app_factory,
+        executor,
+        state_manager_factory,
+        tmp_path,
+    ):
+        consumer_group = str(uuid.uuid4())
+        state_dir = (tmp_path / "state").absolute()
+        partition_num = 0
+        app = app_factory(
+            consumer_group=consumer_group,
+            auto_offset_reset="earliest",
+            state_dir=state_dir,
+        )
+
+        topic_in = app.topic(str(uuid.uuid4()), value_deserializer=JSONDeserializer())
+
+        # Set the store partition offset to 9999
+        state_manager = state_manager_factory(
+            group_id=consumer_group, state_dir=state_dir
+        )
+        with state_manager:
+            state_manager.register_store(topic_in.name, "default")
+            state_partitions = state_manager.on_partition_assign(
+                topic=topic_in.name, partition=partition_num, committed_offset=-1001
+            )
+            store = state_manager.get_store(topic_in.name, "default")
+            tx = store.start_partition_transaction(partition_num)
+            # Do some change to probe the Writebatch
+            tx.set("key", "value", prefix=b"__key__")
+            tx.flush(processed_offset=9999)
+            assert state_partitions[partition_num].get_processed_offset() == 9999
+
+        # Define some stateful function so the App assigns store partitions
+        done = Future()
+
+        sdf = app.dataframe(topic_in).update(
+            lambda *_: done.set_result(True), stateful=True
+        )
+
+        # Produce a message to the topic and flush
+        data = {
+            "key": b"key",
+            "value": dumps({"key": "value"}),
+            "partition": partition_num,
+        }
+        with app.get_producer() as producer:
+            producer.produce(topic_in.name, **data)
+
+        # Stop app when the future is resolved
+        executor.submit(_stop_app_on_future, app, done, 10.0)
+        # Run the application
+        with patch.object(logging.getLoggerClass(), "warning") as mock:
+            app.run(sdf)
+
+        assert mock.called
+        assert "is behind the stored offset" in mock.call_args[0][0]
+
+
 @pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
 class TestApplicationRecovery:
     def test_changelog_recovery_default_store(
@@ -1415,6 +1435,7 @@ class TestApplicationRecovery:
         executor,
         tmp_path,
         state_manager_factory,
+        store_type,
     ):
         consumer_group = str(uuid.uuid4())
         state_dir = (tmp_path / "state").absolute()
@@ -1456,7 +1477,7 @@ class TestApplicationRecovery:
             sdf = sdf.apply(sum_value, stateful=True)
             return app, sdf, topic
 
-        def validate_state():
+        def validate_disk_state():
             with state_manager_factory(
                 group_id=consumer_group,
                 state_dir=state_dir,
@@ -1476,6 +1497,17 @@ class TestApplicationRecovery:
                         prefix = f"key{p_num}".encode()
                         assert tx.get(sum_key, prefix=prefix) == count * msg_int_value
 
+        def validate_live_state(app):
+            for p_num, count in partition_msg_count.items():
+                store = app.get_store(topic=topic.name, store_name=store_name)
+                partition = store.partitions[p_num]
+                assert partition.get_changelog_offset() == count - 1
+                with partition.begin() as tx:
+                    # All keys in state must be prefixed with the message key
+                    prefix = f"key{p_num}".encode()
+                    assert tx.get(sum_key, prefix=prefix) == count * msg_int_value
+                store.revoke_partition(p_num)
+
         # Produce messages to the topic and flush
         app, sdf, topic = get_app()
         with app.get_producer() as producer:
@@ -1494,10 +1526,14 @@ class TestApplicationRecovery:
         # run app to populate state with data
         done = Future()
         executor.submit(_stop_app_on_future, app, done, 10.0)
-        app.run(sdf)
+        with patch("quixstreams.state.base.Store.revoke_partition"):
+            app.run(sdf)
+
         # validate and then delete the state
         assert processed_count == partition_msg_count
-        validate_state()
+        validate_live_state(app)
+        if store_type == RocksDBStore:
+            validate_disk_state()
         app.clear_state()
 
         # run the app again and validate the recovered state
@@ -1505,11 +1541,16 @@ class TestApplicationRecovery:
         app, sdf, topic = get_app()
         done = Future()
         executor.submit(_stop_app_on_future, app, done, 10.0)
-        app.run(sdf)
+
+        with patch("quixstreams.state.base.Store.revoke_partition"):
+            app.run(sdf)
+
         # no messages should have been processed outside of recovery loop
         assert processed_count == {0: 0, 1: 0}
         # State should be the same as before deletion
-        validate_state()
+        validate_live_state(app)
+        if store_type == RocksDBStore:
+            validate_disk_state()
 
     @pytest.mark.parametrize("processing_guarantee", ["at-least-once", "exactly-once"])
     def test_changelog_recovery_window_store(
@@ -1752,7 +1793,6 @@ class TestApplicationRecovery:
                 consumer_group=consumer_group,
                 state_dir=state_dir,
                 processing_guarantee=processing_guarantee,
-                store_type=store_type,
             )
             topic = app.topic(topic_name)
             sdf = app.dataframe(topic)
@@ -1761,7 +1801,17 @@ class TestApplicationRecovery:
             )
             return app, sdf, topic
 
-        def validate_state():
+        def validate_live_state(app):
+            store = app.get_store(topic=topic.name, store_name=store_name)
+            partition = store.partitions[0]
+            with partition.begin() as tx:
+                for key, value in succeeded_messages:
+                    state = tx.as_state(prefix=key.encode())
+                    assert state.get("latest") == value
+
+            store.revoke_partition(0)
+
+        def validate_disk_state():
             with (
                 state_manager_factory(
                     group_id=consumer_group,
@@ -1791,10 +1841,15 @@ class TestApplicationRecovery:
         # Run the application to apply changes to state
         done = Future()
         executor.submit(_stop_app_on_future, app, done, 10.0)
-        app.run(sdf)
+
+        with patch("quixstreams.state.base.Store.revoke_partition"):
+            app.run(sdf)
+
         assert processed_count == total_count
         # Validate the state
-        validate_state()
+        validate_live_state(app)
+        if store_type == RocksDBStore:
+            validate_disk_state()
 
         # Init application again
         processed_count = 0
@@ -1810,26 +1865,34 @@ class TestApplicationRecovery:
         with commit_patch:
             done = Future()
             executor.submit(_stop_app_on_future, app, done, 10.0)
-            with contextlib.suppress(PartitionAssignmentError):
-                with pytest.raises(ValueError):
-                    app.run(sdf)
+            with patch("quixstreams.state.base.Store.revoke_partition"):
+                with contextlib.suppress(PartitionAssignmentError):
+                    with pytest.raises(ValueError):
+                        app.run(sdf)
+
         # state should remain the same
-        validate_state()
+        validate_live_state(app)
+        if store_type == RocksDBStore:
+            validate_disk_state()
 
         # Run the app again to recover the state
         app, sdf, topic = get_app()
         # Clear the state to recover from scratch
         app.clear_state()
 
+        done = Future()
+        executor.submit(_stop_app_on_future, app, done, 10.0)
         # Run app for the third time and fail on commit to prevent state changes
         with commit_patch:
-            done = Future()
-            executor.submit(_stop_app_on_future, app, done, 10.0)
-            with contextlib.suppress(PartitionAssignmentError):
-                with pytest.raises(ValueError):
-                    app.run(sdf)
-        # The app should be recovered
-        validate_state()
+            with patch("quixstreams.state.base.Store.revoke_partition"):
+                with contextlib.suppress(PartitionAssignmentError):
+                    with pytest.raises(ValueError):
+                        app.run(sdf)
+
+        # state should remain the same
+        validate_live_state(app)
+        if store_type == RocksDBStore:
+            validate_disk_state()
 
 
 class TestApplicationSink:
@@ -2469,22 +2532,32 @@ class TestApplicationMultipleSdf:
 
         # Stop app when the future is resolved
         executor.submit(_stop_app_on_future, app, done, 10.0)
-        app.run()
+
+        with patch("quixstreams.state.base.Store.revoke_partition"):
+            app.run()
+
         assert processed_count == total_messages
 
-        # Check that the values are actually in the DB
-        state_manager = state_manager_factory(
-            group_id=consumer_group, state_dir=state_dir
-        )
         for topic in input_topics:
-            state_manager.register_store(topic.name, "default")
-            state_manager.on_partition_assign(
-                topic=topic.name, partition=partition_num, committed_offset=-1001
-            )
-            store = state_manager.get_store(topic=topic.name, store_name="default")
-            with store.start_partition_transaction(partition=partition_num) as tx:
-                # All keys in state must be prefixed with the message key
+            store = app.get_store(topic=topic.name, store_name="default")
+            partition = store.partitions[partition_num]
+            with partition.begin() as tx:
                 assert tx.get("total", prefix=message_key) == messages_per_topic
+            store.revoke_partition(partition_num)
+
+            if isinstance(store, RocksDBStore):
+                # Check that the values are actually in the DB
+                state_manager = state_manager_factory(
+                    group_id=consumer_group, state_dir=state_dir
+                )
+                state_manager.register_store(topic.name, "default")
+                state_manager.on_partition_assign(
+                    topic=topic.name, partition=partition_num, committed_offset=-1001
+                )
+                store = state_manager.get_store(topic=topic.name, store_name="default")
+                with store.start_partition_transaction(partition=partition_num) as tx:
+                    # All keys in state must be prefixed with the message key
+                    assert tx.get("total", prefix=message_key) == messages_per_topic
 
     @pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
     def test_changelog_recovery(
@@ -2574,19 +2647,30 @@ class TestApplicationMultipleSdf:
 
         done = Future()
         executor.submit(_stop_app_on_future, app, done, 10.0)
-        app.run()
+
+        with patch("quixstreams.state.base.Store.revoke_partition"):
+            app.run()
+
         assert processed_count == total_messages
 
-        state_manager = state_manager_factory(
-            group_id=consumer_group, state_dir=state_dir
-        )
-
         for topic in input_topics:
-            state_manager.register_store(topic.name, "default")
-            state_manager.on_partition_assign(
-                topic=topic.name, partition=partition_num, committed_offset=-1001
-            )
-            store = state_manager.get_store(topic=topic.name, store_name="default")
-            with store.start_partition_transaction(partition=partition_num) as tx:
-                # All keys in state must be prefixed with the message key
+            store = app.get_store(topic=topic.name, store_name="default")
+            partition = store.partitions[partition_num]
+            with partition.begin() as tx:
                 assert tx.get("total", prefix=message_key) == messages_per_topic * 2
+            store.revoke_partition(partition_num)
+            if isinstance(store, RocksDBStore):
+                # Check that the values are actually in the DB
+                state_manager = state_manager_factory(
+                    group_id=consumer_group, state_dir=state_dir
+                )
+                state_manager.register_store(topic.name, "default")
+                state_manager.on_partition_assign(
+                    topic=topic.name,
+                    partition=partition_num,
+                    committed_offset=-1001,
+                )
+                store = state_manager.get_store(topic=topic.name, store_name="default")
+                with store.start_partition_transaction(partition=partition_num) as tx:
+                    # All keys in state must be prefixed with the message key
+                    assert tx.get("total", prefix=message_key) == messages_per_topic * 2
