@@ -293,7 +293,8 @@ workspace data dict if topic search success, else None
 ```python
 def create_topics(topics: List[Topic],
                   timeout: Optional[float] = None,
-                  finalize_timeout: Optional[float] = None)
+                  finalize_timeout: Optional[float] = None,
+                  prepend: bool = True)
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L369)
@@ -306,6 +307,7 @@ Create topics in a Quix cluster.
 - `timeout`: response timeout (seconds); Default 30
 - `finalize_timeout`: topic finalization timeout (seconds); Default 60
 marked as "Ready" (and thus ready to produce to/consume from).
+- `prepend`: whether to prepend workspace_id during creation attempt.
 
 <a id="quixstreams.platforms.quix.config.QuixKafkaConfigsBuilder.get_topic"></a>
 
@@ -316,7 +318,7 @@ def get_topic(topic_name: str,
               timeout: Optional[float] = None) -> Optional[dict]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L419)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L421)
 
 return the topic ID (the actual cluster topic name) if it exists, else None
 
@@ -342,7 +344,7 @@ def confirm_topics_exist(topics: Union[List[Topic], List[str]],
                          timeout: Optional[float] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L451)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L453)
 
 Confirm whether the desired set of topics exists in the Quix workspace.
 
@@ -359,7 +361,7 @@ Confirm whether the desired set of topics exists in the Quix workspace.
 def get_application_config(consumer_group_id: str) -> QuixApplicationConfig
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L483)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L485)
 
 Get all the necessary attributes for an Application to run on Quix Cloud.
 
