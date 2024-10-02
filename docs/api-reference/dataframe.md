@@ -56,7 +56,7 @@ usage, see `streamingdataframe.md` under the `docs/` folder.
 ***Example Snippet:***
 
 ```python
-sdf = StreamingDataframe()
+sdf = StreamingDataFrame()
 sdf = sdf.apply(a_func)
 sdf = sdf.filter(another_func)
 sdf = sdf.to_topic(topic_obj)
@@ -101,7 +101,7 @@ def func(d: dict, state: State):
         state.set("my_store_key") = value
     return {k: v.upper() if isinstance(v, str) else v for k, v in d.items()}
 
-sdf = StreamingDataframe()
+sdf = StreamingDataFrame()
 sdf = sdf.apply(func, stateful=True)
 sdf = sdf.apply(lambda d: {k: v for k,v in d.items() if isinstance(v, str)})
 
@@ -166,7 +166,7 @@ def func(values: list, state: State):
         state.set("my_store_key") = value
     values.append("new_item")
 
-sdf = StreamingDataframe()
+sdf = StreamingDataFrame()
 sdf = sdf.update(func, stateful=True)
 # does not require reassigning
 sdf.update(lambda v: v.append(1))
@@ -229,7 +229,7 @@ def func(d: dict, state: State):
         return True
     return False
 
-sdf = StreamingDataframe()
+sdf = StreamingDataFrame()
 sdf = sdf.filter(func, stateful=True)
 ```
 
@@ -289,7 +289,7 @@ def func(d: dict, state: State):
     d["customer_total"] = new_total
     return d
 
-sdf = StreamingDataframe()
+sdf = StreamingDataFrame()
 sdf = sdf.group_by("customer_account_id")
 sdf = sdf.apply(func, stateful=True)
 ```
@@ -335,7 +335,7 @@ Check if the key is present in the Row value.
 # Add new column 'has_column' which contains a boolean indicating
 # the presence of 'column_x'
 
-sdf = StreamingDataframe()
+sdf = StreamingDataFrame()
 sdf['has_column'] = sdf.contains('column_x')
 ```
 
@@ -859,7 +859,7 @@ original `StreamingDataFrame` is returned for chaining (`sdf.update().print()`).
 # Remove columns "x" and "y" from the value.
 # This would transform {"x": 1, "y": 2, "z": 3} to {"z": 3}
 
-sdf = StreamingDataframe()
+sdf = StreamingDataFrame()
 sdf.drop(["x", "y"])
 ```
 
@@ -965,7 +965,7 @@ with `StreamingSeries`, and you shouldn't have to think about them explicitly.
 # Random methods for example purposes. More detailed explanations found under
 # various methods or in the docs folder.
 
-sdf = StreamingDataframe()
+sdf = StreamingDataFrame()
 sdf = sdf["column_a"].apply(a_func).apply(diff_func, stateful=True)
 sdf["my_new_bool_field"] = sdf["column_b"].contains("this_string")
 sdf["new_sum_field"] = sdf["column_c"] + sdf["column_d"] + 2
@@ -1038,7 +1038,7 @@ def func(value: str, state: State):
         state.set("my_store_key") = value
     return v.upper()
 
-sdf = StreamingDataframe()
+sdf = StreamingDataFrame()
 sdf["new_col"] = sdf["a_column"]["nested_dict_key"].apply(func, stateful=True)
 sdf["new_col_2"] = sdf["str_col"].apply(lambda v: int(v)) + sdf["str_col2"] + 2
 ```
