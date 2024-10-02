@@ -51,7 +51,6 @@ from .utils.settings import BaseSettings
 __all__ = ("Application", "ApplicationConfig")
 
 logger = logging.getLogger(__name__)
-warnings.simplefilter("always", DeprecationWarning)
 ProcessingGuarantee = Literal["at-least-once", "exactly-once"]
 MessageProcessedCallback = Callable[[str, int, int], None]
 
@@ -684,7 +683,7 @@ class Application:
                 "Application.run() received a `dataframe` argument which is "
                 "no longer used (StreamingDataFrames are now tracked automatically); "
                 "the argument should be removed.",
-                DeprecationWarning,
+                FutureWarning,
             )
         self._run()
 
