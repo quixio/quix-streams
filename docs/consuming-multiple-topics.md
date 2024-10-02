@@ -61,7 +61,7 @@ the state of another `SDF`.
 
 As a reminder, state is ultimately tied to a given topic (and thus its `SDF`).
 
-[See here to learn more about stateful processing](stateful-processing.md).
+[See here to learn more about stateful processing](./advanced/stateful-processing.md).
 
 ## Multiple Topics: NOT parallel
 

@@ -53,11 +53,11 @@ See [sinks](../connectors/sinks/README.md#sinks-are-terminal-operations) for det
 
 With the introduction of branching, assignment is no longer technically required 
 for the "assignment" operation to be added: it instead generates a 
-[terminal branch](branching.md#terminal-branches-no-assignment).
+[terminal branch](../branching.md#terminal-branches-no-assignment).
 
 In general, it is still recommended to follow both the 
 [recommended assignment patterns](#assignment-vs-in-place-patterns) and
-[recommended branching patterns](branching.md#branching-fundamentals).
+[recommended branching patterns](../branching.md#branching-fundamentals).
 
 ## Before Quix Streams v3.0.0 (branching)
 
