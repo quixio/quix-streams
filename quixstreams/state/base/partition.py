@@ -1,7 +1,7 @@
 import logging
 
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Optional, Union, Any, TYPE_CHECKING
 
 from quixstreams.models import ConfluentKafkaMessageProto
 from quixstreams.state.exceptions import ColumnFamilyHeaderMissing
@@ -9,9 +9,14 @@ from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER,
 )
+from quixstreams.state.serialization import DumpsFunc, LoadsFunc
 from quixstreams.utils.json import loads as json_loads
 
 from .transaction import PartitionTransaction, CACHE_TYPE
+
+if TYPE_CHECKING:
+    from quixstreams.state.recovery import ChangelogProducer
+
 
 __all__ = ("StorePartition",)
 
@@ -25,14 +30,16 @@ class StorePartition(ABC):
     the persistent storage).
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        dumps: DumpsFunc,
+        loads: LoadsFunc,
+        changelog_producer: "ChangelogProducer",
+    ) -> None:
         super().__init__()
-
-    @abstractmethod
-    def begin(self) -> PartitionTransaction:
-        """
-        Start new `PartitionTransaction`
-        """
+        self._dumps = dumps
+        self._loads = loads
+        self._changelog_producer = changelog_producer
 
     @abstractmethod
     def close(self): ...
@@ -72,6 +79,42 @@ class StorePartition(ABC):
         :param processed_offset: The offset processed to generate the data.
         :param changelog_offset: The changelog message offset of the data.
         """
+
+    @abstractmethod
+    def get(
+        self, key: bytes, default: Any = None, cf_name: str = "default"
+    ) -> Union[None, bytes, Any]:
+        """
+        Get a key from the store
+
+        :param key: a key encoded to `bytes`
+        :param default: a default value to return if the key is not found.
+        :param cf_name: rocksdb column family name. Default - "default"
+        :return: a value if the key is present in the store. Otherwise, `default`
+        """
+
+    @abstractmethod
+    def exists(self, key: bytes, cf_name: str = "default") -> bool:
+        """
+        Check if a key is present in the store.
+
+        :param key: a key encoded to `bytes`.
+        :param cf_name: rocksdb column family name. Default - "default"
+        :return: `True` if the key is present, `False` otherwise.
+        """
+
+    def begin(self) -> PartitionTransaction:
+        """
+        Start a new `PartitionTransaction`
+
+        Using `PartitionTransaction` is a recommended way for accessing the data.
+        """
+        return PartitionTransaction(
+            partition=self,
+            dumps=self._dumps,
+            loads=self._loads,
+            changelog_producer=self._changelog_producer,
+        )
 
     def recover_from_changelog_message(
         self, changelog_message: ConfluentKafkaMessageProto, committed_offset: int

@@ -16,8 +16,8 @@ from quixstreams.rowproducer import RowProducer
 from quixstreams.sinks import SinkManager, BatchingSink, SinkBackpressureError
 from quixstreams.sinks.base import SinkBatch
 from quixstreams.state import StateStoreManager
+from quixstreams.state.base import PartitionTransaction
 from quixstreams.state.exceptions import StoreNotRegisteredError, StoreTransactionFailed
-from quixstreams.state.rocksdb import RocksDBPartitionTransaction
 from tests.utils import DummySink
 
 
@@ -309,7 +309,7 @@ class TestCheckpoint:
         with (
             contextlib.suppress(ValueError),
             patch.object(
-                RocksDBPartitionTransaction,
+                PartitionTransaction,
                 "_serialize_key",
                 side_effect=ValueError("test"),
             ),

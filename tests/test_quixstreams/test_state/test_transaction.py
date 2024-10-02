@@ -5,16 +5,13 @@ from unittest.mock import patch
 
 import pytest
 
+from quixstreams.state.base import PartitionTransaction
 from quixstreams.state.exceptions import (
     StateSerializationError,
     StateTransactionError,
     InvalidChangelogOffset,
 )
-from quixstreams.state.rocksdb import (
-    RocksDBStorePartition,
-    RocksDBOptions,
-    RocksDBPartitionTransaction,
-)
+from quixstreams.state.rocksdb import RocksDBOptions
 from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER,
@@ -48,7 +45,7 @@ TEST_PREFIXES = [
 ]
 
 
-class TestRocksDBPartitionTransaction:
+class TestPartitionTransaction:
     def test_transaction_complete(self, rocksdb_partition):
         with rocksdb_partition.begin() as tx:
             ...
@@ -68,7 +65,7 @@ class TestRocksDBPartitionTransaction:
         with rocksdb_partition_factory(
             changelog_producer=changelog_producer_mock
         ) as partition:
-            with patch.object(RocksDBStorePartition, "write") as mocked:
+            with patch.object(partition, "write") as mocked:
                 with partition.begin() as tx:
                     tx.get("key", prefix=prefix)
 
@@ -259,7 +256,7 @@ class TestRocksDBPartitionTransaction:
 
         prefix = b"__key__"
         with patch.object(
-            RocksDBPartitionTransaction,
+            PartitionTransaction,
             "_serialize_key",
             side_effect=ValueError("test"),
         ):
@@ -395,9 +392,7 @@ class TestRocksDBPartitionTransaction:
         """
 
         prefix = b"__key__"
-        with patch.object(
-            RocksDBStorePartition, "write", side_effect=ValueError("test")
-        ):
+        with patch.object(rocksdb_partition, "write", side_effect=ValueError("test")):
             with rocksdb_partition.begin() as tx:
                 tx.set("key", "value", prefix=prefix)
 

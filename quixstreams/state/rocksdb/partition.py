@@ -22,9 +22,6 @@ from .metadata import (
     CHANGELOG_OFFSET_KEY,
 )
 from .options import RocksDBOptions
-from .transaction import (
-    RocksDBPartitionTransaction,
-)
 from .types import RocksDBOptionsType
 
 __all__ = ("RocksDBStorePartition",)
@@ -55,34 +52,18 @@ class RocksDBStorePartition(StorePartition):
         options: Optional[RocksDBOptionsType] = None,
         changelog_producer: Optional[ChangelogProducer] = None,
     ):
-        super().__init__()
+        if not options:
+            options = RocksDBOptions()
+
+        super().__init__(options.dumps, options.loads, changelog_producer)
         self._path = path
-        self._options = options or RocksDBOptions()
+        self._options = options
         self._rocksdb_options = self._options.to_options()
-        self._dumps = self._options.dumps
-        self._loads = self._options.loads
         self._open_max_retries = self._options.open_max_retries
         self._open_retry_backoff = self._options.open_retry_backoff
         self._db = self._init_rocksdb()
         self._cf_cache: Dict[str, Rdict] = {}
         self._cf_handle_cache: Dict[str, ColumnFamily] = {}
-        self._changelog_producer = changelog_producer
-
-    def begin(
-        self,
-    ) -> RocksDBPartitionTransaction:
-        """
-        Create a new `RocksDBPartitionTransaction` object.
-        Using `RocksDBPartitionTransaction` is a recommended way for accessing the data.
-
-        :return: an instance of `RocksDBPartitionTransaction`
-        """
-        return RocksDBPartitionTransaction(
-            partition=self,
-            dumps=self._dumps,
-            loads=self._loads,
-            changelog_producer=self._changelog_producer,
-        )
 
     def _changelog_recover_flush(self, changelog_offset: int, batch: WriteBatch):
         """

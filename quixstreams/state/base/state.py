@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from quixstreams.state.base import PartitionTransaction
+    from .transaction import PartitionTransaction
 
 __all__ = ("State", "TransactionState")
 

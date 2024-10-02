@@ -10,7 +10,7 @@ from typing import (
     TYPE_CHECKING,
 )
 
-from abc import ABC, abstractmethod
+from abc import ABC
 
 from quixstreams.state.exceptions import (
     StateTransactionError,
@@ -36,8 +36,8 @@ from quixstreams.utils.json import dumps as json_dumps
 from .state import State, TransactionState
 
 if TYPE_CHECKING:
+    from quixstreams.state.recovery import ChangelogProducer
     from .partition import StorePartition
-    from ..recovery import ChangelogProducer
 
 __all__ = ("PartitionTransactionStatus", "PartitionTransaction", "CACHE_TYPE")
 
@@ -98,14 +98,6 @@ class PartitionTransaction(ABC):
         self._partition = partition
 
         self._update_cache: CACHE_TYPE = {}
-
-    @abstractmethod
-    def _get(
-        self, key_serialized: bytes, default: Any = None, cf_name: str = "default"
-    ) -> Optional[Any]: ...
-
-    @abstractmethod
-    def _exists(self, key_serialized: bytes, cf_name: str) -> bool: ...
 
     @property
     def changelog_producer(self) -> Optional["ChangelogProducer"]:
@@ -198,7 +190,9 @@ class PartitionTransaction(ABC):
         cf_name: str = "default",
     ) -> Optional[Any]:
         """
-        Get the value for key if key is present in the state, else default
+        Get a key from the store.
+
+        It returns `None` if the key is not found and `default` is not provided.
 
         :param key: key
         :param prefix: a key prefix
@@ -218,7 +212,11 @@ class PartitionTransaction(ABC):
         if cached is not UNDEFINED:
             return self._deserialize_value(cached)
 
-        return self._get(key_serialized, default, cf_name)
+        stored = self._partition.get(key_serialized, UNDEFINED, cf_name)
+        if stored is UNDEFINED:
+            return default
+
+        return self._deserialize_value(stored)
 
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
     def set(self, key: Any, value: Any, prefix: bytes, cf_name: str = "default"):
@@ -277,7 +275,7 @@ class PartitionTransaction(ABC):
         if cached is not UNDEFINED:
             return True
 
-        return self._exists(key_serialized, cf_name)
+        return self._partition.exists(key_serialized, cf_name=cf_name)
 
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
     def prepare(self, processed_offset: int):

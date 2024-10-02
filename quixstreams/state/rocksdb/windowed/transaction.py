@@ -9,17 +9,17 @@ from quixstreams.state.serialization import (
     LoadsFunc,
     DumpsFunc,
 )
+from quixstreams.state.base.transaction import PartitionTransaction
 
 from .metadata import LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY, LATEST_EXPIRED_WINDOW_CF_NAME
 from .serialization import encode_window_key, encode_window_prefix, parse_window_key
 from .state import WindowedTransactionState
-from ..transaction import RocksDBPartitionTransaction
 
 if TYPE_CHECKING:
     from .partition import WindowedRocksDBStorePartition
 
 
-class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
+class WindowedRocksDBPartitionTransaction(PartitionTransaction):
     __slots__ = ("_latest_timestamp_ms",)
 
     def __init__(
