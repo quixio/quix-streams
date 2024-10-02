@@ -683,7 +683,7 @@ class Application:
                 "Application.run() received a `dataframe` argument which is "
                 "no longer used (StreamingDataFrames are now tracked automatically); "
                 "the argument should be removed.",
-                DeprecationWarning,
+                FutureWarning,
             )
         self._run()
 
