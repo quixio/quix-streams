@@ -4,6 +4,8 @@ from typing import Any, Callable
 from .exceptions import StateSerializationError
 
 __all__ = (
+    "DumpsFunc",
+    "LoadsFunc",
     "serialize",
     "deserialize",
     "int_to_int64_bytes",

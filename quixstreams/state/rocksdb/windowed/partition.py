@@ -6,16 +6,11 @@ from rocksdict import WriteBatch, ReadOptions, RdictItems  # type: ignore
 from quixstreams.state.serialization import int_from_int64_bytes, int_to_int64_bytes
 from quixstreams.state.recovery import ChangelogProducer
 
-from .metadata import LATEST_EXPIRED_WINDOW_CF_NAME
+from .metadata import LATEST_EXPIRED_WINDOW_CF_NAME, LATEST_TIMESTAMP_KEY
 from .transaction import WindowedRocksDBPartitionTransaction
 from .. import ColumnFamilyDoesNotExist
-from ..metadata import (
-    METADATA_CF_NAME,
-    LATEST_TIMESTAMP_KEY,
-)
-from ..partition import (
-    RocksDBStorePartition,
-)
+from ..metadata import METADATA_CF_NAME
+from ..partition import RocksDBStorePartition
 from ..types import RocksDBOptionsType
 
 logger = logging.getLogger(__name__)
@@ -85,7 +80,7 @@ class WindowedRocksDBStorePartition(RocksDBStorePartition):
     ):
         batch = WriteBatch(raw_mode=True)
 
-        if latest_timestamp_ms:
+        if latest_timestamp_ms is not None:
             cf_handle = self.get_column_family_handle(METADATA_CF_NAME)
             batch.put(
                 LATEST_TIMESTAMP_KEY,
@@ -99,5 +94,5 @@ class WindowedRocksDBStorePartition(RocksDBStorePartition):
             batch=batch,
         )
 
-        if latest_timestamp_ms:
+        if latest_timestamp_ms is not None:
             self.set_latest_timestamp(latest_timestamp_ms)
