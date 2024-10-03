@@ -209,7 +209,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
                 windows[(start, end)] = self._deserialize_value(value)
 
         for window_key, window_value in (
-            self._update_cache["default"].get(prefix, {}).items()
+            self._update_cache.get("default", {}).get(prefix, {}).items()
         ):
             message_key, start, end = parse_window_key(window_key)
             if window_value is DELETED:
