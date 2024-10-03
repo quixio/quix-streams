@@ -22,6 +22,7 @@ from quixstreams.state.metadata import (
     DELETED,
     PREFIX_SEPARATOR,
     UNDEFINED,
+    Undefined,
     DEFAULT_PREFIX,
 )
 from quixstreams.state.serialization import (
@@ -41,7 +42,7 @@ if TYPE_CHECKING:
 __all__ = ("PartitionTransactionStatus", "PartitionTransaction", "CACHE_TYPE")
 
 logger = logging.getLogger(__name__)
-CACHE_TYPE = Dict[str, Dict[bytes, Dict[bytes, Union[bytes, DELETED]]]]
+CACHE_TYPE = Dict[str, Dict[bytes, Dict[bytes, Union[bytes, Undefined]]]]
 
 
 class PartitionTransactionStatus(enum.Enum):
