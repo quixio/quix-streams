@@ -80,18 +80,24 @@ class WindowedRocksDBStorePartition(RocksDBStorePartition):
         data: Dict,
         processed_offset: Optional[int],
         changelog_offset: Optional[int],
+        batch: Optional[WriteBatch] = None,
+        latest_timestamp_ms: Optional[int] = None,
     ):
         batch = WriteBatch(raw_mode=True)
 
-        cf_handle = self.get_column_family_handle(METADATA_CF_NAME)
-        batch.put(
-            LATEST_TIMESTAMP_KEY,
-            int_to_int64_bytes(self._latest_timestamp_ms),
-            cf_handle,
-        )
+        if latest_timestamp_ms:
+            cf_handle = self.get_column_family_handle(METADATA_CF_NAME)
+            batch.put(
+                LATEST_TIMESTAMP_KEY,
+                int_to_int64_bytes(latest_timestamp_ms),
+                cf_handle,
+            )
         super().write(
             data=data,
             processed_offset=processed_offset,
             changelog_offset=changelog_offset,
             batch=batch,
         )
+
+        if latest_timestamp_ms:
+            self.set_latest_timestamp(latest_timestamp_ms)

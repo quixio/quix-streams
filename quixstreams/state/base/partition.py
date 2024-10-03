@@ -34,7 +34,7 @@ class StorePartition(ABC):
         self,
         dumps: DumpsFunc,
         loads: LoadsFunc,
-        changelog_producer: "ChangelogProducer",
+        changelog_producer: Optional["ChangelogProducer"],
     ) -> None:
         super().__init__()
         self._dumps = dumps
@@ -46,7 +46,11 @@ class StorePartition(ABC):
 
     @abstractmethod
     def _recover_from_changelog_message(
-        self, changelog_message: ConfluentKafkaMessageProto, committed_offset: int
+        self,
+        changelog_message: ConfluentKafkaMessageProto,
+        cf_name: str,
+        processed_offset: Optional[int],
+        committed_offset: int,
     ): ...
 
     @abstractmethod

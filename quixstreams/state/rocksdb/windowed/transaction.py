@@ -10,6 +10,7 @@ from quixstreams.state.serialization import (
     DumpsFunc,
 )
 from quixstreams.state.base.transaction import PartitionTransaction
+from quixstreams.state.exceptions import InvalidChangelogOffset
 
 from .metadata import LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY, LATEST_EXPIRED_WINDOW_CF_NAME
 from .serialization import encode_window_key, encode_window_prefix, parse_window_key
@@ -87,8 +88,25 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         self.delete(key=key, prefix=prefix)
 
     def _flush(self, processed_offset: Optional[int], changelog_offset: Optional[int]):
-        self._partition.set_latest_timestamp(self._latest_timestamp_ms)
-        super()._flush(processed_offset, changelog_offset)
+        if not self._update_cache:
+            return
+
+        if changelog_offset is not None:
+            current_changelog_offset = self._partition.get_changelog_offset()
+            if (
+                current_changelog_offset is not None
+                and changelog_offset < current_changelog_offset
+            ):
+                raise InvalidChangelogOffset(
+                    "Cannot set changelog offset lower than already saved one"
+                )
+
+        self._partition.write(
+            data=self._update_cache,
+            processed_offset=processed_offset,
+            changelog_offset=changelog_offset,
+            latest_timestamp_ms=self._latest_timestamp_ms,
+        )
 
     def expire_windows(
         self, duration_ms: int, prefix: bytes, grace_ms: int = 0
