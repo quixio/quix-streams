@@ -3176,6 +3176,12 @@ Default - `json.dumps`.
 
 ## quixstreams.sinks
 
+<a id="quixstreams.sinks.community"></a>
+
+## quixstreams.sinks.community
+
+This module contains Sinks developed and maintained by the members of Quix Streams community.
+
 <a id="quixstreams.sinks.base.sink"></a>
 
 ## quixstreams.sinks.base.sink
@@ -9445,6 +9451,12 @@ Default - `json.loads`
 <a id="quixstreams.sources"></a>
 
 ## quixstreams.sources
+
+<a id="quixstreams.sources.community"></a>
+
+## quixstreams.sources.community
+
+This module contains Sources developed and maintained by the members of Quix Streams community.
 
 <a id="quixstreams.sources.base"></a>
 
