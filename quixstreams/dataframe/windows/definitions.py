@@ -3,7 +3,7 @@ from abc import abstractmethod
 from typing import Any, Optional, Callable, Tuple, TYPE_CHECKING
 
 from .base import WindowAggregateFunc, WindowMergeFunc
-from .time_based import FixedTimeWindow
+from .time_based import FixedTimeWindow, SlidingWindow
 
 if TYPE_CHECKING:
     from quixstreams.dataframe.dataframe import StreamingDataFrame
@@ -248,6 +248,39 @@ class TumblingWindowDefinition(FixedTimeWindowDefinition):
         merge_func: Optional[WindowMergeFunc] = None,
     ) -> "FixedTimeWindow":
         return FixedTimeWindow(
+            duration_ms=self._duration_ms,
+            grace_ms=self._grace_ms,
+            name=self._get_name(func_name=func_name),
+            aggregate_func=aggregate_func,
+            aggregate_default=aggregate_default,
+            merge_func=merge_func,
+            dataframe=self._dataframe,
+        )
+
+
+class SlidingWindowDefinition(FixedTimeWindowDefinition):
+    def __init__(
+        self,
+        duration_ms: int,
+        grace_ms: int,
+        dataframe: "StreamingDataFrame",
+        name: Optional[str] = None,
+    ):
+        super().__init__(
+            duration_ms=duration_ms, grace_ms=grace_ms, dataframe=dataframe, name=name
+        )
+
+    def _get_name(self, func_name: str) -> str:
+        return self._name or f"sliding_window_{self._duration_ms}_{func_name}"
+
+    def _create_window(
+        self,
+        func_name: str,
+        aggregate_func: WindowAggregateFunc,
+        aggregate_default: Optional[Any] = None,
+        merge_func: Optional[WindowMergeFunc] = None,
+    ) -> "FixedTimeWindow":
+        return SlidingWindow(
             duration_ms=self._duration_ms,
             grace_ms=self._grace_ms,
             name=self._get_name(func_name=func_name),

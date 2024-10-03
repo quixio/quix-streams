@@ -1,5 +1,15 @@
 import functools
-from typing import Any, Optional, List, TYPE_CHECKING, cast, Tuple, Callable
+from collections import deque
+from typing import (
+    Any,
+    Callable,
+    cast,
+    Iterable,
+    List,
+    Optional,
+    Tuple,
+    TYPE_CHECKING,
+)
 
 import logging
 from quixstreams.context import message_context
@@ -62,7 +72,7 @@ class FixedTimeWindow:
         value: Any,
         timestamp_ms: int,
         state: WindowedState,
-    ) -> Tuple[List[WindowResult], List[WindowResult]]:
+    ) -> Tuple[Iterable[WindowResult], Iterable[WindowResult]]:
         duration_ms = self._duration_ms
         grace_ms = self._grace_ms
         default = self._aggregate_default
@@ -236,3 +246,195 @@ def _as_windowed(
         return func(value, key, timestamp, headers, state)
 
     return wrapper
+
+
+class SlidingWindow(FixedTimeWindow):
+    def process_window(
+        self,
+        value: Any,
+        timestamp_ms: int,
+        state: WindowedState,
+    ) -> Tuple[Iterable[WindowResult], Iterable[WindowResult]]:
+        duration_ms = self._duration_ms
+        grace_ms = self._grace_ms
+        default = self._aggregate_default
+
+        # Sliding windows are inclusive on both ends so values with
+        # timestamps equal to latest_timestamp - duration_ms - grace
+        # are still eligible for processing.
+        watermark = state.get_latest_timestamp() - duration_ms - grace_ms - 1
+
+        left_window_end = timestamp_ms
+        left_window_start = timestamp_ms - duration_ms
+
+        right_window_start = timestamp_ms + 1
+        right_window_end = right_window_start + duration_ms
+        right_window_exists = False
+
+        windows_starts = set([left_window_start])
+        updated_windows = deque()
+        windows = state.get_windows(
+            # start_from_ms is exclusive, hence -1
+            start_from_ms=left_window_start - duration_ms - 1,
+            start_to_ms=right_window_start,
+            backwards=True,
+        )
+
+        for (start, end), (max_timestamp, aggregation) in windows:
+            windows_starts.add(start)
+
+            if start == right_window_start:
+                # Right window already exists
+                right_window_exists = True
+
+            elif end > left_window_end:
+                # Create right window if it does not exist and will not be empty
+                if not right_window_exists and max_timestamp > timestamp_ms:
+                    updated_windows.appendleft(
+                        self._update_window(
+                            state=state,
+                            start_ms=right_window_start,
+                            end_ms=right_window_end,
+                            value=aggregation,
+                            timestamp_ms=timestamp_ms,
+                            window_timestamp_ms=max_timestamp,
+                        )
+                    )
+                    right_window_exists = True
+
+                # Update existing window
+                updated_windows.appendleft(
+                    self._update_window(
+                        state=state,
+                        start_ms=start,
+                        end_ms=end,
+                        value=self._aggregate_func(aggregation, value),
+                        timestamp_ms=timestamp_ms,
+                        window_timestamp_ms=max(timestamp_ms, max_timestamp),
+                    )
+                )
+
+            elif end == left_window_end:
+                if (
+                    # If max_timestamp < timestamp_ms, the window becomes left window
+                    # for the current value but before that it was only right window
+                    # for other value(s). That means that the right window for its
+                    # max_timestamp may not exist yet and we need to create it.
+                    max_timestamp < timestamp_ms
+                    and self._should_create_right_window(
+                        start=(right_window_start := max_timestamp + 1),
+                        end=(right_window_end := right_window_start + duration_ms),
+                        windows_starts=windows_starts,
+                        timestamp_ms=timestamp_ms,
+                    )
+                ):
+                    updated_windows.appendleft(
+                        self._update_window(
+                            state=state,
+                            start_ms=right_window_start,
+                            end_ms=right_window_end,
+                            value=self._aggregate_func(default, value),
+                            timestamp_ms=timestamp_ms,
+                            window_timestamp_ms=timestamp_ms,
+                        )
+                    )
+
+                # Left window already exists, its enough to update it
+                updated_windows.appendleft(
+                    self._update_window(
+                        state=state,
+                        start_ms=start,
+                        end_ms=end,
+                        value=self._aggregate_func(aggregation, value),
+                        timestamp_ms=timestamp_ms,
+                        window_timestamp_ms=timestamp_ms,
+                    )
+                )
+                break
+
+            elif end < left_window_end:
+                if (
+                    # Similar to right window creation when end == left_window_end,
+                    # but in this case max_timestamp is lower than timestamp_ms
+                    # so we don't need to check that, but check the watermark instead.
+                    (right_window_start := max_timestamp + 1) > watermark
+                    and self._should_create_right_window(
+                        start=right_window_start,
+                        end=(right_window_end := right_window_start + duration_ms),
+                        windows_starts=windows_starts,
+                        timestamp_ms=timestamp_ms,
+                    )
+                ):
+                    updated_windows.appendleft(
+                        self._update_window(
+                            state=state,
+                            start_ms=right_window_start,
+                            end_ms=right_window_end,
+                            value=self._aggregate_func(default, value),
+                            timestamp_ms=timestamp_ms,
+                            window_timestamp_ms=timestamp_ms,
+                        )
+                    )
+
+                # Create left window with existing aggregation if it falls within the window
+                agg = default if left_window_start > max_timestamp else aggregation
+                updated_windows.appendleft(
+                    self._update_window(
+                        state=state,
+                        start_ms=left_window_start,
+                        end_ms=left_window_end,
+                        value=self._aggregate_func(agg, value),
+                        timestamp_ms=timestamp_ms,
+                        window_timestamp_ms=timestamp_ms,
+                    )
+                )
+                break
+
+        else:
+            # Create left window because iteration was exhausted without creating (or updating) it
+            updated_windows.appendleft(
+                self._update_window(
+                    state=state,
+                    start_ms=left_window_start,
+                    end_ms=left_window_end,
+                    value=self._aggregate_func(default, value),
+                    timestamp_ms=timestamp_ms,
+                    window_timestamp_ms=timestamp_ms,
+                )
+            )
+
+        # `state.update_window` bumps latest timestamp so we have to fetch it again
+        watermark = state.get_latest_timestamp() - duration_ms - grace_ms - 1
+        expired_windows = []
+        for (start, end), (_, aggregation) in state.expire_windows(watermark=watermark):
+            expired_windows.append(
+                {"start": start, "end": end, "value": self._merge_func(aggregation)}
+            )
+
+        state.delete_windows(watermark=watermark - duration_ms)
+        return updated_windows, expired_windows
+
+    def _update_window(
+        self,
+        state,
+        start_ms,
+        end_ms,
+        value,
+        timestamp_ms,
+        window_timestamp_ms,
+    ):
+        # TODO: typing
+        state.update_window(
+            start_ms=start_ms,
+            end_ms=end_ms,
+            value=value,
+            timestamp_ms=timestamp_ms,
+            window_timestamp_ms=window_timestamp_ms,
+        )
+        return {"start": start_ms, "end": end_ms, "value": self._merge_func(value)}
+
+    def _should_create_right_window(
+        self, start, end, windows_starts, timestamp_ms
+    ) -> bool:
+        # TODO: typing
+        return start not in windows_starts and end >= timestamp_ms
