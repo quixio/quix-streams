@@ -1,6 +1,58 @@
-from typing import Any, Optional
+import logging
+from abc import ABC, abstractmethod
+from typing import Any, Optional, TYPE_CHECKING
 
-from .types import State, PartitionTransaction
+if TYPE_CHECKING:
+    from .transaction import PartitionTransaction
+
+__all__ = ("State", "TransactionState")
+
+logger = logging.getLogger(__name__)
+
+
+class State(ABC):
+    """
+    Primary interface for working with key-value state data from `StreamingDataFrame`
+    """
+
+    @abstractmethod
+    def get(self, key: Any, default: Any = None) -> Optional[Any]:
+        """
+        Get the value for key if key is present in the state, else default
+
+        :param key: key
+        :param default: default value to return if the key is not found
+        :return: value or None if the key is not found and `default` is not provided
+        """
+        ...
+
+    @abstractmethod
+    def set(self, key: Any, value: Any):
+        """
+        Set value for the key.
+        :param key: key
+        :param value: value
+        """
+        ...
+
+    @abstractmethod
+    def delete(self, key: Any):
+        """
+        Delete value for the key.
+
+        This function always returns `None`, even if value is not found.
+        :param key: key
+        """
+        ...
+
+    @abstractmethod
+    def exists(self, key: Any) -> bool:
+        """
+        Check if the key exists in state.
+        :param key: key
+        :return: True if key exists, False otherwise
+        """
+        ...
 
 
 class TransactionState(State):
@@ -9,7 +61,7 @@ class TransactionState(State):
         "_prefix",
     )
 
-    def __init__(self, prefix: bytes, transaction: PartitionTransaction):
+    def __init__(self, prefix: bytes, transaction: "PartitionTransaction"):
         """
         Simple key-value state to be provided into `StreamingDataFrame` functions
 

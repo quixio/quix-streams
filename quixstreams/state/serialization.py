@@ -1,10 +1,11 @@
 import struct
-from typing import Any
+from typing import Any, Callable
 
-from quixstreams.state.types import DumpsFunc, LoadsFunc
 from .exceptions import StateSerializationError
 
 __all__ = (
+    "DumpsFunc",
+    "LoadsFunc",
     "serialize",
     "deserialize",
     "int_to_int64_bytes",
@@ -14,6 +15,9 @@ __all__ = (
 _int_packer = struct.Struct(">q")
 _int_pack = _int_packer.pack
 _int_unpack = _int_packer.unpack
+
+DumpsFunc = Callable[[Any], bytes]
+LoadsFunc = Callable[[bytes], Any]
 
 
 def serialize(value: Any, dumps: DumpsFunc) -> bytes:

@@ -4,21 +4,19 @@ from datetime import datetime, timezone
 from unittest.mock import patch
 
 import pytest
-import rocksdict
 
-from quixstreams.state.rocksdb import (
+from quixstreams.state.base import PartitionTransaction
+from quixstreams.state.exceptions import (
     StateSerializationError,
     StateTransactionError,
-    RocksDBStorePartition,
-    RocksDBOptions,
-    RocksDBPartitionTransaction,
     InvalidChangelogOffset,
 )
-from quixstreams.state.rocksdb.metadata import (
+from quixstreams.state.rocksdb import RocksDBOptions
+from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER,
 )
-from quixstreams.state.rocksdb.serialization import serialize
+from quixstreams.state.serialization import serialize
 from quixstreams.utils.json import dumps
 
 TEST_KEYS = [
@@ -47,7 +45,7 @@ TEST_PREFIXES = [
 ]
 
 
-class TestRocksDBPartitionTransaction:
+class TestPartitionTransaction:
     def test_transaction_complete(self, rocksdb_partition):
         with rocksdb_partition.begin() as tx:
             ...
@@ -67,7 +65,7 @@ class TestRocksDBPartitionTransaction:
         with rocksdb_partition_factory(
             changelog_producer=changelog_producer_mock
         ) as partition:
-            with patch.object(RocksDBStorePartition, "write") as mocked:
+            with patch.object(partition, "write") as mocked:
                 with partition.begin() as tx:
                     tx.get("key", prefix=prefix)
 
@@ -204,13 +202,20 @@ class TestRocksDBPartitionTransaction:
     def test_get_deserialization_error(self, rocksdb_partition):
         bytes_ = secrets.token_bytes(10)
         string_ = "string"
-
-        batch = rocksdict.WriteBatch(raw_mode=True)
-        # Set non-deserializable key and valid value
-        batch.put(bytes_, serialize(string_, dumps=dumps))
-        # Set valid key and non-deserializable value
-        batch.put(serialize(string_, dumps=dumps), bytes_)
-        rocksdb_partition.write(batch)
+        rocksdb_partition.write(
+            data={
+                "default": {
+                    "": {
+                        # Set non-deserializable key and valid value
+                        bytes_: serialize(string_, dumps=dumps),
+                        # Set valid key and non-deserializable value
+                        serialize(string_, dumps=dumps): bytes_,
+                    }
+                }
+            },
+            processed_offset=None,
+            changelog_offset=None,
+        )
 
         with rocksdb_partition.begin() as tx:
             with pytest.raises(StateSerializationError):
@@ -251,7 +256,7 @@ class TestRocksDBPartitionTransaction:
 
         prefix = b"__key__"
         with patch.object(
-            RocksDBPartitionTransaction,
+            PartitionTransaction,
             "_serialize_key",
             side_effect=ValueError("test"),
         ):
@@ -387,9 +392,7 @@ class TestRocksDBPartitionTransaction:
         """
 
         prefix = b"__key__"
-        with patch.object(
-            RocksDBStorePartition, "write", side_effect=ValueError("test")
-        ):
+        with patch.object(rocksdb_partition, "write", side_effect=ValueError("test")):
             with rocksdb_partition.begin() as tx:
                 tx.set("key", "value", prefix=prefix)
 

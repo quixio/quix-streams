@@ -1,22 +1,17 @@
 import logging
-from typing import Optional
+from typing import Optional, Dict
 
-from rocksdict import ReadOptions, RdictItems  # type: ignore
+from rocksdict import WriteBatch, ReadOptions, RdictItems  # type: ignore
 
-from .metadata import LATEST_EXPIRED_WINDOW_CF_NAME
+from quixstreams.state.serialization import int_from_int64_bytes, int_to_int64_bytes
+from quixstreams.state.recovery import ChangelogProducer
+
+from .metadata import LATEST_EXPIRED_WINDOW_CF_NAME, LATEST_TIMESTAMP_KEY
 from .transaction import WindowedRocksDBPartitionTransaction
 from .. import ColumnFamilyDoesNotExist
-from ..metadata import (
-    METADATA_CF_NAME,
-    LATEST_TIMESTAMP_KEY,
-)
-from ..partition import (
-    RocksDBStorePartition,
-)
-from ..serialization import int_from_int64_bytes
+from ..metadata import METADATA_CF_NAME
+from ..partition import RocksDBStorePartition
 from ..types import RocksDBOptionsType
-
-from ...recovery import ChangelogProducer
 
 logger = logging.getLogger(__name__)
 
@@ -74,3 +69,30 @@ class WindowedRocksDBStorePartition(RocksDBStorePartition):
             self.get_column_family(cf_name)
         except ColumnFamilyDoesNotExist:
             self.create_column_family(cf_name)
+
+    def write(
+        self,
+        data: Dict,
+        processed_offset: Optional[int],
+        changelog_offset: Optional[int],
+        batch: Optional[WriteBatch] = None,
+        latest_timestamp_ms: Optional[int] = None,
+    ):
+        batch = WriteBatch(raw_mode=True)
+
+        if latest_timestamp_ms is not None:
+            cf_handle = self.get_column_family_handle(METADATA_CF_NAME)
+            batch.put(
+                LATEST_TIMESTAMP_KEY,
+                int_to_int64_bytes(latest_timestamp_ms),
+                cf_handle,
+            )
+        super().write(
+            data=data,
+            processed_offset=processed_offset,
+            changelog_offset=changelog_offset,
+            batch=batch,
+        )
+
+        if latest_timestamp_ms is not None:
+            self.set_latest_timestamp(latest_timestamp_ms)

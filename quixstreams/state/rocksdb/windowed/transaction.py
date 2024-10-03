@@ -2,24 +2,25 @@ from typing import Any, Optional, List, Tuple, TYPE_CHECKING, cast
 
 from rocksdict import ReadOptions
 
+from quixstreams.state.metadata import DELETED, PREFIX_SEPARATOR, DEFAULT_PREFIX
 from quixstreams.state.recovery import ChangelogProducer
+from quixstreams.state.serialization import (
+    serialize,
+    LoadsFunc,
+    DumpsFunc,
+)
+from quixstreams.state.base.transaction import PartitionTransaction
+from quixstreams.state.exceptions import InvalidChangelogOffset
+
 from .metadata import LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY, LATEST_EXPIRED_WINDOW_CF_NAME
 from .serialization import encode_window_key, encode_window_prefix, parse_window_key
 from .state import WindowedTransactionState
-from ..metadata import (
-    METADATA_CF_NAME,
-    LATEST_TIMESTAMP_KEY,
-    PREFIX_SEPARATOR,
-)
-from ..serialization import int_to_int64_bytes, serialize
-from ..transaction import RocksDBPartitionTransaction, DELETED, DEFAULT_PREFIX
-from ..types import LoadsFunc, DumpsFunc
 
 if TYPE_CHECKING:
     from .partition import WindowedRocksDBStorePartition
 
 
-class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
+class WindowedRocksDBPartitionTransaction(PartitionTransaction):
     __slots__ = ("_latest_timestamp_ms",)
 
     def __init__(
@@ -86,21 +87,26 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
         key = encode_window_key(start_ms, end_ms)
         self.delete(key=key, prefix=prefix)
 
-    def flush(
-        self,
-        processed_offset: Optional[int] = None,
-        changelog_offset: Optional[int] = None,
-    ):
-        cf_handle = self._partition.get_column_family_handle(METADATA_CF_NAME)
-        self._batch.put(
-            LATEST_TIMESTAMP_KEY,
-            int_to_int64_bytes(self._latest_timestamp_ms),
-            cf_handle,
+    def _flush(self, processed_offset: Optional[int], changelog_offset: Optional[int]):
+        if not self._update_cache:
+            return
+
+        if changelog_offset is not None:
+            current_changelog_offset = self._partition.get_changelog_offset()
+            if (
+                current_changelog_offset is not None
+                and changelog_offset < current_changelog_offset
+            ):
+                raise InvalidChangelogOffset(
+                    "Cannot set changelog offset lower than already saved one"
+                )
+
+        self._partition.write(
+            data=self._update_cache,
+            processed_offset=processed_offset,
+            changelog_offset=changelog_offset,
+            latest_timestamp_ms=self._latest_timestamp_ms,
         )
-        super().flush(
-            processed_offset=processed_offset, changelog_offset=changelog_offset
-        )
-        self._partition.set_latest_timestamp(self._latest_timestamp_ms)
 
     def expire_windows(
         self, duration_ms: int, prefix: bytes, grace_ms: int = 0
