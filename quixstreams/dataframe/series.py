@@ -108,7 +108,7 @@ class StreamingSeries(BaseStreaming):
     # Random methods for example purposes. More detailed explanations found under
     # various methods or in the docs folder.
 
-    sdf = StreamingDataframe()
+    sdf = StreamingDataFrame()
     sdf = sdf["column_a"].apply(a_func).apply(diff_func, stateful=True)
     sdf["my_new_bool_field"] = sdf["column_b"].contains("this_string")
     sdf["new_sum_field"] = sdf["column_c"] + sdf["column_d"] + 2
@@ -174,7 +174,7 @@ class StreamingSeries(BaseStreaming):
                 state.set("my_store_key") = value
             return v.upper()
 
-        sdf = StreamingDataframe()
+        sdf = StreamingDataFrame()
         sdf["new_col"] = sdf["a_column"]["nested_dict_key"].apply(func, stateful=True)
         sdf["new_col_2"] = sdf["str_col"].apply(lambda v: int(v)) + sdf["str_col2"] + 2
         ```

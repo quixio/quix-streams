@@ -101,7 +101,7 @@ class StreamingDataFrame(BaseStreaming):
     Example Snippet:
 
     ```python
-    sdf = StreamingDataframe()
+    sdf = StreamingDataFrame()
     sdf = sdf.apply(a_func)
     sdf = sdf.filter(another_func)
     sdf = sdf.to_topic(topic_obj)
@@ -197,7 +197,7 @@ class StreamingDataFrame(BaseStreaming):
                 state.set("my_store_key") = value
             return {k: v.upper() if isinstance(v, str) else v for k, v in d.items()}
 
-        sdf = StreamingDataframe()
+        sdf = StreamingDataFrame()
         sdf = sdf.apply(func, stateful=True)
         sdf = sdf.apply(lambda d: {k: v for k,v in d.items() if isinstance(v, str)})
 
@@ -291,7 +291,7 @@ class StreamingDataFrame(BaseStreaming):
                 state.set("my_store_key") = value
             values.append("new_item")
 
-        sdf = StreamingDataframe()
+        sdf = StreamingDataFrame()
         sdf = sdf.update(func, stateful=True)
         # does not require reassigning
         sdf.update(lambda v: v.append(1))
@@ -379,7 +379,7 @@ class StreamingDataFrame(BaseStreaming):
                 return True
             return False
 
-        sdf = StreamingDataframe()
+        sdf = StreamingDataFrame()
         sdf = sdf.filter(func, stateful=True)
         ```
 
@@ -469,7 +469,7 @@ class StreamingDataFrame(BaseStreaming):
             d["customer_total"] = new_total
             return d
 
-        sdf = StreamingDataframe()
+        sdf = StreamingDataFrame()
         sdf = sdf.group_by("customer_account_id")
         sdf = sdf.apply(func, stateful=True)
         ```
@@ -518,7 +518,7 @@ class StreamingDataFrame(BaseStreaming):
         # Add new column 'has_column' which contains a boolean indicating
         # the presence of 'column_x'
 
-        sdf = StreamingDataframe()
+        sdf = StreamingDataFrame()
         sdf['has_column'] = sdf.contains('column_x')
         ```
 
@@ -968,7 +968,7 @@ class StreamingDataFrame(BaseStreaming):
         # Remove columns "x" and "y" from the value.
         # This would transform {"x": 1, "y": 2, "z": 3} to {"z": 3}
 
-        sdf = StreamingDataframe()
+        sdf = StreamingDataFrame()
         sdf.drop(["x", "y"])
         ```
 
