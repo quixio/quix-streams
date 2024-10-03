@@ -157,7 +157,7 @@ class StorePartition(ABC):
         """
         Determine whether the changelog update should be skipped.
 
-        :param headers: changelog message headers
+        :param processed_offset: changelog message processed offset.
         :param committed_offset: latest committed offset of the source topic partition
         :return: True if update should be applied, else False.
         """
