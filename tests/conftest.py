@@ -31,6 +31,19 @@ SchemaRegistryContainer = namedtuple(
 test_logger = logging.getLogger("quixstreams.tests")
 
 
+def pytest_addoption(parser):
+    # Add the --timeit argument to pytest if you need to run expensive tests
+    # to measure execution times, e.g.:
+    # pytest -sk test_get_windows --timeit
+    parser.addoption("--timeit", action="store_true", default=False)
+
+
+def pytest_runtest_setup(item):
+    # Skip `timeit` tests by default to avoid inflating the overall test suite run times
+    if "timeit" in item.keywords and not item.config.option.timeit:
+        pytest.skip("timeit")
+
+
 @pytest.fixture(autouse=True, scope="session")
 def configure_logging():
     logging.config.dictConfig(LOGGING_CONFIG)
