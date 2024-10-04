@@ -93,7 +93,7 @@ To streamline the review process, describe your PR in the following format
 
 - Link the PR to the previously created issue.
 - Describe new libraries used by the connector.
-- Briefly describe how the connector works, and what users need to know before using it.
+- Briefly describe how the connector works and provide some context for how to use it.
 - Describe the processing guarantees the connector provides (e.g. at-least-once, at-most-once, exactly-once).
 - Add examples how to instantiate the connector class.
 - Explain how to set up a sandbox environment for Quix Streams maintainers to test your PR.
