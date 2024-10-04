@@ -73,7 +73,7 @@ doc_map = {
     "state.md": {
         k: None
         for k in [
-            "quixstreams.state.types",
+            "quixstreams.state.base.state",
             "quixstreams.state.rocksdb.options",
         ]
     },
