@@ -29,7 +29,7 @@ If you want to develop it yourself, proceed to the next section.
 
 3. Create a branch for your connector as a new feature in the format `{feature}/{connector-name}` (e.g. `feature/mqtt-source`)
 
-4. Read ["Create a custom source"](sources/custom-sources.md) and ["Create a custom sink"](sinks/custom-sinks.md) to learn how to build a connector.
+4. Read ["Creating a Custom Source"](sources/custom-sources.md) and ["Creating a Custom Sink"](sinks/custom-sinks.md) to learn how to build a connector.
 
 5. Create a new Python module in `quixstreams/sources/community/{connector-name}` for Sources or `quixstreams/sinks/community/{connector-name}` for Sinks.
 
