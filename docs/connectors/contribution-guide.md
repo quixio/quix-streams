@@ -27,7 +27,7 @@ If you want to develop it yourself, proceed to the next section.
 
 2. Clone the repo locally.
 
-3. Create a branch for your feature or bug in the format `{feature}/{connector-name}` (e.g., `feature/mqtt-source`)
+3. Create a branch for your connector as a new feature in the format `{feature}/{connector-name}` (e.g. `feature/mqtt-source`)
 
 4. Read ["Create a custom source"](sources/custom-sources.md) and ["Create a custom sink"](sinks/custom-sinks.md) to learn how to build a connector.
 
