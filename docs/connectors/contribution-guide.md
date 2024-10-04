@@ -45,7 +45,7 @@ See [How to describe your PR](#how-to-describe-your-pr) section to learn how to 
    
 10. Wait for feedback from a Quix Streams maintainer and adjust the code if necessary.
 
-11. Feel free to join `#contributors` channel in [the community Slack](https://quix.io/slack-invite) and announce your work!
+11. Feel free to join the `#contributors` channel in [the community Slack](https://quix.io/slack-invite) and announce your work!
 
 12. After the PR is accepted, the maintainers will take care releasing it in the next version of Quix Streams.
 
