@@ -56,7 +56,8 @@ nav:
         - Kafka Replicator Source: connectors/sources/kafka-source.md
         - Quix Source: connectors/sources/quix-source.md
         - Creating a Custom Source: connectors/sources/custom-sources.md
-    - Connectors Contribution Guide: 'connectors/contribution-guide.md'
+    - Contribution Guide: 'connectors/contribution-guide.md'
+    - Community and Core Connectors: 'connectors/community-and-core.md'
   - Upgrading Guide:
     - Upgrading from Quix Streams v0.5: upgrading-legacy.md
 
