@@ -17,7 +17,7 @@ Check out our [Tutorials](../tutorials/README.md) to get started.
 
 1. Check the [list of GitHub issues with a `connector` label](https://github.com/quixio/quix-streams/labels/connector) to see if a request for the connector has already been submitted.
 2. If it doesn't exist, create a new one named `"New {source/sink}: {name}"`, and describe your idea. 
-3. At this point, you can either ask for help from Quix Streams maintainers, or implement it yourself and contribute it to the library.  
+3. At this point, you can either ask for help from the Quix Streams maintainers, or implement it yourself and contribute it to the library.  
 If you want to develop it yourself, proceed to the next section.
 
 
