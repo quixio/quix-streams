@@ -1,4 +1,4 @@
-# Contributing New Connectors
+# Contributing new Connectors
 
 Quix Streams provide APIs to build custom Sources and Sinks.
 
