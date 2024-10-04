@@ -47,7 +47,7 @@ See [How to describe your PR](#how-to-describe-your-pr) section to learn how to 
 
 11. Feel free to join the `#contributors` channel in [the community Slack](https://quix.io/slack-invite) and announce your work!
 
-12. After the PR is accepted, the maintainers will take care releasing it in the next version of Quix Streams.
+12. After the PR is accepted, the maintainers will take care of releasing it in the next version of Quix Streams.
 
 
 ## Best practices for the connector's code
