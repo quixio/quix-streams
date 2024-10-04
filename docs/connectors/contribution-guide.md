@@ -43,7 +43,7 @@ Read the [Best Practices](#best-practices-for-the-connectors-code) section on ho
 9. Create a Pull Request to Quix Streams `main` branch.
 See [How to describe your PR](#how-to-describe-your-pr) section to learn how to structure the PR.
    
-10. Wait for a feedback from a Quix Streams maintainer and adjust the code if necessary.
+10. Wait for feedback from a Quix Streams maintainer and adjust the code if necessary.
 
 11. Feel free to join `#contributors` channel in [the community Slack](https://quix.io/slack-invite) and announce your work!
 
