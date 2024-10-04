@@ -101,6 +101,7 @@ class Application:
     def __init__(
         self,
         broker_address: Optional[Union[str, ConnectionConfig]] = None,
+        *,
         quix_sdk_token: Optional[str] = None,
         consumer_group: Optional[str] = None,
         auto_offset_reset: AutoOffsetReset = "latest",
