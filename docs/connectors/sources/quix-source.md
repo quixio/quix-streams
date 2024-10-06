@@ -11,24 +11,24 @@ from quixstreams import Application
 from quixstreams.sources import QuixEnvironmentSource
 
 def main():
-  app = Application()
-  source = QuixEnvironmentSource(
+    app = Application()
+    source = QuixEnvironmentSource(
     name="my-source",
     app_config=app.config,
     topic="source-topic",
     quix_sdk_token="quix-sdk-token",
     quix_workspace_id="quix-workspace-id",
-  )
-
-  sdf = app.dataframe(source=source)
-  sdf.print(metadata=True)
-
-  app.run()
+    )
+    
+    sdf = app.dataframe(source=source)
+    sdf.print(metadata=True)
+    
+    app.run()
 
 if __name__ == "__main__":
-  main()
+    main()
 ```
 
-## Token
+## SDK Token
 
-The Quix Environment Source requires the sdk token of the source environment. [Click here](../../../develop/authentication/streaming-token.md) for more information on SDK tokens.
+The Quix Environment Source requires the SDK token of the source environment. [Click here](../../../develop/authentication/streaming-token.md) for more information on SDK tokens.

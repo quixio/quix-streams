@@ -13,21 +13,21 @@ from quixstreams import Application
 from quixstreams.sources import KafkaReplicatorSource
 
 def main():
-  app = Application()
-  source = KafkaReplicatorSource(
+    app = Application()
+    source = KafkaReplicatorSource(
     name="my-source",
     app_config=app.config,
     topic="source-topic",
     broker_address="source-broker-address"
-  )
-
-  sdf = app.dataframe(source=source)
-  sdf.print(metadata=True)
-
-  app.run()
+    )
+    
+    sdf = app.dataframe(source=source)
+    sdf.print(metadata=True)
+    
+    app.run()
 
 if __name__ == "__main__":
-  main()
+    main()
 ```
 
 ## Topic

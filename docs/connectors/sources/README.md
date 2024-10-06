@@ -53,15 +53,15 @@ from quixstreams.sources import CSVSource
 from quixstreams.models.topics import TopicConfig
 
 def main():
-  app = Application()
-  source = CSVSource(path="input.csv")
-  topic = app.topic("my_csv_source", config=TopicConfig(num_partitions=4, replication_factor=1))
-
-  sdf = app.dataframe(topic=topic, source=source)
-  sdf.print(metadata=True)
-
-  app.run()
+    app = Application()
+    source = CSVSource(path="input.csv")
+    topic = app.topic("my_csv_source", config=TopicConfig(num_partitions=4, replication_factor=1))
+    
+    sdf = app.dataframe(topic=topic, source=source)
+    sdf.print(metadata=True)
+    
+    app.run()
 
 if __name__ == "__main__":
-  main()
+    main()
 ```

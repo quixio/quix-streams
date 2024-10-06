@@ -73,16 +73,16 @@ class MySource(Source):
             time.sleep(1)
 
 def main():
-  app = Application(broker_address="localhost:19092")
-  source = MySource(name="mysource")
+    app = Application(broker_address="localhost:19092")
+    source = MySource(name="mysource")
   
-  sdf = app.dataframe(source=source)
-  sdf.print(metadata=True)
+    sdf = app.dataframe(source=source)
+    sdf.print(metadata=True)
 
-  app.run()
+    app.run()
 
 if __name__ == "__main__":
-  main()
+    main()
 ```
 
 ```

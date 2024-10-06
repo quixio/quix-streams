@@ -28,6 +28,9 @@ sdf = app.dataframe(topic)
 # Do some processing here ...
 # Sink data to InfluxDB
 sdf.sink(influx_sink)
+
+if __name__ == '__main__':
+    app.run()
 ```
 
 ## Sinks Are Terminal Operations
@@ -118,4 +121,7 @@ influx_sink = InfluxDB3Sink(
 
 # The sink will write to InfluxDB across all assigned partitions.
 sdf.sink(influx_sink)
+
+if __name__ == '__main__':
+    app.run()
 ```
