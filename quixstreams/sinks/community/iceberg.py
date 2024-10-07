@@ -195,7 +195,7 @@ class IcebergSink(BatchingSink):
             pq.write_table(table, f, compression=self._compression_type)
             value_bytes = f.getvalue()
 
-            if self._compress and self._compression_type == "none":  # Handle manual gzip if no Parquet compression
-                value_bytes = gzip.compress(value_bytes)
+            #if self._compress and self._compression_type == "none":  # Handle manual gzip if no Parquet compression
+                #value_bytes = gzip.compress(value_bytes)
 
             return value_bytes 
