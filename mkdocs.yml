@@ -22,8 +22,102 @@ exclude_docs: |
   build/*
 
 nav:
- - Current:
-    - 'Introduction': 'introduction.md'
- - Previous:
-    - 'Introduction': 'Previous/introduction.md'
+ - Current (2.11):
+    - Introduction: 'current/introduction.md'
+    - Quickstart: 'current/quickstart.md'
+    - Tutorials:
+      - 'tutorials/README.md'
+      - Word Count: 'current/tutorials/word-count/tutorial.md'
+      - Anomaly Detection: 'current/tutorials/anomaly-detection/tutorial.md'
+      - Purchase Filtering: 'current/tutorials/purchase-filtering/tutorial.md'
+    - How to:
+      - Produce Data to Kafka: 'current/roducer.md'
+      - Process & Transform Data: 'current/rocessing.md'
+      - GroupBy Operation: 'current/roupby.md'
+      - Windows & Aggregations: 'current/indowing.md'
+      - Configuration: 'current/onfiguration.md'
+    - Advanced Usage:
+      - Checkpointing: 'current/dvanced/checkpointing.md'
+      - Serialization Formats: 'current/dvanced/serialization.md'
+      - Schema Registry: 'current/dvanced/schema-registry.md'
+      - Stateful Processing: 'current/dvanced/stateful-processing.md'
+      - Managing Kafka Topics: 'current/dvanced/topics.md'
+      - Using Producer & Consumer: 'current/dvanced/producer-consumer-lowlevel.md'
+      - StreamingDataFrame Assignment Rules: 'current/dvanced/dataframe-assignments.md'
+    - Connecting to Quix Cloud: 'current/uix-platform.md'
+    - 'Connectors [beta]':
+      -  Sinks:
+          - 'connectors/sinks/README.md'
+          - CSV Sink: 'current/onnectors/sinks/csv-sink.md'
+          - InfluxDB v3 Sink: 'current/onnectors/sinks/influxdb3-sink.md'
+          - Creating a Custom Sink: 'current/onnectors/sinks/custom-sinks.md'
+      - Sources:
+          - 'connectors/sources/README.md'
+          - CSV Source: 'current/onnectors/sources/csv-source.md'
+          - Kafka Replicator Source: 'current/onnectors/sources/kafka-source.md'
+          - Quix Source: 'current/onnectors/sources/quix-source.md'
+          - Creating a Custom Source: 'current/onnectors/sources/custom-sources.md'
+    - Upgrading Guide:
+      - Upgrading from Quix Streams v0.5: 'current/pgrading-legacy.md'
+    - API Docs:
+      - StreamingDataFrame API: 'current/pi-reference/dataframe.md'
+      - Topics API: 'current/pi-reference/topics.md'
+      - Context API: 'current/pi-reference/context.md'
+      - Serializers API: 'current/pi-reference/serialization.md'
+      - Application API: 'current/pi-reference/application.md'
+      - State API: 'current/pi-reference/state.md'
+      - Kafka Producer & Consumer API: 'current/pi-reference/kafka.md'
+      - Sources API: 'current/pi-reference/sources.md'
+      - Sinks API: 'current/pi-reference/sinks.md'
+      - Kafka Producer & Consumer API: 'current/pi-reference/kafka.md'
+      - Full Reference: 'current/pi-reference/quixstreams.md'
 
+ - Previous (2.09-2.11):
+    - Introduction: 'previous/introduction.md'
+    - Quickstart: 'previous/quickstart.md'
+    - Tutorials:
+      - 'tutorials/README.md'
+      - Word Count: 'previous/tutorials/word-count/tutorial.md'
+      - Anomaly Detection: 'previous/tutorials/anomaly-detection/tutorial.md'
+      - Purchase Filtering: 'previous/tutorials/purchase-filtering/tutorial.md'
+    - How to:
+      - Produce Data to Kafka: 'previous/roducer.md'
+      - Process & Transform Data: 'previous/rocessing.md'
+      - GroupBy Operation: 'previous/roupby.md'
+      - Windows & Aggregations: 'previous/indowing.md'
+      - Configuration: 'previous/onfiguration.md'
+    - Advanced Usage:
+      - Checkpointing: 'previous/dvanced/checkpointing.md'
+      - Serialization Formats: 'previous/dvanced/serialization.md'
+      - Schema Registry: 'previous/dvanced/schema-registry.md'
+      - Stateful Processing: 'previous/dvanced/stateful-processing.md'
+      - Managing Kafka Topics: 'previous/dvanced/topics.md'
+      - Using Producer & Consumer: 'previous/dvanced/producer-consumer-lowlevel.md'
+      - StreamingDataFrame Assignment Rules: 'previous/dvanced/dataframe-assignments.md'
+    - Connecting to Quix Cloud: 'previous/uix-platform.md'
+    - 'Connectors [beta]':
+      -  Sinks:
+          - 'connectors/sinks/README.md'
+          - CSV Sink: 'previous/onnectors/sinks/csv-sink.md'
+          - InfluxDB v3 Sink: 'previous/onnectors/sinks/influxdb3-sink.md'
+          - Creating a Custom Sink: 'previous/onnectors/sinks/custom-sinks.md'
+      - Sources:
+          - 'connectors/sources/README.md'
+          - CSV Source: 'previous/onnectors/sources/csv-source.md'
+          - Kafka Replicator Source: 'previous/onnectors/sources/kafka-source.md'
+          - Quix Source: 'previous/onnectors/sources/quix-source.md'
+          - Creating a Custom Source: 'previous/onnectors/sources/custom-sources.md'
+    - Upgrading Guide:
+      - Upgrading from Quix Streams v0.5: 'previous/pgrading-legacy.md'
+    - API Docs:
+      - StreamingDataFrame API: 'previous/pi-reference/dataframe.md'
+      - Topics API: 'previous/pi-reference/topics.md'
+      - Context API: 'previous/pi-reference/context.md'
+      - Serializers API: 'previous/pi-reference/serialization.md'
+      - Application API: 'previous/pi-reference/application.md'
+      - State API: 'previous/pi-reference/state.md'
+      - Kafka Producer & Consumer API: 'previous/pi-reference/kafka.md'
+      - Sources API: 'previous/pi-reference/sources.md'
+      - Sinks API: 'previous/pi-reference/sinks.md'
+      - Kafka Producer & Consumer API: 'previous/pi-reference/kafka.md'
+      - Full Reference: 'previous/pi-reference/quixstreams.md'
