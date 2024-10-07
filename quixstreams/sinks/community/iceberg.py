@@ -171,6 +171,8 @@ class IcebergSink(BatchingSink):
         
     
     def _serialize_batch_values(self, values: List[Any]) -> bytes:
+        #TODO: Handle data flattening. Nested properties will cause this to crash.
+        
         # Get all unique keys (columns) across all rows
         all_keys = set()
         for row in values:
