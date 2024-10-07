@@ -245,60 +245,39 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         read_opt.set_iterate_lower_bound(seek_from_key)
         read_opt.set_iterate_upper_bound(seek_to_key)
 
+        cache = self._update_cache.get("default", {}).get(prefix, {}).items()
+        cached_windows = sorted(cache, reverse=True)
         db_windows = self._partition.iter_items(
             read_opt=read_opt, from_key=seek_from_key
         )
 
-        def _get_windows() -> Generator[Tuple[Tuple[int, int], Any], None, None]:
-            # If the cache is empty then yield only db windows
-            if not (cache := self._update_cache.get("default", {}).get(prefix, {})):
-                for db_key, db_value in db_windows:
-                    _, start, end = parse_window_key(db_key)
-                    if start_from_ms < start <= start_to_ms:
-                        yield (start, end), self._deserialize_value(db_value)
+        def _next_cached_window() -> Tuple[Optional[bytes], Optional[bytes]]:
+            try:
+                return cached_windows.pop()
+            except IndexError:
+                return None, None
+
+        def _process_window(
+            key: bytes, value: bytes
+        ) -> Generator[Tuple[Tuple[int, int], Any], None, None]:
+            if value is DELETED:
                 return
+            _, start, end = parse_window_key(key)
+            if start_from_ms < start <= start_to_ms:
+                yield (start, end), self._deserialize_value(value)
 
-            cached_windows = sorted(cache.items(), reverse=True)
-            cached_key, cached_value = cached_windows.pop()
-
+        def _get_windows() -> Generator[Tuple[Tuple[int, int], Any], None, None]:
+            cached_key, cached_value = _next_cached_window()
             for db_key, db_value in db_windows:
-                yield_db_window = True
-                if cached_key:
-                    # Yield all cached windows that have lower or equal timestamp
-                    while cached_key <= db_key:
-                        if cached_value is not DELETED:
-                            _, start, end = parse_window_key(cached_key)
-                            if start_from_ms < start <= start_to_ms:
-                                yield (
-                                    (start, end),
-                                    self._deserialize_value(cached_value),
-                                )
+                while cached_key and cached_key < db_key:
+                    yield from _process_window(cached_key, cached_value)
+                    cached_key, cached_value = _next_cached_window()
 
-                        # Cached window with equal timestamp takes precedence
-                        # so do not yield db window
-                        yield_db_window = cached_key != db_key
+                if cached_key != db_key:
+                    yield from _process_window(db_key, db_value)
 
-                        try:
-                            cached_key, cached_value = cached_windows.pop()
-                        except IndexError:
-                            cached_key, cached_value = None, None
-                            break
-
-                if yield_db_window:
-                    _, start, end = parse_window_key(db_key)
-                    if start_from_ms < start <= start_to_ms:
-                        yield (start, end), self._deserialize_value(db_value)
-
-            # Yield remaining cached windows
             while cached_key:
-                if cached_value is not DELETED:
-                    _, start, end = parse_window_key(cached_key)
-                    if start_from_ms < start <= start_to_ms:
-                        yield (start, end), self._deserialize_value(cached_value)
-
-                try:
-                    cached_key, cached_value = cached_windows.pop()
-                except IndexError:
-                    return
+                yield from _process_window(cached_key, cached_value)
+                cached_key, cached_value = _next_cached_window()
 
         yield from reversed(list(_get_windows())) if backwards else _get_windows()
