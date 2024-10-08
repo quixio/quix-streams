@@ -73,12 +73,16 @@ class WindowedTransactionState(WindowedState):
         self, duration_ms: int, grace_ms: int = 0
     ) -> List[Tuple[Tuple[int, int], Any]]:
         """
-        Get a list of expired windows from RocksDB considering the current
-        latest timestamp, window duration and grace period.
+        Get all expired windows from RocksDB based on the latest timestamp,
+        window duration, and an optional grace period.
 
-        It also marks the latest found window as expired in the expiration index, so
-        calling this method multiple times will yield different results for the same
-        "latest timestamp".
+        This method marks the latest found window as expired in the expiration index,
+        so consecutive calls may yield different results for the same "latest timestamp".
+
+        :param duration_ms: The duration of each window in milliseconds.
+        :param grace_ms: An optional grace period in milliseconds to delay expiration.
+            Defaults to 0, meaning no grace period is applied.
+        :return: A generator that yields sorted tuples in the format `((start, end), value)`.
         """
         return self._transaction.expire_windows(
             duration_ms=duration_ms, grace_ms=grace_ms, prefix=self._prefix
@@ -87,6 +91,14 @@ class WindowedTransactionState(WindowedState):
     def get_windows(
         self, start_from_ms: int, start_to_ms: int, backwards: bool = False
     ) -> Generator[Tuple[Tuple[int, int], Any], None, None]:
+        """
+        Get all windows that start between "start_from_ms" and "start_to_ms".
+
+        :param start_from_ms: The minimal window start time, exclusive.
+        :param start_to_ms: The maximum window start time, inclusive.
+        :param backwards: If True, yields windows in reverse order.
+        :return: A generator that yields sorted tuples in the format `((start, end), value)`.
+        """
         return self._transaction.get_windows(
             start_from_ms=start_from_ms,
             start_to_ms=start_to_ms,
