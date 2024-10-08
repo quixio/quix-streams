@@ -1,30 +1,31 @@
-<a id="quixstreams.state.types"></a>
+<a id="quixstreams.state.base.state"></a>
 
-## quixstreams.state.types
+## quixstreams.state.base.state
 
-<a id="quixstreams.state.types.State"></a>
+<a id="quixstreams.state.base.state.State"></a>
 
 ### State
 
 ```python
-class State(Protocol)
+class State(ABC)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/3.0.0-docs/quixstreams/state/types.py#L135)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/3.0.0-docs/quixstreams/state/base/state.py#L13)
 
 Primary interface for working with key-value state data from `StreamingDataFrame`
 
-<a id="quixstreams.state.types.State.get"></a>
+<a id="quixstreams.state.base.state.State.get"></a>
 
 <br><br>
 
 #### State.get
 
 ```python
+@abstractmethod
 def get(key: Any, default: Any = None) -> Optional[Any]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/3.0.0-docs/quixstreams/state/types.py#L140)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/3.0.0-docs/quixstreams/state/base/state.py#L19)
 
 Get the value for key if key is present in the state, else default
 
@@ -41,17 +42,18 @@ Get the value for key if key is present in the state, else default
 
 value or None if the key is not found and `default` is not provided
 
-<a id="quixstreams.state.types.State.set"></a>
+<a id="quixstreams.state.base.state.State.set"></a>
 
 <br><br>
 
 #### State.set
 
 ```python
+@abstractmethod
 def set(key: Any, value: Any)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/3.0.0-docs/quixstreams/state/types.py#L150)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/3.0.0-docs/quixstreams/state/base/state.py#L30)
 
 Set value for the key.
 
@@ -62,17 +64,18 @@ Set value for the key.
 - `key`: key
 - `value`: value
 
-<a id="quixstreams.state.types.State.delete"></a>
+<a id="quixstreams.state.base.state.State.delete"></a>
 
 <br><br>
 
 #### State.delete
 
 ```python
+@abstractmethod
 def delete(key: Any)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/3.0.0-docs/quixstreams/state/types.py#L158)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/3.0.0-docs/quixstreams/state/base/state.py#L39)
 
 Delete value for the key.
 
@@ -84,17 +87,144 @@ This function always returns `None`, even if value is not found.
 
 - `key`: key
 
-<a id="quixstreams.state.types.State.exists"></a>
+<a id="quixstreams.state.base.state.State.exists"></a>
 
 <br><br>
 
 #### State.exists
 
 ```python
+@abstractmethod
 def exists(key: Any) -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/3.0.0-docs/quixstreams/state/types.py#L167)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/3.0.0-docs/quixstreams/state/base/state.py#L49)
+
+Check if the key exists in state.
+
+
+<br>
+***Arguments:***
+
+- `key`: key
+
+
+<br>
+***Returns:***
+
+True if key exists, False otherwise
+
+<a id="quixstreams.state.base.state.TransactionState"></a>
+
+### TransactionState
+
+```python
+class TransactionState(State)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/3.0.0-docs/quixstreams/state/base/state.py#L58)
+
+<a id="quixstreams.state.base.state.TransactionState.__init__"></a>
+
+<br><br>
+
+#### TransactionState.\_\_init\_\_
+
+```python
+def __init__(prefix: bytes, transaction: "PartitionTransaction")
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/3.0.0-docs/quixstreams/state/base/state.py#L64)
+
+Simple key-value state to be provided into `StreamingDataFrame` functions
+
+
+<br>
+***Arguments:***
+
+- `transaction`: instance of `PartitionTransaction`
+
+<a id="quixstreams.state.base.state.TransactionState.get"></a>
+
+<br><br>
+
+#### TransactionState.get
+
+```python
+def get(key: Any, default: Any = None) -> Optional[Any]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/3.0.0-docs/quixstreams/state/base/state.py#L73)
+
+Get the value for key if key is present in the state, else default
+
+
+<br>
+***Arguments:***
+
+- `key`: key
+- `default`: default value to return if the key is not found
+
+
+<br>
+***Returns:***
+
+value or None if the key is not found and `default` is not provided
+
+<a id="quixstreams.state.base.state.TransactionState.set"></a>
+
+<br><br>
+
+#### TransactionState.set
+
+```python
+def set(key: Any, value: Any)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/3.0.0-docs/quixstreams/state/base/state.py#L83)
+
+Set value for the key.
+
+
+<br>
+***Arguments:***
+
+- `key`: key
+- `value`: value
+
+<a id="quixstreams.state.base.state.TransactionState.delete"></a>
+
+<br><br>
+
+#### TransactionState.delete
+
+```python
+def delete(key: Any)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/3.0.0-docs/quixstreams/state/base/state.py#L91)
+
+Delete value for the key.
+
+This function always returns `None`, even if value is not found.
+
+
+<br>
+***Arguments:***
+
+- `key`: key
+
+<a id="quixstreams.state.base.state.TransactionState.exists"></a>
+
+<br><br>
+
+#### TransactionState.exists
+
+```python
+def exists(key: Any) -> bool
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/3.0.0-docs/quixstreams/state/base/state.py#L100)
 
 Check if the key exists in state.
 
