@@ -15,15 +15,15 @@ from quixstreams.sources import KafkaReplicatorSource
 def main():
     app = Application()
     source = KafkaReplicatorSource(
-    name="my-source",
-    app_config=app.config,
-    topic="source-topic",
-    broker_address="source-broker-address"
+      name="my-source",
+      app_config=app.config,
+      topic="source-topic",
+      broker_address="source-broker-address"
     )
-    
+
     sdf = app.dataframe(source=source)
     sdf.print(metadata=True)
-    
+
     app.run()
 
 if __name__ == "__main__":

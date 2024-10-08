@@ -13,11 +13,11 @@ from quixstreams.sources import QuixEnvironmentSource
 def main():
     app = Application()
     source = QuixEnvironmentSource(
-    name="my-source",
-    app_config=app.config,
-    topic="source-topic",
-    quix_sdk_token="quix-sdk-token",
-    quix_workspace_id="quix-workspace-id",
+      name="my-source",
+      app_config=app.config,
+      topic="source-topic",
+      quix_sdk_token="quix-sdk-token",
+      quix_workspace_id="quix-workspace-id",
     )
     
     sdf = app.dataframe(source=source)

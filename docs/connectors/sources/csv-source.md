@@ -13,16 +13,16 @@ from quixstreams import Application
 from quixstreams.sources import CSVSource
 
 def main():
-  app = Application()
-  source = CSVSource(path="input.csv")
+    app = Application()
+    source = CSVSource(path="input.csv")
 
-  sdf = app.dataframe(source=source)
-  sdf.print(metadata=True)
+    sdf = app.dataframe(source=source)
+    sdf.print(metadata=True)
 
-  app.run()
+    app.run()
 
 if __name__ == "__main__":
-  main()
+    main()
 ```
 
 ## File format
