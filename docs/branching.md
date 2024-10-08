@@ -403,15 +403,10 @@ to non-branching), it may be tricky to identify valid versus invalid usage.
             - `sdf_b['z'] = sdf_a.apply(f)` (`sdf_b` != `sdf_a`)
             - `sdf_c['z'] = sdf_a['x'] + sdf_b['y']` (ALL `sdf` involved must be the SAME)
 
-2. Avoid assigning filters or assignors for later use:
+2. [**AVOID** intermediate operation referencing](./advanced/dataframe-assignments.md#avoid-intermediate-operation-referencing).
+    - All the same rules apply with branches.
 
-    - Example: 
-      ```
-      my_filter = sdf.apply(my_func)
-      sdf = sdf[my_filter]
-      ```
-
-3. Most common invalid usage _should_ raise exceptions
+3. Most common invalid usage _should_ raise exceptions.
  
     - validate results manually if in question
 
