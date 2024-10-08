@@ -23,6 +23,9 @@ sdf = app.dataframe(topic)
 # Do some processing here ...
 # Sink data to a CSV file
 sdf.sink(csv_sink)
+
+if __name__ == '__main__':
+    app.run()
 ```
 
 ## How the CSV Sink Works

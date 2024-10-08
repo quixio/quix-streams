@@ -33,6 +33,9 @@ sdf = app.dataframe(topic)
 # Do some processing here ...
 # Sink data to InfluxDB
 sdf.sink(influx_sink)
+
+if __name__ == '__main__':
+    app.run()
 ```
 
 ## How the InfluxDB Sink Works

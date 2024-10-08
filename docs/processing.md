@@ -40,16 +40,23 @@ In general, when operations are added, they should follow a "reassignment" patte
 to ensure they are applied correctly. For example:
 
 ```python
-# NOTE: this is an incomplete stub just to show usage
 from quixstreams import Application
 
-sdf = Application().dataframe()
+# Initialize the Appication
+app = Application(...)
+
+# Create a StreamingDataFrame
+sdf = app.dataframe()
 
 # re-assign sdf with an added operation
 sdf = sdf.apply(lambda x: x + 1)
 
 # add two more operations at once ("chaining" operations)
 sdf = sdf.apply(lambda x: x + 2).apply(lambda x: x + 3)
+
+# Run the application
+if __name__ == '__main__':
+    app.run()
 ```
 
 This pattern is safe to use for almost every operation with `StreamingDataFrames`; any
