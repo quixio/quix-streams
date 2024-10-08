@@ -37,11 +37,11 @@ For good performance, each source runs in a subprocess. Quix Streams automatical
 
 For multiplatform support, Quix Streams starts the source process using the [spawn](https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods) approach. As a side effect, each Source instance must be pickleable. If a source needs to handle unpickleable objects, it's best to initialize those in the source subprocess (in the `BaseSource.start` or `Source.run` methods).  
 
-## Topics
+## Customize Topic
 
 Sources work by sending data to Kafka topics. Then StreamingDataFrames consume these topics.
 
-Each source provides a default topic based on its configuration. You can override the default topic by specifying a topic using the `app.dataframe()` method. 
+Each source provides a default topic based on its configuration. You can customize the topic using the topic parameter of the `app.dataframe()` method. 
 
 **Example**
 
@@ -64,4 +64,50 @@ def main():
 
 if __name__ == "__main__":
     main()
+```
+
+## Standalone sources
+
+Sources allows you to get data and do some processing in the same application. When builidng complex pipelines you may want to have each individual step run in it's own application. Quix Streams allows you to run source standalone.
+
+**Example**
+
+Run a standalone source.
+
+```python
+from quixstreams import Application
+from quixstreams.sources import CSVSource
+
+def main():
+  app = Application()
+  source = CSVSource(path="input.csv")
+
+  app.add_source(source)
+  app.run()
+
+if __name__ == "__main__":
+  main()
+```
+
+You can also customize the topic using the topic parameter of the `app.add_source()` method.
+
+**Example**
+
+Provide a custom topic with four partitions to the standalone source. 
+
+```python
+from quixstreams import Application
+from quixstreams.sources import CSVSource
+from quixstreams.models.topics import TopicConfig
+
+def main():
+  app = Application()
+  source = CSVSource(path="input.csv")
+  topic = app.topic("my_csv_source", config=TopicConfig(num_partitions=4, replication_factor=1))
+
+  app.add_source(source=source, topic=topic)
+  app.run()
+
+if __name__ == "__main__":
+  main()
 ```
