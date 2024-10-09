@@ -21,7 +21,7 @@ class TestHoppingWindow:
     @pytest.mark.parametrize(
         "duration, grace, step, provided_name, func_name, expected_name",
         [
-            (10, 5, 3, "custom_window", "sum", "custom_window"),
+            (10, 5, 3, "custom_window", "sum", "custom_window_hopping_window_10_3_sum"),
             (10, 5, 3, None, "sum", "hopping_window_10_3_sum"),
             (15, 5, 3, None, "count", "hopping_window_15_3_count"),
         ],

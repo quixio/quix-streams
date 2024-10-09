@@ -19,7 +19,7 @@ class TestTumblingWindow:
     @pytest.mark.parametrize(
         "duration, grace, provided_name, func_name, expected_name",
         [
-            (10, 5, "custom_window", "sum", "custom_window"),
+            (10, 5, "custom_window", "sum", "custom_window_tumbling_window_10_sum"),
             (10, 5, None, "sum", "tumbling_window_10_sum"),
             (15, 5, None, "count", "tumbling_window_15_count"),
         ],

@@ -286,10 +286,8 @@ class HoppingWindowDefinition(FixedTimeWindowDefinition):
         )
 
     def _get_name(self, func_name: str) -> str:
-        return (
-            self._name
-            or f"hopping_window_{self._duration_ms}_{self._step_ms}_{func_name}"
-        )
+        prefix = f"{self._name}_hopping_window" if self._name else "hopping_window"
+        return f"{prefix}_{self._duration_ms}_{self._step_ms}_{func_name}"
 
     def _create_window(
         self,
@@ -321,7 +319,8 @@ class TumblingWindowDefinition(FixedTimeWindowDefinition):
         )
 
     def _get_name(self, func_name: str) -> str:
-        return self._name or f"tumbling_window_{self._duration_ms}_{func_name}"
+        prefix = f"{self._name}_tumbling_window" if self._name else "tumbling_window"
+        return f"{prefix}_{self._duration_ms}_{func_name}"
 
     def _create_window(
         self,
