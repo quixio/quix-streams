@@ -160,7 +160,7 @@ class StateStoreManager:
             Default to StateStoreManager `default_store_type`
         """
         if self._stores.get(topic_name, {}).get(store_name) is None:
-            changlog_producer_factory = self._setup_changelogs(topic_name, store_name)
+            changelog_producer_factory = self._setup_changelogs(topic_name, store_name)
 
             store_type = store_type or self.default_store_type
             if store_type == StoreTypes.ROCKSDB:
@@ -168,7 +168,7 @@ class StateStoreManager:
                     name=store_name,
                     topic=topic_name,
                     base_dir=str(self._state_dir),
-                    changelog_producer_factory=changlog_producer_factory,
+                    changelog_producer_factory=changelog_producer_factory,
                     options=self._rocksdb_options,
                 )
             else:
