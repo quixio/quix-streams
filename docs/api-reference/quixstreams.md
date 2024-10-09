@@ -6497,7 +6497,7 @@ Each window store can be registered only once for each topic.
 def clear_stores()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L180)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L183)
 
 Delete all state stores managed by StateStoreManager.
 
@@ -6510,7 +6510,7 @@ def on_partition_assign(topic: str, partition: int,
                         committed_offset: int) -> List[StorePartition]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L195)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L198)
 
 Assign store partitions for each registered store for the given `TopicPartition`
 
@@ -6534,7 +6534,7 @@ list of assigned `StorePartition`
 def on_partition_revoke(topic: str, partition: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L221)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L224)
 
 Revoke store partitions for each registered store for the given `TopicPartition`
 
@@ -6551,7 +6551,7 @@ Revoke store partitions for each registered store for the given `TopicPartition`
 def init()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L234)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L237)
 
 Initialize `StateStoreManager` and create a store directory
 
@@ -6564,7 +6564,7 @@ Initialize `StateStoreManager` and create a store directory
 def close()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L241)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L244)
 
 Close all registered stores
 
