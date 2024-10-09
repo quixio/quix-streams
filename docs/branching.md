@@ -128,9 +128,9 @@ and executes them.
 ### Branching Limitations
 
 Most of branching's limitations are around:
+
 - [using a branch to manipulate another](#branch-interactions)
 - [shared SDF state](#using-with-state)
-
 
 ## Branching Example
 
@@ -248,7 +248,7 @@ Processing the [example value](#example-value) would produce 2 values in the fol
     - `"Congratulations Jane Doe, your recent purchase totaling $212.36 was enough to earn you a coupon!"`
 
 
-# Execution Ordering
+## Execution Ordering
 
 Because of the way branches are tracked and interact, ordering can be tricky.
 
@@ -259,7 +259,7 @@ That said, if you have behavior that relies on a specific execution ordering,
 it is recommended to test it and ensure its occurring in the order you expect, as
 there may be uncaught edge cases. 
 
-## Ordering Example
+### Ordering Example
 
 ```python
 from quixstreams import Application
@@ -308,7 +308,7 @@ SDF
         └── (+ 500   ) = 530
 ```
 
-## Ordering with `expand=True`
+### Ordering with `expand=True`
 
 Using `expand=True` (like with `SDF.apply(f, expand=True)`) also produces its results
 in a specific order: each element of the expand is fully processed before handling the 
@@ -426,8 +426,10 @@ are much cheaper relative to the first).
 Some considerations for mitigating loss in performance due to cloning:
 
 Before (or while) creating a branch:
+ 
 1. Reduce the value size (ex: use column projection)
     - Smaller value = lower clone cost
+
 2. Filter values upfront
     - lower data volume = less data to clone
 
