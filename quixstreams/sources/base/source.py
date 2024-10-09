@@ -26,37 +26,57 @@ class BaseSource(ABC):
     Sources are executed in a sub-process of the main application.
 
     To create your own source you need to implement:
-        * `run`
-        * `stop`
-        * `default_topic`
+
+    * `start`
+    * `stop`
+    * `default_topic`
 
     `BaseSource` is the most basic interface, and the framework expects every
-    sources to implement it. Use `Source` to benefit from a base implementation.
+    source to implement it.
+    Use `Source` to benefit from a base implementation.
 
     You can connect a source to a StreamingDataframe using the Application.
 
     Example snippet:
 
     ```python
-    from quixstreams import Application
-    from quixstreams.sources import Source
+    class RandomNumbersSource(BaseSource):
+    def __init__(self):
+        super().__init__()
+        self._running = False
 
-    class MySource(Source):
-        def run(self):
-            for _ in range(1000):
-                self.produce(
-                    key="foo",
-                    value=b"foo"
-                )
+    def start(self):
+        self._running = True
+
+        while self._running:
+            number = random.randint(0, 100)
+            serialized = self._producer_topic.serialize(value=number)
+            self._producer.produce(
+                topic=self._producer_topic.name,
+                key=serialized.key,
+                value=serialized.value,
+            )
+
+    def stop(self):
+        self._running = False
+
+    def default_topic(self) -> Topic:
+        return Topic(
+            name="topic-name",
+            value_deserializer="json",
+            value_serializer="json",
+        )
+
 
     def main():
-        app = Application()
-        source = MySource(name="my_source")
+        app = Application(broker_address="localhost:9092")
+        source = RandomNumbersSource()
 
         sdf = app.dataframe(source=source)
         sdf.print(metadata=True)
 
         app.run()
+
 
     if __name__ == "__main__":
         main()
@@ -104,23 +124,6 @@ class BaseSource(ABC):
         This method is triggered when the application is shutting down.
 
         The source must ensure that the `run` method is completed soon.
-
-        Example Snippet:
-
-        ```python
-        class MySource(BaseSource):
-            def start(self):
-                self._running = True
-                while self._running:
-                    self._producer.produce(
-                        topic=self._producer_topic,
-                        value="foo",
-                    )
-                    time.sleep(1)
-
-            def stop(self):
-                self._running = False
-        ```
         """
 
     @abstractmethod
@@ -134,22 +137,50 @@ class BaseSource(ABC):
 
 class Source(BaseSource):
     """
-    BaseSource class implementation providing
-
-    Implementation for the abstract method:
-        * `default_topic`
-        * `start`
-        * `stop`
-
-    Helper methods
-        * serialize
-        * produce
-        * flush
-
-    Helper property
-        * running
+    A base class for custom Sources that provides a basic implementation of `BaseSource`
+    interface.
+    It is recommended to interface to create custom sources.
 
     Subclass it and implement the `run` method to fetch data and produce it to Kafka.
+
+    Example:
+
+    ```python
+    from quixstreams import Application
+    import random
+
+    from quixstreams.sources import Source
+
+
+    class RandomNumbersSource(Source):
+        def run(self):
+            while self.running:
+                number = random.randint(0, 100)
+                serialized = self._producer_topic.serialize(value=number)
+                self.produce(key=str(number), value=serialized.value)
+
+
+    def main():
+        app = Application(broker_address="localhost:9092")
+        source = RandomNumbersSource(name="random-source")
+
+        sdf = app.dataframe(source=source)
+        sdf.print(metadata=True)
+
+        app.run()
+
+
+    if __name__ == "__main__":
+        main()
+    ```
+
+
+    Helper methods and properties:
+
+    * `serialize()`
+    * `produce()`
+    * `flush()`
+    * `running`
     """
 
     def __init__(self, name: str, shutdown_timeout: float = 10) -> None:
@@ -171,18 +202,6 @@ class Source(BaseSource):
         Property indicating if the source is running.
 
         The `stop` method will set it to `False`. Use it to stop the source gracefully.
-
-        Example snippet:
-
-        ```python
-        class MySource(Source):
-            def run(self):
-                while self.running:
-                    self.produce(
-                        value="foo",
-                    )
-                    time.sleep(1)
-        ```
         """
         return self._running
 
@@ -192,7 +211,7 @@ class Source(BaseSource):
 
         Use it to clean up the resources and shut down the source gracefully.
 
-        It flush the producer when `_run` completes successfully.
+        It flushes the producer when `_run` completes successfully.
         """
         if not failed:
             self.flush(self.shutdown_timeout / 2)
