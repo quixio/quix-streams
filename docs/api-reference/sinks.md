@@ -10,7 +10,7 @@
 class InfluxDB3Sink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/3.0.0-docs/quixstreams/sinks/core/influxdb3.py#L23)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/influxdb3.py#L23)
 
 <a id="quixstreams.sinks.core.influxdb3.InfluxDB3Sink.__init__"></a>
 
@@ -35,7 +35,7 @@ def __init__(token: str,
              debug: bool = False)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/3.0.0-docs/quixstreams/sinks/core/influxdb3.py#L24)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/influxdb3.py#L24)
 
 A connector to sink processed data to InfluxDB v3.
 
@@ -104,7 +104,7 @@ Default - `False`.
 class CSVSink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/3.0.0-docs/quixstreams/sinks/core/csv.py#L9)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/csv.py#L9)
 
 <a id="quixstreams.sinks.core.csv.CSVSink.__init__"></a>
 
@@ -119,7 +119,7 @@ def __init__(path: str,
              value_serializer: Callable[[Any], str] = json.dumps)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/3.0.0-docs/quixstreams/sinks/core/csv.py#L10)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/csv.py#L10)
 
 A base CSV sink that writes data from all assigned partitions to a single file.
 
@@ -153,7 +153,7 @@ Default - `json.dumps`.
 class BaseSink(abc.ABC)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/3.0.0-docs/quixstreams/sinks/base/sink.py#L11)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L11)
 
 This is a base class for all sinks.
 
@@ -172,7 +172,7 @@ Note that Sinks are currently in beta, and their design may change over time.
 def flush(topic: str, partition: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/3.0.0-docs/quixstreams/sinks/base/sink.py#L21)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L21)
 
 This method is triggered by the Checkpoint class when it commits.
 
@@ -195,7 +195,7 @@ def add(value: Any, key: Any, timestamp: int,
         offset: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/3.0.0-docs/quixstreams/sinks/base/sink.py#L33)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L33)
 
 This method is triggered on every new processed record being sent to this sink.
 
@@ -213,7 +213,7 @@ on flush().
 def on_paused(topic: str, partition: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/3.0.0-docs/quixstreams/sinks/base/sink.py#L51)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L51)
 
 This method is triggered when the sink is paused due to backpressure, when
 the `SinkBackpressureError` is raised.
@@ -228,7 +228,7 @@ Here you can react to the backpressure events.
 class BatchingSink(BaseSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/3.0.0-docs/quixstreams/sinks/base/sink.py#L60)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L60)
 
 A base class for batching sinks, that need to accumulate the data first before
 sending it to the external destinatios.
@@ -252,7 +252,7 @@ batching sink.
 def write(batch: SinkBatch)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/3.0.0-docs/quixstreams/sinks/base/sink.py#L83)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L83)
 
 This method implements actual writing to the external destination.
 
@@ -273,7 +273,7 @@ def add(value: Any, key: Any, timestamp: int,
         offset: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/3.0.0-docs/quixstreams/sinks/base/sink.py#L93)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L93)
 
 Add a new record to in-memory batch.
 
@@ -287,7 +287,7 @@ Add a new record to in-memory batch.
 def flush(topic: str, partition: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/3.0.0-docs/quixstreams/sinks/base/sink.py#L115)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L115)
 
 Flush an accumulated batch to the destination and drop it afterward.
 
@@ -301,7 +301,7 @@ Flush an accumulated batch to the destination and drop it afterward.
 def on_paused(topic: str, partition: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/3.0.0-docs/quixstreams/sinks/base/sink.py#L135)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L135)
 
 When the destination is already backpressure, drop the accumulated batch.
 
@@ -317,7 +317,7 @@ When the destination is already backpressure, drop the accumulated batch.
 class SinkBackpressureError(QuixException)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/3.0.0-docs/quixstreams/sinks/base/exceptions.py#L6)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/exceptions.py#L6)
 
 An exception to be raised by Sinks during flush() call
 
@@ -347,7 +347,7 @@ a timeout specified in `retry_after`, and resume it when it's elapsed.
 class SinkBatch()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/3.0.0-docs/quixstreams/sinks/base/batch.py#L11)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/batch.py#L11)
 
 A batch to accumulate processed data by `BatchingSink` between the checkpoints.
 
@@ -370,7 +370,7 @@ Batches are created automatically by the implementations of `BatchingSink`.
 def iter_chunks(n: int) -> Iterable[Iterable[SinkItem]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/3.0.0-docs/quixstreams/sinks/base/batch.py#L64)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/batch.py#L64)
 
 Iterate over batch data in chunks of length n.
 The last batch may be shorter.
