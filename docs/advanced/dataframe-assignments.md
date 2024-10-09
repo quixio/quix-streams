@@ -19,9 +19,11 @@ sdf = sdf.update()  # in-place with assigning!
 sdf = sdf.apply().to_topic()
 ```
 
-
 So whenever in doubt, simply assign operations to a variable, even if it won't 
 be referenced afterward.
+
+Once you grow more comfortable with how the various `StreamingDataFrame`operations work, 
+feel free to skip assignments where applicable.
 
 The only time you should _not_ do assignments is [very special edge cases with 
 intermediate operation referencing](#avoid-intermediate-operation-referencing).
