@@ -46,7 +46,7 @@ This is the base class for all sources. It handles configuring the source and re
 * `stop`: This method is called, in the subporcess, when the application is shutting down.
 * `default_topic`: This method is called, in the main process, when a topic is not provided with the source.
 
-For more information, see [`quixstreams.sources.base.BaseSource`](../../api-reference/sources.md#BaseSource) docstrings.
+For more information, see [`quixstreams.sources.base.BaseSource`](../../api-reference/sources.md#basesource) docstrings.
 
 ## Custom Sources and Jupyter Notebook
 
