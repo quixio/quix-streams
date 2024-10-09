@@ -39,6 +39,9 @@ In general, we follow the ["fork-and-pull" Git workflow](https://github.com/susa
 6. Push changes to your fork.
 7. Open a PR in our repository and follow the PR template so that we can efficiently review the changes.
 
+## Contributing new Connectors
+If you want to contribute a new Source or Sink, check out the [Connectors Contribution Guide](https://quix.io/docs/quix-streams/connectors/contribution-guide.html) page to get started.
+
 ## Coding standards
 
 To keep the code as consistent as possible, please familiarize yourself with the existing style of the project. If you're contributing to the Python code base, follow the [PEP 8 - Style Guide for Python Code](https://peps.python.org/pep-0008/). 
