@@ -35,6 +35,8 @@ nav:
     - GroupBy Operation: groupby.md
     - Windows & Aggregations: windowing.md
     - Configuration: configuration.md
+    - StreamingDataFrame Branching: branching.md
+    - Consuming Multiple Topics: consuming-multiple-topics.md
   - Advanced Usage:
     - Checkpointing: advanced/checkpointing.md
     - Serialization Formats: advanced/serialization.md
