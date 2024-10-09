@@ -1511,6 +1511,9 @@ class TestApplicationRecovery:
         store_name = "window"
         window_duration_ms = 5000
         window_step_ms = 2000
+        actual_store_name = (
+            f"{store_name}_hopping_window_{window_duration_ms}_{window_step_ms}_sum"
+        )
         msg_tick_ms = 1000
         msg_int_value = 10
         partition_timestamps = {
@@ -1591,13 +1594,13 @@ class TestApplicationRecovery:
             with state_manager_factory(
                 group_id=consumer_group, state_dir=state_dir
             ) as state_manager:
-                state_manager.register_windowed_store(topic.name, store_name)
+                state_manager.register_windowed_store(topic.name, actual_store_name)
                 for p_num, windows in expected_window_updates.items():
                     state_manager.on_partition_assign(
                         topic=topic.name, partition=p_num, committed_offset=-1001
                     )
                     store = state_manager.get_store(
-                        topic=topic.name, store_name=store_name
+                        topic=topic.name, store_name=actual_store_name
                     )
 
                     # in this test, each expiration check only deletes one window,

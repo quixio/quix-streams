@@ -168,7 +168,10 @@ class StateStoreManager:
         """
         store = self._stores.get(topic_name, {}).get(store_name)
         if store:
-            raise WindowedStoreAlreadyRegisteredError()
+            raise WindowedStoreAlreadyRegisteredError(
+                "This window range and type combination already exists; "
+                "to use this window, provide a unique name via the `name` parameter."
+            )
         self._stores.setdefault(topic_name, {})[store_name] = WindowedRocksDBStore(
             name=store_name,
             topic=topic_name,
