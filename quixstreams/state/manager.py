@@ -91,6 +91,10 @@ class StateStoreManager:
         """
         return bool(self._recovery_manager)
 
+    @property
+    def default_store_type(self) -> StoreTypes:
+        return self._default_store_type
+
     def do_recovery(self):
         """
         Perform a state recovery, if necessary.
@@ -158,7 +162,7 @@ class StateStoreManager:
         if self._stores.get(topic_name, {}).get(store_name) is None:
             changlog_producer_factory = self._setup_changelogs(topic_name, store_name)
 
-            store_type = store_type or self._default_store_type
+            store_type = store_type or self.default_store_type
             if store_type == StoreTypes.ROCKSDB:
                 factory = RocksDBStore(
                     name=store_name,

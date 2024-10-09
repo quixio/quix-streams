@@ -1,7 +1,7 @@
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional, Union
-from unittest.mock import create_autospec, patch
+from unittest.mock import create_autospec, patch, PropertyMock
 
 import pytest
 from confluent_kafka.admin import (
@@ -317,10 +317,14 @@ def app_factory(kafka_container, random_consumer_group, tmp_path, store_type):
             topic_manager=topic_manager,
             processing_guarantee=processing_guarantee,
             request_timeout=request_timeout,
-            state_store_type=store_type,
         )
 
-    return factory
+    with patch(
+        "quixstreams.state.manager.StateStoreManager.default_store_type",
+        new_callable=PropertyMock,
+    ) as m:
+        m.return_value = store_type
+        yield factory
 
 
 @pytest.fixture()
@@ -478,10 +482,14 @@ def quix_app_factory(
             quix_config_builder=quix_mock_config_builder_factory(
                 workspace_id=workspace_id
             ),
-            state_store_type=store_type,
         )
 
-    return factory
+    with patch(
+        "quixstreams.state.manager.StateStoreManager.default_store_type",
+        new_callable=PropertyMock,
+    ) as m:
+        m.return_value = store_type
+        yield factory
 
 
 @pytest.fixture()
