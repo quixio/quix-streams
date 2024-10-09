@@ -35,6 +35,11 @@ from .functions import (
 __all__ = ("Stream",)
 
 
+class IdentityFunction(ApplyFunction):
+    def __init__(self):
+        super().__init__(func=lambda x: x)
+
+
 class Stream:
     def __init__(
         self,
@@ -75,15 +80,16 @@ class Stream:
 
         :param func: a function to be called on the stream.
             It is expected to be wrapped into one of "Apply", "Filter", "Update" or
-            "Trasform" from `quixstreams.core.stream.functions` package.
+            "Transform" from `quixstreams.core.stream.functions` package.
             Default - "ApplyFunction(lambda value: value)".
         :param parent: a parent `Stream`
         """
         if func is not None and not isinstance(func, StreamFunction):
             raise ValueError("Provided function must be a subclass of StreamFunction")
 
-        self.func = func if func is not None else ApplyFunction(lambda value: value)
+        self.func = func if func is not None else IdentityFunction()
         self.parent = parent
+        self.merge_parents = []
         self.children = set()
         self.generated = monotonic_ns()
         self.pruned = False
@@ -269,7 +275,7 @@ class Stream:
         self._prune(diff[0])
         return parent
 
-    def root_path(self, allow_splits=True) -> List[Self]:
+    def root_path(self, allow_splits=True, allow_merges=True) -> List[Self]:
         """
         Return a list of all parent Streams including the node itself.
 
@@ -281,7 +287,11 @@ class Stream:
 
         node = self
         tree_ = [node]
-        while (parent := node.parent) and (allow_splits or len(parent.children) < 2):
+        while (
+            (parent := node.parent)
+            and (allow_merges or not node.merge_parents)
+            and (allow_splits or len(parent.children) < 2)
+        ):
             tree_.append(parent)
             node = node.parent
 
@@ -335,24 +345,29 @@ class Stream:
             allow_updates=allow_updates,
             allow_transforms=allow_transforms,
         )
+        pending_composes = {}
 
-        def _split_compose(pending_composes, composed, node):
+        def _split_compose(composed, node):
             children = node.children
 
-            if len(children) == 1:
-                return _split_compose(pending_composes, composed, list(children)[0])
+            if len(children) == 1 and not (child := next(iter(children))).merge_parents:
+                return _split_compose(composed, child)
 
             for child in sorted(children, key=lambda node: node.generated):
-                _split_compose(pending_composes, composed, child)
-            tree = node.root_path(allow_splits=False)
-            composed = composer(tree, pending_composes.pop(node, composed))
+                _split_compose(composed, child)
 
-            if split := tree[0].parent:
-                pending_composes.setdefault(split, []).append(composed)
+            tree = node.root_path(allow_splits=False, allow_merges=False)
+            composed = composer(tree, pending_composes.pop(node, composed))
+            if parent := tree[0].parent:
+                if merges := tree[0].merge_parents:
+                    for p in [parent, *merges]:
+                        pending_composes[p] = composed
+                else:
+                    pending_composes.setdefault(parent, []).append(composed)
             else:
                 return composed
 
-        return _split_compose({}, composed, self.full_tree()[0])
+        return _split_compose(composed, self.full_tree()[0])
 
     def compose_returning(self) -> ReturningExecutor:
         """
@@ -391,6 +406,16 @@ class Stream:
 
         return wrapper
 
+    def merge(self, others: List[Self]):
+        # This allows us to "unify" streams with a new operation, which will be
+        # ignored during compose.
+        # There is probably a way to it without this, but it makes it easier for now
+        new_node = self._add(IdentityFunction())
+        new_node.merge_parents.extend(others)
+        for other in others:
+            other.children.add(new_node)
+        return new_node
+
     def _compose(
         self,
         tree: List[Self],
@@ -405,6 +430,10 @@ class Stream:
         # Iterate over a reversed list of functions
         for func in reversed(functions):
             # Validate that only allowed functions are passed
+            if isinstance(func, IdentityFunction) and composed:
+                # These are added either when making a new Stream or doing a merge
+                # They do not need to be included as part of execution.
+                continue
             if not allow_updates and isinstance(
                 func, (UpdateFunction, UpdateWithMetadataFunction)
             ):
