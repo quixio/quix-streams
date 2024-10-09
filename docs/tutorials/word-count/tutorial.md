@@ -214,7 +214,7 @@ NOTE: This is how you would see the values in the Kafka topic `product_review_wo
 ### 1. Run Kafka
 First, have a running Kafka cluster. 
 
-To conveniently follow along with this tutorial, just [run this simple one-liner](../tutorials-overview.md#running-kafka-locally).
+To conveniently follow along with this tutorial, just [run this simple one-liner](../README.md#running-kafka-locally).
 
 ### 2. Install Quix Streams
 In your python environment, run `pip install quixstreams`

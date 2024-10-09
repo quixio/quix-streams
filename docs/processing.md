@@ -439,7 +439,7 @@ Since version 2.6, the `StreamingDataFrame.to_topic()` method always forwards th
 
 This way, **the outgoing messages will be produced with the identical timestamps and headers as they were received with** by default. 
 
-To change the timestamp of the message, use the `StreamingDataFrame.set_timestamp()` API, described in [this section](#updating-timestamps).
+To change the timestamp of the message, use the `StreamingDataFrame.set_timestamp()` API, described in [this section](#updating-kafka-timestamps).
 
 ## Using Columns and DataFrame API
 
@@ -673,7 +673,7 @@ To update the current timestamp, use the `StreamingDataFrame.set_timestamp()` AP
 
 There are several things to note:
 
-- The new timestamp will be used by the `StreamingDataFrame.to_topic()` method when the message is produced (see [here](#timestamps-of-produced-messages)).
+- The new timestamp will be used by the `StreamingDataFrame.to_topic()` method when the message is produced (see [here](#timestamps-and-headers-of-produced-messages)).
 - The timestamp will also determine the applicable window in the windowed aggregations.
 
 **Example:**
@@ -757,7 +757,7 @@ The `quixstreams.message_context()` function should be called
 only from the custom functions during processing.
 
 > **_NOTE:_** Before quixstreams==2.6.0, `MessageContext` also provided access to message keys and timestamps.  
-> To access keys and timestamps in `quixstreams>=2.6`, use the approach described in this [section](#accessing-kafka-keys-anad-timestamps)
+> To access keys and timestamps in `quixstreams>=2.6`, use the approach described in this [section](#accessing-kafka-keys-timestamps-and-headers)
 
 
 **Example:**

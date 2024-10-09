@@ -206,7 +206,7 @@ NOTE: because we use "Current" windowing, we may produce a lot of "duplicate" al
 ### 1. Run Kafka
 First, have a running Kafka cluster. 
 
-To conveniently follow along with this tutorial, just [run this simple one-liner](../tutorials-overview.md#running-kafka-locally).
+To conveniently follow along with this tutorial, just [run this simple one-liner](../README.md#running-kafka-locally).
 
 ### 2. Install Quix Streams
 In your python environment, run `pip install quixstreams`
