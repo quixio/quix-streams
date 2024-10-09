@@ -2,8 +2,8 @@
 
 Quix Streams also provides a set of classes to help users implement custom sources.
 
-* [`quixstreams.sources.base.Source`](../../api-reference/sources.md#sources): A subclass of `BaseSource` that implements some helpful methods for writing sources. We recommend subclassing `Source` instead of `BaseSource`.
-* [`quixstreams.sources.base.BaseSource`](../../api-reference/sources.md#BaseSource): This is the base class for all other sources. It defines the must have methods.
+* [`quixstreams.sources.base.Source`](../../api-reference/sources.md#source): A subclass of `BaseSource` that implements some helpful methods for writing sources. We recommend subclassing `Source` instead of `BaseSource`.
+* [`quixstreams.sources.base.BaseSource`](../../api-reference/sources.md#basesource): This is the base class for all other sources. It defines the must-have methods.
 
 ## Source
 

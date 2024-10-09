@@ -134,7 +134,7 @@ Most of branching's limitations are around:
 
 ## Branching Example
 
-In this example, we have purchase events similar to our [purchase-filtering tutorial](../tutorials/purchase-filtering):
+In this example, we have purchase events similar to our [purchase-filtering tutorial](tutorials/purchase-filtering/tutorial.md):
 
 In short, customers who have either a `Gold`, `Silver`, or `Bronze` membership
 are making purchases at this store.

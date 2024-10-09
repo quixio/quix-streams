@@ -31,4 +31,4 @@ if __name__ == "__main__":
 
 ## SDK Token
 
-The Quix Environment Source requires the SDK token of the source environment. [Click here](../../../develop/authentication/streaming-token.md) for more information on SDK tokens.
+The Quix Environment Source requires the SDK token of the source environment. [Click here](https://quix.io/docs/develop/authentication/streaming-token.html) for more information on SDK tokens.

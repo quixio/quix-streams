@@ -43,7 +43,7 @@ This is to ensure no further mutations can be applied to the outbound data.
 _However_, you can continue other operations with other branches, including using
 the same `Sink` to push another value (with another `SDF.sink()` call).
 
-[Learn more about _branching_ here](../../advanced/branching.md).
+[Learn more about _branching_ here](../../branching.md).
 
 ### Branching after SDF.sink()
 
