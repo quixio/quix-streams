@@ -12,24 +12,24 @@ Before branching, only this was possible:
 
 ```
 sdf
-└── A
-    └── B
-        └── C
-            └── D
+└── apply()
+    └── apply()
+        └── apply()
+            └── apply()
 ```
 
 But with branching, you could do something like:
 
 ```
 sdf
-└── A
-    └── B
-        ├── C
-        │   └── D
-        └── E
-            ├── F
-            ├── G
-            └── H
+└── apply()
+    └── apply()
+        ├── apply()
+        │   └── apply()
+        └── filter() - (does following operations only to this filtered subset)
+            ├── apply()
+            ├── apply()
+            └── apply()
 ```
 
 ## Branching Use Cases
