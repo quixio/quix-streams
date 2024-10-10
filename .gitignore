@@ -25,6 +25,7 @@ certificates/
 # environment
 env/
 venv/
+.venv/
 
 # build results
 /build/
@@ -40,5 +41,3 @@ __pycache__/
 # direnv
 .direnv/
 .envrc
-
-.venv/

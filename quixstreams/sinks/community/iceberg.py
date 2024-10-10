@@ -1,7 +1,7 @@
 import logging
 from quixstreams.sinks import SinkBatch, BatchingSink, SinkBackpressureError
-from typing import Optional, Any, List
-from typing import Literal, Optional
+from quixstreams.logging import LogLevel
+from typing import Any, List, Literal, Optional
 from datetime import datetime
 from io import BytesIO
 
@@ -12,12 +12,6 @@ import random  # For jitter in backoff
 try:
     import pyarrow as pa
     import pyarrow.parquet as pq
-except ImportError as exc:
-    raise ImportError(
-        'Package "pyarrow" is missing: '
-        "run pip install quixstreams[pyarrow] to fix it"
-    ) from exc    
-try:
     from pyiceberg.transforms import DayTransform, IdentityTransform
     from pyiceberg.catalog.glue import GlueCatalog
     from pyiceberg.partitioning import PartitionSpec, PartitionField
@@ -26,21 +20,13 @@ try:
     from pyiceberg.exceptions import CommitFailedException  # Import the exception
 except ImportError as exc:
     raise ImportError(
-        'Package "pyiceberg" is missing: '
-        "run pip install quixstreams[pyiceberg] to fix it"
+        'Package "pyarrow" is missing: '
+        "run pip install quixstreams[iceberg] to fix it"
     ) from exc
 
 
 DataCatalogSpec = Literal["aws_glue"]
 
-LogLevel = Literal[
-    "CRITICAL",
-    "ERROR",
-    "WARNING",
-    "INFO",
-    "DEBUG",
-    "NOTSET",
-]
 
 class IcebergSink(BatchingSink):
     """
@@ -50,6 +36,7 @@ class IcebergSink(BatchingSink):
     It serializes incoming data batches into Parquet format and appends them to the Iceberg table,
     updating the table schema as necessary on fly.
     """
+
     def __init__(
         self,
         table_name: str,
@@ -58,7 +45,7 @@ class IcebergSink(BatchingSink):
         data_catalog_spec: DataCatalogSpec = "aws_glue",
         schema: Optional[Schema] = None,
         partition_spec: Optional[PartitionSpec] = None,
-        loglevel: LogLevel = "INFO"
+        loglevel: LogLevel = "INFO",
     ):
         """
         Initializes the S3Sink with the specified configuration.
@@ -74,31 +61,30 @@ class IcebergSink(BatchingSink):
             loglevel (LogLevel): The logging level for the logger (default is 'INFO').
         """
         super().__init__()
-        
+
         # Configure logging.
         self._logger = logging.getLogger("IcebergSink")
-        log_format = '[%(asctime)s.%(msecs)03d] [%(levelname)s] [%(name)s] : %(message)s'
-        logging.basicConfig(format=log_format, datefmt='%Y-%m-%d %H:%M:%S')
+        log_format = (
+            "[%(asctime)s.%(msecs)03d] [%(levelname)s] [%(name)s] : %(message)s"
+        )
+        logging.basicConfig(format=log_format, datefmt="%Y-%m-%d %H:%M:%S")
         self._logger.setLevel(loglevel)
 
         # Initialize the Iceberg catalog.
         if data_catalog_spec == "aws_glue":
             # Configure Iceberg Catalog using AWS Glue.
-            self.catalog = GlueCatalog(
-                name="glue_catalog",
-                region_name=s3_region_name
-            )
+            self.catalog = GlueCatalog(name="glue_catalog", region_name=s3_region_name)
         else:
             raise ValueError(f"Unsupported data_catalog_spec: {data_catalog_spec}")
-        
+
         # Set up the schema.
         if schema is None:
             # Define a default schema if none is provided.
             schema = Schema(
                 NestedField(1, "_timestamp", TimestampType(), required=False),
-                NestedField(2, "_key", StringType(), required=False)
+                NestedField(2, "_key", StringType(), required=False),
             )
-        
+
         # Set up the partition specification.
         if partition_spec is None:
             # Map field names to field IDs from the schema.
@@ -107,32 +93,32 @@ class IcebergSink(BatchingSink):
             # Create partition fields.
             partition_fields = [
                 PartitionField(
-                    source_id=field_ids['_key'],
+                    source_id=field_ids["_key"],
                     field_id=1000,  # Unique partition field ID.
                     transform=IdentityTransform(),
-                    name='_key'
+                    name="_key",
                 ),
                 PartitionField(
-                    source_id=field_ids['_timestamp'],
+                    source_id=field_ids["_timestamp"],
                     field_id=1001,
                     transform=DayTransform(),
-                    name='day'
-                )
+                    name="day",
+                ),
             ]
 
             # Create the new PartitionSpec.
             partition_spec = PartitionSpec(schema=schema, fields=partition_fields)
-        
+
             # Create the Iceberg table if it doesn't exist.
             self.table = self.catalog.create_table_if_not_exists(
                 identifier=table_name,
                 schema=schema,
                 location=aws_s3_uri,
                 partition_spec=partition_spec,
-                properties={"write.distribution-mode": "fanout"}
+                properties={"write.distribution-mode": "fanout"},
             )
             self._logger.info(f"Loaded Iceberg table '{table_name}' at '{aws_s3_uri}'.")
-        
+
     def write(self, batch: SinkBatch):
         """
         Writes a batch of data to the Iceberg table.
@@ -144,35 +130,36 @@ class IcebergSink(BatchingSink):
         try:
             # Serialize batch data into Parquet format.
             data = self._format.serialize_batch_values(batch)
-            
+
             # Read data into a PyArrow Table.
             input_buffer = pa.BufferReader(data)
             parquet_table = pq.read_table(input_buffer)
 
             # Reload the table to get the latest metadata
             self.table = self.catalog.load_table(self.table.name())
-            
+
             # Update the table schema if necessary.
             with self.table.update_schema() as update:
                 update.union_by_name(parquet_table.schema)
-            
+
             append_start_epoch = time.time()
             self.table.append(parquet_table)
-            self._logger.info(f"Appended {len(list(batch))} records to {self.table.name()} table in {time.time() - append_start_epoch}s.")
-            
+            self._logger.info(
+                f"Appended {len(list(batch))} records to {self.table.name()} table in {time.time() - append_start_epoch}s."
+            )
+
         except CommitFailedException as e:
             # Handle commit conflict
             self._logger.warning(f"Commit conflict detected.: {e}")
-            sleep_time = random.uniform(0, 5)
+            sleep_time = random.uniform(0, 5)  # noqa: S311
             raise SinkBackpressureError(sleep_time, batch.topic, batch.partition)
         except Exception as e:
             self._logger.error(f"Error writing data to Iceberg table: {e}")
             raise
-        
-    
+
     def _serialize_batch_values(self, values: List[Any]) -> bytes:
-        #TODO: Handle data flattening. Nested properties will cause this to crash.
-        
+        # TODO: Handle data flattening. Nested properties will cause this to crash.
+
         # Get all unique keys (columns) across all rows
         all_keys = set()
         for row in values:
@@ -184,20 +171,25 @@ class IcebergSink(BatchingSink):
         ]
 
         columns = {
-            "_timestamp": [datetime.fromtimestamp(row.timestamp / 1000.0) for row in values], 
-            "_key": [bytes.decode(row.key) for row in values]
+            "_timestamp": [
+                datetime.fromtimestamp(row.timestamp / 1000.0) for row in values
+            ],
+            "_key": [bytes.decode(row.key) for row in values],
         }
 
         # Convert normalized values to a pyarrow Table
-        columns = {**columns, **{key: [row[key] for row in normalized_values] for key in all_keys}}
-                   
+        columns = {
+            **columns,
+            **{key: [row[key] for row in normalized_values] for key in all_keys},
+        }
+
         table = pa.Table.from_pydict(columns)
 
         with BytesIO() as f:
             pq.write_table(table, f, compression=self._compression_type)
             value_bytes = f.getvalue()
 
-            #if self._compress and self._compression_type == "none":  # Handle manual gzip if no Parquet compression
-                #value_bytes = gzip.compress(value_bytes)
+            # if self._compress and self._compression_type == "none":  # Handle manual gzip if no Parquet compression
+            # value_bytes = gzip.compress(value_bytes)
 
-            return value_bytes 
+            return value_bytes
