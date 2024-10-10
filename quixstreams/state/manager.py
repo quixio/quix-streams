@@ -1,7 +1,7 @@
 import logging
 import shutil
 from pathlib import Path
-from typing import List, Dict, Optional, Union, Type
+from typing import List, Dict, Optional, Union, Type, get_args
 
 from quixstreams.rowproducer import RowProducer
 from .exceptions import (
@@ -20,10 +20,8 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_STATE_STORE_NAME = "default"
 
-StoreTypes = Type[RocksDBStore]
-
-# SUPPORTED_STORES = get_args(StoreTypes)
-SUPPORTED_STORES = [RocksDBStore]
+StoreTypes = Union[Type[RocksDBStore]]
+SUPPORTED_STORES = get_args(StoreTypes)
 
 
 class StateStoreManager:
