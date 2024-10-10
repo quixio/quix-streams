@@ -81,3 +81,5 @@ addopts = "--log-disable=urllib3.connectionpool --log-disable=parso --log-disabl
 log_cli = true
 log_cli_level = "INFO"
 log_cli_format = "[%(levelname)s] %(name)s: %(message)s"
+# Custom markers
+markers = ["timeit"]

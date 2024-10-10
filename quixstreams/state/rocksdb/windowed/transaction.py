@@ -1,4 +1,4 @@
-from typing import Any, Optional, List, Tuple, TYPE_CHECKING, cast
+from typing import Any, Generator, Optional, Tuple, TYPE_CHECKING, cast
 
 from rocksdict import ReadOptions
 
@@ -110,26 +110,29 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
 
     def expire_windows(
         self, duration_ms: int, prefix: bytes, grace_ms: int = 0
-    ) -> List[Tuple[Tuple[int, int], Any]]:
+    ) -> Generator[Tuple[Tuple[int, int], Any], None, None]:
         """
-        Get a list of expired windows from RocksDB considering latest timestamp,
-        window size and grace period.
-        It marks the latest found window as expired in the expiration index, so
-        calling this method multiple times will yield different results for the same
-        "latest timestamp".
+        Get all expired windows from RocksDB based on the latest timestamp,
+        window duration, and an optional grace period.
+
+        This method marks the latest found window as expired in the expiration index,
+        so consecutive calls may yield different results for the same "latest timestamp".
 
         How it works:
-        - First, it looks for the start time of the last expired window for the current
-          prefix using expiration cache. If it's found, it will be used to reduce
-          the search space and to avoid returning already expired windows.
-        - Then it goes over window segments and fetches the windows
-          that should be expired.
-        - At last, it updates the expiration cache with the start time of the latest
-          found windows
+        - First, it checks the expiration cache for the start time of the last expired
+          window for the current prefix. If found, this value helps reduce the search
+          space and prevents returning previously expired windows.
+        - Next, it iterates over window segments and identifies the windows that should
+          be marked as expired.
+        - Finally, it updates the expiration cache with the start time of the latest
+          windows found.
 
-        :return: sorted list of tuples in format `((start, end), value)`
+        :param duration_ms: The duration of each window in milliseconds.
+        :param prefix: The key prefix for filtering windows.
+        :param grace_ms: An optional grace period in milliseconds to delay expiration.
+            Defaults to 0, meaning no grace period is applied.
+        :return: A generator that yields sorted tuples in the format `((start, end), value)`.
         """
-
         latest_timestamp = self._latest_timestamp_ms
         start_to = latest_timestamp - duration_ms - grace_ms
         start_from = -1
@@ -145,77 +148,126 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
 
         # Use the latest expired timestamp to limit the iteration over
         # only those windows that have not been expired before
-        expired_windows = self._get_windows(
+        expired_windows = self.get_windows(
             start_from_ms=start_from,
             start_to_ms=start_to,
             prefix=prefix,
         )
-        if expired_windows:
-            # Save the start of the latest expired window to the expiration index
-            latest_window = expired_windows[-1]
-            last_expired__gt = latest_window[0][0]
+
+        last_expired__gt = None
+        for (start, end), aggregated in expired_windows:
+            last_expired__gt = start
+            # Delete expired window from the state
+            self.delete_window(start, end, prefix=prefix)
+            yield (start, end), aggregated
+
+        # Save the start of the latest expired window to the expiration index
+        if last_expired__gt:
             self.set(
                 key=LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY,
                 value=last_expired__gt,
                 prefix=prefix,
                 cf_name=LATEST_EXPIRED_WINDOW_CF_NAME,
             )
-            # Delete expired windows from the state
-            for (start, end), _ in expired_windows:
-                self.delete_window(start, end, prefix=prefix)
-        return expired_windows
 
     def _serialize_key(self, key: Any, prefix: bytes) -> bytes:
         # Allow bytes keys in WindowedStore
         key_bytes = key if isinstance(key, bytes) else serialize(key, dumps=self._dumps)
         return prefix + PREFIX_SEPARATOR + key_bytes
 
-    def _get_windows(
-        self, start_from_ms: int, start_to_ms: int, prefix: bytes
-    ) -> List[Tuple[Tuple[int, int], Any]]:
+    def get_windows(
+        self,
+        start_from_ms: int,
+        start_to_ms: int,
+        prefix: bytes,
+        backwards: bool = False,
+    ) -> Generator[Tuple[Tuple[int, int], Any], None, None]:
         """
-        Get all windows starting between "start_from" and "start_to"
-        within the given prefix.
+        Get all windows that start between "start_from_ms" and "start_to_ms"
+        within the specified prefix.
 
+        This function also checks the update cache for any updates not yet
+        committed to RocksDB.
 
-        This function also checks the update cache in case some updates have not
-        been committed to RocksDB yet.
-
-        :param start_from_ms: minimal window start time, exclusive
-        :param start_to_ms: maximum window start time, inclusive
-        :return: sorted list of tuples in format `((start, end), value)`
+        :param start_from_ms: The minimal window start time, exclusive.
+        :param start_to_ms: The maximum window start time, inclusive.
+        :param prefix: The key prefix for filtering windows.
+        :param backwards: If True, yields windows in reverse order.
+        :return: A generator that yields sorted tuples in the format `((start, end), value)`.
         """
-
-        # Iterate over rocksdb within the given prefix and (start_form, start_to)
-        # timestamps
         seek_from = max(start_from_ms, 0)
         seek_from_key = encode_window_prefix(prefix=prefix, start_ms=seek_from)
 
-        # Add +1 to make the "start_to" inclusive
+        # Add +1 to make the upper bound inclusive
         seek_to = start_to_ms + 1
         seek_to_key = encode_window_prefix(prefix=prefix, start_ms=seek_to)
 
-        # Set iterator bounds to reduce the potential IO
+        # Set iterator bounds to reduce IO by limiting the range of keys fetched
         read_opt = ReadOptions()
         read_opt.set_iterate_lower_bound(seek_from_key)
         read_opt.set_iterate_upper_bound(seek_to_key)
 
-        windows = {}
-        for key, value in self._partition.iter_items(
+        db_windows = self._partition.iter_items(
             read_opt=read_opt, from_key=seek_from_key
-        ):
-            message_key, start, end = parse_window_key(key)
-            if start_from_ms < start <= start_to_ms:
-                windows[(start, end)] = self._deserialize_value(value)
+        )
 
-        for window_key, window_value in (
-            self._update_cache.get("default", {}).get(prefix, {}).items()
-        ):
-            message_key, start, end = parse_window_key(window_key)
-            if window_value is DELETED:
-                windows.pop((start, end), None)
-                continue
-            elif start_from_ms < start <= start_to_ms:
-                windows[(start, end)] = self._deserialize_value(window_value)
+        def _get_windows() -> Generator[Tuple[Tuple[int, int], Any], None, None]:
+            """
+            This internal generator function iterates over database and cache entries.
+            Cached entries take precedence over database entries with the same timestamp,
+            and non-deleted cache entries are yielded in the appropriate order.
+            """
 
-        return sorted(windows.items())
+            # If the cache is empty then yield only db windows
+            if not (cache := self._update_cache.get("default", {}).get(prefix, {})):
+                for db_key, db_value in db_windows:
+                    _, start, end = parse_window_key(db_key)
+                    if start_from_ms < start <= start_to_ms:
+                        yield (start, end), self._deserialize_value(db_value)
+                return
+
+            cached_windows = sorted(cache.items(), reverse=True)
+            cached_key, cached_value = cached_windows.pop()
+
+            for db_key, db_value in db_windows:
+                yield_db_window = True
+                if cached_key:
+                    # Yield all cached windows with a timestamp
+                    # less than or equal to the current db_key
+                    while cached_key <= db_key:
+                        if cached_value is not DELETED:
+                            _, start, end = parse_window_key(cached_key)
+                            if start_from_ms < start <= start_to_ms:
+                                yield (
+                                    (start, end),
+                                    self._deserialize_value(cached_value),
+                                )
+
+                        # Cached window with equal timestamp takes precedence,
+                        # so do not yield the db window for this timestamp
+                        yield_db_window = cached_key != db_key
+
+                        try:
+                            cached_key, cached_value = cached_windows.pop()
+                        except IndexError:
+                            cached_key, cached_value = None, None
+                            break
+
+                if yield_db_window:
+                    _, start, end = parse_window_key(db_key)
+                    if start_from_ms < start <= start_to_ms:
+                        yield (start, end), self._deserialize_value(db_value)
+
+            # Yield remaining cached windows
+            while cached_key:
+                if cached_value is not DELETED:
+                    _, start, end = parse_window_key(cached_key)
+                    if start_from_ms < start <= start_to_ms:
+                        yield (start, end), self._deserialize_value(cached_value)
+
+                try:
+                    cached_key, cached_value = cached_windows.pop()
+                except IndexError:
+                    return
+
+        yield from reversed(list(_get_windows())) if backwards else _get_windows()
