@@ -16,6 +16,7 @@ from quixstreams.rowproducer import RowProducer
 from quixstreams.sinks import SinkManager, BatchingSink, SinkBackpressureError
 from quixstreams.sinks.base import SinkBatch
 from quixstreams.state import StateStoreManager
+from quixstreams.state.manager import SUPPORTED_STORES
 from quixstreams.state.base import PartitionTransaction
 from quixstreams.state.exceptions import StoreNotRegisteredError, StoreTransactionFailed
 from tests.utils import DummySink
@@ -71,6 +72,7 @@ class FailingSink(BatchingSink):
         raise ValueError("Sink write failed")
 
 
+@pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
 class TestCheckpoint:
     def test_empty_true(self, checkpoint_factory):
         checkpoint = checkpoint_factory()
