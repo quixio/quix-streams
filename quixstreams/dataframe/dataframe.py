@@ -17,6 +17,7 @@ from typing import (
     Tuple,
     Literal,
     Collection,
+    Set,
 )
 
 from typing_extensions import Self
@@ -115,14 +116,21 @@ class StreamingDataFrame(BaseStreaming):
         registry: DataframeRegistry,
         processing_context: ProcessingContext,
         stream: Optional[Stream] = None,
+        merges: Optional[List[Self]] = None,
     ):
         self._stream: Stream = stream or Stream()
         self._topic = topic
         self._topic_manager = topic_manager
         self._registry = registry
+        self._merges = merges or []
         self._processing_context = processing_context
         self._producer = processing_context.producer
-        self._locked = False
+
+    @property
+    def __all_topics__(self) -> Set[str]:
+        topics = {self._topic.name}
+        topics.update([topic for sdf in self._merges for topic in sdf.__all_topics__])
+        return topics
 
     @property
     def processing_context(self) -> ProcessingContext:
@@ -492,20 +500,27 @@ class StreamingDataFrame(BaseStreaming):
             raise ValueError(
                 'group_by requires "name" parameter when "key" is a function'
             )
-
-        groupby_topic = self._topic_manager.repartition_topic(
-            operation=name or key,
-            topic_name=self._topic.name,
-            key_serializer=key_serializer,
-            value_serializer=value_serializer,
-            key_deserializer=key_deserializer,
-            value_deserializer=value_deserializer,
-        )
-
-        self.to_topic(topic=groupby_topic, key=self._groupby_key(key))
-        groupby_sdf = self.__dataframe_clone__(topic=groupby_topic)
-        self._registry.register_groupby(source_sdf=self, new_sdf=groupby_sdf)
-        return groupby_sdf
+        key = name or key
+        topic_names = self.__all_topics__
+        final_sdf = None
+        while topic_names:
+            topic_name = topic_names.pop()
+            topic = self._topic_manager.repartition_topic(
+                operation=key,
+                topic_name=topic_name,
+                key_serializer=key_serializer,
+                value_serializer=value_serializer,
+                key_deserializer=key_deserializer,
+                value_deserializer=value_deserializer,
+            )
+            new_sdf = self.__dataframe_clone__(topic=topic, merges=[])
+            self._registry.register_groupby(source_topic=topic_name, new_sdf=new_sdf)
+            if final_sdf is None:
+                final_sdf = new_sdf
+            else:
+                final_sdf = final_sdf.merge(new_sdf)
+        self._to_groupby_topics(key=_groupby_key(key))
+        return final_sdf
 
     def contains(self, key: str) -> StreamingSeries:
         """
@@ -569,6 +584,17 @@ class StreamingDataFrame(BaseStreaming):
         return self._add_update(
             lambda value, orig_key, timestamp, headers: self._produce(
                 topic=topic,
+                value=value,
+                key=orig_key if key is None else key(value),
+                timestamp=timestamp,
+                headers=headers,
+            ),
+            metadata=True,
+        )
+
+    def _to_groupby_topics(self, key: Optional[Callable[[Any], Any]] = None) -> Self:
+        return self._add_update(
+            lambda value, orig_key, timestamp, headers: self._produce_groupby(
                 value=value,
                 key=orig_key if key is None else key(value),
                 timestamp=timestamp,
@@ -1032,6 +1058,11 @@ class StreamingDataFrame(BaseStreaming):
         # uses apply without returning to make this operation terminal
         self.apply(_sink_callback, metadata=True)
 
+    def merge(self, *others: Self):
+        self._stream = self.stream.merge([other.stream for other in others])
+        self._merges.extend(list(others))
+        return self
+
     def _produce(
         self,
         topic: Topic,
@@ -1046,6 +1077,24 @@ class StreamingDataFrame(BaseStreaming):
         )
         self._producer.produce_row(row=row, topic=topic, key=key, timestamp=timestamp)
 
+    def _produce_groupby(
+        self,
+        value: object,
+        key: Any,
+        timestamp: int,
+        headers: Any,
+    ):
+        ctx = message_context()
+        topic_out = self._topic_manager.repartition_topics[
+            self._topic_manager.topic_to_repartition_names[ctx.topic]
+        ]
+        row = Row(
+            value=value, key=key, timestamp=timestamp, context=ctx, headers=headers
+        )
+        self._producer.produce_row(
+            row=row, topic=topic_out, key=key, timestamp=timestamp
+        )
+
     def _add_update(
         self,
         func: Union[UpdateCallback, UpdateWithMetadataCallback],
@@ -1055,30 +1104,18 @@ class StreamingDataFrame(BaseStreaming):
         return self
 
     def _register_store(self):
-        """
-        Register the default store for input topic in StateStoreManager
-        """
-        self._processing_context.state_manager.register_store(
-            topic_name=self._topic.name
-        )
+        for topic in self.__all_topics__:
+            self._processing_context.state_manager.register_store(topic)
 
-    def _groupby_key(
-        self, key: Union[str, Callable[[Any], Any]]
-    ) -> Callable[[Any], Any]:
-        """
-        Generate the underlying groupby key function based on users provided input.
-        """
-        if isinstance(key, str):
-            return lambda row: row[key]
-        elif callable(key):
-            return lambda row: key(row)
-        else:
-            raise TypeError("group_by 'key' must be callable or string (column name)")
+    def __register_windowed_store__(self, name: str):
+        for topic in self.__all_topics__:
+            self._processing_context.state_manager.register_windowed_store(topic, name)
 
     def __dataframe_clone__(
         self,
         stream: Optional[Stream] = None,
         topic: Optional[Topic] = None,
+        merges: Optional[List[Self]] = None,
     ) -> Self:
         """
         Clone the StreamingDataFrame with a new `stream` and `topic` parameters.
@@ -1093,6 +1130,7 @@ class StreamingDataFrame(BaseStreaming):
             processing_context=self._processing_context,
             topic_manager=self._topic_manager,
             registry=self._registry,
+            merges=merges if merges is not None else self._merges,
         )
         return clone
 
@@ -1170,6 +1208,18 @@ class StreamingDataFrame(BaseStreaming):
             f"using 'bool()' or any operations that rely on it; "
             f"use '&' or '|' for logical and/or comparisons"
         )
+
+
+def _groupby_key(key: Union[str, Callable[[Any], Any]]) -> Callable[[Any], Any]:
+    """
+    Generate the underlying groupby key function based on users provided input.
+    """
+    if isinstance(key, str):
+        return lambda row: row[key]
+    elif callable(key):
+        return lambda row: key(row)
+    else:
+        raise TypeError("group_by 'key' must be callable or string (column name)")
 
 
 def _drop(value: Dict, columns: List[str], ignore_missing: bool = False):

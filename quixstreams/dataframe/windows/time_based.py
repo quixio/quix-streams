@@ -171,9 +171,7 @@ class FixedTimeWindow:
         return self._apply_window(func=window_callback, name=self._name)
 
     def register_store(self):
-        self._dataframe.processing_context.state_manager.register_windowed_store(
-            topic_name=self._dataframe.topic.name, store_name=self._name
-        )
+        self._dataframe.__register_windowed_store__(self._name)
 
     def _apply_window(
         self,
