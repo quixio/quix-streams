@@ -8,7 +8,7 @@ from quixstreams.models import TopicManager, TopicConfig
 from quixstreams.state.exceptions import InvalidStoreChangelogOffset
 from quixstreams.state.metadata import CHANGELOG_CF_MESSAGE_HEADER
 from quixstreams.state.base import StorePartition
-from quixstreams.state.manager import StoreTypes
+from quixstreams.state.manager import SUPPORTED_STORES
 from quixstreams.state.rocksdb import RocksDBStorePartition
 from tests.utils import ConfluentKafkaMessageStub
 
@@ -228,7 +228,7 @@ class TestRecoveryManager:
         assert not consumer.poll.called
 
 
-@pytest.mark.parametrize("store_type", StoreTypes, indirect=True)
+@pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
 class TestRecoveryManagerRecover:
     def test_assign_partition(
         self, state_manager_factory, recovery_manager_factory, topic_manager_factory

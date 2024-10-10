@@ -46,7 +46,8 @@ from quixstreams.platforms.quix.config import (
 )
 from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
-from quixstreams.state import StateStoreManager, StoreTypes
+from quixstreams.state import StateStoreManager
+from quixstreams.state.manager import StoreTypes
 from quixstreams.state.recovery import RecoveryManager
 
 
@@ -334,7 +335,7 @@ def state_manager_factory(store_type, tmp_path):
         state_dir: Optional[str] = None,
         producer: Optional[RowProducer] = None,
         recovery_manager: Optional[RecoveryManager] = None,
-        default_store_type: Optional[StoreTypes] = store_type,
+        default_store_type: StoreTypes = store_type,
     ) -> StateStoreManager:
         group_id = group_id or str(uuid.uuid4())
         state_dir = state_dir or str(uuid.uuid4())

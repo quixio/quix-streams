@@ -13,7 +13,6 @@ from quixstreams.state.recovery import (
     ChangelogProducerFactory,
     ChangelogProducer,
 )
-from quixstreams.state.manager import StoreTypes
 from quixstreams.state.rocksdb import (
     RocksDBStore,
     RocksDBStorePartition,
@@ -63,7 +62,7 @@ def store_type(request):
     if hasattr(request, "param"):
         return request.param
     else:
-        return StoreTypes.ROCKSDB
+        return RocksDBStore
 
 
 def rocksdb_store_factory(tmp_path):
@@ -85,7 +84,7 @@ def rocksdb_store_factory(tmp_path):
 
 @pytest.fixture()
 def store_factory(store_type, tmp_path):
-    if store_type == StoreTypes.ROCKSDB:
+    if store_type == RocksDBStore:
         return rocksdb_store_factory(tmp_path)
     else:
         raise ValueError(f"invalid store type {store_type}")
@@ -117,7 +116,7 @@ def rocksdb_partition_factory(tmp_path, changelog_producer_mock):
 
 @pytest.fixture()
 def store_partition_factory(store_type, tmp_path, changelog_producer_mock):
-    if store_type == StoreTypes.ROCKSDB:
+    if store_type == RocksDBStore:
         return rocksdb_partition_factory(tmp_path, changelog_producer_mock)
     else:
         raise ValueError(f"invalid store type {store_type}")
