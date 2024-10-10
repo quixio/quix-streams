@@ -12,7 +12,12 @@ from quixstreams.state.serialization import (
 from quixstreams.state.base.transaction import PartitionTransaction
 from quixstreams.state.exceptions import InvalidChangelogOffset
 
-from .metadata import LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY, LATEST_EXPIRED_WINDOW_CF_NAME
+from .metadata import (
+    LATEST_DELETED_WINDOW_CF_NAME,
+    LATEST_DELETED_WINDOW_TIMESTAMP_KEY,
+    LATEST_EXPIRED_WINDOW_CF_NAME,
+    LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY,
+)
 from .serialization import encode_window_key, encode_window_prefix, parse_window_key
 from .state import WindowedTransactionState
 
@@ -72,13 +77,21 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         return self.get(key=key, default=default, prefix=prefix)
 
     def update_window(
-        self, start_ms: int, end_ms: int, value: Any, timestamp_ms: int, prefix: bytes
-    ):
+        self,
+        start_ms: int,
+        end_ms: int,
+        value: Any,
+        timestamp_ms: int,
+        prefix: bytes,
+        window_timestamp_ms: Optional[int] = None,
+    ) -> None:
         if timestamp_ms < 0:
             raise ValueError("Timestamp cannot be negative")
         self._validate_duration(start_ms=start_ms, end_ms=end_ms)
 
         key = encode_window_key(start_ms, end_ms)
+        if window_timestamp_ms is not None:
+            value = [window_timestamp_ms, value]
         self.set(key=key, value=value, prefix=prefix)
         self._latest_timestamp_ms = max(self._latest_timestamp_ms, timestamp_ms)
 
@@ -109,11 +122,10 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         )
 
     def expire_windows(
-        self, duration_ms: int, prefix: bytes, grace_ms: int = 0
+        self, watermark: int, prefix: bytes
     ) -> Generator[Tuple[Tuple[int, int], Any], None, None]:
         """
-        Get all expired windows from RocksDB based on the latest timestamp,
-        window duration, and an optional grace period.
+        Get all expired windows from RocksDB up to the specified `watermark` timestamp.
 
         This method marks the latest found window as expired in the expiration index,
         so consecutive calls may yield different results for the same "latest timestamp".
@@ -127,38 +139,30 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         - Finally, it updates the expiration cache with the start time of the latest
           windows found.
 
-        :param duration_ms: The duration of each window in milliseconds.
+        :param watermark: The timestamp up to which windows are considered expired, inclusive.
         :param prefix: The key prefix for filtering windows.
-        :param grace_ms: An optional grace period in milliseconds to delay expiration.
-            Defaults to 0, meaning no grace period is applied.
         :return: A generator that yields sorted tuples in the format `((start, end), value)`.
         """
-        latest_timestamp = self._latest_timestamp_ms
-        start_to = latest_timestamp - duration_ms - grace_ms
-        start_from = -1
 
         # Find the latest start timestamp of the expired windows for the given key
-        last_expired = self.get(
+        start_from = self.get(
             key=LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY,
             prefix=prefix,
             cf_name=LATEST_EXPIRED_WINDOW_CF_NAME,
+            default=-1,
         )
-        if last_expired is not None:
-            start_from = max(start_from, last_expired)
 
         # Use the latest expired timestamp to limit the iteration over
         # only those windows that have not been expired before
         expired_windows = self.get_windows(
             start_from_ms=start_from,
-            start_to_ms=start_to,
+            start_to_ms=watermark,
             prefix=prefix,
         )
 
         last_expired__gt = None
         for (start, end), aggregated in expired_windows:
             last_expired__gt = start
-            # Delete expired window from the state
-            self.delete_window(start, end, prefix=prefix)
             yield (start, end), aggregated
 
         # Save the start of the latest expired window to the expiration index
@@ -168,6 +172,52 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
                 value=last_expired__gt,
                 prefix=prefix,
                 cf_name=LATEST_EXPIRED_WINDOW_CF_NAME,
+            )
+
+    def delete_windows(self, watermark: int, prefix: bytes) -> None:
+        """
+        Delete windows from RocksDB up to the specified `watermark` timestamp.
+
+        This method removes all window entries that have a start time less than or equal to the given
+        `watermark`. It ensures that expired data is cleaned up efficiently without affecting
+        unexpired windows.
+
+        How it works:
+        - It retrieves the start time of the last deleted window for the given prefix from the
+        deletion index. This minimizes redundant scans over already deleted windows.
+        - It iterates over the windows starting from the last deleted timestamp up to the `watermark`.
+        - Each window within this range is deleted from the database.
+        - After deletion, it updates the deletion index with the start time of the latest window
+        that was deleted to keep track of progress.
+
+        :param watermark: The timestamp up to which windows should be deleted, inclusive.
+        :param prefix: The key prefix used to identify and filter relevant windows.
+        """
+        start_from = self.get(
+            key=LATEST_DELETED_WINDOW_TIMESTAMP_KEY,
+            prefix=prefix,
+            cf_name=LATEST_DELETED_WINDOW_CF_NAME,
+            default=-1,
+        )
+
+        windows = self.get_windows(
+            start_from_ms=start_from,
+            start_to_ms=watermark,
+            prefix=prefix,
+        )
+
+        last_deleted__gt = None
+        for (start, end), _ in windows:
+            last_deleted__gt = start
+            self.delete_window(start, end, prefix=prefix)
+
+        # Save the start of the latest deleted window to the deletion index
+        if last_deleted__gt:
+            self.set(
+                key=LATEST_DELETED_WINDOW_TIMESTAMP_KEY,
+                value=last_deleted__gt,
+                prefix=prefix,
+                cf_name=LATEST_DELETED_WINDOW_CF_NAME,
             )
 
     def _serialize_key(self, key: Any, prefix: bytes) -> bytes:
