@@ -10,7 +10,7 @@ To use a CSV Source, you need to create and instance of `CSVSource` and pass it 
 
 ```python
 from quixstreams import Application
-from quixstreams.sources import CSVSource
+from quixstreams.sources.core.csv import CSVSource
 
 def main():
     app = Application()

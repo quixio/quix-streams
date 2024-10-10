@@ -10,7 +10,7 @@ To use a Kafka Replicator source, you need to create an instance of `KafkaReplic
 
 ```python
 from quixstreams import Application
-from quixstreams.sources import KafkaReplicatorSource
+from quixstreams.sources.core.kafka import KafkaReplicatorSource
 
 def main():
     app = Application()

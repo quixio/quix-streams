@@ -8,7 +8,7 @@ To use a Quix Environment source, you need to create an instance of `QuixEnviron
 
 ```python
 from quixstreams import Application
-from quixstreams.sources import QuixEnvironmentSource
+from quixstreams.sources.core.kafka import QuixEnvironmentSource
 
 def main():
     app = Application()
