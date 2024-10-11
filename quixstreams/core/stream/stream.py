@@ -45,17 +45,6 @@ class IdentityFunction(StreamFunction):
     def get_executor(self, *child_executors: VoidExecutor) -> VoidExecutor:
         return self._resolve_branching(*child_executors)
 
-    # def add_identity(self, *child_executors: VoidExecutor) -> VoidExecutor:
-    #     child_executor = self._resolve_branching(*child_executors)
-    #
-    #     def wrapper(
-    #         value: Any, key: Any, timestamp: int, headers: Any, func=self.func
-    #     ):
-    #         result = func(value)
-    #         child_executor(result, key, timestamp, headers)
-    #
-    #     return wrapper
-
 
 class Stream:
     def __init__(
@@ -447,13 +436,6 @@ class Stream:
         # Iterate over a reversed list of functions
         for func in reversed(functions):
             # Validate that only allowed functions are passed
-            # if isinstance(func, IdentityFunction) and not composed:
-            #     # These are added either when making a new Stream or doing a merge
-            #     # They do not need to be included as part of execution.
-            #     composed = func.add_identity(
-            #         *composed if isinstance(composed, list) else [composed]
-            #     )
-            #     continue
             if not allow_updates and isinstance(
                 func, (UpdateFunction, UpdateWithMetadataFunction)
             ):
