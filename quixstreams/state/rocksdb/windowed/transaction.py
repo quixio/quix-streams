@@ -1,4 +1,5 @@
-from typing import Any, Generator, Optional, List, Tuple, TYPE_CHECKING, cast
+from itertools import chain
+from typing import Any, Optional, Tuple, TYPE_CHECKING, cast
 
 from rocksdict import ReadOptions
 
@@ -181,7 +182,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         start_to_ms: int,
         prefix: bytes,
         backwards: bool = False,
-    ) -> Generator[Tuple[Tuple[int, int], Any], None, None]:
+    ) -> list[tuple[tuple[int, int], Any]]:
         """
         Get all windows that start between "start_from_ms" and "start_to_ms"
         within the specified prefix.
@@ -193,7 +194,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         :param start_to_ms: The maximum window start time, inclusive.
         :param prefix: The key prefix for filtering windows.
         :param backwards: If True, yields windows in reverse order.
-        :return: A generator that yields sorted tuples in the format `((start, end), value)`.
+        :return: A sorted list of tuples in the format `((start, end), value)`.
         """
         seek_from = max(start_from_ms, 0)
         seek_from_key = encode_window_prefix(prefix=prefix, start_ms=seek_from)
@@ -207,67 +208,33 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         read_opt.set_iterate_lower_bound(seek_from_key)
         read_opt.set_iterate_upper_bound(seek_to_key)
 
+        # Create an iterator over the state store
         db_windows = self._partition.iter_items(
             read_opt=read_opt, from_key=seek_from_key
         )
 
-        def _get_windows() -> Generator[Tuple[Tuple[int, int], Any], None, None]:
-            """
-            This internal generator function iterates over database and cache entries.
-            Cached entries take precedence over database entries with the same timestamp,
-            and non-deleted cache entries are yielded in the appropriate order.
-            """
+        # Get cached updates with matching keys
+        cached_windows = [
+            (k, v)
+            for k, v in self._update_cache.get("default", {}).get(prefix, {}).items()
+            if seek_from_key < k <= seek_to_key
+        ]
 
-            # If the cache is empty then yield only db windows
-            if not (cache := self._update_cache.get("default", {}).get(prefix, {})):
-                for db_key, db_value in db_windows:
-                    _, start, end = parse_window_key(db_key)
-                    if start_from_ms < start <= start_to_ms:
-                        yield (start, end), self._deserialize_value(db_value)
-                return
+        # Iterate over stored and cached windows (cached come first) and
+        # merge them in a single dict
+        deleted_windows = set()
+        merged_windows = {}
+        for key, value in chain(cached_windows, db_windows):
+            if value is DELETED:
+                deleted_windows.add(key)
+            elif key not in merged_windows and key not in deleted_windows:
+                merged_windows[key] = value
 
-            cached_windows = sorted(cache.items(), reverse=True)
-            cached_key, cached_value = cached_windows.pop()
+        final_windows = []
+        for key in sorted(merged_windows, reverse=backwards):
+            _, start, end = parse_window_key(key)
+            if start_from_ms < start <= start_to_ms:
+                value = self._deserialize_value(merged_windows[key])
+                final_windows.append(((start, end), value))
 
-            for db_key, db_value in db_windows:
-                yield_db_window = True
-                if cached_key:
-                    # Yield all cached windows with a timestamp
-                    # less than or equal to the current db_key
-                    while cached_key <= db_key:
-                        if cached_value is not DELETED:
-                            _, start, end = parse_window_key(cached_key)
-                            if start_from_ms < start <= start_to_ms:
-                                yield (
-                                    (start, end),
-                                    self._deserialize_value(cached_value),
-                                )
-
-                        # Cached window with equal timestamp takes precedence,
-                        # so do not yield the db window for this timestamp
-                        yield_db_window = cached_key != db_key
-
-                        try:
-                            cached_key, cached_value = cached_windows.pop()
-                        except IndexError:
-                            cached_key, cached_value = None, None
-                            break
-
-                if yield_db_window:
-                    _, start, end = parse_window_key(db_key)
-                    if start_from_ms < start <= start_to_ms:
-                        yield (start, end), self._deserialize_value(db_value)
-
-            # Yield remaining cached windows
-            while cached_key:
-                if cached_value is not DELETED:
-                    _, start, end = parse_window_key(cached_key)
-                    if start_from_ms < start <= start_to_ms:
-                        yield (start, end), self._deserialize_value(cached_value)
-
-                try:
-                    cached_key, cached_value = cached_windows.pop()
-                except IndexError:
-                    return
-
-        yield from reversed(list(_get_windows())) if backwards else _get_windows()
+        return final_windows

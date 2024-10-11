@@ -67,14 +67,14 @@ class WindowedState(Protocol):
 
     def get_windows(
         self, start_from_ms: int, start_to_ms: int, backwards: bool = False
-    ) -> Generator[Tuple[Tuple[int, int], Any], None, None]:
+    ) -> list[tuple[tuple[int, int], Any]]:
         """
         Get all windows that start between "start_from_ms" and "start_to_ms".
 
         :param start_from_ms: The minimal window start time, exclusive.
         :param start_to_ms: The maximum window start time, inclusive.
         :param backwards: If True, yields windows in reverse order.
-        :return: A generator that yields sorted tuples in the format `((start, end), value)`.
+        :return: A sorted list of tuples in the format `((start, end), value)`.
         """
         ...
 
@@ -196,7 +196,7 @@ class WindowedPartitionTransaction(Protocol):
         start_to_ms: int,
         prefix: bytes,
         backwards: bool = False,
-    ) -> Generator[Tuple[Tuple[int, int], Any], None, None]:
+    ) -> list[tuple[tuple[int, int], Any]]:
         """
         Get all windows that start between "start_from_ms" and "start_to_ms"
         within the specified prefix.
@@ -205,7 +205,7 @@ class WindowedPartitionTransaction(Protocol):
         :param start_to_ms: The maximum window start time, inclusive.
         :param prefix: The key prefix for filtering windows.
         :param backwards: If True, yields windows in reverse order.
-        :return: A generator that yields sorted tuples in the format `((start, end), value)`.
+        :return: A sorted list of tuples in the format `((start, end), value)`.
         """
         ...
 

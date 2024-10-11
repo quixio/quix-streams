@@ -90,14 +90,14 @@ class WindowedTransactionState(WindowedState):
 
     def get_windows(
         self, start_from_ms: int, start_to_ms: int, backwards: bool = False
-    ) -> Generator[Tuple[Tuple[int, int], Any], None, None]:
+    ) -> list[tuple[tuple[int, int], Any]]:
         """
         Get all windows that start between "start_from_ms" and "start_to_ms".
 
         :param start_from_ms: The minimal window start time, exclusive.
         :param start_to_ms: The maximum window start time, inclusive.
         :param backwards: If True, yields windows in reverse order.
-        :return: A generator that yields sorted tuples in the format `((start, end), value)`.
+        :return: A sorted list of tuples in the format `((start, end), value)`.
         """
         return self._transaction.get_windows(
             start_from_ms=start_from_ms,
