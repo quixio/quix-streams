@@ -1,6 +1,6 @@
 import logging
 from copy import deepcopy
-from typing import Dict, List, Optional, Set, Literal
+from typing import Dict, List, Optional, Set, Literal, Tuple
 
 from quixstreams.models.serializers import DeserializerType, SerializerType
 from quixstreams.utils.dicts import dict_values
@@ -68,7 +68,7 @@ class TopicManager:
         self._topics: Dict[str, Topic] = {}
         self._repartition_topics: Dict[str, Topic] = {}
         self._changelog_topics: Dict[str, Dict[str, Topic]] = {}
-        self._topic_to_repartition_names: Dict[str, str] = {}
+        self._topic_to_repartition_names: Dict[Tuple[str, str], str] = {}
         self._timeout = timeout
         self._create_timeout = create_timeout
 
@@ -119,7 +119,7 @@ class TopicManager:
         return {topic.name: topic for topic in self._all_topics_list}
 
     @property
-    def topic_to_repartition_names(self) -> Dict[str, str]:
+    def topic_to_repartition_names(self) -> Dict[Tuple[str, str], str]:
         return self._topic_to_repartition_names
 
     def _resolve_topic_name(self, name: str) -> str:
@@ -343,7 +343,7 @@ class TopicManager:
             ),
         )
         self._repartition_topics[name] = topic
-        self._topic_to_repartition_names[topic_name] = name
+        self._topic_to_repartition_names[(topic_name, operation)] = name
         return topic
 
     def changelog_topic(

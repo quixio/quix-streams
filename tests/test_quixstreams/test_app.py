@@ -2566,3 +2566,210 @@ class TestApplicationMultipleSdf:
             with store.start_partition_transaction(partition=partition_num) as tx:
                 # All keys in state must be prefixed with the message key
                 assert tx.get("total", prefix=message_key) == messages_per_topic * 2
+
+
+class TestApplicationBranchingMerging:
+    def test_branching_merging(
+        self,
+        app_factory,
+        row_consumer_factory,
+        executor,
+    ):
+        """
+        Test that StreamingDataFrame processes 3 messages from Kafka by having the
+        app produce the consumed messages verbatim to a new topic, and of course
+        committing the respective offsets after handling each message.
+        """
+
+        def on_message_processed(topic_, partition, offset):
+            # Set the callback to track total messages processed
+            # The callback is not triggered if processing fails
+            nonlocal processed_count
+
+            processed_count += 1
+            # Stop processing after consuming all the messages
+            if processed_count == total_messages:
+                done.set_result(True)
+
+        partition_num = 0
+        app = app_factory(
+            auto_offset_reset="earliest",
+            on_message_processed=on_message_processed,
+        )
+        topic_in = app.topic(
+            str(uuid.uuid4()),
+            value_serializer="int",
+            value_deserializer="int",
+        )
+        topic_out = app.topic(
+            str(uuid.uuid4()),
+            value_serializer="int",
+            value_deserializer="int",
+        )
+
+        sdf = app.dataframe(topic_in)
+        branch_a = sdf.apply(lambda x: x + 10)
+        branch_b = sdf.apply(lambda x: x + 500)
+        branch_c = sdf.apply(lambda x: x + 9000)
+        branch_a.merge(branch_b, branch_c).apply(lambda x: x + 7).to_topic(topic_out)
+
+        processed_count = 0
+        total_messages = 2
+        expected_message_outputs = [17, 507, 9007]  # 3 branches
+        outputs_per_message = len(expected_message_outputs)
+
+        # Produce messages to the topic and flush
+        timestamp_ms = int(time.time() / 1000)
+        headers = [("header", b"value")]
+        data = {"key": b"key", "value": 0, "headers": headers}
+        msg_out = topic_in.serialize(**data)
+        with app.get_producer() as producer:
+            for _ in range(total_messages):
+                producer.produce(
+                    topic=topic_in.name,
+                    key=msg_out.key,
+                    value=msg_out.value,
+                    timestamp=timestamp_ms,
+                    headers=msg_out.headers,
+                    partition=partition_num,
+                )
+
+        done = Future()
+
+        # Stop app when the future is resolved
+        executor.submit(_stop_app_on_future, app, done, 15.0)
+        app.run()
+
+        # Check that all messages have been processed
+        assert processed_count == total_messages
+
+        # Ensure that the right offset is committed
+        with row_consumer_factory(auto_offset_reset="latest") as row_consumer:
+            committed, *_ = row_consumer.committed(
+                [TopicPartition(topic_in.name, partition_num)]
+            )
+            assert committed.offset == total_messages
+
+        # confirm messages actually ended up being produced by the app
+        rows_out = []
+        with row_consumer_factory(auto_offset_reset="earliest") as row_consumer:
+            row_consumer.subscribe([topic_out])
+            while row := row_consumer.poll_row(timeout=3):
+                rows_out.append(row)
+
+        assert len(rows_out) == total_messages * outputs_per_message
+        for idx, row in enumerate(rows_out):
+            assert row.topic == topic_out.name
+            assert row.key == data["key"]
+            assert row.value == expected_message_outputs[idx % outputs_per_message]
+            assert row.timestamp == timestamp_ms
+            assert row.headers == headers
+
+    def test_multiple_sdfs_merge(
+        self,
+        app_factory,
+        row_consumer_factory,
+        executor,
+    ):
+        """
+        Test that StreamingDataFrame processes 3 messages from Kafka by having the
+        app produce the consumed messages verbatim to a new topic, and of course
+        committing the respective offsets after handling each message.
+        """
+
+        def on_message_processed(topic_, partition, offset):
+            # Set the callback to track total messages processed
+            # The callback is not triggered if processing fails
+            nonlocal processed_count
+
+            processed_count += 1
+            # Stop processing after consuming all the messages
+            if processed_count == total_messages:
+                done.set_result(True)
+
+        app = app_factory(
+            auto_offset_reset="earliest",
+            on_message_processed=on_message_processed,
+        )
+
+        partition_num = 0
+        topic_a = app.topic(
+            str(uuid.uuid4()),
+            value_serializer="int",
+            value_deserializer="int",
+        )
+        topic_b = app.topic(
+            str(uuid.uuid4()),
+            value_serializer="int",
+            value_deserializer="int",
+        )
+        topic_c = app.topic(
+            str(uuid.uuid4()),
+            value_serializer="int",
+            value_deserializer="int",
+        )
+        input_topics = [topic_a, topic_b, topic_c]
+        topic_out = app.topic(
+            str(uuid.uuid4()),
+            value_serializer="int",
+            value_deserializer="int",
+        )
+        sdf_a = app.dataframe(topic_a).apply(lambda x: x + 10)
+        sdf_b = app.dataframe(topic_b).apply(lambda x: x + 500)
+        sdf_c = app.dataframe(topic_c).apply(lambda x: x + 9000)
+        sdf_b.merge(sdf_a, sdf_c).apply(lambda x: x + 7).to_topic(topic_out)
+
+        processed_count = 0
+        messages_per_topic = 3
+        expected_message_outputs = [17, 507, 9007]  # 3 sdfs
+        total_messages = messages_per_topic * len(input_topics)
+        # Produce messages to the topic and flush
+        timestamp_ms = int(time.time() / 1000)
+        headers = [("header", b"value")]
+        data = {"key": b"key", "value": 0, "headers": headers}
+        with app.get_producer() as producer:
+            for topic in input_topics:
+                msg_out = topic.serialize(**data)
+                for _ in range(messages_per_topic):
+                    producer.produce(
+                        topic=topic.name,
+                        key=msg_out.key,
+                        value=msg_out.value,
+                        timestamp=timestamp_ms,
+                        headers=msg_out.headers,
+                        partition=partition_num,
+                    )
+
+        done = Future()
+
+        # Stop app when the future is resolved
+        executor.submit(_stop_app_on_future, app, done, 15.0)
+        app.run()
+
+        # Check that all messages have been processed
+        assert processed_count == total_messages
+
+        # Ensure that the right offset is committed
+        with row_consumer_factory(auto_offset_reset="latest") as row_consumer:
+            committed = row_consumer.committed(
+                [TopicPartition(topic.name, partition_num) for topic in input_topics]
+            )
+            for topic in committed:
+                assert topic.offset == messages_per_topic
+
+        # confirm messages actually ended up being produced by the app
+        rows_out = []
+        with row_consumer_factory(auto_offset_reset="earliest") as row_consumer:
+            row_consumer.subscribe([topic_out])
+            while len(rows_out) < total_messages:
+                rows_out.append(row_consumer.poll_row(timeout=5))
+
+        assert len(rows_out) == total_messages
+        counts = {v: 0 for v in expected_message_outputs}
+        for row in rows_out:
+            counts[row.value] += 1
+            assert row.topic == topic_out.name
+            assert row.key == data["key"]
+            assert row.timestamp == timestamp_ms
+            assert row.headers == headers
+        assert all([v == messages_per_topic for v in counts.values()])

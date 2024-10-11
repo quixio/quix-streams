@@ -500,13 +500,13 @@ class StreamingDataFrame(BaseStreaming):
             raise ValueError(
                 'group_by requires "name" parameter when "key" is a function'
             )
-        key = name or key
         topic_names = self.__all_topics__
         final_sdf = None
+        op_name = name or key
         while topic_names:
             topic_name = topic_names.pop()
             topic = self._topic_manager.repartition_topic(
-                operation=key,
+                operation=op_name,
                 topic_name=topic_name,
                 key_serializer=key_serializer,
                 value_serializer=value_serializer,
@@ -519,7 +519,7 @@ class StreamingDataFrame(BaseStreaming):
                 final_sdf = new_sdf
             else:
                 final_sdf = final_sdf.merge(new_sdf)
-        self._to_groupby_topics(key=_groupby_key(key))
+        self._to_groupby_topics(key_op=_groupby_key(key), op_name=op_name)
         return final_sdf
 
     def contains(self, key: str) -> StreamingSeries:
@@ -592,11 +592,12 @@ class StreamingDataFrame(BaseStreaming):
             metadata=True,
         )
 
-    def _to_groupby_topics(self, key: Optional[Callable[[Any], Any]] = None) -> Self:
+    def _to_groupby_topics(self, key_op: Callable[[Any], Any], op_name: str) -> Self:
         return self._add_update(
             lambda value, orig_key, timestamp, headers: self._produce_groupby(
+                op_name=op_name,
                 value=value,
-                key=orig_key if key is None else key(value),
+                key=key_op(value),
                 timestamp=timestamp,
                 headers=headers,
             ),
@@ -1079,6 +1080,7 @@ class StreamingDataFrame(BaseStreaming):
 
     def _produce_groupby(
         self,
+        op_name: str,
         value: object,
         key: Any,
         timestamp: int,
@@ -1086,7 +1088,7 @@ class StreamingDataFrame(BaseStreaming):
     ):
         ctx = message_context()
         topic_out = self._topic_manager.repartition_topics[
-            self._topic_manager.topic_to_repartition_names[ctx.topic]
+            self._topic_manager.topic_to_repartition_names[(ctx.topic, op_name)]
         ]
         row = Row(
             value=value, key=key, timestamp=timestamp, context=ctx, headers=headers
@@ -1217,7 +1219,7 @@ def _groupby_key(key: Union[str, Callable[[Any], Any]]) -> Callable[[Any], Any]:
     if isinstance(key, str):
         return lambda row: row[key]
     elif callable(key):
-        return lambda row: key(row)
+        return key
     else:
         raise TypeError("group_by 'key' must be callable or string (column name)")
 

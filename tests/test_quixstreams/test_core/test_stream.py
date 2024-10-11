@@ -3,7 +3,7 @@ from operator import setitem
 import pytest
 
 from quixstreams.dataframe.exceptions import InvalidOperation
-from quixstreams.core.stream import Stream
+from quixstreams.core.stream import Stream, IdentityFunction
 from quixstreams.core.stream.functions import (
     ApplyFunction,
     UpdateFunction,
@@ -49,7 +49,7 @@ class TestStream:
         )
         tree = stream.root_path()
         assert len(tree) == 5
-        assert isinstance(tree[0].func, ApplyFunction)
+        assert isinstance(tree[0].func, IdentityFunction)
         assert isinstance(tree[1].func, ApplyFunction)
         assert isinstance(tree[2].func, FilterFunction)
         assert isinstance(tree[3].func, UpdateFunction)
