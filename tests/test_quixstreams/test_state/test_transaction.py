@@ -6,6 +6,7 @@ from unittest.mock import patch
 import pytest
 
 from quixstreams.state.base import PartitionTransaction
+from quixstreams.state.base.transaction import PartitionTransactionCache
 from quixstreams.state.exceptions import (
     StateSerializationError,
     StateTransactionError,
@@ -15,6 +16,8 @@ from quixstreams.state.rocksdb import RocksDBOptions
 from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER,
+    UNDEFINED,
+    DELETED,
 )
 from quixstreams.state.serialization import serialize
 from quixstreams.utils.json import dumps
@@ -43,6 +46,11 @@ TEST_PREFIXES = [
     (123, 456),
     [123, 456],
 ]
+
+
+@pytest.fixture()
+def cache() -> PartitionTransactionCache:
+    return PartitionTransactionCache()
 
 
 class TestPartitionTransaction:
@@ -199,20 +207,25 @@ class TestPartitionTransaction:
             with pytest.raises(StateSerializationError):
                 tx.delete(key, prefix=prefix)
 
-    def test_get_deserialization_error(self, store_partition):
+    def test_get_deserialization_error(self, store_partition, cache):
         bytes_ = secrets.token_bytes(10)
         string_ = "string"
+
+        cache.set(
+            key=bytes_,
+            value=serialize(string_, dumps=dumps),
+            prefix=b"",
+            cf_name="default",
+        )
+        cache.set(
+            key=serialize(string_, dumps=dumps),
+            value=bytes_,
+            prefix=b"",
+            cf_name="default",
+        )
+
         store_partition.write(
-            data={
-                "default": {
-                    "": {
-                        # Set non-deserializable key and valid value
-                        bytes_: serialize(string_, dumps=dumps),
-                        # Set valid key and non-deserializable value
-                        serialize(string_, dumps=dumps): bytes_,
-                    }
-                }
-            },
+            cache=cache,
             processed_offset=None,
             changelog_offset=None,
         )
@@ -541,3 +554,79 @@ class TestPartitionTransaction:
                 CHANGELOG_CF_MESSAGE_HEADER: cf,
                 CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER: dumps(processed_offset),
             }
+
+
+class TestPartitionTransactionCache:
+    def test_set_get_key_present(self, cache: PartitionTransactionCache):
+        cache.set(key=b"key", value=b"value", prefix=b"prefix", cf_name="cf_name")
+        value = cache.get(key=b"key", prefix=b"prefix", cf_name="cf_name")
+        assert value == b"value"
+
+    def test_get_key_missing(self, cache: PartitionTransactionCache):
+        value = cache.get(key=b"key", prefix=b"prefix", cf_name="cf_name")
+        assert value is UNDEFINED
+
+    def test_set_delete_get(self, cache: PartitionTransactionCache):
+        cache.set(key=b"key", value=b"value", prefix=b"prefix", cf_name="cf_name")
+        cache.delete(key=b"key", prefix=b"prefix", cf_name="cf_name")
+
+        value = cache.get(key=b"key", prefix=b"prefix", cf_name="cf_name")
+        assert value is DELETED
+
+    def test_get_column_families_empty(self, cache: PartitionTransactionCache):
+        assert cache.get_column_families() == []
+
+    def test_get_column_families_present(self, cache: PartitionTransactionCache):
+        cache.set(key=b"key", value=b"value", prefix=b"prefix", cf_name="cf_name1")
+        cache.delete(key=b"key", prefix=b"prefix", cf_name="cf_name2")
+        assert sorted(cache.get_column_families()) == sorted(["cf_name1", "cf_name2"])
+
+    def test_get_updates_empty(self, cache: PartitionTransactionCache):
+        assert cache.get_updates(cf_name="cf_name") == {}
+
+        # Delete an item and make sure it's not in "updates"
+        cache.delete(key=b"key", prefix=b"prefix", cf_name="cf_name2")
+        assert cache.get_updates(cf_name="cf_name") == {}
+
+    def test_get_updates_present(self, cache: PartitionTransactionCache):
+        cache.set(key=b"key", value=b"value", prefix=b"prefix", cf_name="cf_name")
+        assert cache.get_updates(cf_name="cf_name") == {b"prefix": {b"key": b"value"}}
+
+    def test_get_updates_after_delete(self, cache: PartitionTransactionCache):
+        cache.set(key=b"key", value=b"value", prefix=b"prefix", cf_name="cf_name")
+        cache.delete(key=b"key", prefix=b"prefix", cf_name="cf_name")
+        assert cache.get_updates(cf_name="cf_name") == {b"prefix": {}}
+
+    def test_get_deletes_empty(self, cache: PartitionTransactionCache):
+        assert cache.get_deletes(cf_name="cf_name") == set()
+
+        cache.set(key=b"key", value=b"value", prefix=b"prefix", cf_name="cf_name")
+        assert cache.get_deletes(cf_name="cf_name") == set()
+
+    def test_get_deletes_present(self, cache: PartitionTransactionCache):
+        cache.delete(key=b"key1", prefix=b"prefix", cf_name="cf_name")
+        cache.delete(key=b"key2", prefix=b"prefix", cf_name="cf_name")
+        assert cache.get_deletes(cf_name="cf_name") == {b"key1", b"key2"}
+
+    def test_get_deletes_after_set(self, cache: PartitionTransactionCache):
+        cache.delete(key=b"key1", prefix=b"prefix", cf_name="cf_name")
+        cache.set(key=b"key1", value=b"value", prefix=b"prefix", cf_name="cf_name")
+        assert cache.get_deletes(cf_name="cf_name") == set()
+
+    @pytest.mark.parametrize(
+        "action, expected",
+        [
+            (lambda cache: None, True),
+            (
+                lambda cache: cache.set(key=b"key1", value=b"value", prefix=b"prefix"),
+                False,
+            ),
+            (
+                lambda cache: cache.delete(key=b"key1", prefix=b"prefix"),
+                False,
+            ),
+        ],
+    )
+    def test_empty(self, action, expected, cache):
+        action(cache)
+        assert cache.is_empty() == expected

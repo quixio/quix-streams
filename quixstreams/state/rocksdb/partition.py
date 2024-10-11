@@ -5,9 +5,8 @@ from typing import Any, Union, Optional, List, Dict
 from rocksdict import WriteBatch, Rdict, ColumnFamily, AccessType
 
 from quixstreams.models import ConfluentKafkaMessageProto
-from quixstreams.state.metadata import DELETED
 from quixstreams.state.recovery import ChangelogProducer
-from quixstreams.state.base import StorePartition, CACHE_TYPE
+from quixstreams.state.base import StorePartition, PartitionTransactionCache
 from quixstreams.state.serialization import (
     int_from_int64_bytes,
     int_to_int64_bytes,
@@ -113,7 +112,7 @@ class RocksDBStorePartition(StorePartition):
 
     def write(
         self,
-        data: CACHE_TYPE,
+        cache: PartitionTransactionCache,
         processed_offset: Optional[int],
         changelog_offset: Optional[int],
         batch: Optional[WriteBatch] = None,
@@ -121,24 +120,29 @@ class RocksDBStorePartition(StorePartition):
         """
         Write data to RocksDB
 
-        :param data: The modified data
+        :param cache: The modified data
         :param processed_offset: The offset processed to generate the data.
         :param changelog_offset: The changelog message offset of the data.
+        :param batch: prefilled `rocksdict.WriteBatch`, optional.
         """
         if batch is None:
             batch = WriteBatch(raw_mode=True)
 
         meta_cf_handle = self.get_column_family_handle(METADATA_CF_NAME)
+
         # Iterate over the transaction update cache
-        for cf_name, cf_update_cache in data.items():
+        column_families = cache.get_column_families()
+        for cf_name in column_families:
             cf_handle = self.get_column_family_handle(cf_name)
-            for _prefix, prefix_update_cache in cf_update_cache.items():
+
+            updates = cache.get_updates(cf_name=cf_name)
+            for _, prefix_update_cache in updates.items():
                 for key, value in prefix_update_cache.items():
-                    # Apply changes to the Writebatch
-                    if value is DELETED:
-                        batch.delete(key, cf_handle)
-                    else:
-                        batch.put(key, value, cf_handle)
+                    batch.put(key, value, cf_handle)
+
+            deletes = cache.get_deletes(cf_name=cf_name)
+            for key in deletes:
+                batch.delete(key, cf_handle)
 
         # Save the latest processed input topic offset
         if processed_offset is not None:

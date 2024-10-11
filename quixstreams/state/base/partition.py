@@ -12,7 +12,7 @@ from quixstreams.state.metadata import (
 from quixstreams.state.serialization import DumpsFunc, LoadsFunc
 from quixstreams.utils.json import loads as json_loads
 
-from .transaction import PartitionTransaction, CACHE_TYPE
+from .transaction import PartitionTransaction, PartitionTransactionCache
 
 if TYPE_CHECKING:
     from quixstreams.state.recovery import ChangelogProducer
@@ -72,14 +72,14 @@ class StorePartition(ABC):
     @abstractmethod
     def write(
         self,
-        data: CACHE_TYPE,
+        cache: PartitionTransactionCache,
         processed_offset: Optional[int],
         changelog_offset: Optional[int],
     ):
         """
-        Update the state with data
+        Update the state with data from the update cache
 
-        :param data: The modified data
+        :param cache: The modified data
         :param processed_offset: The offset processed to generate the data.
         :param changelog_offset: The changelog message offset of the data.
         """

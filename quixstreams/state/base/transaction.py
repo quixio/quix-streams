@@ -1,21 +1,11 @@
 import enum
-import logging
 import functools
-from typing import (
-    Any,
-    Optional,
-    Dict,
-    Tuple,
-    Union,
-    TYPE_CHECKING,
-)
-
+import logging
 from abc import ABC
+from collections import defaultdict
+from typing import Any, Optional, Dict, Tuple, Union, TYPE_CHECKING, Set
 
-from quixstreams.state.exceptions import (
-    StateTransactionError,
-    InvalidChangelogOffset,
-)
+from quixstreams.state.exceptions import StateTransactionError, InvalidChangelogOffset
 from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER,
@@ -25,24 +15,126 @@ from quixstreams.state.metadata import (
     Undefined,
     DEFAULT_PREFIX,
 )
-from quixstreams.state.serialization import (
-    serialize,
-    deserialize,
-    LoadsFunc,
-    DumpsFunc,
-)
+from quixstreams.state.serialization import serialize, deserialize, LoadsFunc, DumpsFunc
 from quixstreams.utils.json import dumps as json_dumps
-
 from .state import State, TransactionState
 
 if TYPE_CHECKING:
     from quixstreams.state.recovery import ChangelogProducer
     from .partition import StorePartition
 
-__all__ = ("PartitionTransactionStatus", "PartitionTransaction", "CACHE_TYPE")
+__all__ = (
+    "PartitionTransactionStatus",
+    "PartitionTransaction",
+    "PartitionTransactionCache",
+)
 
 logger = logging.getLogger(__name__)
-CACHE_TYPE = Dict[str, Dict[bytes, Dict[bytes, Union[bytes, Undefined]]]]
+
+
+class PartitionTransactionCache:
+    """
+    A cache with the data updated in the current PartitionTransaction.
+    It is used to read-your-own-writes before the transaction is committed to the Store.
+
+    Internally, updates and deletes are separated into two separate structures
+    to simplify the querying over them.
+    """
+
+    def __init__(self):
+        # A map with updated keys in format {<cf>: {<prefix>: {<key>: <value>}}}
+        self._updated: dict[str, dict[bytes, dict[bytes, bytes]]] = defaultdict(
+            lambda: defaultdict(dict)
+        )
+        # Dict of sets with deleted keys in format {<cf>: set[<key1>, <key2>]}
+        self._deleted: dict[str, set[bytes]] = defaultdict(set)
+        self._empty = True
+
+    def get(
+        self,
+        key: bytes,
+        prefix: bytes,
+        cf_name: str = "default",
+    ) -> Union[bytes, Undefined]:
+        """
+        Get a value for the key.
+
+        Returns the key value if it has been updated during the transaction.
+
+        If the key has already been deleted, returns "DELETED" sentinel
+        (we don't need to check the actual store).
+        If the key is not present in the cache, returns "UNDEFINED sentinel
+        (we need to check the store).
+
+        :param: key: key as bytes
+        :param: prefix: key prefix as bytes
+        :param: cf_name: column family name
+        """
+        # Check if the key has been deleted
+        deleted = key in self._deleted[cf_name]
+        if deleted:
+            # The key is deleted and the store doesn't need to be checked
+            return DELETED
+
+        # Check if the key has been updated
+        # If the key is not present in the cache, we need to check the store and return
+        # UNDEFINED to signify that
+        cached = self._updated[cf_name][prefix].get(key, UNDEFINED)
+        return cached
+
+    def set(self, key: bytes, value: bytes, prefix: bytes, cf_name: str = "default"):
+        """
+        Set a value for the key.
+
+        :param: key: key as bytes
+        :param: value: value as bytes
+        :param: prefix: key prefix as bytes
+        :param: cf_name: column family name
+        """
+        self._updated[cf_name][prefix][key] = value
+        self._deleted[cf_name].discard(key)
+        self._empty = False
+
+    def delete(self, key: Any, prefix: bytes, cf_name: str = "default"):
+        """
+        Delete a key.
+
+        :param: key: key as bytes
+        :param: value: value as bytes
+        :param: prefix: key prefix as bytes
+        :param: cf_name: column family name
+        """
+        self._updated[cf_name][prefix].pop(key, None)
+        self._deleted[cf_name].add(key)
+        self._empty = False
+
+    def is_empty(self) -> bool:
+        """
+        Return True if any changes have been made (updates or deletes), otherwise
+        return False.
+        """
+        return self._empty
+
+    def get_column_families(self) -> list[str]:
+        """
+        Get all update column families.
+        """
+        return list(set(self._updated.keys()) | set(self._deleted.keys()))
+
+    def get_updates(self, cf_name: str = "default") -> Dict[bytes, Dict[bytes, bytes]]:
+        """
+        Get all updated keys (excluding deleted)
+        in the format "{<prefix>: {<key>: <value>}}".
+
+        :param: cf_name: column family name
+        """
+        return self._updated.get(cf_name, {})
+
+    def get_deletes(self, cf_name: str = "default") -> Set[bytes]:
+        """
+        Get all deleted keys (excluding updated) as a set.
+        """
+        return self._deleted[cf_name]
 
 
 class PartitionTransactionStatus(enum.Enum):
@@ -97,7 +189,7 @@ class PartitionTransaction(ABC):
         self._loads = loads
         self._partition = partition
 
-        self._update_cache: CACHE_TYPE = {}
+        self._update_cache = PartitionTransactionCache()
 
     @property
     def changelog_producer(self) -> Optional["ChangelogProducer"]:
@@ -197,14 +289,13 @@ class PartitionTransaction(ABC):
         :param key: key
         :param prefix: a key prefix
         :param default: default value to return if the key is not found
+        :param cf_name: column family name
         :return: value or None if the key is not found and `default` is not provided
         """
         key_serialized = self._serialize_key(key, prefix=prefix)
 
-        cached = (
-            self._update_cache.get(cf_name, {})
-            .get(prefix, {})
-            .get(key_serialized, UNDEFINED)
+        cached = self._update_cache.get(
+            key=key_serialized, prefix=prefix, cf_name=cf_name
         )
         if cached is DELETED:
             return default
@@ -225,14 +316,18 @@ class PartitionTransaction(ABC):
         :param key: key
         :param prefix: a key prefix
         :param value: value
+        :param cf_name: column family name
         """
 
         try:
             key_serialized = self._serialize_key(key, prefix=prefix)
             value_serialized = self._serialize_value(value)
-            self._update_cache.setdefault(cf_name, {}).setdefault(prefix, {})[
-                key_serialized
-            ] = value_serialized
+            self._update_cache.set(
+                key=key_serialized,
+                value=value_serialized,
+                prefix=prefix,
+                cf_name=cf_name,
+            )
         except Exception:
             self._status = PartitionTransactionStatus.FAILED
             raise
@@ -245,12 +340,13 @@ class PartitionTransaction(ABC):
         This function always returns `None`, even if value is not found.
         :param key: key
         :param prefix: a key prefix
+        :param cf_name: column family name
         """
         try:
             key_serialized = self._serialize_key(key, prefix=prefix)
-            self._update_cache.setdefault(cf_name, {}).setdefault(prefix, {})[
-                key_serialized
-            ] = DELETED
+            self._update_cache.delete(
+                key=key_serialized, prefix=prefix, cf_name=cf_name
+            )
         except Exception:
             self._status = PartitionTransactionStatus.FAILED
             raise
@@ -261,21 +357,19 @@ class PartitionTransaction(ABC):
         Check if the key exists in state.
         :param key: key
         :param prefix: a key prefix
+        :param cf_name: column family name
         :return: True if key exists, False otherwise
         """
         key_serialized = self._serialize_key(key, prefix=prefix)
-        cached = (
-            self._update_cache.get(cf_name, {})
-            .get(prefix, {})
-            .get(key_serialized, UNDEFINED)
+        cached = self._update_cache.get(
+            key=key_serialized, prefix=prefix, cf_name=cf_name
         )
         if cached is DELETED:
             return False
-
-        if cached is not UNDEFINED:
+        elif cached is not UNDEFINED:
             return True
-
-        return self._partition.exists(key_serialized, cf_name=cf_name)
+        else:
+            return self._partition.exists(key_serialized, cf_name=cf_name)
 
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
     def prepare(self, processed_offset: int):
@@ -310,20 +404,31 @@ class PartitionTransaction(ABC):
             f"partition={self._changelog_producer.partition} "
             f"processed_offset={processed_offset}"
         )
-        for cf_name, cf_update_cache in self._update_cache.items():
-            source_tp_offset_header = json_dumps(processed_offset)
+        source_tp_offset_header = json_dumps(processed_offset)
+        column_families = self._update_cache.get_column_families()
+
+        for cf_name in column_families:
             headers = {
                 CHANGELOG_CF_MESSAGE_HEADER: cf_name,
                 CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER: source_tp_offset_header,
             }
-            for _, prefix_update_cache in cf_update_cache.items():
+
+            updates = self._update_cache.get_updates(cf_name=cf_name)
+            for _, prefix_update_cache in updates.items():
                 for key, value in prefix_update_cache.items():
-                    # Produce changes to the changelog topic
                     self._changelog_producer.produce(
                         key=key,
-                        value=value if value is not DELETED else None,
+                        value=value,
                         headers=headers,
                     )
+
+            deletes = self._update_cache.get_deletes(cf_name=cf_name)
+            for key in deletes:
+                self._changelog_producer.produce(
+                    key=key,
+                    value=None,
+                    headers=headers,
+                )
 
     @validate_transaction_status(
         PartitionTransactionStatus.STARTED, PartitionTransactionStatus.PREPARED
@@ -357,7 +462,7 @@ class PartitionTransaction(ABC):
             raise
 
     def _flush(self, processed_offset: Optional[int], changelog_offset: Optional[int]):
-        if not self._update_cache:
+        if self._update_cache.is_empty():
             return
 
         if changelog_offset is not None:
@@ -371,7 +476,7 @@ class PartitionTransaction(ABC):
                 )
 
         self._partition.write(
-            data=self._update_cache,
+            cache=self._update_cache,
             processed_offset=processed_offset,
             changelog_offset=changelog_offset,
         )

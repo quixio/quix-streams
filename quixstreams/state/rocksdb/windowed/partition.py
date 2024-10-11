@@ -1,14 +1,14 @@
 import logging
-from typing import Optional, Dict
+from typing import Optional
 
 from rocksdict import WriteBatch, ReadOptions, RdictItems  # type: ignore
 
-from quixstreams.state.serialization import int_from_int64_bytes, int_to_int64_bytes
+from quixstreams.state.base import PartitionTransactionCache
 from quixstreams.state.recovery import ChangelogProducer
-
+from quixstreams.state.serialization import int_from_int64_bytes, int_to_int64_bytes
 from .metadata import LATEST_EXPIRED_WINDOW_CF_NAME, LATEST_TIMESTAMP_KEY
 from .transaction import WindowedRocksDBPartitionTransaction
-from .. import ColumnFamilyDoesNotExist
+from ..exceptions import ColumnFamilyDoesNotExist
 from ..metadata import METADATA_CF_NAME
 from ..partition import RocksDBStorePartition
 from ..types import RocksDBOptionsType
@@ -72,7 +72,7 @@ class WindowedRocksDBStorePartition(RocksDBStorePartition):
 
     def write(
         self,
-        data: Dict,
+        cache: PartitionTransactionCache,
         processed_offset: Optional[int],
         changelog_offset: Optional[int],
         batch: Optional[WriteBatch] = None,
@@ -88,7 +88,7 @@ class WindowedRocksDBStorePartition(RocksDBStorePartition):
                 cf_handle,
             )
         super().write(
-            data=data,
+            cache=cache,
             processed_offset=processed_offset,
             changelog_offset=changelog_offset,
             batch=batch,

@@ -1,9 +1,9 @@
-from itertools import chain
+import itertools
 from typing import Any, Optional, TYPE_CHECKING, cast
 
 from rocksdict import ReadOptions
 
-from quixstreams.state.metadata import DELETED, PREFIX_SEPARATOR, DEFAULT_PREFIX
+from quixstreams.state.metadata import PREFIX_SEPARATOR, DEFAULT_PREFIX
 from quixstreams.state.recovery import ChangelogProducer
 from quixstreams.state.serialization import (
     serialize,
@@ -89,7 +89,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         self.delete(key=key, prefix=prefix)
 
     def _flush(self, processed_offset: Optional[int], changelog_offset: Optional[int]):
-        if not self._update_cache:
+        if self._update_cache.is_empty():
             return
 
         if changelog_offset is not None:
@@ -103,7 +103,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
                 )
 
         self._partition.write(
-            data=self._update_cache,
+            cache=self._update_cache,
             processed_offset=processed_offset,
             changelog_offset=changelog_offset,
             latest_timestamp_ms=self._latest_timestamp_ms,
@@ -203,38 +203,40 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         seek_to = start_to_ms + 1
         seek_to_key = encode_window_prefix(prefix=prefix, start_ms=seek_to)
 
+        # Create an iterator over the state store
         # Set iterator bounds to reduce IO by limiting the range of keys fetched
         read_opt = ReadOptions()
         read_opt.set_iterate_lower_bound(seek_from_key)
         read_opt.set_iterate_upper_bound(seek_to_key)
-
-        # Create an iterator over the state store
         db_windows = self._partition.iter_items(
             read_opt=read_opt, from_key=seek_from_key
         )
 
         # Get cached updates with matching keys
-        cached_windows = [
+        update_cache = self._update_cache
+        updated_windows = (
             (k, v)
-            for k, v in self._update_cache.get("default", {}).get(prefix, {}).items()
+            for k, v in update_cache.get_updates(cf_name="default")
+            .get(prefix, {})
+            .items()
             if seek_from_key < k <= seek_to_key
-        ]
+        )
 
-        # Iterate over stored and cached windows (cached come first) and
-        # merge them in a single dict
-        deleted_windows = set()
+        # Iterate over stored and cached windows and merge them to a single dict
+        deleted_windows = update_cache.get_deletes(cf_name="default")
         merged_windows = {}
-        for key, value in chain(cached_windows, db_windows):
-            if value is DELETED:
-                deleted_windows.add(key)
-            elif key not in merged_windows and key not in deleted_windows:
+        for key, value in itertools.chain(db_windows, updated_windows):
+            if key not in deleted_windows:
                 merged_windows[key] = value
 
-        final_windows = []
-        for key in sorted(merged_windows, reverse=backwards):
-            _, start, end = parse_window_key(key)
+        # Sort and deserialize windows merged from the cache and store
+        result = []
+        for db_key, db_value in sorted(
+            merged_windows.items(), key=lambda kv: kv[0], reverse=backwards
+        ):
+            _, start, end = parse_window_key(db_key)
             if start_from_ms < start <= start_to_ms:
-                value = self._deserialize_value(merged_windows[key])
-                final_windows.append(((start, end), value))
+                value = self._deserialize_value(db_value)
+                result.append(((start, end), value))
 
-        return final_windows
+        return result
