@@ -1,4 +1,4 @@
-from typing import Any, Generator, Optional, List, Tuple, TYPE_CHECKING
+from typing import Any, Optional, TYPE_CHECKING
 
 from quixstreams.state.types import WindowedState
 
@@ -71,7 +71,7 @@ class WindowedTransactionState(WindowedState):
 
     def expire_windows(
         self, duration_ms: int, grace_ms: int = 0
-    ) -> List[Tuple[Tuple[int, int], Any]]:
+    ) -> list[tuple[tuple[int, int], Any]]:
         """
         Get all expired windows from RocksDB based on the latest timestamp,
         window duration, and an optional grace period.
@@ -82,7 +82,7 @@ class WindowedTransactionState(WindowedState):
         :param duration_ms: The duration of each window in milliseconds.
         :param grace_ms: An optional grace period in milliseconds to delay expiration.
             Defaults to 0, meaning no grace period is applied.
-        :return: A generator that yields sorted tuples in the format `((start, end), value)`.
+        :return: A sorted list of tuples in the format `((start, end), value)`.
         """
         return self._transaction.expire_windows(
             duration_ms=duration_ms, grace_ms=grace_ms, prefix=self._prefix

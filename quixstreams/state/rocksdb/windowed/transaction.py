@@ -1,5 +1,5 @@
 from itertools import chain
-from typing import Any, Optional, Tuple, TYPE_CHECKING, cast
+from typing import Any, Optional, TYPE_CHECKING, cast
 
 from rocksdict import ReadOptions
 
@@ -111,7 +111,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
 
     def expire_windows(
         self, duration_ms: int, prefix: bytes, grace_ms: int = 0
-    ) -> List[Tuple[Tuple[int, int], Any]]:
+    ) -> list[tuple[tuple[int, int], Any]]:
         """
         Get all expired windows from RocksDB based on the latest timestamp,
         window duration, and an optional grace period.

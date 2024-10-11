@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Generator, List, Optional, Protocol, Tuple
+from typing import Any, Optional, Protocol, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,7 @@ class WindowedState(Protocol):
 
     def expire_windows(
         self, duration_ms: int, grace_ms: int = 0
-    ) -> List[Tuple[Tuple[int, int], Any]]:
+    ) -> list[tuple[tuple[int, int], Any]]:
         """
         Get all expired windows from RocksDB based on the latest timestamp,
         window duration, and an optional grace period.
@@ -61,7 +61,7 @@ class WindowedState(Protocol):
         :param duration_ms: The duration of each window in milliseconds.
         :param grace_ms: An optional grace period in milliseconds to delay expiration.
             Defaults to 0, meaning no grace period is applied.
-        :return: A generator that yields sorted tuples in the format `((start, end), value)`.
+        :return: A sorted list of tuples in the format `((start, end), value)`.
         """
         ...
 
@@ -174,7 +174,9 @@ class WindowedPartitionTransaction(Protocol):
         """
         ...
 
-    def expire_windows(self, duration_ms: int, prefix: bytes, grace_ms: int = 0):
+    def expire_windows(
+        self, duration_ms: int, prefix: bytes, grace_ms: int = 0
+    ) -> list[tuple[tuple[int, int], Any]]:
         """
         Get all expired windows from RocksDB based on the latest timestamp,
         window duration, and an optional grace period.
@@ -186,7 +188,7 @@ class WindowedPartitionTransaction(Protocol):
         :param prefix: The key prefix for filtering windows.
         :param grace_ms: An optional grace period in milliseconds to delay expiration.
             Defaults to 0, meaning no grace period is applied.
-        :return: A generator that yields sorted tuples in the format `((start, end), value)`.
+        :return: A sorted list of tuples in the format `((start, end), value)`.
         """
         ...
 
