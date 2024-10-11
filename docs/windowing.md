@@ -40,19 +40,27 @@ To use a different timestamp in window aggregations, you need to provide a
 
 A timestamp extractor is a callable object accepting these positional arguments:
 
-- Message value
-- Message headers
-- Kafka message timestamp in milliseconds
-- Kafka timestamp type: 
-  - "0" - timestamp not available, 
-  - "1" - "create time" (specified by a producer) 
-  - "2" - "log-append time" (when the broker received a message)
+1. Message value
+2. Message headers
+3. Kafka message timestamp in milliseconds
+4. Kafka timestamp type.
+
+Kafka timestamp type can have these values:
+
+   * `0` - timestamp not available, 
+   * `1` - "create time" (specified by a producer) 
+   * `2` - "log-append time" (when the broker received a message)
 
 Timestamp extractor must always return timestamp **as an integer in milliseconds**.
 
 Example:
 
 ```python
+from quixstreams import Application
+from quixstreams.models import TimestampType
+from typing import Any, Optional, List, Tuple
+
+# Create an Application
 app = Application(...)
 
 
@@ -71,6 +79,12 @@ def custom_ts_extractor(
 # Passing the timestamp extractor to the topic.
 # The window functions will now use the extracted timestamp instead of the Kafka timestamp.
 topic = app.topic("input-topic", timestamp_extractor=custom_ts_extractor)
+
+# Create a StreamingDataFrame and keep processing
+sdf = app.dataframe(topic)
+
+if __name__ == '__main__':
+    app.run()
 ```
 
 ### Timestamps of the aggregation results
@@ -80,7 +94,10 @@ Since version 2.6, all windowed aggregations always set timestamps equal to the 
 **Example:**
 
 ```python
+from quixstreams import Application
 from datetime import timedelta
+
+app = Application(...)
 
 sdf = app.dataframe(...)
 
@@ -167,6 +184,11 @@ Here is how to do it using tumbling windows:
 
 ```python
 from datetime import timedelta
+from quixstreams import Application
+
+app = Application(...)
+sdf = app.dataframe(...)
+
 
 sdf = (
     # Extract "temperature" value from the message
@@ -251,7 +273,10 @@ Expected output:
 
 ```python
 from datetime import timedelta
+from quixstreams import Application
 
+app = Application(...)
+sdf = app.dataframe(...)
 
 sdf = (
     # Extract "temperature" value from the message
@@ -324,7 +349,9 @@ Here is how you can do that with `reduce()`:
 
 ```python
 from datetime import timedelta
+from quixstreams import Application
 
+app = Application(...)
 sdf = app.dataframe(...)
 
 
@@ -397,7 +424,9 @@ Count all received events over a 10-minute tumbling window.
 
 ```python
 from datetime import timedelta
+from quixstreams import Application
 
+app = Application(...)
 sdf = app.dataframe(...)
 
 
@@ -435,7 +464,9 @@ Imagine you receive the temperature data from the sensor, and you need to calcul
 
 ```python
 from datetime import timedelta
+from quixstreams import Application
 
+app = Application(...)
 sdf = app.dataframe(...)
 
 # Input:
@@ -475,6 +506,12 @@ Since it is rather generic, you may need to transform it into your own schema.
 Here is how you can do that:
  
 ```python
+from datetime import timedelta
+from quixstreams import Application
+
+app = Application(...)
+sdf = app.dataframe(...)
+
 sdf = (
     # Define a tumbling window of 10 minutes
     sdf.tumbling_window(timedelta(minutes=10))
@@ -520,8 +557,9 @@ Example:
 
 ```python
 from datetime import timedelta
+from quixstreams import Application
 
-
+app = Application(...)
 sdf = app.dataframe(...)
 
 # Define a 1 hour tumbling window with a grace period of 10 seconds.
@@ -549,8 +587,9 @@ To emit results for each processed message in the stream, use the following API:
 
 ```python
 from datetime import timedelta
+from quixstreams import Application
 
-
+app = Application(...)
 sdf = app.dataframe(...)
 
 # Calculate a sum of values over a window of 10 seconds 
@@ -576,8 +615,9 @@ Here is how to emit results only once for each window interval after it's closed
 
 ```python
 from datetime import timedelta
+from quixstreams import Application
 
-
+app = Application(...)
 sdf = app.dataframe(...)
 
 # Calculate a sum of values over a window of 10 seconds 
