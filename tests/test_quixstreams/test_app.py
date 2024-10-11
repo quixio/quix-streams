@@ -30,6 +30,7 @@ from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
 from quixstreams.sinks import SinkBatch, SinkBackpressureError
 from quixstreams.state import State
+from quixstreams.state.manager import SUPPORTED_STORES
 from quixstreams.sources import SourceException, multiprocessing
 from tests.utils import DummySink, DummySource
 
@@ -1036,6 +1037,7 @@ class TestQuixApplication:
         assert expected_topic.config.num_partitions == topic_partitions
 
 
+@pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
 class TestQuixApplicationWithState:
     def test_quix_app_no_state_management_warning(
         self, quix_app_factory, monkeypatch, topic_factory, executor
@@ -1086,6 +1088,7 @@ class TestQuixApplicationWithState:
         assert "does not match the state directory" in warning
 
 
+@pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
 class TestApplicationWithState:
     def test_run_stateful_success(
         self,
@@ -1393,6 +1396,7 @@ class TestApplicationWithState:
         assert not app._state_manager.using_changelogs
 
 
+@pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
 class TestApplicationRecovery:
     def test_changelog_recovery_default_store(
         self,
@@ -1672,6 +1676,7 @@ class TestApplicationRecovery:
     @pytest.mark.parametrize("processing_guarantee", ["at-least-once", "exactly-once"])
     def test_changelog_recovery_consistent_after_failed_commit(
         self,
+        store_type,
         app_factory,
         executor,
         tmp_path,
@@ -1734,6 +1739,7 @@ class TestApplicationRecovery:
                 consumer_group=consumer_group,
                 state_dir=state_dir,
                 processing_guarantee=processing_guarantee,
+                store_type=store_type,
             )
             topic = app.topic(topic_name)
             sdf = app.dataframe(topic)
@@ -2376,6 +2382,7 @@ class TestApplicationMultipleSdf:
                     "groupby_timestamp": timestamp,
                 }
 
+    @pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
     def test_stateful(
         self,
         app_factory,
@@ -2466,6 +2473,7 @@ class TestApplicationMultipleSdf:
                 # All keys in state must be prefixed with the message key
                 assert tx.get("total", prefix=message_key) == messages_per_topic
 
+    @pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
     def test_changelog_recovery(
         self,
         app_factory,

@@ -1,7 +1,7 @@
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional, Union
-from unittest.mock import create_autospec, patch
+from unittest.mock import create_autospec, patch, PropertyMock
 
 import pytest
 from confluent_kafka.admin import (
@@ -47,6 +47,7 @@ from quixstreams.platforms.quix.config import (
 from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
 from quixstreams.state import StateStoreManager
+from quixstreams.state.manager import StoreTypes
 from quixstreams.state.recovery import RecoveryManager
 
 
@@ -278,7 +279,7 @@ def row_factory():
 
 
 @pytest.fixture()
-def app_factory(kafka_container, random_consumer_group, tmp_path):
+def app_factory(kafka_container, random_consumer_group, tmp_path, store_type):
     def factory(
         consumer_group: Optional[str] = None,
         auto_offset_reset: AutoOffsetReset = "latest",
@@ -296,6 +297,7 @@ def app_factory(kafka_container, random_consumer_group, tmp_path):
         topic_manager: Optional[TopicManager] = None,
         processing_guarantee: ProcessingGuarantee = "at-least-once",
         request_timeout: float = 30,
+        store_type: StoreTypes = store_type,
     ) -> Application:
         state_dir = state_dir or (tmp_path / "state").absolute()
         return Application(
@@ -318,16 +320,22 @@ def app_factory(kafka_container, random_consumer_group, tmp_path):
             request_timeout=request_timeout,
         )
 
-    return factory
+    with patch(
+        "quixstreams.state.manager.StateStoreManager.default_store_type",
+        new_callable=PropertyMock,
+    ) as m:
+        m.return_value = store_type
+        yield factory
 
 
 @pytest.fixture()
-def state_manager_factory(tmp_path):
+def state_manager_factory(store_type, tmp_path):
     def factory(
         group_id: Optional[str] = None,
         state_dir: Optional[str] = None,
         producer: Optional[RowProducer] = None,
         recovery_manager: Optional[RecoveryManager] = None,
+        default_store_type: StoreTypes = store_type,
     ) -> StateStoreManager:
         group_id = group_id or str(uuid.uuid4())
         state_dir = state_dir or str(uuid.uuid4())
@@ -336,6 +344,7 @@ def state_manager_factory(tmp_path):
             state_dir=str(tmp_path / state_dir),
             producer=producer,
             recovery_manager=recovery_manager,
+            default_store_type=default_store_type,
         )
 
     return factory
@@ -434,6 +443,7 @@ def quix_app_factory(
     topic_admin,
     quix_mock_config_builder_factory,
     quix_topic_manager_factory,
+    store_type,
 ):
     """
     For doing testing with Quix Applications against a local cluster.
@@ -454,6 +464,7 @@ def quix_app_factory(
         auto_create_topics: bool = True,
         use_changelog_topics: bool = True,
         workspace_id: str = "my_ws",
+        store_type: Optional[StoreTypes] = store_type,
     ) -> Application:
         state_dir = state_dir or (tmp_path / "state").absolute()
         return Application(
@@ -474,7 +485,12 @@ def quix_app_factory(
             ),
         )
 
-    return factory
+    with patch(
+        "quixstreams.state.manager.StateStoreManager.default_store_type",
+        new_callable=PropertyMock,
+    ) as m:
+        m.return_value = store_type
+        yield factory
 
 
 @pytest.fixture()
