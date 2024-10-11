@@ -1,5 +1,5 @@
 import logging
-from typing import Protocol, Any, Optional, Tuple, List
+from typing import Any, Optional, Protocol, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -50,17 +50,31 @@ class WindowedState(Protocol):
 
     def expire_windows(
         self, duration_ms: int, grace_ms: int = 0
-    ) -> List[Tuple[Tuple[int, int], Any]]:
+    ) -> list[tuple[tuple[int, int], Any]]:
         """
-        Get a list of expired windows from RocksDB considering the current
-        latest timestamp, window duration and grace period.
+        Get all expired windows from RocksDB based on the latest timestamp,
+        window duration, and an optional grace period.
 
-        It also marks the latest found window as expired in the expiration index, so
-        calling this method multiple times will yield different results for the same
-        "latest timestamp".
+        This method marks the latest found window as expired in the expiration index,
+        so consecutive calls may yield different results for the same "latest timestamp".
 
-        :param duration_ms: duration of the windows in milliseconds
-        :param grace_ms: grace period in milliseconds. Default - "0"
+        :param duration_ms: The duration of each window in milliseconds.
+        :param grace_ms: An optional grace period in milliseconds to delay expiration.
+            Defaults to 0, meaning no grace period is applied.
+        :return: A sorted list of tuples in the format `((start, end), value)`.
+        """
+        ...
+
+    def get_windows(
+        self, start_from_ms: int, start_to_ms: int, backwards: bool = False
+    ) -> list[tuple[tuple[int, int], Any]]:
+        """
+        Get all windows that start between "start_from_ms" and "start_to_ms".
+
+        :param start_from_ms: The minimal window start time, exclusive.
+        :param start_to_ms: The maximum window start time, inclusive.
+        :param backwards: If True, yields windows in reverse order.
+        :return: A sorted list of tuples in the format `((start, end), value)`.
         """
         ...
 
@@ -160,18 +174,40 @@ class WindowedPartitionTransaction(Protocol):
         """
         ...
 
-    def expire_windows(self, duration_ms: int, prefix: bytes, grace_ms: int = 0):
+    def expire_windows(
+        self, duration_ms: int, prefix: bytes, grace_ms: int = 0
+    ) -> list[tuple[tuple[int, int], Any]]:
         """
-        Get a list of expired windows from RocksDB considering the current
-        latest timestamp, window duration and grace period.
+        Get all expired windows from RocksDB based on the latest timestamp,
+        window duration, and an optional grace period.
 
-        It also marks the latest found window as expired in the expiration index, so
-        calling this method multiple times will yield different results for the same
-        "latest timestamp".
+        This method marks the latest found window as expired in the expiration index,
+        so consecutive calls may yield different results for the same "latest timestamp".
 
-        :param duration_ms: duration of the windows in milliseconds
-        :param prefix: a key prefix
-        :param grace_ms: grace period in milliseconds. Default - "0"
+        :param duration_ms: The duration of each window in milliseconds.
+        :param prefix: The key prefix for filtering windows.
+        :param grace_ms: An optional grace period in milliseconds to delay expiration.
+            Defaults to 0, meaning no grace period is applied.
+        :return: A sorted list of tuples in the format `((start, end), value)`.
+        """
+        ...
+
+    def get_windows(
+        self,
+        start_from_ms: int,
+        start_to_ms: int,
+        prefix: bytes,
+        backwards: bool = False,
+    ) -> list[tuple[tuple[int, int], Any]]:
+        """
+        Get all windows that start between "start_from_ms" and "start_to_ms"
+        within the specified prefix.
+
+        :param start_from_ms: The minimal window start time, exclusive.
+        :param start_to_ms: The maximum window start time, inclusive.
+        :param prefix: The key prefix for filtering windows.
+        :param backwards: If True, yields windows in reverse order.
+        :return: A sorted list of tuples in the format `((start, end), value)`.
         """
         ...
 

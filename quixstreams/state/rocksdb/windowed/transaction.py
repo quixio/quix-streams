@@ -1,4 +1,5 @@
-from typing import Any, Optional, List, Tuple, TYPE_CHECKING, cast
+from itertools import chain
+from typing import Any, Optional, TYPE_CHECKING, cast
 
 from rocksdict import ReadOptions
 
@@ -110,26 +111,29 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
 
     def expire_windows(
         self, duration_ms: int, prefix: bytes, grace_ms: int = 0
-    ) -> List[Tuple[Tuple[int, int], Any]]:
+    ) -> list[tuple[tuple[int, int], Any]]:
         """
-        Get a list of expired windows from RocksDB considering latest timestamp,
-        window size and grace period.
-        It marks the latest found window as expired in the expiration index, so
-        calling this method multiple times will yield different results for the same
-        "latest timestamp".
+        Get all expired windows from RocksDB based on the latest timestamp,
+        window duration, and an optional grace period.
+
+        This method marks the latest found window as expired in the expiration index,
+        so consecutive calls may yield different results for the same "latest timestamp".
 
         How it works:
-        - First, it looks for the start time of the last expired window for the current
-          prefix using expiration cache. If it's found, it will be used to reduce
-          the search space and to avoid returning already expired windows.
-        - Then it goes over window segments and fetches the windows
-          that should be expired.
-        - At last, it updates the expiration cache with the start time of the latest
-          found windows
+        - First, it checks the expiration cache for the start time of the last expired
+          window for the current prefix. If found, this value helps reduce the search
+          space and prevents returning previously expired windows.
+        - Next, it iterates over window segments and identifies the windows that should
+          be marked as expired.
+        - Finally, it updates the expiration cache with the start time of the latest
+          windows found.
 
-        :return: sorted list of tuples in format `((start, end), value)`
+        :param duration_ms: The duration of each window in milliseconds.
+        :param prefix: The key prefix for filtering windows.
+        :param grace_ms: An optional grace period in milliseconds to delay expiration.
+            Defaults to 0, meaning no grace period is applied.
+        :return: A generator that yields sorted tuples in the format `((start, end), value)`.
         """
-
         latest_timestamp = self._latest_timestamp_ms
         start_to = latest_timestamp - duration_ms - grace_ms
         start_from = -1
@@ -145,10 +149,12 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
 
         # Use the latest expired timestamp to limit the iteration over
         # only those windows that have not been expired before
-        expired_windows = self._get_windows(
-            start_from_ms=start_from,
-            start_to_ms=start_to,
-            prefix=prefix,
+        expired_windows = list(
+            self.get_windows(
+                start_from_ms=start_from,
+                start_to_ms=start_to,
+                prefix=prefix,
+            )
         )
         if expired_windows:
             # Save the start of the latest expired window to the expiration index
@@ -170,52 +176,65 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         key_bytes = key if isinstance(key, bytes) else serialize(key, dumps=self._dumps)
         return prefix + PREFIX_SEPARATOR + key_bytes
 
-    def _get_windows(
-        self, start_from_ms: int, start_to_ms: int, prefix: bytes
-    ) -> List[Tuple[Tuple[int, int], Any]]:
+    def get_windows(
+        self,
+        start_from_ms: int,
+        start_to_ms: int,
+        prefix: bytes,
+        backwards: bool = False,
+    ) -> list[tuple[tuple[int, int], Any]]:
         """
-        Get all windows starting between "start_from" and "start_to"
-        within the given prefix.
+        Get all windows that start between "start_from_ms" and "start_to_ms"
+        within the specified prefix.
 
+        This function also checks the update cache for any updates not yet
+        committed to RocksDB.
 
-        This function also checks the update cache in case some updates have not
-        been committed to RocksDB yet.
-
-        :param start_from_ms: minimal window start time, exclusive
-        :param start_to_ms: maximum window start time, inclusive
-        :return: sorted list of tuples in format `((start, end), value)`
+        :param start_from_ms: The minimal window start time, exclusive.
+        :param start_to_ms: The maximum window start time, inclusive.
+        :param prefix: The key prefix for filtering windows.
+        :param backwards: If True, yields windows in reverse order.
+        :return: A sorted list of tuples in the format `((start, end), value)`.
         """
-
-        # Iterate over rocksdb within the given prefix and (start_form, start_to)
-        # timestamps
         seek_from = max(start_from_ms, 0)
         seek_from_key = encode_window_prefix(prefix=prefix, start_ms=seek_from)
 
-        # Add +1 to make the "start_to" inclusive
+        # Add +1 to make the upper bound inclusive
         seek_to = start_to_ms + 1
         seek_to_key = encode_window_prefix(prefix=prefix, start_ms=seek_to)
 
-        # Set iterator bounds to reduce the potential IO
+        # Set iterator bounds to reduce IO by limiting the range of keys fetched
         read_opt = ReadOptions()
         read_opt.set_iterate_lower_bound(seek_from_key)
         read_opt.set_iterate_upper_bound(seek_to_key)
 
-        windows = {}
-        for key, value in self._partition.iter_items(
+        # Create an iterator over the state store
+        db_windows = self._partition.iter_items(
             read_opt=read_opt, from_key=seek_from_key
-        ):
-            message_key, start, end = parse_window_key(key)
+        )
+
+        # Get cached updates with matching keys
+        cached_windows = [
+            (k, v)
+            for k, v in self._update_cache.get("default", {}).get(prefix, {}).items()
+            if seek_from_key < k <= seek_to_key
+        ]
+
+        # Iterate over stored and cached windows (cached come first) and
+        # merge them in a single dict
+        deleted_windows = set()
+        merged_windows = {}
+        for key, value in chain(cached_windows, db_windows):
+            if value is DELETED:
+                deleted_windows.add(key)
+            elif key not in merged_windows and key not in deleted_windows:
+                merged_windows[key] = value
+
+        final_windows = []
+        for key in sorted(merged_windows, reverse=backwards):
+            _, start, end = parse_window_key(key)
             if start_from_ms < start <= start_to_ms:
-                windows[(start, end)] = self._deserialize_value(value)
+                value = self._deserialize_value(merged_windows[key])
+                final_windows.append(((start, end), value))
 
-        for window_key, window_value in (
-            self._update_cache.get("default", {}).get(prefix, {}).items()
-        ):
-            message_key, start, end = parse_window_key(window_key)
-            if window_value is DELETED:
-                windows.pop((start, end), None)
-                continue
-            elif start_from_ms < start <= start_to_ms:
-                windows[(start, end)] = self._deserialize_value(window_value)
-
-        return sorted(windows.items())
+        return final_windows
