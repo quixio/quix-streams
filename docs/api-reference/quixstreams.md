@@ -6343,7 +6343,7 @@ Flush the recovery update to the storage.
 class StateStoreManager()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L24)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L27)
 
 Class for managing state stores and partitions.
 
@@ -6361,7 +6361,7 @@ StateStoreManager is responsible for:
 def stores() -> Dict[str, Dict[str, Store]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L62)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L67)
 
 Map of registered state stores
 
@@ -6378,7 +6378,7 @@ dict in format {topic: {store_name: store}}
 def recovery_required() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L70)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L75)
 
 Whether recovery needs to be done.
 
@@ -6391,7 +6391,7 @@ Whether recovery needs to be done.
 def using_changelogs() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L79)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L84)
 
 Whether the StateStoreManager is using changelog topics
 
@@ -6407,7 +6407,7 @@ using changelogs, as bool
 def do_recovery()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L87)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L96)
 
 Perform a state recovery, if necessary.
 
@@ -6419,7 +6419,7 @@ Perform a state recovery, if necessary.
 def stop_recovery()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L93)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L102)
 
 Stop recovery (called during app shutdown).
 
@@ -6431,7 +6431,7 @@ Stop recovery (called during app shutdown).
 def get_store(topic: str, store_name: str = DEFAULT_STATE_STORE_NAME) -> Store
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L99)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L108)
 
 Get a store for given name and topic
 
@@ -6450,10 +6450,11 @@ instance of `Store`
 
 ```python
 def register_store(topic_name: str,
-                   store_name: str = DEFAULT_STATE_STORE_NAME)
+                   store_name: str = DEFAULT_STATE_STORE_NAME,
+                   store_type: Optional[StoreTypes] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L132)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L141)
 
 Register a state store to be managed by StateStoreManager.
 
@@ -6466,6 +6467,8 @@ Each store can be registered only once for each topic.
 
 - `topic_name`: topic name
 - `store_name`: store name
+- `store_type`: the storage type used for this store.
+Default to StateStoreManager `default_store_type`
 
 <a id="quixstreams.state.manager.StateStoreManager.register_windowed_store"></a>
 
@@ -6475,7 +6478,7 @@ Each store can be registered only once for each topic.
 def register_windowed_store(topic_name: str, store_name: str)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L157)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L177)
 
 Register a windowed state store to be managed by StateStoreManager.
 
@@ -6497,7 +6500,7 @@ Each window store can be registered only once for each topic.
 def clear_stores()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L183)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L203)
 
 Delete all state stores managed by StateStoreManager.
 
@@ -6510,7 +6513,7 @@ def on_partition_assign(topic: str, partition: int,
                         committed_offset: int) -> List[StorePartition]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L198)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L218)
 
 Assign store partitions for each registered store for the given `TopicPartition`
 
@@ -6534,7 +6537,7 @@ list of assigned `StorePartition`
 def on_partition_revoke(topic: str, partition: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L224)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L244)
 
 Revoke store partitions for each registered store for the given `TopicPartition`
 
@@ -6551,7 +6554,7 @@ Revoke store partitions for each registered store for the given `TopicPartition`
 def init()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L237)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L257)
 
 Initialize `StateStoreManager` and create a store directory
 
@@ -6564,7 +6567,7 @@ Initialize `StateStoreManager` and create a store directory
 def close()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L244)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L264)
 
 Close all registered stores
 
