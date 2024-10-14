@@ -84,11 +84,12 @@ As a reminder, state is ultimately tied to a given topic (and thus its `SDF`).
 
 ### Multiple Topics: NOT parallel
 
-Though multiple `SDF`s are involved with multiple topics, they do not run in parallel: 
-it simply subscribes the `Application`s underlying consumer to all the `SDF`'s topics.
+Though multiple `StreamingDataFrame`s are involved with multiple topics, they do not run _in parallel_:
 
-So, more topics being processed will directly affect the processing time of each given 
-topic.
+- The `Application` instance always has a single consumer, which reads messages one-by-one from multiple topics.
+- After the message is consumed from the topic, it is routed to the corresponding `StreamingDataFrame` responsible for the processing of this topic. 
+
+Processing multiple topics directly affects the throughput for each topic because more messages will be processed using the same resources. 
 
 
 ## Upcoming Features 
