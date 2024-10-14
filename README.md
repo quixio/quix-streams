@@ -13,11 +13,13 @@
 Quix Streams is a cloud-native library for processing data in Kafka using pure Python. It’s designed to give you the power of a distributed system in a lightweight library by combining Kafka's low-level scalability and resiliency features with an easy-to-use Python interface (to ease newcomers to stream processing). 
 
 It has the following benefits:
+
 - Streaming DataFrame API (similar to pandas DataFrame) for tabular data transformations.
 - Custom stateful operations via a state object.
 - Custom reducing and aggregating over tumbling and hopping time windows.
 - Exactly-once processing semantics via Kafka transactions.
-- Pure Python with no need for a server-side engine.  
+- Sources and Sinks APIs to connect external data to Kafka.
+- Pure Python with no need for a server-side engine.
 
 Use Quix Streams to build simple Kafka producer/consumer applications or leverage stream processing to build complex event-driven systems, real-time data pipelines and AI/ML products.
 
