@@ -43,10 +43,15 @@ class PartitionTransactionCache:
 
     def __init__(self):
         # A map with updated keys in format {<cf>: {<prefix>: {<key>: <value>}}}
+        # Note: "updates" are bucketed per prefix to speed up iterating over the
+        # specific set of keys when we merge updates with data from the stores.
+        # Using a prefix like that allows us to perform fewer iterations.
         self._updated: dict[str, dict[bytes, dict[bytes, bytes]]] = defaultdict(
             lambda: defaultdict(dict)
         )
         # Dict of sets with deleted keys in format {<cf>: set[<key1>, <key2>]}
+        # Deletes are stored without prefixes because we don't need to iterate over
+        # them.
         self._deleted: dict[str, set[bytes]] = defaultdict(set)
         self._empty = True
 
