@@ -43,7 +43,7 @@ class WindowedTransactionState(WindowedState):
         value: Any,
         timestamp_ms: int,
         window_timestamp_ms: Optional[int] = None,
-    ):
+    ) -> None:
         """
         Set a value for the window.
 
@@ -78,7 +78,9 @@ class WindowedTransactionState(WindowedState):
 
         return self._transaction.get_latest_timestamp(prefix=self._prefix)
 
-    def expire_windows(self, watermark: int) -> list[tuple[tuple[int, int], Any]]:
+    def expire_windows(
+        self, watermark: int, delete: bool = True
+    ) -> list[tuple[tuple[int, int], Any]]:
         """
         Get all expired windows from RocksDB up to the specified `watermark` timestamp.
 
@@ -86,10 +88,11 @@ class WindowedTransactionState(WindowedState):
         so consecutive calls may yield different results for the same "latest timestamp".
 
         :param watermark: The timestamp up to which windows are considered expired, inclusive.
+        :param delete: If True, expired windows will be deleted.
         :return: A sorted list of tuples in the format `((start, end), value)`.
         """
         return self._transaction.expire_windows(
-            watermark=watermark, prefix=self._prefix
+            watermark=watermark, prefix=self._prefix, delete=delete
         )
 
     def get_windows(
@@ -108,4 +111,18 @@ class WindowedTransactionState(WindowedState):
             start_to_ms=start_to_ms,
             prefix=self._prefix,
             backwards=backwards,
+        )
+
+    def delete_windows(self, watermark: int) -> None:
+        """
+        Delete windows from RocksDB up to the specified `watermark` timestamp.
+
+        This method removes all window entries that have a start time less than or equal to the given
+        `watermark`. It ensures that expired data is cleaned up efficiently without affecting
+        unexpired windows.
+
+        :param watermark: The timestamp up to which windows should be deleted, inclusive.
+        """
+        return self._transaction.delete_windows(
+            watermark=watermark, prefix=self._prefix
         )

@@ -10,6 +10,7 @@ from ..partition import RocksDBStorePartition
 from ..types import RocksDBOptionsType
 from .metadata import (
     LATEST_EXPIRED_WINDOW_CF_NAME,
+    LATEST_DELETED_WINDOW_CF_NAME,
     LATEST_TIMESTAMPS_CF_NAME,
 )
 from .transaction import WindowedRocksDBPartitionTransaction
@@ -39,6 +40,7 @@ class WindowedRocksDBStorePartition(RocksDBStorePartition):
             path=path, options=options, changelog_producer=changelog_producer
         )
         self._ensure_column_family(LATEST_EXPIRED_WINDOW_CF_NAME)
+        self._ensure_column_family(LATEST_DELETED_WINDOW_CF_NAME)
         self._ensure_column_family(LATEST_TIMESTAMPS_CF_NAME)
 
     def iter_items(

@@ -41,7 +41,8 @@ def test_update_window_with_window_timestamp(transaction_state):
         assert state.get_window(start_ms=0, end_ms=10) == [3, 1]
 
 
-def test_expire_windows(transaction_state):
+@pytest.mark.parametrize("delete", [True, False])
+def test_expire_windows(transaction_state, delete):
     duration_ms = 10
 
     with transaction_state() as state:
@@ -51,10 +52,10 @@ def test_expire_windows(transaction_state):
     with transaction_state() as state:
         state.update_window(start_ms=20, end_ms=30, value=3, timestamp_ms=20)
         watermark = state.get_latest_timestamp() - duration_ms
-        expired = state.expire_windows(watermark=watermark)
+        expired = state.expire_windows(watermark=watermark, delete=delete)
         # "expire_windows" must update the expiration index so that the same
         # windows are not expired twice
-        assert not state.expire_windows(watermark=watermark)
+        assert not state.expire_windows(watermark=watermark, delete=delete)
 
     assert len(expired) == 2
     assert expired == [
@@ -63,8 +64,8 @@ def test_expire_windows(transaction_state):
     ]
 
     with transaction_state() as state:
-        assert state.get_window(start_ms=0, end_ms=10) is None
-        assert state.get_window(start_ms=10, end_ms=20) is None
+        assert state.get_window(start_ms=0, end_ms=10) == None if delete else 1
+        assert state.get_window(start_ms=10, end_ms=20) == None if delete else 2
         assert state.get_window(start_ms=20, end_ms=30) == 3
 
 
@@ -303,3 +304,21 @@ def test_get_windows_timeit(transaction_state, backwards):
         execution_time = timeit(func, number=100)
 
     print("Execution time:", execution_time)
+
+
+def test_delete_windows(transaction_state):
+    with transaction_state() as state:
+        state.update_window(start_ms=1, end_ms=2, value=1, timestamp_ms=1)
+        state.update_window(start_ms=2, end_ms=3, value=2, timestamp_ms=2)
+        state.update_window(start_ms=3, end_ms=4, value=3, timestamp_ms=3)
+
+    with transaction_state() as state:
+        assert state.get_window(start_ms=1, end_ms=2)
+        assert state.get_window(start_ms=2, end_ms=3)
+        assert state.get_window(start_ms=3, end_ms=4)
+
+        state.delete_windows(watermark=2)
+
+        assert not state.get_window(start_ms=1, end_ms=2)
+        assert not state.get_window(start_ms=2, end_ms=3)
+        assert state.get_window(start_ms=3, end_ms=4)
