@@ -2576,9 +2576,7 @@ class TestApplicationBranchingMerging:
         executor,
     ):
         """
-        Test that StreamingDataFrame processes 3 messages from Kafka by having the
-        app produce the consumed messages verbatim to a new topic, and of course
-        committing the respective offsets after handling each message.
+        A basic example of branching + merging.
         """
 
         def on_message_processed(topic_, partition, offset):
@@ -2614,7 +2612,8 @@ class TestApplicationBranchingMerging:
         branch_a.merge(branch_b, branch_c).apply(lambda x: x + 7).to_topic(topic_out)
 
         processed_count = 0
-        total_messages = 2
+        messages_per_topic = 2
+        total_messages = messages_per_topic
         expected_message_outputs = [17, 507, 9007]  # 3 branches
         outputs_per_message = len(expected_message_outputs)
 
@@ -2624,7 +2623,7 @@ class TestApplicationBranchingMerging:
         data = {"key": b"key", "value": 0, "headers": headers}
         msg_out = topic_in.serialize(**data)
         with app.get_producer() as producer:
-            for _ in range(total_messages):
+            for _ in range(messages_per_topic):
                 producer.produce(
                     topic=topic_in.name,
                     key=msg_out.key,
@@ -2648,7 +2647,7 @@ class TestApplicationBranchingMerging:
             committed, *_ = row_consumer.committed(
                 [TopicPartition(topic_in.name, partition_num)]
             )
-            assert committed.offset == total_messages
+            assert committed.offset == messages_per_topic
 
         # confirm messages actually ended up being produced by the app
         rows_out = []
@@ -2657,13 +2656,15 @@ class TestApplicationBranchingMerging:
             while row := row_consumer.poll_row(timeout=3):
                 rows_out.append(row)
 
-        assert len(rows_out) == total_messages * outputs_per_message
+        assert len(rows_out) == messages_per_topic * outputs_per_message
+        counts = {v: 0 for v in expected_message_outputs}
         for idx, row in enumerate(rows_out):
+            counts[row.value] += 1
             assert row.topic == topic_out.name
             assert row.key == data["key"]
-            assert row.value == expected_message_outputs[idx % outputs_per_message]
             assert row.timestamp == timestamp_ms
             assert row.headers == headers
+        assert all([v == messages_per_topic for v in counts.values()])
 
     def test_multiple_sdfs_merge(
         self,
@@ -2672,9 +2673,7 @@ class TestApplicationBranchingMerging:
         executor,
     ):
         """
-        Test that StreamingDataFrame processes 3 messages from Kafka by having the
-        app produce the consumed messages verbatim to a new topic, and of course
-        committing the respective offsets after handling each message.
+        Merging with a mult-sdf (multi-topic) application.
         """
 
         def on_message_processed(topic_, partition, offset):
@@ -2773,3 +2772,391 @@ class TestApplicationBranchingMerging:
             assert row.timestamp == timestamp_ms
             assert row.headers == headers
         assert all([v == messages_per_topic for v in counts.values()])
+
+    def test_multiple_merging_ops(
+        self,
+        app_factory,
+        row_consumer_factory,
+        executor,
+    ):
+        """
+        Application that uses multiple SDF.merge() operations.
+        """
+
+        def on_message_processed(topic_, partition, offset):
+            # Set the callback to track total messages processed
+            # The callback is not triggered if processing fails
+            nonlocal processed_count
+
+            processed_count += 1
+            # Stop processing after consuming all the messages
+            if processed_count == total_messages:
+                done.set_result(True)
+
+        partition_num = 0
+        app = app_factory(
+            auto_offset_reset="earliest",
+            on_message_processed=on_message_processed,
+        )
+        topic_in = app.topic(
+            str(uuid.uuid4()),
+            value_serializer="int",
+            value_deserializer="int",
+        )
+        topic_out = app.topic(
+            str(uuid.uuid4()),
+            value_serializer="int",
+            value_deserializer="int",
+        )
+
+        sdf = app.dataframe(topic_in)
+        branch_a = sdf.apply(lambda x: x + 10)
+        branch_b = sdf.apply(lambda x: x + 500)
+        branch_c = sdf.apply(lambda x: x + 9000)
+        branch_ab = branch_a.merge(branch_b).apply(lambda x: x + 7)
+        branch_c.merge(branch_ab).apply(lambda x: x - 3).to_topic(topic_out)
+
+        processed_count = 0
+        messages_per_topic = 2
+        total_messages = messages_per_topic
+        expected_message_outputs = [14, 504, 8997]  # 3 branches
+        outputs_per_message = len(expected_message_outputs)
+
+        # Produce messages to the topic and flush
+        timestamp_ms = int(time.time() / 1000)
+        headers = [("header", b"value")]
+        data = {"key": b"key", "value": 0, "headers": headers}
+        msg_out = topic_in.serialize(**data)
+        with app.get_producer() as producer:
+            for _ in range(messages_per_topic):
+                producer.produce(
+                    topic=topic_in.name,
+                    key=msg_out.key,
+                    value=msg_out.value,
+                    timestamp=timestamp_ms,
+                    headers=msg_out.headers,
+                    partition=partition_num,
+                )
+
+        done = Future()
+
+        # Stop app when the future is resolved
+        executor.submit(_stop_app_on_future, app, done, 15.0)
+        app.run()
+
+        # Check that all messages have been processed
+        assert processed_count == total_messages
+
+        # Ensure that the right offset is committed
+        with row_consumer_factory(auto_offset_reset="latest") as row_consumer:
+            committed, *_ = row_consumer.committed(
+                [TopicPartition(topic_in.name, partition_num)]
+            )
+            assert committed.offset == messages_per_topic
+
+        # confirm messages actually ended up being produced by the app
+        rows_out = []
+        with row_consumer_factory(auto_offset_reset="earliest") as row_consumer:
+            row_consumer.subscribe([topic_out])
+            while row := row_consumer.poll_row(timeout=3):
+                rows_out.append(row)
+
+        assert len(rows_out) == messages_per_topic * outputs_per_message
+        counts = {v: 0 for v in expected_message_outputs}
+        for idx, row in enumerate(rows_out):
+            counts[row.value] += 1
+            assert row.topic == topic_out.name
+            assert row.key == data["key"]
+            assert row.timestamp == timestamp_ms
+            assert row.headers == headers
+        assert all([v == messages_per_topic for v in counts.values()])
+
+    def test_group_by_multiple_sdf_merge(
+        self, app_factory, row_consumer_factory, executor, topic_manager_factory
+    ):
+        """
+        Group by is applied independently to each SDF after a merge.
+        """
+
+        def on_message_processed(*_):
+            # Set the callback to track total messages processed
+            # The callback is not triggered if processing fails
+            nonlocal processed_count
+
+            processed_count += 1
+            # Stop processing after consuming all the messages
+            if processed_count == expected_processed:
+                done.set_result(True)
+
+        processed_count = 0
+        topic_manager = topic_manager_factory()
+
+        app = app_factory(
+            auto_offset_reset="earliest",
+            on_message_processed=on_message_processed,
+            topic_manager=topic_manager,
+        )
+        topic_a = app.topic(
+            str(uuid.uuid4()),
+            value_serializer="json",
+            value_deserializer="json",
+        )
+        topic_b = app.topic(
+            str(uuid.uuid4()),
+            value_serializer="json",
+            value_deserializer="json",
+        )
+
+        input_topics = [topic_a, topic_b]
+
+        output_topic = app.topic(
+            str(uuid.uuid4()),
+            value_deserializer="json",
+            value_serializer="json",
+        )
+
+        user_id = "abc123"
+        account_id = "def456"
+        value_in = {"user": user_id, "account": account_id}
+        # expected_processed = 1 (input msg per SDF) * 2 (2 groupbys, each reprocesses input) * 2 SDFs
+        expected_processed = 4
+        expected_output_topic_count = 2
+
+        sdf_a = app.dataframe(topic=topic_a)
+        sdf_b = app.dataframe(topic=topic_b)
+        sdf_a.merge(sdf_b).group_by("user").to_topic(output_topic)
+
+        with app.get_producer() as producer:
+            for topic in input_topics:
+                msg = topic.serialize(key="some_key", value=value_in, timestamp_ms=1000)
+                producer.produce(
+                    topic.name, key=msg.key, value=msg.value, timestamp=msg.timestamp
+                )
+
+        done = Future()
+
+        # Stop app when the future is resolved
+        executor.submit(_stop_app_on_future, app, done, 10.0)
+        app.run()
+
+        # Check that all messages have been processed
+        assert processed_count == expected_processed
+
+        # Consume the message from the output topic
+        rows = []
+        with row_consumer_factory(auto_offset_reset="earliest") as row_consumer:
+            row_consumer.subscribe([output_topic])
+            while row := row_consumer.poll_row(timeout=5):
+                rows.append(row)
+
+        assert len(rows) == expected_output_topic_count
+        for row in rows:
+            assert row.key.decode() == user_id
+            assert row.value == value_in
+
+        # confirm the group_by topics are independent for the two dataframes
+        assert len(topic_manager.repartition_topics) == 2
+        with row_consumer_factory(auto_offset_reset="earliest") as row_consumer:
+            row_consumer.subscribe(
+                [k for k in topic_manager.repartition_topics.values()]
+            )
+            assert row_consumer.poll_row(timeout=3) is None
+            for topic in topic_manager.repartition_topics.keys():
+                assert row_consumer.committed([TopicPartition(topic, 0)])[0].offset == 1
+
+    def test_stateful(
+        self,
+        app_factory,
+        executor,
+        state_manager_factory,
+        tmp_path,
+    ):
+        """
+        State remains shared and accessed multiple times after merge with a single SDF.
+
+        State remains independent across multiple SDF's after a merge.
+        """
+
+        def on_message_processed(*_):
+            # Set the callback to track total messages processed
+            # The callback is not triggered if processing fails
+            nonlocal processed_count
+
+            processed_count += 1
+            # Stop processing after consuming all the messages
+            if processed_count == total_messages:
+                done.set_result(True)
+
+        processed_count = 0
+
+        consumer_group = str(uuid.uuid4())
+        state_dir = (tmp_path / "state").absolute()
+        partition_num = 0
+        app = app_factory(
+            commit_interval=0,
+            consumer_group=consumer_group,
+            auto_offset_reset="earliest",
+            state_dir=state_dir,
+            on_message_processed=on_message_processed,
+            use_changelog_topics=True,
+        )
+        input_topic_a = app.topic(
+            str(uuid.uuid4()), value_deserializer=JSONDeserializer()
+        )
+        input_topic_b = app.topic(
+            str(uuid.uuid4()), value_deserializer=JSONDeserializer()
+        )
+        input_topics_expected_counts = {input_topic_a: 7, input_topic_b: 2}
+        total_messages = 2
+
+        # Define a function that counts incoming Rows using state
+        def count(_, state: State):
+            total = state.get("total", 0)
+            total += 1
+            state.set("total", total)
+
+        sdf_a = app.dataframe(input_topic_a)
+        sdf_a0 = (
+            sdf_a.apply(count, stateful=True)
+            .update(count, stateful=True)
+            .update(count, stateful=True)
+        )
+        sdf_a1 = sdf_a.apply(count, stateful=True).update(count, stateful=True)
+
+        sdf_b = app.dataframe(input_topic_b)
+        sdf_b.update(count, stateful=True)
+        sdf_b.merge(sdf_a0, sdf_a1).update(count, stateful=True)
+
+        # Produce messages to the topic and flush
+        message_key = b"key"
+        data = {
+            "key": message_key,
+            "value": dumps({"key": "value"}),
+            "partition": partition_num,
+        }
+        with app.get_producer() as producer:
+            for topic in input_topics_expected_counts:
+                producer.produce(topic.name, **data)
+
+        done = Future()
+
+        # Stop app when the future is resolved
+        executor.submit(_stop_app_on_future, app, done, 10.0)
+        app.run()
+        assert processed_count == total_messages
+
+        # Check that the values are actually in the DB
+        state_manager = state_manager_factory(
+            group_id=consumer_group, state_dir=state_dir
+        )
+        for topic, expected_counts in input_topics_expected_counts.items():
+            state_manager.register_store(topic.name, "default")
+            state_manager.on_partition_assign(
+                topic=topic.name, partition=partition_num, committed_offset=-1001
+            )
+            store = state_manager.get_store(topic=topic.name, store_name="default")
+            with store.start_partition_transaction(partition=partition_num) as tx:
+                # All keys in state must be prefixed with the message key
+                assert tx.get("total", prefix=message_key) == expected_counts
+
+    def test_window_after_merge(
+        self,
+        app_factory,
+        row_consumer_factory,
+        executor,
+    ):
+        """
+        StreamingDataFrame windows after merge share state.
+
+        Multi-SDF maintain independent state when windowing after merge.
+        """
+
+        def on_message_processed(*_):
+            # Set the callback to track total messages processed
+            # The callback is not triggered if processing fails
+            nonlocal processed_count
+
+            processed_count += 1
+            # Stop processing after consuming all the messages
+            if processed_count == total_messages:
+                done.set_result(True)
+
+        processed_count = 0
+
+        window_duration_ms = 1000
+        timestamp_ms = int(time.time() * 1000)
+        # use a "window-friendly" timestamp for easier testing
+        timestamp_ms = timestamp_ms - (timestamp_ms % window_duration_ms)
+        key = "some_key"
+        value_in = {"user": "abc123"}
+        total_messages = 2
+        app = app_factory(
+            auto_offset_reset="earliest",
+            on_message_processed=on_message_processed,
+        )
+
+        input_topic_a = app.topic(
+            str(uuid.uuid4()),
+            value_deserializer="json",
+            value_serializer="json",
+        )
+
+        input_topic_b = app.topic(
+            str(uuid.uuid4()),
+            value_deserializer="json",
+            value_serializer="json",
+        )
+
+        topic_out = app.topic(
+            str(uuid.uuid4()),
+            value_deserializer="json",
+            value_serializer="json",
+        )
+
+        input_topics = [input_topic_a, input_topic_b]
+
+        sdf_a = app.dataframe(topic=input_topic_a)
+        sdf_a0 = sdf_a.apply(lambda x: x)
+        sdf_a1 = sdf_a.apply(lambda x: x)
+        sdf_b = app.dataframe(topic=input_topic_b)
+
+        sdf_b.merge(sdf_a0, sdf_a1).tumbling_window(
+            duration_ms=window_duration_ms
+        ).count().current().to_topic(topic_out)
+
+        with app.get_producer() as producer:
+            for topic in input_topics:
+                msg = topic.serialize(
+                    key=key,
+                    value={**value_in, "topic": topic.name},
+                    timestamp_ms=timestamp_ms,
+                )
+                producer.produce(
+                    topic.name, key=msg.key, value=msg.value, timestamp=msg.timestamp
+                )
+
+        done = Future()
+
+        # Stop app when the future is resolved
+        executor.submit(_stop_app_on_future, app, done, 10.0)
+        app.run()
+
+        # Check that all messages have been processed
+        assert processed_count == total_messages
+
+        # Consume the message from the output topic
+        rows_out = []
+        with row_consumer_factory(auto_offset_reset="earliest") as row_consumer:
+            row_consumer.subscribe([topic_out])
+            while row := row_consumer.poll_row(timeout=3):
+                rows_out.append(row)
+
+        counts = {1: 0, 2: 0}
+        for row in rows_out:
+            # Check that "user_id" is now used as a message key
+            assert row.key.decode() == key
+            # Check that window is calculated based on the original timestamp
+            counts[row.value["value"]] += 1
+            assert row.value["start"] == timestamp_ms
+            assert row.value["end"] == timestamp_ms + window_duration_ms
+        assert counts == {1: 2, 2: 1}

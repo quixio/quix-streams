@@ -1059,7 +1059,17 @@ class StreamingDataFrame(BaseStreaming):
         # uses apply without returning to make this operation terminal
         self.apply(_sink_callback, metadata=True)
 
-    def merge(self, *others: Self):
+    def merge(self, *others: Self) -> Self:
+        """
+        Merge all provided "other" `StreamingDataFrame` into the current.
+
+        Is an in-place operation.
+
+        NOTE: SDF.merge() is commutative: X.merge(Y) == Y.merge(X)
+
+        :param others: other `StreamingDataFrame` instances
+        :return: the original StreamingDataFrame
+        """
         self._stream = self.stream.merge([other.stream for other in others])
         self._merges.extend(list(others))
         return self
