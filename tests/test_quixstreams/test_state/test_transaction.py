@@ -574,12 +574,12 @@ class TestPartitionTransactionCache:
         assert value is DELETED
 
     def test_get_column_families_empty(self, cache: PartitionTransactionCache):
-        assert cache.get_column_families() == []
+        assert not cache.get_column_families()
 
     def test_get_column_families_present(self, cache: PartitionTransactionCache):
         cache.set(key=b"key", value=b"value", prefix=b"prefix", cf_name="cf_name1")
         cache.delete(key=b"key", prefix=b"prefix", cf_name="cf_name2")
-        assert sorted(cache.get_column_families()) == sorted(["cf_name1", "cf_name2"])
+        assert cache.get_column_families() == {"cf_name1", "cf_name2"}
 
     def test_get_updates_empty(self, cache: PartitionTransactionCache):
         assert cache.get_updates(cf_name="cf_name") == {}

@@ -136,7 +136,7 @@ class RocksDBStorePartition(StorePartition):
             cf_handle = self.get_column_family_handle(cf_name)
 
             updates = cache.get_updates(cf_name=cf_name)
-            for _, prefix_update_cache in updates.items():
+            for prefix_update_cache in updates.values():
                 for key, value in prefix_update_cache.items():
                     batch.put(key, value, cf_handle)
 

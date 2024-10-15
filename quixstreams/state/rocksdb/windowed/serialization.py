@@ -12,7 +12,6 @@ _TIMESTAMP_BYTE_LENGTH = len(int_to_int64_bytes(0))
 _PREFIX_SEPARATOR_LENGTH = len(PREFIX_SEPARATOR)
 _TIMESTAMPS_SEGMENT_LEN = _TIMESTAMP_BYTE_LENGTH * 2 + _PREFIX_SEPARATOR_LENGTH
 
-
 _window_pack_format = ">q" + "c" * _PREFIX_SEPARATOR_LENGTH + "q"
 _window_packer = struct.Struct(_window_pack_format)
 _window_pack = _window_packer.pack

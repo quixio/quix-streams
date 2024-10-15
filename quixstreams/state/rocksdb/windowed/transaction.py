@@ -231,12 +231,12 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
 
         # Sort and deserialize windows merged from the cache and store
         result = []
-        for db_key, db_value in sorted(
+        for window_key, window_value in sorted(
             merged_windows.items(), key=lambda kv: kv[0], reverse=backwards
         ):
-            _, start, end = parse_window_key(db_key)
+            _, start, end = parse_window_key(window_key)
             if start_from_ms < start <= start_to_ms:
-                value = self._deserialize_value(db_value)
+                value = self._deserialize_value(window_value)
                 result.append(((start, end), value))
 
         return result

@@ -76,16 +76,14 @@ class PartitionTransactionCache:
         :param: cf_name: column family name
         """
         # Check if the key has been deleted
-        deleted = key in self._deleted[cf_name]
-        if deleted:
+        if key in self._deleted[cf_name]:
             # The key is deleted and the store doesn't need to be checked
             return DELETED
 
         # Check if the key has been updated
         # If the key is not present in the cache, we need to check the store and return
         # UNDEFINED to signify that
-        cached = self._updated[cf_name][prefix].get(key, UNDEFINED)
-        return cached
+        return self._updated[cf_name][prefix].get(key, UNDEFINED)
 
     def set(self, key: bytes, value: bytes, prefix: bytes, cf_name: str = "default"):
         """
@@ -120,11 +118,11 @@ class PartitionTransactionCache:
         """
         return self._empty
 
-    def get_column_families(self) -> list[str]:
+    def get_column_families(self) -> Set[str]:
         """
         Get all update column families.
         """
-        return list(set(self._updated.keys()) | set(self._deleted.keys()))
+        return set(self._updated.keys()) | set(self._deleted.keys())
 
     def get_updates(self, cf_name: str = "default") -> Dict[bytes, Dict[bytes, bytes]]:
         """
@@ -419,7 +417,7 @@ class PartitionTransaction(ABC):
             }
 
             updates = self._update_cache.get_updates(cf_name=cf_name)
-            for _, prefix_update_cache in updates.items():
+            for prefix_update_cache in updates.values():
                 for key, value in prefix_update_cache.items():
                     self._changelog_producer.produce(
                         key=key,
