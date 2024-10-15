@@ -5065,7 +5065,7 @@ stores the expiration index to delete expired windows.
 class WindowedRocksDBPartitionTransaction(PartitionTransaction)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L23)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L24)
 
 <a id="quixstreams.state.rocksdb.windowed.transaction.WindowedRocksDBPartitionTransaction.expire_windows"></a>
 
@@ -5074,30 +5074,68 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction)
 ```python
 def expire_windows(duration_ms: int,
                    prefix: bytes,
-                   grace_ms: int = 0) -> List[Tuple[Tuple[int, int], Any]]
+                   grace_ms: int = 0) -> list[tuple[tuple[int, int], Any]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L111)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L112)
 
-Get a list of expired windows from RocksDB considering latest timestamp,
+Get all expired windows from RocksDB based on the latest timestamp,
 
-window size and grace period.
-It marks the latest found window as expired in the expiration index, so
-calling this method multiple times will yield different results for the same
-"latest timestamp".
+window duration, and an optional grace period.
+
+This method marks the latest found window as expired in the expiration index,
+so consecutive calls may yield different results for the same "latest timestamp".
 
 How it works:
-- First, it looks for the start time of the last expired window for the current
-  prefix using expiration cache. If it's found, it will be used to reduce
-  the search space and to avoid returning already expired windows.
-- Then it goes over window segments and fetches the windows
-  that should be expired.
-- At last, it updates the expiration cache with the start time of the latest
-  found windows
+- First, it checks the expiration cache for the start time of the last expired
+  window for the current prefix. If found, this value helps reduce the search
+  space and prevents returning previously expired windows.
+- Next, it iterates over window segments and identifies the windows that should
+  be marked as expired.
+- Finally, it updates the expiration cache with the start time of the latest
+  windows found.
+
+**Arguments**:
+
+- `duration_ms`: The duration of each window in milliseconds.
+- `prefix`: The key prefix for filtering windows.
+- `grace_ms`: An optional grace period in milliseconds to delay expiration.
+Defaults to 0, meaning no grace period is applied.
 
 **Returns**:
 
-sorted list of tuples in format `((start, end), value)`
+A generator that yields sorted tuples in the format `((start, end), value)`.
+
+<a id="quixstreams.state.rocksdb.windowed.transaction.WindowedRocksDBPartitionTransaction.get_windows"></a>
+
+#### WindowedRocksDBPartitionTransaction.get\_windows
+
+```python
+def get_windows(start_from_ms: int,
+                start_to_ms: int,
+                prefix: bytes,
+                backwards: bool = False) -> list[tuple[tuple[int, int], Any]]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L179)
+
+Get all windows that start between "start_from_ms" and "start_to_ms"
+
+within the specified prefix.
+
+This function also checks the update cache for any updates not yet
+committed to RocksDB.
+
+**Arguments**:
+
+- `start_from_ms`: The minimal window start time, exclusive.
+- `start_to_ms`: The maximum window start time, inclusive.
+- `prefix`: The key prefix for filtering windows.
+- `backwards`: If True, yields windows in reverse order.
+
+**Returns**:
+
+A sorted list of tuples in the format `((start, end), value)`.
 
 <a id="quixstreams.state.rocksdb.windowed"></a>
 
@@ -5115,7 +5153,7 @@ sorted list of tuples in format `((start, end), value)`
 def parse_window_key(key: bytes) -> Tuple[bytes, int, int]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/serialization.py#L15)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/serialization.py#L21)
 
 Parse the window key from Rocksdb into (message_key, start, end) structure.
 
@@ -5138,7 +5176,7 @@ a tuple with message key, start timestamp, end timestamp
 def encode_window_key(start_ms: int, end_ms: int) -> bytes
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/serialization.py#L43)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/serialization.py#L41)
 
 Encode window start and end timestamps into bytes of the following format:
 
@@ -5163,7 +5201,7 @@ window timestamps as bytes
 def encode_window_prefix(prefix: bytes, start_ms: int) -> bytes
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/serialization.py#L57)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/serialization.py#L55)
 
 Encode window prefix and start time to iterate over keys in RocksDB
 
@@ -5283,17 +5321,51 @@ latest observed event timestamp in milliseconds
 
 ```python
 def expire_windows(duration_ms: int,
-                   grace_ms: int = 0) -> List[Tuple[Tuple[int, int], Any]]
+                   grace_ms: int = 0) -> list[tuple[tuple[int, int], Any]]
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/state.py#L72)
 
-Get a list of expired windows from RocksDB considering the current
-latest timestamp, window duration and grace period.
+Get all expired windows from RocksDB based on the latest timestamp,
 
-It also marks the latest found window as expired in the expiration index, so
-calling this method multiple times will yield different results for the same
-"latest timestamp".
+window duration, and an optional grace period.
+
+This method marks the latest found window as expired in the expiration index,
+so consecutive calls may yield different results for the same "latest timestamp".
+
+**Arguments**:
+
+- `duration_ms`: The duration of each window in milliseconds.
+- `grace_ms`: An optional grace period in milliseconds to delay expiration.
+Defaults to 0, meaning no grace period is applied.
+
+**Returns**:
+
+A sorted list of tuples in the format `((start, end), value)`.
+
+<a id="quixstreams.state.rocksdb.windowed.state.WindowedTransactionState.get_windows"></a>
+
+#### WindowedTransactionState.get\_windows
+
+```python
+def get_windows(start_from_ms: int,
+                start_to_ms: int,
+                backwards: bool = False) -> list[tuple[tuple[int, int], Any]]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/state.py#L91)
+
+Get all windows that start between "start_from_ms" and "start_to_ms".
+
+**Arguments**:
+
+- `start_from_ms`: The minimal window start time, exclusive.
+- `start_to_ms`: The maximum window start time, inclusive.
+- `backwards`: If True, yields windows in reverse order.
+
+**Returns**:
+
+A sorted list of tuples in the format `((start, end), value)`.
 
 <a id="quixstreams.state.rocksdb.options"></a>
 
@@ -5392,7 +5464,7 @@ if using changelogs
 class RocksDBStorePartition(StorePartition)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L32)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L31)
 
 A base class to access state in RocksDB.
 
@@ -5416,21 +5488,22 @@ it will retry according to `open_max_retries` and `open_retry_backoff` options.
 #### RocksDBStorePartition.write
 
 ```python
-def write(data: CACHE_TYPE,
+def write(cache: PartitionTransactionCache,
           processed_offset: Optional[int],
           changelog_offset: Optional[int],
           batch: Optional[WriteBatch] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L114)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L113)
 
 Write data to RocksDB
 
 **Arguments**:
 
-- `data`: The modified data
+- `cache`: The modified data
 - `processed_offset`: The offset processed to generate the data.
 - `changelog_offset`: The changelog message offset of the data.
+- `batch`: prefilled `rocksdict.WriteBatch`, optional.
 
 <a id="quixstreams.state.rocksdb.partition.RocksDBStorePartition.get"></a>
 
@@ -5442,7 +5515,7 @@ def get(key: bytes,
         cf_name: str = "default") -> Union[None, bytes, Any]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L174)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L178)
 
 Get a key from RocksDB.
 
@@ -5464,7 +5537,7 @@ a value if the key is present in the DB. Otherwise, `default`
 def exists(key: bytes, cf_name: str = "default") -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L188)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L192)
 
 Check if a key is present in the DB.
 
@@ -5485,7 +5558,7 @@ Check if a key is present in the DB.
 def get_processed_offset() -> Optional[int]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L199)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L203)
 
 Get last processed offset for the given partition
 
@@ -5501,7 +5574,7 @@ offset or `None` if there's no processed offset yet
 def get_changelog_offset() -> Optional[int]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L211)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L215)
 
 Get offset that the changelog is up-to-date with.
 
@@ -5517,7 +5590,7 @@ offset or `None` if there's no processed offset yet
 def close()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L221)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L225)
 
 Close the underlying RocksDB
 
@@ -5530,7 +5603,7 @@ Close the underlying RocksDB
 def path() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L234)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L238)
 
 Absolute path to RocksDB database folder
 
@@ -5547,7 +5620,7 @@ file path
 def destroy(cls, path: str)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L242)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L246)
 
 Delete underlying RocksDB database
 
@@ -5565,7 +5638,7 @@ The database must be closed first.
 def get_column_family_handle(cf_name: str) -> ColumnFamily
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L252)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L256)
 
 Get a column family handle to pass to it WriteBatch.
 
@@ -5588,7 +5661,7 @@ instance of `rocksdict.ColumnFamily`
 def get_column_family(cf_name: str) -> Rdict
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L273)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L277)
 
 Get a column family instance.
 
@@ -6060,23 +6133,51 @@ latest observed event timestamp in milliseconds
 
 ```python
 def expire_windows(duration_ms: int,
-                   grace_ms: int = 0) -> List[Tuple[Tuple[int, int], Any]]
+                   grace_ms: int = 0) -> list[tuple[tuple[int, int], Any]]
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L51)
 
-Get a list of expired windows from RocksDB considering the current
+Get all expired windows from RocksDB based on the latest timestamp,
 
-latest timestamp, window duration and grace period.
+window duration, and an optional grace period.
 
-It also marks the latest found window as expired in the expiration index, so
-calling this method multiple times will yield different results for the same
-"latest timestamp".
+This method marks the latest found window as expired in the expiration index,
+so consecutive calls may yield different results for the same "latest timestamp".
 
 **Arguments**:
 
-- `duration_ms`: duration of the windows in milliseconds
-- `grace_ms`: grace period in milliseconds. Default - "0"
+- `duration_ms`: The duration of each window in milliseconds.
+- `grace_ms`: An optional grace period in milliseconds to delay expiration.
+Defaults to 0, meaning no grace period is applied.
+
+**Returns**:
+
+A sorted list of tuples in the format `((start, end), value)`.
+
+<a id="quixstreams.state.types.WindowedState.get_windows"></a>
+
+#### WindowedState.get\_windows
+
+```python
+def get_windows(start_from_ms: int,
+                start_to_ms: int,
+                backwards: bool = False) -> list[tuple[tuple[int, int], Any]]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L68)
+
+Get all windows that start between "start_from_ms" and "start_to_ms".
+
+**Arguments**:
+
+- `start_from_ms`: The minimal window start time, exclusive.
+- `start_to_ms`: The maximum window start time, inclusive.
+- `backwards`: If True, yields windows in reverse order.
+
+**Returns**:
+
+A sorted list of tuples in the format `((start, end), value)`.
 
 <a id="quixstreams.state.types.WindowedPartitionTransaction"></a>
 
@@ -6086,7 +6187,7 @@ calling this method multiple times will yield different results for the same
 class WindowedPartitionTransaction(Protocol)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L68)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L82)
 
 <a id="quixstreams.state.types.WindowedPartitionTransaction.failed"></a>
 
@@ -6097,7 +6198,7 @@ class WindowedPartitionTransaction(Protocol)
 def failed() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L70)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L84)
 
 Return `True` if transaction failed to update data at some point.
 
@@ -6116,7 +6217,7 @@ bool
 def completed() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L80)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L94)
 
 Return `True` if transaction is successfully completed.
 
@@ -6135,7 +6236,7 @@ bool
 def prepared() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L90)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L104)
 
 Return `True` if transaction is prepared completed.
 
@@ -6153,7 +6254,7 @@ bool
 def prepare(processed_offset: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L99)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L113)
 
 Produce changelog messages to the changelog topic for all changes accumulated
 
@@ -6181,7 +6282,7 @@ def get_window(start_ms: int,
                default: Any = None) -> Optional[Any]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L116)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L130)
 
 Get the value of the window defined by `start` and `end` timestamps
 
@@ -6207,7 +6308,7 @@ def update_window(start_ms: int, end_ms: int, value: Any, timestamp_ms: int,
                   prefix: bytes)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L135)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L149)
 
 Set a value for the window.
 
@@ -6230,7 +6331,7 @@ using the provided `timestamp`.
 def get_latest_timestamp() -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L152)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L166)
 
 Get the latest observed timestamp for the current state partition.
 
@@ -6246,24 +6347,58 @@ latest observed event timestamp in milliseconds
 #### WindowedPartitionTransaction.expire\_windows
 
 ```python
-def expire_windows(duration_ms: int, prefix: bytes, grace_ms: int = 0)
+def expire_windows(duration_ms: int,
+                   prefix: bytes,
+                   grace_ms: int = 0) -> list[tuple[tuple[int, int], Any]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L163)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L177)
 
-Get a list of expired windows from RocksDB considering the current
+Get all expired windows from RocksDB based on the latest timestamp,
 
-latest timestamp, window duration and grace period.
+window duration, and an optional grace period.
 
-It also marks the latest found window as expired in the expiration index, so
-calling this method multiple times will yield different results for the same
-"latest timestamp".
+This method marks the latest found window as expired in the expiration index,
+so consecutive calls may yield different results for the same "latest timestamp".
 
 **Arguments**:
 
-- `duration_ms`: duration of the windows in milliseconds
-- `prefix`: a key prefix
-- `grace_ms`: grace period in milliseconds. Default - "0"
+- `duration_ms`: The duration of each window in milliseconds.
+- `prefix`: The key prefix for filtering windows.
+- `grace_ms`: An optional grace period in milliseconds to delay expiration.
+Defaults to 0, meaning no grace period is applied.
+
+**Returns**:
+
+A sorted list of tuples in the format `((start, end), value)`.
+
+<a id="quixstreams.state.types.WindowedPartitionTransaction.get_windows"></a>
+
+#### WindowedPartitionTransaction.get\_windows
+
+```python
+def get_windows(start_from_ms: int,
+                start_to_ms: int,
+                prefix: bytes,
+                backwards: bool = False) -> list[tuple[tuple[int, int], Any]]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L195)
+
+Get all windows that start between "start_from_ms" and "start_to_ms"
+
+within the specified prefix.
+
+**Arguments**:
+
+- `start_from_ms`: The minimal window start time, exclusive.
+- `start_to_ms`: The maximum window start time, inclusive.
+- `prefix`: The key prefix for filtering windows.
+- `backwards`: If True, yields windows in reverse order.
+
+**Returns**:
+
+A sorted list of tuples in the format `((start, end), value)`.
 
 <a id="quixstreams.state.types.WindowedPartitionTransaction.flush"></a>
 
@@ -6274,7 +6409,7 @@ def flush(processed_offset: Optional[int] = None,
           changelog_offset: Optional[int] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L178)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L214)
 
 Flush the recent updates to the storage.
 
@@ -6293,7 +6428,7 @@ optional.
 def changelog_topic_partition() -> Optional[Tuple[str, int]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L192)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L228)
 
 Return the changelog topic-partition for the StorePartition of this transaction.
 
@@ -6311,7 +6446,7 @@ Returns `None` if changelog_producer is not provided.
 class PartitionRecoveryTransaction(Protocol)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L206)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L242)
 
 A class for managing recovery for a StorePartition from a changelog message
 
@@ -6323,7 +6458,7 @@ A class for managing recovery for a StorePartition from a changelog message
 def flush()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L213)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L249)
 
 Flush the recovery update to the storage.
 
@@ -6765,17 +6900,17 @@ offset or `None` if there's no processed offset yet
 
 ```python
 @abstractmethod
-def write(data: CACHE_TYPE, processed_offset: Optional[int],
+def write(cache: PartitionTransactionCache, processed_offset: Optional[int],
           changelog_offset: Optional[int])
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/partition.py#L73)
 
-Update the state with data
+Update the state with data from the update cache
 
 **Arguments**:
 
-- `data`: The modified data
+- `cache`: The modified data
 - `processed_offset`: The offset processed to generate the data.
 - `changelog_offset`: The changelog message offset of the data.
 
@@ -6862,6 +6997,138 @@ Updates state from a given changelog message.
 
 ## quixstreams.state.base.transaction
 
+<a id="quixstreams.state.base.transaction.PartitionTransactionCache"></a>
+
+### PartitionTransactionCache
+
+```python
+class PartitionTransactionCache()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L35)
+
+A cache with the data updated in the current PartitionTransaction.
+It is used to read-your-own-writes before the transaction is committed to the Store.
+
+Internally, updates and deletes are separated into two separate structures
+to simplify the querying over them.
+
+<a id="quixstreams.state.base.transaction.PartitionTransactionCache.get"></a>
+
+#### PartitionTransactionCache.get
+
+```python
+def get(key: bytes,
+        prefix: bytes,
+        cf_name: str = "default") -> Union[bytes, Undefined]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L58)
+
+Get a value for the key.
+
+Returns the key value if it has been updated during the transaction.
+
+If the key has already been deleted, returns "DELETED" sentinel
+(we don't need to check the actual store).
+If the key is not present in the cache, returns "UNDEFINED sentinel
+(we need to check the store).
+
+:param: key: key as bytes
+:param: prefix: key prefix as bytes
+:param: cf_name: column family name
+
+
+<a id="quixstreams.state.base.transaction.PartitionTransactionCache.set"></a>
+
+#### PartitionTransactionCache.set
+
+```python
+def set(key: bytes, value: bytes, prefix: bytes, cf_name: str = "default")
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L88)
+
+Set a value for the key.
+
+:param: key: key as bytes
+:param: value: value as bytes
+:param: prefix: key prefix as bytes
+:param: cf_name: column family name
+
+
+<a id="quixstreams.state.base.transaction.PartitionTransactionCache.delete"></a>
+
+#### PartitionTransactionCache.delete
+
+```python
+def delete(key: Any, prefix: bytes, cf_name: str = "default")
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L101)
+
+Delete a key.
+
+:param: key: key as bytes
+:param: value: value as bytes
+:param: prefix: key prefix as bytes
+:param: cf_name: column family name
+
+
+<a id="quixstreams.state.base.transaction.PartitionTransactionCache.is_empty"></a>
+
+#### PartitionTransactionCache.is\_empty
+
+```python
+def is_empty() -> bool
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L114)
+
+Return True if any changes have been made (updates or deletes), otherwise
+return False.
+
+<a id="quixstreams.state.base.transaction.PartitionTransactionCache.get_column_families"></a>
+
+#### PartitionTransactionCache.get\_column\_families
+
+```python
+def get_column_families() -> Set[str]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L121)
+
+Get all update column families.
+
+<a id="quixstreams.state.base.transaction.PartitionTransactionCache.get_updates"></a>
+
+#### PartitionTransactionCache.get\_updates
+
+```python
+def get_updates(cf_name: str = "default") -> Dict[bytes, Dict[bytes, bytes]]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L127)
+
+Get all updated keys (excluding deleted)
+
+in the format "{<prefix>: {<key>: <value>}}".
+
+:param: cf_name: column family name
+
+
+<a id="quixstreams.state.base.transaction.PartitionTransactionCache.get_deletes"></a>
+
+#### PartitionTransactionCache.get\_deletes
+
+```python
+def get_deletes(cf_name: str = "default") -> Set[bytes]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L136)
+
+Get all deleted keys (excluding updated) as a set.
+
 <a id="quixstreams.state.base.transaction.PartitionTransactionStatus"></a>
 
 ### PartitionTransactionStatus
@@ -6870,7 +7137,7 @@ Updates state from a given changelog message.
 class PartitionTransactionStatus(enum.Enum)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L48)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L143)
 
 <a id="quixstreams.state.base.transaction.PartitionTransactionStatus.STARTED"></a>
 
@@ -6904,7 +7171,7 @@ Transaction is failed, it cannot be used anymore
 def validate_transaction_status(*allowed: PartitionTransactionStatus)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L59)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L154)
 
 Check that the status of `RocksDBTransaction` is valid before calling a method
 
@@ -6916,7 +7183,7 @@ Check that the status of `RocksDBTransaction` is valid before calling a method
 class PartitionTransaction(ABC)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L79)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L174)
 
 A transaction class to perform simple key-value operations like
 "get", "set", "delete" and "exists" on a single storage partition.
@@ -6930,7 +7197,7 @@ A transaction class to perform simple key-value operations like
 def failed() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L111)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L206)
 
 Return `True` if transaction failed to update data at some point.
 
@@ -6949,7 +7216,7 @@ bool
 def completed() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L121)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L216)
 
 Return `True` if transaction is successfully completed.
 
@@ -6968,7 +7235,7 @@ bool
 def prepared() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L131)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L226)
 
 Return `True` if transaction is prepared completed.
 
@@ -6987,7 +7254,7 @@ bool
 def changelog_topic_partition() -> Optional[Tuple[str, int]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L141)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L236)
 
 Return the changelog topic-partition for the StorePartition of this transaction.
 
@@ -7005,7 +7272,7 @@ Returns `None` if changelog_producer is not provided.
 def as_state(prefix: Any = DEFAULT_PREFIX) -> State
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L166)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L261)
 
 Create an instance implementing the `State` protocol to be provided
 
@@ -7029,7 +7296,7 @@ def get(key: Any,
         cf_name: str = "default") -> Optional[Any]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L185)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L280)
 
 Get a key from the store.
 
@@ -7040,6 +7307,7 @@ It returns `None` if the key is not found and `default` is not provided.
 - `key`: key
 - `prefix`: a key prefix
 - `default`: default value to return if the key is not found
+- `cf_name`: column family name
 
 **Returns**:
 
@@ -7054,7 +7322,7 @@ value or None if the key is not found and `default` is not provided
 def set(key: Any, value: Any, prefix: bytes, cf_name: str = "default")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L222)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L316)
 
 Set value for the key.
 
@@ -7063,6 +7331,7 @@ Set value for the key.
 - `key`: key
 - `prefix`: a key prefix
 - `value`: value
+- `cf_name`: column family name
 
 <a id="quixstreams.state.base.transaction.PartitionTransaction.delete"></a>
 
@@ -7073,7 +7342,7 @@ Set value for the key.
 def delete(key: Any, prefix: bytes, cf_name: str = "default")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L241)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L339)
 
 Delete value for the key.
 
@@ -7083,6 +7352,7 @@ This function always returns `None`, even if value is not found.
 
 - `key`: key
 - `prefix`: a key prefix
+- `cf_name`: column family name
 
 <a id="quixstreams.state.base.transaction.PartitionTransaction.exists"></a>
 
@@ -7093,7 +7363,7 @@ This function always returns `None`, even if value is not found.
 def exists(key: Any, prefix: bytes, cf_name: str = "default") -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L259)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L358)
 
 Check if the key exists in state.
 
@@ -7101,6 +7371,7 @@ Check if the key exists in state.
 
 - `key`: key
 - `prefix`: a key prefix
+- `cf_name`: column family name
 
 **Returns**:
 
@@ -7115,7 +7386,7 @@ True if key exists, False otherwise
 def prepare(processed_offset: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L281)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L378)
 
 Produce changelog messages to the changelog topic for all changes accumulated
 
@@ -7143,7 +7414,7 @@ def flush(processed_offset: Optional[int] = None,
           changelog_offset: Optional[int] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L331)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L439)
 
 Flush the recent updates to the database.
 
