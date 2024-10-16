@@ -1,13 +1,11 @@
 import logging
-from quixstreams.sinks import SinkBatch, BatchingSink, SinkBackpressureError
-from quixstreams.logging import LogLevel
-from typing import Literal, Optional
+import random
+import time
 from datetime import datetime
 from io import BytesIO
+from typing import Optional
 
-import time  # For sleep in backoff
-import random  # For jitter in backoff
-
+from quixstreams.sinks import SinkBatch, BatchingSink, SinkBackpressureError
 
 try:
     import pyarrow as pa
@@ -31,65 +29,59 @@ except ImportError as exc:
     ) from exc
 
 
-DataCatalogSpec = Literal["aws_glue"]
+logger = logging.getLogger(__name__)
 
 
 class IcebergSink(BatchingSink):
     """
-    IcebergSink is a sink that writes batches of data to an Apache Iceberg table stored in AWS S3,
-    using the AWS Glue Data Catalog as a default catalog (only implemented for now).
+    IcebergSink is a sink that writes batches of data to an Apache Iceberg table
+    stored in AWS S3 using the AWS Glue Data Catalog.
 
-    It serializes incoming data batches into Parquet format and appends them to the Iceberg table,
-    updating the table schema as necessary on fly.
+    It serializes incoming data batches into Parquet format and appends them to the
+    Iceberg table, updating the table schema as necessary.
     """
 
     def __init__(
         self,
         table_name: str,
         aws_s3_uri: str,
-        aws_region_name: Optional[str] = None,
+        aws_region: Optional[str] = None,
         aws_access_key_id: Optional[str] = None,
         aws_secret_access_key: Optional[str] = None,
         aws_session_token: Optional[str] = None,
-        data_catalog_spec: DataCatalogSpec = "aws_glue",
         schema: Optional[Schema] = None,
         partition_spec: Optional[PartitionSpec] = None,
-        loglevel: LogLevel = "INFO",
     ):
         """
         Initializes the S3Sink with the specified configuration.
 
-        Parameters:
-            table_name (str): The name of the Iceberg table.
-            aws_s3_uri (str): The S3 URI where the table data will be stored (e.g., 's3://your-bucket/warehouse/').
-            aws_region_name (Optional[str]): The AWS region where the S3 bucket and Glue catalog are located.
-            data_catalog_spec (DataCatalogSpec): The data catalog specification to use (default is 'aws_glue').
-            schema (Optional[Schema]): The Iceberg table schema. If None, a default schema is used.
-            partition_spec (Optional[PartitionSpec]): The partition specification for the table. If None, a default is used.
-            loglevel (LogLevel): The logging level for the logger (default is 'INFO').
+
+        :param table_name: The name of the Iceberg table.
+        :param aws_s3_uri: The S3 URI where the table data will be stored
+            (e.g., 's3://your-bucket/warehouse/').
+        :param aws_region: The AWS region for the S3 bucket and Glue catalog.
+        :param aws_access_key_id: the AWS access key ID.
+            NOTE: can alternatively set the AWS_ACCESS_KEY_ID environment variable.
+        :param aws_secret_access_key: the AWS secret access key.
+            NOTE: can alternatively set the AWS_SECRET_ACCESS_KEY environment variable.
+        :param aws_session_token: a session token (or will be generated for you).
+            NOTE: can alternatively set the AWS_SESSION_TOKEN environment variable.
+        :param schema: The Iceberg table schema. If None, a default schema is used.
+        :param partition_spec: The partition specification for the table.
+            If None, a default is used.
         """
         super().__init__()
 
-        # Configure logging.
-        self._logger = logging.getLogger("IcebergSink")
-        log_format = (
-            "[%(asctime)s.%(msecs)03d] [%(levelname)s] [%(name)s] : %(message)s"
-        )
-        logging.basicConfig(format=log_format, datefmt="%Y-%m-%d %H:%M:%S")
-        self._logger.setLevel(loglevel)
-
-        # Initialize the Iceberg catalog.
-        if data_catalog_spec == "aws_glue":
-            glue_properties = {
-                AWS_REGION: aws_region_name,
+        # Configure Iceberg Catalog using AWS Glue.
+        self.catalog = GlueCatalog(
+            name="glue_catalog",
+            **{
+                AWS_REGION: aws_region,
                 AWS_ACCESS_KEY_ID: aws_access_key_id,
                 AWS_SECRET_ACCESS_KEY: aws_secret_access_key,
                 AWS_SESSION_TOKEN: aws_session_token,
-            }
-            # Configure Iceberg Catalog using AWS Glue.
-            self.catalog = GlueCatalog(name="glue_catalog", **glue_properties)
-        else:
-            raise ValueError(f"Unsupported data_catalog_spec: {data_catalog_spec}")
+            },
+        )
 
         # Set up the schema.
         if schema is None:
@@ -140,15 +132,14 @@ class IcebergSink(BatchingSink):
                 partition_spec=partition_spec,
                 properties={"write.distribution-mode": "fanout"},
             )
-            self._logger.info(f"Loaded Iceberg table '{table_name}' at '{aws_s3_uri}'.")
+            logger.info(f"Loaded Iceberg table '{table_name}' at '{aws_s3_uri}'.")
 
     def write(self, batch: SinkBatch):
         """
         Writes a batch of data to the Iceberg table.
         Implements retry logic to handle concurrent write conflicts.
 
-        Parameters:
-            batch (SinkBatch): The batch of data to write.
+        :param batch: The batch of data to write.
         """
         try:
             # Serialize batch data into Parquet format.
@@ -167,24 +158,31 @@ class IcebergSink(BatchingSink):
 
             append_start_epoch = time.time()
             self.table.append(parquet_table)
-            self._logger.info(
-                f"Appended {len(list(batch))} records to {self.table.name()} table in {time.time() - append_start_epoch}s."
+            logger.info(
+                f"Appended {len(list(batch))} records to {self.table.name()} table "
+                f"in {time.time() - append_start_epoch}s."
             )
 
         except CommitFailedException as e:
             # Handle commit conflict
-            self._logger.warning(f"Commit conflict detected.: {e}")
+            logger.warning(f"Commit conflict detected.: {e}")
+            # encourage staggered backoff
             sleep_time = random.uniform(0, 5)  # noqa: S311
             raise SinkBackpressureError(sleep_time, batch.topic, batch.partition)
         except Exception as e:
-            self._logger.error(f"Error writing data to Iceberg table: {e}")
+            logger.error(f"Error writing data to Iceberg table: {e}")
             raise
 
 
 def _serialize_batch_values(batch: SinkBatch) -> bytes:
+    """
+    Dynamically unpacks each kafka message's value (its dict keys/"columns") within the
+    provided batch and preps the messages for reading into a PyArrow Table.
+    """
     # TODO: Handle data flattening. Nested properties will cause this to crash.
+    # TODO: possible optimizations with all the iterative batch transformations
 
-    # Get all unique keys (columns) across all rows
+    # Get all unique "keys" (columns) across all rows
     all_keys = set()
     for row in batch:
         all_keys.update(row.value.keys())
