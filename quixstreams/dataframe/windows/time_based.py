@@ -135,7 +135,9 @@ class FixedTimeWindow:
                 value=value, timestamp_ms=timestamp_ms, state=state
             )
             # Use window start timestamp as a new record timestamp
-            return [(window, key, window["start"], None) for window in expired_windows]
+            return [
+                (window, key, window["start"], _headers) for window in expired_windows
+            ]
 
         return self._apply_window(
             func=window_callback,
@@ -166,7 +168,9 @@ class FixedTimeWindow:
             updated_windows, _ = self.process_window(
                 value=value, timestamp_ms=timestamp_ms, state=state
             )
-            return [(window, key, window["start"], None) for window in updated_windows]
+            return [
+                (window, key, window["start"], _headers) for window in updated_windows
+            ]
 
         return self._apply_window(func=window_callback, name=self._name)
 
