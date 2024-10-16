@@ -30,6 +30,9 @@ logger = logging.getLogger(__name__)
 DataCatalogSpec = Literal["aws_glue"]
 
 
+__all__ = ("IcebergSink", "IcebergAWSConfig")
+
+
 @dataclass
 class IcebergSinkConfig:
     location: str
