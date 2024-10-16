@@ -430,10 +430,11 @@ class SlidingWindow(FixedTimeWindow):
         expiration_watermark = state.get_latest_timestamp() - duration - grace - 1
         expired_windows = [
             {"start": start, "end": end, "value": self._merge_func(aggregation)}
-            for (start, end), (_, aggregation) in state.expire_windows(
+            for (start, end), (max_timestamp, aggregation) in state.expire_windows(
                 watermark=expiration_watermark,
                 delete=False,
             )
+            if end == max_timestamp  # Include only left windows
         ]
 
         if deletion_watermark is not None:

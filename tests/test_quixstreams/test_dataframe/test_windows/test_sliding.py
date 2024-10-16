@@ -145,7 +145,7 @@ BASIC_CASE = [
             {"start": 12, "end": 22, "value": [B, C, E]},  # right A / left E
             {"start": 15, "end": 25, "value": [B, C, E, F]},  # left F
             {"start": 17, "end": 27, "value": [B, D, E, F, G]},  # right C / left D
-            {"start": 20, "end": 30, "value": [D, E, F, G]},  # right B
+            # {"start": 20, "end": 30, "value": [D, E, F, G]},  # right B
         ],
         deleted=[
             {"start": 6, "end": 16, "value": [A, C]},  # left C
@@ -159,8 +159,8 @@ BASIC_CASE = [
             {"start": 44, "end": 54, "value": [I]},  # left I
         ],
         expired=[
-            {"start": 23, "end": 33, "value": [D, F, G]},  # right E
-            {"start": 26, "end": 36, "value": [D, G]},  # right F
+            # {"start": 23, "end": 33, "value": [D, F, G]},  # right E
+            # {"start": 26, "end": 36, "value": [D, G]},  # right F
             {"start": 28, "end": 38, "value": [H]},  # left H
         ],
         deleted=[
@@ -289,7 +289,7 @@ DELETION_WATERMARK = [
         ],
         expired=[
             {"start": 9, "end": 19, "value": [A, C]},  # left C
-            {"start": 12, "end": 22, "value": [C]},  # right A
+            # {"start": 12, "end": 22, "value": [C]},  # right A
             {"start": 13, "end": 23, "value": [B, C]},  # left B
         ],
         deleted=[
