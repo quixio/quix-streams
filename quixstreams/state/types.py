@@ -23,7 +23,14 @@ class WindowedState(Protocol):
         """
         ...
 
-    def update_window(self, start_ms: int, end_ms: int, value: Any, timestamp_ms: int):
+    def update_window(
+        self,
+        start_ms: int,
+        end_ms: int,
+        value: Any,
+        timestamp_ms: int,
+        window_timestamp_ms: Optional[int] = None,
+    ):
         """
         Set a value for the window.
 
@@ -34,6 +41,7 @@ class WindowedState(Protocol):
         :param end_ms: end of the window in milliseconds
         :param value: value of the window
         :param timestamp_ms: current message timestamp in milliseconds
+        :param window_timestamp_ms: arbitrary timestamp stored with the window value
         """
         ...
 
@@ -49,19 +57,29 @@ class WindowedState(Protocol):
         ...
 
     def expire_windows(
-        self, duration_ms: int, grace_ms: int = 0
+        self, watermark: int, delete: bool = True
     ) -> list[tuple[tuple[int, int], Any]]:
         """
-        Get all expired windows from RocksDB based on the latest timestamp,
-        window duration, and an optional grace period.
+        Get all expired windows from RocksDB up to the specified `watermark` timestamp.
 
         This method marks the latest found window as expired in the expiration index,
         so consecutive calls may yield different results for the same "latest timestamp".
 
-        :param duration_ms: The duration of each window in milliseconds.
-        :param grace_ms: An optional grace period in milliseconds to delay expiration.
-            Defaults to 0, meaning no grace period is applied.
+        :param watermark: The timestamp up to which windows are considered expired, inclusive.
+        :param delete: If True, expired windows will be deleted.
         :return: A sorted list of tuples in the format `((start, end), value)`.
+        """
+        ...
+
+    def delete_windows(self, watermark: int) -> None:
+        """
+        Delete windows from RocksDB up to the specified `watermark` timestamp.
+
+        This method removes all window entries that have a start time less than or equal to the given
+        `watermark`. It ensures that expired data is cleaned up efficiently without affecting
+        unexpired windows.
+
+        :param watermark: The timestamp up to which windows should be deleted, inclusive.
         """
         ...
 
@@ -175,20 +193,31 @@ class WindowedPartitionTransaction(Protocol):
         ...
 
     def expire_windows(
-        self, duration_ms: int, prefix: bytes, grace_ms: int = 0
+        self, watermark: int, prefix: bytes, delete: bool = True
     ) -> list[tuple[tuple[int, int], Any]]:
         """
-        Get all expired windows from RocksDB based on the latest timestamp,
-        window duration, and an optional grace period.
+        Get all expired windows from RocksDB up to the specified `watermark` timestamp.
 
         This method marks the latest found window as expired in the expiration index,
         so consecutive calls may yield different results for the same "latest timestamp".
 
-        :param duration_ms: The duration of each window in milliseconds.
+        :param watermark: The timestamp up to which windows are considered expired, inclusive.
         :param prefix: The key prefix for filtering windows.
-        :param grace_ms: An optional grace period in milliseconds to delay expiration.
-            Defaults to 0, meaning no grace period is applied.
+        :param delete: If True, expired windows will be deleted.
         :return: A sorted list of tuples in the format `((start, end), value)`.
+        """
+        ...
+
+    def delete_windows(self, watermark: int, prefix: bytes) -> None:
+        """
+        Delete windows from RocksDB up to the specified `watermark` timestamp.
+
+        This method removes all window entries that have a start time less than or equal to the given
+        `watermark`. It ensures that expired data is cleaned up efficiently without affecting
+        unexpired windows.
+
+        :param watermark: The timestamp up to which windows should be deleted, inclusive.
+        :param prefix: The key prefix used to identify and filter relevant windows.
         """
         ...
 
