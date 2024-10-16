@@ -1,7 +1,7 @@
 import logging
 from quixstreams.sinks import SinkBatch, BatchingSink, SinkBackpressureError
 from quixstreams.logging import LogLevel
-from typing import Any, List, Literal, Optional
+from typing import Literal, Optional
 from datetime import datetime
 from io import BytesIO
 
@@ -13,15 +13,21 @@ try:
     import pyarrow as pa
     import pyarrow.parquet as pq
     from pyiceberg.transforms import DayTransform, IdentityTransform
-    from pyiceberg.catalog.glue import GlueCatalog
+    from pyiceberg.catalog.glue import (
+        GlueCatalog,
+        AWS_REGION,
+        AWS_ACCESS_KEY_ID,
+        AWS_SECRET_ACCESS_KEY,
+        AWS_SESSION_TOKEN,
+    )
     from pyiceberg.partitioning import PartitionSpec, PartitionField
     from pyiceberg.schema import Schema, NestedField
     from pyiceberg.types import StringType, TimestampType
     from pyiceberg.exceptions import CommitFailedException  # Import the exception
 except ImportError as exc:
     raise ImportError(
-        'Package "pyarrow" is missing: '
-        "run pip install quixstreams[iceberg] to fix it"
+        f"Package {exc.name} is missing: "
+        "run pip install quixstreams[aws_iceberg] to use this sink"
     ) from exc
 
 
@@ -41,7 +47,10 @@ class IcebergSink(BatchingSink):
         self,
         table_name: str,
         aws_s3_uri: str,
-        s3_region_name: Optional[str] = None,
+        aws_region_name: Optional[str] = None,
+        aws_access_key_id: Optional[str] = None,
+        aws_secret_access_key: Optional[str] = None,
+        aws_session_token: Optional[str] = None,
         data_catalog_spec: DataCatalogSpec = "aws_glue",
         schema: Optional[Schema] = None,
         partition_spec: Optional[PartitionSpec] = None,
@@ -53,11 +62,10 @@ class IcebergSink(BatchingSink):
         Parameters:
             table_name (str): The name of the Iceberg table.
             aws_s3_uri (str): The S3 URI where the table data will be stored (e.g., 's3://your-bucket/warehouse/').
-            s3_region_name (Optional[str]): The AWS region where the S3 bucket and Glue catalog are located.
+            aws_region_name (Optional[str]): The AWS region where the S3 bucket and Glue catalog are located.
             data_catalog_spec (DataCatalogSpec): The data catalog specification to use (default is 'aws_glue').
             schema (Optional[Schema]): The Iceberg table schema. If None, a default schema is used.
             partition_spec (Optional[PartitionSpec]): The partition specification for the table. If None, a default is used.
-            format: The data serialization format to use (default is ParquetFormat()).
             loglevel (LogLevel): The logging level for the logger (default is 'INFO').
         """
         super().__init__()
@@ -72,8 +80,14 @@ class IcebergSink(BatchingSink):
 
         # Initialize the Iceberg catalog.
         if data_catalog_spec == "aws_glue":
+            glue_properties = {
+                AWS_REGION: aws_region_name,
+                AWS_ACCESS_KEY_ID: aws_access_key_id,
+                AWS_SECRET_ACCESS_KEY: aws_secret_access_key,
+                AWS_SESSION_TOKEN: aws_session_token,
+            }
             # Configure Iceberg Catalog using AWS Glue.
-            self.catalog = GlueCatalog(name="glue_catalog", region_name=s3_region_name)
+            self.catalog = GlueCatalog(name="glue_catalog", **glue_properties)
         else:
             raise ValueError(f"Unsupported data_catalog_spec: {data_catalog_spec}")
 
@@ -81,8 +95,17 @@ class IcebergSink(BatchingSink):
         if schema is None:
             # Define a default schema if none is provided.
             schema = Schema(
-                NestedField(1, "_timestamp", TimestampType(), required=False),
-                NestedField(2, "_key", StringType(), required=False),
+                fields=(
+                    NestedField(
+                        field_id=1,
+                        name="_timestamp",
+                        field_type=TimestampType(),
+                        required=False,
+                    ),
+                    NestedField(
+                        field_id=2, name="_key", field_type=StringType(), required=False
+                    ),
+                )
             )
 
         # Set up the partition specification.
@@ -90,8 +113,8 @@ class IcebergSink(BatchingSink):
             # Map field names to field IDs from the schema.
             field_ids = {field.name: field.field_id for field in schema.fields}
 
-            # Create partition fields.
-            partition_fields = [
+            # Create partition fields for kafka key and timestamp.
+            partition_fields = (
                 PartitionField(
                     source_id=field_ids["_key"],
                     field_id=1000,  # Unique partition field ID.
@@ -104,10 +127,10 @@ class IcebergSink(BatchingSink):
                     transform=DayTransform(),
                     name="day",
                 ),
-            ]
+            )
 
             # Create the new PartitionSpec.
-            partition_spec = PartitionSpec(schema=schema, fields=partition_fields)
+            partition_spec = PartitionSpec(fields=partition_fields)
 
             # Create the Iceberg table if it doesn't exist.
             self.table = self.catalog.create_table_if_not_exists(
@@ -129,7 +152,7 @@ class IcebergSink(BatchingSink):
         """
         try:
             # Serialize batch data into Parquet format.
-            data = self._format.serialize_batch_values(batch)
+            data = _serialize_batch_values(batch)
 
             # Read data into a PyArrow Table.
             input_buffer = pa.BufferReader(data)
@@ -157,39 +180,35 @@ class IcebergSink(BatchingSink):
             self._logger.error(f"Error writing data to Iceberg table: {e}")
             raise
 
-    def _serialize_batch_values(self, values: List[Any]) -> bytes:
-        # TODO: Handle data flattening. Nested properties will cause this to crash.
 
-        # Get all unique keys (columns) across all rows
-        all_keys = set()
-        for row in values:
-            all_keys.update(row.value.keys())
+def _serialize_batch_values(batch: SinkBatch) -> bytes:
+    # TODO: Handle data flattening. Nested properties will cause this to crash.
 
-        # Normalize rows: Ensure all rows have the same keys, filling missing ones with None
-        normalized_values = [
-            {key: row.value.get(key, None) for key in all_keys} for row in values
-        ]
+    # Get all unique keys (columns) across all rows
+    all_keys = set()
+    for row in batch:
+        all_keys.update(row.value.keys())
 
-        columns = {
-            "_timestamp": [
-                datetime.fromtimestamp(row.timestamp / 1000.0) for row in values
-            ],
-            "_key": [bytes.decode(row.key) for row in values],
-        }
+    # Normalize rows: Ensure all rows have the same keys, filling missing ones with None
+    normalized_values = [
+        {key: row.value.get(key, None) for key in all_keys} for row in batch
+    ]
 
-        # Convert normalized values to a pyarrow Table
-        columns = {
-            **columns,
-            **{key: [row[key] for row in normalized_values] for key in all_keys},
-        }
+    columns = {
+        "_timestamp": [datetime.fromtimestamp(row.timestamp / 1000.0) for row in batch],
+        "_key": [
+            row.key.decode() if isinstance(row.key, bytes) else row.key for row in batch
+        ],
+    }
 
-        table = pa.Table.from_pydict(columns)
+    # Convert normalized values to a pyarrow Table
+    columns = {
+        **columns,
+        **{key: [row[key] for row in normalized_values] for key in all_keys},
+    }
 
-        with BytesIO() as f:
-            pq.write_table(table, f, compression=self._compression_type)
-            value_bytes = f.getvalue()
+    table = pa.Table.from_pydict(columns)
 
-            # if self._compress and self._compression_type == "none":  # Handle manual gzip if no Parquet compression
-            # value_bytes = gzip.compress(value_bytes)
-
-            return value_bytes
+    with BytesIO() as f:
+        pq.write_table(table, f, compression="snappy")
+        return f.getvalue()
