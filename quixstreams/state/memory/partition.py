@@ -61,8 +61,8 @@ class MemoryStorePartition(StorePartition):
             self._processed_offset = processed_offset
         if changelog_offset is not None:
             self._changelog_offset = changelog_offset
-        column_families = cache.get_column_families()
-        for cf_name in column_families:
+
+        for cf_name in cache.get_column_families():
             updates = cache.get_updates(cf_name=cf_name)
             for prefix_update_cache in updates.values():
                 for key, value in prefix_update_cache.items():
