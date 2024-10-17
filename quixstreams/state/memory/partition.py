@@ -94,7 +94,7 @@ class MemoryStorePartition(StorePartition):
             if value := changelog_message.value():
                 self._state.setdefault(cf_name, {})[changelog_message.key()] = value
             else:
-                self._state.setdefault(cf_name, {}).pop(changelog_message.key, None)
+                self._state.setdefault(cf_name, {}).pop(changelog_message.key(), None)
 
         self._changelog_offset = changelog_message.offset()
 

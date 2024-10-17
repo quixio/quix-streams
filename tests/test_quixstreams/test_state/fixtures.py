@@ -73,7 +73,7 @@ def memory_store_factory():
         changelog_producer_factory: Optional[ChangelogProducerFactory] = None,
     ):
         return MemoryStore(
-            topic=topic,
+            topic=topic or str(uuid.uuid4()),
             name=name,
             changelog_producer_factory=changelog_producer_factory,
         )
