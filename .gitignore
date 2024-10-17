@@ -25,6 +25,7 @@ certificates/
 # environment
 env/
 venv/
+.venv/
 
 # build results
 /build/
