@@ -297,7 +297,6 @@ def app_factory(kafka_container, random_consumer_group, tmp_path, store_type):
         topic_manager: Optional[TopicManager] = None,
         processing_guarantee: ProcessingGuarantee = "at-least-once",
         request_timeout: float = 30,
-        store_type: StoreTypes = store_type,
     ) -> Application:
         state_dir = state_dir or (tmp_path / "state").absolute()
         return Application(
@@ -464,7 +463,6 @@ def quix_app_factory(
         auto_create_topics: bool = True,
         use_changelog_topics: bool = True,
         workspace_id: str = "my_ws",
-        store_type: Optional[StoreTypes] = store_type,
     ) -> Application:
         state_dir = state_dir or (tmp_path / "state").absolute()
         return Application(

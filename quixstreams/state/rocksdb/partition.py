@@ -7,16 +7,14 @@ from rocksdict import WriteBatch, Rdict, ColumnFamily, AccessType
 from quixstreams.models import ConfluentKafkaMessageProto
 from quixstreams.state.recovery import ChangelogProducer
 from quixstreams.state.base import StorePartition, PartitionTransactionCache
+from quixstreams.state.exceptions import ColumnFamilyDoesNotExist
 from quixstreams.state.serialization import (
     int_from_int64_bytes,
     int_to_int64_bytes,
 )
-from .exceptions import (
-    ColumnFamilyAlreadyExists,
-    ColumnFamilyDoesNotExist,
-)
+from quixstreams.state.metadata import METADATA_CF_NAME
+from .exceptions import ColumnFamilyAlreadyExists
 from .metadata import (
-    METADATA_CF_NAME,
     PROCESSED_OFFSET_KEY,
     CHANGELOG_OFFSET_KEY,
 )
