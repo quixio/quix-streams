@@ -6,8 +6,8 @@ from confluent_kafka import TopicPartition as ConfluentPartition
 from quixstreams.kafka import Consumer
 
 from quixstreams.models import TopicManager, TopicConfig
-from quixstreams.state.metadata import CHANGELOG_CF_MESSAGE_HEADER
 from quixstreams.state.exceptions import InvalidStoreChangelogOffset
+from quixstreams.state.metadata import CHANGELOG_CF_MESSAGE_HEADER
 from quixstreams.state.base import StorePartition
 from quixstreams.state.exceptions import InvalidStoreChangelogOffset
 from quixstreams.state.manager import SUPPORTED_STORES
