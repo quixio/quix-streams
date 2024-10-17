@@ -34,12 +34,12 @@ __all__ = ("IcebergSink", "IcebergAWSConfig")
 
 
 @dataclass
-class IcebergSinkConfig:
+class IcebergConfig:
     location: str
     auth: dict
 
 
-class IcebergAWSConfig(IcebergSinkConfig):
+class IcebergAWSConfig(IcebergConfig):
     def __init__(
         self,
         aws_s3_uri: str,
@@ -90,7 +90,7 @@ class IcebergSink(BatchingSink):
     def __init__(
         self,
         table_name: str,
-        config: IcebergAWSConfig,
+        config: IcebergConfig,
         data_catalog_spec: DataCatalogSpec,
         schema: Optional[Schema] = None,
         partition_spec: Optional[PartitionSpec] = None,
