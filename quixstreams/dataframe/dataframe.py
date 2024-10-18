@@ -127,6 +127,15 @@ class StreamingDataFrame(BaseStreaming):
         self._producer = processing_context.producer
 
     @property
+    def _as_stateful(self) -> Callable:
+        if self._merges:
+            return functools.partial(_as_shared_stateful, dataframe=self)
+        return _as_stateful
+
+    def __get_merge_topic_name__(self) -> str:
+        return self._registry.get_merge_topic_name(self._topic.name)
+
+    @property
     def __all_topics__(self) -> Set[str]:
         topics = {self._topic.name}
         topics.update([topic for sdf in self._merges for topic in sdf.__all_topics__])
@@ -229,7 +238,7 @@ class StreamingDataFrame(BaseStreaming):
                 if metadata
                 else _as_metadata_func(cast(ApplyCallbackStateful, func))
             )
-            stateful_func = _as_stateful(
+            stateful_func = self._as_stateful(
                 func=with_metadata_func,
                 processing_context=self._processing_context,
             )
@@ -321,7 +330,7 @@ class StreamingDataFrame(BaseStreaming):
                 if metadata
                 else _as_metadata_func(cast(UpdateCallbackStateful, func))
             )
-            stateful_func = _as_stateful(
+            stateful_func = self._as_stateful(
                 func=cast(UpdateWithMetadataCallbackStateful, with_metadata_func),
                 processing_context=self._processing_context,
             )
@@ -408,7 +417,7 @@ class StreamingDataFrame(BaseStreaming):
                 if metadata
                 else _as_metadata_func(cast(FilterCallbackStateful, func))
             )
-            stateful_func = _as_stateful(
+            stateful_func = self._as_stateful(
                 func=cast(FilterWithMetadataCallbackStateful, with_metadata_func),
                 processing_context=self._processing_context,
             )
@@ -500,27 +509,20 @@ class StreamingDataFrame(BaseStreaming):
             raise ValueError(
                 'group_by requires "name" parameter when "key" is a function'
             )
-        topic_names = self.__all_topics__
-        final_sdf = None
-        op_name = name or key
-        while topic_names:
-            topic_name = topic_names.pop()
-            topic = self._topic_manager.repartition_topic(
-                operation=op_name,
-                topic_name=topic_name,
-                key_serializer=key_serializer,
-                value_serializer=value_serializer,
-                key_deserializer=key_deserializer,
-                value_deserializer=value_deserializer,
-            )
-            new_sdf = self.__dataframe_clone__(topic=topic, merges=[])
-            self._registry.register_groupby(source_topic=topic_name, new_sdf=new_sdf)
-            if final_sdf is None:
-                final_sdf = new_sdf
-            else:
-                final_sdf = final_sdf.merge(new_sdf)
-        self._to_groupby_topics(key_op=_groupby_key(key), op_name=op_name)
-        return final_sdf
+
+        groupby_topic = self._topic_manager.repartition_topic(
+            operation=name or key,
+            topic_name=self._topic.name,
+            key_serializer=key_serializer,
+            value_serializer=value_serializer,
+            key_deserializer=key_deserializer,
+            value_deserializer=value_deserializer,
+        )
+
+        self.to_topic(topic=groupby_topic, key=_groupby_key(key))
+        groupby_sdf = self.__dataframe_clone__(topic=groupby_topic)
+        self._registry.register_groupby(source_sdf=self, new_sdf=groupby_sdf)
+        return groupby_sdf
 
     def contains(self, key: str) -> StreamingSeries:
         """
@@ -586,18 +588,6 @@ class StreamingDataFrame(BaseStreaming):
                 topic=topic,
                 value=value,
                 key=orig_key if key is None else key(value),
-                timestamp=timestamp,
-                headers=headers,
-            ),
-            metadata=True,
-        )
-
-    def _to_groupby_topics(self, key_op: Callable[[Any], Any], op_name: str) -> Self:
-        return self._add_update(
-            lambda value, orig_key, timestamp, headers: self._produce_groupby(
-                op_name=op_name,
-                value=value,
-                key=key_op(value),
                 timestamp=timestamp,
                 headers=headers,
             ),
@@ -1059,7 +1049,7 @@ class StreamingDataFrame(BaseStreaming):
         # uses apply without returning to make this operation terminal
         self.apply(_sink_callback, metadata=True)
 
-    def merge(self, *others: Self) -> Self:
+    def merge(self, name: str, *others: Self) -> Self:
         """
         Merge all provided "other" `StreamingDataFrame` into the current.
 
@@ -1070,9 +1060,13 @@ class StreamingDataFrame(BaseStreaming):
         :param others: other `StreamingDataFrame` instances
         :return: the original StreamingDataFrame
         """
-        self._stream = self.stream.merge([other.stream for other in others])
-        self._merges.extend(list(others))
-        return self
+        merged_sdf = self.__dataframe_clone__(
+            topic=self._topic_manager.combined_topic(name, self._topic),
+            stream=self.stream.merge([other.stream for other in others]),
+            merges=self._merges + list(others),
+        )
+        self._registry.register_merge(merged_sdf, self)
+        return merged_sdf
 
     def _produce(
         self,
@@ -1088,25 +1082,6 @@ class StreamingDataFrame(BaseStreaming):
         )
         self._producer.produce_row(row=row, topic=topic, key=key, timestamp=timestamp)
 
-    def _produce_groupby(
-        self,
-        op_name: str,
-        value: object,
-        key: Any,
-        timestamp: int,
-        headers: Any,
-    ):
-        ctx = message_context()
-        topic_out = self._topic_manager.repartition_topics[
-            self._topic_manager.topic_to_repartition_names[(ctx.topic, op_name)]
-        ]
-        row = Row(
-            value=value, key=key, timestamp=timestamp, context=ctx, headers=headers
-        )
-        self._producer.produce_row(
-            row=row, topic=topic_out, key=key, timestamp=timestamp
-        )
-
     def _add_update(
         self,
         func: Union[UpdateCallback, UpdateWithMetadataCallback],
@@ -1116,12 +1091,15 @@ class StreamingDataFrame(BaseStreaming):
         return self
 
     def _register_store(self):
-        for topic in self.__all_topics__:
-            self._processing_context.state_manager.register_store(topic)
+        self._processing_context.state_manager.register_store(
+            topic_name=self._registry.get_merge_topic_name(self._topic.name),
+            store_name=self._topic.name,
+        )
 
     def __register_windowed_store__(self, name: str):
-        for topic in self.__all_topics__:
-            self._processing_context.state_manager.register_windowed_store(topic, name)
+        self._processing_context.state_manager.register_windowed_store(
+            self._topic.name, name
+        )
 
     def __dataframe_clone__(
         self,
@@ -1282,6 +1260,36 @@ def _as_stateful(
         ctx = message_context()
         transaction = processing_context.checkpoint.get_store_transaction(
             topic=ctx.topic, partition=ctx.partition
+        )
+        # Pass a State object with an interface limited to the key updates only
+        # and prefix all the state keys by the message key
+        state = transaction.as_state(prefix=key)
+        return func(value, key, timestamp, headers, state)
+
+    return wrapper
+
+
+def _as_shared_stateful(
+    dataframe: StreamingDataFrame,
+    func: Union[
+        ApplyWithMetadataCallbackStateful,
+        FilterWithMetadataCallbackStateful,
+        UpdateWithMetadataCallbackStateful,
+    ],
+    processing_context: ProcessingContext,
+) -> Union[
+    ApplyWithMetadataCallback,
+    FilterWithMetadataCallback,
+    UpdateWithMetadataCallback,
+]:
+    topic = dataframe.__get_merge_topic_name__()
+    store = dataframe.topic.name
+
+    @functools.wraps(func)
+    def wrapper(value: Any, key: Any, timestamp: int, headers: Any) -> Any:
+        ctx = message_context()
+        transaction = processing_context.checkpoint.get_store_transaction(
+            topic=topic, partition=ctx.partition, store_name=store
         )
         # Pass a State object with an interface limited to the key updates only
         # and prefix all the state keys by the message key

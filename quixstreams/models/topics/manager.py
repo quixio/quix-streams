@@ -1,6 +1,6 @@
 import logging
 from copy import deepcopy
-from typing import Dict, List, Optional, Set, Literal, Tuple
+from typing import Dict, List, Optional, Set, Literal
 
 from quixstreams.models.serializers import DeserializerType, SerializerType
 from quixstreams.utils.dicts import dict_values
@@ -68,7 +68,7 @@ class TopicManager:
         self._topics: Dict[str, Topic] = {}
         self._repartition_topics: Dict[str, Topic] = {}
         self._changelog_topics: Dict[str, Dict[str, Topic]] = {}
-        self._topic_to_repartition_names: Dict[Tuple[str, str], str] = {}
+        self._combined_topics: Dict[str, Topic] = {}
         self._timeout = timeout
         self._create_timeout = create_timeout
 
@@ -117,10 +117,6 @@ class TopicManager:
         returns: full topic dict, {topic_name: Topic}
         """
         return {topic.name: topic for topic in self._all_topics_list}
-
-    @property
-    def topic_to_repartition_names(self) -> Dict[Tuple[str, str], str]:
-        return self._topic_to_repartition_names
 
     def _resolve_topic_name(self, name: str) -> str:
         """
@@ -211,7 +207,12 @@ class TopicManager:
         """
         topic_config = self._admin.inspect_topics([topic_name], timeout=timeout)[
             topic_name
-        ] or deepcopy(self._non_changelog_topics[topic_name].config)
+        ] or deepcopy(
+            (
+                self._non_changelog_topics.get(topic_name)
+                or self._combined_topics.get(topic_name)
+            ).config
+        )
 
         # Copy only certain configuration values from original topic
         if extras_imports:
@@ -252,6 +253,7 @@ class TopicManager:
         key_serializer: Optional[SerializerType] = "bytes",
         config: Optional[TopicConfig] = None,
         timestamp_extractor: Optional[TimestampExtractor] = None,
+        register: bool = True,
     ) -> Topic:
         """
         A convenience method for generating a `Topic`. Will use default config options
@@ -285,7 +287,8 @@ class TopicManager:
             config=config,
             timestamp_extractor=timestamp_extractor,
         )
-        self._topics[name] = topic
+        if register:
+            self._topics[name] = topic
         return topic
 
     def register(self, topic: Topic):
@@ -343,7 +346,6 @@ class TopicManager:
             ),
         )
         self._repartition_topics[name] = topic
-        self._topic_to_repartition_names[(topic_name, operation)] = name
         return topic
 
     def changelog_topic(
@@ -401,6 +403,11 @@ class TopicManager:
             config=changelog_config,
         )
         self._changelog_topics.setdefault(topic_name, {})[store_name] = topic
+        return topic
+
+    def combined_topic(self, name: str, origin_topic: Topic):
+        topic = self.topic(name=name, config=origin_topic.config, register=False)
+        self._combined_topics[topic.name] = topic
         return topic
 
     def create_topics(
