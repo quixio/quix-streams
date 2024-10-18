@@ -207,12 +207,7 @@ class TopicManager:
         """
         topic_config = self._admin.inspect_topics([topic_name], timeout=timeout)[
             topic_name
-        ] or deepcopy(
-            (
-                self._non_changelog_topics.get(topic_name)
-                or self._combined_topics.get(topic_name)
-            ).config
-        )
+        ] or deepcopy(self._non_changelog_topics[topic_name].config)
 
         # Copy only certain configuration values from original topic
         if extras_imports:
@@ -253,7 +248,6 @@ class TopicManager:
         key_serializer: Optional[SerializerType] = "bytes",
         config: Optional[TopicConfig] = None,
         timestamp_extractor: Optional[TimestampExtractor] = None,
-        register: bool = True,
     ) -> Topic:
         """
         A convenience method for generating a `Topic`. Will use default config options
@@ -287,8 +281,7 @@ class TopicManager:
             config=config,
             timestamp_extractor=timestamp_extractor,
         )
-        if register:
-            self._topics[name] = topic
+        self._topics[name] = topic
         return topic
 
     def register(self, topic: Topic):
@@ -403,11 +396,6 @@ class TopicManager:
             config=changelog_config,
         )
         self._changelog_topics.setdefault(topic_name, {})[store_name] = topic
-        return topic
-
-    def combined_topic(self, name: str, origin_topic: Topic):
-        topic = self.topic(name=name, config=origin_topic.config, register=False)
-        self._combined_topics[topic.name] = topic
         return topic
 
     def create_topics(

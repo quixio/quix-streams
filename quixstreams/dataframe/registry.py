@@ -24,8 +24,6 @@ class DataframeRegistry:
     def __init__(self):
         self._registry: Dict[str, Stream] = {}
         self._topics: List[Topic] = []
-        # {original_topic_name: new_topic_name}
-        self._combined: Dict[str, str] = {}
         # {repartition_topic_name: source_topic_name}
         self._repartition_origins: Dict[str, str] = {}
 
@@ -35,17 +33,6 @@ class DataframeRegistry:
         :return: a list of Topics a consumer should subscribe to.
         """
         return self._topics
-
-    def get_merge_topic_name(self, merge_name: str) -> str:
-        """
-        :return: a list of Topics a consumer should subscribe to.
-        """
-        return self._combined[merge_name]
-
-    def register_merge(
-        self, new_sdf: "StreamingDataFrame", origin_sdf: "StreamingDataFrame"
-    ):
-        self._combined[new_sdf.topic.name] = origin_sdf.topic.name
 
     def register_root(
         self,

@@ -47,6 +47,7 @@ from quixstreams.models.serializers import SerializerType, DeserializerType
 from quixstreams.processing import ProcessingContext
 from quixstreams.sinks import BaseSink
 from quixstreams.state.base import State
+from quixstreams.state.manager import DEFAULT_STATE_STORE_NAME
 from .base import BaseStreaming
 from .exceptions import InvalidOperation
 from .registry import DataframeRegistry
@@ -117,23 +118,16 @@ class StreamingDataFrame(BaseStreaming):
         processing_context: ProcessingContext,
         stream: Optional[Stream] = None,
         merges: Optional[List[Self]] = None,
+        user_state_store_name: str = DEFAULT_STATE_STORE_NAME,
     ):
         self._stream: Stream = stream or Stream()
         self._topic = topic
         self._topic_manager = topic_manager
         self._registry = registry
         self._merges = merges or []
+        self._user_state_store_name = user_state_store_name
         self._processing_context = processing_context
         self._producer = processing_context.producer
-
-    @property
-    def _as_stateful(self) -> Callable:
-        if self._merges:
-            return functools.partial(_as_shared_stateful, dataframe=self)
-        return _as_stateful
-
-    def __get_merge_topic_name__(self) -> str:
-        return self._registry.get_merge_topic_name(self._topic.name)
 
     @property
     def __all_topics__(self) -> Set[str]:
@@ -1049,7 +1043,7 @@ class StreamingDataFrame(BaseStreaming):
         # uses apply without returning to make this operation terminal
         self.apply(_sink_callback, metadata=True)
 
-    def merge(self, name: str, *others: Self) -> Self:
+    def merge(self, *others: Self, name: str = "merged") -> Self:
         """
         Merge all provided "other" `StreamingDataFrame` into the current.
 
@@ -1057,16 +1051,14 @@ class StreamingDataFrame(BaseStreaming):
 
         NOTE: SDF.merge() is commutative: X.merge(Y) == Y.merge(X)
 
+        :param name: the name of your merge (to align state across the merged SDF's).
         :param others: other `StreamingDataFrame` instances
         :return: the original StreamingDataFrame
         """
-        merged_sdf = self.__dataframe_clone__(
-            topic=self._topic_manager.combined_topic(name, self._topic),
-            stream=self.stream.merge([other.stream for other in others]),
-            merges=self._merges + list(others),
-        )
-        self._registry.register_merge(merged_sdf, self)
-        return merged_sdf
+        self._user_state_store_name = name
+        self._stream = self.stream.merge([other.stream for other in others])
+        self._merges.extend(list(others))
+        return self
 
     def _produce(
         self,
@@ -1092,8 +1084,7 @@ class StreamingDataFrame(BaseStreaming):
 
     def _register_store(self):
         self._processing_context.state_manager.register_store(
-            topic_name=self._registry.get_merge_topic_name(self._topic.name),
-            store_name=self._topic.name,
+            topic_name=self._topic.name, store_name=self._user_state_store_name
         )
 
     def __register_windowed_store__(self, name: str):
@@ -1199,6 +1190,35 @@ class StreamingDataFrame(BaseStreaming):
             f"use '&' or '|' for logical and/or comparisons"
         )
 
+    def _as_stateful(
+        self,
+        func: Union[
+            ApplyWithMetadataCallbackStateful,
+            FilterWithMetadataCallbackStateful,
+            UpdateWithMetadataCallbackStateful,
+        ],
+        processing_context: ProcessingContext,
+    ) -> Union[
+        ApplyWithMetadataCallback,
+        FilterWithMetadataCallback,
+        UpdateWithMetadataCallback,
+    ]:
+        topic = self._topic.name
+        store = self._user_state_store_name
+
+        @functools.wraps(func)
+        def wrapper(value: Any, key: Any, timestamp: int, headers: Any) -> Any:
+            ctx = message_context()
+            transaction = processing_context.checkpoint.get_store_transaction(
+                topic=topic, partition=ctx.partition, store_name=store
+            )
+            # Pass a State object with an interface limited to the key updates only
+            # and prefix all the state keys by the message key
+            state = transaction.as_state(prefix=key)
+            return func(value, key, timestamp, headers, state)
+
+        return wrapper
+
 
 def _groupby_key(key: Union[str, Callable[[Any], Any]]) -> Callable[[Any], Any]:
     """
@@ -1239,61 +1259,5 @@ def _as_metadata_func(
         value: Any, _key: Any, _timestamp: int, _headers: Any, state: State
     ) -> Any:
         return func(value, state)
-
-    return wrapper
-
-
-def _as_stateful(
-    func: Union[
-        ApplyWithMetadataCallbackStateful,
-        FilterWithMetadataCallbackStateful,
-        UpdateWithMetadataCallbackStateful,
-    ],
-    processing_context: ProcessingContext,
-) -> Union[
-    ApplyWithMetadataCallback,
-    FilterWithMetadataCallback,
-    UpdateWithMetadataCallback,
-]:
-    @functools.wraps(func)
-    def wrapper(value: Any, key: Any, timestamp: int, headers: Any) -> Any:
-        ctx = message_context()
-        transaction = processing_context.checkpoint.get_store_transaction(
-            topic=ctx.topic, partition=ctx.partition
-        )
-        # Pass a State object with an interface limited to the key updates only
-        # and prefix all the state keys by the message key
-        state = transaction.as_state(prefix=key)
-        return func(value, key, timestamp, headers, state)
-
-    return wrapper
-
-
-def _as_shared_stateful(
-    dataframe: StreamingDataFrame,
-    func: Union[
-        ApplyWithMetadataCallbackStateful,
-        FilterWithMetadataCallbackStateful,
-        UpdateWithMetadataCallbackStateful,
-    ],
-    processing_context: ProcessingContext,
-) -> Union[
-    ApplyWithMetadataCallback,
-    FilterWithMetadataCallback,
-    UpdateWithMetadataCallback,
-]:
-    topic = dataframe.__get_merge_topic_name__()
-    store = dataframe.topic.name
-
-    @functools.wraps(func)
-    def wrapper(value: Any, key: Any, timestamp: int, headers: Any) -> Any:
-        ctx = message_context()
-        transaction = processing_context.checkpoint.get_store_transaction(
-            topic=topic, partition=ctx.partition, store_name=store
-        )
-        # Pass a State object with an interface limited to the key updates only
-        # and prefix all the state keys by the message key
-        state = transaction.as_state(prefix=key)
-        return func(value, key, timestamp, headers, state)
 
     return wrapper
