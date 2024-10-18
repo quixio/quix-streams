@@ -1,4 +1,3 @@
-from collections import deque
 from typing import Any, Iterable
 
 from quixstreams.state import WindowedState
@@ -33,7 +32,7 @@ class SlidingWindow(FixedTimeWindow):
         right_exists = False
 
         starts = set([left_start])
-        updated_windows = deque()
+        updated_windows = []
         iterated_windows = state.get_windows(
             # start_from_ms is exclusive, hence -1
             start_from_ms=max(0, left_start - duration) - 1,
@@ -64,7 +63,7 @@ class SlidingWindow(FixedTimeWindow):
                         window_timestamp=max_timestamp,
                     )
                     if right_end == max_timestamp:
-                        updated_windows.appendleft(window)
+                        updated_windows.append(window)
                     right_exists = True
 
                 # Update existing window
@@ -78,7 +77,7 @@ class SlidingWindow(FixedTimeWindow):
                     window_timestamp=window_timestamp,
                 )
                 if end == window_timestamp:
-                    updated_windows.appendleft(window)
+                    updated_windows.append(window)
 
             elif end == left_end:
                 # Backfill the right window for previous messages
@@ -103,7 +102,7 @@ class SlidingWindow(FixedTimeWindow):
                     )
 
                 # The left window already exists; updating it is sufficient
-                updated_windows.appendleft(
+                updated_windows.append(
                     self._update_window(
                         state=state,
                         start=start,
@@ -139,7 +138,7 @@ class SlidingWindow(FixedTimeWindow):
                 # Create a left window with existing aggregation if it falls within the window
                 if left_start > max_timestamp:
                     aggregation = default
-                updated_windows.appendleft(
+                updated_windows.append(
                     self._update_window(
                         state=state,
                         start=left_start,
@@ -158,7 +157,7 @@ class SlidingWindow(FixedTimeWindow):
 
         else:
             # Create the left window as iteration completed without creating (or updating) it
-            updated_windows.appendleft(
+            updated_windows.append(
                 self._update_window(
                     state=state,
                     start=left_start,
@@ -186,7 +185,7 @@ class SlidingWindow(FixedTimeWindow):
             deletion_watermark = expiration_watermark - duration
         state.delete_windows(watermark=deletion_watermark)
 
-        return updated_windows, expired_windows
+        return reversed(updated_windows), expired_windows
 
     def _update_window(
         self,
