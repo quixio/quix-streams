@@ -3,7 +3,8 @@ from abc import abstractmethod
 from typing import TYPE_CHECKING, Any, Callable, Optional, Tuple
 
 from .base import WindowAggregateFunc, WindowMergeFunc
-from .time_based import FixedTimeWindow, SlidingWindow
+from .sliding import SlidingWindow
+from .time_based import FixedTimeWindow
 
 if TYPE_CHECKING:
     from quixstreams.dataframe.dataframe import StreamingDataFrame
