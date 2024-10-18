@@ -64,7 +64,7 @@ BASIC_CASE = [
         value=B,
         updated=[
             {"start": 9, "end": 19, "value": [A, B]},  # left B
-            {"start": 12, "end": 22, "value": [B]},  # right A
+            # {"start": 12, "end": 22, "value": [B]},  # right A
         ],
         expired=[
             {"start": 1, "end": 11, "value": [A]},  # left A
@@ -77,8 +77,8 @@ BASIC_CASE = [
         updated=[
             {"start": 6, "end": 16, "value": [A, C]},  # left C
             {"start": 9, "end": 19, "value": [A, B, C]},  # left B
-            {"start": 12, "end": 22, "value": [B, C]},  # right A
-            {"start": 17, "end": 27, "value": [B]},  # right C
+            # {"start": 12, "end": 22, "value": [B, C]},  # right A
+            # {"start": 17, "end": 27, "value": [B]},  # right C
         ],
         expired=[],
         deleted=[],
@@ -88,7 +88,7 @@ BASIC_CASE = [
         value=D,
         updated=[
             {"start": 17, "end": 27, "value": [B, D]},  # right C / left D
-            {"start": 20, "end": 30, "value": [D]},  # right B
+            # {"start": 20, "end": 30, "value": [D]},  # right B
         ],
         expired=[
             {"start": 6, "end": 16, "value": [A, C]},  # left C
@@ -104,8 +104,8 @@ BASIC_CASE = [
         updated=[
             {"start": 12, "end": 22, "value": [B, C, E]},  # right A / left E
             {"start": 17, "end": 27, "value": [B, D, E]},  # right C / left D
-            {"start": 20, "end": 30, "value": [D, E]},  # right B
-            {"start": 23, "end": 33, "value": [D]},  # right E
+            # {"start": 20, "end": 30, "value": [D, E]},  # right B
+            # {"start": 23, "end": 33, "value": [D]},  # right E
         ],
         expired=[],
         deleted=[],
@@ -116,9 +116,9 @@ BASIC_CASE = [
         updated=[
             {"start": 15, "end": 25, "value": [B, C, E, F]},  # left F
             {"start": 17, "end": 27, "value": [B, D, E, F]},  # right C / left D
-            {"start": 20, "end": 30, "value": [D, E, F]},  # right B
-            {"start": 23, "end": 33, "value": [D, F]},  # right E
-            {"start": 26, "end": 36, "value": [D]},  # right F
+            # {"start": 20, "end": 30, "value": [D, E, F]},  # right B
+            # {"start": 23, "end": 33, "value": [D, F]},  # right E
+            # {"start": 26, "end": 36, "value": [D]},  # right F
         ],
         expired=[],
         deleted=[],
@@ -128,9 +128,9 @@ BASIC_CASE = [
         value=G,
         updated=[
             {"start": 17, "end": 27, "value": [B, D, E, F, G]},  # right C / left D, G
-            {"start": 20, "end": 30, "value": [D, E, F, G]},  # right B
-            {"start": 23, "end": 33, "value": [D, F, G]},  # right E
-            {"start": 26, "end": 36, "value": [D, G]},  # right F
+            # {"start": 20, "end": 30, "value": [D, E, F, G]},  # right B
+            # {"start": 23, "end": 33, "value": [D, F, G]},  # right E
+            # {"start": 26, "end": 36, "value": [D, G]},  # right F
         ],
         expired=[],
         deleted=[],
@@ -203,7 +203,7 @@ RIGHT_WINDOW_EXISTS = [
         value=B,
         updated=[
             {"start": 3, "end": 13, "value": [A, B]},  # left B
-            {"start": 12, "end": 22, "value": [B]},  # right A
+            # {"start": 12, "end": 22, "value": [B]},  # right A
         ],
         expired=[],
         deleted=[],
@@ -272,9 +272,9 @@ DELETION_WATERMARK = [
         value=C,
         updated=[
             {"start": 9, "end": 19, "value": [A, C]},  # left C
-            {"start": 12, "end": 22, "value": [C]},  # right A
+            # {"start": 12, "end": 22, "value": [C]},  # right A
             {"start": 13, "end": 23, "value": [B, C]},  # left B
-            {"start": 20, "end": 30, "value": [B]},  # right C
+            # {"start": 20, "end": 30, "value": [B]},  # right C
         ],
         expired=[],
         deleted=[],
@@ -284,8 +284,8 @@ DELETION_WATERMARK = [
         value=D,
         updated=[
             {"start": 19, "end": 29, "value": [B, C, D]},  # left D
-            {"start": 20, "end": 30, "value": [B, D]},  # right C
-            {"start": 24, "end": 34, "value": [D]},  # right B
+            # {"start": 20, "end": 30, "value": [B, D]},  # right C
+            # {"start": 24, "end": 34, "value": [D]},  # right B
         ],
         expired=[
             {"start": 9, "end": 19, "value": [A, C]},  # left C
@@ -304,9 +304,9 @@ DELETION_WATERMARK = [
         updated=[
             {"start": 14, "end": 24, "value": [B, C, E]},  # left E
             {"start": 19, "end": 29, "value": [B, C, D, E]},  # left D
-            {"start": 20, "end": 30, "value": [B, D, E]},  # right C
-            {"start": 24, "end": 34, "value": [D, E]},  # right B
-            {"start": 25, "end": 35, "value": [D]},  # right E
+            # {"start": 20, "end": 30, "value": [B, D, E]},  # right C
+            # {"start": 24, "end": 34, "value": [D, E]},  # right B
+            # {"start": 25, "end": 35, "value": [D]},  # right E
         ],
         expired=[],
         deleted=[],
@@ -340,7 +340,7 @@ AGG_FROM_MIN_ELIGIBLE_WINDOW = [
         value=B,
         updated=[
             {"start": 11, "end": 21, "value": [A, B]},  # left B
-            {"start": 12, "end": 22, "value": [B]},  # right A
+            # {"start": 12, "end": 22, "value": [B]},  # right A
         ],
         expired=[
             {"start": 1, "end": 11, "value": [A]},  # left A
@@ -415,7 +415,7 @@ PREVENT_NEGATIVE_START_TIME = [
         value=B,
         updated=[
             {"start": 0, "end": 5, "value": [A, B]},  # left B
-            {"start": 4, "end": 14, "value": [B]},  # left B
+            # {"start": 4, "end": 14, "value": [B]},  # right A
         ],
         expired=[],
         deleted=[],
@@ -426,8 +426,8 @@ PREVENT_NEGATIVE_START_TIME = [
         updated=[
             {"start": 0, "end": 4, "value": [A, C]},  # left C
             {"start": 0, "end": 5, "value": [A, B, C]},  # left B
-            {"start": 4, "end": 14, "value": [B, C]},  # left B
-            {"start": 5, "end": 15, "value": [B]},  # right C
+            # {"start": 4, "end": 14, "value": [B, C]},  # right A
+            # {"start": 5, "end": 15, "value": [B]},  # right C
         ],
         expired=[],
         deleted=[],

@@ -1,12 +1,10 @@
 import functools
 import logging
 from collections import deque
-from contextlib import contextmanager
 from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
-    Generator,
     Iterable,
     List,
     Optional,
@@ -298,29 +296,30 @@ class SlidingWindow(FixedTimeWindow):
             elif end > left_end:
                 # Create the right window if it does not exist and will not be empty
                 if not right_exists and max_timestamp > timestamp_ms:
-                    updated_windows.appendleft(
-                        self._update_window(
-                            state=state,
-                            start=right_start,
-                            end=right_end,
-                            value=aggregation,
-                            timestamp=timestamp_ms,
-                            window_timestamp=max_timestamp,
-                        )
+                    window = self._update_window(
+                        state=state,
+                        start=right_start,
+                        end=right_end,
+                        value=aggregation,
+                        timestamp=timestamp_ms,
+                        window_timestamp=max_timestamp,
                     )
+                    if right_end == max_timestamp:
+                        updated_windows.appendleft(window)
                     right_exists = True
 
                 # Update existing window
-                updated_windows.appendleft(
-                    self._update_window(
-                        state=state,
-                        start=start,
-                        end=end,
-                        value=aggregate(aggregation, value),
-                        timestamp=timestamp_ms,
-                        window_timestamp=max(timestamp_ms, max_timestamp),
-                    )
+                window_timestamp = max(timestamp_ms, max_timestamp)
+                window = self._update_window(
+                    state=state,
+                    start=start,
+                    end=end,
+                    value=aggregate(aggregation, value),
+                    timestamp=timestamp_ms,
+                    window_timestamp=window_timestamp,
                 )
+                if end == window_timestamp:
+                    updated_windows.appendleft(window)
 
             elif end == left_end:
                 # Backfill the right window for previous messages
@@ -328,22 +327,20 @@ class SlidingWindow(FixedTimeWindow):
                     # Right window does not already exist
                     (right_start := max_timestamp + 1) not in starts
                     # Current value belongs to the right window
-                    and (right_end := right_start + duration) >= timestamp_ms
+                    and (right_end := right_start + duration) > timestamp_ms
                     # If max_timestamp < timestamp_ms, this window becomes the left window
                     # for the current value, but previously it only served as the right window
-                    # for other values. That means the right window for its max_timestamp may
-                    # not exist yet and needs to be created.
+                    # for other values. That means that the right window for its max_timestamp
+                    # does not exist yet and needs to be created.
                     and max_timestamp < timestamp_ms
                 ):
-                    updated_windows.appendleft(
-                        self._update_window(
-                            state=state,
-                            start=right_start,
-                            end=right_end,
-                            value=aggregate(default, value),
-                            timestamp=timestamp_ms,
-                            window_timestamp=timestamp_ms,
-                        )
+                    self._update_window(
+                        state=state,
+                        start=right_start,
+                        end=right_end,
+                        value=aggregate(default, value),
+                        timestamp=timestamp_ms,
+                        window_timestamp=timestamp_ms,
                     )
 
                 # The left window already exists; updating it is sufficient
@@ -365,33 +362,20 @@ class SlidingWindow(FixedTimeWindow):
                     # Right window does not already exist
                     (right_start := max_timestamp + 1) not in starts
                     # Current value belongs to the right window
-                    and (right_end := right_start + duration) >= timestamp_ms
+                    and (right_end := right_start + duration) > timestamp_ms
                     # This is similar to right window creation when end == left_end,
                     # but since max_timestamp is lower than timestamp_ms, we check
                     # the expiration watermark instead.
                     and right_start > expiration_watermark
                 ):
-                    # At this point, windows with lower start times might already
-                    # be in updated_windows deque. To ensure order, temporarily
-                    # rotate updated_windows, append the new window to the left,
-                    # and rotate the deque back.
-                    #
-                    # Simplified example:
-                    # dq = deque([20, 21, 23])  # need to insert 22
-                    # dq.rotate(-2)  # deque([23, 20, 21])
-                    # dq.appendleft(22)  # deque([22, 23, 20, 21])
-                    # dq.rotate(2)  # deque([20, 21, 22, 23])
-                    with _rotate_windows(updated_windows, right_end) as _windows:
-                        _windows.appendleft(
-                            self._update_window(
-                                state=state,
-                                start=right_start,
-                                end=right_end,
-                                value=aggregate(default, value),
-                                timestamp=timestamp_ms,
-                                window_timestamp=timestamp_ms,
-                            )
-                        )
+                    self._update_window(
+                        state=state,
+                        start=right_start,
+                        end=right_end,
+                        value=aggregate(default, value),
+                        timestamp=timestamp_ms,
+                        window_timestamp=timestamp_ms,
+                    )
 
                 # Create a left window with existing aggregation if it falls within the window
                 if left_start > max_timestamp:
@@ -462,26 +446,3 @@ class SlidingWindow(FixedTimeWindow):
             window_timestamp_ms=window_timestamp,
         )
         return {"start": start, "end": end, "value": self._merge_func(value)}
-
-
-@contextmanager
-def _rotate_windows(
-    windows: deque[WindowResult], end: int
-) -> Generator[deque[WindowResult], None, None]:
-    """
-    A context manager that helps efficiently insert an out-of-order window
-    into an ordered deque of windows by rotating elements as needed.
-    """
-    n = 0
-    for window in windows:
-        if window["end"] < end:
-            n += 1
-        else:
-            break
-
-    if n > 0:
-        windows.rotate(-n)
-        yield windows
-        windows.rotate(n)
-    else:
-        yield windows
