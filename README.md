@@ -8,21 +8,23 @@
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-0A66C2.svg?logo=linkedin)](https://www.linkedin.com/company/70925173/)
 [![X](https://img.shields.io/twitter/url?label=X&style=social&url=https%3A%2F%2Ftwitter.com%2Fquix_io)](https://twitter.com/quix_io)
 
-# 100% Python Stream Processing for Apache Kafka
+# Open source Python framework for reliable data engineering
 
-Quix Streams is a cloud-native library for processing data in Kafka using pure Python. It’s designed to give you the power of a distributed system in a lightweight library by combining Kafka's low-level scalability and resiliency features with an easy-to-use Python interface (to ease newcomers to stream processing). 
+Quix Streams is an end-to-end framework for real-time Python data engineering, operational analytics and machine learning on Apache Kafka data streams. Extract, transform and load data reliably in fewer lines of code using your favourite Python libraries.
 
-It has the following benefits:
+Build data pipelines and event-driven microservice architectures leveraging Kafka's low-level scalability, resiliency and durability features in a lightweight library without server-side clusters to manage.
 
-- Streaming DataFrame API (similar to pandas DataFrame) for tabular data transformations.
-- Custom stateful operations via a state object.
-- Custom reducing and aggregating over tumbling and hopping time windows.
-- Exactly-once processing semantics via Kafka transactions.
-- Sources and Sinks APIs to connect external data to Kafka.
-- Pure Python with no need for a server-side engine.
+Quix Streams provides the following features to make your life easier:
+- Pure Python, meaning no wrappers around Java and no cross-language debugging.
+- Sources & Sinks API for building custom connectors that integrate data with Kafka.
+- Streaming DataFrame API for building tabular data processing pipelines.
+- Serializers API supporting JSON, Avro, Protobuf & Schema Registry.
+- State API with built-in RocksDB state object for stateful processing.
+- Application API for managing the Kafka-related setup, teardown and message lifecycle.
+- Operators for common processing tasks like Windowing, Branching, Group By and Reduce.
+- Exactly-once processing guarantees via Kafka transactions.
 
 Use Quix Streams to build simple Kafka producer/consumer applications or leverage stream processing to build complex event-driven systems, real-time data pipelines and AI/ML products.
-
 
 ## Getting Started 🏄
 
