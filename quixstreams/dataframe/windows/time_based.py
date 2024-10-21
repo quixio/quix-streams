@@ -83,7 +83,8 @@ class FixedTimeWindow:
             step_ms=self._step_ms,
         )
 
-        max_expired_window_start = state.get_latest_timestamp() - duration_ms - grace_ms
+        latest_timestamp = max(timestamp_ms, state.get_latest_timestamp())
+        max_expired_window_start = latest_timestamp - duration_ms - grace_ms
         updated_windows = []
         for start, end in ranges:
             if start <= max_expired_window_start:
@@ -109,11 +110,9 @@ class FixedTimeWindow:
                 }
             )
 
-        # `state.update_window` updates the latest timestamp, so fetch it again
-        max_start_time = state.get_latest_timestamp() - duration_ms - grace_ms
         expired_windows = []
         for (start, end), aggregated in state.expire_windows(
-            max_start_time=max_start_time
+            max_start_time=max_expired_window_start
         ):
             expired_windows.append(
                 {"start": start, "end": end, "value": self._merge_func(aggregated)}

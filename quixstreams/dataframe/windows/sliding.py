@@ -21,7 +21,8 @@ class SlidingWindow(FixedTimeWindow):
         # Sliding windows are inclusive on both ends, so values with
         # timestamps equal to latest_timestamp - duration - grace
         # are still eligible for processing.
-        expiration_max_start_time = state.get_latest_timestamp() - duration - grace - 1
+        latest_timestamp = max(timestamp_ms, state.get_latest_timestamp())
+        expiration_max_start_time = latest_timestamp - duration - grace - 1
         deletion_max_start_time = None
 
         left_start = max(0, timestamp_ms - duration)
@@ -168,8 +169,6 @@ class SlidingWindow(FixedTimeWindow):
                 )
             )
 
-        # `state.update_window` updates the latest timestamp, so fetch it again
-        expiration_max_start_time = state.get_latest_timestamp() - duration - grace - 1
         expired_windows = [
             {"start": start, "end": end, "value": self._merge_func(aggregation)}
             for (start, end), (max_timestamp, aggregation) in state.expire_windows(
