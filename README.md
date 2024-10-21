@@ -21,7 +21,7 @@ Quix Streams provides the following features to make your life easier:
 - Serializers API supporting JSON, Avro, Protobuf & Schema Registry.
 - State API with built-in RocksDB state object for stateful processing.
 - Application API for managing the Kafka-related setup, teardown and message lifecycle.
-- Operators for common processing tasks like Windowing, Branching, Merging, Group By and Reduce.
+- Operators for common processing tasks like Windowing, Branching, Group By and Reduce.
 - Exactly-once processing guarantees via Kafka transactions.
 
 Use Quix Streams to build simple Kafka producer/consumer applications or leverage stream processing to build complex event-driven systems, real-time data pipelines and AI/ML products.
