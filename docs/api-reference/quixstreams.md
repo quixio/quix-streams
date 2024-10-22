@@ -3182,6 +3182,127 @@ Default - `json.dumps`.
 
 This module contains Sinks developed and maintained by the members of Quix Streams community.
 
+<a id="quixstreams.sinks.community.iceberg"></a>
+
+## quixstreams.sinks.community.iceberg
+
+<a id="quixstreams.sinks.community.iceberg.AWSIcebergConfig"></a>
+
+### AWSIcebergConfig
+
+```python
+class AWSIcebergConfig(BaseIcebergConfig)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/iceberg.py#L42)
+
+<a id="quixstreams.sinks.community.iceberg.AWSIcebergConfig.__init__"></a>
+
+#### AWSIcebergConfig.\_\_init\_\_
+
+```python
+def __init__(aws_s3_uri: str,
+             aws_region: Optional[str] = None,
+             aws_access_key_id: Optional[str] = None,
+             aws_secret_access_key: Optional[str] = None,
+             aws_session_token: Optional[str] = None)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/iceberg.py#L43)
+
+Configure IcebergSink to work with AWS Glue.
+
+**Arguments**:
+
+- `aws_s3_uri`: The S3 URI where the table data will be stored
+(e.g., 's3://your-bucket/warehouse/').
+- `aws_region`: The AWS region for the S3 bucket and Glue catalog.
+- `aws_access_key_id`: the AWS access key ID.
+NOTE: can alternatively set the AWS_ACCESS_KEY_ID environment variable
+when using AWS Glue.
+- `aws_secret_access_key`: the AWS secret access key.
+NOTE: can alternatively set the AWS_SECRET_ACCESS_KEY environment variable
+when using AWS Glue.
+- `aws_session_token`: a session token (or will be generated for you).
+NOTE: can alternatively set the AWS_SESSION_TOKEN environment variable when
+using AWS Glue.
+
+<a id="quixstreams.sinks.community.iceberg.IcebergSink"></a>
+
+### IcebergSink
+
+```python
+class IcebergSink(BatchingSink)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/iceberg.py#L76)
+
+IcebergSink writes batches of data to an Apache Iceberg table.
+
+The data will by default include the kafka message key, value, and timestamp.
+
+It serializes incoming data batches into Parquet format and appends them to the
+Iceberg table, updating the table schema as necessary.
+
+Currently, supports Apache Iceberg hosted in:
+
+- AWS
+
+Supported data catalogs:
+
+- AWS Glue
+
+**Arguments**:
+
+- `table_name`: The name of the Iceberg table.
+- `config`: An IcebergConfig with all the various connection parameters.
+- `data_catalog_spec`: data cataloger to use (ex. for AWS Glue, "aws_glue").
+- `schema`: The Iceberg table schema. If None, a default schema is used.
+- `partition_spec`: The partition specification for the table.
+If None, a default is used.
+
+Example setup using an AWS-hosted Iceberg with AWS Glue:
+
+```
+from quixstreams.sinks.community.iceberg import IcebergSink, IcebergAWSConfig
+
+iceberg_config = IcebergAWSConfig(
+    aws_s3_uri="", aws_region="", aws_access_key_id="", aws_secret_access_key=""
+)
+
+iceberg_sink = IcebergSink(
+    table_name="glue.sink-test",
+    config=iceberg_config,
+    data_catalog_spec="aws_glue",
+)
+
+app = Application(broker_address='localhost:9092', auto_offset_reset="earliest")
+topic = app.topic('sink_topic')
+sdf = app.dataframe(topic=topic).print(metadata=True)
+sdf.sink(iceberg_sink)
+
+if __name__ == "__main__":
+    app.run()
+```
+
+<a id="quixstreams.sinks.community.iceberg.IcebergSink.write"></a>
+
+#### IcebergSink.write
+
+```python
+def write(batch: SinkBatch)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/iceberg.py#L165)
+
+Writes a batch of data to the Iceberg table.
+
+Implements retry logic to handle concurrent write conflicts.
+
+**Arguments**:
+
+- `batch`: The batch of data to write.
+
 <a id="quixstreams.sinks.base.sink"></a>
 
 ## quixstreams.sinks.base.sink
