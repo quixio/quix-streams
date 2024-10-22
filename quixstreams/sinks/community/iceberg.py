@@ -24,7 +24,7 @@ except ImportError as exc:
         f'run "pip install quixstreams[iceberg]" to use IcebergSink'
     ) from exc
 
-__all__ = ("IcebergSink", "IcebergAWSConfig")
+__all__ = ("IcebergSink", "AWSIcebergConfig")
 
 logger = logging.getLogger(__name__)
 
@@ -34,12 +34,12 @@ _SUPPORTED_DATA_CATALOG_SPECS = get_args(DataCatalogSpec)
 
 
 @dataclass
-class IcebergConfig:
+class BaseIcebergConfig:
     location: str
     auth: dict
 
 
-class IcebergAWSConfig(IcebergConfig):
+class AWSIcebergConfig(BaseIcebergConfig):
     def __init__(
         self,
         aws_s3_uri: str,
@@ -49,6 +49,8 @@ class IcebergAWSConfig(IcebergConfig):
         aws_session_token: Optional[str] = None,
     ):
         """
+        Configure IcebergSink to work with AWS Glue.
+
         :param aws_s3_uri: The S3 URI where the table data will be stored
             (e.g., 's3://your-bucket/warehouse/').
         :param aws_region: The AWS region for the S3 bucket and Glue catalog.
@@ -124,7 +126,7 @@ class IcebergSink(BatchingSink):
     def __init__(
         self,
         table_name: str,
-        config: IcebergConfig,
+        config: BaseIcebergConfig,
         data_catalog_spec: DataCatalogSpec,
         schema: Optional[Schema] = None,
         partition_spec: Optional[PartitionSpec] = None,
