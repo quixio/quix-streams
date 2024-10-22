@@ -17,7 +17,7 @@ try:
     from pyiceberg.partitioning import PartitionSpec, PartitionField
     from pyiceberg.schema import Schema, NestedField
     from pyiceberg.types import StringType, TimestampType
-    from pyiceberg.exceptions import CommitFailedException  # Import the exception
+    from pyiceberg.exceptions import CommitFailedException
 except ImportError as exc:
     raise ImportError(
         f"Package {exc.name} is missing: "
@@ -101,12 +101,15 @@ class IcebergSink(BatchingSink):
     Example setup using an AWS-hosted Iceberg with AWS Glue:
 
     ```
-    from quixstreams.sinks.community.iceberg import IcebergSink, IcebergAWSConfig
+    from quixstreams import Application
+    from quixstreams.sinks.community.iceberg import IcebergSink, AWSIcebergConfig
 
-    iceberg_config = IcebergAWSConfig(
+    # Configure S3 bucket credentials
+    iceberg_config = AWSIcebergConfig(
         aws_s3_uri="", aws_region="", aws_access_key_id="", aws_secret_access_key=""
     )
 
+    # Configure the sink to write data to S3 with the AWS Glue catalog spec
     iceberg_sink = IcebergSink(
         table_name="glue.sink-test",
         config=iceberg_config,
@@ -115,10 +118,16 @@ class IcebergSink(BatchingSink):
 
     app = Application(broker_address='localhost:9092', auto_offset_reset="earliest")
     topic = app.topic('sink_topic')
+
+    # Do some processing here
     sdf = app.dataframe(topic=topic).print(metadata=True)
+
+    # Sink results to the IcebergSink
     sdf.sink(iceberg_sink)
 
+
     if __name__ == "__main__":
+        # Start the application
         app.run()
     ```
     """
