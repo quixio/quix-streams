@@ -114,7 +114,7 @@ doc_map = {
     "sinks.md": {
         k: None
         for k in [
-            "quixstreams.sinks.core.community.iceberg",
+            "quixstreams.sinks.community.iceberg",
             "quixstreams.sinks.core.influxdb3",
             "quixstreams.sinks.core.csv",
             "quixstreams.sinks.base.sink",
