@@ -49,6 +49,7 @@ nav:
   - 'Connectors [beta]':
     -  Sinks:
         - 'connectors/sinks/README.md'
+        - Apache Iceberg Sink: connectors/sinks/apache-iceberg-sink.md
         - CSV Sink: connectors/sinks/csv-sink.md
         - InfluxDB v3 Sink: connectors/sinks/influxdb3-sink.md
         - Creating a Custom Sink: connectors/sinks/custom-sinks.md
