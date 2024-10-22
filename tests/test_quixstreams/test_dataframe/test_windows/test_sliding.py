@@ -1,16 +1,217 @@
-from collections import namedtuple
 from contextlib import contextmanager
+from dataclasses import dataclass, field
+from typing import Any
 
 import pytest
 
 from quixstreams.dataframe.windows import SlidingWindowDefinition
 
-Message = namedtuple("Message", ["timestamp", "value", "updated", "expired", "deleted"])
-
 A, B, C, D, E, F, G, H, I = "A", "B", "C", "D", "E", "F", "G", "H", "I"
+
+
+@dataclass
+class Message:
+    """
+    Represents an incoming message with its timestamp and value. It also tracks
+    the expected state of sliding windows after the message is processed.
+    """
+
+    timestamp: int
+    value: str
+
+    # Windows that will be emitted via .current()
+    updated: list[dict[str, Any]] = field(default_factory=list)
+
+    # Windows that will be emitted via .final()
+    expired: list[dict[str, Any]] = field(default_factory=list)
+
+    # Windows that should no longer be in state.
+    deleted: list[dict[str, Any]] = field(default_factory=list)
+
 
 #      0        10        20        30        40        50        60
 # -----|---------|---------|---------|---------|---------|---------|--->
+# Duration: 10
+# Grace: 15
+# ______________________________________________________________________
+# A 23                        A
+#                   |---------|
+#                   13       23
+# ______________________________________________________________________
+# B 12             B
+#        |---------|
+#        2        12
+# ______________________________________________________________________
+# Message B arrives and finds that the right window (13, 23) already exists.
+# It will neither be created nor updated. Message B will only create a left
+# window for itself.
+RIGHT_WINDOW_EXISTS = [
+    Message(
+        timestamp=23,
+        value=A,
+        updated=[{"start": 13, "end": 23, "value": [A]}],  # left A
+    ),
+    Message(
+        timestamp=12,
+        value=B,
+        updated=[{"start": 2, "end": 12, "value": [B]}],  # left B
+    ),
+]
+
+#      0        10        20        30        40        50        60
+# -----|---------|---------|---------|---------|---------|---------|--->
+# Duration: 10
+# Grace: 15
+# ______________________________________________________________________
+# A 23                        A
+#                   |---------|
+#                   13       23
+# ______________________________________________________________________
+# B 20                     B
+#                |---------||---------|
+#                10      20  21      31
+# ______________________________________________________________________
+# Late message B arrives:
+# * The right window (21, 31) must be created because it is not empty.
+# * The left window of A (13, 23) must be updated with the new message.
+# * The left window for B (10, 20) must be created.
+RIGHT_WINDOW_CREATED = [
+    Message(
+        timestamp=23,
+        value=A,
+        updated=[{"start": 13, "end": 23, "value": [A]}],  # left A
+    ),
+    Message(
+        timestamp=20,
+        value=B,
+        updated=[
+            {"start": 10, "end": 20, "value": [B]},  # left B
+            {"start": 13, "end": 23, "value": [A, B]},  # left A
+        ],
+    ),
+]
+
+#      0        10        20        30        40        50        60
+# -----|---------|---------|---------|---------|---------|---------|--->
+# Duration: 10
+# Grace: 15
+# ______________________________________________________________________
+# A 23                        A
+#                   |---------|
+#                   13       23
+# ______________________________________________________________________
+# B 20                     B
+#                |---------||---------|
+#                10      20  21      31
+# ______________________________________________________________________
+# B 27                         |---------|
+#                              24       34
+#                                 C
+#                       |---------|
+#                       17       27
+# ______________________________________________________________________
+# Message C arrives after late message B. The right window (21, 31)
+# is updated but not emitted.
+RIGHT_WINDOW_UPDATED = [
+    Message(
+        timestamp=23,
+        value=A,
+        updated=[{"start": 13, "end": 23, "value": [A]}],  # left A
+    ),
+    Message(
+        timestamp=20,
+        value=B,
+        updated=[
+            {"start": 10, "end": 20, "value": [B]},  # left B
+            {"start": 13, "end": 23, "value": [A, B]},  # left A
+        ],
+    ),
+    Message(
+        timestamp=27,
+        value=C,
+        updated=[{"start": 17, "end": 27, "value": [A, B, C]}],  # left C
+    ),
+]
+
+#      0        10        20        30        40        50        60
+# -----|---------|---------|---------|---------|---------|---------|--->
+# Duration: 10
+# Grace: 15
+# ______________________________________________________________________
+# A 17                  A
+#             |---------|
+#             7        17
+# ______________________________________________________________________
+# B 17                  B
+# ______________________________________________________________________
+# The left window (7, 17) already exists, and it will be updated.
+# No right window will be created.
+LEFT_WINDOW_EXISTS = [
+    Message(
+        timestamp=17,
+        value=A,
+        updated=[{"start": 7, "end": 17, "value": [A]}],  # left A
+    ),
+    Message(
+        timestamp=17,
+        value=B,
+        updated=[{"start": 7, "end": 17, "value": [A, B]}],  # left A, B
+    ),
+]
+
+#      0        10        20        30        40        50        60
+# -----|---------|---------|---------|---------|---------|---------|--->
+# Duration: 10
+# Grace: 15
+# ______________________________________________________________________
+# A 23                        A
+#                   |---------|
+#                   13       23
+# ______________________________________________________________________
+# B 20
+#                          B
+#                |---------||---------|
+#                10      20  21      31
+# ______________________________________________________________________
+# C 31                         |---------|
+#                              24       34
+#                                     C
+# ______________________________________________________________________
+# D 31                                D
+# Message C arrives after late message B:
+# * A new right window for message A (24, 34) must be created.
+# * The right window (21, 31) becomes the left window of C and gets emitted.
+# When message D arrives, it finds no windows to create.
+RIGHT_WINDOW_BECOMES_LEFT_WINDOW = [
+    Message(
+        timestamp=23,
+        value=A,
+        updated=[{"start": 13, "end": 23, "value": [A]}],  # left A
+    ),
+    Message(
+        timestamp=20,
+        value=B,
+        updated=[
+            {"start": 10, "end": 20, "value": [B]},  # left B
+            {"start": 13, "end": 23, "value": [A, B]},  # left A
+        ],
+    ),
+    Message(
+        timestamp=31,
+        value=C,
+        updated=[{"start": 21, "end": 31, "value": [A, C]}],  # left C
+    ),
+    Message(
+        timestamp=31,
+        value=D,
+        updated=[{"start": 21, "end": 31, "value": [A, C, D]}],  # left C, D
+    ),
+]
+
+#      0        10        20        30        40        50        60
+# -----|---------|---------|---------|---------|---------|---------|--->
+# Duration: 10
+# Grace: 15
 # ______________________________________________________________________
 # A 11            A
 #       |---------|
@@ -22,297 +223,126 @@ A, B, C, D, E, F, G, H, I = "A", "B", "C", "D", "E", "F", "G", "H", "I"
 #               |---------|
 #               9        19
 # ______________________________________________________________________
-# C 16                 C
-#            |---------||---------|
-#            6       16  17      27
-# ______________________________________________________________________
-# D 27                     |---------|
-#                          20       30
-#                                 D
-# ______________________________________________________________________
-# E 22                       E
-#                             |---------|
-#                             23       33
-# ______________________________________________________________________
-# F 25                          F
-#                     |---------||---------|
-#                     15      25  26      36
-# ______________________________________________________________________
-# G 27                            G
-# ______________________________________________________________________
-# H 38                                       H
-#                                  |---------|
-#                                  28       38
-# ______________________________________________________________________
-# I 54                                                        I
-#                                                   |---------|
-#                                                   44       54
-BASIC_CASE = [
+# Right windows do not need to be created in advance. The window (12, 22)
+# will be created only after message B arrives. Additionally:
+# * The left window (9, 19) will aggregate with window (1, 11).
+# * The right window (12, 22) will not be emitted.
+RIGHT_WINDOW_FOR_PREVIOUS_MESSAGE_CREATED = [
     Message(
         timestamp=11,
         value=A,
-        updated=[
-            {"start": 1, "end": 11, "value": [A]},  # left A
-        ],
-        expired=[],
-        deleted=[],
+        updated=[{"start": 1, "end": 11, "value": [A]}],  # left A
     ),
     Message(
         timestamp=19,
         value=B,
-        updated=[
-            {"start": 9, "end": 19, "value": [A, B]},  # left B
-            # {"start": 12, "end": 22, "value": [B]},  # right A
-        ],
-        expired=[
-            {"start": 1, "end": 11, "value": [A]},  # left A
-        ],
-        deleted=[],
+        updated=[{"start": 9, "end": 19, "value": [A, B]}],  # left B
     ),
+]
+
+#      0        10        20        30        40        50        60
+# -----|---------|---------|---------|---------|---------|---------|--->
+# Duration: 10
+# Grace: 0
+# ______________________________________________________________________
+# A 16                 A
+#            |---------|
+#            6        16
+# ______________________________________________________________________
+# B 24                  |---------|
+#                       17       27
+#                              B
+#                    |---------|
+#                    14       24
+#                   ^ 13  expiration watermark = 24 - 10 - 0 - 1
+#           ^ 5  deletion watermark = min(5, 13)
+# ______________________________________________________________________
+# C 25                          |---------|
+#                               25       35
+#                               C
+#                     |---------|
+#                     15       25
+#                    ^ 14  expiration watermark = 25 - 10 - 0 - 1
+#                   ^ 13  deletion watermark = min(13, 14)
+# ______________________________________________________________________
+# For message C, the aggregation from window (14, 24) was used. Since we will
+# not revisit lower windows, the deletion watermark can be set dynamically higher
+# than the default expiration watermark minus the window duration. In this case,
+# with a grace period of 0, the deletion watermark is set to the start of window
+# (14, 24) minus one.
+DELETION_WATERMARK_SET_BELOW_LAST_ITERATED_WINDOW = [
     Message(
         timestamp=16,
-        value=C,
-        updated=[
-            {"start": 6, "end": 16, "value": [A, C]},  # left C
-            {"start": 9, "end": 19, "value": [A, B, C]},  # left B
-            # {"start": 12, "end": 22, "value": [B, C]},  # right A
-            # {"start": 17, "end": 27, "value": [B]},  # right C
-        ],
-        expired=[],
-        deleted=[],
-    ),
-    Message(
-        timestamp=27,
-        value=D,
-        updated=[
-            {"start": 17, "end": 27, "value": [B, D]},  # right C / left D
-            # {"start": 20, "end": 30, "value": [D]},  # right B
-        ],
-        expired=[
-            {"start": 6, "end": 16, "value": [A, C]},  # left C
-            {"start": 9, "end": 19, "value": [A, B, C]},  # left B
-        ],
-        deleted=[
-            {"start": 1, "end": 11, "value": [A]},  # left A
-        ],
-    ),
-    Message(
-        timestamp=22,
-        value=E,
-        updated=[
-            {"start": 12, "end": 22, "value": [B, C, E]},  # right A / left E
-            {"start": 17, "end": 27, "value": [B, D, E]},  # right C / left D
-            # {"start": 20, "end": 30, "value": [D, E]},  # right B
-            # {"start": 23, "end": 33, "value": [D]},  # right E
-        ],
-        expired=[],
-        deleted=[],
-    ),
-    Message(
-        timestamp=25,
-        value=F,
-        updated=[
-            {"start": 15, "end": 25, "value": [B, C, E, F]},  # left F
-            {"start": 17, "end": 27, "value": [B, D, E, F]},  # right C / left D
-            # {"start": 20, "end": 30, "value": [D, E, F]},  # right B
-            # {"start": 23, "end": 33, "value": [D, F]},  # right E
-            # {"start": 26, "end": 36, "value": [D]},  # right F
-        ],
-        expired=[],
-        deleted=[],
-    ),
-    Message(
-        timestamp=27,
-        value=G,
-        updated=[
-            {"start": 17, "end": 27, "value": [B, D, E, F, G]},  # right C / left D, G
-            # {"start": 20, "end": 30, "value": [D, E, F, G]},  # right B
-            # {"start": 23, "end": 33, "value": [D, F, G]},  # right E
-            # {"start": 26, "end": 36, "value": [D, G]},  # right F
-        ],
-        expired=[],
-        deleted=[],
-    ),
-    Message(
-        timestamp=38,
-        value=H,
-        updated=[
-            {"start": 28, "end": 38, "value": [H]},  # left H
-        ],
-        expired=[
-            {"start": 12, "end": 22, "value": [B, C, E]},  # right A / left E
-            {"start": 15, "end": 25, "value": [B, C, E, F]},  # left F
-            {"start": 17, "end": 27, "value": [B, D, E, F, G]},  # right C / left D
-            # {"start": 20, "end": 30, "value": [D, E, F, G]},  # right B
-        ],
-        deleted=[
-            {"start": 6, "end": 16, "value": [A, C]},  # left C
-            {"start": 9, "end": 19, "value": [A, B, C]},  # left B
-        ],
-    ),
-    Message(
-        timestamp=54,
-        value=I,
-        updated=[
-            {"start": 44, "end": 54, "value": [I]},  # left I
-        ],
-        expired=[
-            # {"start": 23, "end": 33, "value": [D, F, G]},  # right E
-            # {"start": 26, "end": 36, "value": [D, G]},  # right F
-            {"start": 28, "end": 38, "value": [H]},  # left H
-        ],
-        deleted=[
-            {"start": 12, "end": 22, "value": [B, C, E]},  # right A / left E
-            {"start": 15, "end": 25, "value": [B, C, E, F]},  # left F
-            {"start": 17, "end": 27, "value": [B, D, E, F, G]},  # right C / left D
-            {"start": 20, "end": 30, "value": [D, E, F, G]},  # right B
-            {"start": 23, "end": 33, "value": [D, F, G]},  # right E
-            {"start": 26, "end": 36, "value": [D, G]},  # right F
-        ],
-    ),
-]
-
-#      0        10        20        30        40        50        60
-# -----|---------|---------|---------|---------|---------|---------|--->
-# ______________________________________________________________________
-# A 11            A
-#       |---------|
-#       1        11
-# ______________________________________________________________________
-# B 13             |---------|
-#                  12       22
-#                   B
-#         |---------|
-#         3        13
-# ______________________________________________________________________
-# C 11            C
-RIGHT_WINDOW_EXISTS = [
-    Message(
-        timestamp=11,
         value=A,
-        updated=[
-            {"start": 1, "end": 11, "value": [A]},  # left A
-        ],
-        expired=[],
-        deleted=[],
-    ),
-    Message(
-        timestamp=13,
-        value=B,
-        updated=[
-            {"start": 3, "end": 13, "value": [A, B]},  # left B
-            # {"start": 12, "end": 22, "value": [B]},  # right A
-        ],
-        expired=[],
-        deleted=[],
-    ),
-    Message(
-        timestamp=11,
-        value=C,
-        updated=[
-            {"start": 1, "end": 11, "value": [A, C]},  # left A
-            {"start": 3, "end": 13, "value": [A, B, C]},  # left B
-        ],
-        expired=[],
-        deleted=[],
-    ),
-]
-
-#      0        10        20        30        40        50        60
-# -----|---------|---------|---------|---------|---------|---------|--->
-# ______________________________________________________________________
-# A 11            A
-#       |---------|
-#       1        11
-# ______________________________________________________________________
-# B 23                        B
-#                   |---------|
-#                   13       23
-# ______________________________________________________________________
-# C 19             |---------|
-#                  12       22
-#                         C
-#               |---------||---------|
-#               9       19  20      30
-# ______________________________________________________________________
-# D 29                         |---------|
-#                              24       34
-#                                   D
-#                         |---------|
-#                         19       29
-# ______________________________________________________________________
-# E 24                         E
-#                    |---------||---------|
-#                    14      24  25      35
-DELETION_WATERMARK = [
-    Message(
-        timestamp=11,
-        value=A,
-        updated=[
-            {"start": 1, "end": 11, "value": [A]},  # left A
-        ],
-        expired=[],
-        deleted=[],
-    ),
-    Message(
-        timestamp=23,
-        value=B,
-        updated=[
-            {"start": 13, "end": 23, "value": [B]},  # left B
-        ],
-        expired=[
-            {"start": 1, "end": 11, "value": [A]},  # left A
-        ],
-        deleted=[],
-    ),
-    Message(
-        timestamp=19,
-        value=C,
-        updated=[
-            {"start": 9, "end": 19, "value": [A, C]},  # left C
-            # {"start": 12, "end": 22, "value": [C]},  # right A
-            {"start": 13, "end": 23, "value": [B, C]},  # left B
-            # {"start": 20, "end": 30, "value": [B]},  # right C
-        ],
-        expired=[],
-        deleted=[],
-    ),
-    Message(
-        timestamp=29,
-        value=D,
-        updated=[
-            {"start": 19, "end": 29, "value": [B, C, D]},  # left D
-            # {"start": 20, "end": 30, "value": [B, D]},  # right C
-            # {"start": 24, "end": 34, "value": [D]},  # right B
-        ],
-        expired=[
-            {"start": 9, "end": 19, "value": [A, C]},  # left C
-            # {"start": 12, "end": 22, "value": [C]},  # right A
-            {"start": 13, "end": 23, "value": [B, C]},  # left B
-        ],
-        deleted=[
-            {"start": 1, "end": 11, "value": [A]},  # left A
-            {"start": 9, "end": 19, "value": [A, C]},  # left C
-            {"start": 12, "end": 22, "value": [C]},  # right A
-        ],
+        updated=[{"start": 6, "end": 16, "value": [A]}],  # left A
     ),
     Message(
         timestamp=24,
-        value=E,
-        updated=[
-            {"start": 14, "end": 24, "value": [B, C, E]},  # left E
-            {"start": 19, "end": 29, "value": [B, C, D, E]},  # left D
-            # {"start": 20, "end": 30, "value": [B, D, E]},  # right C
-            # {"start": 24, "end": 34, "value": [D, E]},  # right B
-            # {"start": 25, "end": 35, "value": [D]},  # right E
-        ],
-        expired=[],
-        deleted=[],
+        value=B,
+        updated=[{"start": 14, "end": 24, "value": [A, B]}],  # left B
+        expired=[{"start": 6, "end": 16, "value": [A]}],  # left A
+    ),
+    Message(
+        timestamp=25,
+        value=C,
+        updated=[{"start": 15, "end": 25, "value": [A, B, C]}],  # left C
+        expired=[{"start": 14, "end": 24, "value": [A, B]}],  # left B
+        deleted=[{"start": 6, "end": 16, "value": [A]}],  # left A
     ),
 ]
 
 #      0        10        20        30        40        50        60
 # -----|---------|---------|---------|---------|---------|---------|--->
+# Duration: 10
+# Grace: 0
+# ______________________________________________________________________
+# A 16                 A
+#            |---------|
+#            6        16
+# ______________________________________________________________________
+# B 24                  |---------|
+#                       17       27
+#                              B
+#                    |---------|
+#                    14       24
+#                 ^ 11  expiration watermark = 24 - 10 - 2 - 1
+#           ^ 5  deletion watermark = min(5, 11)
+# ______________________________________________________________________
+# C 25                          |---------|
+#                               25       35
+#                               C
+#                     |---------|
+#                     15       25
+#                  ^ 12  expiration watermark = 25 - 10 - 2 - 1
+#                  ^ 12  deletion watermark = min(13, 12)
+# ______________________________________________________________________
+# For message C, the aggregation from window (14, 24) was used. Since we will
+# not revisit lower windows, the deletion watermark is dynamically set higher.
+# In this case, with a grace period of 2, the deletion watermark is set to the
+# expiration watermark, so window (14, 24) will not be deleted.
+DELETION_WATERMARK_SET_TO_EXPIRATION_WATERMARK = [
+    Message(
+        timestamp=16,
+        value=A,
+        updated=[{"start": 6, "end": 16, "value": [A]}],  # left A
+    ),
+    Message(
+        timestamp=24,
+        value=B,
+        updated=[{"start": 14, "end": 24, "value": [A, B]}],  # left B
+        expired=[{"start": 6, "end": 16, "value": [A]}],  # left A
+    ),
+    Message(
+        timestamp=25,
+        value=C,
+        updated=[{"start": 15, "end": 25, "value": [A, B, C]}],  # left C
+    ),
+]
+
+#      0        10        20        30        40        50        60
+# -----|---------|---------|---------|---------|---------|---------|--->
+# Duration: 10
+# Grace: 15
 # ______________________________________________________________________
 # A 11            A
 #       |---------|
@@ -323,32 +353,26 @@ DELETION_WATERMARK = [
 #                           B
 #                 |---------|
 #                 11       21
-AGG_FROM_MIN_ELIGIBLE_WINDOW = [
+# ______________________________________________________________________
+# Window (1, 11) overlaps with window (11, 21). It is the lowest possible
+# window to provide aggregation to combine with message B.
+AGGREGATION_FROM_MIN_ELIGIBLE_WINDOW = [
     Message(
         timestamp=11,
         value=A,
-        updated=[
-            {"start": 1, "end": 11, "value": [A]},  # left A
-        ],
-        expired=[],
-        deleted=[],
+        updated=[{"start": 1, "end": 11, "value": [A]}],  # left A
     ),
     Message(
         timestamp=21,
         value=B,
-        updated=[
-            {"start": 11, "end": 21, "value": [A, B]},  # left B
-            # {"start": 12, "end": 22, "value": [B]},  # right A
-        ],
-        expired=[
-            {"start": 1, "end": 11, "value": [A]},  # left A
-        ],
-        deleted=[],
+        updated=[{"start": 11, "end": 21, "value": [A, B]}],  # left B
     ),
 ]
 
 #      0        10        20        30        40        50        60
 # -----|---------|---------|---------|---------|---------|---------|--->
+# Duration: 10
+# Grace: 15
 # ______________________________________________________________________
 # A 11            A
 #       |---------|
@@ -357,47 +381,33 @@ AGG_FROM_MIN_ELIGIBLE_WINDOW = [
 # B 22                       B
 #                  |---------|
 #                  12       22
-AGG_NOT_FOUND = [
+# ______________________________________________________________________
+# Window (1, 11) does not overlap with window (12, 22). Message B will
+# be the only message in window (12, 22).
+AGGREGATION_NOT_FOUND = [
     Message(
         timestamp=11,
         value=A,
-        updated=[
-            {"start": 1, "end": 11, "value": [A]},  # left A
-        ],
-        expired=[],
-        deleted=[],
+        updated=[{"start": 1, "end": 11, "value": [A]}],  # left A
     ),
     Message(
         timestamp=22,
         value=B,
-        updated=[
-            {"start": 12, "end": 22, "value": [B]},  # left B
-        ],
-        expired=[
-            {"start": 1, "end": 11, "value": [A]},  # left A
-        ],
-        deleted=[],
+        updated=[{"start": 12, "end": 22, "value": [B]}],  # left B
     ),
 ]
 
 #      0        10        20        30        40        50        60
 # -----|---------|---------|---------|---------|---------|---------|--->
+# Duration: 10
+# Grace: 15
 # ______________________________________________________________________
 # A 3     A
 #      |--|
 #      0  3
 # ______________________________________________________________________
-# B 5      |---------|
-#          4        14
-#           B
-#      |----|
-#      0    5
-# ______________________________________________________________________
-# C 4       |---------|
-#           5        15
-#          C
-#      |---|
-#      0   4
+# If the event times start from 0, prevent window start times from
+# going into negative values.
 PREVENT_NEGATIVE_START_TIME = [
     Message(
         timestamp=3,
@@ -405,30 +415,147 @@ PREVENT_NEGATIVE_START_TIME = [
         updated=[
             {"start": 0, "end": 3, "value": [A]},  # left A
         ],
-        expired=[],
-        deleted=[],
+    ),
+]
+
+#      0        10        20        30        40        50        60
+# -----|---------|---------|---------|---------|---------|---------|--->
+# Duration: 10
+# Grace: 15
+# ______________________________________________________________________
+# A 29                              A
+#                         |---------|
+#                         19       29
+# ______________________________________________________________________
+# B 26                           B
+#                      |---------||---------|
+#                      16      26  27      37
+# ______________________________________________________________________
+# C 41                                          C
+#                                     |---------|
+#                                     31       41
+# ______________________________________________________________________
+# When message C arrives, it finds the overlapping window (27, 37),
+# but the maximum timestamp in that window is from message A, which is 29.
+# Since 29 falls outside of C's left window (31, 41), C will be the only
+# message in its own window.
+DEFAULT_AGGREGATION_USED = [
+    Message(
+        timestamp=29,
+        value=A,
+        updated=[{"start": 19, "end": 29, "value": [A]}],  # left A
     ),
     Message(
-        timestamp=5,
+        timestamp=26,
         value=B,
         updated=[
-            {"start": 0, "end": 5, "value": [A, B]},  # left B
-            # {"start": 4, "end": 14, "value": [B]},  # right A
+            {"start": 16, "end": 26, "value": [B]},  # left B
+            {"start": 19, "end": 29, "value": [A, B]},  # left A
         ],
-        expired=[],
-        deleted=[],
     ),
     Message(
-        timestamp=4,
+        timestamp=41,
+        value=C,
+        updated=[{"start": 31, "end": 41, "value": [C]}],  # left C
+    ),
+]
+
+#      0        10        20        30        40        50        60
+# -----|---------|---------|---------|---------|---------|---------|--->
+# Duration: 10
+# Grace: 0
+# ______________________________________________________________________
+# A 22                       A
+#                  |---------|
+#                  12        22
+# ______________________________________________________________________
+# B 23                        |---------|
+#                             23       33
+#                             B
+#                   |---------|
+#                   13       23
+#                  ^ 12  expiration watermark = 23 - 10 - 0 - 1
+# ______________________________________________________________________
+# C 22                       C
+#                  ^ 12  expiration watermark = 23 - 10 - 0 - 1
+# ______________________________________________________________________
+# When message B arrives, window (12, 22) no longer accepts messages,
+# it may be closed. Message C will not update window (12, 22).
+EXPIRATION_WITHOUT_GRACE = [
+    Message(
+        timestamp=22,
+        value=A,
+        updated=[{"start": 12, "end": 22, "value": [A]}],  # left A
+    ),
+    Message(
+        timestamp=23,
+        value=B,
+        updated=[{"start": 13, "end": 23, "value": [A, B]}],  # left B
+        expired=[{"start": 12, "end": 22, "value": [A]}],  # left A
+    ),
+    Message(
+        timestamp=22,
+        value=C,
+        updated=[{"start": 13, "end": 23, "value": [A, B, C]}],  # left B
+    ),
+]
+
+#      0        10        20        30        40        50        60
+# -----|---------|---------|---------|---------|---------|---------|--->
+# Duration: 10
+# Grace: 3
+# ______________________________________________________________________
+# A 22                       A
+#                  |---------|
+#                  12       22
+# ______________________________________________________________________
+# B 23                        |---------|
+#                             23       33
+#                             B
+#                   |---------|
+#                   13       23
+#               ^ 9  expiration watermark = 23 - 10 - 3 - 1
+# ______________________________________________________________________
+# C 17                  C
+#                        |---------|
+#                        18       28
+#               ^ 9  expiration watermark = 23 - 10 - 3 - 1
+# ______________________________________________________________________
+# D 26                         |---------|
+#                              24       34
+#                                D
+#                      |---------|
+#                      16       26
+#                  ^ 12  expiration watermark = 26 - 10 - 3 - 1
+# ______________________________________________________________________
+# Window (12, 22) is expired by a message D arriving at 26.
+# Note: left window for message C (7, 17) will not be created
+# because its start time is behind the expiration watermark
+EXPIRATION_WITH_GRACE = [
+    Message(
+        timestamp=22,
+        value=A,
+        updated=[{"start": 12, "end": 22, "value": [A]}],  # left A
+    ),
+    Message(
+        timestamp=23,
+        value=B,
+        updated=[{"start": 13, "end": 23, "value": [A, B]}],  # left B
+    ),
+    Message(
+        timestamp=17,
         value=C,
         updated=[
-            {"start": 0, "end": 4, "value": [A, C]},  # left C
-            {"start": 0, "end": 5, "value": [A, B, C]},  # left B
-            # {"start": 4, "end": 14, "value": [B, C]},  # right A
-            # {"start": 5, "end": 15, "value": [B]},  # right C
+            {"start": 12, "end": 22, "value": [A, C]},  # left A
+            {"start": 13, "end": 23, "value": [A, B, C]},  # left B
         ],
-        expired=[],
-        deleted=[],
+    ),
+    Message(
+        timestamp=26,
+        value=D,
+        updated=[{"start": 16, "end": 26, "value": [A, B, C, D]}],  # left D
+        expired=[{"start": 12, "end": 22, "value": [A, C]}],  # left A
+        deleted=[{"start": 12, "end": 22, "value": [A, C]}],  # left A
     ),
 ]
 
@@ -482,16 +609,47 @@ def state_factory(state_manager):
 @pytest.mark.parametrize(
     "duration_ms, grace_ms, messages",
     [
-        pytest.param(10, 5, BASIC_CASE, id="basic-case"),
-        pytest.param(10, 5, RIGHT_WINDOW_EXISTS, id="right-window-exists"),
-        pytest.param(10, 5, DELETION_WATERMARK, id="deletion-watermark"),
+        pytest.param(10, 15, RIGHT_WINDOW_EXISTS, id="right-window-exists"),
+        pytest.param(10, 15, RIGHT_WINDOW_CREATED, id="right-window-created"),
+        pytest.param(10, 15, RIGHT_WINDOW_UPDATED, id="right-window-updated"),
+        pytest.param(10, 15, LEFT_WINDOW_EXISTS, id="left-window-exists"),
         pytest.param(
-            10, 5, AGG_FROM_MIN_ELIGIBLE_WINDOW, id="agg-from-min-eligible-window"
+            10,
+            15,
+            RIGHT_WINDOW_BECOMES_LEFT_WINDOW,
+            id="right-window-becomes-left-window",
         ),
-        pytest.param(10, 5, AGG_NOT_FOUND, id="agg-not-found"),
         pytest.param(
-            10, 5, PREVENT_NEGATIVE_START_TIME, id="prevent-negative-start-time"
+            10,
+            15,
+            RIGHT_WINDOW_FOR_PREVIOUS_MESSAGE_CREATED,
+            id="right-window-for-revious-message-created",
         ),
+        pytest.param(
+            10,
+            0,
+            DELETION_WATERMARK_SET_BELOW_LAST_ITERATED_WINDOW,
+            id="deletion-watermark-set-below-last-iterated-window",
+        ),
+        pytest.param(
+            10,
+            2,
+            DELETION_WATERMARK_SET_TO_EXPIRATION_WATERMARK,
+            id="deletion-watermark-set-expiration-watermark",
+        ),
+        pytest.param(
+            10,
+            15,
+            AGGREGATION_FROM_MIN_ELIGIBLE_WINDOW,
+            id="aggregation-from-min-eligible-window",
+        ),
+        pytest.param(10, 15, AGGREGATION_NOT_FOUND, id="aggregation-not-found"),
+        pytest.param(
+            10, 15, PREVENT_NEGATIVE_START_TIME, id="prevent-negative-start-time"
+        ),
+        pytest.param(10, 15, DEFAULT_AGGREGATION_USED, id="default-aggregation-used"),
+        pytest.param(10, 0, EXPIRATION_WITHOUT_GRACE, id="expiration-without-grace"),
+        pytest.param(10, 3, EXPIRATION_WITH_GRACE, id="expiration-with-grace"),
     ],
 )
 def test_sliding_window(window_factory, state_factory, duration_ms, grace_ms, messages):
