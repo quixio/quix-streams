@@ -1,7 +1,5 @@
 from collections import namedtuple
 from contextlib import contextmanager
-from timeit import timeit
-from uuid import uuid4
 
 import pytest
 
@@ -439,8 +437,8 @@ PREVENT_NEGATIVE_START_TIME = [
 def sliding_window_definition_factory(
     state_manager, dataframe_factory, topic_manager_topic_factory
 ):
-    def factory(topic: str, duration_ms: int, grace_ms: int) -> SlidingWindowDefinition:
-        topic = topic_manager_topic_factory(topic)
+    def factory(duration_ms: int, grace_ms: int) -> SlidingWindowDefinition:
+        topic = topic_manager_topic_factory("topic")
         sdf = dataframe_factory(topic=topic, state_manager=state_manager)
         return SlidingWindowDefinition(
             duration_ms=duration_ms, grace_ms=grace_ms, dataframe=sdf
@@ -451,9 +449,9 @@ def sliding_window_definition_factory(
 
 @pytest.fixture
 def window_factory(sliding_window_definition_factory):
-    def factory(topic: str, duration_ms: int, grace_ms: int):
+    def factory(duration_ms: int, grace_ms: int):
         window_definition = sliding_window_definition_factory(
-            topic=topic, duration_ms=duration_ms, grace_ms=grace_ms
+            duration_ms=duration_ms, grace_ms=grace_ms
         )
         window = window_definition.reduce(
             reducer=lambda agg, value: agg + [value],
@@ -466,22 +464,17 @@ def window_factory(sliding_window_definition_factory):
 
 
 @pytest.fixture
-def store_factory(state_manager):
-    def factory(window):
-        topic = window._dataframe.topic.name
-        store = state_manager.get_store(topic=topic, store_name=window.name)
-        store.assign_partition(0)
-        return store
+def state_factory(state_manager):
+    store = None
 
-    return factory
-
-
-@pytest.fixture
-def state_factory():
     @contextmanager
-    def factory(store, key):
+    def factory(window):
+        nonlocal store
+        if store is None:
+            store = state_manager.get_store(topic="topic", store_name=window.name)
+            store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
-            yield tx.as_state(prefix=key)
+            yield tx.as_state(prefix=b"key")
 
     return factory
 
@@ -501,13 +494,10 @@ def state_factory():
         ),
     ],
 )
-def test_sliding_window(
-    window_factory, store_factory, state_factory, duration_ms, grace_ms, messages
-):
-    window = window_factory(topic="topic", duration_ms=duration_ms, grace_ms=grace_ms)
-    store = store_factory(window)
+def test_sliding_window(window_factory, state_factory, duration_ms, grace_ms, messages):
+    window = window_factory(duration_ms=duration_ms, grace_ms=grace_ms)
     for message in messages:
-        with state_factory(store, b"key") as state:
+        with state_factory(window) as state:
             updated, expired = window.process_window(
                 value=message.value, timestamp_ms=message.timestamp, state=state
             )
@@ -515,34 +505,8 @@ def test_sliding_window(
         assert list(updated) == message.updated
         assert list(expired) == message.expired
 
-        with state_factory(store, b"key") as state:
+        with state_factory(window) as state:
             for deleted in message.deleted:
                 assert not state.get_window(
                     start_ms=deleted["start"], end_ms=deleted["end"]
                 )
-
-
-@pytest.mark.timeit
-def test_sliding_window_timeit(window_factory, store_factory, state_factory):
-    number = 1000
-    i = 0
-
-    # Windows and stores are provisioned and kept in outer scope
-    # to reduce the amount of work inside timed functions
-    windows, stores = [], []
-    for _ in range(number):
-        window = window_factory(topic=uuid4().hex, duration_ms=10, grace_ms=5)
-        windows.append(window)
-        stores.append(store_factory(window))
-
-    def func():
-        nonlocal windows, stores, i
-        window, store, i = windows[i], stores[i], i + 1
-
-        for message in BASIC_CASE:
-            with state_factory(store, uuid4().hex.encode()) as state:
-                window.process_window(
-                    value=message.value, timestamp_ms=message.timestamp, state=state
-                )
-
-    print("Timeit:", timeit(func, number=number))

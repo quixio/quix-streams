@@ -1,5 +1,4 @@
 from contextlib import contextmanager
-from timeit import timeit
 
 import pytest
 
@@ -267,43 +266,6 @@ def test_get_windows(
 
         windows = state.get_windows(**get_windows_args)
         assert list(windows) == expected_windows
-
-
-@pytest.mark.timeit
-@pytest.mark.parametrize("backwards", [False, True])
-def test_get_windows_timeit(transaction_state, backwards):
-    db_windows, cached_windows, deleted_windows = [], [], []
-    number_of_windows = 100000
-
-    for i in range(number_of_windows):
-        window = {"start_ms": i, "end_ms": i + 10, "value": i, "timestamp_ms": i + 1}
-        db_windows.append(window)
-
-        if not i % 2:
-            cached_windows.append(window)
-        if not i % 4:
-            deleted_windows.append(
-                {"start_ms": window["start_ms"], "end_ms": window["end_ms"]}
-            )
-
-    with transaction_state() as state:
-        for window in db_windows:
-            state.update_window(**window)
-
-    with transaction_state() as state:
-        for window in cached_windows:
-            state.update_window(**window)
-        for window in deleted_windows:
-            state._transaction.delete_window(**window, prefix=state._prefix)
-
-        func = lambda: list(
-            state.get_windows(
-                start_from_ms=-1, start_to_ms=number_of_windows, backwards=backwards
-            )
-        )
-        execution_time = timeit(func, number=100)
-
-    print("Execution time:", execution_time)
 
 
 def test_delete_windows(transaction_state):
