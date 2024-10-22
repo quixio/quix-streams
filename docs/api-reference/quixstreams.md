@@ -3264,12 +3264,15 @@ If None, a default is used.
 Example setup using an AWS-hosted Iceberg with AWS Glue:
 
 ```
-from quixstreams.sinks.community.iceberg import IcebergSink, IcebergAWSConfig
+from quixstreams import Application
+from quixstreams.sinks.community.iceberg import IcebergSink, AWSIcebergConfig
 
-iceberg_config = IcebergAWSConfig(
+# Configure S3 bucket credentials
+iceberg_config = AWSIcebergConfig(
     aws_s3_uri="", aws_region="", aws_access_key_id="", aws_secret_access_key=""
 )
 
+# Configure the sink to write data to S3 with the AWS Glue catalog spec
 iceberg_sink = IcebergSink(
     table_name="glue.sink-test",
     config=iceberg_config,
@@ -3278,10 +3281,16 @@ iceberg_sink = IcebergSink(
 
 app = Application(broker_address='localhost:9092', auto_offset_reset="earliest")
 topic = app.topic('sink_topic')
+
+# Do some processing here
 sdf = app.dataframe(topic=topic).print(metadata=True)
+
+# Sink results to the IcebergSink
 sdf.sink(iceberg_sink)
 
+
 if __name__ == "__main__":
+    # Start the application
     app.run()
 ```
 
@@ -3293,7 +3302,7 @@ if __name__ == "__main__":
 def write(batch: SinkBatch)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/iceberg.py#L165)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/iceberg.py#L174)
 
 Writes a batch of data to the Iceberg table.
 
