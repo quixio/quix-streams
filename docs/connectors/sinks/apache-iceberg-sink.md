@@ -1,6 +1,4 @@
-# Apache Iceberg Sink 
-
-TODO: Intro
+# Apache Iceberg Sink
 
 !!! info
 
@@ -8,6 +6,21 @@ TODO: Intro
 
     To learn more about differences between Core and Community connectors, see the [Community and Core Connectors](../community-and-core.md) page.
 
+This sink writes batches of data to an Apache Iceberg table.  
+By default, the data will include the kafka message key, value, and timestamp.  
+
+Currently, supports Apache Iceberg hosted in:
+
+- AWS
+
+Supported data catalogs:
+
+- AWS Glue
+
+## How the Iceberg Sink Works
+`IcebergSink` is a batching sink.  
+
+It batches processed records in memory per topic partition, serializes incoming data batches into Parquet format, and appends them to the Iceberg table, updating the table schema as necessary.
 
 ## How To Use Iceberg Sink
 
@@ -46,18 +59,6 @@ if __name__ == "__main__":
     # Start the application
     app.run()
 ```
-
-## How the Iceberg Sink Works
-`IcebergSink` is a batching sink.  
-It batches processed records in memory per topic partition, and writes them to the configured destination when a checkpoint is committed.
-
-## Schema and Partition Spec
-TODO
-
-
-## Data Format
-TODO
-
 
 ## Retrying Failures
 `IcebergSink` will retry failed commits automatically with a random delay up to 5 seconds.
