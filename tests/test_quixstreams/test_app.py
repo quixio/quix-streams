@@ -1012,24 +1012,35 @@ class TestQuixApplication:
 
         assert not app.is_quix_app
 
-    def test_topic_name_and_config(self, quix_app_factory):
+    def test_topic_name_and_config(
+        self,
+        quix_app_factory,
+        quix_topic_manager_factory,
+        quix_mock_config_builder_factory,
+    ):
         """
         Topic names created with Quix API have workspace id prefixed
         Topic config has provided values else defaults
         """
         workspace_id = "my-workspace"
-        app = quix_app_factory(workspace_id=workspace_id)
-        topic_manager = app._topic_manager
+        cfg_builder = quix_mock_config_builder_factory(workspace_id=workspace_id)
+        topic_manager = quix_topic_manager_factory(
+            workspace_id=workspace_id, quix_config_builder=cfg_builder
+        )
+        app = quix_app_factory(
+            workspace_id=workspace_id,
+            topic_manager=topic_manager,
+            quix_config_builder=cfg_builder,
+        )
         initial_topic_name = "input_topic"
         topic_partitions = 5
         topic = app.topic(
             initial_topic_name,
             config=topic_manager.topic_config(num_partitions=topic_partitions),
         )
-        expected_name = f"{workspace_id}-{initial_topic_name}"
-        expected_topic = topic_manager.topics[expected_name]
-        assert topic.name == expected_name
-        assert expected_name in topic_manager.topics
+        topic_id = f"{workspace_id}-{initial_topic_name}"
+        expected_topic = topic_manager.topics[topic_id]
+        assert topic.name == topic_id
         assert (
             expected_topic.config.replication_factor
             == topic_manager.default_replication_factor
@@ -1040,8 +1051,9 @@ class TestQuixApplication:
 @pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
 class TestQuixApplicationWithState:
     def test_quix_app_no_state_management_warning(
-        self, quix_app_factory, monkeypatch, topic_factory, executor
+        self, quix_app_factory, quix_mock_config_builder_factory, monkeypatch, executor
     ):
+        # TODO: ERROR!!
         """
         Ensure that Application.run() prints a warning if the app is stateful,
         runs on Quix (the "Quix__Deployment__Id" env var is set),

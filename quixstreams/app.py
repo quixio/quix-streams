@@ -647,8 +647,7 @@ class Application:
             Default: the source default
         """
         if not topic:
-            topic = source.default_topic()
-            self._topic_manager.register(topic)
+            topic = self._topic_manager.register(source.default_topic())
 
         producer = self._get_rowproducer(transactional=False)
         source.configure(topic, producer)
