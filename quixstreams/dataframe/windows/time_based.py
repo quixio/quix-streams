@@ -88,12 +88,13 @@ class FixedTimeWindow:
         updated_windows = []
         for start, end in ranges:
             if start <= max_expired_window_start:
+                late_by_ms = max_expired_window_start + 1 - timestamp_ms
                 ctx = message_context()
                 logger.warning(
                     f"Skipping window processing for expired window "
                     f"timestamp={timestamp_ms} "
                     f"window=[{start},{end}) "
-                    f"max_expired_window_start={max_expired_window_start} "
+                    f"late_by_ms={late_by_ms} "
                     f"partition={ctx.topic}[{ctx.partition}] "
                     f"offset={ctx.offset}"
                 )
