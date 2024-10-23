@@ -22,8 +22,8 @@ class SlidingWindow(FixedTimeWindow):
         # timestamps equal to latest_timestamp - duration - grace
         # are still eligible for processing.
         latest_timestamp = max(timestamp_ms, state.get_latest_timestamp())
-        expiration_max_start_time = latest_timestamp - duration - grace - 1
-        deletion_max_start_time = expiration_max_start_time - duration
+        max_expired_window_start = latest_timestamp - duration - grace - 1
+        max_deleted_window_start = max_expired_window_start - duration
 
         left_start = max(0, timestamp_ms - duration)
         left_end = timestamp_ms
@@ -66,7 +66,7 @@ class SlidingWindow(FixedTimeWindow):
                     right_exists = True
 
                 # Update existing window if it is not expired
-                if start > expiration_max_start_time:
+                if start > max_expired_window_start:
                     window_timestamp = max(timestamp_ms, max_timestamp)
                     window = self._update_window(
                         state=state,
@@ -95,7 +95,7 @@ class SlidingWindow(FixedTimeWindow):
 
                 # The left window already exists; updating it is sufficient
                 # if window is not expired
-                if start > expiration_max_start_time:
+                if start > max_expired_window_start:
                     updated_windows.append(
                         self._update_window(
                             state=state,
@@ -140,13 +140,13 @@ class SlidingWindow(FixedTimeWindow):
                 # At this point, this is the last window that will ever be considered
                 # for existing aggregations. Windows lower than this and lower than
                 # the expiration watermark may be deleted.
-                deletion_max_start_time = min(start - 1, expiration_max_start_time)
+                max_deleted_window_start = min(start - 1, max_expired_window_start)
                 break
 
         else:
             # As iteration completed without creating (or updating) left window,
             # create it if it is above expiration watermark.
-            if left_start > expiration_max_start_time:
+            if left_start > max_expired_window_start:
                 updated_windows.append(
                     self._update_window(
                         state=state,
@@ -161,13 +161,13 @@ class SlidingWindow(FixedTimeWindow):
         expired_windows = [
             {"start": start, "end": end, "value": self._merge_func(aggregation)}
             for (start, end), (max_timestamp, aggregation) in state.expire_windows(
-                max_start_time=expiration_max_start_time,
+                max_start_time=max_expired_window_start,
                 delete=False,
             )
             if end == max_timestamp  # Emit only left windows
         ]
 
-        state.delete_windows(max_start_time=deletion_max_start_time)
+        state.delete_windows(max_start_time=max_deleted_window_start)
         return reversed(updated_windows), expired_windows
 
     def _update_window(
