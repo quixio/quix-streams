@@ -78,6 +78,12 @@ class SlidingWindow(FixedTimeWindow):
                     )
                     if end == window_timestamp:  # Emit only left windows
                         updated_windows.append(window)
+                else:
+                    self._log_expired_window(
+                        window=[start, end],
+                        timestamp_ms=timestamp_ms,
+                        late_by_ms=max_expired_window_start + 1 - timestamp_ms,
+                    )
 
             elif end == left_end:
                 # Create the right window for previous messages if it does not exist
@@ -105,6 +111,12 @@ class SlidingWindow(FixedTimeWindow):
                             timestamp=timestamp_ms,
                             window_timestamp=timestamp_ms,
                         )
+                    )
+                else:
+                    self._log_expired_window(
+                        window=[start, end],
+                        timestamp_ms=timestamp_ms,
+                        late_by_ms=max_expired_window_start + 1 - timestamp_ms,
                     )
                 break
 

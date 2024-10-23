@@ -2,6 +2,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from itertools import chain
 from typing import Any
+from unittest import mock
 
 import pytest
 
@@ -644,6 +645,12 @@ EXPIRATION_WITH_GRACE = [
 
 
 @pytest.fixture
+def mock_message_context():
+    with mock.patch("quixstreams.dataframe.windows.time_based.message_context"):
+        yield
+
+
+@pytest.fixture
 def sliding_window_definition_factory(
     state_manager, dataframe_factory, topic_manager_topic_factory
 ):
@@ -735,7 +742,9 @@ def state_factory(state_manager):
         pytest.param(10, 3, EXPIRATION_WITH_GRACE, id="expiration-with-grace"),
     ],
 )
-def test_sliding_window(window_factory, state_factory, duration_ms, grace_ms, messages):
+def test_sliding_window(
+    window_factory, state_factory, duration_ms, grace_ms, messages, mock_message_context
+):
     window = window_factory(duration_ms=duration_ms, grace_ms=grace_ms)
     for message in messages:
         with state_factory(window) as state:

@@ -88,15 +88,10 @@ class FixedTimeWindow:
         updated_windows = []
         for start, end in ranges:
             if start <= max_expired_window_start:
-                late_by_ms = max_expired_window_start + 1 - timestamp_ms
-                ctx = message_context()
-                logger.warning(
-                    f"Skipping window processing for expired window "
-                    f"timestamp={timestamp_ms} "
-                    f"window=[{start},{end}) "
-                    f"late_by_ms={late_by_ms} "
-                    f"partition={ctx.topic}[{ctx.partition}] "
-                    f"offset={ctx.offset}"
+                self._log_expired_window(
+                    window=[start, end],
+                    timestamp_ms=timestamp_ms,
+                    late_by_ms=max_expired_window_start + 1 - timestamp_ms,
                 )
                 continue
 
@@ -119,6 +114,17 @@ class FixedTimeWindow:
                 {"start": start, "end": end, "value": self._merge_func(aggregated)}
             )
         return updated_windows, expired_windows
+
+    def _log_expired_window(self, window, timestamp_ms, late_by_ms) -> None:
+        ctx = message_context()
+        logger.warning(
+            "Skipping window processing for expired window "
+            f"timestamp_ms={timestamp_ms} "
+            f"window={window} "
+            f"late_by_ms={late_by_ms} "
+            f"partition={ctx.topic}[{ctx.partition}] "
+            f"offset={ctx.offset}"
+        )
 
     def final(self) -> "StreamingDataFrame":
         """
