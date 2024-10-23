@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from itertools import chain
 from typing import Any
 
 import pytest
@@ -28,6 +29,23 @@ class Message:
     # Windows that should no longer be in state.
     deleted: list[dict[str, Any]] = field(default_factory=list)
 
+    # Remaining windows that must be in the state:
+    # * Windows that were not updated
+    # * Windows that are expired but still needed
+    # * Right windows that were not emitted.
+    present: list[dict[str, Any]] = field(default_factory=list)
+
+    @property
+    def expected_windows_in_state(self) -> set[tuple[int, int]]:
+        """
+        These and only these windows must be present in the state
+        after the message is processed.
+        """
+        _windows = chain(self.updated, self.expired, self.present)
+        active_windows = {(w["start"], w["end"]) for w in _windows}
+        deleted_windows = {(w["start"], w["end"]) for w in self.deleted}
+        return active_windows - deleted_windows
+
 
 #      0        10        20        30        40        50        60
 # -----|---------|---------|---------|---------|---------|---------|--->
@@ -55,6 +73,7 @@ RIGHT_WINDOW_EXISTS = [
         timestamp=12,
         value=B,
         updated=[{"start": 2, "end": 12, "value": [B]}],  # left B
+        present=[{"start": 13, "end": 23, "value": [23, [A]]}],  # left A
     ),
 ]
 
@@ -88,6 +107,7 @@ RIGHT_WINDOW_CREATED = [
             {"start": 10, "end": 20, "value": [B]},  # left B
             {"start": 13, "end": 23, "value": [A, B]},  # left A
         ],
+        present=[{"start": 21, "end": 31, "value": [23, [A]]}],  # right B
     ),
 ]
 
@@ -125,11 +145,18 @@ RIGHT_WINDOW_UPDATED = [
             {"start": 10, "end": 20, "value": [B]},  # left B
             {"start": 13, "end": 23, "value": [A, B]},  # left A
         ],
+        present=[{"start": 21, "end": 31, "value": [23, [A]]}],  # right B
     ),
     Message(
         timestamp=27,
         value=C,
         updated=[{"start": 17, "end": 27, "value": [A, B, C]}],  # left C
+        present=[
+            {"start": 10, "end": 20, "value": [20, [B]]},  # left B
+            {"start": 13, "end": 23, "value": [23, [A, B]]},  # left A
+            {"start": 21, "end": 31, "value": [27, [A, C]]},  # right B
+            {"start": 24, "end": 34, "value": [27, [C]]},  # right A
+        ],
     ),
 ]
 
@@ -195,16 +222,27 @@ RIGHT_WINDOW_BECOMES_LEFT_WINDOW = [
             {"start": 10, "end": 20, "value": [B]},  # left B
             {"start": 13, "end": 23, "value": [A, B]},  # left A
         ],
+        present=[{"start": 21, "end": 31, "value": [23, [A]]}],  # right B
     ),
     Message(
         timestamp=31,
         value=C,
         updated=[{"start": 21, "end": 31, "value": [A, C]}],  # left C
+        present=[
+            {"start": 10, "end": 20, "value": [20, [B]]},  # left B
+            {"start": 13, "end": 23, "value": [23, [A, B]]},  # left A
+            {"start": 24, "end": 34, "value": [31, [C]]},  # right A
+        ],
     ),
     Message(
         timestamp=31,
         value=D,
         updated=[{"start": 21, "end": 31, "value": [A, C, D]}],  # left C, D
+        present=[
+            {"start": 10, "end": 20, "value": [20, [B]]},  # left B
+            {"start": 13, "end": 23, "value": [23, [A, B]]},  # left A
+            {"start": 24, "end": 34, "value": [31, [C, D]]},  # right A
+        ],
     ),
 ]
 
@@ -237,6 +275,10 @@ RIGHT_WINDOW_FOR_PREVIOUS_MESSAGE_CREATED = [
         timestamp=19,
         value=B,
         updated=[{"start": 9, "end": 19, "value": [A, B]}],  # left B
+        present=[
+            {"start": 1, "end": 11, "value": [11, [A]]},  # left A
+            {"start": 12, "end": 22, "value": [19, [B]]},  # right A
+        ],
     ),
 ]
 
@@ -281,6 +323,7 @@ DELETION_WATERMARK_SET_BELOW_LAST_ITERATED_WINDOW = [
         value=B,
         updated=[{"start": 14, "end": 24, "value": [A, B]}],  # left B
         expired=[{"start": 6, "end": 16, "value": [A]}],  # left A
+        present=[{"start": 17, "end": 27, "value": [24, [B]]}],  # left A
     ),
     Message(
         timestamp=25,
@@ -288,6 +331,10 @@ DELETION_WATERMARK_SET_BELOW_LAST_ITERATED_WINDOW = [
         updated=[{"start": 15, "end": 25, "value": [A, B, C]}],  # left C
         expired=[{"start": 14, "end": 24, "value": [A, B]}],  # left B
         deleted=[{"start": 6, "end": 16, "value": [A]}],  # left A
+        present=[
+            {"start": 17, "end": 27, "value": [25, [B, C]]},  # right A
+            {"start": 25, "end": 35, "value": [25, [C]]},  # right B
+        ],
     ),
 ]
 
@@ -331,11 +378,17 @@ DELETION_WATERMARK_SET_TO_EXPIRATION_WATERMARK = [
         value=B,
         updated=[{"start": 14, "end": 24, "value": [A, B]}],  # left B
         expired=[{"start": 6, "end": 16, "value": [A]}],  # left A
+        present=[{"start": 17, "end": 27, "value": [24, [B]]}],  # left A
     ),
     Message(
         timestamp=25,
         value=C,
         updated=[{"start": 15, "end": 25, "value": [A, B, C]}],  # left C
+        present=[
+            {"start": 14, "end": 24, "value": [24, [A, B]]},  # left  B
+            {"start": 17, "end": 27, "value": [25, [B, C]]},  # right A
+            {"start": 25, "end": 35, "value": [25, [C]]},  # right B
+        ],
     ),
 ]
 
@@ -366,6 +419,10 @@ AGGREGATION_FROM_MIN_ELIGIBLE_WINDOW = [
         timestamp=21,
         value=B,
         updated=[{"start": 11, "end": 21, "value": [A, B]}],  # left B
+        present=[
+            {"start": 1, "end": 11, "value": [11, [A]]},  # left A
+            {"start": 12, "end": 22, "value": [21, [B]]},  # right A
+        ],
     ),
 ]
 
@@ -394,6 +451,7 @@ AGGREGATION_NOT_FOUND = [
         timestamp=22,
         value=B,
         updated=[{"start": 12, "end": 22, "value": [B]}],  # left B
+        present=[{"start": 1, "end": 11, "value": [11, [A]]}],  # left A
     ),
 ]
 
@@ -452,11 +510,17 @@ DEFAULT_AGGREGATION_USED = [
             {"start": 16, "end": 26, "value": [B]},  # left B
             {"start": 19, "end": 29, "value": [A, B]},  # left A
         ],
+        present=[{"start": 27, "end": 37, "value": [29, [A]]}],  # right B
     ),
     Message(
         timestamp=41,
         value=C,
         updated=[{"start": 31, "end": 41, "value": [C]}],  # left C
+        present=[
+            {"start": 16, "end": 26, "value": [26, [B]]},  # left B
+            {"start": 19, "end": 29, "value": [29, [A, B]]},  # left A
+            {"start": 27, "end": 37, "value": [29, [A]]},  # right B
+        ],
     ),
 ]
 
@@ -492,11 +556,16 @@ EXPIRATION_WITHOUT_GRACE = [
         value=B,
         updated=[{"start": 13, "end": 23, "value": [A, B]}],  # left B
         expired=[{"start": 12, "end": 22, "value": [A]}],  # left A
+        present=[{"start": 23, "end": 33, "value": [23, [B]]}],  # right A
     ),
     Message(
         timestamp=22,
         value=C,
         updated=[{"start": 13, "end": 23, "value": [A, B, C]}],  # left B
+        present=[
+            {"start": 12, "end": 22, "value": [22, [A]]},  # left A
+            {"start": 23, "end": 33, "value": [23, [B]]},  # right A
+        ],
     ),
 ]
 
@@ -541,6 +610,10 @@ EXPIRATION_WITH_GRACE = [
         timestamp=23,
         value=B,
         updated=[{"start": 13, "end": 23, "value": [A, B]}],  # left B
+        present=[
+            {"start": 12, "end": 22, "value": [22, [A]]},  # left A
+            {"start": 23, "end": 33, "value": [23, [B]]},  # right A
+        ],
     ),
     Message(
         timestamp=17,
@@ -549,6 +622,10 @@ EXPIRATION_WITH_GRACE = [
             {"start": 12, "end": 22, "value": [A, C]},  # left A
             {"start": 13, "end": 23, "value": [A, B, C]},  # left B
         ],
+        present=[
+            {"start": 18, "end": 28, "value": [23, [A, B]]},  # right C
+            {"start": 23, "end": 33, "value": [23, [B]]},  # right A
+        ],
     ),
     Message(
         timestamp=26,
@@ -556,6 +633,12 @@ EXPIRATION_WITH_GRACE = [
         updated=[{"start": 16, "end": 26, "value": [A, B, C, D]}],  # left D
         expired=[{"start": 12, "end": 22, "value": [A, C]}],  # left A
         deleted=[{"start": 12, "end": 22, "value": [A, C]}],  # left A
+        present=[
+            {"start": 13, "end": 23, "value": [23, [A, B, C]]},  # left B
+            {"start": 18, "end": 28, "value": [26, [A, B, D]]},  # right C
+            {"start": 23, "end": 33, "value": [26, [B, D]]},  # right A
+            {"start": 24, "end": 34, "value": [26, [D]]},  # right A
+        ],
     ),
 ]
 
@@ -668,3 +751,12 @@ def test_sliding_window(window_factory, state_factory, duration_ms, grace_ms, me
                 assert not state.get_window(
                     start_ms=deleted["start"], end_ms=deleted["end"]
                 )
+
+            for present in message.present:
+                assert (
+                    state.get_window(start_ms=present["start"], end_ms=present["end"])
+                    == present["value"]
+                )
+
+            all_windows_in_state = {window for window, *_ in state.get_windows(-1, 99)}
+            assert all_windows_in_state == message.expected_windows_in_state
