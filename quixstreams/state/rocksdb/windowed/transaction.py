@@ -3,6 +3,8 @@ from typing import Any, Optional, TYPE_CHECKING, cast
 
 from rocksdict import ReadOptions
 
+from quixstreams.state.base.transaction import PartitionTransaction
+from quixstreams.state.exceptions import InvalidChangelogOffset
 from quixstreams.state.metadata import PREFIX_SEPARATOR, DEFAULT_PREFIX
 from quixstreams.state.recovery import ChangelogProducer
 from quixstreams.state.serialization import (
@@ -10,10 +12,11 @@ from quixstreams.state.serialization import (
     LoadsFunc,
     DumpsFunc,
 )
-from quixstreams.state.base.transaction import PartitionTransaction
-from quixstreams.state.exceptions import InvalidChangelogOffset
-
-from .metadata import LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY, LATEST_EXPIRED_WINDOW_CF_NAME
+from .metadata import (
+    LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY,
+    LATEST_EXPIRED_WINDOW_CF_NAME,
+    LATEST_TIMESTAMPS_CF_NAME,
+)
 from .serialization import encode_window_key, encode_window_prefix, parse_window_key
 from .state import WindowedTransactionState
 
@@ -29,7 +32,6 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         partition: "WindowedRocksDBStorePartition",
         dumps: DumpsFunc,
         loads: LoadsFunc,
-        latest_timestamp_ms: int,
         changelog_producer: Optional[ChangelogProducer] = None,
     ):
         super().__init__(
@@ -39,7 +41,6 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
             changelog_producer=changelog_producer,
         )
         self._partition = cast("WindowedRocksDBStorePartition", self._partition)
-        self._latest_timestamp_ms = latest_timestamp_ms
 
     def as_state(self, prefix: Any = DEFAULT_PREFIX) -> WindowedTransactionState:
         return WindowedTransactionState(
@@ -51,8 +52,18 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
             ),
         )
 
-    def get_latest_timestamp(self) -> int:
-        return self._latest_timestamp_ms
+    def get_latest_timestamp(self, prefix: bytes) -> int:
+        return self.get(
+            key=prefix, prefix=prefix, cf_name=LATEST_TIMESTAMPS_CF_NAME, default=0
+        )
+
+    def _set_latest_timestamp(self, prefix: bytes, timestamp_ms: int):
+        self.set(
+            key=prefix,
+            value=timestamp_ms,
+            prefix=prefix,
+            cf_name=LATEST_TIMESTAMPS_CF_NAME,
+        )
 
     def _validate_duration(self, start_ms: int, end_ms: int):
         if end_ms <= start_ms:
@@ -81,7 +92,10 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
 
         key = encode_window_key(start_ms, end_ms)
         self.set(key=key, value=value, prefix=prefix)
-        self._latest_timestamp_ms = max(self._latest_timestamp_ms, timestamp_ms)
+        latest_timestamp_ms = self.get_latest_timestamp(prefix=prefix)
+        self._set_latest_timestamp(
+            prefix=prefix, timestamp_ms=max(latest_timestamp_ms, timestamp_ms)
+        )
 
     def delete_window(self, start_ms: int, end_ms: int, prefix: bytes):
         self._validate_duration(start_ms=start_ms, end_ms=end_ms)
@@ -106,7 +120,6 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
             cache=self._update_cache,
             processed_offset=processed_offset,
             changelog_offset=changelog_offset,
-            latest_timestamp_ms=self._latest_timestamp_ms,
         )
 
     def expire_windows(
@@ -134,7 +147,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
             Defaults to 0, meaning no grace period is applied.
         :return: A generator that yields sorted tuples in the format `((start, end), value)`.
         """
-        latest_timestamp = self._latest_timestamp_ms
+        latest_timestamp = self.get_latest_timestamp(prefix=prefix)
         start_to = latest_timestamp - duration_ms - grace_ms
         start_from = -1
 
