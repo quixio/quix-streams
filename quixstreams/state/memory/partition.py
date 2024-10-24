@@ -18,7 +18,7 @@ class MemoryStorePartition(StorePartition):
     """
     Class to access in-memory state.
 
-    Responsabilities:
+    Responsibilities:
      1. Recovering from changelog messages
      2. Creating transaction to interact with data
      3. Track partition state in-memory
@@ -50,7 +50,7 @@ class MemoryStorePartition(StorePartition):
         """
         Write data to the state
 
-        :param data: The modified data
+        :param cache: The partition update cache
         :param processed_offset: The offset processed to generate the data.
         :param changelog_offset: The changelog message offset of the data.
         """

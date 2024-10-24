@@ -1150,12 +1150,17 @@ class TestApplicationWithState:
 
         total_consumed = Future()
 
+        stores = {}
+
+        def revoke_partition(store, partition):
+            stores[store.topic] = store
+
         # Stop app when the future is resolved
         executor.submit(_stop_app_on_future, app, total_consumed, 10.0)
-        with patch("quixstreams.state.base.Store.revoke_partition"):
+        with patch("quixstreams.state.base.Store.revoke_partition", revoke_partition):
             app.run(sdf)
 
-        store = app.get_store(topic=topic_in.name, store_name="default")
+        store = stores[topic_in.name]
         partition = store.partitions[partition_num]
         with partition.begin() as tx:
             assert tx.get("total", prefix=message_key) == total_consumed.result()
@@ -1279,13 +1284,18 @@ class TestApplicationWithState:
 
         total_consumed = Future()
 
+        stores = {}
+
+        def revoke_partition(store, partition):
+            stores[store.topic] = store
+
         # Stop app when the future is resolved
         executor.submit(_stop_app_on_future, app, total_consumed, 10.0)
         # Run the application
-        with patch("quixstreams.state.base.Store.revoke_partition"):
+        with patch("quixstreams.state.base.Store.revoke_partition", revoke_partition):
             app.run(sdf)
 
-        store = app.get_store(topic=topic_in.name, store_name="default")
+        store = stores[topic_in.name]
         partition = store.partitions[partition_num]
         with partition.begin() as tx:
             assert tx.get("total", prefix=message_key) == total_consumed.result()
@@ -1497,9 +1507,9 @@ class TestApplicationRecovery:
                         prefix = f"key{p_num}".encode()
                         assert tx.get(sum_key, prefix=prefix) == count * msg_int_value
 
-        def validate_live_state(app):
+        def validate_live_state(stores):
             for p_num, count in partition_msg_count.items():
-                store = app.get_store(topic=topic.name, store_name=store_name)
+                store = stores[topic.name]
                 partition = store.partitions[p_num]
                 assert partition.get_changelog_offset() == count - 1
                 with partition.begin() as tx:
@@ -1523,15 +1533,20 @@ class TestApplicationRecovery:
                         partition=p_num,
                     )
 
+        stores = {}
+
+        def revoke_partition(store, partition):
+            stores[store.topic] = store
+
         # run app to populate state with data
         done = Future()
         executor.submit(_stop_app_on_future, app, done, 10.0)
-        with patch("quixstreams.state.base.Store.revoke_partition"):
+        with patch("quixstreams.state.base.Store.revoke_partition", revoke_partition):
             app.run(sdf)
 
         # validate and then delete the state
         assert processed_count == partition_msg_count
-        validate_live_state(app)
+        validate_live_state(stores)
         if store_type == RocksDBStore:
             validate_disk_state()
         app.clear_state()
@@ -1542,13 +1557,14 @@ class TestApplicationRecovery:
         done = Future()
         executor.submit(_stop_app_on_future, app, done, 10.0)
 
-        with patch("quixstreams.state.base.Store.revoke_partition"):
+        stores = {}
+        with patch("quixstreams.state.base.Store.revoke_partition", revoke_partition):
             app.run(sdf)
 
         # no messages should have been processed outside of recovery loop
         assert processed_count == {0: 0, 1: 0}
         # State should be the same as before deletion
-        validate_live_state(app)
+        validate_live_state(stores)
         if store_type == RocksDBStore:
             validate_disk_state()
 
@@ -1801,8 +1817,8 @@ class TestApplicationRecovery:
             )
             return app, sdf, topic
 
-        def validate_live_state(app):
-            store = app.get_store(topic=topic.name, store_name=store_name)
+        def validate_live_state(stores):
+            store = stores[topic.name]
             partition = store.partitions[0]
             with partition.begin() as tx:
                 for key, value in succeeded_messages:
@@ -1838,16 +1854,21 @@ class TestApplicationRecovery:
                 serialized = topic.serialize(key=key.encode(), value={"number": value})
                 producer.produce(topic.name, key=serialized.key, value=serialized.value)
 
+        stores = {}
+
+        def revoke_partition(store, partition):
+            stores[store.topic] = store
+
         # Run the application to apply changes to state
         done = Future()
         executor.submit(_stop_app_on_future, app, done, 10.0)
 
-        with patch("quixstreams.state.base.Store.revoke_partition"):
+        with patch("quixstreams.state.base.Store.revoke_partition", revoke_partition):
             app.run(sdf)
 
         assert processed_count == total_count
         # Validate the state
-        validate_live_state(app)
+        validate_live_state(stores)
         if store_type == RocksDBStore:
             validate_disk_state()
 
@@ -1865,13 +1886,16 @@ class TestApplicationRecovery:
         with commit_patch:
             done = Future()
             executor.submit(_stop_app_on_future, app, done, 10.0)
-            with patch("quixstreams.state.base.Store.revoke_partition"):
+            stores = {}
+            with patch(
+                "quixstreams.state.base.Store.revoke_partition", revoke_partition
+            ):
                 with contextlib.suppress(PartitionAssignmentError):
                     with pytest.raises(ValueError):
                         app.run(sdf)
 
         # state should remain the same
-        validate_live_state(app)
+        validate_live_state(stores)
         if store_type == RocksDBStore:
             validate_disk_state()
 
@@ -1884,13 +1908,16 @@ class TestApplicationRecovery:
         executor.submit(_stop_app_on_future, app, done, 10.0)
         # Run app for the third time and fail on commit to prevent state changes
         with commit_patch:
-            with patch("quixstreams.state.base.Store.revoke_partition"):
+            stores = {}
+            with patch(
+                "quixstreams.state.base.Store.revoke_partition", revoke_partition
+            ):
                 with contextlib.suppress(PartitionAssignmentError):
                     with pytest.raises(ValueError):
                         app.run(sdf)
 
         # state should remain the same
-        validate_live_state(app)
+        validate_live_state(stores)
         if store_type == RocksDBStore:
             validate_disk_state()
 
@@ -2528,18 +2555,22 @@ class TestApplicationMultipleSdf:
                 for _ in range(messages_per_topic):
                     producer.produce(topic.name, **data)
 
-        done = Future()
+        stores = {}
 
+        def revoke_partition(store, partition):
+            stores[store.topic] = store
+
+        done = Future()
         # Stop app when the future is resolved
         executor.submit(_stop_app_on_future, app, done, 10.0)
 
-        with patch("quixstreams.state.base.Store.revoke_partition"):
+        with patch("quixstreams.state.base.Store.revoke_partition", revoke_partition):
             app.run()
 
         assert processed_count == total_messages
 
         for topic in input_topics:
-            store = app.get_store(topic=topic.name, store_name="default")
+            store = stores[topic.name]
             partition = store.partitions[partition_num]
             with partition.begin() as tx:
                 assert tx.get("total", prefix=message_key) == messages_per_topic
@@ -2648,13 +2679,18 @@ class TestApplicationMultipleSdf:
         done = Future()
         executor.submit(_stop_app_on_future, app, done, 10.0)
 
-        with patch("quixstreams.state.base.Store.revoke_partition"):
+        stores = {}
+
+        def revoke_partition(store, partition):
+            stores[store.topic] = store
+
+        with patch("quixstreams.state.base.Store.revoke_partition", revoke_partition):
             app.run()
 
         assert processed_count == total_messages
 
         for topic in input_topics:
-            store = app.get_store(topic=topic.name, store_name="default")
+            store = stores[topic.name]
             partition = store.partitions[partition_num]
             with partition.begin() as tx:
                 assert tx.get("total", prefix=message_key) == messages_per_topic * 2

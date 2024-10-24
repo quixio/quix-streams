@@ -34,7 +34,7 @@ class MemoryStore(Store):
         :param changelog_producer_factory: a ChangelogProducerFactory instance
             if using changelogs
         """
-        super().__init__(topic, name)
+        super().__init__(name, topic)
 
         self._changelog_producer_factory = changelog_producer_factory
 
