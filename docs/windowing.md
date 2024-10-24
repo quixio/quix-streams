@@ -167,17 +167,17 @@ Input:
 
 (Here the `"timestamp"` column illustrates Kafka message timestamps)
 ```json
-{"temperature": 65, "timestamp": 100}
-{"temperature": 52, "timestamp": 200}
-{"temperature": 61, "timestamp": 300}
+{"temperature": 30, "timestamp": 100}
+{"temperature": 29, "timestamp": 200}
+{"temperature": 28, "timestamp": 300}
 ```
 
 Expected output:
 
 ```json
-{"avg_temperature": 65, "window_start": 0, "window_end": 3600000}
-{"avg_temperature": 58.5, "window_start": 0, "window_end": 3600000}
-{"avg_temperature": 59.333, "window_start": 0, "window_end": 3600000}
+{"avg_temperature": 30, "window_start_ms": 0, "window_end_ms": 3600000}
+{"avg_temperature": 29.5, "window_start_ms": 0, "window_end_ms": 3600000}
+{"avg_temperature": 29, "window_start_ms": 0, "window_end_ms": 3600000}
 ```
 
 Here is how to do it using tumbling windows: 
@@ -253,21 +253,21 @@ Input:
 (Here the `"timestamp"` column illustrates Kafka message timestamps)
 
 ```json
-{"temperature": 65, "timestamp": 50000}
-{"temperature": 52, "timestamp": 60000}
-{"temperature": 61, "timestamp": 62000}
+{"temperature": 30, "timestamp": 50000}
+{"temperature": 29, "timestamp": 60000}
+{"temperature": 28, "timestamp": 62000}
 ```
 
 Expected output:
 
 ```json
-{"avg_temperature": 65, "window_start": 0, "window_end": 3600000}
+{"avg_temperature": 30, "window_start_ms": 0, "window_end_ms": 3600000}
 
-{"avg_temperature": 58.5, "window_start": 0, "window_end": 3600000}
-{"avg_temperature": 65, "window_start": 60000, "window_end": 4200000}
+{"avg_temperature": 29.5, "window_start_ms": 0, "window_end_ms": 3600000}
+{"avg_temperature": 30, "window_start_ms": 60000, "window_end_ms": 4200000}
 
-{"avg_temperature": 59.333, "window_start": 0, "window_end": 3600000}
-{"avg_temperature": 56.5, "window_start": 60000, "window_end": 4200000}
+{"avg_temperature": 29, "window_start_ms": 0, "window_end_ms": 3600000}
+{"avg_temperature": 28.5, "window_start_ms": 60000, "window_end_ms": 4200000}
 ```
 
 
