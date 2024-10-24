@@ -1,0 +1,24 @@
+name: Update Conda Requirements
+
+on:
+  pull_request:
+    branches:
+      - 'chore/update-conda-requirements'
+
+jobs:
+  update-conda-files:
+    permissions:
+      contents: write
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+        - run: echo ${{ github.event.pull_request.head.ref }}
+    #   - uses: actions/checkout@v4
+    #     with:
+    #       ref: ${{ github.event.pull_request.head.ref }}
+    #   - uses: actions/setup-python@v4
+    #   - run: python conda/sync_requirements.py
+    #   - uses: stefanzweifel/git-auto-commit-action@v5
+
+permissions:
+  contents: write
