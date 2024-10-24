@@ -67,7 +67,7 @@ class WindowedTransactionState(WindowedState):
         :return: latest observed event timestamp in milliseconds
         """
 
-        return self._transaction.get_latest_timestamp()
+        return self._transaction.get_latest_timestamp(prefix=self._prefix)
 
     def expire_windows(
         self, duration_ms: int, grace_ms: int = 0
