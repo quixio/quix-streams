@@ -13,6 +13,42 @@ class SlidingWindow(FixedTimeWindow):
         timestamp_ms: int,
         state: WindowedState,
     ) -> tuple[Iterable[WindowResult], Iterable[WindowResult]]:
+        """
+        The algorithm is based on the concept that each message
+        is associated with a left and a right window.
+
+        Left Window:
+        - Begins at message timestamp - window size
+        - Ends at message timestamp
+
+        Right Window:
+        - Begins at message timestamp + 1 ms
+        - Ends at message timestamp + 1 ms + window size
+
+        For example, for a window size of 10 and a message A arriving at timestamp 26:
+
+            0        10        20        30        40        50        60
+        ----|---------|---------|---------|---------|---------|---------|--->
+                                    A
+        left window ->    |---------||---------|    <- right window
+                            16      26  27      37
+
+        The algorithm scans backward through the window store:
+        - Starting at: start_time = message timestamp + 1 ms (the right window's start time)
+        - Ending at: start_time = message timestamp - 2 * window size
+
+        During this traversal, the algorithm performs the following actions:
+
+        1. Determine if the right window should be created.
+           If yes, locate the existing aggregation to copy to the new window.
+        2. Determine if the right window of the previous record should be created.
+           If yes, locate the existing aggregation and combine it with the incoming message.
+        3. Locate and update the left window if it exists.
+        4. If the left window does not exist, create it. Locate the existing
+           aggregation and combine it with the incoming message.
+        5. Locate and update all existing windows to which the new message belongs.
+        """
+
         duration = self._duration_ms
         grace = self._grace_ms
         aggregate = self._aggregate_func
