@@ -72,11 +72,12 @@ class QuixTopicManager(TopicManager):
                     **topic.config.extra_config,
                     "retention.ms": true_cfg["retentionInMinutes"] * 60 * 1000,
                     "retention.bytes": true_cfg["retentionInBytes"],
-                    "cleanup.policy": true_cfg["cleanupPolicy"],
+                    # TODO: uncomment or remove this once Emanuel confirms API behavior
+                    # "cleanup.policy": true_cfg["cleanupPolicy"],
                 },
             ),
         )
-        self._topic_id_to_name[true_topic.name] = topic.name
+        self._topic_id_to_name[true_topic.name] = quix_topic_info["name"]
         return super()._finalize_topic(true_topic)
 
     def _create_topics(

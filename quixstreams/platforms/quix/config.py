@@ -349,13 +349,16 @@ class QuixKafkaConfigsBuilder:
         marked as "Ready" (and thus ready to produce to/consume from).
         """
         try:
-            created = self._create_topic(topic, timeout=timeout)
-            logger.debug(f"Created topic {topic.name}")
-        except QuixApiRequestFailure:
-            # We don't inspect the error to avoid dependency on the exact error message
-            created = self.get_topic(topic_name=topic.name, timeout=timeout)
-            logger.debug(f"topic {topic.name} already exists")
-        return created
+            return self.get_topic(topic_name=topic.name, timeout=timeout)
+        except QuixApiRequestFailure as get_error:
+            if get_error.status_code == 404:
+                try:
+                    return self._create_topic(topic, timeout=timeout)
+                except QuixApiRequestFailure as create_error:
+                    if create_error.status_code == 404:
+                        # Multiple apps likely tried to create at the same time
+                        return self.get_topic(topic_name=topic.name, timeout=timeout)
+                    raise
 
     def _confirm_topic_ready_statuses(
         self,
@@ -419,7 +422,7 @@ class QuixKafkaConfigsBuilder:
         topic_ids = [topic.name for topic in topics]
         self._confirm_topic_ready_statuses(
             {
-                t["name"]
+                t["id"]
                 for t in self.get_topics(timeout=timeout)
                 if t["id"] in topic_ids and t["status"] != "Ready"
             },

@@ -549,14 +549,18 @@ class TestQuixKafkaConfigsBuilder:
             workspace_id="12345", quix_portal_api_service=api
         )
         stack = ExitStack()
+        get_topic = stack.enter_context(patch.object(cfg_builder, "get_topic"))
+        get_topic.side_effect = QuixApiRequestFailure(
+            404, "wid/topic/", error_text="Topic was not found"
+        )
         create_topic = stack.enter_context(patch.object(cfg_builder, "_create_topic"))
         create_topic.return_value = api_return_stub
-        get_topic = stack.enter_context(patch.object(cfg_builder, "get_topic"))
+
         result = cfg_builder.create_topic_no_status_check(topic, timeout=timeout)
         stack.close()
 
+        get_topic.assert_called_once_with(topic_name=topic.name, timeout=timeout)
         create_topic.assert_called_once_with(topic, timeout=timeout)
-        get_topic.assert_not_called()
         assert result == api_return_stub
 
     def test_create_topic_no_status_check_exists(self, topic_manager_topic_factory):
@@ -574,17 +578,15 @@ class TestQuixKafkaConfigsBuilder:
             workspace_id="12345", quix_portal_api_service=api
         )
         stack = ExitStack()
-        create_topic = stack.enter_context(patch.object(cfg_builder, "_create_topic"))
-        create_topic.side_effect = QuixApiRequestFailure(
-            404, "wid/topic/", error_text="topic already exists"
-        )
         get_topic = stack.enter_context(patch.object(cfg_builder, "get_topic"))
         get_topic.return_value = api_return_stub
+        create_topic = stack.enter_context(patch.object(cfg_builder, "_create_topic"))
+
         result = cfg_builder.create_topic_no_status_check(topic, timeout=timeout)
         stack.close()
 
-        create_topic.assert_called_once_with(topic, timeout=timeout)
         get_topic.assert_called_once_with(topic_name=topic.name, timeout=timeout)
+        create_topic.assert_not_called()
         assert result == api_return_stub
 
     def test__confirm_topic_ready_statuses(self):
