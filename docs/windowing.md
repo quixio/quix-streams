@@ -167,17 +167,17 @@ Input:
 
 (Here the `"timestamp"` column illustrates Kafka message timestamps)
 ```json
-{"temperature": 65, "timestamp": 100}
-{"temperature": 52, "timestamp": 200}
-{"temperature": 61, "timestamp": 300}
+{"temperature": 30, "timestamp": 100}
+{"temperature": 29, "timestamp": 200}
+{"temperature": 28, "timestamp": 300}
 ```
 
 Expected output:
 
 ```json
-{"avg_temperature": 65, "window_start": 0, "window_end": 3600000}
-{"avg_temperature": 58.5, "window_start": 0, "window_end": 3600000}
-{"avg_temperature": 59.333, "window_start": 0, "window_end": 3600000}
+{"avg_temperature": 30, "window_start_ms": 0, "window_end_ms": 3600000}
+{"avg_temperature": 29.5, "window_start_ms": 0, "window_end_ms": 3600000}
+{"avg_temperature": 29, "window_start_ms": 0, "window_end_ms": 3600000}
 ```
 
 Here is how to do it using tumbling windows: 
@@ -253,21 +253,21 @@ Input:
 (Here the `"timestamp"` column illustrates Kafka message timestamps)
 
 ```json
-{"temperature": 65, "timestamp": 50000}
-{"temperature": 52, "timestamp": 60000}
-{"temperature": 61, "timestamp": 62000}
+{"temperature": 30, "timestamp": 50000}
+{"temperature": 29, "timestamp": 60000}
+{"temperature": 28, "timestamp": 62000}
 ```
 
 Expected output:
 
 ```json
-{"avg_temperature": 65, "window_start": 0, "window_end": 3600000}
+{"avg_temperature": 30, "window_start_ms": 0, "window_end_ms": 3600000}
 
-{"avg_temperature": 58.5, "window_start": 0, "window_end": 3600000}
-{"avg_temperature": 65, "window_start": 60000, "window_end": 4200000}
+{"avg_temperature": 29.5, "window_start_ms": 0, "window_end_ms": 3600000}
+{"avg_temperature": 30, "window_start_ms": 60000, "window_end_ms": 4200000}
 
-{"avg_temperature": 59.333, "window_start": 0, "window_end": 3600000}
-{"avg_temperature": 56.5, "window_start": 60000, "window_end": 4200000}
+{"avg_temperature": 29, "window_start_ms": 0, "window_end_ms": 3600000}
+{"avg_temperature": 28.5, "window_start_ms": 60000, "window_end_ms": 4200000}
 ```
 
 
@@ -285,6 +285,94 @@ sdf = (
     # Define a hopping window of 1h with 10m step
     # You can also pass duration_ms and step_ms as integers of milliseconds
     .hopping_window(duration_ms=timedelta(hours=1), step_ms=timedelta(minutes=10))
+
+    # Specify the "mean" aggregate function
+    .mean()
+
+    # Emit updates for each incoming message
+    .current()
+
+    # Unwrap the aggregated result to match the expected output format
+    .apply(
+        lambda result: {
+            "avg_temperature": result["value"],
+            "window_start_ms": result["start"],
+            "window_end_ms": result["end"],
+        }
+    )
+)
+
+```
+
+
+## Sliding Windows
+Sliding windows are overlapping time-based windows that advance with each incoming message, rather than at fixed time intervals like hopping windows. They have a fixed 1 ms resolution and perform better and are less resource-intensive than hopping windows with a 1 ms step. Sliding windows do not produce redundant windows; every interval has a distinct aggregation.
+
+Sliding windows provide optimal performance for tasks requiring high-precision real-time monitoring. However, if the task is not time-critical or the data stream is extremely dense, tumbling or hopping windows may perform better.
+
+For example, a sliding window of 1 hour will generate the following intervals as messages A, B, C, and D arrive:
+
+```
+                Sliding Windows
+
+Time
+[00:00:00.000, 01:00:00.000):  ......A
+[00:00:00.001, 01:00:00.001):   ......B
+[00:00:00.003, 01:00:00.003):     ......C
+[00:00:00.006, 01:00:00.006):        ......D
+
+```
+   
+Note that both the start and the end of the interval are inclusive.
+
+In sliding windows, each timestamp can be assigned to multiple intervals because these intervals overlap.
+
+For example, a timestamp `01:33:13.000` will match intervals for all messages incoming between `01:33:13.000` and `02:33:13.000`. Borderline windows including this timestamp will be:
+
+   - `00:33:13.000 - 01:33:13.000`
+   - `01:33:13.000 - 02:33:13.000`
+
+    
+**Example:**
+
+Imagine you receive temperature readings from sensors, and you need to calculate the average temperature for the last hour, producing updates for each incoming message. The message key is a sensor ID, so the aggregations will be grouped by each sensor.
+
+Input:  
+(Here the `"timestamp"` column illustrates Kafka message timestamps)
+
+```json
+{"temperature": 30, "timestamp": 3600000}
+{"temperature": 29, "timestamp": 4800000}
+{"temperature": 28, "timestamp": 4800001}
+{"temperature": 27, "timestamp": 7200000}
+{"temperature": 26, "timestamp": 7200001}
+```
+
+Expected output:
+
+```json
+{"avg_temperature": 30, "window_start_ms": 0, "window_end_ms": 3600000}
+{"avg_temperature": 29.5, "window_start_ms": 1200000, "window_end_ms": 4800000}
+{"avg_temperature": 29, "window_start_ms": 1200001, "window_end_ms": 4800001}
+{"avg_temperature": 28.5, "window_start_ms": 3600000, "window_end_ms": 7200000}
+{"avg_temperature": 27.5, "window_start_ms": 3600001, "window_end_ms": 7200001}  # reading 30 is outside of the window
+```
+
+
+```python
+from datetime import timedelta
+from quixstreams import Application
+
+app = Application(...)
+sdf = app.dataframe(...)
+
+sdf = (
+    # Extract "temperature" value from the message
+    sdf.apply(lambda value: value["temperature"])
+
+    # Define a sliding window of 1h
+    # You can also pass duration_ms as integer of milliseconds
+    .sliding_window(duration_ms=timedelta(hours=1))
 
     # Specify the "mean" aggregate function
     .mean()

@@ -1,5 +1,4 @@
 from contextlib import contextmanager
-from timeit import timeit
 
 import pytest
 
@@ -30,17 +29,32 @@ def test_update_window(transaction_state):
         assert state.get_window(start_ms=0, end_ms=10) == 1
 
 
-def test_expire_windows(transaction_state):
+def test_update_window_with_window_timestamp(transaction_state):
+    with transaction_state() as state:
+        state.update_window(
+            start_ms=0, end_ms=10, value=1, timestamp_ms=2, window_timestamp_ms=3
+        )
+        assert state.get_window(start_ms=0, end_ms=10) == [3, 1]
+
+    with transaction_state() as state:
+        assert state.get_window(start_ms=0, end_ms=10) == [3, 1]
+
+
+@pytest.mark.parametrize("delete", [True, False])
+def test_expire_windows(transaction_state, delete):
+    duration_ms = 10
+
     with transaction_state() as state:
         state.update_window(start_ms=0, end_ms=10, value=1, timestamp_ms=2)
         state.update_window(start_ms=10, end_ms=20, value=2, timestamp_ms=10)
 
     with transaction_state() as state:
         state.update_window(start_ms=20, end_ms=30, value=3, timestamp_ms=20)
-        expired = state.expire_windows(duration_ms=10)
+        max_start_time = state.get_latest_timestamp() - duration_ms
+        expired = state.expire_windows(max_start_time=max_start_time, delete=delete)
         # "expire_windows" must update the expiration index so that the same
         # windows are not expired twice
-        assert not state.expire_windows(duration_ms=10)
+        assert not state.expire_windows(max_start_time=max_start_time, delete=delete)
 
     assert len(expired) == 2
     assert expired == [
@@ -49,12 +63,14 @@ def test_expire_windows(transaction_state):
     ]
 
     with transaction_state() as state:
-        assert state.get_window(start_ms=0, end_ms=10) is None
-        assert state.get_window(start_ms=10, end_ms=20) is None
+        assert state.get_window(start_ms=0, end_ms=10) == None if delete else 1
+        assert state.get_window(start_ms=10, end_ms=20) == None if delete else 2
         assert state.get_window(start_ms=20, end_ms=30) == 3
 
 
 def test_same_keys_in_db_and_update_cache(transaction_state):
+    duration_ms = 10
+
     with transaction_state() as state:
         state.update_window(start_ms=0, end_ms=10, value=1, timestamp_ms=2)
 
@@ -63,7 +79,8 @@ def test_same_keys_in_db_and_update_cache(transaction_state):
         state.update_window(start_ms=0, end_ms=10, value=3, timestamp_ms=8)
 
         state.update_window(start_ms=10, end_ms=20, value=2, timestamp_ms=10)
-        expired = state.expire_windows(duration_ms=10)
+        max_start_time = state.get_latest_timestamp() - duration_ms
+        expired = state.expire_windows(max_start_time=max_start_time)
 
         # Value from the cache takes precedence over the value in the db
         assert expired == [((0, 10), 3)]
@@ -251,38 +268,19 @@ def test_get_windows(
         assert list(windows) == expected_windows
 
 
-@pytest.mark.timeit
-@pytest.mark.parametrize("backwards", [False, True])
-def test_get_windows_timeit(transaction_state, backwards):
-    db_windows, cached_windows, deleted_windows = [], [], []
-    number_of_windows = 100000
-
-    for i in range(number_of_windows):
-        window = {"start_ms": i, "end_ms": i + 10, "value": i, "timestamp_ms": i + 1}
-        db_windows.append(window)
-
-        if not i % 2:
-            cached_windows.append(window)
-        if not i % 4:
-            deleted_windows.append(
-                {"start_ms": window["start_ms"], "end_ms": window["end_ms"]}
-            )
+def test_delete_windows(transaction_state):
+    with transaction_state() as state:
+        state.update_window(start_ms=1, end_ms=2, value=1, timestamp_ms=1)
+        state.update_window(start_ms=2, end_ms=3, value=2, timestamp_ms=2)
+        state.update_window(start_ms=3, end_ms=4, value=3, timestamp_ms=3)
 
     with transaction_state() as state:
-        for window in db_windows:
-            state.update_window(**window)
+        assert state.get_window(start_ms=1, end_ms=2)
+        assert state.get_window(start_ms=2, end_ms=3)
+        assert state.get_window(start_ms=3, end_ms=4)
 
-    with transaction_state() as state:
-        for window in cached_windows:
-            state.update_window(**window)
-        for window in deleted_windows:
-            state._transaction.delete_window(**window, prefix=state._prefix)
+        state.delete_windows(max_start_time=2)
 
-        func = lambda: list(
-            state.get_windows(
-                start_from_ms=-1, start_to_ms=number_of_windows, backwards=backwards
-            )
-        )
-        execution_time = timeit(func, number=100)
-
-    print("Execution time:", execution_time)
+        assert not state.get_window(start_ms=1, end_ms=2)
+        assert not state.get_window(start_ms=2, end_ms=3)
+        assert state.get_window(start_ms=3, end_ms=4)
