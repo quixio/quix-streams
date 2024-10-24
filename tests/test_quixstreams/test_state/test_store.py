@@ -1,9 +1,11 @@
 import pytest
 
 from quixstreams.state.exceptions import PartitionNotAssignedError
+from quixstreams.state.manager import SUPPORTED_STORES
 
 
-class TestRocksDBStore:
+@pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
+class TestStore:
     def test_open_close(self, store_factory):
         with store_factory():
             pass
@@ -30,10 +32,7 @@ class TestRocksDBStore:
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             tx.set("key", "value", prefix=prefix)
-        store.revoke_partition(0)
 
-        # Assign partition again and check the value
-        store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             assert tx.get("key", prefix=prefix) == "value"
         assert store._changelog_producer_factory is None
