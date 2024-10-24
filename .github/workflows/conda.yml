@@ -1,8 +1,7 @@
 name: Update Conda Requirements
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
+  push:
     branches:
       - 'chore/update-conda-requirements'
 
@@ -13,7 +12,7 @@ jobs:
       pull-requests: write
     runs-on: ubuntu-latest
     steps:
-        - run: echo ${{ github.event.pull_request.head.ref }}
+        - run: echo ${{ github.event.push.head.ref }}
     #   - uses: actions/checkout@v4
     #     with:
     #       ref: ${{ github.event.pull_request.head.ref }}
