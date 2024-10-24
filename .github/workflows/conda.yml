@@ -3,7 +3,7 @@ name: Update Conda Requirements
 on:
   pull_request:
     branches:
-      - 'chore/conda-test-branch'
+      - '*'
 
 jobs:
   update-conda-files:
