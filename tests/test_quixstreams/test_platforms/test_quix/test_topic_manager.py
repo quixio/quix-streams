@@ -15,7 +15,7 @@ class TestQuixTopicManager:
         topic_id = "quix_topic_id"
 
         config_builder = quix_mock_config_builder_factory()
-        config_builder.create_topic_no_status_check.side_effect = lambda _topic: {
+        config_builder.get_or_create_topic.side_effect = lambda _topic: {
             "id": topic_id,
             "name": _topic.name,
             "configuration": {
@@ -36,7 +36,7 @@ class TestQuixTopicManager:
         assert topic.name == topic_id
         assert topic_manager.topics[topic.name] == topic
         assert (
-            config_builder.create_topic_no_status_check.call_args_list[0].args[0].name
+            config_builder.get_or_create_topic.call_args_list[0].args[0].name
             == topic_name
         )
         assert topic.config.num_partitions == num_partitions
@@ -59,7 +59,7 @@ class TestQuixTopicManager:
             quix_config_builder=config_builder,
         )
 
-        config_builder.create_topic_no_status_check.side_effect = lambda _topic: {
+        config_builder.get_or_create_topic.side_effect = lambda _topic: {
             "id": topic_id,
             "name": _topic.name,
             "configuration": {
@@ -73,7 +73,7 @@ class TestQuixTopicManager:
         topic = topic_manager.topic(topic_name)
         assert topic.name == topic_id
 
-        config_builder.create_topic_no_status_check.side_effect = lambda _topic: {
+        config_builder.get_or_create_topic.side_effect = lambda _topic: {
             "id": changelog_id,
             "name": _topic.name,
             "configuration": {
@@ -90,13 +90,13 @@ class TestQuixTopicManager:
         assert changelog.name == changelog_id
         assert topic_manager.changelog_topics[topic.name][store_name] == changelog
         assert (
-            config_builder.create_topic_no_status_check.call_args_list[1].args[0].name
+            config_builder.get_or_create_topic.call_args_list[1].args[0].name
             == changelog_name
         )
         assert changelog.config.num_partitions == num_partitions
         assert changelog.config.replication_factor == rep_factor
 
-        config_builder.create_topic_no_status_check.side_effect = lambda _topic: {
+        config_builder.get_or_create_topic.side_effect = lambda _topic: {
             "id": topic_id,
             "name": _topic.name,
             "configuration": {
@@ -110,7 +110,7 @@ class TestQuixTopicManager:
         topic = topic_manager.topic(topic_name)
         assert topic.name == topic_id
 
-        config_builder.create_topic_no_status_check.side_effect = lambda _topic: {
+        config_builder.get_or_create_topic.side_effect = lambda _topic: {
             "id": changelog_id,
             "name": _topic.name,
             "configuration": {
@@ -127,7 +127,7 @@ class TestQuixTopicManager:
         assert changelog.name == changelog_id
         assert topic_manager.changelog_topics[topic.name][store_name] == changelog
         assert (
-            config_builder.create_topic_no_status_check.call_args_list[1].args[0].name
+            config_builder.get_or_create_topic.call_args_list[1].args[0].name
             == changelog_name
         )
         assert changelog.config.num_partitions == num_partitions
@@ -162,7 +162,7 @@ class TestQuixTopicManager:
             quix_config_builder=config_builder,
         )
 
-        config_builder.create_topic_no_status_check.side_effect = lambda _topic: {
+        config_builder.get_or_create_topic.side_effect = lambda _topic: {
             "id": topic_id,
             "name": _topic.name,
             "configuration": {
@@ -176,7 +176,7 @@ class TestQuixTopicManager:
         topic = topic_manager.topic(topic_name)
         assert topic.name == topic_id
 
-        config_builder.create_topic_no_status_check.side_effect = lambda _topic: {
+        config_builder.get_or_create_topic.side_effect = lambda _topic: {
             "id": repartition_id,
             "name": _topic.name,
             "configuration": {
@@ -191,7 +191,7 @@ class TestQuixTopicManager:
         assert repartition.name == repartition_id
         assert topic_manager.repartition_topics[repartition.name] == repartition
 
-        config_builder.create_topic_no_status_check.side_effect = lambda _topic: {
+        config_builder.get_or_create_topic.side_effect = lambda _topic: {
             "id": changelog_topic_id,
             "name": _topic.name,
             "configuration": {
@@ -206,7 +206,7 @@ class TestQuixTopicManager:
         assert changelog.name == changelog_topic_id
         assert topic_manager.changelog_topics[repartition.name][store_name] == changelog
         assert (
-            config_builder.create_topic_no_status_check.call_args_list[2].args[0].name
+            config_builder.get_or_create_topic.call_args_list[2].args[0].name
             == changelog_name
         )
         assert changelog.config.num_partitions == num_partitions

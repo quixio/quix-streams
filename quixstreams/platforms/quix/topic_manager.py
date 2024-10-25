@@ -1,6 +1,6 @@
 from typing import List, Literal
 
-from quixstreams.models.topics import Topic, TopicAdmin, TopicConfig, TopicManager
+from quixstreams.models.topics import Topic, TopicAdmin, TopicManager
 
 from .config import QuixKafkaConfigsBuilder
 
@@ -61,22 +61,13 @@ class QuixTopicManager(TopicManager):
 
         Additionally, sets the actual topic configuration since we now have it anyway.
         """
-        quix_topic_info = self._quix_config_builder.create_topic_no_status_check(topic)
-        true_cfg = quix_topic_info["configuration"]
-        true_topic = topic.__clone__(
-            name=quix_topic_info["id"],
-            config=TopicConfig(
-                num_partitions=true_cfg["partitions"],
-                replication_factor=true_cfg["replicationFactor"],
-                extra_config={
-                    **topic.config.extra_config,
-                    "retention.ms": true_cfg["retentionInMinutes"] * 60 * 1000,
-                    "retention.bytes": true_cfg["retentionInBytes"],
-                    # TODO: uncomment or remove this once Emanuel confirms API behavior
-                    # "cleanup.policy": true_cfg["cleanupPolicy"],
-                },
-            ),
-        )
+        quix_topic_info = self._quix_config_builder.get_or_create_topic(topic)
+        true_topic = self._quix_config_builder.convert_topic_response(quix_topic_info)
+        # allows us to include the configs not included in the API response
+        true_topic.config.extra_config = {
+            **topic.config.extra_config,
+            **true_topic.config.extra_config,
+        }
         self._topic_id_to_name[true_topic.name] = quix_topic_info["name"]
         return super()._finalize_topic(true_topic)
 
@@ -87,7 +78,7 @@ class QuixTopicManager(TopicManager):
         Because we create topics immediately upon Topic generation for Quix Cloud,
         this method simply confirms topics all have a "Ready" status.
         """
-        self._quix_config_builder.confirm_topic_ready_statuses(topics)
+        self._quix_config_builder.wait_for_topic_ready_statuses(topics)
 
     def _internal_name(
         self,

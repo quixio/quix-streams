@@ -379,12 +379,16 @@ def quix_mock_config_builder_factory(kafka_container):
             strip_workspace_id_prefix(workspace_id, s) if workspace_id else s
         )
 
+        cfg_builder.convert_topic_response.side_effect = (
+            lambda topic: QuixKafkaConfigsBuilder.convert_topic_response(topic)
+        )
+
         # Mock the create API call and return this response.
         # Doing it this way keeps the old behavior where topics are only created
         # when the app is actually run (for tests, at least).
         # This does simulate an expected topic name with prepended WID which may not
         # always be true, but it's just to make testing easier.
-        cfg_builder.create_topic_no_status_check.side_effect = lambda topic: {
+        cfg_builder.get_or_create_topic.side_effect = lambda topic, timeout=None: {
             "id": f"{workspace_id}-{topic.name}",
             "name": topic.name,
             "configuration": {

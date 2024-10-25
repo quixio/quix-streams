@@ -553,10 +553,10 @@ class TestQuixKafkaConfigsBuilder:
         get_topic.side_effect = QuixApiRequestFailure(
             404, "wid/topic/", error_text="Topic was not found"
         )
-        create_topic = stack.enter_context(patch.object(cfg_builder, "_create_topic"))
+        create_topic = stack.enter_context(patch.object(cfg_builder, "create_topic"))
         create_topic.return_value = api_return_stub
 
-        result = cfg_builder.create_topic_no_status_check(topic, timeout=timeout)
+        result = cfg_builder.get_or_create_topic(topic, timeout=timeout)
         stack.close()
 
         get_topic.assert_called_once_with(topic_name=topic.name, timeout=timeout)
@@ -580,16 +580,16 @@ class TestQuixKafkaConfigsBuilder:
         stack = ExitStack()
         get_topic = stack.enter_context(patch.object(cfg_builder, "get_topic"))
         get_topic.return_value = api_return_stub
-        create_topic = stack.enter_context(patch.object(cfg_builder, "_create_topic"))
+        create_topic = stack.enter_context(patch.object(cfg_builder, "create_topic"))
 
-        result = cfg_builder.create_topic_no_status_check(topic, timeout=timeout)
+        result = cfg_builder.get_or_create_topic(topic, timeout=timeout)
         stack.close()
 
         get_topic.assert_called_once_with(topic_name=topic.name, timeout=timeout)
         create_topic.assert_not_called()
         assert result == api_return_stub
 
-    def test__confirm_topic_ready_statuses(self):
+    def test_wait_for_topic_ready_statuses(self, topic_manager_topic_factory):
         def side_effect():
             def nested():
                 data = [
@@ -628,15 +628,18 @@ class TestQuixKafkaConfigsBuilder:
         )
         with patch.object(cfg_builder, "get_topics") as get_topics:
             get_topics.side_effect = side_effect()
-            cfg_builder._confirm_topic_ready_statuses(
-                topics={"12345-topic_b", "12345-topic_c", "12345-topic_d"},
+            cfg_builder.wait_for_topic_ready_statuses(
+                topics=[
+                    topic_manager_topic_factory(f"12345-topic_{x}")
+                    for x in ["a", "b", "c", "d"]
+                ],
                 timeout=timeout,
             )
 
         get_topics.assert_has_calls([call(timeout=timeout)] * 2)
         assert get_topics.call_count == 2
 
-    def test__confirm_topic_ready_statuses_error(self):
+    def test_wait_for_topic_ready_statuses_error(self, topic_manager_topic_factory):
         data = [
             {
                 "id": "12345-topic_a",
@@ -669,25 +672,29 @@ class TestQuixKafkaConfigsBuilder:
             workspace_id="12345", quix_portal_api_service=api
         )
         with patch.object(cfg_builder, "get_topics") as get_topics:
-            topics = {"12345-topic_b", "12345-topic_c", "12345-topic_d"}
             get_topics.return_value = data
             with pytest.raises(QuixCreateTopicFailure) as e:
-                cfg_builder._confirm_topic_ready_statuses(topics)
+                cfg_builder.wait_for_topic_ready_statuses(
+                    topics=[
+                        topic_manager_topic_factory(f"12345-topic_{x}")
+                        for x in ["a", "b", "c", "d"]
+                    ],
+                )
         assert get_topics.call_count == 1
         for topic in ["topic_c", "topic_d"]:
             assert topic in str(e)
         assert "topic_b" not in str(e)
 
-    def test__confirm_topic_ready_statuses_timeout(self):
+    def test_wait_for_topic_ready_statuses_timeout(self, topic_manager_topic_factory):
         get_topics_return = [
             {
-                "id": "12345-topic_c",
-                "name": "topic_c",
+                "id": "12345-topic_a",
+                "name": "topic_a",
                 "status": "Ready",
             },
             {
-                "id": "12345-topic_d",
-                "name": "topic_d",
+                "id": "12345-topic_b",
+                "name": "topic_b",
                 "status": "Creating",
             },
         ]
@@ -699,59 +706,13 @@ class TestQuixKafkaConfigsBuilder:
         with patch.object(cfg_builder, "get_topics") as get_topics:
             get_topics.return_value = get_topics_return
             with pytest.raises(QuixCreateTopicTimeout) as e:
-                cfg_builder._confirm_topic_ready_statuses(
-                    {"12345-topic_b", "12345-topic_c", "12345-topic_d"},
+                cfg_builder.wait_for_topic_ready_statuses(
+                    topics=[
+                        topic_manager_topic_factory(f"12345-topic_{x}")
+                        for x in ["a", "b"]
+                    ],
                     finalize_timeout=0.01,
                 )
         e = e.value.args[0]
-        assert "topic_c" not in e and "topic_d" in e
         assert get_topics.call_count == 1
-
-    def test_get_topic_success(self):
-        workspace_id = "12345"
-        topic_name = "topic_in"
-        api_data_stub = {
-            "id": f"{workspace_id}-{topic_name}",
-            "name": topic_name,
-            "createdAt": "2023-10-16T22:27:39.943Z",
-            "updatedAt": "2023-10-16T22:28:27.17Z",
-            "persisted": False,
-            "persistedStatus": "Complete",
-            "external": False,
-            "workspaceId": "12345",
-            "status": "Ready",
-            "configuration": {
-                "partitions": 2,
-                "replicationFactor": 2,
-                "retentionInMinutes": 10080,
-                "retentionInBytes": 52428800,
-            },
-        }
-        api = create_autospec(QuixPortalApiService)
-        cfg_builder = QuixKafkaConfigsBuilder(
-            workspace_id="12345", quix_portal_api_service=api
-        )
-        api.get_topic.return_value = api_data_stub
-
-        assert cfg_builder.get_topic(topic_name) == api_data_stub
-
-    def test_get_topic_error(self):
-        """
-        Non-404 errors should still be raised when doing get_topic
-        """
-        topic_name = "topic_in"
-        api_error = QuixApiRequestFailure(
-            status_code=403,
-            url=f"topic_endpoint/{topic_name}",
-            error_text="Access Denied",
-        )
-        api = create_autospec(QuixPortalApiService)
-        cfg_builder = QuixKafkaConfigsBuilder(
-            workspace_id="12345", quix_portal_api_service=api
-        )
-        api.get_topic.side_effect = api_error
-
-        with pytest.raises(QuixApiRequestFailure) as e:
-            cfg_builder.get_topic(topic_name)
-
-        assert e.value.status_code == api_error.status_code
+        assert "topic_a" not in e and "topic_b" in e

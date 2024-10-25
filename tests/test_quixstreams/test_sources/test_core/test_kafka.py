@@ -309,6 +309,9 @@ class TestQuixEnvironmentSource(Base):
     def _get_librdkafka_connection_config(self, *args, **kwargs):
         return ConnectionConfig(bootstrap_servers=self._external_broker_address)
 
+    def _get_or_create_topic(self, *args, **kwargs):
+        return ConnectionConfig(bootstrap_servers=self._external_broker_address)
+
     def create_source_topic(self, num_partitions=1, quix_workspace_id=None):
         source_topic = Topic(
             str(uuid.uuid4()),
@@ -331,12 +334,32 @@ class TestQuixEnvironmentSource(Base):
     def test_quix_environment_source(self, app, executor):
         destination_topic = app.topic(str(uuid.uuid4()))
         source_topic, source_topic_with_workspace = self.create_source_topic()
+        workspace_id = self.QUIX_WORKSPACE_ID
+
+        def mock_get_or_create(self, topic, timeout=None):
+            return {
+                "id": f"{workspace_id}-{topic.name}",
+                "name": topic.name,
+                "configuration": {
+                    "partitions": topic.config.num_partitions,
+                    "replicationFactor": topic.config.replication_factor,
+                    "retentionInMinutes": 1,
+                    "retentionInBytes": 1,
+                    "cleanupPolicy": topic.config.extra_config.get(
+                        "cleanup.policy", "delete"
+                    ),
+                },
+            }
 
         with patch(
             "quixstreams.app.QuixKafkaConfigsBuilder._get_librdkafka_connection_config",
             self._get_librdkafka_connection_config,
         ):
-            source = self.source(app.config, source_topic)
+            with patch(
+                "quixstreams.app.QuixKafkaConfigsBuilder.get_or_create_topic",
+                mock_get_or_create,
+            ):
+                source = self.source(app.config, source_topic)
 
         app.add_source(source, destination_topic)
 
