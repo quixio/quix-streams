@@ -11,14 +11,12 @@ jobs:
       contents: write
       pull-requests: write
     runs-on: ubuntu-latest
+    if: startsWith(github.event.pull_request.head.ref, 'do-not-run/')
     steps:
-        - run: echo ${{ github.ref_name }}
-        - run: echo ${{ github.ref }}
-        - run: echo ${{ github.event.pull_request.head.ref }}
-        - run: echo 'foo'
-    #   - uses: actions/checkout@v4
-    #     with:
-    #       ref: ${{ github.event.pull_request.head.ref }}
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+      - run: git log
     #   - uses: actions/setup-python@v4
     #   - run: python conda/sync_requirements.py
     #   - uses: stefanzweifel/git-auto-commit-action@v5
