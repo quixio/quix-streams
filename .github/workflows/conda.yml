@@ -15,6 +15,7 @@ jobs:
         - run: echo ${{ github.ref_name }}
         - run: echo ${{ github.ref }}
         - run: echo ${{ github.event.pull_request.head.ref }}
+        - run: echo 'foo'
     #   - uses: actions/checkout@v4
     #     with:
     #       ref: ${{ github.event.pull_request.head.ref }}
