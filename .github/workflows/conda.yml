@@ -18,6 +18,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref }}
       - uses: actions/setup-python@v4
       - run: python conda/sync_requirements.py
+      - run: touch conda/test
       - uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: Synchronize Conda requirements
