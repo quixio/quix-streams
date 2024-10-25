@@ -16,7 +16,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.ref }}
-      - run: git log
-    #   - uses: actions/setup-python@v4
-    #   - run: python conda/sync_requirements.py
-    #   - uses: stefanzweifel/git-auto-commit-action@v5
+      - uses: actions/setup-python@v4
+      - run: python conda/sync_requirements.py
+      - uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: Synchronize Conda requirements
