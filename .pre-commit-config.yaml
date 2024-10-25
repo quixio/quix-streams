@@ -4,3 +4,10 @@ repos:
     hooks:
       - id: ruff
       - id: ruff-format
+  - repo: local
+    hooks:
+      - id: conda-requirements
+        name: conda-requirements
+        entry: python conda/requirements.py
+        language: python
+        files: ^(requirements\.txt|pyproject\.toml)$
