@@ -11,7 +11,7 @@ jobs:
       contents: write
       pull-requests: write
     runs-on: ubuntu-latest
-    if: startsWith(github.event.pull_request.head.ref, 'do-not-run/')
+    if: startsWith(github.event.pull_request.head.ref, 'conda-sync-')
     steps:
       - uses: actions/checkout@v4
         with:
