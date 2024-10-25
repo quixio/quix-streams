@@ -12,5 +12,5 @@ jobs:
       pull-requests: write
     runs-on: ubuntu-latest
     steps:
-        - run: echo 'Branch: ${{ github.ref }}'
-        - run: echo 'Branch: ${{ github.ref_name }}'
+        - run: echo ${{ github.ref_name }}
+        - run: echo ${{ github.ref }}
