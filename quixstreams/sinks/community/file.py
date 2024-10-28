@@ -9,14 +9,8 @@ from .formats.parquet_format import ParquetFormat
 
 from quixstreams.sinks import BatchingSink, SinkBatch
 
-LogLevel = Literal[
-    "CRITICAL",
-    "ERROR",
-    "WARNING",
-    "INFO",
-    "DEBUG",
-    "NOTSET",
-]
+logger = logging.getLogger(__name__)
+
 FormatSpec = Literal["bytes", "json", "parquet"]
 
 _SINK_FORMATTERS: Dict[FormatSpec, BatchFormat] = {
@@ -39,33 +33,21 @@ class FileSink(BatchingSink):
     same key are appended to the same file where possible.
     """
 
-    def __init__(
-        self, output_dir: str, format: FormatSpec, loglevel: LogLevel = "INFO"
-    ):
+    def __init__(self, output_dir: str, format: FormatSpec) -> None:
         """
         Initializes the FileSink with the specified configuration.
 
         Parameters:
             output_dir (str): The directory where files will be written.
             format (S3SinkBatchFormat): The data serialization format to use.
-            loglevel (LogLevel): The logging level for the logger (default is 'INFO').
         """
         super().__init__()
-
-        # Configure logging.
-        self._logger = logging.getLogger("FileSink")
-        log_format = (
-            "[%(asctime)s.%(msecs)03d] [%(levelname)s] [%(name)s] : %(message)s"
-        )
-        logging.basicConfig(format=log_format, datefmt="%Y-%m-%d %H:%M:%S")
-        self._logger.setLevel(loglevel)
-
         self._format = self._resolve_format(format)
         self._output_dir = output_dir
 
         # Ensure the output directory exists.
         os.makedirs(self._output_dir, exist_ok=True)
-        self._logger.info(f"Files will be written to '{self._output_dir}'.")
+        logger.info(f"Files will be written to '{self._output_dir}'.")
 
     def write(self, batch: SinkBatch):
         """
@@ -113,12 +95,10 @@ class FileSink(BatchingSink):
                 with open(file_path, "wb") as f:
                     f.write(data)
 
-                self._logger.info(
-                    f"Wrote {len(messages)} records to file '{file_path}'."
-                )
+                logger.info(f"Wrote {len(messages)} records to file '{file_path}'.")
 
         except Exception as e:
-            self._logger.error(f"Error writing data to file: {e}")
+            logger.error(f"Error writing data to file: {e}")
             raise
 
     def _resolve_format(
