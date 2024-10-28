@@ -1,14 +1,13 @@
-import abc
 import json
 from gzip import compress as gzip_compress
-from quixstreams.models.messages import KafkaMessage
 from io import BytesIO
-from typing import Optional, Callable, Any, List
-
-from ..file_formats import BatchFormat
+from typing import Any, Callable, List, Optional
 
 from jsonlines import Writer
 
+from quixstreams.models.messages import KafkaMessage
+
+from ..file_formats import BatchFormat
 
 
 class JSONFormat(BatchFormat):
@@ -32,13 +31,17 @@ class JSONFormat(BatchFormat):
         return self._file_extension
 
     def deserialize_value(self, value: bytes) -> Any:
-        
-        lines = value.decode('utf-8').splitlines()
-        
+        lines = value.decode("utf-8").splitlines()
+
         for line in lines:
             json_doc = self._loads(line)
-            
-            yield KafkaMessage(json_doc["key"], json.dumps(json_doc), None, timestamp=json_doc["timestamp"])
+
+            yield KafkaMessage(
+                json_doc["key"],
+                json.dumps(json_doc),
+                None,
+                timestamp=json_doc["timestamp"],
+            )
 
     def serialize_batch_values(self, values: List[any]) -> bytes:
         with BytesIO() as f:
@@ -54,4 +57,3 @@ class JSONFormat(BatchFormat):
             if self._compress:
                 value_bytes = gzip_compress(value_bytes)
             return value_bytes
-        

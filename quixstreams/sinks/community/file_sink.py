@@ -1,13 +1,13 @@
 import logging
 import os
-from quixstreams.sinks import SinkBatch, BatchingSink
-from typing import Literal, Dict, List
+from typing import Any, Dict, List, Literal, Union
+
 from file_formats import BatchFormat
-from formats.json_format import JSONFormat
 from formats.bytes_format import BytesFormat
+from formats.json_format import JSONFormat
 from formats.parquet_format import ParquetFormat
 
-from typing import Union, Any, Literal, Optional, Dict
+from quixstreams.sinks import BatchingSink, SinkBatch
 
 LogLevel = Literal[
     "CRITICAL",
@@ -17,14 +17,14 @@ LogLevel = Literal[
     "DEBUG",
     "NOTSET",
 ]
-
-
 FormatSpec = Literal["bytes", "json", "parquet"]
+
 _SINK_FORMATTERS: Dict[FormatSpec, BatchFormat] = {
     "json": JSONFormat(),
     "bytes": BytesFormat(),
     "parquet": ParquetFormat(),
 }
+
 
 class InvalidS3FormatterError(Exception):
     """
@@ -40,10 +40,7 @@ class FileSink(BatchingSink):
     """
 
     def __init__(
-        self,
-        output_dir: str,
-        format: FormatSpec,
-        loglevel: LogLevel = "INFO"
+        self, output_dir: str, format: FormatSpec, loglevel: LogLevel = "INFO"
     ):
         """
         Initializes the FileSink with the specified configuration.
@@ -57,8 +54,10 @@ class FileSink(BatchingSink):
 
         # Configure logging.
         self._logger = logging.getLogger("FileSink")
-        log_format = '[%(asctime)s.%(msecs)03d] [%(levelname)s] [%(name)s] : %(message)s'
-        logging.basicConfig(format=log_format, datefmt='%Y-%m-%d %H:%M:%S')
+        log_format = (
+            "[%(asctime)s.%(msecs)03d] [%(levelname)s] [%(name)s] : %(message)s"
+        )
+        logging.basicConfig(format=log_format, datefmt="%Y-%m-%d %H:%M:%S")
         self._logger.setLevel(loglevel)
 
         self._format = self._resolve_format(format)
@@ -79,18 +78,23 @@ class FileSink(BatchingSink):
             # Group messages by key
             messages_by_key: Dict[str, List[Any]] = {}
             for message in batch:
-                key = message.key.decode() if isinstance(message.key, bytes) else str(message.key)
+                key = (
+                    message.key.decode()
+                    if isinstance(message.key, bytes)
+                    else str(message.key)
+                )
                 if key not in messages_by_key:
                     messages_by_key[key] = []
                 messages_by_key[key].append(message)
-                
 
             for key, messages in messages_by_key.items():
                 # Serialize messages for this key using the specified format
                 data = self._format.serialize_batch_values(messages)
 
                 # Generate filename based on the key
-                safe_key = "".join([c if c.isalnum() or c in (' ', '.', '_') else '_' for c in key])
+                safe_key = "".join(
+                    [c if c.isalnum() or c in (" ", ".", "_") else "_" for c in key]
+                )
 
                 padded_offset = str(messages[0].offset).zfill(15)
 
@@ -100,24 +104,28 @@ class FileSink(BatchingSink):
 
                 # Get the folder path
                 folder_path = os.path.dirname(file_path)
-                
+
                 # Create the folder if it doesn't exist
                 if not os.path.exists(folder_path):
                     os.makedirs(folder_path)
 
                 # Write data to a new file
-                with open(file_path, 'wb') as f:
+                with open(file_path, "wb") as f:
                     f.write(data)
 
-                self._logger.info(f"Wrote {len(messages)} records to file '{file_path}'.")
+                self._logger.info(
+                    f"Wrote {len(messages)} records to file '{file_path}'."
+                )
 
         except Exception as e:
             self._logger.error(f"Error writing data to file: {e}")
             raise
-        
+
     def _resolve_format(
         self,
-        formatter_spec: Union[Literal["bytes"], Literal["json"], Literal["parquet"], BatchFormat],
+        formatter_spec: Union[
+            Literal["bytes"], Literal["json"], Literal["parquet"], BatchFormat
+        ],
     ) -> BatchFormat:
         if isinstance(formatter_spec, BatchFormat):
             return formatter_spec

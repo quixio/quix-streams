@@ -1,10 +1,7 @@
 from gzip import compress as gzip_compress
-from quixstreams.models.messages import KafkaMessage
-from io import BytesIO
-from typing import Optional, Callable, Any, List
+from typing import Any, List
 
 from ..file_formats import BatchFormat
-
 
 
 class BytesFormat(BatchFormat):
@@ -28,7 +25,7 @@ class BytesFormat(BatchFormat):
     def file_extension(self) -> str:
         return self._file_extension
 
-    #TODO: Make this returns KafkaMessage.
+    # TODO: Make this returns KafkaMessage.
     def deserialize_value(self, value: bytes) -> Any:
         return value
 
@@ -37,6 +34,3 @@ class BytesFormat(BatchFormat):
         if self._compress:
             value_bytes = gzip_compress(value_bytes)
         return value_bytes
-
-
-
