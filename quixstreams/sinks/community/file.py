@@ -13,9 +13,9 @@ from quixstreams.sinks import BatchingSink, SinkBatch
 
 logger = logging.getLogger(__name__)
 
-FormatSpec = Literal["bytes", "json", "parquet"]
+Format = Literal["bytes", "json", "parquet"]
 
-_SINK_FORMATTERS: dict[FormatSpec, BatchFormat] = {
+_FORMATTERS: dict[Format, BatchFormat] = {
     "json": JSONFormat(),
     "bytes": BytesFormat(),
     "parquet": ParquetFormat(),
@@ -24,9 +24,9 @@ _SINK_FORMATTERS: dict[FormatSpec, BatchFormat] = {
 _UNSAFE_CHARACTERS_REGEX = re.compile(r"[^a-zA-Z0-9 ._]")
 
 
-class InvalidS3FormatterError(Exception):
+class InvalidFormatterError(Exception):
     """
-    Raised when S3 formatter is specified incorrectly
+    Raised when formatter is specified incorrectly
     """
 
 
@@ -37,7 +37,7 @@ class FileSink(BatchingSink):
     same key are appended to the same file where possible.
     """
 
-    def __init__(self, output_dir: str, format: FormatSpec) -> None:
+    def __init__(self, output_dir: str, format: Format) -> None:
         """
         Initializes the FileSink with the specified configuration.
 
@@ -84,20 +84,15 @@ class FileSink(BatchingSink):
 
             logger.info(f"Wrote {len(messages)} records to file '{file_path}'.")
 
-    def _resolve_format(
-        self,
-        formatter_spec: Union[
-            Literal["bytes"], Literal["json"], Literal["parquet"], BatchFormat
-        ],
-    ) -> BatchFormat:
-        if isinstance(formatter_spec, BatchFormat):
-            return formatter_spec
+    def _resolve_format(self, formatter: Union[Format, BatchFormat]) -> BatchFormat:
+        if isinstance(formatter, BatchFormat):
+            return formatter
+        elif formatter_obj := _FORMATTERS.get(formatter):
+            return formatter_obj
 
-        formatter_obj = _SINK_FORMATTERS.get(formatter_spec)
-        if formatter_obj is None:
-            raise InvalidS3FormatterError(
-                f'Invalid format name "{formatter_obj}". '
-                f'Allowed values: "json", "bytes", "parquet", '
-                f"or an instance of {BatchFormat.__class__.__name__} "
-            )
-        return formatter_obj
+        allowed_formats = ", ".join(Format.__args__)
+        raise InvalidFormatterError(
+            f'Invalid format name "{formatter}". '
+            f"Allowed values: {allowed_formats}, "
+            f"or an instance of {BatchFormat.__class__.__name__}."
+        )
