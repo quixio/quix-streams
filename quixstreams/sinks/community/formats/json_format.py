@@ -1,7 +1,7 @@
 import json
 from gzip import compress as gzip_compress
 from io import BytesIO
-from typing import Any, Callable, List, Optional
+from typing import Any, Callable, Optional
 
 from jsonlines import Writer
 
@@ -43,7 +43,7 @@ class JSONFormat(BatchFormat):
                 timestamp=json_doc["timestamp"],
             )
 
-    def serialize_batch_values(self, values: List[any]) -> bytes:
+    def serialize_batch_values(self, values: list[any]) -> bytes:
         with BytesIO() as f:
             with Writer(f, compact=True, dumps=self._dumps) as writer:
                 for row in values:

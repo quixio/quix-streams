@@ -1,6 +1,6 @@
 import gzip
 from io import BytesIO
-from typing import Any, List
+from typing import Any
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -35,7 +35,7 @@ class ParquetFormat(BatchFormat):
             table = pq.read_table(f)
             return table.to_pydict()
 
-    def serialize_batch_values(self, values: List[Any]) -> bytes:
+    def serialize_batch_values(self, values: list[Any]) -> bytes:
         # Get all unique keys (columns) across all rows
         all_keys = set()
         for row in values:

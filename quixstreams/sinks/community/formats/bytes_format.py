@@ -1,5 +1,5 @@
 from gzip import compress as gzip_compress
-from typing import Any, List
+from typing import Any
 
 from ..file_formats import BatchFormat
 
@@ -29,7 +29,7 @@ class BytesFormat(BatchFormat):
     def deserialize_value(self, value: bytes) -> Any:
         return value
 
-    def serialize_batch_values(self, values: List[bytes]) -> bytes:
+    def serialize_batch_values(self, values: list[bytes]) -> bytes:
         value_bytes = self._separator.join(values)
         if self._compress:
             value_bytes = gzip_compress(value_bytes)

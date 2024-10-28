@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Any, Dict, List, Literal, Union
+from typing import Any, Literal, Union
 
 from .file_formats import BatchFormat
 from .formats.bytes_format import BytesFormat
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 FormatSpec = Literal["bytes", "json", "parquet"]
 
-_SINK_FORMATTERS: Dict[FormatSpec, BatchFormat] = {
+_SINK_FORMATTERS: dict[FormatSpec, BatchFormat] = {
     "json": JSONFormat(),
     "bytes": BytesFormat(),
     "parquet": ParquetFormat(),
@@ -58,7 +58,7 @@ class FileSink(BatchingSink):
         """
 
         # Group messages by key
-        messages_by_key: Dict[str, List[Any]] = {}
+        messages_by_key: dict[str, list[Any]] = {}
         for message in batch:
             key = (
                 message.key.decode()

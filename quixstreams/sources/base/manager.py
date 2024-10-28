@@ -2,7 +2,6 @@ import logging
 import signal
 import threading
 from pickle import PicklingError
-from typing import List
 
 from quixstreams.logging import LOGGER_NAME, configure_logging
 from quixstreams.models import Topic
@@ -28,7 +27,7 @@ class SourceProcess(multiprocessing.Process):
         super().__init__()
         self.source: BaseSource = source
 
-        self._exceptions: List[Exception] = []
+        self._exceptions: list[Exception] = []
         self._started = False
         self._stopping = False
 
@@ -168,7 +167,7 @@ class SourceManager:
     """
 
     def __init__(self):
-        self.processes: List[SourceProcess] = []
+        self.processes: list[SourceProcess] = []
 
     def register(self, source: BaseSource):
         """
@@ -188,11 +187,11 @@ class SourceManager:
         return process
 
     @property
-    def sources(self) -> List[BaseSource]:
+    def sources(self) -> list[BaseSource]:
         return [process.source for process in self.processes]
 
     @property
-    def topics(self) -> List[Topic]:
+    def topics(self) -> list[Topic]:
         return [process.source.producer_topic for process in self.processes]
 
     def start_sources(self) -> None:
