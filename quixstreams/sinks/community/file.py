@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from collections import defaultdict
 from typing import Any, Hashable, Literal, Union
 
@@ -19,6 +20,8 @@ _SINK_FORMATTERS: dict[FormatSpec, BatchFormat] = {
     "bytes": BytesFormat(),
     "parquet": ParquetFormat(),
 }
+
+_UNSAFE_CHARACTERS_REGEX = re.compile(r"[^a-zA-Z0-9 ._]")
 
 
 class InvalidS3FormatterError(Exception):
@@ -70,10 +73,7 @@ class FileSink(BatchingSink):
             data = self._format.serialize_batch_values(messages)
 
             # Generate filename based on the key
-            key = _to_str(key)
-            safe_key = "".join(
-                [c if c.isalnum() or c in (" ", ".", "_") else "_" for c in key]
-            )
+            safe_key = _UNSAFE_CHARACTERS_REGEX.sub("_", _to_str(key))
 
             padded_offset = str(messages[0].offset).zfill(15)
 
