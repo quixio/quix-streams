@@ -1,5 +1,6 @@
 import logging
 import os
+from collections import defaultdict
 from typing import Any, Literal, Union
 
 from .file_formats import BatchFormat
@@ -58,15 +59,13 @@ class FileSink(BatchingSink):
         """
 
         # Group messages by key
-        messages_by_key: dict[str, list[Any]] = {}
+        messages_by_key: dict[str, list[Any]] = defaultdict(list)
         for message in batch:
             key = (
                 message.key.decode()
                 if isinstance(message.key, bytes)
                 else str(message.key)
             )
-            if key not in messages_by_key:
-                messages_by_key[key] = []
             messages_by_key[key].append(message)
 
         for key, messages in messages_by_key.items():
