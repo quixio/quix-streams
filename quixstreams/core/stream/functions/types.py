@@ -1,4 +1,4 @@
-from typing import Callable, Any, Iterable, Protocol, Tuple, Union
+from typing import Any, Callable, Iterable, Protocol, Tuple, Union
 
 __all__ = (
     "StreamCallback",

@@ -6,17 +6,17 @@ import operator
 import pprint
 from datetime import timedelta
 from typing import (
-    Optional,
-    Callable,
-    Union,
-    List,
     Any,
+    Callable,
+    Collection,
+    Dict,
+    List,
+    Literal,
+    Optional,
+    Tuple,
+    Union,
     cast,
     overload,
-    Dict,
-    Tuple,
-    Literal,
-    Collection,
 )
 
 from typing_extensions import Self
@@ -26,32 +26,33 @@ from quixstreams.context import (
     set_message_context,
 )
 from quixstreams.core.stream import (
-    Stream,
-    VoidExecutor,
     ApplyCallback,
-    FilterCallback,
-    UpdateCallback,
     ApplyWithMetadataCallback,
+    FilterCallback,
     FilterWithMetadataCallback,
+    Stream,
+    UpdateCallback,
     UpdateWithMetadataCallback,
+    VoidExecutor,
 )
 from quixstreams.models import (
+    HeaderValue,
+    MessageContext,
+    Row,
     Topic,
     TopicManager,
-    Row,
-    MessageContext,
-    HeaderValue,
 )
-from quixstreams.models.serializers import SerializerType, DeserializerType
+from quixstreams.models.serializers import DeserializerType, SerializerType
 from quixstreams.processing import ProcessingContext
 from quixstreams.sinks import BaseSink
 from quixstreams.state.base import State
+
 from .base import BaseStreaming
 from .exceptions import InvalidOperation
 from .registry import DataframeRegistry
 from .series import StreamingSeries
 from .utils import ensure_milliseconds
-from .windows import TumblingWindowDefinition, HoppingWindowDefinition
+from .windows import HoppingWindowDefinition, TumblingWindowDefinition
 
 ApplyCallbackStateful = Callable[[Any, State], Any]
 ApplyWithMetadataCallbackStateful = Callable[[Any, Any, int, Any, State], Any]

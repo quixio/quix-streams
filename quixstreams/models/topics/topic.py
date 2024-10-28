@@ -1,25 +1,24 @@
 import dataclasses
 import logging
-from typing import List, Any, Callable, Union
-from typing import Optional
+from typing import Any, Callable, List, Optional, Union
 
 from quixstreams.models.messagecontext import MessageContext
 from quixstreams.models.messages import KafkaMessage
 from quixstreams.models.rows import Row
 from quixstreams.models.serializers import (
-    SerializationContext,
-    MessageField,
-    DeserializerIsNotProvidedError,
-    SerializerIsNotProvidedError,
-    BytesSerializer,
-    BytesDeserializer,
-    IgnoreMessage,
-    SERIALIZERS,
     DESERIALIZERS,
-    SerializerType,
-    DeserializerType,
-    Serializer,
+    SERIALIZERS,
+    BytesDeserializer,
+    BytesSerializer,
     Deserializer,
+    DeserializerIsNotProvidedError,
+    DeserializerType,
+    IgnoreMessage,
+    MessageField,
+    SerializationContext,
+    Serializer,
+    SerializerIsNotProvidedError,
+    SerializerType,
 )
 from quixstreams.models.timestamps import TimestampType
 from quixstreams.models.topics.utils import merge_headers

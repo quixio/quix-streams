@@ -3,33 +3,33 @@ import copy
 import functools
 import itertools
 from time import monotonic_ns
-from typing import List, Callable, Optional, Any, Union
+from typing import Any, Callable, List, Optional, Union
 
 from typing_extensions import Self
 
 from quixstreams.dataframe.exceptions import InvalidOperation
 
 from .functions import (
-    ApplyFunction,
-    FilterFunction,
-    UpdateFunction,
-    StreamFunction,
-    VoidExecutor,
-    ReturningExecutor,
-    FilterCallback,
     ApplyCallback,
-    UpdateCallback,
+    ApplyExpandedCallback,
+    ApplyFunction,
     ApplyWithMetadataCallback,
+    ApplyWithMetadataExpandedCallback,
     ApplyWithMetadataFunction,
-    UpdateWithMetadataCallback,
-    UpdateWithMetadataFunction,
+    FilterCallback,
+    FilterFunction,
     FilterWithMetadataCallback,
     FilterWithMetadataFunction,
+    ReturningExecutor,
+    StreamFunction,
     TransformCallback,
-    TransformFunction,
     TransformExpandedCallback,
-    ApplyWithMetadataExpandedCallback,
-    ApplyExpandedCallback,
+    TransformFunction,
+    UpdateCallback,
+    UpdateFunction,
+    UpdateWithMetadataCallback,
+    UpdateWithMetadataFunction,
+    VoidExecutor,
 )
 
 __all__ = ("Stream",)

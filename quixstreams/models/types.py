@@ -1,4 +1,4 @@
-from typing import Union, List, Tuple, Optional, Dict
+from typing import Dict, List, Optional, Tuple, Union
 
 from typing_extensions import Protocol
 

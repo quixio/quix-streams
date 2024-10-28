@@ -1,15 +1,18 @@
 import base64
 import gzip
-from typing import List, Mapping, Iterable, Optional, Union, Tuple, Any, Callable, Dict
+from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Tuple, Union
 
-from .base import SerializationContext
-from .exceptions import SerializationError, IgnoreMessage
-from .json import JSONDeserializer, JSONSerializer
 from quixstreams.models.types import MessageHeadersMapping
 from quixstreams.utils.json import (
     dumps as default_dumps,
+)
+from quixstreams.utils.json import (
     loads as default_loads,
 )
+
+from .base import SerializationContext
+from .exceptions import IgnoreMessage, SerializationError
+from .json import JSONDeserializer, JSONSerializer
 
 Q_SPLITMESSAGEID_NAME = "__Q_SplitMessageId"
 

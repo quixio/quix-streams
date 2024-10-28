@@ -3,24 +3,26 @@ import functools
 import logging
 from abc import ABC
 from collections import defaultdict
-from typing import Any, Optional, Dict, Tuple, Union, TYPE_CHECKING, Set
+from typing import TYPE_CHECKING, Any, Dict, Optional, Set, Tuple, Union
 
-from quixstreams.state.exceptions import StateTransactionError, InvalidChangelogOffset
+from quixstreams.state.exceptions import InvalidChangelogOffset, StateTransactionError
 from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER,
+    DEFAULT_PREFIX,
     DELETED,
     PREFIX_SEPARATOR,
     UNDEFINED,
     Undefined,
-    DEFAULT_PREFIX,
 )
-from quixstreams.state.serialization import serialize, deserialize, LoadsFunc, DumpsFunc
+from quixstreams.state.serialization import DumpsFunc, LoadsFunc, deserialize, serialize
 from quixstreams.utils.json import dumps as json_dumps
+
 from .state import State, TransactionState
 
 if TYPE_CHECKING:
     from quixstreams.state.recovery import ChangelogProducer
+
     from .partition import StorePartition
 
 __all__ = (

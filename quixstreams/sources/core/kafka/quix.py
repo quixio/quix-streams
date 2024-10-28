@@ -1,6 +1,6 @@
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
-from quixstreams.error_callbacks import default_on_consumer_error, ConsumerErrorCallback
+from quixstreams.error_callbacks import ConsumerErrorCallback, default_on_consumer_error
 from quixstreams.kafka import AutoOffsetReset
 from quixstreams.models.serializers import DeserializerType
 from quixstreams.platforms.quix import QuixKafkaConfigsBuilder

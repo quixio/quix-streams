@@ -1,16 +1,19 @@
 import logging
 import uuid
-from typing import Union, Optional, Callable, List
+from typing import Callable, List, Optional, Union
 
 from confluent_kafka import (
-    Producer as ConfluentProducer,
     KafkaError,
     Message,
     TopicPartition,
 )
+from confluent_kafka import (
+    Producer as ConfluentProducer,
+)
 from confluent_kafka.admin import GroupMetadata
 
 from quixstreams.models.types import Headers
+
 from .configuration import ConnectionConfig
 
 __all__ = ("Producer",)

@@ -6,8 +6,8 @@ import pytest
 
 from quixstreams.kafka import Consumer
 from quixstreams.state.exceptions import (
-    StoreNotRegisteredError,
     PartitionStoreIsUsed,
+    StoreNotRegisteredError,
     WindowedStoreAlreadyRegisteredError,
 )
 from quixstreams.state.manager import SUPPORTED_STORES

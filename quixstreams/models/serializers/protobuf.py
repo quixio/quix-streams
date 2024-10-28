@@ -3,6 +3,8 @@ from typing import Dict, Iterable, Mapping, Optional, Union
 from confluent_kafka.schema_registry import SchemaRegistryClient, SchemaRegistryError
 from confluent_kafka.schema_registry.protobuf import (
     ProtobufDeserializer as _ProtobufDeserializer,
+)
+from confluent_kafka.schema_registry.protobuf import (
     ProtobufSerializer as _ProtobufSerializer,
 )
 from confluent_kafka.serialization import SerializationError as _SerializationError
@@ -15,7 +17,6 @@ from .schema_registry import (
     SchemaRegistryClientConfig,
     SchemaRegistrySerializationConfig,
 )
-
 
 __all__ = ("ProtobufSerializer", "ProtobufDeserializer")
 

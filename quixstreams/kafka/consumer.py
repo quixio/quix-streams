@@ -1,18 +1,21 @@
 import functools
 import logging
 import typing
-from typing import List, Optional, Callable, Tuple, Union
+from typing import Callable, List, Optional, Tuple, Union
 
 from confluent_kafka import (
-    TopicPartition,
-    Message,
     Consumer as ConfluentConsumer,
+)
+from confluent_kafka import (
     KafkaError,
+    Message,
+    TopicPartition,
 )
 from confluent_kafka.admin import ClusterMetadata, GroupMetadata
 
+from quixstreams.exceptions import KafkaPartitionError, PartitionAssignmentError
+
 from .configuration import ConnectionConfig
-from quixstreams.exceptions import PartitionAssignmentError, KafkaPartitionError
 
 __all__ = (
     "Consumer",

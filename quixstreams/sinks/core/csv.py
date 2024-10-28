@@ -1,7 +1,7 @@
 import csv
 import json
 import os
-from typing import Callable, Any
+from typing import Any, Callable
 
 from ..base import BatchingSink, SinkBatch
 

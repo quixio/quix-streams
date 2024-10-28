@@ -5,7 +5,7 @@ from unittest.mock import create_autospec
 import pytest
 
 from quixstreams.rowproducer import RowProducer
-from quixstreams.state.recovery import ChangelogProducerFactory, ChangelogProducer
+from quixstreams.state.recovery import ChangelogProducer, ChangelogProducerFactory
 from quixstreams.state.rocksdb import RocksDBOptions
 from quixstreams.state.rocksdb.windowed.partition import WindowedRocksDBStorePartition
 from quixstreams.state.rocksdb.windowed.store import WindowedRocksDBStore

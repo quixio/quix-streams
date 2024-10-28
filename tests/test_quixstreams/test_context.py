@@ -3,9 +3,9 @@ import contextvars
 import pytest
 
 from quixstreams.context import (
+    MessageContextNotSetError,
     message_context,
     set_message_context,
-    MessageContextNotSetError,
 )
 
 

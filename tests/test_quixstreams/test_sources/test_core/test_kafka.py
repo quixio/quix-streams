@@ -1,19 +1,19 @@
+import logging
 import time
 import uuid
-import pytest
-import logging
-
-from confluent_kafka import TopicPartition
 from unittest.mock import patch
 
-from quixstreams.platforms.quix.config import ConnectionConfig
+import pytest
+from confluent_kafka import TopicPartition
+
 from quixstreams.kafka.consumer import Consumer
 from quixstreams.kafka.producer import Producer
-from quixstreams.models.topics import TopicAdmin, Topic, TopicConfig
+from quixstreams.models.topics import Topic, TopicAdmin, TopicConfig
+from quixstreams.platforms.quix.config import ConnectionConfig
 from quixstreams.sources import (
     KafkaReplicatorSource,
-    SourceException,
     QuixEnvironmentSource,
+    SourceException,
 )
 
 logger = logging.getLogger("quixstreams")

@@ -7,26 +7,27 @@ from typing import Any, Generator, Set, Tuple, Union
 
 import pytest
 from confluent_kafka.schema_registry import (
-    SchemaRegistryClient,
     Schema,
+    SchemaRegistryClient,
     topic_subject_name_strategy,
 )
+
 from quixstreams.models import (
     Deserializer,
-    Serializer,
-    SerializationError,
+    JSONDeserializer,
+    JSONSerializer,
     SchemaRegistryClientConfig,
     SchemaRegistrySerializationConfig,
+    SerializationError,
+    Serializer,
 )
-
-from quixstreams.models import JSONDeserializer, JSONSerializer
 from quixstreams.models.serializers.avro import AvroDeserializer, AvroSerializer
 from quixstreams.models.serializers.protobuf import (
     ProtobufDeserializer,
     ProtobufSerializer,
 )
-
 from tests.conftest import SchemaRegistryContainer
+
 from .constants import AVRO_TEST_SCHEMA, DUMMY_CONTEXT, JSONSCHEMA_TEST_SCHEMA
 from .protobuf.nested_pb2 import Nested
 from .protobuf.root_pb2 import Root

@@ -1,5 +1,5 @@
 import logging
-from typing import Optional, Dict, List
+from typing import Dict, List, Optional
 
 from confluent_kafka import TopicPartition as ConfluentPartition
 
@@ -10,6 +10,7 @@ from quixstreams.models.types import MessageHeadersMapping
 from quixstreams.rowproducer import RowProducer
 from quixstreams.state.base import StorePartition
 from quixstreams.utils.dicts import dict_values
+
 from .exceptions import InvalidStoreChangelogOffset
 
 logger = logging.getLogger(__name__)

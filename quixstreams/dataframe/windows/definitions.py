@@ -1,10 +1,11 @@
 import abc
 from abc import abstractmethod
-from typing import Any, Optional, Callable, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable, Optional, Tuple
 
 from quixstreams.state import (
     WindowedState,
 )
+
 from .base import WindowAggregateFunc, WindowMergeFunc
 from .time_based import FixedTimeWindow
 

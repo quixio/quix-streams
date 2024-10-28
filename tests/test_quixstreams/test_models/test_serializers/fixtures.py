@@ -1,7 +1,7 @@
 import base64
 import json
 import time
-from typing import Mapping, Union, List, Any
+from typing import Any, List, Mapping, Union
 
 import pytest
 

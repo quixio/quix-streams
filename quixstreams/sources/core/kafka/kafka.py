@@ -1,15 +1,14 @@
-import time
 import logging
+import time
+from typing import TYPE_CHECKING, Dict, List, Optional, Union
 
-from typing import Union, Optional, Dict, List, TYPE_CHECKING
+from confluent_kafka import Message, TopicPartition
 
-from confluent_kafka import TopicPartition, Message
-
-from quixstreams.kafka import Consumer, ConnectionConfig, AutoOffsetReset
+from quixstreams.error_callbacks import ConsumerErrorCallback, default_on_consumer_error
+from quixstreams.kafka import AutoOffsetReset, ConnectionConfig, Consumer
 from quixstreams.kafka.exceptions import KafkaConsumerException
-from quixstreams.error_callbacks import default_on_consumer_error, ConsumerErrorCallback
-from quixstreams.models.topics import TopicConfig, TopicAdmin, Topic
 from quixstreams.models.serializers import DeserializerType
+from quixstreams.models.topics import Topic, TopicAdmin, TopicConfig
 from quixstreams.sources import Source
 
 from .checkpoint import Checkpoint

@@ -1,15 +1,12 @@
 import logging
-
 from abc import ABC, abstractmethod
 from typing import Optional, Union
 
-
+from quixstreams.checkpointing.exceptions import CheckpointProducerTimeout
 from quixstreams.models.messages import KafkaMessage
 from quixstreams.models.topics import Topic
 from quixstreams.models.types import Headers
 from quixstreams.rowproducer import RowProducer
-from quixstreams.checkpointing.exceptions import CheckpointProducerTimeout
-
 
 logger = logging.getLogger(__name__)
 

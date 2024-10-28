@@ -3,7 +3,6 @@ import time
 
 from quixstreams import Application
 
-
 _app = Application(broker_address=os.environ.get("BROKER_ADDRESS", "localhost:9092"))
 topic = _app.topic(name="customer_purchases")
 

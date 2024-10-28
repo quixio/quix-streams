@@ -1,12 +1,13 @@
 import dataclasses
-from typing import Optional, Mapping
+from typing import Mapping, Optional
 
 import rocksdict
 from rocksdict import DBCompressionType
 
 from quixstreams.state.serialization import DumpsFunc, LoadsFunc
 from quixstreams.utils.json import dumps, loads
-from .types import RocksDBOptionsType, CompressionType
+
+from .types import CompressionType, RocksDBOptionsType
 
 __all__ = ("RocksDBOptions",)
 

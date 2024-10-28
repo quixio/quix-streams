@@ -8,17 +8,17 @@ import pytest
 from quixstreams.state.base import PartitionTransaction
 from quixstreams.state.base.transaction import PartitionTransactionCache
 from quixstreams.state.exceptions import (
+    InvalidChangelogOffset,
     StateSerializationError,
     StateTransactionError,
-    InvalidChangelogOffset,
 )
-from quixstreams.state.rocksdb import RocksDBOptions
 from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER,
-    UNDEFINED,
     DELETED,
+    UNDEFINED,
 )
+from quixstreams.state.rocksdb import RocksDBOptions
 from quixstreams.state.serialization import serialize
 from quixstreams.utils.json import dumps
 

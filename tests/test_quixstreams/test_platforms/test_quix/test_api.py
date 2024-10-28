@@ -10,8 +10,8 @@ from quixstreams.platforms.quix.api import (
     QuixPortalApiService,
 )
 from quixstreams.platforms.quix.exceptions import (
-    UndefinedQuixWorkspaceId,
     QuixApiRequestFailure,
+    UndefinedQuixWorkspaceId,
 )
 
 

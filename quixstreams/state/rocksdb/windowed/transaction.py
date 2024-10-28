@@ -1,19 +1,19 @@
 import itertools
-from typing import Any, Optional, TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 from rocksdict import ReadOptions
 
-from quixstreams.state.metadata import PREFIX_SEPARATOR, DEFAULT_PREFIX
-from quixstreams.state.recovery import ChangelogProducer
-from quixstreams.state.serialization import (
-    serialize,
-    LoadsFunc,
-    DumpsFunc,
-)
 from quixstreams.state.base.transaction import PartitionTransaction
 from quixstreams.state.exceptions import InvalidChangelogOffset
+from quixstreams.state.metadata import DEFAULT_PREFIX, PREFIX_SEPARATOR
+from quixstreams.state.recovery import ChangelogProducer
+from quixstreams.state.serialization import (
+    DumpsFunc,
+    LoadsFunc,
+    serialize,
+)
 
-from .metadata import LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY, LATEST_EXPIRED_WINDOW_CF_NAME
+from .metadata import LATEST_EXPIRED_WINDOW_CF_NAME, LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY
 from .serialization import encode_window_key, encode_window_prefix, parse_window_key
 from .state import WindowedTransactionState
 

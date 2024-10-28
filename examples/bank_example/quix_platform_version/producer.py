@@ -1,6 +1,6 @@
 import time
 import uuid
-from random import randint, random, choice
+from random import choice, randint, random
 from time import sleep
 
 from dotenv import load_dotenv

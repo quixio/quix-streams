@@ -2,12 +2,12 @@ import pytest
 from confluent_kafka import KafkaError, TopicPartition
 
 from quixstreams.exceptions import PartitionAssignmentError
+from quixstreams.kafka.exceptions import KafkaConsumerException
 from quixstreams.models import (
     Deserializer,
     IgnoreMessage,
     SerializationError,
 )
-from quixstreams.kafka.exceptions import KafkaConsumerException
 from tests.utils import Timeout
 
 

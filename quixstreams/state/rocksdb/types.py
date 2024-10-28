@@ -1,7 +1,7 @@
-from typing import Protocol, Optional, Literal
-from typing_extensions import runtime_checkable
+from typing import Literal, Optional, Protocol
 
 import rocksdict
+from typing_extensions import runtime_checkable
 
 from quixstreams.state.serialization import DumpsFunc, LoadsFunc
 

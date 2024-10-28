@@ -1,24 +1,24 @@
 import contextlib
 from typing import Optional
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
-from confluent_kafka import TopicPartition, KafkaException, KafkaError
+from confluent_kafka import KafkaError, KafkaException, TopicPartition
 
 from quixstreams.checkpointing import Checkpoint, InvalidStoredOffset
 from quixstreams.checkpointing.exceptions import (
-    CheckpointProducerTimeout,
     CheckpointConsumerCommitError,
+    CheckpointProducerTimeout,
 )
 from quixstreams.kafka import Consumer
 from quixstreams.processing import PausingManager
 from quixstreams.rowproducer import RowProducer
-from quixstreams.sinks import SinkManager, BatchingSink, SinkBackpressureError
+from quixstreams.sinks import BatchingSink, SinkBackpressureError, SinkManager
 from quixstreams.sinks.base import SinkBatch
 from quixstreams.state import StateStoreManager
-from quixstreams.state.manager import SUPPORTED_STORES
 from quixstreams.state.base import PartitionTransaction
 from quixstreams.state.exceptions import StoreNotRegisteredError, StoreTransactionFailed
+from quixstreams.state.manager import SUPPORTED_STORES
 from tests.utils import DummySink
 
 

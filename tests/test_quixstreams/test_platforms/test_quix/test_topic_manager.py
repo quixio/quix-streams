@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock
 
-from quixstreams.models import TopicConfig, TopicAdmin
+from quixstreams.models import TopicAdmin, TopicConfig
 from quixstreams.platforms.quix import QuixTopicManager
 
 

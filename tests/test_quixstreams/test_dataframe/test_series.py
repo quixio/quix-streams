@@ -1,9 +1,9 @@
 import pytest
 
 from quixstreams.dataframe.exceptions import (
-    InvalidOperation,
     ColumnDoesNotExist,
     InvalidColumnReference,
+    InvalidOperation,
 )
 from quixstreams.dataframe.series import StreamingSeries
 

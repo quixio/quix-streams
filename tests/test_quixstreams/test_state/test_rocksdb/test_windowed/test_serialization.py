@@ -3,8 +3,8 @@ import pytest
 from quixstreams.state.metadata import PREFIX_SEPARATOR
 from quixstreams.state.rocksdb.windowed.serialization import (
     encode_window_key,
-    parse_window_key,
     encode_window_prefix,
+    parse_window_key,
 )
 
 

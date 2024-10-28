@@ -1,6 +1,5 @@
 from quixstreams.exceptions.base import QuixException
 
-
 __all__ = (
     "InvalidOperation",
     "GroupByNestingLimit",

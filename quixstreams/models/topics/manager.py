@@ -1,16 +1,17 @@
 import logging
 from copy import deepcopy
-from typing import Dict, List, Optional, Set, Literal
+from typing import Dict, List, Literal, Optional, Set
 
 from quixstreams.models.serializers import DeserializerType, SerializerType
 from quixstreams.utils.dicts import dict_values
+
 from .admin import TopicAdmin
 from .exceptions import (
-    TopicNameLengthExceeded,
     TopicConfigurationMismatch,
+    TopicNameLengthExceeded,
     TopicNotFoundError,
 )
-from .topic import Topic, TopicConfig, TimestampExtractor
+from .topic import TimestampExtractor, Topic, TopicConfig
 
 logger = logging.getLogger(__name__)
 

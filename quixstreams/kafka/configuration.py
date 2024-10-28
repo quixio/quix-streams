@@ -1,9 +1,9 @@
-from typing import Literal, Optional, Callable, Tuple, Type
+from typing import Callable, Literal, Optional, Tuple, Type
 
-from pydantic import SecretStr, AliasChoices, Field
+from pydantic import AliasChoices, Field, SecretStr
 from pydantic.functional_validators import BeforeValidator
 from pydantic_settings import PydanticBaseSettingsSource
-from typing_extensions import Self, Annotated
+from typing_extensions import Annotated, Self
 
 from quixstreams.utils.settings import BaseSettings
 

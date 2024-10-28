@@ -1,7 +1,7 @@
 import time
 import uuid
 from os import environ
-from random import randint, random, choice
+from random import choice, randint, random
 
 from dotenv import load_dotenv
 

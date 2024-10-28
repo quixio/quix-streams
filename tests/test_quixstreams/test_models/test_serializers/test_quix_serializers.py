@@ -5,18 +5,18 @@ import json
 import pytest
 
 from quixstreams.models.serializers import (
-    SerializationError,
-    SerializationContext,
     IgnoreMessage,
     MessageField,
+    SerializationContext,
+    SerializationError,
 )
 from quixstreams.models.serializers.quix import (
-    QuixDeserializer,
-    QuixTimeseriesSerializer,
-    QuixEventsSerializer,
+    Q_SPLITMESSAGEID_NAME,
     QCodecId,
     QModelKey,
-    Q_SPLITMESSAGEID_NAME,
+    QuixDeserializer,
+    QuixEventsSerializer,
+    QuixTimeseriesSerializer,
 )
 
 

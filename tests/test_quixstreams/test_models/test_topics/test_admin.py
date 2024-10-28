@@ -4,10 +4,10 @@ from uuid import uuid4
 
 import pytest
 from confluent_kafka.admin import TopicMetadata
-
 from confluent_kafka.error import KafkaException
-from quixstreams.models.topics import TopicConfig, TopicAdmin
-from quixstreams.models.topics.exceptions import CreateTopicTimeout, CreateTopicFailure
+
+from quixstreams.models.topics import TopicAdmin, TopicConfig
+from quixstreams.models.topics.exceptions import CreateTopicFailure, CreateTopicTimeout
 
 logger = logging.getLogger(__name__)
 

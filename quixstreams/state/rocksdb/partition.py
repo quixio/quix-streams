@@ -1,24 +1,25 @@
 import logging
 import time
-from typing import Any, Union, Optional, List, Dict
+from typing import Any, Dict, List, Optional, Union
 
-from rocksdict import WriteBatch, Rdict, ColumnFamily, AccessType
+from rocksdict import AccessType, ColumnFamily, Rdict, WriteBatch
 
 from quixstreams.models import ConfluentKafkaMessageProto
+from quixstreams.state.base import PartitionTransactionCache, StorePartition
 from quixstreams.state.recovery import ChangelogProducer
-from quixstreams.state.base import StorePartition, PartitionTransactionCache
 from quixstreams.state.serialization import (
     int_from_int64_bytes,
     int_to_int64_bytes,
 )
+
 from .exceptions import (
     ColumnFamilyAlreadyExists,
     ColumnFamilyDoesNotExist,
 )
 from .metadata import (
+    CHANGELOG_OFFSET_KEY,
     METADATA_CF_NAME,
     PROCESSED_OFFSET_KEY,
-    CHANGELOG_OFFSET_KEY,
 )
 from .options import RocksDBOptions
 from .types import RocksDBOptionsType

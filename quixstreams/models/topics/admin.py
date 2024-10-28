@@ -2,19 +2,24 @@ import logging
 import pprint
 import time
 from asyncio import Future
-from typing import List, Dict, Mapping, Optional, Union
+from typing import Dict, List, Mapping, Optional, Union
 
 from confluent_kafka.admin import (
     AdminClient,
     ConfigResource,
     KafkaException,  # type: ignore
+)
+from confluent_kafka.admin import (
     NewTopic as ConfluentTopic,  # type: ignore
+)
+from confluent_kafka.admin import (
     TopicMetadata as ConfluentTopicMetadata,
 )
 
+from quixstreams.kafka import ConnectionConfig
+
 from .exceptions import CreateTopicFailure, CreateTopicTimeout
 from .topic import Topic, TopicConfig
-from quixstreams.kafka import ConnectionConfig
 
 logger = logging.getLogger(__name__)
 

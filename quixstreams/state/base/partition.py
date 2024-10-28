@@ -1,7 +1,6 @@
 import logging
-
 from abc import ABC, abstractmethod
-from typing import Optional, Union, Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 from quixstreams.models import ConfluentKafkaMessageProto
 from quixstreams.state.exceptions import ColumnFamilyHeaderMissing

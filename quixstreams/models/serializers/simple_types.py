@@ -1,14 +1,26 @@
 import functools
-from typing import Union, Mapping
+from typing import Mapping, Union
 
 from confluent_kafka.serialization import (
-    StringDeserializer as _StringDeserializer,
-    StringSerializer as _StringSerializer,
-    IntegerDeserializer as _IntegerDeserializer,
-    IntegerSerializer as _IntegerSerializer,
     DoubleDeserializer as _DoubleDeserializer,
+)
+from confluent_kafka.serialization import (
     DoubleSerializer as _DoubleSerializer,
+)
+from confluent_kafka.serialization import (
+    IntegerDeserializer as _IntegerDeserializer,
+)
+from confluent_kafka.serialization import (
+    IntegerSerializer as _IntegerSerializer,
+)
+from confluent_kafka.serialization import (
     SerializationError as _SerializationError,
+)
+from confluent_kafka.serialization import (
+    StringDeserializer as _StringDeserializer,
+)
+from confluent_kafka.serialization import (
+    StringSerializer as _StringSerializer,
 )
 
 from .base import Deserializer, SerializationContext, Serializer

@@ -1,13 +1,14 @@
 import functools
-from typing import Any, Optional, List, TYPE_CHECKING, cast, Tuple, Callable
-
 import logging
+from typing import TYPE_CHECKING, Any, Callable, List, Optional, Tuple, cast
+
 from quixstreams.context import message_context
 from quixstreams.core.stream import (
     TransformExpandedCallback,
 )
 from quixstreams.processing import ProcessingContext
 from quixstreams.state import WindowedPartitionTransaction, WindowedState
+
 from .base import (
     WindowAggregateFunc,
     WindowMergeFunc,

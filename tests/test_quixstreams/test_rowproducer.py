@@ -1,12 +1,14 @@
 import uuid
 from concurrent.futures import Future
 from time import sleep
-from unittest.mock import patch, create_autospec, call
+from unittest.mock import call, create_autospec, patch
 
 import pytest
 from confluent_kafka import (
-    KafkaException as ConfluentKafkaException,
     KafkaError as ConfluentKafkaError,
+)
+from confluent_kafka import (
+    KafkaException as ConfluentKafkaException,
 )
 from confluent_kafka import TopicPartition
 

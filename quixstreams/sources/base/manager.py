@@ -4,8 +4,9 @@ import threading
 from pickle import PicklingError
 from typing import List
 
-from quixstreams.logging import configure_logging, LOGGER_NAME
+from quixstreams.logging import LOGGER_NAME, configure_logging
 from quixstreams.models import Topic
+
 from .exceptions import SourceException
 from .multiprocessing import multiprocessing
 from .source import BaseSource

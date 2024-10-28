@@ -1,20 +1,20 @@
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional, Union
-from unittest.mock import create_autospec, patch, PropertyMock
+from unittest.mock import PropertyMock, create_autospec, patch
 
 import pytest
 from confluent_kafka.admin import (
     AdminClient,
-    NewTopic,
     NewPartitions,
+    NewTopic,
 )
 
 from quixstreams.app import Application, MessageProcessedCallback, ProcessingGuarantee
 from quixstreams.error_callbacks import (
     ConsumerErrorCallback,
-    ProducerErrorCallback,
     ProcessingErrorCallback,
+    ProducerErrorCallback,
 )
 from quixstreams.kafka import (
     AutoOffsetReset,
@@ -25,24 +25,24 @@ from quixstreams.kafka.configuration import ConnectionConfig
 from quixstreams.models import MessageContext
 from quixstreams.models.rows import Row
 from quixstreams.models.serializers import (
-    Serializer,
     Deserializer,
-    JSONSerializer,
     JSONDeserializer,
+    JSONSerializer,
+    Serializer,
 )
 from quixstreams.models.topics import (
+    TimestampExtractor,
     Topic,
-    TopicManager,
     TopicAdmin,
     TopicConfig,
-    TimestampExtractor,
+    TopicManager,
 )
 from quixstreams.platforms.quix import QuixTopicManager
 from quixstreams.platforms.quix.config import (
+    QuixApplicationConfig,
     QuixKafkaConfigsBuilder,
     prepend_workspace_id,
     strip_workspace_id_prefix,
-    QuixApplicationConfig,
 )
 from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
