@@ -31,17 +31,14 @@ all = [
     "fastavro>=1.8,<2.0",
     "protobuf>=5.27.2,<6.0",
     "influxdb3-python>=0.7,<1.0",
-    "pyarrow",
-    "pyiceberg",
-    "boto3",
-    "mypy_boto3_glue",
+    "pyiceberg[pyarrow,glue]>=0.7,<0.8",
 ]
 
 avro = ["fastavro>=1.8,<2.0"]
 protobuf = ["protobuf>=5.27.2,<6.0"]
 influxdb3 = ["influxdb3-python>=0.7,<1.0"]
-iceberg = ["pyarrow", "pyiceberg"]
-iceberg_aws = ["pyarrow", "pyiceberg", "boto3", "mypy_boto3_glue"]
+iceberg = ["pyiceberg[pyarrow]>=0.7,<0.8"]
+iceberg_aws = ["pyiceberg[pyarrow,glue]>=0.7,<0.8"]
 
 [tool.setuptools.packages.find]
 include = ["quixstreams*"]
