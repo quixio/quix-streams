@@ -56,50 +56,46 @@ class FileSink(BatchingSink):
         Parameters:
             batch (SinkBatch): The batch of data to write.
         """
-        try:
-            # Group messages by key
-            messages_by_key: Dict[str, List[Any]] = {}
-            for message in batch:
-                key = (
-                    message.key.decode()
-                    if isinstance(message.key, bytes)
-                    else str(message.key)
-                )
-                if key not in messages_by_key:
-                    messages_by_key[key] = []
-                messages_by_key[key].append(message)
 
-            for key, messages in messages_by_key.items():
-                # Serialize messages for this key using the specified format
-                data = self._format.serialize_batch_values(messages)
+        # Group messages by key
+        messages_by_key: Dict[str, List[Any]] = {}
+        for message in batch:
+            key = (
+                message.key.decode()
+                if isinstance(message.key, bytes)
+                else str(message.key)
+            )
+            if key not in messages_by_key:
+                messages_by_key[key] = []
+            messages_by_key[key].append(message)
 
-                # Generate filename based on the key
-                safe_key = "".join(
-                    [c if c.isalnum() or c in (" ", ".", "_") else "_" for c in key]
-                )
+        for key, messages in messages_by_key.items():
+            # Serialize messages for this key using the specified format
+            data = self._format.serialize_batch_values(messages)
 
-                padded_offset = str(messages[0].offset).zfill(15)
+            # Generate filename based on the key
+            safe_key = "".join(
+                [c if c.isalnum() or c in (" ", ".", "_") else "_" for c in key]
+            )
 
-                filename = f"{safe_key}/{padded_offset}{self._format.file_extension}"
+            padded_offset = str(messages[0].offset).zfill(15)
 
-                file_path = os.path.join(self._output_dir, filename)
+            filename = f"{safe_key}/{padded_offset}{self._format.file_extension}"
 
-                # Get the folder path
-                folder_path = os.path.dirname(file_path)
+            file_path = os.path.join(self._output_dir, filename)
 
-                # Create the folder if it doesn't exist
-                if not os.path.exists(folder_path):
-                    os.makedirs(folder_path)
+            # Get the folder path
+            folder_path = os.path.dirname(file_path)
 
-                # Write data to a new file
-                with open(file_path, "wb") as f:
-                    f.write(data)
+            # Create the folder if it doesn't exist
+            if not os.path.exists(folder_path):
+                os.makedirs(folder_path)
 
-                logger.info(f"Wrote {len(messages)} records to file '{file_path}'.")
+            # Write data to a new file
+            with open(file_path, "wb") as f:
+                f.write(data)
 
-        except Exception as e:
-            logger.error(f"Error writing data to file: {e}")
-            raise
+            logger.info(f"Wrote {len(messages)} records to file '{file_path}'.")
 
     def _resolve_format(
         self,
