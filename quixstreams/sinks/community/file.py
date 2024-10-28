@@ -2,10 +2,10 @@ import logging
 import os
 from typing import Any, Dict, List, Literal, Union
 
-from file_formats import BatchFormat
-from formats.bytes_format import BytesFormat
-from formats.json_format import JSONFormat
-from formats.parquet_format import ParquetFormat
+from .file_formats import BatchFormat
+from .formats.bytes_format import BytesFormat
+from .formats.json_format import JSONFormat
+from .formats.parquet_format import ParquetFormat
 
 from quixstreams.sinks import BatchingSink, SinkBatch
 
