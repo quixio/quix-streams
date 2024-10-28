@@ -1,7 +1,7 @@
 import logging
 import os
 from collections import defaultdict
-from typing import Any, Literal, Union
+from typing import Any, Hashable, Literal, Union
 
 from .file_formats import BatchFormat
 from .formats.bytes_format import BytesFormat
@@ -59,20 +59,18 @@ class FileSink(BatchingSink):
         """
 
         # Group messages by key
-        messages_by_key: dict[str, list[Any]] = defaultdict(list)
+        messages_by_key: dict[Hashable, list[Any]] = defaultdict(list)
         for message in batch:
-            key = (
-                message.key.decode()
-                if isinstance(message.key, bytes)
-                else str(message.key)
-            )
-            messages_by_key[key].append(message)
+            messages_by_key[message.key].append(message)
+
+        _to_str = bytes.decode if isinstance(message.key, bytes) else str
 
         for key, messages in messages_by_key.items():
             # Serialize messages for this key using the specified format
             data = self._format.serialize_batch_values(messages)
 
             # Generate filename based on the key
+            key = _to_str(key)
             safe_key = "".join(
                 [c if c.isalnum() or c in (" ", ".", "_") else "_" for c in key]
             )
