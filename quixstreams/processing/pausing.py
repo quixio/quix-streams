@@ -1,7 +1,7 @@
 import logging
 import sys
 import time
-from typing import Tuple, Dict
+from typing import Dict, Tuple
 
 from confluent_kafka import TopicPartition
 

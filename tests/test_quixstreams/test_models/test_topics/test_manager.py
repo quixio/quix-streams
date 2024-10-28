@@ -3,12 +3,12 @@ from unittest.mock import create_autospec
 
 import pytest
 
-from quixstreams.models.serializers import BytesSerializer, BytesDeserializer
-from quixstreams.models.topics import TopicConfig, TopicAdmin
+from quixstreams.models.serializers import BytesDeserializer, BytesSerializer
+from quixstreams.models.topics import TopicAdmin, TopicConfig
 from quixstreams.models.topics.exceptions import (
+    TopicConfigurationMismatch,
     TopicNameLengthExceeded,
     TopicNotFoundError,
-    TopicConfigurationMismatch,
 )
 
 

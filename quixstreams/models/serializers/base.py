@@ -1,13 +1,15 @@
 import abc
-from typing import Optional, Any, Union
-from typing_extensions import TypeAlias, Literal
+from typing import Any, Optional, Union
 
 from confluent_kafka.serialization import (
-    SerializationContext as _SerializationContext,
     MessageField,
 )
+from confluent_kafka.serialization import (
+    SerializationContext as _SerializationContext,
+)
+from typing_extensions import Literal, TypeAlias
 
-from ..types import MessageHeadersTuples, MessageHeadersMapping
+from ..types import MessageHeadersMapping, MessageHeadersTuples
 
 __all__ = (
     "SerializationContext",

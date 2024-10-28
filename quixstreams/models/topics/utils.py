@@ -1,6 +1,6 @@
 from typing import Optional
 
-from quixstreams.models.types import MessageHeadersTuples, MessageHeadersMapping
+from quixstreams.models.types import MessageHeadersMapping, MessageHeadersTuples
 
 __all__ = ("merge_headers",)
 

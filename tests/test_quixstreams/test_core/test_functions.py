@@ -2,12 +2,12 @@ import pytest
 
 from quixstreams.core.stream.functions import (
     ApplyFunction,
-    FilterFunction,
-    UpdateFunction,
-    TransformFunction,
     ApplyWithMetadataFunction,
-    UpdateWithMetadataFunction,
+    FilterFunction,
     FilterWithMetadataFunction,
+    TransformFunction,
+    UpdateFunction,
+    UpdateWithMetadataFunction,
 )
 
 from .utils import Sink

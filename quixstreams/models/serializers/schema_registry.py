@@ -1,14 +1,14 @@
 from typing import Callable, Optional
 
-from pydantic import SecretStr
 from confluent_kafka.schema_registry import (
-    reference_subject_name_strategy,
     SchemaReference,
+    reference_subject_name_strategy,
     topic_subject_name_strategy,
 )
+from pydantic import SecretStr
 
-from quixstreams.utils.settings import BaseSettings
 from quixstreams.models.serializers import SerializationContext
+from quixstreams.utils.settings import BaseSettings
 
 __all__ = [
     "SchemaRegistryClientConfig",

@@ -1,11 +1,11 @@
 import csv
 import json
-import pytest
-
 from unittest.mock import MagicMock
 
-from quixstreams.sources import CSVSource
+import pytest
+
 from quixstreams.rowproducer import RowProducer
+from quixstreams.sources import CSVSource
 
 
 class TestCSVSource:

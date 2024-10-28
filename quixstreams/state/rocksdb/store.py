@@ -2,8 +2,9 @@ import logging
 from pathlib import Path
 from typing import Dict, Optional
 
-from quixstreams.state.recovery import ChangelogProducer, ChangelogProducerFactory
 from quixstreams.state.base import Store
+from quixstreams.state.recovery import ChangelogProducer, ChangelogProducerFactory
+
 from .partition import (
     RocksDBStorePartition,
 )

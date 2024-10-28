@@ -3,7 +3,7 @@ import time
 from abc import abstractmethod
 from typing import Dict, Tuple
 
-from confluent_kafka import TopicPartition, KafkaException
+from confluent_kafka import KafkaException, TopicPartition
 
 from quixstreams.kafka import Consumer
 from quixstreams.processing.pausing import PausingManager
@@ -11,15 +11,16 @@ from quixstreams.rowproducer import RowProducer
 from quixstreams.sinks import SinkManager
 from quixstreams.sinks.base import SinkBackpressureError
 from quixstreams.state import (
-    StateStoreManager,
-    PartitionTransaction,
     DEFAULT_STATE_STORE_NAME,
+    PartitionTransaction,
+    StateStoreManager,
 )
 from quixstreams.state.exceptions import StoreTransactionFailed
+
 from .exceptions import (
-    InvalidStoredOffset,
-    CheckpointProducerTimeout,
     CheckpointConsumerCommitError,
+    CheckpointProducerTimeout,
+    InvalidStoredOffset,
 )
 
 logger = logging.getLogger(__name__)

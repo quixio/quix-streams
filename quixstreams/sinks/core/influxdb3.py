@@ -1,13 +1,13 @@
 import logging
 import sys
 import time
-from typing import Optional, Iterable, Any, List, Tuple, Mapping
+from typing import Any, Iterable, List, Mapping, Optional, Tuple
 
 from quixstreams.models import HeaderValue
 
 try:
     import influxdb_client_3
-    from influxdb_client_3 import InfluxDBClient3, WritePrecision, WriteOptions
+    from influxdb_client_3 import InfluxDBClient3, WriteOptions, WritePrecision
     from influxdb_client_3.write_client.client.write_api import WriteType
 except ImportError as exc:
     raise ImportError(
@@ -15,7 +15,7 @@ except ImportError as exc:
         "run pip install quixstreams[influxdb3] to fix it"
     ) from exc
 
-from ..base import BatchingSink, SinkBatch, SinkBackpressureError
+from ..base import BatchingSink, SinkBackpressureError, SinkBatch
 
 logger = logging.getLogger(__name__)
 

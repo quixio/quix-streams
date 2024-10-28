@@ -1,33 +1,34 @@
 import json
-from typing import Optional, Any, Callable, List
+from typing import Any, Callable, List, Optional
 
 import pytest
 
 from quixstreams.models import (
+    MessageHeadersTuples,
     StringSerializer,
     TimestampType,
-    MessageHeadersTuples,
 )
 from quixstreams.models.serializers import (
-    Deserializer,
-    Serializer,
-    IntegerDeserializer,
-    DoubleDeserializer,
-    JSONDeserializer,
-    BytesSerializer,
-    JSONSerializer,
-    IntegerSerializer,
-    BytesDeserializer,
-    SerializationContext,
-    SerializerIsNotProvidedError,
-    DeserializerIsNotProvidedError,
-    IgnoreMessage,
-    SerializationError,
-    SERIALIZERS,
     DESERIALIZERS,
+    SERIALIZERS,
+    BytesDeserializer,
+    BytesSerializer,
+    Deserializer,
+    DeserializerIsNotProvidedError,
+    DoubleDeserializer,
+    IgnoreMessage,
+    IntegerDeserializer,
+    IntegerSerializer,
+    JSONDeserializer,
+    JSONSerializer,
+    SerializationContext,
+    SerializationError,
+    Serializer,
+    SerializerIsNotProvidedError,
 )
 from tests.utils import ConfluentKafkaMessageStub
-from ..utils import int_to_bytes, float_to_bytes
+
+from ..utils import float_to_bytes, int_to_bytes
 
 
 class JSONListDeserializer(JSONDeserializer):

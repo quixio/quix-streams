@@ -1,7 +1,7 @@
 from typing import Any
 
 from .base import StreamFunction
-from .types import ApplyCallback, VoidExecutor, ApplyWithMetadataCallback
+from .types import ApplyCallback, ApplyWithMetadataCallback, VoidExecutor
 
 __all__ = ("ApplyFunction", "ApplyWithMetadataFunction")
 

@@ -1,6 +1,7 @@
 import logging
 from typing import Callable, Optional
-from .models import Row, ConfluentKafkaMessageProto
+
+from .models import ConfluentKafkaMessageProto, Row
 
 ProcessingErrorCallback = Callable[[Exception, Optional[Row], logging.Logger], bool]
 ConsumerErrorCallback = Callable[

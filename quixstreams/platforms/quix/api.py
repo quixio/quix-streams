@@ -1,5 +1,5 @@
 from io import BytesIO
-from typing import Optional, List, Literal
+from typing import List, Literal, Optional
 from urllib.parse import urljoin
 from zipfile import ZipFile
 
@@ -7,9 +7,9 @@ import requests
 
 from .env import QUIX_ENVIRONMENT
 from .exceptions import (
-    UndefinedQuixWorkspaceId,
     MissingConnectionRequirements,
     QuixApiRequestFailure,
+    UndefinedQuixWorkspaceId,
 )
 
 __all__ = ("QuixPortalApiService",)

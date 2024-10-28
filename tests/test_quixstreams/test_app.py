@@ -4,8 +4,8 @@ import os
 import time
 import uuid
 from concurrent.futures import Future
-from json import loads, dumps
-from unittest.mock import patch, create_autospec
+from json import dumps, loads
+from unittest.mock import create_autospec, patch
 
 import pytest
 from confluent_kafka import KafkaException, TopicPartition
@@ -20,18 +20,18 @@ from quixstreams.models import (
     DoubleDeserializer,
     DoubleSerializer,
     JSONDeserializer,
-    SerializationError,
     JSONSerializer,
+    SerializationError,
     TopicConfig,
 )
-from quixstreams.platforms.quix import QuixKafkaConfigsBuilder, QuixApplicationConfig
+from quixstreams.platforms.quix import QuixApplicationConfig, QuixKafkaConfigsBuilder
 from quixstreams.platforms.quix.env import QuixEnvironment
 from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
-from quixstreams.sinks import SinkBatch, SinkBackpressureError
+from quixstreams.sinks import SinkBackpressureError, SinkBatch
+from quixstreams.sources import SourceException, multiprocessing
 from quixstreams.state import State
 from quixstreams.state.manager import SUPPORTED_STORES
-from quixstreams.sources import SourceException, multiprocessing
 from tests.utils import DummySink, DummySource
 
 

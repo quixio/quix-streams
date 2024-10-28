@@ -1,5 +1,5 @@
 from collections import deque
-from typing import Any, Deque, Optional, Callable, Tuple
+from typing import Any, Callable, Deque, Optional, Tuple
 
 from typing_extensions import TypedDict
 

@@ -1,18 +1,19 @@
 import json
-from typing import Union, Mapping, Optional, Any, Iterable
-
 from io import BytesIO
+from typing import Any, Iterable, Mapping, Optional, Union
 
-from confluent_kafka.serialization import SerializationError as _SerializationError
 from confluent_kafka.schema_registry import SchemaRegistryClient, SchemaRegistryError
 from confluent_kafka.schema_registry.avro import (
     AvroDeserializer as _AvroDeserializer,
+)
+from confluent_kafka.schema_registry.avro import (
     AvroSerializer as _AvroSerializer,
 )
-from fastavro import schemaless_reader, schemaless_writer, parse_schema
+from confluent_kafka.serialization import SerializationError as _SerializationError
+from fastavro import parse_schema, schemaless_reader, schemaless_writer
 from fastavro.types import Schema
 
-from .base import Serializer, Deserializer, SerializationContext
+from .base import Deserializer, SerializationContext, Serializer
 from .exceptions import SerializationError
 from .schema_registry import (
     SchemaRegistryClientConfig,

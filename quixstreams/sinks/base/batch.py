@@ -1,8 +1,9 @@
 from collections import deque
 from itertools import islice
-from typing import Deque, Tuple, List, Any, Iterator, Iterable
+from typing import Any, Deque, Iterable, Iterator, List, Tuple
 
 from quixstreams.models import HeaderValue
+
 from .item import SinkItem
 
 __all__ = ("SinkBatch",)

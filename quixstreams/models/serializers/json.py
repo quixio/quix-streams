@@ -1,20 +1,25 @@
 import json
-from typing import Callable, Union, Mapping, Optional, Any, Iterable
+from typing import Any, Callable, Iterable, Mapping, Optional, Union
 
 from confluent_kafka.schema_registry import SchemaRegistryClient, SchemaRegistryError
 from confluent_kafka.schema_registry.json_schema import (
     JSONDeserializer as _JSONDeserializer,
+)
+from confluent_kafka.schema_registry.json_schema import (
     JSONSerializer as _JSONSerializer,
 )
 from confluent_kafka.serialization import SerializationError as _SerializationError
-from jsonschema import ValidationError, Draft202012Validator
+from jsonschema import Draft202012Validator, ValidationError
 from jsonschema.protocols import Validator
 
 from quixstreams.utils.json import (
     dumps as default_dumps,
+)
+from quixstreams.utils.json import (
     loads as default_loads,
 )
-from .base import Serializer, Deserializer, SerializationContext
+
+from .base import Deserializer, SerializationContext, Serializer
 from .exceptions import SerializationError
 from .schema_registry import (
     SchemaRegistryClientConfig,

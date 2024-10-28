@@ -1,7 +1,7 @@
 import base64
 from contextlib import ExitStack
 from copy import deepcopy
-from unittest.mock import patch, call, create_autospec, PropertyMock
+from unittest.mock import PropertyMock, call, create_autospec, patch
 
 import pytest
 from requests import HTTPError, Response
@@ -10,12 +10,12 @@ from quixstreams.kafka.configuration import ConnectionConfig
 from quixstreams.platforms.quix.api import QuixPortalApiService
 from quixstreams.platforms.quix.config import QuixKafkaConfigsBuilder
 from quixstreams.platforms.quix.exceptions import (
-    NoWorkspaceFound,
-    MultipleWorkspaces,
     MissingQuixTopics,
-    QuixCreateTopicTimeout,
-    QuixCreateTopicFailure,
+    MultipleWorkspaces,
+    NoWorkspaceFound,
     QuixApiRequestFailure,
+    QuixCreateTopicFailure,
+    QuixCreateTopicTimeout,
 )
 
 

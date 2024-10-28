@@ -2,14 +2,15 @@ from operator import setitem
 
 import pytest
 
-from quixstreams.dataframe.exceptions import InvalidOperation
 from quixstreams.core.stream import Stream
 from quixstreams.core.stream.functions import (
     ApplyFunction,
-    UpdateFunction,
     FilterFunction,
     TransformFunction,
+    UpdateFunction,
 )
+from quixstreams.dataframe.exceptions import InvalidOperation
+
 from .utils import Sink
 
 

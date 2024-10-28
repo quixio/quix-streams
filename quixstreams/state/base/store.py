@@ -1,7 +1,6 @@
 import logging
-
-from typing import Dict, ClassVar
 from abc import ABC, abstractmethod
+from typing import ClassVar, Dict
 
 from quixstreams.state.exceptions import PartitionNotAssignedError
 

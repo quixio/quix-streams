@@ -1,29 +1,28 @@
-import pytest
 import jsonschema
+import pytest
 
 from quixstreams.models import (
-    IntegerSerializer,
-    DoubleSerializer,
-    StringSerializer,
     BytesDeserializer,
-    JSONDeserializer,
-    JSONSerializer,
     BytesSerializer,
-    Serializer,
-    SerializationError,
-    IntegerDeserializer,
     Deserializer,
     DoubleDeserializer,
+    DoubleSerializer,
+    IntegerDeserializer,
+    IntegerSerializer,
+    JSONDeserializer,
+    JSONSerializer,
+    SerializationError,
+    Serializer,
     StringDeserializer,
+    StringSerializer,
 )
-from quixstreams.models.serializers.protobuf import (
-    ProtobufSerializer,
-    ProtobufDeserializer,
-)
-
 from quixstreams.models.serializers.avro import AvroDeserializer, AvroSerializer
+from quixstreams.models.serializers.protobuf import (
+    ProtobufDeserializer,
+    ProtobufSerializer,
+)
 
-from ..utils import int_to_bytes, float_to_bytes
+from ..utils import float_to_bytes, int_to_bytes
 from .constants import AVRO_TEST_SCHEMA, DUMMY_CONTEXT, JSONSCHEMA_TEST_SCHEMA
 from .protobuf.nested_pb2 import Nested
 from .protobuf.root_pb2 import Root

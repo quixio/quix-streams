@@ -1,22 +1,22 @@
 import uuid
-from typing import Optional, Generator
+from typing import Generator, Optional
 from unittest.mock import MagicMock, PropertyMock
 
 import pytest
-from quixstreams.state.base import StorePartition
 
 from quixstreams.kafka import Consumer
 from quixstreams.models import TopicManager
+from quixstreams.state.base import StorePartition
 from quixstreams.state.recovery import (
-    RecoveryPartition,
-    RecoveryManager,
-    ChangelogProducerFactory,
     ChangelogProducer,
+    ChangelogProducerFactory,
+    RecoveryManager,
+    RecoveryPartition,
 )
 from quixstreams.state.rocksdb import (
+    RocksDBOptions,
     RocksDBStore,
     RocksDBStorePartition,
-    RocksDBOptions,
 )
 
 

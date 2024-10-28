@@ -1,6 +1,6 @@
 import csv
 import json
-from typing import Optional, Callable, Any
+from typing import Any, Callable, Optional
 
 from quixstreams.models.topics import Topic
 from quixstreams.sources.base import Source

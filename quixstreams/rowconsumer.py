@@ -1,14 +1,14 @@
 import logging
-from typing import Optional, Callable, List, Union, Mapping
+from typing import Callable, List, Mapping, Optional, Union
 
 from confluent_kafka import KafkaError, TopicPartition
 
 from .error_callbacks import ConsumerErrorCallback, default_on_consumer_error
 from .exceptions import PartitionAssignmentError
-from .kafka import Consumer, AutoOffsetReset, ConnectionConfig
+from .kafka import AutoOffsetReset, ConnectionConfig, Consumer
 from .kafka.consumer import RebalancingCallback
 from .kafka.exceptions import KafkaConsumerException
-from .models import Topic, Row
+from .models import Row, Topic
 from .models.serializers.exceptions import IgnoreMessage
 
 logger = logging.getLogger(__name__)

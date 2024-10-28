@@ -1,5 +1,5 @@
 import abc
-from typing import Optional, Any
+from typing import Any, Optional
 
 from quixstreams.core.stream import Stream, VoidExecutor
 from quixstreams.models.messagecontext import MessageContext

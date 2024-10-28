@@ -1,6 +1,6 @@
 import pickle
-from pickle import loads, dumps
-from typing import TypeVar, Callable
+from pickle import dumps, loads
+from typing import Callable, TypeVar
 
 __all__ = ("pickle_copier",)
 T = TypeVar("T")

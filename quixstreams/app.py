@@ -6,43 +6,43 @@ import signal
 import time
 import warnings
 from pathlib import Path
-from typing import Optional, List, Callable, Union, Literal, Tuple, Type
+from typing import Callable, List, Literal, Optional, Tuple, Type, Union
 
 from confluent_kafka import TopicPartition
-from pydantic import Field, AliasGenerator
+from pydantic import AliasGenerator, Field
 from pydantic_settings import PydanticBaseSettingsSource, SettingsConfigDict
 from typing_extensions import Self
 
-from .context import set_message_context, copy_context
-from .dataframe import StreamingDataFrame, DataframeRegistry
+from .context import copy_context, set_message_context
+from .dataframe import DataframeRegistry, StreamingDataFrame
 from .error_callbacks import (
     ConsumerErrorCallback,
     ProcessingErrorCallback,
     ProducerErrorCallback,
     default_on_processing_error,
 )
-from .kafka import AutoOffsetReset, Producer, Consumer, ConnectionConfig
-from .logging import configure_logging, LogLevel
+from .kafka import AutoOffsetReset, ConnectionConfig, Consumer, Producer
+from .logging import LogLevel, configure_logging
 from .models import (
-    Topic,
-    TopicConfig,
-    TopicAdmin,
-    TopicManager,
-    SerializerType,
     DeserializerType,
+    SerializerType,
     TimestampExtractor,
+    Topic,
+    TopicAdmin,
+    TopicConfig,
+    TopicManager,
 )
 from .platforms.quix import (
     QuixKafkaConfigsBuilder,
+    QuixTopicManager,
     check_state_dir,
     check_state_management_enabled,
-    QuixTopicManager,
 )
-from .processing import ProcessingContext, PausingManager
+from .processing import PausingManager, ProcessingContext
 from .rowconsumer import RowConsumer
 from .rowproducer import RowProducer
 from .sinks import SinkManager
-from .sources import SourceManager, BaseSource, SourceException
+from .sources import BaseSource, SourceException, SourceManager
 from .state import StateStoreManager
 from .state.recovery import RecoveryManager
 from .state.rocksdb import RocksDBOptionsType

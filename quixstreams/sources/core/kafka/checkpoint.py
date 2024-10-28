@@ -1,11 +1,11 @@
-from confluent_kafka import TopicPartition, KafkaException
-
 from typing import List
+
+from confluent_kafka import KafkaException, TopicPartition
 
 from quixstreams.checkpointing import BaseCheckpoint
 from quixstreams.checkpointing.exceptions import (
-    CheckpointProducerTimeout,
     CheckpointConsumerCommitError,
+    CheckpointProducerTimeout,
 )
 from quixstreams.models.topics import Topic
 from quixstreams.rowconsumer import Consumer

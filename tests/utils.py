@@ -1,9 +1,8 @@
 import dataclasses
+import threading
 import time
 import uuid
-import threading
-
-from typing import Optional, Tuple, Union, List, Any
+from typing import Any, List, Optional, Tuple, Union
 
 from confluent_kafka import OFFSET_INVALID
 

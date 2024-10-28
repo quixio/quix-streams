@@ -1,17 +1,18 @@
 import logging
 from typing import Optional
 
-from rocksdict import WriteBatch, ReadOptions, RdictItems  # type: ignore
+from rocksdict import RdictItems, ReadOptions, WriteBatch  # type: ignore
 
 from quixstreams.state.base import PartitionTransactionCache
 from quixstreams.state.recovery import ChangelogProducer
 from quixstreams.state.serialization import int_from_int64_bytes, int_to_int64_bytes
-from .metadata import LATEST_EXPIRED_WINDOW_CF_NAME, LATEST_TIMESTAMP_KEY
-from .transaction import WindowedRocksDBPartitionTransaction
+
 from ..exceptions import ColumnFamilyDoesNotExist
 from ..metadata import METADATA_CF_NAME
 from ..partition import RocksDBStorePartition
 from ..types import RocksDBOptionsType
+from .metadata import LATEST_EXPIRED_WINDOW_CF_NAME, LATEST_TIMESTAMP_KEY
+from .transaction import WindowedRocksDBPartitionTransaction
 
 logger = logging.getLogger(__name__)
 

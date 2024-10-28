@@ -1,9 +1,9 @@
 from typing import Optional
 
-from .partition import WindowedRocksDBStorePartition
+from ...recovery import ChangelogProducer, ChangelogProducerFactory
 from ..store import RocksDBStore
 from ..types import RocksDBOptionsType
-from ...recovery import ChangelogProducerFactory, ChangelogProducer
+from .partition import WindowedRocksDBStorePartition
 
 
 class WindowedRocksDBStore(RocksDBStore):

@@ -1,17 +1,18 @@
 import logging
 from functools import wraps
 from time import sleep
-from typing import Optional, Any, Union, Dict, Tuple, List, Callable
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
-from confluent_kafka import TopicPartition, KafkaException, KafkaError, Message
+from confluent_kafka import KafkaError, KafkaException, Message, TopicPartition
 from confluent_kafka.admin import GroupMetadata
 
 from quixstreams.exceptions import QuixException
+
 from .error_callbacks import ProducerErrorCallback, default_on_producer_error
 from .kafka.configuration import ConnectionConfig
 from .kafka.exceptions import KafkaProducerDeliveryError
 from .kafka.producer import Producer, TransactionalProducer
-from .models import Topic, Row, Headers
+from .models import Headers, Row, Topic
 
 logger = logging.getLogger(__name__)
 

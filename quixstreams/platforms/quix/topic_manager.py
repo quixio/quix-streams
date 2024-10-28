@@ -1,6 +1,7 @@
 from typing import List, Literal
 
-from quixstreams.models.topics import TopicManager, TopicAdmin, Topic
+from quixstreams.models.topics import Topic, TopicAdmin, TopicManager
+
 from .config import QuixKafkaConfigsBuilder
 
 __all__ = ("QuixTopicManager",)

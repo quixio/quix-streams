@@ -3,21 +3,22 @@ import dataclasses
 import logging
 import time
 from copy import deepcopy
-from typing import Optional, Set, Union, List
+from typing import List, Optional, Set, Union
 
 from requests import HTTPError
 
 from quixstreams.kafka.configuration import ConnectionConfig
 from quixstreams.models.topics import Topic
+
 from .api import QuixPortalApiService
 from .exceptions import (
-    NoWorkspaceFound,
-    MultipleWorkspaces,
     MissingQuixTopics,
-    UndefinedQuixWorkspaceId,
+    MultipleWorkspaces,
+    NoWorkspaceFound,
+    QuixApiRequestFailure,
     QuixCreateTopicFailure,
     QuixCreateTopicTimeout,
-    QuixApiRequestFailure,
+    UndefinedQuixWorkspaceId,
 )
 
 logger = logging.getLogger(__name__)

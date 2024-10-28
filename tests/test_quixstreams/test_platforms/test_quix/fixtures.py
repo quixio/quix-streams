@@ -1,5 +1,5 @@
-from json import loads, JSONDecodeError
-from typing import Union, Optional
+from json import JSONDecodeError, loads
+from typing import Optional, Union
 
 import pytest
 import requests

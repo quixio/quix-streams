@@ -5,19 +5,19 @@ from dataclasses import dataclass
 from datetime import datetime
 from importlib import import_module
 from io import BytesIO
-from typing import Optional, Literal, get_args, Type
+from typing import Literal, Optional, Type, get_args
 
-from quixstreams.sinks import SinkBatch, BatchingSink, SinkBackpressureError
+from quixstreams.sinks import BatchingSink, SinkBackpressureError, SinkBatch
 
 try:
     import pyarrow as pa
     import pyarrow.parquet as pq
     from pyiceberg.catalog import MetastoreCatalog
-    from pyiceberg.transforms import DayTransform, IdentityTransform
-    from pyiceberg.partitioning import PartitionSpec, PartitionField
-    from pyiceberg.schema import Schema, NestedField
-    from pyiceberg.types import StringType, TimestampType
     from pyiceberg.exceptions import CommitFailedException
+    from pyiceberg.partitioning import PartitionField, PartitionSpec
+    from pyiceberg.schema import NestedField, Schema
+    from pyiceberg.transforms import DayTransform, IdentityTransform
+    from pyiceberg.types import StringType, TimestampType
 except ImportError as exc:
     raise ImportError(
         f"Package {exc.name} is missing: "

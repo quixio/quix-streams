@@ -1,11 +1,11 @@
 from .dataframe import StreamingDataFrame
 from .exceptions import (
-    InvalidOperation,
+    ColumnDoesNotExist,
+    GroupByDuplicate,
     GroupByNestingLimit,
     InvalidColumnReference,
-    ColumnDoesNotExist,
+    InvalidOperation,
     StreamingDataFrameDuplicate,
-    GroupByDuplicate,
 )
 from .registry import DataframeRegistry
 from .series import StreamingSeries

@@ -1,23 +1,24 @@
 import contextvars
 import functools
 import operator
-from typing import Optional, Union, Callable, Container, Any, Mapping, TypeVar
+from typing import Any, Callable, Container, Mapping, Optional, TypeVar, Union
 
-from typing_extensions import Self, ParamSpec
+from typing_extensions import ParamSpec, Self
 
 from quixstreams.context import set_message_context
 from quixstreams.core.stream.functions import (
     ApplyCallback,
     ApplyFunction,
-    VoidExecutor,
-    ReturningExecutor,
     ApplyWithMetadataCallback,
     ApplyWithMetadataFunction,
+    ReturningExecutor,
+    VoidExecutor,
 )
 from quixstreams.core.stream.stream import Stream
 from quixstreams.models.messagecontext import MessageContext
+
 from .base import BaseStreaming
-from .exceptions import InvalidOperation, ColumnDoesNotExist, InvalidColumnReference
+from .exceptions import ColumnDoesNotExist, InvalidColumnReference, InvalidOperation
 
 __all__ = ("StreamingSeries",)
 

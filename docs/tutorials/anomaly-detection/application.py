@@ -2,7 +2,6 @@ import os
 
 from quixstreams import Application
 
-
 app = Application(
     broker_address=os.environ.get("BROKER_ADDRESS", "localhost:9092"),
     consumer_group="temperature_alerter",

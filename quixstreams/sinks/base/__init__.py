@@ -1,7 +1,7 @@
 from .batch import SinkBatch
 from .exceptions import SinkBackpressureError
 from .manager import SinkManager
-from .sink import BatchingSink, BaseSink
+from .sink import BaseSink, BatchingSink
 
 __all__ = (
     "SinkBatch",

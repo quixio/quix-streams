@@ -1,11 +1,11 @@
-import pytest
-import time
 import signal
+import time
+
+import pytest
 
 from quixstreams.models.topics import Topic
 from quixstreams.sources import multiprocessing
-from quixstreams.sources.base.manager import SourceManager, SourceException
-
+from quixstreams.sources.base.manager import SourceException, SourceManager
 from tests.utils import DummySource
 
 

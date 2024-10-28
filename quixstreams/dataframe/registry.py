@@ -1,13 +1,13 @@
-from typing import List, Dict, Optional, Callable, Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+
+from quixstreams.core.stream import Stream, VoidExecutor
+from quixstreams.models import Topic
 
 from .exceptions import (
-    StreamingDataFrameDuplicate,
     GroupByDuplicate,
     GroupByNestingLimit,
+    StreamingDataFrameDuplicate,
 )
-from quixstreams.core.stream import Stream, VoidExecutor
-
-from quixstreams.models import Topic
 
 if TYPE_CHECKING:
     from .dataframe import StreamingDataFrame

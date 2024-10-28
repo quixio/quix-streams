@@ -1,4 +1,4 @@
-from .base import SourceException, multiprocessing, BaseSource, SourceManager, Source
+from .base import BaseSource, Source, SourceException, SourceManager, multiprocessing
 from .core.csv import CSVSource
 from .core.kafka import KafkaReplicatorSource, QuixEnvironmentSource
 

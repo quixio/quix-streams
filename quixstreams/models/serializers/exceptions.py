@@ -1,9 +1,17 @@
 from confluent_kafka.error import (
     KeyDeserializationError as _KeyDeserializationError,
+)
+from confluent_kafka.error import (
     KeySerializationError as _KeySerializationError,
-    ValueSerializationError as _ValueSerializationError,
-    ValueDeserializationError as _ValueDeserializationError,
+)
+from confluent_kafka.error import (
     SerializationError as _SerializationError,
+)
+from confluent_kafka.error import (
+    ValueDeserializationError as _ValueDeserializationError,
+)
+from confluent_kafka.error import (
+    ValueSerializationError as _ValueSerializationError,
 )
 
 from quixstreams import exceptions

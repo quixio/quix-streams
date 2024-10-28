@@ -56,6 +56,7 @@ ignore-init-method-arguments = true
 fix = true
 lint.select = [
   "F",  # Pyflakes
+  "I",  # isort
   "S",  # flake8-bandit
   "SLF",  # flake8-self
 ]

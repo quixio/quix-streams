@@ -1,7 +1,8 @@
 from typing import Optional, Set
 
 from pydantic import AliasGenerator, SecretStr
-from pydantic_settings import BaseSettings as _BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings as _BaseSettings
+from pydantic_settings import SettingsConfigDict
 
 __all__ = ["BaseSettings"]
 

@@ -7,9 +7,9 @@ import pytest
 
 from quixstreams import State
 from quixstreams.dataframe.exceptions import (
-    InvalidOperation,
-    GroupByNestingLimit,
     GroupByDuplicate,
+    GroupByNestingLimit,
+    InvalidOperation,
 )
 from quixstreams.dataframe.registry import DataframeRegistry
 from quixstreams.dataframe.windows import WindowResult
