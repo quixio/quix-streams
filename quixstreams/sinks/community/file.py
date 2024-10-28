@@ -1,7 +1,7 @@
 import logging
-import os
 import re
 from collections import defaultdict
+from pathlib import Path
 from typing import Any, Hashable, Literal, Union
 
 from .file_formats import BatchFormat
@@ -47,10 +47,7 @@ class FileSink(BatchingSink):
         """
         super().__init__()
         self._format = self._resolve_format(format)
-        self._output_dir = output_dir
-
-        # Ensure the output directory exists.
-        os.makedirs(self._output_dir, exist_ok=True)
+        self._output_dir = Path(output_dir)
         logger.info(f"Files will be written to '{self._output_dir}'.")
 
     def write(self, batch: SinkBatch):
@@ -75,18 +72,11 @@ class FileSink(BatchingSink):
             # Generate filename based on the key
             safe_key = _UNSAFE_CHARACTERS_REGEX.sub("_", _to_str(key))
 
+            directory = self._output_dir / safe_key
+            directory.mkdir(parents=True, exist_ok=True)
+
             padded_offset = str(messages[0].offset).zfill(15)
-
-            filename = f"{safe_key}/{padded_offset}{self._format.file_extension}"
-
-            file_path = os.path.join(self._output_dir, filename)
-
-            # Get the folder path
-            folder_path = os.path.dirname(file_path)
-
-            # Create the folder if it doesn't exist
-            if not os.path.exists(folder_path):
-                os.makedirs(folder_path)
+            file_path = directory / (padded_offset + self._format.file_extension)
 
             # Write data to a new file
             with open(file_path, "wb") as f:
