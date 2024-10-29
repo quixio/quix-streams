@@ -11,12 +11,30 @@ __all__ = ["BatchFormat"]
 
 class BatchFormat(ABC):
     """
-    Base class to format batches for File Sink
+    Base class to format batches for File Sink.
+
+    This abstract base class defines the interface for batch formatting
+    in file sinks. Subclasses should implement the `file_extension`
+    property and the `serialize` method to define how messages are
+    formatted and saved.
     """
 
     @property
     @abstractmethod
-    def file_extension(self) -> str: ...
+    def file_extension(self) -> str:
+        """
+        Returns the file extension used for output files.
+
+        :return: The file extension as a string.
+        """
+        ...
 
     @abstractmethod
-    def serialize(self, messages: list[SinkItem]) -> bytes: ...
+    def serialize(self, messages: list[SinkItem]) -> bytes:
+        """
+        Serializes a list of messages into a byte string.
+
+        :param messages: The list of messages to serialize.
+        :return: The serialized messages as bytes.
+        """
+        ...
