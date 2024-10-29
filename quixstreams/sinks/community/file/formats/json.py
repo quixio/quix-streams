@@ -37,7 +37,7 @@ class JSONFormat(BatchFormat):
                     {
                         "timestamp": message.timestamp,
                         "key": _to_str(message.key),
-                        "value": json.dumps(message.value),
+                        "value": message.value,
                     }
                     for message in messages
                 )
