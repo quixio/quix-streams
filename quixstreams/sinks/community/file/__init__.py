@@ -6,10 +6,7 @@ from typing import Any, Hashable, Literal, Union
 
 from quixstreams.sinks import BatchingSink, SinkBatch
 
-from .file_formats import BatchFormat
-from .formats.bytes_format import BytesFormat
-from .formats.json_format import JSONFormat
-from .formats.parquet_format import ParquetFormat
+from .formats import BatchFormat, BytesFormat, JSONFormat, ParquetFormat
 
 logger = logging.getLogger(__name__)
 

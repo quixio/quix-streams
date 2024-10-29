@@ -5,7 +5,7 @@ from typing import Any
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from ..file_formats import BatchFormat
+from .base import BatchFormat
 
 
 class ParquetFormat(BatchFormat):

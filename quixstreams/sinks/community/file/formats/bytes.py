@@ -1,7 +1,7 @@
 from gzip import compress as gzip_compress
 from typing import Any
 
-from ..file_formats import BatchFormat
+from .base import BatchFormat
 
 
 class BytesFormat(BatchFormat):

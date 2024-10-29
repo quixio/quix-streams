@@ -7,7 +7,7 @@ from jsonlines import Writer
 
 from quixstreams.models.messages import KafkaMessage
 
-from ..file_formats import BatchFormat
+from .base import BatchFormat
 
 
 class JSONFormat(BatchFormat):
