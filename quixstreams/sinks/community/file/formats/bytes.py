@@ -2,6 +2,8 @@ from gzip import compress as gzip_compress
 
 from .base import BatchFormat
 
+__all__ = ["BytesFormat"]
+
 
 class BytesFormat(BatchFormat):
     """
@@ -24,8 +26,8 @@ class BytesFormat(BatchFormat):
     def file_extension(self) -> str:
         return self._file_extension
 
-    def serialize_batch_values(self, values: list[bytes]) -> bytes:
-        value_bytes = self._separator.join(values)
+    def serialize(self, messages: list[bytes]) -> bytes:
+        value_bytes = self._separator.join(messages)
         if self._compress:
             value_bytes = gzip_compress(value_bytes)
         return value_bytes

@@ -7,17 +7,18 @@ from jsonlines import Writer
 
 from .base import BatchFormat
 
+__all__ = ["JSONFormat"]
+
 
 class JSONFormat(BatchFormat):
     # TODO: Docs
     def __init__(
         self,
-        dumps: Optional[Callable[[Any], bytes]] = None,
-        loads: Optional[Callable[[bytes], Any]] = None,
+        dumps: Optional[Callable[[Any], bytes]] = json.dumps,
         file_extension: str = ".json",
         compress: bool = False,
     ):
-        self._dumps = dumps or json.dumps
+        self._dumps = dumps
         self._compress = compress
         self._file_extension = file_extension
         if self._compress:
@@ -27,17 +28,17 @@ class JSONFormat(BatchFormat):
     def file_extension(self) -> str:
         return self._file_extension
 
-    def serialize_batch_values(self, values: list[any]) -> bytes:
+    def serialize(self, messages: list[any]) -> bytes:
         with BytesIO() as f:
             with Writer(f, compact=True, dumps=self._dumps) as writer:
-                for row in values:
+                for message in messages:
                     obj = {
-                        "timestamp": row.timestamp,
-                        "key": bytes.decode(row.key),
-                        "value": json.dumps(row.value),
+                        "timestamp": message.timestamp,
+                        "key": bytes.decode(message.key),
+                        "value": json.dumps(message.value),
                     }
                     writer.write(obj)
             value_bytes = f.getvalue()
             if self._compress:
-                value_bytes = gzip_compress(value_bytes)
+                return gzip_compress(value_bytes)
             return value_bytes

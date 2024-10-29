@@ -1,4 +1,4 @@
-import abc
+from abc import ABC, abstractmethod
 from typing import Any
 
 __all__ = ["BatchFormat"]
@@ -8,14 +8,14 @@ __all__ = ["BatchFormat"]
 # TODO: Check the types of the values before serializing
 
 
-class BatchFormat:
+class BatchFormat(ABC):
     """
-    Base class to format batches for S3 Sink
+    Base class to format batches for File Sink
     """
 
     @property
-    @abc.abstractmethod
+    @abstractmethod
     def file_extension(self) -> str: ...
 
-    @abc.abstractmethod
-    def serialize_batch_values(self, values: list[Any]) -> bytes: ...
+    @abstractmethod
+    def serialize(self, messages: list[Any]) -> bytes: ...

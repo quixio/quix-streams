@@ -7,6 +7,8 @@ import pyarrow.parquet as pq
 
 from .base import BatchFormat
 
+__all__ = ["ParquetFormat"]
+
 
 class ParquetFormat(BatchFormat):
     # TODO: Docs
@@ -28,26 +30,26 @@ class ParquetFormat(BatchFormat):
     def supports_append(self) -> bool:
         return True
 
-    def serialize_batch_values(self, values: list[Any]) -> bytes:
+    def serialize(self, messages: list[Any]) -> bytes:
         # Get all unique keys (columns) across all rows
         all_keys = set()
-        for row in values:
+        for row in messages:
             all_keys.update(row.value.keys())
 
         # Normalize rows: Ensure all rows have the same keys, filling missing ones with None
-        normalized_values = [
-            {key: row.value.get(key, None) for key in all_keys} for row in values
+        normalized_messages = [
+            {key: row.value.get(key, None) for key in all_keys} for row in messages
         ]
 
         columns = {
-            "timestamp": [row.timestamp for row in values],
-            "key": [bytes.decode(row.key) for row in values],
+            "timestamp": [row.timestamp for row in messages],
+            "key": [bytes.decode(row.key) for row in messages],
         }
 
-        # Convert normalized values to a pyarrow Table
+        # Convert normalized messages to a pyarrow Table
         columns = {
             **columns,
-            **{key: [row[key] for row in normalized_values] for key in all_keys},
+            **{key: [row[key] for row in normalized_messages] for key in all_keys},
         }
 
         table = pa.Table.from_pydict(columns)

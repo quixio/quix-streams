@@ -64,7 +64,7 @@ class FileSink(BatchingSink):
 
         for key, messages in messages_by_key.items():
             # Serialize messages for this key using the specified format
-            data = self._format.serialize_batch_values(messages)
+            data = self._format.serialize(messages)
 
             # Generate filename based on the key
             safe_key = _UNSAFE_CHARACTERS_REGEX.sub("_", _to_str(key))
