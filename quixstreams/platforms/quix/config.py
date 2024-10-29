@@ -176,8 +176,7 @@ class QuixKafkaConfigsBuilder:
                 extra_config={
                     "retention.ms": topic_config["retentionInMinutes"] * 60 * 1000,
                     "retention.bytes": topic_config["retentionInBytes"],
-                    # TODO: uncomment or remove this once Emanuel confirms API behavior
-                    # "cleanup.policy": true_cfg["cleanupPolicy"],
+                    "cleanup.policy": topic_config["cleanupPolicy"],
                 },
             ),
         )
@@ -369,15 +368,16 @@ class QuixKafkaConfigsBuilder:
         """
         try:
             return self.get_topic(topic_name=topic.name, timeout=timeout)
-        except QuixApiRequestFailure:
-            # Topic likely does not exist (anything but success 404's; could inspect
-            # error string, but that creates a dependency on it never changing).
-            try:
-                return self.create_topic(topic, timeout=timeout)
-            except QuixApiRequestFailure:
-                # Multiple apps likely tried to create at the same time.
-                # If this fails, it will raise with all the API errors it encountered
-                return self.get_topic(topic_name=topic.name, timeout=timeout)
+        except QuixApiRequestFailure as e:
+            if e.status_code == 404:
+                # Topic likely does not exist (anything but success 404's; could inspect
+                # error string, but that creates a dependency on it never changing).
+                try:
+                    return self.create_topic(topic, timeout=timeout)
+                except QuixApiRequestFailure:
+                    # Multiple apps likely tried to create at the same time.
+                    # If this fails, it raises with all previous API errors
+                    return self.get_topic(topic_name=topic.name, timeout=timeout)
 
     def wait_for_topic_ready_statuses(
         self,

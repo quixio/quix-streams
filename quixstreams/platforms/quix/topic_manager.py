@@ -62,14 +62,15 @@ class QuixTopicManager(TopicManager):
         Additionally, sets the actual topic configuration since we now have it anyway.
         """
         quix_topic_info = self._quix_config_builder.get_or_create_topic(topic)
-        true_topic = self._quix_config_builder.convert_topic_response(quix_topic_info)
+        quix_topic = self._quix_config_builder.convert_topic_response(quix_topic_info)
         # allows us to include the configs not included in the API response
-        true_topic.config.extra_config = {
+        quix_topic.config.extra_config = {
             **topic.config.extra_config,
-            **true_topic.config.extra_config,
+            **quix_topic.config.extra_config,
         }
-        self._topic_id_to_name[true_topic.name] = quix_topic_info["name"]
-        return super()._finalize_topic(true_topic)
+        topic_out = topic.__clone__(name=quix_topic.name, config=quix_topic.config)
+        self._topic_id_to_name[topic_out.name] = quix_topic_info["name"]
+        return super()._finalize_topic(topic_out)
 
     def _create_topics(
         self, topics: List[Topic], timeout: float, create_timeout: float
