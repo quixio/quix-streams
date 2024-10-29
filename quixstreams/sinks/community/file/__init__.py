@@ -32,24 +32,28 @@ _UNSAFE_CHARACTERS_REGEX = re.compile(r"[^a-zA-Z0-9 ._]")
 
 class InvalidFormatError(Exception):
     """
-    Raised when format is specified incorrectly
+    Raised when the format is specified incorrectly.
     """
 
 
 class FileSink(BatchingSink):
     """
-    FileSink writes batches of data to files on disk using specified formats.
-    Files are named using message keys, and data from multiple messages with the
-    same key are appended to the same file where possible.
+    Writes batches of data to files on disk using specified formats.
+
+    Messages are grouped by their keys, and data from messages with the same key
+    are saved in the same directory. Each batch of messages is serialized and
+    saved to a new file within that directory. Files are named using the message
+    offset to ensure uniqueness.
     """
 
     def __init__(self, output_dir: str, format: Union[FormatName, Format]) -> None:
         """
-        Initializes the FileSink with the specified configuration.
+        Initializes the FileSink.
 
-        Parameters:
-            output_dir (str): The directory where files will be written.
-            format (S3SinkBatchFormat): The data serialization format to use.
+        :param output_dir: The directory where files will be written.
+        :param format: The data serialization format to use. This can be either a
+            format name ("bytes", "json", "parquet") or an instance of a `Format`
+            subclass.
         """
         super().__init__()
         self._format = self._resolve_format(format)
@@ -60,8 +64,7 @@ class FileSink(BatchingSink):
         """
         Writes a batch of data to files on disk, grouping data by message key.
 
-        Parameters:
-            batch (SinkBatch): The batch of data to write.
+        :param batch: The batch of data to write.
         """
 
         # Group messages by key
@@ -91,14 +94,22 @@ class FileSink(BatchingSink):
             logger.info(f"Wrote {len(messages)} records to file '{file_path}'.")
 
     def _resolve_format(self, format: Union[FormatName, Format]) -> Format:
+        """
+        Resolves the format into a `Format` instance.
+
+        :param format: The format to resolve, either a format name ("bytes", "json",
+            "parquet") or a `Format` instance.
+        :return: An instance of `Format` corresponding to the specified format.
+        :raises InvalidFormatError: If the format name is invalid.
+        """
         if isinstance(format, Format):
             return format
         elif format_obj := _FORMATS.get(format):
             return format_obj
 
-        allowed_formats = ", ".join(Format.__args__)
+        allowed_formats = ", ".join(FormatName.__args__)
         raise InvalidFormatError(
             f'Invalid format name "{format}". '
             f"Allowed values: {allowed_formats}, "
-            f"or an instance of {Format.__class__.__name__}."
+            f"or an instance of a subclass of `Format`."
         )
