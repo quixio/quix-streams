@@ -159,10 +159,11 @@ class JSONDeserializer(Deserializer):
             )
 
     def __call__(
-        self, value: bytes, ctx: SerializationContext
+        self, value: bytes, ctx: Optional[SerializationContext] = None
     ) -> Union[Iterable[Mapping], Mapping]:
         if self._schema_registry_deserializer is not None:
             try:
+                # NOTE: ctx must be provided for schema registry
                 return self._schema_registry_deserializer(value, ctx)
             except (SchemaRegistryError, _SerializationError) as exc:
                 raise SerializationError(str(exc)) from exc

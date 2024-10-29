@@ -166,7 +166,7 @@ class AvroDeserializer(Deserializer):
             )
 
     def __call__(
-        self, value: bytes, ctx: SerializationContext
+        self, value: bytes, ctx: Optional[SerializationContext] = None
     ) -> Union[Iterable[Mapping], Mapping]:
         if self._schema_registry_deserializer is not None:
             try:
