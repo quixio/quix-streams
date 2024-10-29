@@ -33,13 +33,15 @@ class JSONFormat(BatchFormat):
 
         with BytesIO() as f:
             with Writer(f, compact=True, dumps=self._dumps) as writer:
-                for message in messages:
-                    obj = {
+                writer.write_all(
+                    {
                         "timestamp": message.timestamp,
                         "key": _to_str(message.key),
                         "value": json.dumps(message.value),
                     }
-                    writer.write(obj)
+                    for message in messages
+                )
+
             value_bytes = f.getvalue()
             if self._compress:
                 return gzip_compress(value_bytes)
