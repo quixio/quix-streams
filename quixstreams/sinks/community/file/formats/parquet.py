@@ -6,12 +6,12 @@ import pyarrow.parquet as pq
 
 from quixstreams.sinks.base import SinkItem
 
-from .base import BatchFormat
+from .base import Format
 
 __all__ = ["ParquetFormat"]
 
 
-class ParquetFormat(BatchFormat):
+class ParquetFormat(Format):
     # TODO: Docs
     def __init__(
         self,

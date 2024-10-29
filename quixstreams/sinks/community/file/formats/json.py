@@ -6,12 +6,12 @@ from jsonlines import Writer
 
 from quixstreams.sinks.base import SinkItem
 
-from .base import BatchFormat
+from .base import Format
 
 __all__ = ["JSONFormat"]
 
 
-class JSONFormat(BatchFormat):
+class JSONFormat(Format):
     """
     Serializes messages into JSON Lines format with optional gzip compression.
 

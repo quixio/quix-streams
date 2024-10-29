@@ -2,14 +2,14 @@ from abc import ABC, abstractmethod
 
 from quixstreams.sinks.base import SinkItem
 
-__all__ = ["BatchFormat"]
+__all__ = ["Format"]
 
 
 # TODO: Document the compatible topic formats for each formatter
 # TODO: Check the types of the values before serializing
 
 
-class BatchFormat(ABC):
+class Format(ABC):
     """
     Base class to format batches for File Sink.
 

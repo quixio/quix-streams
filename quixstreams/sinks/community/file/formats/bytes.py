@@ -2,12 +2,12 @@ from gzip import compress as gzip_compress
 
 from quixstreams.sinks.base import SinkItem
 
-from .base import BatchFormat
+from .base import Format
 
 __all__ = ["BytesFormat"]
 
 
-class BytesFormat(BatchFormat):
+class BytesFormat(Format):
     """
     Bypass formatter to serialize
     """

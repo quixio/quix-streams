@@ -6,33 +6,33 @@ from typing import Any, Hashable, Literal, Union
 
 from quixstreams.sinks import BatchingSink, SinkBatch
 
-from .formats import BatchFormat, BytesFormat, JSONFormat, ParquetFormat
+from .formats import BytesFormat, Format, JSONFormat, ParquetFormat
 
 __all__ = [
     "BatchFormat",
     "BytesFormat",
     "FileSink",
-    "InvalidFormatterError",
+    "InvalidFormatError",
     "JSONFormat",
     "ParquetFormat",
 ]
 
 logger = logging.getLogger(__name__)
 
-Format = Literal["bytes", "json", "parquet"]
+FormatName = Literal["bytes", "json", "parquet"]
 
-_FORMATTERS: dict[Format, BatchFormat] = {
-    "json": JSONFormat(),
+_FORMATS: dict[FormatName, Format] = {
     "bytes": BytesFormat(),
+    "json": JSONFormat(),
     "parquet": ParquetFormat(),
 }
 
 _UNSAFE_CHARACTERS_REGEX = re.compile(r"[^a-zA-Z0-9 ._]")
 
 
-class InvalidFormatterError(Exception):
+class InvalidFormatError(Exception):
     """
-    Raised when formatter is specified incorrectly
+    Raised when format is specified incorrectly
     """
 
 
@@ -43,7 +43,7 @@ class FileSink(BatchingSink):
     same key are appended to the same file where possible.
     """
 
-    def __init__(self, output_dir: str, format: Format) -> None:
+    def __init__(self, output_dir: str, format: Union[FormatName, Format]) -> None:
         """
         Initializes the FileSink with the specified configuration.
 
@@ -90,15 +90,15 @@ class FileSink(BatchingSink):
 
             logger.info(f"Wrote {len(messages)} records to file '{file_path}'.")
 
-    def _resolve_format(self, formatter: Union[Format, BatchFormat]) -> BatchFormat:
-        if isinstance(formatter, BatchFormat):
-            return formatter
-        elif formatter_obj := _FORMATTERS.get(formatter):
-            return formatter_obj
+    def _resolve_format(self, format: Union[FormatName, Format]) -> Format:
+        if isinstance(format, Format):
+            return format
+        elif format_obj := _FORMATS.get(format):
+            return format_obj
 
         allowed_formats = ", ".join(Format.__args__)
-        raise InvalidFormatterError(
-            f'Invalid format name "{formatter}". '
+        raise InvalidFormatError(
+            f'Invalid format name "{format}". '
             f"Allowed values: {allowed_formats}, "
-            f"or an instance of {BatchFormat.__class__.__name__}."
+            f"or an instance of {Format.__class__.__name__}."
         )
