@@ -33,7 +33,7 @@ class JSONFormat(BatchFormat):
     def file_extension(self) -> str:
         return self._file_extension
 
-    def serialize(self, messages: list[any]) -> bytes:
+    def serialize(self, messages: list[Any]) -> bytes:
         _to_str = bytes.decode if isinstance(messages[0].key, bytes) else str
 
         with BytesIO() as fp:

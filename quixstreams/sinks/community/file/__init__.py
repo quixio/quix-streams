@@ -8,6 +8,15 @@ from quixstreams.sinks import BatchingSink, SinkBatch
 
 from .formats import BatchFormat, BytesFormat, JSONFormat, ParquetFormat
 
+__all__ = [
+    "BatchFormat",
+    "BytesFormat",
+    "FileSink",
+    "InvalidFormatterError",
+    "JSONFormat",
+    "ParquetFormat",
+]
+
 logger = logging.getLogger(__name__)
 
 Format = Literal["bytes", "json", "parquet"]
