@@ -1,9 +1,10 @@
 import gzip
 from io import BytesIO
-from typing import Any
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+
+from quixstreams.sinks.base import SinkItem
 
 from .base import BatchFormat
 
@@ -17,7 +18,7 @@ class ParquetFormat(BatchFormat):
         file_extension: str = ".parquet",
         compress: bool = False,
         compression_type: str = "snappy",  # Parquet compression: snappy, gzip, none, etc.
-    ):
+    ) -> None:
         self._compress = compress
         self._compression_type = compression_type if compress else "none"
         self._file_extension = file_extension
@@ -30,7 +31,7 @@ class ParquetFormat(BatchFormat):
     def supports_append(self) -> bool:
         return True
 
-    def serialize(self, messages: list[Any]) -> bytes:
+    def serialize(self, messages: list[SinkItem]) -> bytes:
         # Get all unique keys (columns) across all rows
         all_keys = set()
         for row in messages:

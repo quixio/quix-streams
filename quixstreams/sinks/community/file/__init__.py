@@ -56,7 +56,7 @@ class FileSink(BatchingSink):
         self._output_dir = Path(output_dir)
         logger.info(f"Files will be written to '{self._output_dir}'.")
 
-    def write(self, batch: SinkBatch):
+    def write(self, batch: SinkBatch) -> None:
         """
         Writes a batch of data to files on disk, grouping data by message key.
 

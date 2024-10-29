@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Any
+
+from quixstreams.sinks.base import SinkItem
 
 __all__ = ["BatchFormat"]
 
@@ -18,4 +19,4 @@ class BatchFormat(ABC):
     def file_extension(self) -> str: ...
 
     @abstractmethod
-    def serialize(self, messages: list[Any]) -> bytes: ...
+    def serialize(self, messages: list[SinkItem]) -> bytes: ...

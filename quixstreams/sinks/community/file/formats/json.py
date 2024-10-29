@@ -4,6 +4,8 @@ from typing import Any, Callable, Optional
 
 from jsonlines import Writer
 
+from quixstreams.sinks.base import SinkItem
+
 from .base import BatchFormat
 
 __all__ = ["JSONFormat"]
@@ -16,7 +18,7 @@ class JSONFormat(BatchFormat):
         file_extension: str = ".jsonl",
         compress: bool = False,
         dumps: Optional[Callable[[Any], str]] = None,
-    ):
+    ) -> None:
         self._file_extension = file_extension
 
         self._compress = compress
@@ -33,7 +35,7 @@ class JSONFormat(BatchFormat):
     def file_extension(self) -> str:
         return self._file_extension
 
-    def serialize(self, messages: list[Any]) -> bytes:
+    def serialize(self, messages: list[SinkItem]) -> bytes:
         _to_str = bytes.decode if isinstance(messages[0].key, bytes) else str
 
         with BytesIO() as fp:
