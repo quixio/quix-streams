@@ -29,12 +29,14 @@ class JSONFormat(BatchFormat):
         return self._file_extension
 
     def serialize(self, messages: list[any]) -> bytes:
+        _to_str = bytes.decode if isinstance(messages[0].key, bytes) else str
+
         with BytesIO() as f:
             with Writer(f, compact=True, dumps=self._dumps) as writer:
                 for message in messages:
                     obj = {
                         "timestamp": message.timestamp,
-                        "key": bytes.decode(message.key),
+                        "key": _to_str(message.key),
                         "value": json.dumps(message.value),
                     }
                     writer.write(obj)
