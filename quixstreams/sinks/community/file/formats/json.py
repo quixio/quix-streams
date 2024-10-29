@@ -15,7 +15,7 @@ class JSONFormat(BatchFormat):
     def __init__(
         self,
         dumps: Optional[Callable[[Any], bytes]] = json.dumps,
-        file_extension: str = ".json",
+        file_extension: str = ".jsonl",
         compress: bool = False,
     ):
         self._dumps = dumps
