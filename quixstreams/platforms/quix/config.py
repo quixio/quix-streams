@@ -176,7 +176,8 @@ class QuixKafkaConfigsBuilder:
                 extra_config={
                     "retention.ms": topic_config["retentionInMinutes"] * 60 * 1000,
                     "retention.bytes": topic_config["retentionInBytes"],
-                    "cleanup.policy": topic_config["cleanupPolicy"],
+                    # TODO: uncomment or remove this once Emanuel confirms API behavior
+                    # "cleanup.policy": true_cfg["cleanupPolicy"],
                 },
             ),
         )
