@@ -1,8 +1,6 @@
 import abc
 from typing import Any
 
-from quixstreams.models.messages import KafkaMessage
-
 __all__ = ["BatchFormat"]
 
 
@@ -18,10 +16,6 @@ class BatchFormat:
     @property
     @abc.abstractmethod
     def file_extension(self) -> str: ...
-
-    # TODO: This probably needs to move to sources.
-    @abc.abstractmethod
-    def deserialize_value(self, value: bytes) -> list[KafkaMessage]: ...
 
     @abc.abstractmethod
     def serialize_batch_values(self, values: list[Any]) -> bytes: ...

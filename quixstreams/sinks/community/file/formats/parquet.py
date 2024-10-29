@@ -28,13 +28,6 @@ class ParquetFormat(BatchFormat):
     def supports_append(self) -> bool:
         return True
 
-    # TODO: Convert this to return KafkaMessages.
-    def deserialize_value(self, value: bytes) -> Any:
-        # Use pyarrow to load Parquet data
-        with BytesIO(value) as f:
-            table = pq.read_table(f)
-            return table.to_pydict()
-
     def serialize_batch_values(self, values: list[Any]) -> bytes:
         # Get all unique keys (columns) across all rows
         all_keys = set()

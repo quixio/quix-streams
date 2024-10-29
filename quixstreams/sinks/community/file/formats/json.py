@@ -5,8 +5,6 @@ from typing import Any, Callable, Optional
 
 from jsonlines import Writer
 
-from quixstreams.models.messages import KafkaMessage
-
 from .base import BatchFormat
 
 
@@ -20,7 +18,6 @@ class JSONFormat(BatchFormat):
         compress: bool = False,
     ):
         self._dumps = dumps or json.dumps
-        self._loads = loads or json.loads
         self._compress = compress
         self._file_extension = file_extension
         if self._compress:
@@ -29,19 +26,6 @@ class JSONFormat(BatchFormat):
     @property
     def file_extension(self) -> str:
         return self._file_extension
-
-    def deserialize_value(self, value: bytes) -> Any:
-        lines = value.decode("utf-8").splitlines()
-
-        for line in lines:
-            json_doc = self._loads(line)
-
-            yield KafkaMessage(
-                json_doc["key"],
-                json.dumps(json_doc),
-                None,
-                timestamp=json_doc["timestamp"],
-            )
 
     def serialize_batch_values(self, values: list[any]) -> bytes:
         with BytesIO() as f:

@@ -1,5 +1,4 @@
 from gzip import compress as gzip_compress
-from typing import Any
 
 from .base import BatchFormat
 
@@ -24,10 +23,6 @@ class BytesFormat(BatchFormat):
     @property
     def file_extension(self) -> str:
         return self._file_extension
-
-    # TODO: Make this returns KafkaMessage.
-    def deserialize_value(self, value: bytes) -> Any:
-        return value
 
     def serialize_batch_values(self, values: list[bytes]) -> bytes:
         value_bytes = self._separator.join(values)
