@@ -35,31 +35,23 @@ class ParquetFormat(Format):
         _to_str = bytes.decode if isinstance(messages[0].key, bytes) else str
 
         # Get all unique keys (columns) across all messages
-        all_keys = set()
+        columns = set()
         for message in messages:
-            all_keys.update(message.value.keys())
+            columns.update(message.value.keys())
 
-        # Normalize messages: Ensure all messages have the same keys, filling missing ones with None
+        # Normalize messages: Ensure all messages have the same keys,
+        # filling missing ones with None.
         normalized_messages = [
-            {key: message.value.get(key, None) for key in all_keys}
+            {
+                "timestamp": message.timestamp,
+                "key": _to_str(message.key),
+                **{column: message.value.get(column, None) for column in columns},
+            }
             for message in messages
         ]
 
-        columns = {
-            "timestamp": [message.timestamp for message in messages],
-            "key": [_to_str(message.key) for message in messages],
-        }
-
         # Convert normalized messages to a pyarrow Table
-        columns = {
-            **columns,
-            **{
-                key: [message[key] for message in normalized_messages]
-                for key in all_keys
-            },
-        }
-
-        table = pa.Table.from_pydict(columns)
+        table = pa.Table.from_pylist(normalized_messages)
 
         with BytesIO() as f:
             pq.write_table(table, f, compression=self._compression_type)
