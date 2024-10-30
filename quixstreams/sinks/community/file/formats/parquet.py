@@ -32,25 +32,29 @@ class ParquetFormat(Format):
         return True
 
     def serialize(self, messages: list[SinkItem]) -> bytes:
-        # Get all unique keys (columns) across all rows
+        # Get all unique keys (columns) across all messages
         all_keys = set()
-        for row in messages:
-            all_keys.update(row.value.keys())
+        for message in messages:
+            all_keys.update(message.value.keys())
 
-        # Normalize rows: Ensure all rows have the same keys, filling missing ones with None
+        # Normalize messages: Ensure all messages have the same keys, filling missing ones with None
         normalized_messages = [
-            {key: row.value.get(key, None) for key in all_keys} for row in messages
+            {key: message.value.get(key, None) for key in all_keys}
+            for message in messages
         ]
 
         columns = {
-            "timestamp": [row.timestamp for row in messages],
-            "key": [bytes.decode(row.key) for row in messages],
+            "timestamp": [message.timestamp for message in messages],
+            "key": [bytes.decode(message.key) for message in messages],
         }
 
         # Convert normalized messages to a pyarrow Table
         columns = {
             **columns,
-            **{key: [row[key] for row in normalized_messages] for key in all_keys},
+            **{
+                key: [message[key] for message in normalized_messages]
+                for key in all_keys
+            },
         }
 
         table = pa.Table.from_pydict(columns)
