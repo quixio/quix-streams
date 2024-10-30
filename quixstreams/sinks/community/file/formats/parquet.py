@@ -27,10 +27,6 @@ class ParquetFormat(Format):
     def file_extension(self) -> str:
         return self._file_extension
 
-    @property
-    def supports_append(self) -> bool:
-        return True
-
     def serialize(self, messages: list[SinkItem]) -> bytes:
         _to_str = bytes.decode if isinstance(messages[0].key, bytes) else str
 
