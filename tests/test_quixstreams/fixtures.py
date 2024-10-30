@@ -396,9 +396,7 @@ def quix_mock_config_builder_factory(kafka_container):
                 "replicationFactor": topic.config.replication_factor,
                 "retentionInMinutes": 1,
                 "retentionInBytes": 1,
-                "cleanupPolicy": topic.config.extra_config.get(
-                    "cleanup.policy", "delete"
-                ),
+                "cleanupPolicy": "Delete",
             },
         }
 

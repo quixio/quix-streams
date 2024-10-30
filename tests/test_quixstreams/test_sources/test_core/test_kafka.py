@@ -346,7 +346,7 @@ class TestQuixEnvironmentSource(Base):
                     "retentionInMinutes": 1,
                     "retentionInBytes": 1,
                     "cleanupPolicy": topic.config.extra_config.get(
-                        "cleanup.policy", "delete"
+                        "cleanup.policy", "Delete"
                     ),
                 },
             }

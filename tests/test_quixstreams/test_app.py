@@ -1051,9 +1051,8 @@ class TestQuixApplication:
 @pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
 class TestQuixApplicationWithState:
     def test_quix_app_no_state_management_warning(
-        self, quix_app_factory, quix_mock_config_builder_factory, monkeypatch, executor
+        self, quix_app_factory, monkeypatch, executor
     ):
-        # TODO: ERROR!!
         """
         Ensure that Application.run() prints a warning if the app is stateful,
         runs on Quix (the "Quix__Deployment__Id" env var is set),

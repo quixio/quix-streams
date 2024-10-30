@@ -27,6 +27,21 @@ __all__ = ("QuixKafkaConfigsBuilder", "QuixApplicationConfig")
 QUIX_CONNECTIONS_MAX_IDLE_MS = 3 * 60 * 1000
 QUIX_METADATA_MAX_AGE_MS = 3 * 60 * 1000
 
+_QUIX_CLEANUP_POLICY_MAPPING = {
+    "Delete": "delete",
+    "Compact": "compact",
+    "DeleteAndCompact": "delete,compact",
+}
+
+
+def _quix_cleanup_policy_to_kafka(quix_cleanup_policy: str) -> str:
+    try:
+        return _QUIX_CLEANUP_POLICY_MAPPING[quix_cleanup_policy]
+    except KeyError:
+        raise ValueError(
+            f'Invalid value for "cleanupPolicy" parameter "{quix_cleanup_policy}"'
+        )
+
 
 def strip_workspace_id_prefix(workspace_id: str, s: str) -> str:
     """
@@ -168,17 +183,23 @@ class QuixKafkaConfigsBuilder:
         :return: a corresponding Topic object
         """
         topic_config = api_response["configuration"]
+        extra_config = {
+            "retention.ms": topic_config["retentionInMinutes"] * 60 * 1000,
+            "retention.bytes": topic_config["retentionInBytes"],
+        }
+        # Map value returned by Quix API to Kafka Admin API format
+        if topic_config.get("cleanupPolicy"):
+            cleanup_policy = _quix_cleanup_policy_to_kafka(
+                topic_config["cleanupPolicy"]
+            )
+            extra_config["cleanup.policy"] = cleanup_policy
+
         return Topic(
             name=api_response["id"],
             config=TopicConfig(
                 num_partitions=topic_config["partitions"],
                 replication_factor=topic_config["replicationFactor"],
-                extra_config={
-                    "retention.ms": topic_config["retentionInMinutes"] * 60 * 1000,
-                    "retention.bytes": topic_config["retentionInBytes"],
-                    # TODO: uncomment or remove this once Emanuel confirms API behavior
-                    # "cleanup.policy": true_cfg["cleanupPolicy"],
-                },
+                extra_config=extra_config,
             ),
         )
 
