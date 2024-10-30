@@ -32,6 +32,8 @@ class ParquetFormat(Format):
         return True
 
     def serialize(self, messages: list[SinkItem]) -> bytes:
+        _to_str = bytes.decode if isinstance(messages[0].key, bytes) else str
+
         # Get all unique keys (columns) across all messages
         all_keys = set()
         for message in messages:
@@ -45,7 +47,7 @@ class ParquetFormat(Format):
 
         columns = {
             "timestamp": [message.timestamp for message in messages],
-            "key": [bytes.decode(message.key) for message in messages],
+            "key": [_to_str(message.key) for message in messages],
         }
 
         # Convert normalized messages to a pyarrow Table
