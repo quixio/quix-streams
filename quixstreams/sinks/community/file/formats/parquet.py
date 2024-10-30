@@ -1,5 +1,5 @@
-import gzip
 from io import BytesIO
+from typing import Literal
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -10,18 +10,18 @@ from .base import Format
 
 __all__ = ["ParquetFormat"]
 
+Compression = Literal["NONE", "SNAPPY", "GZIP", "BROTLI", "LZ4", "ZSTD"]
+
 
 class ParquetFormat(Format):
     # TODO: Docs
     def __init__(
         self,
         file_extension: str = ".parquet",
-        compress: bool = False,
-        compression_type: str = "snappy",  # Parquet compression: snappy, gzip, none, etc.
+        compression: Compression = "SNAPPY",
     ) -> None:
-        self._compress = compress
-        self._compression_type = compression_type if compress else "none"
         self._file_extension = file_extension
+        self._compression = compression
 
     @property
     def file_extension(self) -> str:
@@ -53,13 +53,6 @@ class ParquetFormat(Format):
         # Convert normalized messages to a pyarrow Table
         table = pa.Table.from_pylist(normalized_messages)
 
-        with BytesIO() as f:
-            pq.write_table(table, f, compression=self._compression_type)
-            value_bytes = f.getvalue()
-
-            if (
-                self._compress and self._compression_type == "none"
-            ):  # Handle manual gzip if no Parquet compression
-                value_bytes = gzip.compress(value_bytes)
-
-            return value_bytes
+        with BytesIO() as fp:
+            pq.write_table(table, fp, compression=self._compression)
+            return fp.getvalue()
