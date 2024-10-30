@@ -487,7 +487,7 @@ a timeout specified in `retry_after`, and resume it when it's elapsed.
 class SinkBatch()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/batch.py#L11)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/batch.py#L12)
 
 A batch to accumulate processed data by `BatchingSink` between the checkpoints.
 
@@ -510,7 +510,7 @@ Batches are created automatically by the implementations of `BatchingSink`.
 def iter_chunks(n: int) -> Iterable[Iterable[SinkItem]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/batch.py#L64)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/batch.py#L65)
 
 Iterate over batch data in chunks of length n.
 The last batch may be shorter.
