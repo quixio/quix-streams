@@ -52,42 +52,34 @@ class QuixTopicManager(TopicManager):
             create_timeout=create_timeout,
         )
         self._quix_config_builder = quix_config_builder
+        self._topic_id_to_name = {}
+
+    def _finalize_topic(self, topic: Topic) -> Topic:
+        """
+        Returns a Topic object with the true topic name by attempting by finding or
+        creating it in Quix Cloud and using the returned ID (the true topic name).
+
+        Additionally, sets the actual topic configuration since we now have it anyway.
+        """
+        quix_topic_info = self._quix_config_builder.get_or_create_topic(topic)
+        quix_topic = self._quix_config_builder.convert_topic_response(quix_topic_info)
+        # allows us to include the configs not included in the API response
+        quix_topic.config.extra_config = {
+            **topic.config.extra_config,
+            **quix_topic.config.extra_config,
+        }
+        topic_out = topic.__clone__(name=quix_topic.name, config=quix_topic.config)
+        self._topic_id_to_name[topic_out.name] = quix_topic_info["name"]
+        return super()._finalize_topic(topic_out)
 
     def _create_topics(
         self, topics: List[Topic], timeout: float, create_timeout: float
     ):
         """
-        Method that actually creates the topics in Kafka via the
-        QuixConfigBuilder instance.
-
-        :param topics: list of `Topic`s
-        :param timeout: creation acknowledge timeout (seconds)
-        :param create_timeout: topic finalization timeout (seconds)
+        Because we create topics immediately upon Topic generation for Quix Cloud,
+        this method simply confirms topics all have a "Ready" status.
         """
-        # note: prepending was already performed as needed, so we skip doing it
-        # within `create_topics`
-        self._quix_config_builder.create_topics(
-            topics, timeout=timeout, finalize_timeout=create_timeout, prepend=False
-        )
-
-    def _resolve_topic_name(self, name: str) -> str:
-        """
-        Checks if provided topic name is registered via Quix API; if yes,
-        return its corresponding topic ID (AKA the actual topic name, usually
-        just has prepended workspace ID).
-
-        Otherwise, assume it doesn't exist and prepend the workspace ID to match the
-        topic naming pattern in Quix.
-
-        :param name: topic name
-
-        :return: actual cluster topic name to use
-        """
-        if quix_topic := self._quix_config_builder.get_topic(name):
-            name = quix_topic["id"]
-        else:
-            name = self._quix_config_builder.prepend_workspace_id(name)
-        return super()._resolve_topic_name(name)
+        self._quix_config_builder.wait_for_topic_ready_statuses(topics)
 
     def _internal_name(
         self,
@@ -100,6 +92,9 @@ class QuixTopicManager(TopicManager):
 
         This naming scheme guarantees uniqueness across all independent `Application`s.
 
+        For Quix Cloud, the original topic name passed by the user (rather than
+        the topic id as returned by the get/create) is used to construct it.
+
         The internal format is <{TYPE}__{GROUP}--{NAME}--{SUFFIX}>
 
         :param topic_type: topic type, added as prefix (changelog, repartition)
@@ -110,6 +105,6 @@ class QuixTopicManager(TopicManager):
         """
         return super()._internal_name(
             topic_type,
-            self._quix_config_builder.strip_workspace_id_prefix(topic_name),
+            self._topic_id_to_name[topic_name],
             suffix,
         )

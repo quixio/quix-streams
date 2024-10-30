@@ -3,7 +3,8 @@ from typing import TYPE_CHECKING, Optional
 from quixstreams.error_callbacks import ConsumerErrorCallback, default_on_consumer_error
 from quixstreams.kafka import AutoOffsetReset
 from quixstreams.models.serializers import DeserializerType
-from quixstreams.platforms.quix import QuixKafkaConfigsBuilder
+from quixstreams.models.topics import Topic, TopicConfig
+from quixstreams.platforms.quix import QuixKafkaConfigsBuilder, QuixTopicManager
 from quixstreams.platforms.quix.api import QuixPortalApiService
 
 from .kafka import KafkaReplicatorSource
@@ -84,11 +85,23 @@ class QuixEnvironmentSource(KafkaReplicatorSource):
             )
         )
 
+        quix_topic = self._quix_config.convert_topic_response(
+            self._quix_config.get_or_create_topic(
+                Topic(
+                    name=topic,
+                    config=TopicConfig(
+                        num_partitions=QuixTopicManager.default_num_partitions,
+                        replication_factor=QuixTopicManager.default_replication_factor,
+                    ),
+                )
+            )
+        )
+
         consumer_extra_config.update(self._quix_config.librdkafka_extra_config)
         super().__init__(
             name=name,
             app_config=app_config,
-            topic=self._quix_config.prepend_workspace_id(topic),
+            topic=quix_topic.name,
             broker_address=self._quix_config.librdkafka_connection_config,
             auto_offset_reset=auto_offset_reset,
             consumer_extra_config=consumer_extra_config,

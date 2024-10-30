@@ -30,13 +30,11 @@ def affirm_ready_for_create(topics: List[Topic]):
 
 class TopicManager:
     """
-    The source of all topic management with quixstreams.
+    The source of all topic management for a Quix Streams Application.
 
-    Generally initialized and managed automatically by an `Application`,
-    but allows a user to work with it directly when needed, such as using it alongside
-    a plain `Producer` to create its topics.
+    Intended only for internal use by Application.
 
-    See methods for details.
+    To create a Topic, use Application.topic() or generate them directly.
     """
 
     # Default topic params
@@ -118,19 +116,17 @@ class TopicManager:
         """
         return {topic.name: topic for topic in self._all_topics_list}
 
-    def _resolve_topic_name(self, name: str) -> str:
+    def _finalize_topic(self, topic: Topic) -> Topic:
         """
-        Here primarily for adjusting the topic name for Quix topics.
+        Validates the original topic name and returns the Topic.
 
-        Also validates topic name is not too long.
-
-        :return: name, no changes (identity function)
+        Does more in QuixTopicManager.
         """
-        if len(name) > self._max_topic_name_len:
+        if len(topic.name) > self._max_topic_name_len:
             raise TopicNameLengthExceeded(
-                f"Topic {name} exceeds the {self._max_topic_name_len} character limit"
+                f"'{topic.name}' exceeds the {self._max_topic_name_len} character limit"
             )
-        return name
+        return topic
 
     def _format_nested_name(self, topic_name: str) -> str:
         """
@@ -171,9 +167,7 @@ class TopicManager:
         :return: formatted topic name
         """
         nested_name = self._format_nested_name(topic_name)
-        return self._resolve_topic_name(
-            f"{topic_type}__{'--'.join([self._consumer_group, nested_name, suffix])}"
-        )
+        return f"{topic_type}__{'--'.join([self._consumer_group, nested_name, suffix])}"
 
     def _create_topics(
         self, topics: List[Topic], timeout: float, create_timeout: float
@@ -264,27 +258,28 @@ class TopicManager:
 
         :return: Topic object with creation configs
         """
-        name = self._resolve_topic_name(name)
-
         if not config:
             config = TopicConfig(
                 num_partitions=self.default_num_partitions,
                 replication_factor=self.default_replication_factor,
                 extra_config=self.default_extra_config,
             )
-        topic = Topic(
-            name=name,
-            value_serializer=value_serializer,
-            value_deserializer=value_deserializer,
-            key_serializer=key_serializer,
-            key_deserializer=key_deserializer,
-            config=config,
-            timestamp_extractor=timestamp_extractor,
+
+        topic = self._finalize_topic(
+            Topic(
+                name=name,
+                value_serializer=value_serializer,
+                value_deserializer=value_deserializer,
+                key_serializer=key_serializer,
+                key_deserializer=key_deserializer,
+                config=config,
+                timestamp_extractor=timestamp_extractor,
+            )
         )
-        self._topics[name] = topic
+        self._topics[topic.name] = topic
         return topic
 
-    def register(self, topic: Topic):
+    def register(self, topic: Topic) -> Topic:
         """
         Register an already generated :class:`quixstreams.models.topics.Topic` to the topic manager.
 
@@ -292,14 +287,15 @@ class TopicManager:
 
         :param topic: The topic to register
         """
-        topic.name = self._resolve_topic_name(topic.name)
         if topic.config is None:
             topic.config = TopicConfig(
                 num_partitions=self.default_num_partitions,
                 replication_factor=self.default_replication_factor,
                 extra_config=self.default_extra_config,
             )
+        topic = self._finalize_topic(topic)
         self._topics[topic.name] = topic
+        return topic
 
     def repartition_topic(
         self,
@@ -324,21 +320,21 @@ class TopicManager:
 
         :return: `Topic` object (which is also stored on the TopicManager)
         """
-        name = self._internal_name("repartition", topic_name, operation)
-
-        topic = Topic(
-            name=name,
-            value_deserializer=value_deserializer,
-            key_deserializer=key_deserializer,
-            value_serializer=value_serializer,
-            key_serializer=key_serializer,
-            config=self._get_source_topic_config(
-                topic_name,
-                extras_imports=self._groupby_extra_config_imports_defaults,
-                timeout=timeout if timeout is not None else self._timeout,
-            ),
+        topic = self._finalize_topic(
+            Topic(
+                name=self._internal_name("repartition", topic_name, operation),
+                value_deserializer=value_deserializer,
+                key_deserializer=key_deserializer,
+                value_serializer=value_serializer,
+                key_serializer=key_serializer,
+                config=self._get_source_topic_config(
+                    topic_name,
+                    extras_imports=self._groupby_extra_config_imports_defaults,
+                    timeout=timeout if timeout is not None else self._timeout,
+                ),
+            )
         )
-        self._repartition_topics[name] = topic
+        self._repartition_topics[topic.name] = topic
         return topic
 
     def changelog_topic(
@@ -373,7 +369,6 @@ class TopicManager:
         :return: `Topic` object (which is also stored on the TopicManager)
         """
 
-        topic_name = self._resolve_topic_name(topic_name)
         source_topic_config = self._get_source_topic_config(
             topic_name,
             extras_imports=self._changelog_extra_config_imports_defaults,
@@ -387,13 +382,15 @@ class TopicManager:
             extra_config=source_topic_config.extra_config,
         )
 
-        topic = Topic(
-            name=self._internal_name("changelog", topic_name, store_name),
-            key_serializer="bytes",
-            value_serializer="bytes",
-            key_deserializer="bytes",
-            value_deserializer="bytes",
-            config=changelog_config,
+        topic = self._finalize_topic(
+            Topic(
+                name=self._internal_name("changelog", topic_name, store_name),
+                key_serializer="bytes",
+                value_serializer="bytes",
+                key_deserializer="bytes",
+                value_deserializer="bytes",
+                config=changelog_config,
+            )
         )
         self._changelog_topics.setdefault(topic_name, {})[store_name] = topic
         return topic

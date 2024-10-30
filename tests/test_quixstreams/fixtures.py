@@ -364,8 +364,11 @@ def quix_mock_config_builder_factory(kafka_container):
         if not workspace_id:
             workspace_id = "my_ws"
         cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
-        cfg_builder._workspace_id = workspace_id
-        cfg_builder.workspace_id = workspace_id
+        patch.object(
+            cfg_builder,
+            "workspace_id",
+            new_callable=PropertyMock(return_value=workspace_id),
+        ).start()
 
         # Slight change to ws stuff in case you pass a blank workspace (which makes
         #  some things easier
@@ -375,10 +378,29 @@ def quix_mock_config_builder_factory(kafka_container):
         cfg_builder.strip_workspace_id_prefix.side_effect = lambda s: (
             strip_workspace_id_prefix(workspace_id, s) if workspace_id else s
         )
-        cfg_builder.get_topic.side_effect = lambda topic: {
-            "id": cfg_builder.prepend_workspace_id(topic)
+
+        cfg_builder.convert_topic_response.side_effect = (
+            lambda topic: QuixKafkaConfigsBuilder.convert_topic_response(topic)
+        )
+
+        # Mock the create API call and return this response.
+        # Doing it this way keeps the old behavior where topics are only created
+        # when the app is actually run (for tests, at least).
+        # This does simulate an expected topic name with prepended WID which may not
+        # always be true, but it's just to make testing easier.
+        cfg_builder.get_or_create_topic.side_effect = lambda topic, timeout=None: {
+            "id": f"{workspace_id}-{topic.name}",
+            "name": topic.name,
+            "configuration": {
+                "partitions": topic.config.num_partitions,
+                "replicationFactor": topic.config.replication_factor,
+                "retentionInMinutes": 1,
+                "retentionInBytes": 1,
+                "cleanupPolicy": "Delete",
+            },
         }
 
+        # Connect to local test container rather than Quix
         connection = ConnectionConfig(bootstrap_servers=kafka_container.broker_address)
         cfg_builder.librdkafka_connection_config = connection
         cfg_builder.get_application_config.side_effect = lambda cg: (
@@ -413,6 +435,7 @@ def quix_topic_manager_factory(
         topic_manager = topic_manager_factory(
             topic_admin_=topic_admin, consumer_group=consumer_group
         )
+
         if not quix_config_builder:
             quix_config_builder = quix_mock_config_builder_factory(
                 workspace_id=workspace_id
@@ -422,13 +445,14 @@ def quix_topic_manager_factory(
             consumer_group=consumer_group,
             quix_config_builder=quix_config_builder,
         )
+
         # Patch the instance of QuixTopicManager to use Kafka Admin API
         # create topics instead of Quix Portal API
         patch.multiple(
             quix_topic_manager,
             default_num_partitions=1,
             default_replication_factor=1,
-            _create_topics=topic_manager._create_topics,
+            _create_topics=topic_manager.create_topics,
         ).start()
         return quix_topic_manager
 
@@ -465,8 +489,15 @@ def quix_app_factory(
         use_changelog_topics: bool = True,
         workspace_id: str = "my_ws",
         store_type: Optional[StoreTypes] = store_type,
+        topic_manager: Optional[QuixTopicManager] = None,
+        quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
     ) -> Application:
         state_dir = state_dir or (tmp_path / "state").absolute()
+        if bool(topic_manager) ^ bool(quix_config_builder):
+            raise ValueError(
+                "Should provide both QuixTopicManager AND QuixKafkaConfigBuilder with "
+                "corresponding workspace_id, or neither."
+            )
         return Application(
             consumer_group=random_consumer_group,
             state_dir=state_dir,
@@ -479,10 +510,10 @@ def quix_app_factory(
             on_message_processed=on_message_processed,
             auto_create_topics=auto_create_topics,
             use_changelog_topics=use_changelog_topics,
-            topic_manager=quix_topic_manager_factory(workspace_id=workspace_id),
-            quix_config_builder=quix_mock_config_builder_factory(
-                workspace_id=workspace_id
-            ),
+            topic_manager=topic_manager
+            or quix_topic_manager_factory(workspace_id=workspace_id),
+            quix_config_builder=quix_config_builder
+            or quix_mock_config_builder_factory(workspace_id=workspace_id),
         )
 
     with patch(

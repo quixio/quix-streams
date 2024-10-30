@@ -3,16 +3,15 @@ import dataclasses
 import logging
 import time
 from copy import deepcopy
-from typing import List, Optional, Set, Union
+from typing import List, Optional
 
 from requests import HTTPError
 
 from quixstreams.kafka.configuration import ConnectionConfig
-from quixstreams.models.topics import Topic
+from quixstreams.models.topics import Topic, TopicConfig
 
 from .api import QuixPortalApiService
 from .exceptions import (
-    MissingQuixTopics,
     MultipleWorkspaces,
     NoWorkspaceFound,
     QuixApiRequestFailure,
@@ -28,11 +27,27 @@ __all__ = ("QuixKafkaConfigsBuilder", "QuixApplicationConfig")
 QUIX_CONNECTIONS_MAX_IDLE_MS = 3 * 60 * 1000
 QUIX_METADATA_MAX_AGE_MS = 3 * 60 * 1000
 
+_QUIX_CLEANUP_POLICY_MAPPING = {
+    "Delete": "delete",
+    "Compact": "compact",
+    "DeleteAndCompact": "delete,compact",
+}
+
+
+def _quix_cleanup_policy_to_kafka(quix_cleanup_policy: str) -> str:
+    try:
+        return _QUIX_CLEANUP_POLICY_MAPPING[quix_cleanup_policy]
+    except KeyError:
+        raise ValueError(
+            f'Invalid value for "cleanupPolicy" parameter "{quix_cleanup_policy}"'
+        )
+
 
 def strip_workspace_id_prefix(workspace_id: str, s: str) -> str:
     """
-    Remove the workspace ID from a given string if it starts with it,
-    typically a topic or consumer group id
+    Remove the workspace ID from a given string if it starts with it.
+
+    Only used for consumer groups.
 
     :param workspace_id: the workspace id
     :param s: the string to append to
@@ -43,8 +58,9 @@ def strip_workspace_id_prefix(workspace_id: str, s: str) -> str:
 
 def prepend_workspace_id(workspace_id: str, s: str) -> str:
     """
-    Add the workspace ID as a prefix to a given string if it does not have it,
-    typically a topic or consumer group it
+    Add the workspace ID as a prefix to a given string if it does not have it.
+
+    Only used for consumer groups.
 
     :param workspace_id: the workspace id
     :param s: the string to append to
@@ -158,10 +174,40 @@ class QuixKafkaConfigsBuilder:
             "metadata.max.age.ms": QUIX_METADATA_MAX_AGE_MS,
         }
 
+    @classmethod
+    def convert_topic_response(cls, api_response: dict) -> Topic:
+        """
+        Converts a GET or POST ("create") topic API response to a Topic object
+
+        :param api_response: the dict response from a get or create topic call
+        :return: a corresponding Topic object
+        """
+        topic_config = api_response["configuration"]
+        extra_config = {
+            "retention.ms": topic_config["retentionInMinutes"] * 60 * 1000,
+            "retention.bytes": topic_config["retentionInBytes"],
+        }
+        # Map value returned by Quix API to Kafka Admin API format
+        if topic_config.get("cleanupPolicy"):
+            cleanup_policy = _quix_cleanup_policy_to_kafka(
+                topic_config["cleanupPolicy"]
+            )
+            extra_config["cleanup.policy"] = cleanup_policy
+
+        return Topic(
+            name=api_response["id"],
+            config=TopicConfig(
+                num_partitions=topic_config["partitions"],
+                replication_factor=topic_config["replicationFactor"],
+                extra_config=extra_config,
+            ),
+        )
+
     def strip_workspace_id_prefix(self, s: str) -> str:
         """
-        Remove the workspace ID from a given string if it starts with it,
-        typically a topic or consumer group id
+        Remove the workspace ID from a given string if it starts with it.
+
+        Only used for consumer groups.
 
         :param s: the string to append to
         :return: the string with workspace_id prefix removed
@@ -170,8 +216,9 @@ class QuixKafkaConfigsBuilder:
 
     def prepend_workspace_id(self, s: str) -> str:
         """
-        Add the workspace ID as a prefix to a given string if it does not have it,
-        typically a topic or consumer group it
+        Add the workspace ID as a prefix to a given string if it does not have it.
+
+        Only used for consumer groups.
 
         :param s: the string to append to
         :return: the string with workspace_id prepended
@@ -298,13 +345,13 @@ class QuixKafkaConfigsBuilder:
             ):
                 return ws
 
-    def _create_topic(self, topic: Topic, timeout: Optional[float] = None):
+    def create_topic(self, topic: Topic, timeout: Optional[float] = None):
         """
-        The actual API call to create the topic
+        The actual API call to create the topic.
 
         :param topic: a Topic instance
+        :param timeout: response timeout (seconds); Default 30
         """
-        topic_name = self.strip_workspace_id_prefix(topic.name)
         cfg = topic.config
 
         # settings that must be ints or Nones
@@ -312,8 +359,8 @@ class QuixKafkaConfigsBuilder:
         ret_bytes = cfg.extra_config.get("retention.bytes")
 
         # an exception is raised (status code) if topic is not created successfully
-        self.api.post_topic(
-            topic_name=topic_name,
+        resp = self.api.post_topic(
+            topic_name=topic.name,
             workspace_id=self.workspace_id,
             topic_partitions=cfg.num_partitions,
             topic_rep_factor=cfg.replication_factor,
@@ -322,156 +369,102 @@ class QuixKafkaConfigsBuilder:
             cleanup_policy=cfg.extra_config.get("cleanup.policy"),
             timeout=timeout if timeout is not None else self._timeout,
         )
-        logger.info(
-            f"Creation of topic {topic_name} acknowledged by broker. Must wait "
+        logger.debug(
+            f"Creation of topic {topic.name} acknowledged by broker. Must wait "
             f"for 'Ready' status before topic is actually available"
         )
+        return resp
 
-    def _finalize_create(
+    def get_or_create_topic(
         self,
-        topics: Set[str],
+        topic: Topic,
         timeout: Optional[float] = None,
-        finalize_timeout: Optional[float] = None,
-    ):
+    ) -> dict:
         """
-        After the broker acknowledges the topics are created, they will be in a
-        "Creating", and will not be ready to consume from/produce to until they are
-        set to a status of "Ready". This will block until all topics passed are marked
-        as "Ready" or the timeout is hit.
+        Get or create topics in a Quix cluster as part of initializing the Topic
+        object to obtain the true topic name.
 
-        :param topics: set of topic names
-        :param finalize_timeout: topic finalization timeout (seconds); Default 60
+        :param topic: a `Topic` object
+        :param timeout: response timeout (seconds); Default 30
+        marked as "Ready" (and thus ready to produce to/consume from).
         """
-        exceptions = {}
-        stop_time = time.time() + (
-            finalize_timeout if finalize_timeout else self._topic_create_timeout
-        )
-        while topics and time.time() < stop_time:
-            # Each topic seems to take 10-15 seconds each to finalize (at least in dev)
-            time.sleep(1)
-            for topic in [
-                t for t in self.get_topics(timeout=timeout) if t["id"] in topics.copy()
-            ]:
-                if topic["status"] == "Ready":
-                    logger.debug(f"Topic {topic['name']} creation finalized")
-                    topics.remove(topic["id"])
-                elif topic["status"] == "Error":
-                    logger.debug(f"Topic {topic['name']} encountered an error")
-                    exceptions[topic["name"]] = topic["lastError"]
-                    topics.remove(topic["id"])
-        if exceptions:
-            raise QuixCreateTopicFailure(f"Failed to create Quix topics: {exceptions}")
-        if topics:
-            raise QuixCreateTopicTimeout(
-                f"Creation succeeded, but waiting for 'Ready' status timed out "
-                f"for topics: {[self.strip_workspace_id_prefix(t) for t in topics]}"
-            )
+        try:
+            return self.get_topic(topic_name=topic.name, timeout=timeout)
+        except QuixApiRequestFailure as e:
+            if e.status_code == 404:
+                # Topic likely does not exist (anything but success 404's; could inspect
+                # error string, but that creates a dependency on it never changing).
+                try:
+                    return self.create_topic(topic, timeout=timeout)
+                except QuixApiRequestFailure:
+                    # Multiple apps likely tried to create at the same time.
+                    # If this fails, it raises with all previous API errors
+                    return self.get_topic(topic_name=topic.name, timeout=timeout)
 
-    def create_topics(
+    def wait_for_topic_ready_statuses(
         self,
         topics: List[Topic],
         timeout: Optional[float] = None,
         finalize_timeout: Optional[float] = None,
-        prepend: bool = True,
     ):
         """
-        Create topics in a Quix cluster.
+        After the broker acknowledges topics for creation, they will be in a
+        "Creating" status; they not usable until they are set to a status of "Ready".
+
+        This blocks until all topics are marked as "Ready" or the timeout is hit.
 
         :param topics: a list of `Topic` objects
         :param timeout: response timeout (seconds); Default 30
         :param finalize_timeout: topic finalization timeout (seconds); Default 60
         marked as "Ready" (and thus ready to produce to/consume from).
-        :param prepend: whether to prepend workspace_id during creation attempt.
         """
-        logger.info("Attempting to create topics...")
-        current_topics = {t["id"]: t for t in self.get_topics(timeout=timeout)}
-        finalize = set()
-        for topic in topics:
-            name = self.prepend_workspace_id(topic.name) if prepend else topic.name
-            exists = name in current_topics
-            if not exists or current_topics[name]["status"] != "Ready":
-                if exists:
-                    logger.debug(
-                        f"Topic {self.strip_workspace_id_prefix(name)} exists but does "
-                        f"not have 'Ready' status. Added to finalize check."
-                    )
-                else:
-                    try:
-                        self._create_topic(topic, timeout=timeout)
-                    # TODO: more robust error handling to better identify issues
-                    # See how it's handled in the admin client and maybe consolidate
-                    # logic via TopicManager
-                    except QuixApiRequestFailure as e:
-                        # Topic was maybe created by another instance
-                        if "already exists" not in e.error_text:
-                            raise
-                finalize.add(name)
-            else:
-                logger.debug(
-                    f"Topic {self.strip_workspace_id_prefix(name)} exists and is Ready"
-                )
-        logger.info(
-            "Topic creations acknowledged; waiting for 'Ready' statuses..."
-            if finalize
-            else "No topic creations required!"
-        )
-        self._finalize_create(
-            finalize, timeout=timeout, finalize_timeout=finalize_timeout
-        )
+        logger.debug("Confirming all topics are ready in Quix Cloud...")
+        exceptions = {}
+        topic_ids = {topic.name for topic in topics}
+        stop_time = time.monotonic() + (finalize_timeout or self._topic_create_timeout)
+        while topic_ids and time.monotonic() < stop_time:
+            time.sleep(1)
+            for topic_resp in (
+                topic_resps := [
+                    t for t in self.get_topics(timeout=timeout) if t["id"] in topic_ids
+                ]
+            ):
+                if topic_resp["status"] == "Ready":
+                    logger.debug(f"Topic {topic_resp['name']} creation finalized")
+                    topic_ids.remove(topic_resp["id"])
+                elif topic_resp["status"] == "Error":
+                    logger.debug(f"Topic {topic_resp['name']} encountered an error")
+                    exceptions[topic_resp["name"]] = topic_resp["lastError"]
+                    topic_ids.remove(topic_resp["id"])
+        if exceptions:
+            raise QuixCreateTopicFailure(f"Quix topic validation failed: {exceptions}")
+        if topic_ids:
+            raise QuixCreateTopicTimeout(
+                f"Waiting for 'Ready' status timed out for Quix "
+                f"topics: {[t['name'] for t in topic_resps if t['id'] in topic_ids]}"
+            )
 
-    def get_topic(
-        self, topic_name: str, timeout: Optional[float] = None
-    ) -> Optional[dict]:
+    def get_topic(self, topic_name: str, timeout: Optional[float] = None) -> dict:
         """
-        return the topic ID (the actual cluster topic name) if it exists, else None
-
-        >***NOTE***: if the name registered in Quix is instead the workspace-prefixed
-        version, this returns None unless that exact name was created WITHOUT the
-        Quix API.
+        return the topic ID (the actual cluster topic name) if it exists, else raise
 
         :param topic_name: name of the topic
         :param timeout: response timeout (seconds); Default 30
 
         :return: response dict of the topic info if topic found, else None
+        :raises QuixApiRequestFailure: when topic does not exist
         """
-        try:
-            return self.api.get_topic(
-                topic_name,
-                workspace_id=self.workspace_id,
-                timeout=timeout if timeout is not None else self._timeout,
-            )
-        except QuixApiRequestFailure as e:
-            if e.status_code == 404:
-                return
-            raise
+        return self.api.get_topic(
+            topic_name,
+            workspace_id=self.workspace_id,
+            timeout=timeout if timeout is not None else self._timeout,
+        )
 
     def get_topics(self, timeout: Optional[float] = None) -> List[dict]:
         return self.api.get_topics(
             workspace_id=self.workspace_id,
             timeout=timeout if timeout is not None else self._timeout,
         )
-
-    def confirm_topics_exist(
-        self, topics: Union[List[Topic], List[str]], timeout: Optional[float] = None
-    ):
-        """
-        Confirm whether the desired set of topics exists in the Quix workspace.
-
-        :param topics: a list of `Topic` or topic names
-        :param timeout: response timeout (seconds); Default 30
-        """
-        if isinstance(topics[0], Topic):
-            topics = [topic.name for topic in topics]
-        logger.info("Confirming required topics exist...")
-        current_topics = [t["id"] for t in self.get_topics(timeout=timeout)]
-        missing_topics = []
-        for name in topics:
-            if name not in current_topics:
-                missing_topics.append(self.strip_workspace_id_prefix(name))
-            else:
-                logger.debug(f"Topic {self.strip_workspace_id_prefix(name)} confirmed!")
-        if missing_topics:
-            raise MissingQuixTopics(f"Topics do no exist: {missing_topics}")
 
     def _get_librdkafka_connection_config(self) -> ConnectionConfig:
         """
