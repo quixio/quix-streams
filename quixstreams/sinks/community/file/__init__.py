@@ -57,7 +57,7 @@ class FileSink(BatchingSink):
         """
         super().__init__()
         self._format = self._resolve_format(format)
-        self._output_dir = Path(output_dir)
+        self._output_dir = output_dir
         logger.info(f"Files will be written to '{self._output_dir}'.")
 
     def write(self, batch: SinkBatch) -> None:
@@ -73,17 +73,19 @@ class FileSink(BatchingSink):
             messages_by_key[message.key].append(message)
 
         _to_str = bytes.decode if isinstance(message.key, bytes) else str
+        path = [batch.topic, str(batch.partition)]
 
         for key, messages in messages_by_key.items():
             # Serialize messages for this key using the specified format
             data = self._format.serialize(messages)
 
-            # Generate filename based on the key
-            safe_key = _UNSAFE_CHARACTERS_REGEX.sub("_", _to_str(key))
-
-            directory = self._output_dir / safe_key
+            # Generate directory based on topic / partition / key
+            directory = Path(self._output_dir)
+            for part in [*path, _to_str(key)]:
+                directory /= _UNSAFE_CHARACTERS_REGEX.sub("_", part)
             directory.mkdir(parents=True, exist_ok=True)
 
+            # Generate filename based on the message offset
             padded_offset = str(messages[0].offset).zfill(15)
             file_path = directory / (padded_offset + self._format.file_extension)
 
