@@ -38,6 +38,14 @@ class SinkBatch:
     def size(self) -> int:
         return len(self._buffer)
 
+    @property
+    def start_offset(self) -> int:
+        return self._buffer[0].offset
+
+    @property
+    def key_type(self) -> type:
+        return type(self._buffer[0].key)
+
     def append(
         self,
         value: Any,

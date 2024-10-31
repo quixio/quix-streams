@@ -10,7 +10,7 @@ def test_sink_batch():
     assert batch.empty()
 
     for i in range(10):
-        batch.append(value="test", key="test", timestamp=0, headers=[], offset=1)
+        batch.append(value="test", key="test", timestamp=0, headers=[], offset=i)
     assert batch.size == 10
     items = list(batch)
     assert len(items) == 10
@@ -19,6 +19,9 @@ def test_sink_batch():
     assert len(chunks) == 5
 
     assert list(itertools.chain(*chunks)) == items
+
+    assert batch.start_offset == 0
+    assert batch.key_type is str
 
     batch.clear()
     assert batch.size == 0
