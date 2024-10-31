@@ -77,19 +77,9 @@ class FileSink(BatchingSink):
         """
 
         # Generate directory based on topic and partition
-        directory = Path(self._output_dir)
-        directory /= _UNSAFE_CHARACTERS_REGEX.sub("_", batch.topic)
-        directory /= _UNSAFE_CHARACTERS_REGEX.sub("_", str(batch.partition))
-        directory.mkdir(parents=True, exist_ok=True)
-
-        if self._append and (existing_files := self._get_existing_files(directory)):
-            file_path = existing_files[-1]
-        else:
-            # Generate filename based on the batch's starting offset
-            # Padded to cover max length of a signed 64-bit integer (19 digits)
-            # e.g., 0000000000000123456
-            padded_offset = str(batch.start_offset).zfill(19)
-            file_path = directory / (padded_offset + self._format.file_extension)
+        # Generate filename based on a padded offset
+        # Returns existing file path if append is True
+        file_path = self._get_file_path(batch)
 
         # Serialize messages using the specified format
         data = self._format.serialize(batch)
@@ -99,6 +89,47 @@ class FileSink(BatchingSink):
             f.write(data)
 
         logger.info(f"Wrote {batch.size} records to file '{file_path}'.")
+
+    def _get_file_path(self, batch: SinkBatch) -> Path:
+        """
+        Generate and return the file path for storing data related to the given batch.
+
+        The file path is constructed based on the output directory, with sanitized
+        topic and partition names to ensure valid file paths. If appending is enabled
+        and existing files are found in the directory, the latest existing file is
+        returned for appending data. Otherwise, a new file path is generated using
+        the batch's starting offset, padded to 19 digits, and appended with the
+        appropriate file extension.
+
+        :param batch: The batch object containing attributes:
+                    - topic (str): The name of the topic associated with the batch.
+                    - partition (int): The partition number of the batch.
+                    - start_offset (int): The starting offset of the batch.
+        :return: The file path where the batch data should be stored.
+
+        Notes:
+            - Unsafe characters in `topic` and `partition` are replaced with underscores
+              `_` to ensure valid directory names.
+            - The directory structure is organized as: `output_dir/topic/partition/`.
+            - File names are based on the starting offset of the batch, padded to 19
+              digits (e.g., `0000000000000123456`), to accommodate the maximum length
+              of a signed 64-bit integer.
+            - If appending is enabled (`self._append` is `True`) and existing files are
+              present, data will be appended to the latest existing file.
+        """
+        directory = Path(self._output_dir)
+        directory /= _UNSAFE_CHARACTERS_REGEX.sub("_", batch.topic)
+        directory /= _UNSAFE_CHARACTERS_REGEX.sub("_", str(batch.partition))
+        directory.mkdir(parents=True, exist_ok=True)
+
+        if self._append and (existing_files := self._get_existing_files(directory)):
+            return existing_files[-1]
+        else:
+            # Generate filename based on the batch's starting offset
+            # Padded to cover max length of a signed 64-bit integer (19 digits)
+            # e.g., 0000000000000123456
+            padded_offset = str(batch.start_offset).zfill(19)
+            return directory / (padded_offset + self._format.file_extension)
 
     def _get_existing_files(self, directory: Path) -> list[Path]:
         """
