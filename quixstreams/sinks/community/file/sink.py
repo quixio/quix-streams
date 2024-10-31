@@ -75,10 +75,6 @@ class FileSink(BatchingSink):
 
         :param batch: The batch of data to write.
         """
-
-        # Generate directory based on topic and partition
-        # Generate filename based on a padded offset
-        # Returns existing file path if append is True
         file_path = self._get_file_path(batch)
 
         # Serialize messages using the specified format
