@@ -13,12 +13,17 @@ __all__ = ["JSONFormat"]
 
 class JSONFormat(Format):
     """
-    Serializes batches of messages into JSON Lines format with optional gzip compression.
+    Serializes batches of messages into JSON Lines format with optional gzip
+    compression.
 
     This class provides functionality to serialize a `SinkBatch` into bytes
-    in JSON Lines format. It supports optional gzip compression and allows for
-    custom JSON serialization through the `dumps` parameter.
+    in JSON Lines format. It supports optional gzip compression and allows
+    for custom JSON serialization through the `dumps` parameter.
+
+    This format supports appending to existing files.
     """
+
+    supports_append = True
 
     def __init__(
         self,
@@ -31,9 +36,10 @@ class JSONFormat(Format):
 
         :param file_extension: The file extension to use for output files.
             Defaults to ".jsonl".
-        :param compress: If `True`, compresses the output using gzip and appends
-            ".gz" to the file extension. Defaults to `False`.
-        :param dumps: A custom function to serialize objects to JSON-formatted strings.
+        :param compress: If `True`, compresses the output using gzip and
+            appends ".gz" to the file extension. Defaults to `False`.
+        :param dumps: A custom function to serialize objects to JSON-formatted
+            strings. If provided, the `compact` option is ignored.
         """
         self._file_extension = file_extension
 
@@ -60,11 +66,13 @@ class JSONFormat(Format):
         """
         Serializes a `SinkBatch` into bytes in JSON Lines format.
 
-        Each item in the batch is converted into a JSON object with "_timestamp", "_key",
-        and "_value" fields. If the message key is in bytes, it is decoded to a string.
+        Each item in the batch is converted into a JSON object with
+        "_timestamp", "_key", and "_value" fields. If the message key is
+        in bytes, it is decoded to a string.
 
         :param batch: The `SinkBatch` to serialize.
-        :return: The serialized batch in JSON Lines format, optionally compressed with gzip.
+        :return: The serialized batch in JSON Lines format, optionally
+            compressed with gzip.
         """
 
         _to_str = bytes.decode if batch.key_type is bytes else str

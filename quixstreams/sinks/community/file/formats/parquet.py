@@ -10,7 +10,7 @@ from .base import Format
 
 __all__ = ["ParquetFormat"]
 
-Compression = Literal["NONE", "SNAPPY", "GZIP", "BROTLI", "LZ4", "ZSTD"]
+Compression = Literal["none", "snappy", "gzip", "brotli", "lz4", "zstd"]
 
 
 class ParquetFormat(Format):
@@ -20,12 +20,16 @@ class ParquetFormat(Format):
     This class provides functionality to serialize a `SinkBatch` into bytes
     in Parquet format using PyArrow. It allows setting the file extension
     and compression algorithm used for the Parquet files.
+
+    This format does not support appending to existing files.
     """
+
+    supports_append = False
 
     def __init__(
         self,
         file_extension: str = ".parquet",
-        compression: Compression = "SNAPPY",
+        compression: Compression = "snappy",
     ) -> None:
         """
         Initializes the ParquetFormat.
@@ -33,8 +37,8 @@ class ParquetFormat(Format):
         :param file_extension: The file extension to use for output files.
             Defaults to ".parquet".
         :param compression: The compression algorithm to use for Parquet files.
-            Allowed values are "NONE", "SNAPPY", "GZIP", "BROTLI", "LZ4", or
-            "ZSTD". Defaults to "SNAPPY".
+            Allowed values are "none", "snappy", "gzip", "brotli", "lz4",
+            or "zstd". Defaults to "snappy".
         """
         self._file_extension = file_extension
         self._compression = compression

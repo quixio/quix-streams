@@ -8,8 +8,6 @@ from quixstreams.sinks import BatchingSink, SinkBatch
 from .formats import Format, JSONFormat, ParquetFormat
 
 __all__ = [
-    "BatchFormat",
-    "BytesFormat",
     "FileSink",
     "InvalidFormatError",
     "JSONFormat",
@@ -40,27 +38,45 @@ class FileSink(BatchingSink):
 
     Messages are grouped by their topic and partition. Data from messages with
     the same topic and partition are saved in the same directory. Each batch of
-    messages is serialized and saved to a new file within that directory. Files
-    are named using the batch's starting offset to ensure uniqueness and order.
+    messages is serialized and saved to a file within that directory. Files are
+    named using the batch's starting offset to ensure uniqueness and order.
+
+    If `append` is set to `True`, the sink will attempt to append data to an
+    existing file rather than creating a new one. This is only supported for
+    formats that allow appending.
     """
 
-    def __init__(self, output_dir: str, format: Union[FormatName, Format]) -> None:
+    def __init__(
+        self, output_dir: str, format: Union[FormatName, Format], append: bool = False
+    ) -> None:
         """
         Initializes the FileSink.
 
         :param output_dir: The directory where files will be written.
         :param format: The data serialization format to use. This can be either a
-            format name ("bytes", "json", "parquet") or an instance of a `Format`
+            format name ("json", "parquet") or an instance of a `Format`
             subclass.
+        :param append: If `True`, data will be appended to existing files when possible.
+            Note that not all formats support appending. Defaults to `False`.
+        :raises ValueError: If `append` is `True` but the specified format does not
+            support appending.
         """
         super().__init__()
         self._format = self._resolve_format(format)
         self._output_dir = output_dir  # TODO: validate
+        if append and not self._format.supports_append:
+            raise ValueError(f"`{format}` format does not support appending.")
+        self._append = append
+        self._file_mode = "ab" if append else "wb"
         logger.info(f"Files will be written to '{self._output_dir}'.")
 
     def write(self, batch: SinkBatch) -> None:
         """
         Writes a batch of data to files on disk, grouping data by topic and partition.
+
+        If `append` is `True` and an existing file is found, data will be appended to
+        the last file. Otherwise, a new file is created based on the batch's starting
+        offset.
 
         :param batch: The batch of data to write.
         """
@@ -71,26 +87,43 @@ class FileSink(BatchingSink):
         directory /= _UNSAFE_CHARACTERS_REGEX.sub("_", str(batch.partition))
         directory.mkdir(parents=True, exist_ok=True)
 
-        # Generate filename based on the batch's starting offset
-        # Padded to cover max length of a signed 64-bit integer (19 digits)
-        # e.g., 0000000000000123456
-        padded_offset = str(batch.start_offset).zfill(19)
-        file_path = directory / (padded_offset + self._format.file_extension)
+        if self._append and (existing_files := self._get_existing_files(directory)):
+            file_path = existing_files[-1]
+        else:
+            # Generate filename based on the batch's starting offset
+            # Padded to cover max length of a signed 64-bit integer (19 digits)
+            # e.g., 0000000000000123456
+            padded_offset = str(batch.start_offset).zfill(19)
+            file_path = directory / (padded_offset + self._format.file_extension)
 
         # Serialize messages using the specified format
         data = self._format.serialize(batch)
 
-        # Write data to a new file
-        with open(file_path, "wb") as f:
+        # Write data to the file
+        with open(file_path, self._file_mode) as f:
             f.write(data)
 
         logger.info(f"Wrote {batch.size} records to file '{file_path}'.")
+
+    def _get_existing_files(self, directory: Path) -> list[Path]:
+        """
+        Retrieves a sorted list of existing files in the given directory that match
+        the current format's file extension.
+
+        :param directory: The directory to search for existing files.
+        :return: A list of Path objects to existing files, sorted by name.
+        """
+        return sorted(
+            path
+            for path in directory.iterdir()
+            if path.suffix == self._format.file_extension
+        )
 
     def _resolve_format(self, format: Union[FormatName, Format]) -> Format:
         """
         Resolves the format into a `Format` instance.
 
-        :param format: The format to resolve, either a format name ("bytes", "json",
+        :param format: The format to resolve, either a format name ("json",
             "parquet") or a `Format` instance.
         :return: An instance of `Format` corresponding to the specified format.
         :raises InvalidFormatError: If the format name is invalid.

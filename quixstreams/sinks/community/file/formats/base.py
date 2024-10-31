@@ -23,7 +23,17 @@ class Format(ABC):
 
         :return: The file extension as a string.
         """
-        pass
+        ...
+
+    @property
+    @abstractmethod
+    def supports_append(self) -> bool:
+        """
+        Indicates if the format supports appending data to an existing file.
+
+        :return: True if appending is supported, otherwise False.
+        """
+        ...
 
     @abstractmethod
     def serialize(self, batch: SinkBatch) -> bytes:
@@ -33,4 +43,4 @@ class Format(ABC):
         :param batch: The batch of messages to serialize.
         :return: The serialized batch as bytes.
         """
-        pass
+        ...
