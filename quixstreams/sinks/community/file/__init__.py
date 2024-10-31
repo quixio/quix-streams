@@ -5,7 +5,7 @@ from typing import Literal, Union
 
 from quixstreams.sinks import BatchingSink, SinkBatch
 
-from .formats import BytesFormat, Format, JSONFormat, ParquetFormat
+from .formats import Format, JSONFormat, ParquetFormat
 
 __all__ = [
     "BatchFormat",
@@ -18,10 +18,9 @@ __all__ = [
 
 logger = logging.getLogger(__name__)
 
-FormatName = Literal["bytes", "json", "parquet"]
+FormatName = Literal["json", "parquet"]
 
 _FORMATS: dict[FormatName, Format] = {
-    "bytes": BytesFormat(),
     "json": JSONFormat(),
     "parquet": ParquetFormat(),
 }
