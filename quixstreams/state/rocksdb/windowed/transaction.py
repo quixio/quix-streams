@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING, Any, Optional, cast
 from rocksdict import ReadOptions
 
 from quixstreams.state.base.transaction import PartitionTransaction
-from quixstreams.state.exceptions import InvalidChangelogOffset
 from quixstreams.state.metadata import DEFAULT_PREFIX, PREFIX_SEPARATOR
 from quixstreams.state.recovery import ChangelogProducer
 from quixstreams.state.serialization import DumpsFunc, LoadsFunc, serialize
@@ -12,6 +11,7 @@ from quixstreams.state.serialization import DumpsFunc, LoadsFunc, serialize
 from .metadata import (
     LATEST_EXPIRED_WINDOW_CF_NAME,
     LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY,
+    LATEST_TIMESTAMP_KEY,
     LATEST_TIMESTAMPS_CF_NAME,
 )
 from .serialization import encode_window_key, encode_window_prefix, parse_window_key
@@ -38,6 +38,12 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
             changelog_producer=changelog_producer,
         )
         self._partition = cast("WindowedRocksDBStorePartition", self._partition)
+        # Store the metadata separately to write it to the DB once on flush,
+        # avoiding serdes on each access
+        # (we are 100% sure that the underlying types are immutable,
+        # while windows' values are not)
+        self._latest_timestamps: dict[bytes, int] = {}
+        self._last_expired_timestamps: dict[bytes, int] = {}
 
     def as_state(self, prefix: Any = DEFAULT_PREFIX) -> WindowedTransactionState:
         return WindowedTransactionState(
@@ -50,24 +56,17 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         )
 
     def get_latest_timestamp(self, prefix: bytes) -> int:
-        return self.get(
-            key=prefix, prefix=prefix, cf_name=LATEST_TIMESTAMPS_CF_NAME, default=0
-        )
+        cached_ts = self._latest_timestamps.get(prefix)
+        if cached_ts is not None:
+            return cached_ts
 
-    def _set_latest_timestamp(self, prefix: bytes, timestamp_ms: int):
-        self.set(
-            key=prefix,
-            value=timestamp_ms,
+        stored_ts = self.get(
+            key=LATEST_TIMESTAMP_KEY,
             prefix=prefix,
             cf_name=LATEST_TIMESTAMPS_CF_NAME,
         )
-
-    def _validate_duration(self, start_ms: int, end_ms: int):
-        if end_ms <= start_ms:
-            raise ValueError(
-                f"Invalid window duration: window end {end_ms} is smaller or equal "
-                f"than window start {start_ms}"
-            )
+        self._latest_timestamps[prefix] = stored_ts
+        return stored_ts or 0
 
     def get_window(
         self,
@@ -99,26 +98,6 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         key = encode_window_key(start_ms, end_ms)
         self.delete(key=key, prefix=prefix)
 
-    def _flush(self, processed_offset: Optional[int], changelog_offset: Optional[int]):
-        if self._update_cache.is_empty():
-            return
-
-        if changelog_offset is not None:
-            current_changelog_offset = self._partition.get_changelog_offset()
-            if (
-                current_changelog_offset is not None
-                and changelog_offset < current_changelog_offset
-            ):
-                raise InvalidChangelogOffset(
-                    "Cannot set changelog offset lower than already saved one"
-                )
-
-        self._partition.write(
-            cache=self._update_cache,
-            processed_offset=processed_offset,
-            changelog_offset=changelog_offset,
-        )
-
     def expire_windows(
         self, duration_ms: int, prefix: bytes, grace_ms: int = 0
     ) -> list[tuple[tuple[int, int], Any]]:
@@ -149,11 +128,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         start_from = -1
 
         # Find the latest start timestamp of the expired windows for the given key
-        last_expired = self.get(
-            key=LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY,
-            prefix=prefix,
-            cf_name=LATEST_EXPIRED_WINDOW_CF_NAME,
-        )
+        last_expired = self._get_last_expired_timestamp(prefix=prefix)
         if last_expired is not None:
             start_from = max(start_from, last_expired)
 
@@ -170,21 +145,14 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
             # Save the start of the latest expired window to the expiration index
             latest_window = expired_windows[-1]
             last_expired__gt = latest_window[0][0]
-            self.set(
-                key=LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY,
-                value=last_expired__gt,
-                prefix=prefix,
-                cf_name=LATEST_EXPIRED_WINDOW_CF_NAME,
+
+            self._set_last_expired_timestamp(
+                prefix=prefix, timestamp_ms=last_expired__gt
             )
             # Delete expired windows from the state
             for (start, end), _ in expired_windows:
                 self.delete_window(start, end, prefix=prefix)
         return expired_windows
-
-    def _serialize_key(self, key: Any, prefix: bytes) -> bytes:
-        # Allow bytes keys in WindowedStore
-        key_bytes = key if isinstance(key, bytes) else serialize(key, dumps=self._dumps)
-        return prefix + PREFIX_SEPARATOR + key_bytes
 
     def get_windows(
         self,
@@ -250,3 +218,46 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
                 result.append(((start, end), value))
 
         return result
+
+    def _set_latest_timestamp(self, prefix: bytes, timestamp_ms: int):
+        self._latest_timestamps[prefix] = timestamp_ms
+        self.set(
+            key=LATEST_TIMESTAMP_KEY,
+            value=timestamp_ms,
+            prefix=prefix,
+            cf_name=LATEST_TIMESTAMPS_CF_NAME,
+        )
+
+    def _get_last_expired_timestamp(self, prefix: bytes) -> Optional[int]:
+        cached_ts = self._last_expired_timestamps.get(prefix)
+        if cached_ts is not None:
+            return cached_ts
+
+        stored_ts = self.get(
+            key=LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY,
+            prefix=prefix,
+            cf_name=LATEST_EXPIRED_WINDOW_CF_NAME,
+        )
+        self._last_expired_timestamps[prefix] = stored_ts
+        return stored_ts
+
+    def _set_last_expired_timestamp(self, prefix: bytes, timestamp_ms: int):
+        self._last_expired_timestamps[prefix] = timestamp_ms
+        self.set(
+            key=LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY,
+            value=timestamp_ms,
+            prefix=prefix,
+            cf_name=LATEST_EXPIRED_WINDOW_CF_NAME,
+        )
+
+    def _validate_duration(self, start_ms: int, end_ms: int):
+        if end_ms <= start_ms:
+            raise ValueError(
+                f"Invalid window duration: window end {end_ms} is smaller or equal "
+                f"than window start {start_ms}"
+            )
+
+    def _serialize_key(self, key: Any, prefix: bytes) -> bytes:
+        # Allow bytes keys in WindowedStore
+        key_bytes = key if isinstance(key, bytes) else serialize(key, dumps=self._dumps)
+        return prefix + PREFIX_SEPARATOR + key_bytes
