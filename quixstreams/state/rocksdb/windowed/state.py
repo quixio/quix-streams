@@ -59,7 +59,7 @@ class WindowedTransactionState(WindowedState):
 
     def get_latest_timestamp(self) -> int:
         """
-        Get the latest observed timestamp for the current state partition.
+        Get the latest observed timestamp for the current message key.
 
         Use this timestamp to determine if the arriving event is late and should be
         discarded from the processing.

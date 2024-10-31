@@ -5,17 +5,14 @@ from rocksdict import RdictItems, ReadOptions, WriteBatch  # type: ignore
 
 from quixstreams.state.base import PartitionTransactionCache
 from quixstreams.state.recovery import ChangelogProducer
-from .metadata import (
-    LATEST_EXPIRED_WINDOW_CF_NAME,
-    LATEST_TIMESTAMPS_CF_NAME,
-)
-from .transaction import WindowedRocksDBPartitionTransaction
-from quixstreams.state.serialization import int_from_int64_bytes, int_to_int64_bytes
 
 from ..exceptions import ColumnFamilyDoesNotExist
 from ..partition import RocksDBStorePartition
 from ..types import RocksDBOptionsType
-from .metadata import LATEST_EXPIRED_WINDOW_CF_NAME, LATEST_TIMESTAMPS_CF_NAME, LATEST_TIMESTAMP_KEY
+from .metadata import (
+    LATEST_EXPIRED_WINDOW_CF_NAME,
+    LATEST_TIMESTAMPS_CF_NAME,
+)
 from .transaction import WindowedRocksDBPartitionTransaction
 
 logger = logging.getLogger(__name__)

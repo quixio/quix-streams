@@ -261,20 +261,6 @@ class TestWindowedRocksDBPartitionTransaction:
         assert expired[1] == ((10, 20), 1)
         assert expired[2] == ((20, 30), 1)
 
-    def test_set_latest_timestamp_transaction(self, windowed_rocksdb_store_factory):
-        store = windowed_rocksdb_store_factory()
-        partition = store.assign_partition(0)
-        timestamp = 123
-        partition.set_latest_timestamp(timestamp)
-        with partition.begin() as tx:
-            assert tx.get_latest_timestamp() == timestamp
-
-    def test_get_latest_timestamp_zero_on_init(self, windowed_rocksdb_store_factory):
-        store = windowed_rocksdb_store_factory()
-        partition = store.assign_partition(0)
-        with partition.begin() as tx:
-            assert tx.get_latest_timestamp() == 0
-
     def test_get_latest_timestamp_update(self, windowed_rocksdb_store_factory):
         store = windowed_rocksdb_store_factory()
         partition = store.assign_partition(0)
@@ -284,20 +270,7 @@ class TestWindowedRocksDBPartitionTransaction:
             tx.update_window(0, 10, value=1, timestamp_ms=timestamp, prefix=prefix)
 
         with partition.begin() as tx:
-            assert tx.get_latest_timestamp() == timestamp
-
-    def test_get_latest_timestamp_loaded_from_db(self, windowed_rocksdb_store_factory):
-        store = windowed_rocksdb_store_factory()
-        partition = store.assign_partition(0)
-        timestamp = 123
-        prefix = b"__key__"
-        with partition.begin() as tx:
-            tx.update_window(0, 10, value=1, timestamp_ms=timestamp, prefix=prefix)
-        store.revoke_partition(0)
-
-        partition = store.assign_partition(0)
-        with partition.begin() as tx:
-            assert tx.get_latest_timestamp() == timestamp
+            assert tx.get_latest_timestamp(prefix=prefix) == timestamp
 
     def test_get_latest_timestamp_cannot_go_backwards(
         self, windowed_rocksdb_store_factory
@@ -309,10 +282,10 @@ class TestWindowedRocksDBPartitionTransaction:
         with partition.begin() as tx:
             tx.update_window(0, 10, value=1, timestamp_ms=timestamp, prefix=prefix)
             tx.update_window(0, 10, value=1, timestamp_ms=timestamp - 1, prefix=prefix)
-            assert tx.get_latest_timestamp() == timestamp
+            assert tx.get_latest_timestamp(prefix=prefix) == timestamp
 
         with partition.begin() as tx:
-            assert tx.get_latest_timestamp() == timestamp
+            assert tx.get_latest_timestamp(prefix=prefix) == timestamp
 
     def test_update_window_and_prepare(
         self, windowed_rocksdb_partition_factory, changelog_producer_mock
@@ -337,12 +310,14 @@ class TestWindowedRocksDBPartitionTransaction:
             tx.prepare(processed_offset=processed_offset)
             assert tx.prepared
 
-        assert changelog_producer_mock.produce.call_count == 1
+        # The transaction is expected to produce 2 keys for each updated one:
+        # One for the window itself, and another for the latest timestamp
+        assert changelog_producer_mock.produce.call_count == 2
         expected_produced_key = tx._serialize_key(
             encode_window_key(start_ms, end_ms), prefix=prefix
         )
         expected_produced_value = tx._serialize_value(value)
-        changelog_producer_mock.produce.assert_called_with(
+        changelog_producer_mock.produce.assert_any_call(
             key=expected_produced_key,
             value=expected_produced_value,
             headers={

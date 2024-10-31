@@ -81,7 +81,7 @@ def test_get_latest_timestamp(windowed_rocksdb_store_factory):
 
     partition = store.assign_partition(0)
     with partition.begin() as tx:
-        assert tx.get_latest_timestamp() == timestamp
+        assert tx.get_latest_timestamp(prefix=prefix) == timestamp
 
 
 @pytest.mark.parametrize(

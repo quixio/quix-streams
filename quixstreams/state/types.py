@@ -163,9 +163,10 @@ class WindowedPartitionTransaction(Protocol):
         """
         ...
 
-    def get_latest_timestamp(self) -> int:
+    def get_latest_timestamp(self, prefix: bytes) -> int:
         """
-        Get the latest observed timestamp for the current state partition.
+        Get the latest observed timestamp for the current state prefix
+        (same as message key).
 
         Use this timestamp to determine if the arriving event is late and should be
         discarded from the processing.
