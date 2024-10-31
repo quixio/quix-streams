@@ -1,8 +1,7 @@
 import logging
 import re
-from collections import defaultdict
 from pathlib import Path
-from typing import Any, Hashable, Literal, Union
+from typing import Literal, Union
 
 from quixstreams.sinks import BatchingSink, SinkBatch
 
@@ -40,10 +39,10 @@ class FileSink(BatchingSink):
     """
     Writes batches of data to files on disk using specified formats.
 
-    Messages are grouped by their keys, and data from messages with the same key
-    are saved in the same directory. Each batch of messages is serialized and
-    saved to a new file within that directory. Files are named using the message
-    offset to ensure uniqueness.
+    Messages are grouped by their topic and partition. Data from messages with
+    the same topic and partition are saved in the same directory. Each batch of
+    messages is serialized and saved to a new file within that directory. Files
+    are named using the batch's starting offset to ensure uniqueness and order.
     """
 
     def __init__(self, output_dir: str, format: Union[FormatName, Format]) -> None:
@@ -57,43 +56,36 @@ class FileSink(BatchingSink):
         """
         super().__init__()
         self._format = self._resolve_format(format)
-        self._output_dir = output_dir
+        self._output_dir = output_dir  # TODO: validate
         logger.info(f"Files will be written to '{self._output_dir}'.")
 
     def write(self, batch: SinkBatch) -> None:
         """
-        Writes a batch of data to files on disk, grouping data by message key.
+        Writes a batch of data to files on disk, grouping data by topic and partition.
 
         :param batch: The batch of data to write.
         """
 
-        # Group messages by key
-        messages_by_key: dict[Hashable, list[Any]] = defaultdict(list)
-        for message in batch:
-            messages_by_key[message.key].append(message)
+        # Generate directory based on topic and partition
+        directory = Path(self._output_dir)
+        directory /= _UNSAFE_CHARACTERS_REGEX.sub("_", batch.topic)
+        directory /= _UNSAFE_CHARACTERS_REGEX.sub("_", str(batch.partition))
+        directory.mkdir(parents=True, exist_ok=True)
 
-        _to_str = bytes.decode if isinstance(message.key, bytes) else str
-        path = [batch.topic, str(batch.partition)]
+        # Generate filename based on the batch's starting offset
+        # Padded to cover max length of a signed 64-bit integer (19 digits)
+        # e.g., 0000000000000123456
+        padded_offset = str(batch.start_offset).zfill(19)
+        file_path = directory / (padded_offset + self._format.file_extension)
 
-        for key, messages in messages_by_key.items():
-            # Serialize messages for this key using the specified format
-            data = self._format.serialize(messages)
+        # Serialize messages using the specified format
+        data = self._format.serialize(batch)
 
-            # Generate directory based on topic / partition / key
-            directory = Path(self._output_dir)
-            for part in [*path, _to_str(key)]:
-                directory /= _UNSAFE_CHARACTERS_REGEX.sub("_", part)
-            directory.mkdir(parents=True, exist_ok=True)
+        # Write data to a new file
+        with open(file_path, "wb") as f:
+            f.write(data)
 
-            # Generate filename based on the message offset
-            padded_offset = str(messages[0].offset).zfill(15)
-            file_path = directory / (padded_offset + self._format.file_extension)
-
-            # Write data to a new file
-            with open(file_path, "wb") as f:
-                f.write(data)
-
-            logger.info(f"Wrote {len(messages)} records to file '{file_path}'.")
+        logger.info(f"Wrote {batch.size} records to file '{file_path}'.")
 
     def _resolve_format(self, format: Union[FormatName, Format]) -> Format:
         """

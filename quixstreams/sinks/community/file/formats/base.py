@@ -1,21 +1,17 @@
 from abc import ABC, abstractmethod
 
-from quixstreams.sinks.base import SinkItem
+from quixstreams.sinks.base import SinkBatch
 
 __all__ = ["Format"]
 
 
-# TODO: Document the compatible topic formats for each formatter
-# TODO: Check the types of the values before serializing
-
-
 class Format(ABC):
     """
-    Base class to format batches for File Sink.
+    Base class for formatting batches in file sinks.
 
     This abstract base class defines the interface for batch formatting
     in file sinks. Subclasses should implement the `file_extension`
-    property and the `serialize` method to define how messages are
+    property and the `serialize` method to define how batches are
     formatted and saved.
     """
 
@@ -27,14 +23,14 @@ class Format(ABC):
 
         :return: The file extension as a string.
         """
-        ...
+        pass
 
     @abstractmethod
-    def serialize(self, messages: list[SinkItem]) -> bytes:
+    def serialize(self, batch: SinkBatch) -> bytes:
         """
-        Serializes a list of messages into a byte string.
+        Serializes a batch of messages into bytes.
 
-        :param messages: The list of messages to serialize.
-        :return: The serialized messages as bytes.
+        :param batch: The batch of messages to serialize.
+        :return: The serialized batch as bytes.
         """
-        ...
+        pass

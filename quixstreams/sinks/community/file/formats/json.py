@@ -4,7 +4,7 @@ from typing import Any, Callable, Optional
 
 from jsonlines import Writer
 
-from quixstreams.sinks.base import SinkItem
+from quixstreams.sinks.base import SinkBatch
 
 from .base import Format
 
@@ -13,9 +13,9 @@ __all__ = ["JSONFormat"]
 
 class JSONFormat(Format):
     """
-    Serializes messages into JSON Lines format with optional gzip compression.
+    Serializes batches of messages into JSON Lines format with optional gzip compression.
 
-    This class provides functionality to serialize a list of messages into bytes
+    This class provides functionality to serialize a `SinkBatch` into bytes
     in JSON Lines format. It supports optional gzip compression and allows for
     custom JSON serialization through the `dumps` parameter.
     """
@@ -49,32 +49,35 @@ class JSONFormat(Format):
 
     @property
     def file_extension(self) -> str:
+        """
+        Returns the file extension used for output files.
+
+        :return: The file extension as a string.
+        """
         return self._file_extension
 
-    def serialize(self, messages: list[SinkItem]) -> bytes:
+    def serialize(self, batch: SinkBatch) -> bytes:
         """
-        Serializes a list of messages into JSON Lines format.
+        Serializes a `SinkBatch` into bytes in JSON Lines format.
 
-        Each message is converted into a JSON object with "timestamp", "key",
-        and "value" fields. If the message key is in bytes, it is decoded to a
-        string.
+        Each item in the batch is converted into a JSON object with "_timestamp", "_key",
+        and "_value" fields. If the message key is in bytes, it is decoded to a string.
 
-        :param messages: The list of messages to serialize.
-        :return: The serialized messages in JSON Lines format, optionally
-            compressed with gzip.
+        :param batch: The `SinkBatch` to serialize.
+        :return: The serialized batch in JSON Lines format, optionally compressed with gzip.
         """
 
-        _to_str = bytes.decode if isinstance(messages[0].key, bytes) else str
+        _to_str = bytes.decode if batch.key_type is bytes else str
 
         with BytesIO() as fp:
             with Writer(fp, **self._writer_arguments) as writer:
                 writer.write_all(
                     {
-                        "timestamp": message.timestamp,
-                        "key": _to_str(message.key),
-                        "value": message.value,
+                        "_timestamp": item.timestamp,
+                        "_key": _to_str(item.key),
+                        "_value": item.value,
                     }
-                    for message in messages
+                    for item in batch
                 )
 
             value = fp.getvalue()
