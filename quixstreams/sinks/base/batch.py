@@ -42,10 +42,6 @@ class SinkBatch:
     def start_offset(self) -> int:
         return self._buffer[0].offset
 
-    @property
-    def key_type(self) -> type:
-        return type(self._buffer[0].key)
-
     def append(
         self,
         value: Any,

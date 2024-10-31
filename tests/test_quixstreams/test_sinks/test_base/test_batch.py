@@ -21,7 +21,6 @@ def test_sink_batch():
     assert list(itertools.chain(*chunks)) == items
 
     assert batch.start_offset == 0
-    assert batch.key_type is str
 
     batch.clear()
     assert batch.size == 0

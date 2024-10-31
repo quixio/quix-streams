@@ -75,14 +75,14 @@ class JSONFormat(Format):
             compressed with gzip.
         """
 
-        _to_str = bytes.decode if batch.key_type is bytes else str
-
         with BytesIO() as fp:
             with Writer(fp, **self._writer_arguments) as writer:
                 writer.write_all(
                     {
                         "_timestamp": item.timestamp,
-                        "_key": _to_str(item.key),
+                        "_key": item.key.decode()
+                        if isinstance(item.key, bytes)
+                        else str(item),
                         "_value": item.value,
                     }
                     for item in batch

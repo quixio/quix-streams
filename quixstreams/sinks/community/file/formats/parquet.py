@@ -66,7 +66,6 @@ class ParquetFormat(Format):
         :param batch: The `SinkBatch` to serialize.
         :return: The serialized batch as bytes in Parquet format.
         """
-        _to_str = bytes.decode if batch.key_type is bytes else str
 
         # Get all unique keys (columns) across all messages
         columns = set()
@@ -78,7 +77,7 @@ class ParquetFormat(Format):
         normalized_messages = [
             {
                 "_timestamp": item.timestamp,
-                "_key": _to_str(item.key),
+                "_key": item.key.decode() if isinstance(item.key, bytes) else str(item),
                 **{column: item.value.get(column, None) for column in columns},
             }
             for item in batch
