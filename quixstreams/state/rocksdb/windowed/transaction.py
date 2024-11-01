@@ -22,8 +22,6 @@ if TYPE_CHECKING:
 
 
 class WindowedRocksDBPartitionTransaction(PartitionTransaction):
-    __slots__ = ("_latest_timestamp_ms",)
-
     def __init__(
         self,
         partition: "WindowedRocksDBStorePartition",
@@ -38,10 +36,9 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
             changelog_producer=changelog_producer,
         )
         self._partition = cast("WindowedRocksDBStorePartition", self._partition)
-        # Store the metadata separately to write it to the DB once on flush,
-        # avoiding serdes on each access
-        # (we are 100% sure that the underlying types are immutable,
-        # while windows' values are not)
+        # Cache the metadata separately to avoid serdes on each access
+        # (we are 100% sure that the underlying types are immutable, while windows'
+        # values are not)
         self._latest_timestamps: dict[bytes, int] = {}
         self._last_expired_timestamps: dict[bytes, int] = {}
 
@@ -64,9 +61,10 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
             key=LATEST_TIMESTAMP_KEY,
             prefix=prefix,
             cf_name=LATEST_TIMESTAMPS_CF_NAME,
+            default=0,
         )
         self._latest_timestamps[prefix] = stored_ts
-        return stored_ts or 0
+        return stored_ts
 
     def get_window(
         self,
