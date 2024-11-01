@@ -36,7 +36,9 @@ class ParquetFormat(Format):
                     "_key": _dict["_key"],
                     "_timestamp": _dict["_timestamp"],
                     "_value": {
-                        v for k, v in _dict.items() if k not in ["_key", "_timestamp"]
+                        k: v
+                        for k, v in _dict.items()
+                        if k not in ["_key", "_timestamp"]
                     },
                 }
         finally:
