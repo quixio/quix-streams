@@ -28,7 +28,7 @@ class FileSource(Source):
         self._formatter = _get_formatter(file_format, file_compression)
         self._as_replay = as_replay
         self._previous_timestamp = None
-        self._previous_folder_name = None
+        self._previous_partition = None
         super().__init__(
             name=name or self._filepath.name, shutdown_timeout=shutdown_timeout
         )
@@ -56,16 +56,16 @@ class FileSource(Source):
         )
         return topic
 
-    def _check_folder_name(self, file: Path):
+    def _check_file_partition_number(self, file: Path):
         """
-        Checks whether the next file is the start of a new key or partition so the
-        timestamp tracker can be reset.
+        Checks whether the next file is the start of a new partition so the timestamp
+        tracker can be reset.
         """
-        name = file.parent.name
-        if self._previous_folder_name != name:
+        partition = int(file.parent.name)
+        if self._previous_partition != partition:
             self._previous_timestamp = None
-            self._previous_folder_name = name
-            logger.debug(f"Beginning reading {name}")
+            self._previous_partition = partition
+            logger.debug(f"Beginning reading partition {partition}")
 
     def _produce(self, record: dict):
         kafka_msg = self._producer_topic.serialize(
@@ -81,7 +81,7 @@ class FileSource(Source):
         while self._running:
             for file in _recursive_file_grabber(self._filepath):
                 logger.info(f"Reading files from topic {self._filepath.name}")
-                self._check_folder_name(file)
+                self._check_file_partition_number(file)
                 for record in self._formatter.deserialize(file):
                     if self._as_replay:
                         self._replay_delay(record["_timestamp"])
