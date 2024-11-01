@@ -1,9 +1,8 @@
 import logging
 from typing import Optional
 
-from rocksdict import RdictItems, ReadOptions, WriteBatch  # type: ignore
+from rocksdict import RdictItems, ReadOptions  # type: ignore
 
-from quixstreams.state.base import PartitionTransactionCache
 from quixstreams.state.recovery import ChangelogProducer
 
 from ..exceptions import ColumnFamilyDoesNotExist
@@ -61,20 +60,3 @@ class WindowedRocksDBStorePartition(RocksDBStorePartition):
             self.get_column_family(cf_name)
         except ColumnFamilyDoesNotExist:
             self.create_column_family(cf_name)
-
-    def write(
-        self,
-        cache: PartitionTransactionCache,
-        processed_offset: Optional[int],
-        changelog_offset: Optional[int],
-        batch: Optional[WriteBatch] = None,
-        latest_timestamp_ms: Optional[int] = None,
-    ):
-        batch = WriteBatch(raw_mode=True)
-
-        super().write(
-            cache=cache,
-            processed_offset=processed_offset,
-            changelog_offset=changelog_offset,
-            batch=batch,
-        )
