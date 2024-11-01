@@ -32,8 +32,8 @@ class JSONFormat(Format):
             else:
                 file = open(filepath, "rb")
             reader = jsonlines.Reader(file)
-            for obj in reader.iter(type=dict, skip_invalid=False):
-                yield obj
+            for _dict in reader.iter(type=dict, skip_invalid=False):
+                yield _dict
         finally:
             if file:
                 logger.debug(f"closing file at {filepath}...")

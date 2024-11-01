@@ -3,8 +3,9 @@
 
 from .base import *
 from .json import *
+from .parquet import *
 
 FORMAT_MAPPER = {
     "json": JSONFormat,
-    "parquet": ...,
+    "parquet": ParquetFormat,
 }

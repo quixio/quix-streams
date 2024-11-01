@@ -3,7 +3,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Generator, Optional
 
-import jsonlines
+import pyarrow.parquet as pq
 
 from ..compressions import CompressionName
 from .base import Format
@@ -31,9 +31,14 @@ class ParquetFormat(Format):
                 file = BytesIO(self._decompressor.decompress(filepath))
             else:
                 file = open(filepath, "rb")
-            reader = jsonlines.Reader(file)
-            for obj in reader.iter(type=dict, skip_invalid=False):
-                yield obj
+            for _dict in pq.read_table(source=file).to_pylist():
+                yield {
+                    "_key": _dict["_key"],
+                    "_timestamp": _dict["_timestamp"],
+                    "_value": {
+                        v for k, v in _dict.items() if k not in ["_key", "_timestamp"]
+                    },
+                }
         finally:
             if file:
                 logger.debug(f"closing file at {filepath}...")
