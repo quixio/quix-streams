@@ -1,8 +1,6 @@
 import logging
 from typing import BinaryIO, Callable, Generator, Optional
 
-import jsonlines
-
 from ..compressions import CompressionName
 from .base import Format
 
@@ -24,6 +22,9 @@ class JSONFormat(Format):
         :param loads: A custom function to deserialize objects to the expected dict
             with {_key: str, _value: dict, _timestamp: int}.
         """
+        import jsonlines
+
+        self._reader = jsonlines.Reader
         super().__init__(compression)
 
         self._reader_arguments = {}
@@ -31,6 +32,6 @@ class JSONFormat(Format):
             self._reader_arguments["loads"] = loads
 
     def deserialize(self, filestream: BinaryIO) -> Generator[dict, None, None]:
-        reader = jsonlines.Reader(filestream, **self._reader_arguments)
+        reader = self._reader(filestream, **self._reader_arguments)
         for _dict in reader.iter(type=dict, skip_invalid=False):
             yield _dict
