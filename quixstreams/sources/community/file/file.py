@@ -93,12 +93,11 @@ class FileSource(Source):
         based on their timestamps.
         """
         if self._previous_timestamp is not None:
-            time_diff = (
-                current_timestamp - self._previous_timestamp
-            ) / 1000.0  # Convert ms to seconds
+            time_diff = (current_timestamp - self._previous_timestamp) / 1000
             if time_diff > 0:
                 logger.debug(f"Sleeping for {time_diff} seconds...")
                 sleep(time_diff)
+        self._previous_timestamp = current_timestamp
 
     def _get_partition_count(self) -> int:
         return len([f for f in self._filepath.iterdir()])
