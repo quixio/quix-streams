@@ -43,6 +43,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         # values are not)
         self._latest_timestamps: dict[bytes, int] = {}
         self._last_expired_timestamps: dict[bytes, int] = {}
+        self._last_deleted_timestamps: dict[bytes, int] = {}
 
     def as_state(self, prefix: Any = DEFAULT_PREFIX) -> WindowedTransactionState:
         return WindowedTransactionState(
@@ -178,12 +179,12 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         :param max_start_time: The timestamp up to which windows should be deleted, inclusive.
         :param prefix: The key prefix used to identify and filter relevant windows.
         """
-        start_from = self.get(
-            key=LATEST_DELETED_WINDOW_TIMESTAMP_KEY,
-            prefix=prefix,
-            cf_name=LATEST_DELETED_WINDOW_CF_NAME,
-            default=-1,
-        )
+        start_from = -1
+
+        # Find the latest start timestamp of the deleted windows for the given key
+        last_deleted = self._get_last_deleted_timestamp(prefix=prefix)
+        if last_deleted is not None:
+            start_from = max(start_from, last_deleted)
 
         windows = self.get_windows(
             start_from_ms=start_from,
@@ -198,11 +199,8 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
 
         # Save the start of the latest deleted window to the deletion index
         if last_deleted__gt:
-            self.set(
-                key=LATEST_DELETED_WINDOW_TIMESTAMP_KEY,
-                value=last_deleted__gt,
-                prefix=prefix,
-                cf_name=LATEST_DELETED_WINDOW_CF_NAME,
+            self._set_last_deleted_timestamp(
+                prefix=prefix, timestamp_ms=last_deleted__gt
             )
 
     def get_windows(
@@ -299,6 +297,28 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
             value=timestamp_ms,
             prefix=prefix,
             cf_name=LATEST_EXPIRED_WINDOW_CF_NAME,
+        )
+
+    def _get_last_deleted_timestamp(self, prefix: bytes) -> Optional[int]:
+        cached_ts = self._last_deleted_timestamps.get(prefix)
+        if cached_ts is not None:
+            return cached_ts
+
+        stored_ts = self.get(
+            key=LATEST_DELETED_WINDOW_TIMESTAMP_KEY,
+            prefix=prefix,
+            cf_name=LATEST_DELETED_WINDOW_CF_NAME,
+        )
+        self._last_deleted_timestamps[prefix] = stored_ts
+        return stored_ts
+
+    def _set_last_deleted_timestamp(self, prefix: bytes, timestamp_ms: int):
+        self._last_deleted_timestamps[prefix] = timestamp_ms
+        self.set(
+            key=LATEST_DELETED_WINDOW_TIMESTAMP_KEY,
+            value=timestamp_ms,
+            prefix=prefix,
+            cf_name=LATEST_DELETED_WINDOW_CF_NAME,
         )
 
     def _validate_duration(self, start_ms: int, end_ms: int):
