@@ -1102,6 +1102,36 @@ class TestQuixApplicationWithState:
 
 @pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
 class TestApplicationWithState:
+    def _validate_state(
+        self,
+        stores,
+        topic,
+        partition_index,
+        state_manager_factory,
+        consumer_group,
+        state_dir,
+        validator,
+    ):
+        store = stores[topic.name]
+        partition = store.partitions[partition_index]
+        with partition.begin() as tx:
+            validator(tx)
+
+        store.revoke_partition(partition_index)
+
+        if isinstance(store, RocksDBStore):
+            # Check that the values are actually in the DB
+            state_manager = state_manager_factory(
+                group_id=consumer_group, state_dir=state_dir
+            )
+            state_manager.register_store(topic.name, "default")
+            state_manager.on_partition_assign(
+                topic=topic.name, partition=partition_index, committed_offset=-1001
+            )
+            store = state_manager.get_store(topic=topic.name, store_name="default")
+            with store.start_partition_transaction(partition=partition_index) as tx:
+                validator(tx)
+
     def test_run_stateful_success(
         self,
         app_factory,
@@ -1160,25 +1190,18 @@ class TestApplicationWithState:
         with patch("quixstreams.state.base.Store.revoke_partition", revoke_partition):
             app.run(sdf)
 
-        store = stores[topic_in.name]
-        partition = store.partitions[partition_num]
-        with partition.begin() as tx:
+        def validate_state(tx):
             assert tx.get("total", prefix=message_key) == total_consumed.result()
-        store.revoke_partition(partition_num)
 
-        if isinstance(store, RocksDBStore):
-            # Check that the values are actually in the DB
-            state_manager = state_manager_factory(
-                group_id=consumer_group, state_dir=state_dir
-            )
-            state_manager.register_store(topic_in.name, "default")
-            state_manager.on_partition_assign(
-                topic=topic_in.name, partition=partition_num, committed_offset=-1001
-            )
-            store = state_manager.get_store(topic=topic_in.name, store_name="default")
-            with store.start_partition_transaction(partition=partition_num) as tx:
-                # All keys in state must be prefixed with the message key
-                assert tx.get("total", prefix=message_key) == total_consumed.result()
+        self._validate_state(
+            stores,
+            topic_in,
+            partition_num,
+            state_manager_factory,
+            consumer_group,
+            state_dir,
+            validate_state,
+        )
 
     def test_run_stateful_fails_no_commit(
         self,
@@ -1295,25 +1318,18 @@ class TestApplicationWithState:
         with patch("quixstreams.state.base.Store.revoke_partition", revoke_partition):
             app.run(sdf)
 
-        store = stores[topic_in.name]
-        partition = store.partitions[partition_num]
-        with partition.begin() as tx:
+        def validate_state(tx):
             assert tx.get("total", prefix=message_key) == total_consumed.result()
-        store.revoke_partition(partition_num)
 
-        if isinstance(store, RocksDBStore):
-            # Check that the values are actually in the DB
-            state_manager = state_manager_factory(
-                group_id=consumer_group, state_dir=state_dir
-            )
-            state_manager.register_store(topic_in.name, "default")
-            state_manager.on_partition_assign(
-                topic=topic_in.name, partition=partition_num, committed_offset=-1001
-            )
-            store = state_manager.get_store(topic=topic_in.name, store_name="default")
-            with store.start_partition_transaction(partition=partition_num) as tx:
-                # All keys in state must be prefixed with the message key
-                assert tx.get("total", prefix=message_key) == total_consumed.result()
+        self._validate_state(
+            stores,
+            topic_in,
+            partition_num,
+            state_manager_factory,
+            consumer_group,
+            state_dir,
+            validate_state,
+        )
 
     def test_clear_state(
         self,
