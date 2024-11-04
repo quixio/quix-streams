@@ -9,10 +9,10 @@ from quixstreams.state.recovery import ChangelogProducer
 from quixstreams.state.serialization import DumpsFunc, LoadsFunc, serialize
 
 from .metadata import (
-    LATEST_EXPIRED_WINDOW_CF_NAME,
-    LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY,
     LATEST_DELETED_WINDOW_CF_NAME,
     LATEST_DELETED_WINDOW_TIMESTAMP_KEY,
+    LATEST_EXPIRED_WINDOW_CF_NAME,
+    LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY,
     LATEST_TIMESTAMP_KEY,
     LATEST_TIMESTAMPS_CF_NAME,
 )

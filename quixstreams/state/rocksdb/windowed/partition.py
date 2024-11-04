@@ -9,8 +9,8 @@ from ..exceptions import ColumnFamilyDoesNotExist
 from ..partition import RocksDBStorePartition
 from ..types import RocksDBOptionsType
 from .metadata import (
-    LATEST_EXPIRED_WINDOW_CF_NAME,
     LATEST_DELETED_WINDOW_CF_NAME,
+    LATEST_EXPIRED_WINDOW_CF_NAME,
     LATEST_TIMESTAMPS_CF_NAME,
 )
 from .transaction import WindowedRocksDBPartitionTransaction
