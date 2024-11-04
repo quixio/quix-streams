@@ -1526,14 +1526,13 @@ class TestApplicationRecovery:
         store_name = "window"
         window_duration_ms = 5000
         window_step_ms = 2000
-        actual_store_name = (
-            f"{store_name}_hopping_window_{window_duration_ms}_{window_step_ms}_sum"
-        )
+
         msg_tick_ms = 1000
         msg_int_value = 10
+
         partition_timestamps = {
-            0: list(range(1707260000000, 1707260004000, msg_tick_ms)),
-            1: list(range(1707260000000, 1707260002000, msg_tick_ms)),
+            0: list(range(10000, 14000, msg_tick_ms)),
+            1: list(range(10000, 12000, msg_tick_ms)),
         }
         partition_windows = {
             p: [
@@ -1586,10 +1585,11 @@ class TestApplicationRecovery:
                     num_partitions=len(partition_msg_count), replication_factor=1
                 ),
             )
-            sdf = app.dataframe(topic)
-            sdf = sdf.apply(lambda row: row["my_value"])
-            sdf = (
-                sdf.hopping_window(
+            # Create a streaming dataframe with a hopping window
+            (
+                app.dataframe(topic)
+                .apply(lambda row: row["my_value"])
+                .hopping_window(
                     duration_ms=window_duration_ms,
                     step_ms=window_step_ms,
                     name=store_name,
@@ -1597,15 +1597,12 @@ class TestApplicationRecovery:
                 .sum()
                 .final()
             )
-            sdf = sdf.apply(
-                lambda value: {
-                    "sum": value["value"],
-                    "window": (value["start"], value["end"]),
-                }
-            )
-            return app, sdf, topic
+            return app, topic
 
         def validate_state():
+            actual_store_name = (
+                f"{store_name}_hopping_window_{window_duration_ms}_{window_step_ms}_sum"
+            )
             with state_manager_factory(
                 group_id=consumer_group, state_dir=state_dir
             ) as state_manager:
@@ -1618,11 +1615,16 @@ class TestApplicationRecovery:
                         topic=topic.name, store_name=actual_store_name
                     )
 
-                    # in this test, each expiration check only deletes one window,
-                    # simplifying the offset counting.
+                    # Calculate how many messages should be send to the changelog topic
                     expected_offset = (
+                        # A number of total window updates
                         sum(expected_window_updates[p_num].values())
+                        # A number of expired windows
                         + 2 * len(expected_expired_windows[p_num])
+                        # A number of total timestamps
+                        # (each timestamp updates the <LATEST_TIMESTAMPS_CF_NAME>)
+                        + len(partition_timestamps[p_num])
+                        # Correction for zero-based index
                         - 1
                     )
                     if processing_guarantee == "exactly-once":
@@ -1638,7 +1640,7 @@ class TestApplicationRecovery:
                     partition = store.partitions[p_num]
 
                     with partition.begin() as tx:
-                        prefix = f"key{p_num}".encode()
+                        prefix = b"key"
                         for window, count in windows.items():
                             expected = count
                             if window in expected_expired_windows[p_num]:
@@ -1648,37 +1650,37 @@ class TestApplicationRecovery:
                                 expected *= msg_int_value
                             assert tx.get_window(*window, prefix=prefix) == expected
 
-        app, sdf, topic = get_app()
+        app, topic = get_app()
         # Produce messages to the topic and flush
         with app.get_producer() as producer:
             for p_num, timestamps in partition_timestamps.items():
                 serialized = topic.serialize(
-                    key=f"key{p_num}".encode(), value={"my_value": msg_int_value}
+                    key=b"key", value={"my_value": msg_int_value}
                 )
-                data = {
-                    "key": serialized.key,
-                    "value": serialized.value,
-                    "partition": p_num,
-                }
                 for ts in timestamps:
-                    data["timestamp"] = ts
-                    producer.produce(topic.name, **data)
+                    producer.produce(
+                        topic=topic.name,
+                        key=serialized.key,
+                        value=serialized.value,
+                        partition=p_num,
+                        timestamp=ts,
+                    )
 
         # run app to populate state
         done = Future()
         executor.submit(_stop_app_on_future, app, done, 10.0)
-        app.run(sdf)
+        app.run()
         # validate and then delete the state
         assert processed_count == partition_msg_count
         validate_state()
 
         # run the app again and validate the recovered state
         processed_count = {0: 0, 1: 0}
-        app, sdf, topic = get_app()
+        app, topic = get_app()
         app.clear_state()
         done = Future()
         executor.submit(_stop_app_on_future, app, done, 10.0)
-        app.run(sdf)
+        app.run()
         # no messages should have been processed outside of recovery loop
         assert processed_count == {0: 0, 1: 0}
         # State should be the same as before deletion

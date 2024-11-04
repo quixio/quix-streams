@@ -59,7 +59,7 @@ class WindowedTransactionState(WindowedState):
 
     def get_latest_timestamp(self) -> int:
         """
-        Get the latest observed timestamp for the current state partition.
+        Get the latest observed timestamp for the current message key.
 
         Use this timestamp to determine if the arriving event is late and should be
         discarded from the processing.
@@ -67,7 +67,7 @@ class WindowedTransactionState(WindowedState):
         :return: latest observed event timestamp in milliseconds
         """
 
-        return self._transaction.get_latest_timestamp()
+        return self._transaction.get_latest_timestamp(prefix=self._prefix)
 
     def expire_windows(
         self, duration_ms: int, grace_ms: int = 0

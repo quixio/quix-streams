@@ -6,9 +6,7 @@ from time import sleep
 from dotenv import load_dotenv
 
 from quixstreams import Application
-from quixstreams.models.serializers import (
-    QuixTimeseriesSerializer,
-)
+from quixstreams.models.serializers import QuixTimeseriesSerializer
 
 load_dotenv("./bank_example/quix_platform_version/quix_vars.env")
 
