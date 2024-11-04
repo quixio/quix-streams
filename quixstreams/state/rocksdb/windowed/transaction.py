@@ -107,10 +107,10 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         self.delete(key=key, prefix=prefix)
 
     def expire_windows(
-        self, watermark: int, prefix: bytes, delete: bool = True
+        self, max_start_time: int, prefix: bytes, delete: bool = True
     ) -> list[tuple[tuple[int, int], Any]]:
         """
-        Get all expired windows from RocksDB up to the specified `watermark` timestamp.
+        Get all expired windows from RocksDB up to the specified `max_start_time` timestamp.
 
         This method marks the latest found window as expired in the expiration index,
         so consecutive calls may yield different results for the same "latest timestamp".
@@ -124,12 +124,11 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         - Finally, it updates the expiration cache with the start time of the latest
           windows found.
 
-        :param watermark: The timestamp up to which windows are considered expired, inclusive.
+        :param max_start_time: The timestamp up to which windows are considered expired, inclusive.
         :param prefix: The key prefix for filtering windows.
         :param delete: If True, expired windows will be deleted.
         :return: A sorted list of tuples in the format `((start, end), value)`.
         """
-        latest_timestamp = self.get_latest_timestamp(prefix=prefix)
         start_from = -1
 
         # Find the latest start timestamp of the expired windows for the given key
@@ -139,10 +138,12 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
 
         # Use the latest expired timestamp to limit the iteration over
         # only those windows that have not been expired before
-        expired_windows = self.get_windows(
-            start_from_ms=start_from,
-            start_to_ms=watermark,
-            prefix=prefix,
+        expired_windows = list(
+            self.get_windows(
+                start_from_ms=start_from,
+                start_to_ms=max_start_time,
+                prefix=prefix,
+            )
         )
         if expired_windows:
             # Save the start of the latest expired window to the expiration index
@@ -158,23 +159,23 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
                     self.delete_window(start, end, prefix=prefix)
         return expired_windows
 
-    def delete_windows(self, watermark: int, prefix: bytes) -> None:
+    def delete_windows(self, max_start_time: int, prefix: bytes) -> None:
         """
-        Delete windows from RocksDB up to the specified `watermark` timestamp.
+        Delete windows from RocksDB up to the specified `max_start_time` timestamp.
 
         This method removes all window entries that have a start time less than or equal to the given
-        `watermark`. It ensures that expired data is cleaned up efficiently without affecting
+        `max_start_time`. It ensures that expired data is cleaned up efficiently without affecting
         unexpired windows.
 
         How it works:
         - It retrieves the start time of the last deleted window for the given prefix from the
         deletion index. This minimizes redundant scans over already deleted windows.
-        - It iterates over the windows starting from the last deleted timestamp up to the `watermark`.
+        - It iterates over the windows starting from the last deleted timestamp up to the `max_start_time`.
         - Each window within this range is deleted from the database.
         - After deletion, it updates the deletion index with the start time of the latest window
         that was deleted to keep track of progress.
 
-        :param watermark: The timestamp up to which windows should be deleted, inclusive.
+        :param max_start_time: The timestamp up to which windows should be deleted, inclusive.
         :param prefix: The key prefix used to identify and filter relevant windows.
         """
         start_from = self.get(
@@ -186,7 +187,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
 
         windows = self.get_windows(
             start_from_ms=start_from,
-            start_to_ms=watermark,
+            start_to_ms=max_start_time,
             prefix=prefix,
         )
 

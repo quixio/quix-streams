@@ -57,29 +57,29 @@ class WindowedState(Protocol):
         ...
 
     def expire_windows(
-        self, watermark: int, delete: bool = True
+        self, max_start_time: int, delete: bool = True
     ) -> list[tuple[tuple[int, int], Any]]:
         """
-        Get all expired windows from RocksDB up to the specified `watermark` timestamp.
+        Get all expired windows from RocksDB up to the specified `max_start_time` timestamp.
 
         This method marks the latest found window as expired in the expiration index,
         so consecutive calls may yield different results for the same "latest timestamp".
 
-        :param watermark: The timestamp up to which windows are considered expired, inclusive.
+        :param max_start_time: The timestamp up to which windows are considered expired, inclusive.
         :param delete: If True, expired windows will be deleted.
         :return: A sorted list of tuples in the format `((start, end), value)`.
         """
         ...
 
-    def delete_windows(self, watermark: int) -> None:
+    def delete_windows(self, max_start_time: int) -> None:
         """
-        Delete windows from RocksDB up to the specified `watermark` timestamp.
+        Delete windows from RocksDB up to the specified `max_start_time` timestamp.
 
         This method removes all window entries that have a start time less than or equal to the given
-        `watermark`. It ensures that expired data is cleaned up efficiently without affecting
+        `max_start_time`. It ensures that expired data is cleaned up efficiently without affecting
         unexpired windows.
 
-        :param watermark: The timestamp up to which windows should be deleted, inclusive.
+        :param max_start_time: The timestamp up to which windows should be deleted, inclusive.
         """
         ...
 
@@ -194,30 +194,30 @@ class WindowedPartitionTransaction(Protocol):
         ...
 
     def expire_windows(
-        self, watermark: int, prefix: bytes, delete: bool = True
+        self, max_start_time: int, prefix: bytes, delete: bool = True
     ) -> list[tuple[tuple[int, int], Any]]:
         """
-        Get all expired windows from RocksDB up to the specified `watermark` timestamp.
+        Get all expired windows from RocksDB up to the specified `max_start_time` timestamp.
 
         This method marks the latest found window as expired in the expiration index,
         so consecutive calls may yield different results for the same "latest timestamp".
 
-        :param watermark: The timestamp up to which windows are considered expired, inclusive.
+        :param max_start_time: The timestamp up to which windows are considered expired, inclusive.
         :param prefix: The key prefix for filtering windows.
         :param delete: If True, expired windows will be deleted.
         :return: A sorted list of tuples in the format `((start, end), value)`.
         """
         ...
 
-    def delete_windows(self, watermark: int, prefix: bytes) -> None:
+    def delete_windows(self, max_start_time: int, prefix: bytes) -> None:
         """
-        Delete windows from RocksDB up to the specified `watermark` timestamp.
+        Delete windows from RocksDB up to the specified `max_start_time` timestamp.
 
         This method removes all window entries that have a start time less than or equal to the given
-        `watermark`. It ensures that expired data is cleaned up efficiently without affecting
+        `max_start_time`. It ensures that expired data is cleaned up efficiently without affecting
         unexpired windows.
 
-        :param watermark: The timestamp up to which windows should be deleted, inclusive.
+        :param max_start_time: The timestamp up to which windows should be deleted, inclusive.
         :param prefix: The key prefix used to identify and filter relevant windows.
         """
         ...

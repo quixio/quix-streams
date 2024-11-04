@@ -79,20 +79,20 @@ class WindowedTransactionState(WindowedState):
         return self._transaction.get_latest_timestamp(prefix=self._prefix)
 
     def expire_windows(
-        self, watermark: int, delete: bool = True
+        self, max_start_time: int, delete: bool = True
     ) -> list[tuple[tuple[int, int], Any]]:
         """
-        Get all expired windows from RocksDB up to the specified `watermark` timestamp.
+        Get all expired windows from RocksDB up to the specified `max_start_time` timestamp.
 
         This method marks the latest found window as expired in the expiration index,
         so consecutive calls may yield different results for the same "latest timestamp".
 
-        :param watermark: The timestamp up to which windows are considered expired, inclusive.
+        :param max_start_time: The timestamp up to which windows are considered expired, inclusive.
         :param delete: If True, expired windows will be deleted.
         :return: A sorted list of tuples in the format `((start, end), value)`.
         """
         return self._transaction.expire_windows(
-            watermark=watermark, prefix=self._prefix, delete=delete
+            max_start_time=max_start_time, prefix=self._prefix, delete=delete
         )
 
     def get_windows(
@@ -113,16 +113,16 @@ class WindowedTransactionState(WindowedState):
             backwards=backwards,
         )
 
-    def delete_windows(self, watermark: int) -> None:
+    def delete_windows(self, max_start_time: int) -> None:
         """
-        Delete windows from RocksDB up to the specified `watermark` timestamp.
+        Delete windows from RocksDB up to the specified `max_start_time` timestamp.
 
         This method removes all window entries that have a start time less than or equal to the given
-        `watermark`. It ensures that expired data is cleaned up efficiently without affecting
+        `max_start_time`. It ensures that expired data is cleaned up efficiently without affecting
         unexpired windows.
 
-        :param watermark: The timestamp up to which windows should be deleted, inclusive.
+        :param max_start_time: The timestamp up to which windows should be deleted, inclusive.
         """
         return self._transaction.delete_windows(
-            watermark=watermark, prefix=self._prefix
+            max_start_time=max_start_time, prefix=self._prefix
         )

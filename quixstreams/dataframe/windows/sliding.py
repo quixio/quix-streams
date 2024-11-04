@@ -21,8 +21,8 @@ class SlidingWindow(FixedTimeWindow):
         # Sliding windows are inclusive on both ends, so values with
         # timestamps equal to latest_timestamp - duration - grace
         # are still eligible for processing.
-        expiration_watermark = state.get_latest_timestamp() - duration - grace - 1
-        deletion_watermark = None
+        expiration_max_start_time = state.get_latest_timestamp() - duration - grace - 1
+        deletion_max_start_time = None
 
         left_start = max(0, timestamp_ms - duration)
         left_end = timestamp_ms
@@ -124,7 +124,7 @@ class SlidingWindow(FixedTimeWindow):
                     # This is similar to right window creation when end == left_end,
                     # but since max_timestamp is lower than timestamp_ms, we check
                     # the expiration watermark instead.
-                    and right_start > expiration_watermark
+                    and right_start > expiration_max_start_time
                 ):
                     self._update_window(
                         state=state,
@@ -152,7 +152,7 @@ class SlidingWindow(FixedTimeWindow):
                 # At this point, this is the last window that will be considered
                 # for existing aggregations. Windows lower than this and lower than
                 # the expiration watermark may be deleted.
-                deletion_watermark = start - 1
+                deletion_max_start_time = start - 1
                 break
 
         else:
@@ -169,21 +169,23 @@ class SlidingWindow(FixedTimeWindow):
             )
 
         # `state.update_window` updates the latest timestamp, so fetch it again
-        expiration_watermark = state.get_latest_timestamp() - duration - grace - 1
+        expiration_max_start_time = state.get_latest_timestamp() - duration - grace - 1
         expired_windows = [
             {"start": start, "end": end, "value": self._merge_func(aggregation)}
             for (start, end), (max_timestamp, aggregation) in state.expire_windows(
-                watermark=expiration_watermark,
+                max_start_time=expiration_max_start_time,
                 delete=False,
             )
             if end == max_timestamp  # Include only left windows
         ]
 
-        if deletion_watermark is not None:
-            deletion_watermark = min(deletion_watermark, expiration_watermark)
+        if deletion_max_start_time is not None:
+            deletion_max_start_time = min(
+                deletion_max_start_time, expiration_max_start_time
+            )
         else:
-            deletion_watermark = expiration_watermark - duration
-        state.delete_windows(watermark=deletion_watermark)
+            deletion_max_start_time = expiration_max_start_time - duration
+        state.delete_windows(max_start_time=deletion_max_start_time)
 
         return reversed(updated_windows), expired_windows
 

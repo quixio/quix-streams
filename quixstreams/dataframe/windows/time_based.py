@@ -110,9 +110,11 @@ class FixedTimeWindow:
             )
 
         # `state.update_window` updates the latest timestamp, so fetch it again
-        watermark = state.get_latest_timestamp() - duration_ms - grace_ms
+        max_start_time = state.get_latest_timestamp() - duration_ms - grace_ms
         expired_windows = []
-        for (start, end), aggregated in state.expire_windows(watermark=watermark):
+        for (start, end), aggregated in state.expire_windows(
+            max_start_time=max_start_time
+        ):
             expired_windows.append(
                 {"start": start, "end": end, "value": self._merge_func(aggregated)}
             )
