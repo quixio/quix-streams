@@ -1487,36 +1487,37 @@ class TestApplicationRecovery:
             sdf = sdf.apply(sum_value, stateful=True)
             return app, sdf, topic
 
-        def validate_disk_state():
-            with state_manager_factory(
-                group_id=consumer_group,
-                state_dir=state_dir,
-            ) as state_manager:
-                state_manager.register_store(topic.name, store_name)
-                for p_num, count in partition_msg_count.items():
-                    state_manager.on_partition_assign(
-                        topic=topic.name, partition=p_num, committed_offset=-1001
-                    )
-                    store = state_manager.get_store(
-                        topic=topic.name, store_name=store_name
-                    )
-                    partition = store.partitions[p_num]
-                    assert partition.get_changelog_offset() == count - 1
-                    with partition.begin() as tx:
-                        # All keys in state must be prefixed with the message key
-                        prefix = f"key{p_num}".encode()
-                        assert tx.get(sum_key, prefix=prefix) == count * msg_int_value
+        def _validate_transaction_state(tx, partition, count):
+            # All keys in state must be pre,fixed with the message key
+            prefix = f"key{partition}".encode()
+            assert tx.get(sum_key, prefix=prefix) == count * msg_int_value
 
-        def validate_live_state(stores):
+        def validate_state(stores):
             for p_num, count in partition_msg_count.items():
                 store = stores[topic.name]
                 partition = store.partitions[p_num]
                 assert partition.get_changelog_offset() == count - 1
                 with partition.begin() as tx:
-                    # All keys in state must be prefixed with the message key
-                    prefix = f"key{p_num}".encode()
-                    assert tx.get(sum_key, prefix=prefix) == count * msg_int_value
+                    _validate_transaction_state(tx, p_num, count)
                 store.revoke_partition(p_num)
+
+            if store_type == RocksDBStore:
+                with state_manager_factory(
+                    group_id=consumer_group,
+                    state_dir=state_dir,
+                ) as state_manager:
+                    state_manager.register_store(topic.name, store_name)
+                    for p_num, count in partition_msg_count.items():
+                        state_manager.on_partition_assign(
+                            topic=topic.name, partition=p_num, committed_offset=-1001
+                        )
+                        store = state_manager.get_store(
+                            topic=topic.name, store_name=store_name
+                        )
+                        partition = store.partitions[p_num]
+                        assert partition.get_changelog_offset() == count - 1
+                        with partition.begin() as tx:
+                            _validate_transaction_state(tx, p_num, count)
 
         # Produce messages to the topic and flush
         app, sdf, topic = get_app()
@@ -1546,9 +1547,7 @@ class TestApplicationRecovery:
 
         # validate and then delete the state
         assert processed_count == partition_msg_count
-        validate_live_state(stores)
-        if store_type == RocksDBStore:
-            validate_disk_state()
+        validate_state(stores)
         app.clear_state()
 
         # run the app again and validate the recovered state
@@ -1564,9 +1563,7 @@ class TestApplicationRecovery:
         # no messages should have been processed outside of recovery loop
         assert processed_count == {0: 0, 1: 0}
         # State should be the same as before deletion
-        validate_live_state(stores)
-        if store_type == RocksDBStore:
-            validate_disk_state()
+        validate_state(stores)
 
     @pytest.mark.parametrize("processing_guarantee", ["at-least-once", "exactly-once"])
     def test_changelog_recovery_window_store(
@@ -1817,35 +1814,36 @@ class TestApplicationRecovery:
             )
             return app, sdf, topic
 
-        def validate_live_state(stores):
+        def _validate_transaction_state(tx):
+            for key, value in succeeded_messages:
+                state = tx.as_state(prefix=key.encode())
+                assert state.get("latest") == value
+
+        def validate_state(stores):
             store = stores[topic.name]
             partition = store.partitions[0]
             with partition.begin() as tx:
-                for key, value in succeeded_messages:
-                    state = tx.as_state(prefix=key.encode())
-                    assert state.get("latest") == value
+                _validate_transaction_state(tx)
 
             store.revoke_partition(0)
 
-        def validate_disk_state():
-            with (
-                state_manager_factory(
-                    group_id=consumer_group,
-                    state_dir=state_dir,
-                ) as state_manager,
-                consumer_factory(consumer_group=consumer_group) as consumer,
-            ):
-                committed_offset = consumer.committed(
-                    [TopicPartition(topic=topic_name, partition=0)]
-                )[0].offset
-                state_manager.register_store(topic.name, store_name)
-                partition = state_manager.on_partition_assign(
-                    topic=topic.name, partition=0, committed_offset=committed_offset
-                )[0]
-                with partition.begin() as tx:
-                    for key, value in succeeded_messages:
-                        state = tx.as_state(prefix=key.encode())
-                        assert state.get("latest") == value
+            if store_type == RocksDBStore:
+                with (
+                    state_manager_factory(
+                        group_id=consumer_group,
+                        state_dir=state_dir,
+                    ) as state_manager,
+                    consumer_factory(consumer_group=consumer_group) as consumer,
+                ):
+                    committed_offset = consumer.committed(
+                        [TopicPartition(topic=topic_name, partition=0)]
+                    )[0].offset
+                    state_manager.register_store(topic.name, store_name)
+                    partition = state_manager.on_partition_assign(
+                        topic=topic.name, partition=0, committed_offset=committed_offset
+                    )[0]
+                    with partition.begin() as tx:
+                        _validate_transaction_state(tx)
 
         # Produce messages from the "succeeded" set
         app, sdf, topic = get_app()
@@ -1868,9 +1866,7 @@ class TestApplicationRecovery:
 
         assert processed_count == total_count
         # Validate the state
-        validate_live_state(stores)
-        if store_type == RocksDBStore:
-            validate_disk_state()
+        validate_state(stores)
 
         # Init application again
         processed_count = 0
@@ -1895,9 +1891,7 @@ class TestApplicationRecovery:
                         app.run(sdf)
 
         # state should remain the same
-        validate_live_state(stores)
-        if store_type == RocksDBStore:
-            validate_disk_state()
+        validate_state(stores)
 
         # Run the app again to recover the state
         app, sdf, topic = get_app()
@@ -1917,9 +1911,7 @@ class TestApplicationRecovery:
                         app.run(sdf)
 
         # state should remain the same
-        validate_live_state(stores)
-        if store_type == RocksDBStore:
-            validate_disk_state()
+        validate_state(stores)
 
 
 class TestApplicationSink:
@@ -2485,6 +2477,39 @@ class TestApplicationMultipleSdf:
                     "groupby_timestamp": timestamp,
                 }
 
+    def _validate_state(
+        self,
+        input_topics,
+        stores,
+        partition_num,
+        message_key,
+        messages_per_topic,
+        state_manager_factory,
+        consumer_group,
+        state_dir,
+    ):
+        for topic in input_topics:
+            store = stores[topic.name]
+            partition = store.partitions[partition_num]
+            with partition.begin() as tx:
+                assert tx.get("total", prefix=message_key) == messages_per_topic
+            store.revoke_partition(partition_num)
+
+            # on disk state only exist for RocksDBStore
+            if isinstance(store, RocksDBStore):
+                # Check that the values are actually in the DB
+                state_manager = state_manager_factory(
+                    group_id=consumer_group, state_dir=state_dir
+                )
+                state_manager.register_store(topic.name, "default")
+                state_manager.on_partition_assign(
+                    topic=topic.name, partition=partition_num, committed_offset=-1001
+                )
+                store = state_manager.get_store(topic=topic.name, store_name="default")
+                with store.start_partition_transaction(partition=partition_num) as tx:
+                    # All keys in state must be prefixed with the message key
+                    assert tx.get("total", prefix=message_key) == messages_per_topic
+
     @pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
     def test_stateful(
         self,
@@ -2568,27 +2593,16 @@ class TestApplicationMultipleSdf:
             app.run()
 
         assert processed_count == total_messages
-
-        for topic in input_topics:
-            store = stores[topic.name]
-            partition = store.partitions[partition_num]
-            with partition.begin() as tx:
-                assert tx.get("total", prefix=message_key) == messages_per_topic
-            store.revoke_partition(partition_num)
-
-            if isinstance(store, RocksDBStore):
-                # Check that the values are actually in the DB
-                state_manager = state_manager_factory(
-                    group_id=consumer_group, state_dir=state_dir
-                )
-                state_manager.register_store(topic.name, "default")
-                state_manager.on_partition_assign(
-                    topic=topic.name, partition=partition_num, committed_offset=-1001
-                )
-                store = state_manager.get_store(topic=topic.name, store_name="default")
-                with store.start_partition_transaction(partition=partition_num) as tx:
-                    # All keys in state must be prefixed with the message key
-                    assert tx.get("total", prefix=message_key) == messages_per_topic
+        self._validate_state(
+            input_topics,
+            stores,
+            partition_num,
+            message_key,
+            messages_per_topic,
+            state_manager_factory,
+            consumer_group,
+            state_dir,
+        )
 
     @pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
     def test_changelog_recovery(
@@ -2689,24 +2703,13 @@ class TestApplicationMultipleSdf:
 
         assert processed_count == total_messages
 
-        for topic in input_topics:
-            store = stores[topic.name]
-            partition = store.partitions[partition_num]
-            with partition.begin() as tx:
-                assert tx.get("total", prefix=message_key) == messages_per_topic * 2
-            store.revoke_partition(partition_num)
-            if isinstance(store, RocksDBStore):
-                # Check that the values are actually in the DB
-                state_manager = state_manager_factory(
-                    group_id=consumer_group, state_dir=state_dir
-                )
-                state_manager.register_store(topic.name, "default")
-                state_manager.on_partition_assign(
-                    topic=topic.name,
-                    partition=partition_num,
-                    committed_offset=-1001,
-                )
-                store = state_manager.get_store(topic=topic.name, store_name="default")
-                with store.start_partition_transaction(partition=partition_num) as tx:
-                    # All keys in state must be prefixed with the message key
-                    assert tx.get("total", prefix=message_key) == messages_per_topic * 2
+        self._validate_state(
+            input_topics,
+            stores,
+            partition_num,
+            message_key,
+            messages_per_topic * 2,
+            state_manager_factory,
+            consumer_group,
+            state_dir,
+        )

@@ -14,12 +14,12 @@ __all__ = ("MemoryStore",)
 
 class MemoryStore(Store):
     """
-    In-memory state store
+    In-memory state store.
 
     It keeps track of individual store partitions and provides access to the
     partitions' transactions.
 
-    Requires a full state recovery for each partition on assignement.
+    Requires a full state recovery for each partition on assignment.
     """
 
     def __init__(
@@ -32,7 +32,7 @@ class MemoryStore(Store):
         :param name: a unique store name
         :param topic: a topic name for this store
         :param changelog_producer_factory: a ChangelogProducerFactory instance
-            if using changelogs
+            if using changelogs topics.
         """
         super().__init__(name, topic)
 

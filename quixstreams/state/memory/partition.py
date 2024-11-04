@@ -1,3 +1,4 @@
+import functools
 import logging
 
 from typing import Optional, Dict, Any, Union
@@ -12,6 +13,24 @@ from quixstreams.utils.json import loads as json_loads, dumps as json_dumps
 logger = logging.getLogger(__name__)
 
 __all__ = ("MemoryStorePartition",)
+
+
+def _validate_partition_state():
+    """
+    Check that the store is not closed
+    """
+
+    def wrapper(func):
+        @functools.wraps(func)
+        def _wrapper(partition: "MemoryStorePartition", *args, **kwargs):
+            if partition.closed:
+                raise RuntimeError("partition is closed")
+
+            return func(partition, *args, **kwargs)
+
+        return _wrapper
+
+    return wrapper
 
 
 class MemoryStorePartition(StorePartition):
@@ -32,15 +51,20 @@ class MemoryStorePartition(StorePartition):
         )
         self._processed_offset: Optional[int] = None
         self._changelog_offset: Optional[int] = None
-        self._state: Dict[str, Dict[bytes, Dict[bytes, Any]]] = {
+        self._state: Dict[str, Dict[bytes, Any]] = {
             "default": {},
             METADATA_CF_NAME: {},
         }
         self._closed = False
 
+    @property
+    def closed(self) -> bool:
+        return self._closed
+
     def close(self) -> None:
         self._closed = True
 
+    @_validate_partition_state()
     def write(
         self,
         cache: PartitionTransactionCache,
@@ -54,9 +78,6 @@ class MemoryStorePartition(StorePartition):
         :param processed_offset: The offset processed to generate the data.
         :param changelog_offset: The changelog message offset of the data.
         """
-        if self._closed:
-            raise RuntimeError("partition is closed")
-
         if processed_offset is not None:
             self._processed_offset = processed_offset
         if changelog_offset is not None:
@@ -112,6 +133,7 @@ class MemoryStorePartition(StorePartition):
         """
         return self._changelog_offset
 
+    @_validate_partition_state()
     def get(
         self, key: bytes, default: Any = None, cf_name: str = "default"
     ) -> Union[None, bytes, Any]:
@@ -123,11 +145,9 @@ class MemoryStorePartition(StorePartition):
         :param cf_name: rocksdb column family name. Default - "default"
         :return: a value if the key is present in the store. Otherwise, `default`
         """
-        if self._closed:
-            raise RuntimeError("partition is closed")
-
         return self._state.get(cf_name, {}).get(key, default)
 
+    @_validate_partition_state()
     def exists(self, key: bytes, cf_name: str = "default") -> bool:
         """
         Check if a key is present in the store.
@@ -136,7 +156,4 @@ class MemoryStorePartition(StorePartition):
         :param cf_name: rocksdb column family name. Default - "default"
         :return: `True` if the key is present, `False` otherwise.
         """
-        if self._closed:
-            raise RuntimeError("partition is closed")
-
         return key in self._state.get(cf_name, {})
