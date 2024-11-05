@@ -43,7 +43,7 @@ from .rowconsumer import RowConsumer
 from .rowproducer import RowProducer
 from .sinks import SinkManager
 from .sources import BaseSource, SourceException, SourceManager
-from .state import DEFAULT_STATE_STORE_NAME, StateStoreManager, Store
+from .state import StateStoreManager
 from .state.recovery import RecoveryManager
 from .state.rocksdb import RocksDBOptionsType
 from .utils.settings import BaseSettings
@@ -627,17 +627,6 @@ class Application:
             auto_commit_enable=auto_commit_enable,
             extra_config=self._config.consumer_extra_config,
         )
-
-    def get_store(
-        self, topic: str, store_name: str = DEFAULT_STATE_STORE_NAME
-    ) -> Store:
-        """
-        Get a store for given name and topic
-        :param topic: topic name
-        :param store_name: store name
-        :return: instance of `Store`
-        """
-        return self._state_manager.get_store(topic, store_name)
 
     def clear_state(self):
         """
