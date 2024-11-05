@@ -60,6 +60,7 @@ nav:
         - Kafka Replicator Source: connectors/sources/kafka-source.md
         - Quix Source: connectors/sources/quix-source.md
         - Creating a Custom Source: connectors/sources/custom-sources.md
+        - Local File Source: connectors/source/file-source.md
     - Contribution Guide: 'connectors/contribution-guide.md'
     - Community and Core Connectors: 'connectors/community-and-core.md'
   - Upgrading Guide:

@@ -133,6 +133,7 @@ doc_map = {
             "quixstreams.sources.core.csv",
             "quixstreams.sources.core.kafka.kafka",
             "quixstreams.sources.core.kafka.quix",
+            "quixstreams.sources.community.file.file",
         ]
     },
 }
