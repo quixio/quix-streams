@@ -115,6 +115,10 @@ doc_map = {
         k: None
         for k in [
             "quixstreams.sinks.community.iceberg",
+            "quixstreams.sinks.community.file.sink",
+            "quixstreams.sinks.community.file.formats.base",
+            "quixstreams.sinks.community.file.formats.json",
+            "quixstreams.sinks.community.file.formats.parquet",
             "quixstreams.sinks.core.influxdb3",
             "quixstreams.sinks.core.csv",
             "quixstreams.sinks.base.sink",
