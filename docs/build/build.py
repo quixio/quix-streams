@@ -134,6 +134,9 @@ doc_map = {
             "quixstreams.sources.core.kafka.kafka",
             "quixstreams.sources.core.kafka.quix",
             "quixstreams.sources.community.file.file",
+            "quixstreams.sources.community.file.compressions.gzip",
+            "quixstreams.sources.community.file.formats.json",
+            "quixstreams.sources.community.file.formats.parquet",
         ]
     },
 }
