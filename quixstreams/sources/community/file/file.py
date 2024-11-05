@@ -169,7 +169,6 @@ def _get_formatter(
 def _file_finder(filepath: Path) -> Generator[Path, None, None]:
     if filepath.is_dir():
         for i in sorted(filepath.iterdir(), key=lambda x: x.name):
-            print(i)
             yield from _file_finder(i)
     else:
         yield filepath
