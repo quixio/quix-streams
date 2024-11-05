@@ -1,9 +1,8 @@
 import logging
-
 from typing import Optional
 
-from quixstreams.state.recovery import ChangelogProducerFactory, ChangelogProducer
 from quixstreams.state.base import Store
+from quixstreams.state.recovery import ChangelogProducer, ChangelogProducerFactory
 
 from .partition import MemoryStorePartition
 

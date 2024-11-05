@@ -1,18 +1,18 @@
-import pytest
 import time
-
 from pathlib import Path
-from rocksdict import Rdict
 from unittest.mock import patch
 
+import pytest
+from rocksdict import Rdict
+
 from quixstreams.state.exceptions import ColumnFamilyDoesNotExist
-from quixstreams.state.rocksdb import (
-    RocksDBStorePartition,
-    RocksDBOptions,
-    ColumnFamilyAlreadyExists,
-)
 from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
+)
+from quixstreams.state.rocksdb import (
+    ColumnFamilyAlreadyExists,
+    RocksDBOptions,
+    RocksDBStorePartition,
 )
 from tests.utils import ConfluentKafkaMessageStub
 

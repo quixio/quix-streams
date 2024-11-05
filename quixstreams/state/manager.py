@@ -1,7 +1,7 @@
 import logging
 import shutil
 from pathlib import Path
-from typing import List, Dict, Optional, Union, Type, get_args
+from typing import Dict, List, Optional, Type, Union
 
 from quixstreams.rowproducer import RowProducer
 
@@ -11,9 +11,9 @@ from .exceptions import (
     StoreNotRegisteredError,
     WindowedStoreAlreadyRegisteredError,
 )
+from .memory import MemoryStore
 from .recovery import ChangelogProducerFactory, RecoveryManager
 from .rocksdb import RocksDBOptionsType, RocksDBStore
-from .memory import MemoryStore
 from .rocksdb.windowed.store import WindowedRocksDBStore
 
 __all__ = ("StateStoreManager", "DEFAULT_STATE_STORE_NAME", "StoreTypes")

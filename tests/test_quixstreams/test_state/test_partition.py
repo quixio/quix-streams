@@ -1,20 +1,14 @@
 import pytest
 
 from quixstreams.state.exceptions import (
-    ColumnFamilyHeaderMissing,
     ColumnFamilyDoesNotExist,
+    ColumnFamilyHeaderMissing,
 )
 from quixstreams.state.manager import SUPPORTED_STORES
-
 from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER,
     PREFIX_SEPARATOR,
-)
-from quixstreams.state.rocksdb import (
-    ColumnFamilyAlreadyExists,
-    RocksDBOptions,
-    RocksDBStorePartition,
 )
 from quixstreams.utils.json import dumps
 from tests.utils import ConfluentKafkaMessageStub

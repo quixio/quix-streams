@@ -10,8 +10,8 @@ from quixstreams.state.exceptions import (
     StoreNotRegisteredError,
     WindowedStoreAlreadyRegisteredError,
 )
-from quixstreams.state.rocksdb import RocksDBStore
 from quixstreams.state.manager import SUPPORTED_STORES
+from quixstreams.state.rocksdb import RocksDBStore
 from tests.utils import TopicPartitionStub
 
 

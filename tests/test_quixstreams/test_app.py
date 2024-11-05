@@ -31,8 +31,8 @@ from quixstreams.rowproducer import RowProducer
 from quixstreams.sinks import SinkBackpressureError, SinkBatch
 from quixstreams.sources import SourceException, multiprocessing
 from quixstreams.state import State
-from quixstreams.state.rocksdb import RocksDBStore
 from quixstreams.state.manager import SUPPORTED_STORES
+from quixstreams.state.rocksdb import RocksDBStore
 from tests.utils import DummySink, DummySource
 
 

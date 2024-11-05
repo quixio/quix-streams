@@ -43,9 +43,7 @@ from .rowconsumer import RowConsumer
 from .rowproducer import RowProducer
 from .sinks import SinkManager
 from .sources import BaseSource, SourceException, SourceManager
-from .state import StateStoreManager
-from .sources import SourceManager, BaseSource, SourceException
-from .state import StateStoreManager, Store, DEFAULT_STATE_STORE_NAME
+from .state import DEFAULT_STATE_STORE_NAME, StateStoreManager, Store
 from .state.recovery import RecoveryManager
 from .state.rocksdb import RocksDBOptionsType
 from .utils.settings import BaseSettings

@@ -7,13 +7,13 @@ import pytest
 from quixstreams.kafka import Consumer
 from quixstreams.models import TopicManager
 from quixstreams.state.base import StorePartition
+from quixstreams.state.memory import MemoryStore, MemoryStorePartition
 from quixstreams.state.recovery import (
     ChangelogProducer,
     ChangelogProducerFactory,
     RecoveryManager,
     RecoveryPartition,
 )
-from quixstreams.state.memory import MemoryStore, MemoryStorePartition
 from quixstreams.state.rocksdb import (
     RocksDBOptions,
     RocksDBStore,

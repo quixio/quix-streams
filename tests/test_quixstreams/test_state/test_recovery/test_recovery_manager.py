@@ -4,15 +4,11 @@ import pytest
 from confluent_kafka import TopicPartition as ConfluentPartition
 
 from quixstreams.kafka import Consumer
-
-from quixstreams.models import TopicManager, TopicConfig
-from quixstreams.state.exceptions import InvalidStoreChangelogOffset
-from quixstreams.state.metadata import CHANGELOG_CF_MESSAGE_HEADER
+from quixstreams.models import TopicConfig, TopicManager
 from quixstreams.state.base import StorePartition
 from quixstreams.state.exceptions import InvalidStoreChangelogOffset
 from quixstreams.state.manager import SUPPORTED_STORES
 from quixstreams.state.metadata import CHANGELOG_CF_MESSAGE_HEADER
-from quixstreams.state.rocksdb import RocksDBStorePartition
 from tests.utils import ConfluentKafkaMessageStub
 
 
