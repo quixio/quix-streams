@@ -52,7 +52,11 @@ from .exceptions import InvalidOperation
 from .registry import DataframeRegistry
 from .series import StreamingSeries
 from .utils import ensure_milliseconds
-from .windows import HoppingWindowDefinition, TumblingWindowDefinition
+from .windows import (
+    HoppingWindowDefinition,
+    SlidingWindowDefinition,
+    TumblingWindowDefinition,
+)
 
 ApplyCallbackStateful = Callable[[Any, State], Any]
 ApplyWithMetadataCallbackStateful = Callable[[Any, Any, int, Any, State], Any]
@@ -821,11 +825,11 @@ class StreamingDataFrame(BaseStreaming):
             .sum()
 
             # Specify how the results should be emitted downstream.
-            # "all()" will emit results as they come for each updated window,
+            # "current()" will emit results as they come for each updated window,
             # possibly producing multiple messages per key-window pair
             # "final()" will emit windows only when they are closed and cannot
             # receive any updates anymore.
-            .all()
+            .current()
         )
         ```
 
@@ -900,11 +904,11 @@ class StreamingDataFrame(BaseStreaming):
             .sum()
 
             # Specify how the results should be emitted downstream.
-            # "all()" will emit results as they come for each updated window,
+            # "current()" will emit results as they come for each updated window,
             # possibly producing multiple messages per key-window pair
             # "final()" will emit windows only when they are closed and cannot
             # receive any updates anymore.
-            .all()
+            .current()
         )
         ```
 
@@ -949,6 +953,87 @@ class StreamingDataFrame(BaseStreaming):
             step_ms=step_ms,
             dataframe=self,
             name=name,
+        )
+
+    def sliding_window(
+        self,
+        duration_ms: Union[int, timedelta],
+        grace_ms: Union[int, timedelta] = 0,
+        name: Optional[str] = None,
+    ) -> SlidingWindowDefinition:
+        """
+        Create a sliding window transformation on this StreamingDataFrame.
+        Sliding windows continuously evaluate the stream with a fixed step of 1 ms
+        allowing for overlapping, but not redundant windows of a fixed size.
+
+        Sliding windows are similar to hopping windows with step_ms set to 1,
+        but are siginificantly more perforant.
+
+        They allow performing stateful aggregations like `sum`, `reduce`, etc.
+        on top of the data and emit results downstream.
+
+        Notes:
+
+        - The timestamp of the aggregation result is set to the window start timestamp.
+        - Every window is grouped by the current Kafka message key.
+        - Messages with `None` key will be ignored.
+        - The time windows always use the current event time.
+        - Windows are inclusive on both the start end end time.
+        - Every window contains a distinct aggregation.
+
+        Example Snippet:
+
+        ```python
+        app = Application()
+        sdf = app.dataframe(...)
+
+        sdf = (
+            # Define a sliding window of 60s with a grace period of 10s
+            sdf.sliding_window(
+                duration_ms=timedelta(seconds=60),
+                grace_ms=timedelta(seconds=10)
+            )
+
+            # Specify the aggregation function
+            .sum()
+
+            # Specify how the results should be emitted downstream.
+            # "current()" will emit results as they come for each updated window,
+            # possibly producing multiple messages per key-window pair
+            # "final()" will emit windows only when they are closed and cannot
+            # receive any updates anymore.
+            .current()
+        )
+        ```
+
+        :param duration_ms: The length of each window.
+            Can be specified as either an `int` representing milliseconds or a
+            `timedelta` object.
+            >***NOTE:*** `timedelta` objects will be rounded to the closest millisecond
+            value.
+
+        :param grace_ms: The grace period for data arrival.
+            It allows late-arriving data (data arriving after the window
+            has theoretically closed) to be included in the window.
+            Can be specified as either an `int` representing milliseconds
+            or as a `timedelta` object.
+            >***NOTE:*** `timedelta` objects will be rounded to the closest millisecond
+            value.
+
+        :param name: The unique identifier for the window. If not provided, it will be
+            automatically generated based on the window's properties.
+
+        :return: `SlidingWindowDefinition` instance representing the sliding window
+            configuration.
+            This object can be further configured with aggregation functions
+            like `sum`, `count`, etc. applied to the StreamingDataFrame.
+        """
+
+        duration_ms = ensure_milliseconds(duration_ms)
+        grace_ms = ensure_milliseconds(grace_ms)
+
+        return SlidingWindowDefinition(
+            duration_ms=duration_ms, grace_ms=grace_ms, dataframe=self, name=name
         )
 
     def drop(

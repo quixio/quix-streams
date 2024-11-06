@@ -36,7 +36,14 @@ class WindowedTransactionState(WindowedState):
             start_ms=start_ms, end_ms=end_ms, default=default, prefix=self._prefix
         )
 
-    def update_window(self, start_ms: int, end_ms: int, value: Any, timestamp_ms: int):
+    def update_window(
+        self,
+        start_ms: int,
+        end_ms: int,
+        value: Any,
+        timestamp_ms: int,
+        window_timestamp_ms: Optional[int] = None,
+    ) -> None:
         """
         Set a value for the window.
 
@@ -48,6 +55,7 @@ class WindowedTransactionState(WindowedState):
         :param end_ms: end of the window in milliseconds
         :param value: value of the window
         :param timestamp_ms: current message timestamp in milliseconds
+        :param window_timestamp_ms: arbitrary timestamp stored with the window value
         """
         return self._transaction.update_window(
             start_ms=start_ms,
@@ -55,6 +63,7 @@ class WindowedTransactionState(WindowedState):
             timestamp_ms=timestamp_ms,
             value=value,
             prefix=self._prefix,
+            window_timestamp_ms=window_timestamp_ms,
         )
 
     def get_latest_timestamp(self) -> int:
@@ -70,22 +79,20 @@ class WindowedTransactionState(WindowedState):
         return self._transaction.get_latest_timestamp(prefix=self._prefix)
 
     def expire_windows(
-        self, duration_ms: int, grace_ms: int = 0
+        self, max_start_time: int, delete: bool = True
     ) -> list[tuple[tuple[int, int], Any]]:
         """
-        Get all expired windows from RocksDB based on the latest timestamp,
-        window duration, and an optional grace period.
+        Get all expired windows from RocksDB up to the specified `max_start_time` timestamp.
 
         This method marks the latest found window as expired in the expiration index,
         so consecutive calls may yield different results for the same "latest timestamp".
 
-        :param duration_ms: The duration of each window in milliseconds.
-        :param grace_ms: An optional grace period in milliseconds to delay expiration.
-            Defaults to 0, meaning no grace period is applied.
+        :param max_start_time: The timestamp up to which windows are considered expired, inclusive.
+        :param delete: If True, expired windows will be deleted.
         :return: A sorted list of tuples in the format `((start, end), value)`.
         """
         return self._transaction.expire_windows(
-            duration_ms=duration_ms, grace_ms=grace_ms, prefix=self._prefix
+            max_start_time=max_start_time, prefix=self._prefix, delete=delete
         )
 
     def get_windows(
@@ -104,4 +111,18 @@ class WindowedTransactionState(WindowedState):
             start_to_ms=start_to_ms,
             prefix=self._prefix,
             backwards=backwards,
+        )
+
+    def delete_windows(self, max_start_time: int) -> None:
+        """
+        Delete windows from RocksDB up to the specified `max_start_time` timestamp.
+
+        This method removes all window entries that have a start time less than or equal to the given
+        `max_start_time`. It ensures that expired data is cleaned up efficiently without affecting
+        unexpired windows.
+
+        :param max_start_time: The timestamp up to which windows should be deleted, inclusive.
+        """
+        return self._transaction.delete_windows(
+            max_start_time=max_start_time, prefix=self._prefix
         )

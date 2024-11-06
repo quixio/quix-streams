@@ -3,8 +3,6 @@ from typing import Any, Callable, Deque, Optional, Tuple
 
 from typing_extensions import TypedDict
 
-from quixstreams.state import WindowedState
-
 
 class WindowResult(TypedDict):
     start: int
@@ -12,7 +10,7 @@ class WindowResult(TypedDict):
     value: Any
 
 
-WindowAggregateFunc = Callable[[int, int, int, Any, WindowedState], Any]
+WindowAggregateFunc = Callable[[Any, Any], Any]
 WindowMergeFunc = Callable[[Any], Any]
 
 

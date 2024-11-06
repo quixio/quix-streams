@@ -1,6 +1,15 @@
 import functools
 import logging
-from typing import TYPE_CHECKING, Any, Callable, List, Optional, Tuple, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Iterable,
+    List,
+    Optional,
+    Tuple,
+    cast,
+)
 
 from quixstreams.context import message_context
 from quixstreams.core.stream import (
@@ -37,6 +46,7 @@ class FixedTimeWindow:
         grace_ms: int,
         name: str,
         aggregate_func: WindowAggregateFunc,
+        aggregate_default: Any,
         dataframe: "StreamingDataFrame",
         merge_func: Optional[WindowMergeFunc] = None,
         step_ms: Optional[int] = None,
@@ -48,6 +58,7 @@ class FixedTimeWindow:
         self._grace_ms = grace_ms
         self._name = name
         self._aggregate_func = aggregate_func
+        self._aggregate_default = aggregate_default
         self._merge_func = merge_func or _default_merge_func
         self._dataframe = dataframe
         self._step_ms = step_ms
@@ -61,33 +72,32 @@ class FixedTimeWindow:
         value: Any,
         timestamp_ms: int,
         state: WindowedState,
-    ) -> Tuple[List[WindowResult], List[WindowResult]]:
+    ) -> tuple[Iterable[WindowResult], Iterable[WindowResult]]:
         duration_ms = self._duration_ms
         grace_ms = self._grace_ms
+        default = self._aggregate_default
 
-        latest_timestamp = state.get_latest_timestamp()
         ranges = get_window_ranges(
             timestamp_ms=timestamp_ms,
             duration_ms=duration_ms,
             step_ms=self._step_ms,
         )
 
+        latest_timestamp = max(timestamp_ms, state.get_latest_timestamp())
+        max_expired_window_start = latest_timestamp - duration_ms - grace_ms
         updated_windows = []
         for start, end in ranges:
-            min_valid_window_end = latest_timestamp - self._grace_ms + 1
-            if end < min_valid_window_end:
-                ctx = message_context()
-                logger.warning(
-                    f"Skipping window processing for expired window "
-                    f"timestamp={timestamp_ms} "
-                    f"window=[{start},{end}) "
-                    f"min_valid_window_end={min_valid_window_end} "
-                    f"partition={ctx.topic}[{ctx.partition}] "
-                    f"offset={ctx.offset}"
+            if start <= max_expired_window_start:
+                self._log_expired_window(
+                    window=[start, end],
+                    timestamp_ms=timestamp_ms,
+                    late_by_ms=max_expired_window_start + 1 - timestamp_ms,
                 )
                 continue
 
-            aggregated = self._aggregate_func(start, end, timestamp_ms, value, state)
+            current_value = state.get_window(start, end, default=default)
+            aggregated = self._aggregate_func(current_value, value)
+            state.update_window(start, end, timestamp_ms=timestamp_ms, value=aggregated)
             updated_windows.append(
                 {
                     "start": start,
@@ -98,12 +108,23 @@ class FixedTimeWindow:
 
         expired_windows = []
         for (start, end), aggregated in state.expire_windows(
-            duration_ms=duration_ms, grace_ms=grace_ms
+            max_start_time=max_expired_window_start
         ):
             expired_windows.append(
                 {"start": start, "end": end, "value": self._merge_func(aggregated)}
             )
         return updated_windows, expired_windows
+
+    def _log_expired_window(self, window, timestamp_ms, late_by_ms) -> None:
+        ctx = message_context()
+        logger.warning(
+            "Skipping window processing for expired window "
+            f"timestamp_ms={timestamp_ms} "
+            f"window={window} "
+            f"late_by_ms={late_by_ms} "
+            f"partition={ctx.topic}[{ctx.partition}] "
+            f"offset={ctx.offset}"
+        )
 
     def final(self) -> "StreamingDataFrame":
         """
