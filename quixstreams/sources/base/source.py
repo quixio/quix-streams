@@ -182,8 +182,8 @@ class Source(BaseSource):
 
     def __init__(self, name: str, shutdown_timeout: float = 10) -> None:
         """
-        :param name: The source unique name. Used to generate the topic configurtion
-        :param shutdown_timeout: Time in second the application waits for the source to gracefully shutdown
+        :param name: The source unique name. It is used to generate the topic configuration.
+        :param shutdown_timeout: Time in second the application waits for the source to gracefully shutdown.
         """
         super().__init__()
 
