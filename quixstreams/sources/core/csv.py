@@ -13,8 +13,8 @@ logger = logging.getLogger(__name__)
 class CSVSource(Source):
     def __init__(
         self,
-        name: str,
         path: Union[str, Path],
+        name: str,
         key_extractor: Optional[Callable[[dict], AnyStr]] = None,
         timestamp_extractor: Optional[Callable[[dict], int]] = None,
         delay: float = 0,
@@ -25,8 +25,9 @@ class CSVSource(Source):
         A base CSV source that reads data from a CSV file and produces rows
         to the Kafka topic in JSON format.
 
-        :param name: The source unique name. Used to generate the topic configuration.
-        :param path: path to the CSV file
+        :param path: a path to the CSV file.
+        :param name: a unique name for the Source.
+            It is used as a part of the default topic name.
         :param key_extractor: an optional callable to extract the message key from the row.
             It must return either `str` or `bytes`.
             If empty, the Kafka messages will be produced without keys.
@@ -35,6 +36,8 @@ class CSVSource(Source):
             It must return time in milliseconds as `int`.
             If empty, the current epoch will be used.
             Default - `None`
+        :param delay: an optional delay after producing each row for stream simulation.
+            Default - `0`.
         :param shutdown_timeout: Time in second the application waits for the source to gracefully shut down.
         :param dialect: a CSV dialect to use. It affects quoting and delimiters.
             See the ["csv" module docs](https://docs.python.org/3/library/csv.html#csv-fmt-params) for more info.
