@@ -20,17 +20,19 @@ There are two types of time in streaming systems:
 2. **Processing time** - the time when the event is processed by the system
 
 
-In Quix Streams, **windows always use event time**.  
+!!! info  
 
-The event time is obtained from the timestamps of incoming Kafka messages.  
+    In Quix Streams, **windows always use event time**.
+    The event time is obtained from the timestamps of incoming Kafka messages.
 
-A Quix Streams application keeps its own "clock" for each assigned partition.  
-The state store tracks the **maximum observed timestamp** across incoming events within each topic partition, and 
-this timestamp is used as a current time in the stream.  
-What's important, it can never go backward.
+    Every windowed aggregation tracks the event time for each **message key**.  
+    It stores the **maximum observed timestamp** for each **message key**, and
+    this timestamp is used as a current time in the stream.
 
-When the application gets an event timestamp for the event, it assigns an interval according to the window definition.
-
+    The maximum observed timestamp is used to determine whether the incoming event is late or on-time.  
+    See [Lateness and Out-of-Order Processing](#lateness-and-out-of-order-processing) for more info about lateness.
+    
+ 
 ### Extracting timestamps from messages
 By default, Quix Streams uses Kafka message timestamps to determine the time of the event.  
 
@@ -659,7 +661,6 @@ sdf.tumbling_window(timedelta(hours=1), grace_ms=timedelta(seconds=10))
 The appropriate value for a grace period varies depending on the use case.
 
  
-
 
 ## Emitting results
 
