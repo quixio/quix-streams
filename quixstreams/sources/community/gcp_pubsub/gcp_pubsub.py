@@ -115,7 +115,8 @@ class GCPPubSubConsumer:
     def subscribe(self) -> Subscription:
         """
         Subscriptions work similarly to Kafka consumer groups, though there is no true
-        "subscribe" action; this just creates a subscription if it doesn't exist.
+        "subscribe" action with synchronous pulling; this just creates a subscription
+        if it doesn't exist.
         - Each topic can have multiple subscriptions (consumer group ~= subscription)
         - A subscription can have multiple subscribers (similar to consumers in a group)
         """
