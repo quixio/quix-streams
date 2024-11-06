@@ -3217,6 +3217,352 @@ Default - `json.dumps`.
 
 ## quixstreams.sinks
 
+<a id="quixstreams.sinks.community.file.formats.parquet"></a>
+
+## quixstreams.sinks.community.file.formats.parquet
+
+<a id="quixstreams.sinks.community.file.formats.parquet.ParquetFormat"></a>
+
+### ParquetFormat
+
+```python
+class ParquetFormat(Format)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/parquet.py#L16)
+
+Serializes batches of messages into Parquet format.
+
+This class provides functionality to serialize a `SinkBatch` into bytes
+in Parquet format using PyArrow. It allows setting the file extension
+and compression algorithm used for the Parquet files.
+
+This format does not support appending to existing files.
+
+<a id="quixstreams.sinks.community.file.formats.parquet.ParquetFormat.__init__"></a>
+
+#### ParquetFormat.\_\_init\_\_
+
+```python
+def __init__(file_extension: str = ".parquet",
+             compression: Compression = "snappy") -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/parquet.py#L29)
+
+Initializes the ParquetFormat.
+
+**Arguments**:
+
+- `file_extension`: The file extension to use for output files.
+Defaults to ".parquet".
+- `compression`: The compression algorithm to use for Parquet files.
+Allowed values are "none", "snappy", "gzip", "brotli", "lz4",
+or "zstd". Defaults to "snappy".
+
+<a id="quixstreams.sinks.community.file.formats.parquet.ParquetFormat.file_extension"></a>
+
+#### ParquetFormat.file\_extension
+
+```python
+@property
+def file_extension() -> str
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/parquet.py#L47)
+
+Returns the file extension used for output files.
+
+**Returns**:
+
+The file extension as a string.
+
+<a id="quixstreams.sinks.community.file.formats.parquet.ParquetFormat.serialize"></a>
+
+#### ParquetFormat.serialize
+
+```python
+def serialize(batch: SinkBatch) -> bytes
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/parquet.py#L55)
+
+Serializes a `SinkBatch` into bytes in Parquet format.
+
+Each item in the batch is converted into a dictionary with "_timestamp",
+"_key", and the keys from the message value. If the message key is in
+bytes, it is decoded to a string.
+
+Missing fields in messages are filled with `None` to ensure all rows
+have the same columns.
+
+**Arguments**:
+
+- `batch`: The `SinkBatch` to serialize.
+
+**Returns**:
+
+The serialized batch as bytes in Parquet format.
+
+<a id="quixstreams.sinks.community.file.formats"></a>
+
+## quixstreams.sinks.community.file.formats
+
+<a id="quixstreams.sinks.community.file.formats.json"></a>
+
+## quixstreams.sinks.community.file.formats.json
+
+<a id="quixstreams.sinks.community.file.formats.json.JSONFormat"></a>
+
+### JSONFormat
+
+```python
+class JSONFormat(Format)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/json.py#L14)
+
+Serializes batches of messages into JSON Lines format with optional gzip
+compression.
+
+This class provides functionality to serialize a `SinkBatch` into bytes
+in JSON Lines format. It supports optional gzip compression and allows
+for custom JSON serialization through the `dumps` parameter.
+
+This format supports appending to existing files.
+
+<a id="quixstreams.sinks.community.file.formats.json.JSONFormat.__init__"></a>
+
+#### JSONFormat.\_\_init\_\_
+
+```python
+def __init__(file_extension: str = ".jsonl",
+             compress: bool = False,
+             dumps: Optional[Callable[[Any], str]] = None) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/json.py#L28)
+
+Initializes the JSONFormat.
+
+**Arguments**:
+
+- `file_extension`: The file extension to use for output files.
+Defaults to ".jsonl".
+- `compress`: If `True`, compresses the output using gzip and
+appends ".gz" to the file extension. Defaults to `False`.
+- `dumps`: A custom function to serialize objects to JSON-formatted
+strings. If provided, the `compact` option is ignored.
+
+<a id="quixstreams.sinks.community.file.formats.json.JSONFormat.file_extension"></a>
+
+#### JSONFormat.file\_extension
+
+```python
+@property
+def file_extension() -> str
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/json.py#L57)
+
+Returns the file extension used for output files.
+
+**Returns**:
+
+The file extension as a string.
+
+<a id="quixstreams.sinks.community.file.formats.json.JSONFormat.serialize"></a>
+
+#### JSONFormat.serialize
+
+```python
+def serialize(batch: SinkBatch) -> bytes
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/json.py#L65)
+
+Serializes a `SinkBatch` into bytes in JSON Lines format.
+
+Each item in the batch is converted into a JSON object with
+"_timestamp", "_key", and "_value" fields. If the message key is
+in bytes, it is decoded to a string.
+
+**Arguments**:
+
+- `batch`: The `SinkBatch` to serialize.
+
+**Returns**:
+
+The serialized batch in JSON Lines format, optionally
+compressed with gzip.
+
+<a id="quixstreams.sinks.community.file.formats.base"></a>
+
+## quixstreams.sinks.community.file.formats.base
+
+<a id="quixstreams.sinks.community.file.formats.base.Format"></a>
+
+### Format
+
+```python
+class Format(ABC)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/base.py#L8)
+
+Base class for formatting batches in file sinks.
+
+This abstract base class defines the interface for batch formatting
+in file sinks. Subclasses should implement the `file_extension`
+property and the `serialize` method to define how batches are
+formatted and saved.
+
+<a id="quixstreams.sinks.community.file.formats.base.Format.file_extension"></a>
+
+#### Format.file\_extension
+
+```python
+@property
+@abstractmethod
+def file_extension() -> str
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/base.py#L20)
+
+Returns the file extension used for output files.
+
+**Returns**:
+
+The file extension as a string.
+
+<a id="quixstreams.sinks.community.file.formats.base.Format.supports_append"></a>
+
+#### Format.supports\_append
+
+```python
+@property
+@abstractmethod
+def supports_append() -> bool
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/base.py#L30)
+
+Indicates if the format supports appending data to an existing file.
+
+**Returns**:
+
+True if appending is supported, otherwise False.
+
+<a id="quixstreams.sinks.community.file.formats.base.Format.serialize"></a>
+
+#### Format.serialize
+
+```python
+@abstractmethod
+def serialize(batch: SinkBatch) -> bytes
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/base.py#L39)
+
+Serializes a batch of messages into bytes.
+
+**Arguments**:
+
+- `batch`: The batch of messages to serialize.
+
+**Returns**:
+
+The serialized batch as bytes.
+
+<a id="quixstreams.sinks.community.file.sink"></a>
+
+## quixstreams.sinks.community.file.sink
+
+<a id="quixstreams.sinks.community.file.sink.InvalidFormatError"></a>
+
+### InvalidFormatError
+
+```python
+class InvalidFormatError(Exception)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/sink.py#L24)
+
+Raised when the format is specified incorrectly.
+
+<a id="quixstreams.sinks.community.file.sink.FileSink"></a>
+
+### FileSink
+
+```python
+class FileSink(BatchingSink)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/sink.py#L30)
+
+Writes batches of data to files on disk using specified formats.
+
+Messages are grouped by their topic and partition. Data from messages with
+the same topic and partition are saved in the same directory. Each batch of
+messages is serialized and saved to a file within that directory. Files are
+named using the batch's starting offset to ensure uniqueness and order.
+
+If `append` is set to `True`, the sink will attempt to append data to an
+existing file rather than creating a new one. This is only supported for
+formats that allow appending.
+
+<a id="quixstreams.sinks.community.file.sink.FileSink.__init__"></a>
+
+#### FileSink.\_\_init\_\_
+
+```python
+def __init__(output_dir: str,
+             format: Union[FormatName, Format],
+             append: bool = False) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/sink.py#L44)
+
+Initializes the FileSink.
+
+**Arguments**:
+
+- `output_dir`: The directory where files will be written.
+- `format`: The data serialization format to use. This can be either a
+format name ("json", "parquet") or an instance of a `Format`
+subclass.
+- `append`: If `True`, data will be appended to existing files when possible.
+Note that not all formats support appending. Defaults to `False`.
+
+**Raises**:
+
+- `ValueError`: If `append` is `True` but the specified format does not
+support appending.
+
+<a id="quixstreams.sinks.community.file.sink.FileSink.write"></a>
+
+#### FileSink.write
+
+```python
+def write(batch: SinkBatch) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/sink.py#L68)
+
+Writes a batch of data to files on disk, grouping data by topic and partition.
+
+If `append` is `True` and an existing file is found, data will be appended to
+the last file. Otherwise, a new file is created based on the batch's starting
+offset.
+
+**Arguments**:
+
+- `batch`: The batch of data to write.
+
+<a id="quixstreams.sinks.community.file"></a>
+
+## quixstreams.sinks.community.file
+
 <a id="quixstreams.sinks.community"></a>
 
 ## quixstreams.sinks.community
@@ -3534,7 +3880,7 @@ Batches are created automatically by the implementations of `BatchingSink`.
 def iter_chunks(n: int) -> Iterable[Iterable[SinkItem]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/batch.py#L65)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/batch.py#L69)
 
 Iterate over batch data in chunks of length n.
 The last batch may be shorter.
@@ -5246,7 +5592,7 @@ def expire_windows(duration_ms: int,
                    grace_ms: int = 0) -> list[tuple[tuple[int, int], Any]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L112)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L99)
 
 Get all expired windows from RocksDB based on the latest timestamp,
 
@@ -5286,7 +5632,7 @@ def get_windows(start_from_ms: int,
                 backwards: bool = False) -> list[tuple[tuple[int, int], Any]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L179)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L155)
 
 Get all windows that start between "start_from_ms" and "start_to_ms"
 
@@ -5475,7 +5821,7 @@ def get_latest_timestamp() -> int
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/state.py#L60)
 
-Get the latest observed timestamp for the current state partition.
+Get the latest observed timestamp for the current message key.
 
 Use this timestamp to determine if the arriving event is late and should be
 discarded from the processing.
@@ -6497,12 +6843,14 @@ using the provided `timestamp`.
 #### WindowedPartitionTransaction.get\_latest\_timestamp
 
 ```python
-def get_latest_timestamp() -> int
+def get_latest_timestamp(prefix: bytes) -> int
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L166)
 
-Get the latest observed timestamp for the current state partition.
+Get the latest observed timestamp for the current state prefix
+
+(same as message key).
 
 Use this timestamp to determine if the arriving event is late and should be
 discarded from the processing.
@@ -6521,7 +6869,7 @@ def expire_windows(duration_ms: int,
                    grace_ms: int = 0) -> list[tuple[tuple[int, int], Any]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L177)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L178)
 
 Get all expired windows from RocksDB based on the latest timestamp,
 
@@ -6552,7 +6900,7 @@ def get_windows(start_from_ms: int,
                 backwards: bool = False) -> list[tuple[tuple[int, int], Any]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L195)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L196)
 
 Get all windows that start between "start_from_ms" and "start_to_ms"
 
@@ -6578,7 +6926,7 @@ def flush(processed_offset: Optional[int] = None,
           changelog_offset: Optional[int] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L214)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L215)
 
 Flush the recent updates to the storage.
 
@@ -6597,7 +6945,7 @@ optional.
 def changelog_topic_partition() -> Optional[Tuple[str, int]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L228)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L229)
 
 Return the changelog topic-partition for the StorePartition of this transaction.
 
@@ -6615,7 +6963,7 @@ Returns `None` if changelog_producer is not provided.
 class PartitionRecoveryTransaction(Protocol)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L242)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L243)
 
 A class for managing recovery for a StorePartition from a changelog message
 
@@ -6627,7 +6975,7 @@ A class for managing recovery for a StorePartition from a changelog message
 def flush()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L249)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L250)
 
 Flush the recovery update to the storage.
 
@@ -9457,44 +9805,270 @@ For other parameters See `quixstreams.sources.kafka.KafkaReplicatorSource`
 class CSVSource(Source)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/core/csv.py#L9)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/core/csv.py#L13)
 
 <a id="quixstreams.sources.core.csv.CSVSource.__init__"></a>
 
 #### CSVSource.\_\_init\_\_
 
 ```python
-def __init__(path: str,
-             dialect: str = "excel",
-             name: Optional[str] = None,
+def __init__(path: Union[str, Path],
+             name: str,
+             key_extractor: Optional[Callable[[dict], AnyStr]] = None,
+             timestamp_extractor: Optional[Callable[[dict], int]] = None,
+             delay: float = 0,
              shutdown_timeout: float = 10,
-             key_deserializer: Callable[[Any], str] = str,
-             value_deserializer: Callable[[Any], str] = json.loads) -> None
+             dialect: str = "excel") -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/core/csv.py#L10)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/core/csv.py#L14)
 
-A base CSV source that reads data from a single CSV file.
+A base CSV source that reads data from a CSV file and produces rows
 
-Best used with `quixstreams.sinks.csv.CSVSink`.
-
-Required columns: key, value
-Optional columns: timestamp
+to the Kafka topic in JSON format.
 
 **Arguments**:
 
-- `path`: path to the CSV file
+- `path`: a path to the CSV file.
+- `name`: a unique name for the Source.
+It is used as a part of the default topic name.
+- `key_extractor`: an optional callable to extract the message key from the row.
+It must return either `str` or `bytes`.
+If empty, the Kafka messages will be produced without keys.
+Default - `None`.
+- `timestamp_extractor`: an optional callable to extract the message timestamp from the row.
+It must return time in milliseconds as `int`.
+If empty, the current epoch will be used.
+Default - `None`
+- `delay`: an optional delay after producing each row for stream simulation.
+Default - `0`.
+- `shutdown_timeout`: Time in second the application waits for the source to gracefully shut down.
 - `dialect`: a CSV dialect to use. It affects quoting and delimiters.
 See the ["csv" module docs](https://docs.python.org/3/library/csv.html#csv-fmt-params) for more info.
 Default - `"excel"`.
-- `key_deseralizer`: a callable to convert strings to key.
-Default - `str`
-- `value_deserializer`: a callable to convert strings to value.
-Default - `json.loads`
 
 <a id="quixstreams.sources"></a>
 
 ## quixstreams.sources
+
+<a id="quixstreams.sources.community.file.formats.parquet"></a>
+
+## quixstreams.sources.community.file.formats.parquet
+
+<a id="quixstreams.sources.community.file.formats"></a>
+
+## quixstreams.sources.community.file.formats
+
+<a id="quixstreams.sources.community.file.formats.json"></a>
+
+## quixstreams.sources.community.file.formats.json
+
+<a id="quixstreams.sources.community.file.formats.json.JSONFormat"></a>
+
+### JSONFormat
+
+```python
+class JSONFormat(Format)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/formats/json.py#L12)
+
+<a id="quixstreams.sources.community.file.formats.json.JSONFormat.__init__"></a>
+
+#### JSONFormat.\_\_init\_\_
+
+```python
+def __init__(compression: Optional[CompressionName],
+             loads: Optional[Callable[[str], dict]] = None)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/formats/json.py#L13)
+
+Read a JSON-formatted file (along with decompressing it).
+
+**Arguments**:
+
+- `compression`: the compression type used on the file
+- `loads`: A custom function to deserialize objects to the expected dict
+with {_key: str, _value: dict, _timestamp: int}.
+
+<a id="quixstreams.sources.community.file.formats.base"></a>
+
+## quixstreams.sources.community.file.formats.base
+
+<a id="quixstreams.sources.community.file.formats.base.Format"></a>
+
+### Format
+
+```python
+class Format(ABC)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/formats/base.py#L14)
+
+Base class for reading files serialized by the Quix Streams File Sink
+Connector.
+
+Formats include things like JSON, Parquet, etc.
+
+Also handles different compression types.
+
+<a id="quixstreams.sources.community.file.formats.base.Format.__init__"></a>
+
+#### Format.\_\_init\_\_
+
+```python
+@abstractmethod
+def __init__(compression: Optional[CompressionName] = None)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/formats/base.py#L25)
+
+super().__init__() this for a usable init.
+
+<a id="quixstreams.sources.community.file.formats.base.Format.deserialize"></a>
+
+#### Format.deserialize
+
+```python
+@abstractmethod
+def deserialize(filestream: BinaryIO) -> Iterable[dict]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/formats/base.py#L35)
+
+Parse a filelike byte stream into a collection of records
+
+using the designated format's deserialization approach.
+
+The opening, decompression, and closing of the byte stream's origin is handled
+automatically.
+
+The iterable should output dicts with the following data/naming structure:
+{_key: str, _value: dict, _timestamp: int}.
+
+**Arguments**:
+
+- `filestream`: a filelike byte stream (such as `f` from `f = open(file)`)
+
+<a id="quixstreams.sources.community.file"></a>
+
+## quixstreams.sources.community.file
+
+<a id="quixstreams.sources.community.file.file"></a>
+
+## quixstreams.sources.community.file.file
+
+<a id="quixstreams.sources.community.file.file.FileSource"></a>
+
+### FileSource
+
+```python
+class FileSource(Source)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/file.py#L17)
+
+Ingest a set of local files into kafka by iterating through the provided folder and
+processing all nested files within it.
+
+Expects folder and file structures as generated by the related Quix Streams File
+Sink Connector:
+
+my_topics/
+├── topic_a/
+│   ├── 0/
+│   │   ├── 0000.ext
+│   │   └── 0011.ext
+│   └── 1/
+│       ├── 0003.ext
+│       └── 0016.ext
+└── topic_b/
+└── etc...
+
+Intended to be used with a single topic (ex: topic_a), but will recursively read
+from whatever entrypoint is passed to it.
+
+File format structure depends on the file format.
+
+See the `.formats` and `.compressions` modules to see what is supported.
+
+**Example**:
+
+  
+  from quixstreams import Application
+  from quixstreams.sources.community.file import FileSource
+  
+  app = Application(broker_address="localhost:9092", auto_offset_reset="earliest")
+  source = FileSource(
+  filepath="/path/to/my/topic_folder",
+  file_format="json",
+  file_compression="gzip",
+  )
+  sdf = app.dataframe(source=source).print(metadata=True)
+  
+  if __name__ == "__main__":
+  app.run()
+
+<a id="quixstreams.sources.community.file.file.FileSource.__init__"></a>
+
+#### FileSource.\_\_init\_\_
+
+```python
+def __init__(filepath: Union[str, Path],
+             file_format: Union[Format, FormatName],
+             file_compression: Optional[CompressionName] = None,
+             as_replay: bool = True,
+             name: Optional[str] = None,
+             shutdown_timeout: float = 10)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/file.py#L60)
+
+**Arguments**:
+
+- `filepath`: a filepath to recursively read through; it is recommended to
+provide the path to a given topic folder (ex: `/path/to/topic_a`).
+- `file_format`: what format the message files are in (ex: json, parquet).
+Optionally, can provide a `Format` instance if more than file_compression
+is necessary to define (file_compression will then be ignored).
+- `file_compression`: what compression is used on the given files, if any.
+- `as_replay`: Produce the messages with the original time delay between them.
+Otherwise, produce the messages as fast as possible.
+NOTE: Time delay will only be accurate per partition, NOT overall.
+- `name`: The name of the Source application (Default: last folder name).
+- `shutdown_timeout`: Time in seconds the application waits for the source
+to gracefully shutdown
+
+<a id="quixstreams.sources.community.file.file.FileSource.default_topic"></a>
+
+#### FileSource.default\_topic
+
+```python
+def default_topic() -> Topic
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/file.py#L107)
+
+Uses the file structure to generate the desired partition count for the
+
+internal topic.
+
+**Returns**:
+
+the original default topic, with updated partition count
+
+<a id="quixstreams.sources.community.file.compressions.gzip"></a>
+
+## quixstreams.sources.community.file.compressions.gzip
+
+<a id="quixstreams.sources.community.file.compressions"></a>
+
+## quixstreams.sources.community.file.compressions
+
+<a id="quixstreams.sources.community.file.compressions.base"></a>
+
+## quixstreams.sources.community.file.compressions.base
 
 <a id="quixstreams.sources.community"></a>
 
@@ -9725,8 +10299,8 @@ def __init__(name: str, shutdown_timeout: float = 10) -> None
 
 **Arguments**:
 
-- `name`: The source unique name. Used to generate the topic configurtion
-- `shutdown_timeout`: Time in second the application waits for the source to gracefully shutdown
+- `name`: The source unique name. It is used to generate the topic configuration.
+- `shutdown_timeout`: Time in second the application waits for the source to gracefully shutdown.
 
 <a id="quixstreams.sources.base.source.Source.running"></a>
 
