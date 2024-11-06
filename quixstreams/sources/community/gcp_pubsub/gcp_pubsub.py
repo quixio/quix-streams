@@ -4,10 +4,8 @@ from dataclasses import dataclass
 from typing import MutableSequence, Optional
 
 from google.api_core import retry
-from google.cloud.pubsub_v1 import PublisherClient, SubscriberClient
-from google.cloud.pubsub_v1.publisher.client import Client as PClient
+from google.cloud.pubsub_v1 import SubscriberClient
 from google.cloud.pubsub_v1.subscriber.client import Client as SClient
-from google.cloud.pubsub_v1.types import PublisherOptions
 from google.pubsub_v1.types import (
     PubsubMessage,
     PullResponse,
@@ -72,16 +70,18 @@ class GCPPubSubConfig:
 
 
 class GCPPubSubConsumer:
-    def __init__(self, config: GCPPubSubConfig):
+    def __init__(self, config: GCPPubSubConfig, create_subscription=False):
         self._config = config
         self._consumer: Optional[SClient] = None
         self._messages = None
+        self._create_subscription = create_subscription
 
     def start_consumer(self):
         if not self._consumer:
             self._consumer = SubscriberClient().__enter__()
-            # subscription_result = self.subscribe()
-            # logger.debug(f"Subscription request succeeded: {subscription_result}")
+            if self._create_subscription:
+                subscription_result = self.subscribe()
+                logger.debug(f"Subscription request succeeded: {subscription_result}")
 
     def stop_consumer(self):
         if self._consumer:
@@ -149,53 +149,6 @@ class GCPPubSubConsumer:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self._consumer.__exit__(exc_type, exc_val, exc_tb)
-
-
-# TODO: remove this once testing finished
-class GCPPubSubProducer:
-    def __init__(self, config: GCPPubSubConfig, use_keys: bool = True):
-        self._config = config
-        self._use_keys = use_keys
-        self._producer: Optional[PClient] = None
-
-    @property
-    def topic_path(self):
-        return self._producer.topic_path(
-            self._config.project_id, self._config.topic_name
-        )
-
-    @property
-    def subscription_path(self):
-        return self._producer.subscription_path(
-            self._config.project_id, self._config.subscription_name
-        )
-
-    def __enter__(self):
-        self._producer = PublisherClient(
-            # allows using message keys like how they are used in Kafka
-            publisher_options=PublisherOptions(enable_message_ordering=self._use_keys)
-        ).__enter__()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self._producer.__exit__(exc_type, exc_val, exc_tb)
-
-    def produce(self, value: bytes, key: str = ""):
-        # Publish a message to the topic
-        if key and not self._use_keys:
-            raise ValueError("Key use is disabled on producer; set 'use_keys' to True")
-        future = self._producer.publish(
-            topic=self.topic_path,
-            data=value,
-            ordering_key=key,
-        )
-
-        # Result is the message ID
-        message_id = future.result()
-        print(f"Published message ID: {message_id}")
-
-    def create_topic(self):
-        self._producer.create_topic(name=self.topic_path)
 
 
 class GCPPubSubSource(Source):
