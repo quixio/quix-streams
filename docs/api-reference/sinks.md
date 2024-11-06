@@ -138,6 +138,394 @@ Implements retry logic to handle concurrent write conflicts.
 
 - `batch`: The batch of data to write.
 
+<a id="quixstreams.sinks.community.file.sink"></a>
+
+## quixstreams.sinks.community.file.sink
+
+<a id="quixstreams.sinks.community.file.sink.InvalidFormatError"></a>
+
+### InvalidFormatError
+
+```python
+class InvalidFormatError(Exception)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/sink.py#L24)
+
+Raised when the format is specified incorrectly.
+
+<a id="quixstreams.sinks.community.file.sink.FileSink"></a>
+
+### FileSink
+
+```python
+class FileSink(BatchingSink)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/sink.py#L30)
+
+Writes batches of data to files on disk using specified formats.
+
+Messages are grouped by their topic and partition. Data from messages with
+the same topic and partition are saved in the same directory. Each batch of
+messages is serialized and saved to a file within that directory. Files are
+named using the batch's starting offset to ensure uniqueness and order.
+
+If `append` is set to `True`, the sink will attempt to append data to an
+existing file rather than creating a new one. This is only supported for
+formats that allow appending.
+
+<a id="quixstreams.sinks.community.file.sink.FileSink.__init__"></a>
+
+<br><br>
+
+#### FileSink.\_\_init\_\_
+
+```python
+def __init__(output_dir: str,
+             format: Union[FormatName, Format],
+             append: bool = False) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/sink.py#L44)
+
+Initializes the FileSink.
+
+
+<br>
+***Arguments:***
+
+- `output_dir`: The directory where files will be written.
+- `format`: The data serialization format to use. This can be either a
+format name ("json", "parquet") or an instance of a `Format`
+subclass.
+- `append`: If `True`, data will be appended to existing files when possible.
+Note that not all formats support appending. Defaults to `False`.
+
+**Raises**:
+
+- `ValueError`: If `append` is `True` but the specified format does not
+support appending.
+
+<a id="quixstreams.sinks.community.file.sink.FileSink.write"></a>
+
+<br><br>
+
+#### FileSink.write
+
+```python
+def write(batch: SinkBatch) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/sink.py#L68)
+
+Writes a batch of data to files on disk, grouping data by topic and partition.
+
+If `append` is `True` and an existing file is found, data will be appended to
+the last file. Otherwise, a new file is created based on the batch's starting
+offset.
+
+
+<br>
+***Arguments:***
+
+- `batch`: The batch of data to write.
+
+<a id="quixstreams.sinks.community.file.formats.base"></a>
+
+## quixstreams.sinks.community.file.formats.base
+
+<a id="quixstreams.sinks.community.file.formats.base.Format"></a>
+
+### Format
+
+```python
+class Format(ABC)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/base.py#L8)
+
+Base class for formatting batches in file sinks.
+
+This abstract base class defines the interface for batch formatting
+in file sinks. Subclasses should implement the `file_extension`
+property and the `serialize` method to define how batches are
+formatted and saved.
+
+<a id="quixstreams.sinks.community.file.formats.base.Format.file_extension"></a>
+
+<br><br>
+
+#### Format.file\_extension
+
+```python
+@property
+@abstractmethod
+def file_extension() -> str
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/base.py#L20)
+
+Returns the file extension used for output files.
+
+
+<br>
+***Returns:***
+
+The file extension as a string.
+
+<a id="quixstreams.sinks.community.file.formats.base.Format.supports_append"></a>
+
+<br><br>
+
+#### Format.supports\_append
+
+```python
+@property
+@abstractmethod
+def supports_append() -> bool
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/base.py#L30)
+
+Indicates if the format supports appending data to an existing file.
+
+
+<br>
+***Returns:***
+
+True if appending is supported, otherwise False.
+
+<a id="quixstreams.sinks.community.file.formats.base.Format.serialize"></a>
+
+<br><br>
+
+#### Format.serialize
+
+```python
+@abstractmethod
+def serialize(batch: SinkBatch) -> bytes
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/base.py#L39)
+
+Serializes a batch of messages into bytes.
+
+
+<br>
+***Arguments:***
+
+- `batch`: The batch of messages to serialize.
+
+
+<br>
+***Returns:***
+
+The serialized batch as bytes.
+
+<a id="quixstreams.sinks.community.file.formats.json"></a>
+
+## quixstreams.sinks.community.file.formats.json
+
+<a id="quixstreams.sinks.community.file.formats.json.JSONFormat"></a>
+
+### JSONFormat
+
+```python
+class JSONFormat(Format)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/json.py#L14)
+
+Serializes batches of messages into JSON Lines format with optional gzip
+compression.
+
+This class provides functionality to serialize a `SinkBatch` into bytes
+in JSON Lines format. It supports optional gzip compression and allows
+for custom JSON serialization through the `dumps` parameter.
+
+This format supports appending to existing files.
+
+<a id="quixstreams.sinks.community.file.formats.json.JSONFormat.__init__"></a>
+
+<br><br>
+
+#### JSONFormat.\_\_init\_\_
+
+```python
+def __init__(file_extension: str = ".jsonl",
+             compress: bool = False,
+             dumps: Optional[Callable[[Any], str]] = None) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/json.py#L28)
+
+Initializes the JSONFormat.
+
+
+<br>
+***Arguments:***
+
+- `file_extension`: The file extension to use for output files.
+Defaults to ".jsonl".
+- `compress`: If `True`, compresses the output using gzip and
+appends ".gz" to the file extension. Defaults to `False`.
+- `dumps`: A custom function to serialize objects to JSON-formatted
+strings. If provided, the `compact` option is ignored.
+
+<a id="quixstreams.sinks.community.file.formats.json.JSONFormat.file_extension"></a>
+
+<br><br>
+
+#### JSONFormat.file\_extension
+
+```python
+@property
+def file_extension() -> str
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/json.py#L57)
+
+Returns the file extension used for output files.
+
+
+<br>
+***Returns:***
+
+The file extension as a string.
+
+<a id="quixstreams.sinks.community.file.formats.json.JSONFormat.serialize"></a>
+
+<br><br>
+
+#### JSONFormat.serialize
+
+```python
+def serialize(batch: SinkBatch) -> bytes
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/json.py#L65)
+
+Serializes a `SinkBatch` into bytes in JSON Lines format.
+
+Each item in the batch is converted into a JSON object with
+"_timestamp", "_key", and "_value" fields. If the message key is
+in bytes, it is decoded to a string.
+
+
+<br>
+***Arguments:***
+
+- `batch`: The `SinkBatch` to serialize.
+
+
+<br>
+***Returns:***
+
+The serialized batch in JSON Lines format, optionally
+compressed with gzip.
+
+<a id="quixstreams.sinks.community.file.formats.parquet"></a>
+
+## quixstreams.sinks.community.file.formats.parquet
+
+<a id="quixstreams.sinks.community.file.formats.parquet.ParquetFormat"></a>
+
+### ParquetFormat
+
+```python
+class ParquetFormat(Format)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/parquet.py#L16)
+
+Serializes batches of messages into Parquet format.
+
+This class provides functionality to serialize a `SinkBatch` into bytes
+in Parquet format using PyArrow. It allows setting the file extension
+and compression algorithm used for the Parquet files.
+
+This format does not support appending to existing files.
+
+<a id="quixstreams.sinks.community.file.formats.parquet.ParquetFormat.__init__"></a>
+
+<br><br>
+
+#### ParquetFormat.\_\_init\_\_
+
+```python
+def __init__(file_extension: str = ".parquet",
+             compression: Compression = "snappy") -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/parquet.py#L29)
+
+Initializes the ParquetFormat.
+
+
+<br>
+***Arguments:***
+
+- `file_extension`: The file extension to use for output files.
+Defaults to ".parquet".
+- `compression`: The compression algorithm to use for Parquet files.
+Allowed values are "none", "snappy", "gzip", "brotli", "lz4",
+or "zstd". Defaults to "snappy".
+
+<a id="quixstreams.sinks.community.file.formats.parquet.ParquetFormat.file_extension"></a>
+
+<br><br>
+
+#### ParquetFormat.file\_extension
+
+```python
+@property
+def file_extension() -> str
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/parquet.py#L47)
+
+Returns the file extension used for output files.
+
+
+<br>
+***Returns:***
+
+The file extension as a string.
+
+<a id="quixstreams.sinks.community.file.formats.parquet.ParquetFormat.serialize"></a>
+
+<br><br>
+
+#### ParquetFormat.serialize
+
+```python
+def serialize(batch: SinkBatch) -> bytes
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/parquet.py#L55)
+
+Serializes a `SinkBatch` into bytes in Parquet format.
+
+Each item in the batch is converted into a dictionary with "_timestamp",
+"_key", and the keys from the message value. If the message key is in
+bytes, it is decoded to a string.
+
+Missing fields in messages are filled with `None` to ensure all rows
+have the same columns.
+
+
+<br>
+***Arguments:***
+
+- `batch`: The `SinkBatch` to serialize.
+
+
+<br>
+***Returns:***
+
+The serialized batch as bytes in Parquet format.
+
 <a id="quixstreams.sinks.core.influxdb3"></a>
 
 ## quixstreams.sinks.core.influxdb3
@@ -510,7 +898,7 @@ Batches are created automatically by the implementations of `BatchingSink`.
 def iter_chunks(n: int) -> Iterable[Iterable[SinkItem]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/batch.py#L65)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/batch.py#L69)
 
 Iterate over batch data in chunks of length n.
 The last batch may be shorter.
