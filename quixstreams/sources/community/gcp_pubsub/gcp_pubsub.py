@@ -1,4 +1,5 @@
 import logging
+import os
 from dataclasses import dataclass
 from typing import MutableSequence, Optional
 
@@ -30,6 +31,44 @@ class GCPPubSubConfig:
     subscription_name: str
     topic_name: str
     max_pull_batch_size: int = 10
+    credentials_path: Optional[str] = None
+    emulated_host_url: Optional[str] = None
+
+    def __post_init__(self):
+        if emulated_host_env := os.getenv("PUBSUB_EMULATOR_HOST"):
+            if self.emulated_host_url and self.emulated_host_url != emulated_host_env:
+                raise ValueError(
+                    f"'emulated_host_url' ('{self.emulated_host_url}') and "
+                    "environment variable 'PUBSUB_EMULATOR_HOST' "
+                    f"('{emulated_host_env}') are both used; set one only."
+                )
+            print("USING EMULATOR HOST!")
+            return
+        if self.emulated_host_url:
+            logger.info(
+                "Setting environment variable 'PUBSUB_EMULATOR_HOST' "
+                "to the provided 'emulated_host_url'"
+            )
+            os.environ["PUBSUB_EMULATOR_HOST"] = self.emulated_host_url
+            print("USING EMULATOR HOST!")
+            return
+
+        if creds_env := os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
+            if self.credentials_path and self.credentials_path != creds_env:
+                raise ValueError(
+                    f"'credentials_path' ('{self.emulated_host_url}') and "
+                    "environment variable 'GOOGLE_APPLICATION_CREDENTIALS' "
+                    f"('{creds_env}') are both used; set one only."
+                )
+            return
+        if self.credentials_path:
+            logger.info(
+                "Setting environment variable 'GOOGLE_APPLICATION_CREDENTIALS' "
+                "to the provided 'credentials_path'"
+            )
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = self.credentials_path
+            return
+        raise ValueError("Must provide a 'credentials_path' or 'emulated_host_url'")
 
 
 class GCPPubSubConsumer:
@@ -41,8 +80,8 @@ class GCPPubSubConsumer:
     def start_consumer(self):
         if not self._consumer:
             self._consumer = SubscriberClient().__enter__()
-            subscription_result = self.subscribe()
-            logger.debug(f"Subscription request succeeded: {subscription_result}")
+            # subscription_result = self.subscribe()
+            # logger.debug(f"Subscription request succeeded: {subscription_result}")
 
     def stop_consumer(self):
         if self._consumer:
@@ -74,7 +113,12 @@ class GCPPubSubConsumer:
         return self._messages
 
     def subscribe(self) -> Subscription:
-        # TODO: investigate expected patterns around subscriptions
+        """
+        Subscriptions work similarly to Kafka consumer groups, though there is no true
+        "subscribe" action; this just creates a subscription if it doesn't exist.
+        - Each topic can have multiple subscriptions (consumer group ~= subscription)
+        - A subscription can have multiple subscribers (similar to consumers in a group)
+        """
         try:
             return self._consumer.get_subscription(subscription=self.subscription_path)
         except Exception as e:
@@ -109,8 +153,9 @@ class GCPPubSubConsumer:
 
 # TODO: remove this once testing finished
 class GCPPubSubProducer:
-    def __init__(self, config: GCPPubSubConfig):
+    def __init__(self, config: GCPPubSubConfig, use_keys: bool = True):
         self._config = config
+        self._use_keys = use_keys
         self._producer: Optional[PClient] = None
 
     @property
@@ -128,7 +173,7 @@ class GCPPubSubProducer:
     def __enter__(self):
         self._producer = PublisherClient(
             # allows using message keys like how they are used in Kafka
-            publisher_options=PublisherOptions(enable_message_ordering=True)
+            publisher_options=PublisherOptions(enable_message_ordering=self._use_keys)
         ).__enter__()
         return self
 
@@ -137,6 +182,8 @@ class GCPPubSubProducer:
 
     def produce(self, value: bytes, key: str = ""):
         # Publish a message to the topic
+        if key and not self._use_keys:
+            raise ValueError("Key use is disabled on producer; set 'use_keys' to True")
         future = self._producer.publish(
             topic=self.topic_path,
             data=value,
@@ -156,8 +203,8 @@ class GCPPubSubSource(Source):
         self,
         config: GCPPubSubConfig,
         name: Optional[str] = None,
-        poll_timeout: float = 5.0,
-        shutdown_timeout: float = 10.0,
+        poll_timeout: float = 30.0,
+        shutdown_timeout: float = 60.0,
     ):
         self._config = config
         self._poll_timeout = poll_timeout
