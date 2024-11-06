@@ -25,17 +25,14 @@ There are two types of time in streaming systems:
     In Quix Streams, **windows always use event time**.
     The event time is obtained from the timestamps of incoming Kafka messages.
 
-    Every windowed aggregation tracks the event time for each **message key**.
-    It stores the **maximum observed timestamp** for each **message key**,  
+    Every windowed aggregation tracks the event time for each **message key**.  
+    It stores the **maximum observed timestamp** for each **message key**, and
     this timestamp is used as a current time in the stream.
 
-    The maximum observed timestamp is used to determine whether the incoming event is "late" or not.  
-    See [Lateness and Out-of-Order Processing](#lateness-and-out-of-order-processing) for more info.
+    The maximum observed timestamp is used to determine whether the incoming event is late or on-time.  
+    See [Lateness and Out-of-Order Processing](#lateness-and-out-of-order-processing) for more info about lateness.
     
-
-   
-
-
+ 
 ### Extracting timestamps from messages
 By default, Quix Streams uses Kafka message timestamps to determine the time of the event.  
 
