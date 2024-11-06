@@ -31,12 +31,14 @@ class TestConnectionConfig:
             "bootstrap.servers": "url",
             "sasl.mechanism": mechanism_casing,
             "sasl.username": "my-username",
+            "oauth_cb": lambda _: _,
         }
         config = ConnectionConfig.from_librdkafka_dict(librdkafka_dict)
 
         assert config.bootstrap_servers == librdkafka_dict["bootstrap.servers"]
         assert config.sasl_mechanism == librdkafka_dict["sasl.mechanism"].upper()
         assert config.sasl_username == librdkafka_dict["sasl.username"]
+        assert config.oauth_cb == librdkafka_dict["oauth_cb"]
 
     def test_from_librdkafka_dict_extras_raise(self):
         librdkafka_dict = {
@@ -95,6 +97,11 @@ class TestConnectionConfig:
         d = mechanism.as_librdkafka_dict()
         assert "sasl.mechanism" in d
         assert "sasl.mechanisms" not in d
+
+    def test_oauth_cb(self):
+        config = ConnectionConfig(bootstrap_servers="url", oauth_cb=lambda _: _)
+        rd_config = config.as_librdkafka_dict()
+        assert config.oauth_cb == rd_config["oauth_cb"]
 
     def test_secret_field(self):
         """
