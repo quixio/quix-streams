@@ -119,14 +119,14 @@ This library is being actively developed by a full-time team.
 
 Here are some of the planned improvements:
 
-- [x] [Windowed aggregations over Tumbling & Hopping windows](https://quix.io/docs/quix-streams/v2-0-latest/windowing.html)
+- [x] [Windowed aggregations over Tumbling & Hopping windows](https://quix.io/docs/quix-streams/windowing.html)
 - [x] [Stateful operations and recovery based on Kafka changelog topics](https://quix.io/docs/quix-streams/advanced/stateful-processing.html)
 - [x] [Group-by operation](https://quix.io/docs/quix-streams/groupby.html)
 - [x] ["Exactly Once" delivery guarantees for Kafka message processing (AKA transactions)](https://quix.io/docs/quix-streams/configuration.html#processing-guarantees)
 - [x] Support for [Avro](https://quix.io/docs/quix-streams/advanced/serialization.html#avro) and [Protobuf](https://quix.io/docs/quix-streams/advanced/serialization.html#protobuf) formats
 - [x] [Schema Registry support](https://quix.io/docs/quix-streams/advanced/schema-registry.html)
+- [x] [Windowed aggregations over Sliding windows](https://quix.io/docs/quix-streams/windowing.html)
 - [ ] Joins
-- [ ] Windowed aggregations over Sliding windows
 
 For a more detailed overview of the planned features, please look at [the Roadmap Board](https://github.com/orgs/quixio/projects/1).
 
