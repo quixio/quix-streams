@@ -443,7 +443,7 @@ class TestApplication:
         topic_manager = app._topic_manager
         _ = [app.topic("topic_in"), app.topic("topic_out")]
 
-        with patch.object(topic_manager, "create_all_topics") as create:
+        with patch.object(topic_manager, "create_topics") as create:
             with patch.object(topic_manager, "validate_all_topics"):
                 app.setup_topics()
 

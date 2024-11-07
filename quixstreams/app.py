@@ -309,6 +309,7 @@ class Application:
                 consumer_group=self._config.consumer_group,
                 timeout=self._config.request_timeout,
                 create_timeout=self._config.topic_create_timeout,
+                auto_create_topics=self._config.auto_create_topics,
             )
         self._topic_manager = topic_manager
 
@@ -785,8 +786,7 @@ class Application:
             f'"{topic}"' for topic in self._topic_manager.all_topics
         )
         logger.info(f"Topics required for this application: {topics_list}")
-        if self._config.auto_create_topics:
-            self._topic_manager.create_all_topics()
+        self._topic_manager.create_all_topics()
         self._topic_manager.validate_all_topics()
 
     def _process_message(self, dataframe_composed):

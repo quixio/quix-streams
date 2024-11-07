@@ -55,6 +55,7 @@ class TopicManager:
         consumer_group: str,
         timeout: float = 30,
         create_timeout: float = 60,
+        auto_create_topics: bool = True,
     ):
         """
         :param topic_admin: an `Admin` instance (required for some functionality)
@@ -69,6 +70,7 @@ class TopicManager:
         self._changelog_topics: Dict[str, Dict[str, Topic]] = {}
         self._timeout = timeout
         self._create_timeout = create_timeout
+        self._auto_create_topics = auto_create_topics
 
     @property
     def _topics_list(self) -> List[Topic]:
@@ -429,12 +431,15 @@ class TopicManager:
         """
         A convenience method to create all Topic objects stored on this TopicManager.
 
+        If `auto_create_topics` is set to False no topic will be created.
+
         :param timeout: creation acknowledge timeout (seconds); Default 30
         :param create_timeout: topic finalization timeout (seconds); Default 60
         """
-        self.create_topics(
-            self._all_topics_list, timeout=timeout, create_timeout=create_timeout
-        )
+        if self._auto_create_topics:
+            self.create_topics(
+                self._all_topics_list, timeout=timeout, create_timeout=create_timeout
+            )
 
     def validate_all_topics(self, timeout: Optional[float] = None):
         """
