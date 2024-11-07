@@ -759,7 +759,7 @@ class BatchingSink(BaseSink)
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L60)
 
 A base class for batching sinks, that need to accumulate the data first before
-sending it to the external destinatios.
+sending it to the external destinations.
 
 Examples: databases, objects stores, and other destinations where
 writing every message is not optimal.
