@@ -61,7 +61,14 @@ class PubSubSink(BaseSink):
         Publish a message to Pub/Sub.
         """
         data = value if isinstance(value, bytes) else str(value).encode()
-        future = self._publisher.publish(topic=self._topic, data=data)
+        key = key if isinstance(key, bytes) else str(key)
+        future = self._publisher.publish(
+            topic=self._topic,
+            data=data,
+            _key=key,
+            _timestamp=str(timestamp),
+            **dict(headers),  # non-unique header keys are overwritten by the last one
+        )
         self._futures[(topic, partition)].append(future)
 
     def flush(self, topic: str, partition: int) -> None:
