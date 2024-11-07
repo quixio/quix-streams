@@ -7,13 +7,11 @@ from quixstreams.models.messages import KafkaMessage
 from quixstreams.models.topics import Topic
 from quixstreams.models.types import Headers
 from quixstreams.rowproducer import RowProducer
+from quixstreams.state import PartitionTransaction, State, StorePartition
 
 logger = logging.getLogger(__name__)
 
-__all__ = (
-    "BaseSource",
-    "Source",
-)
+__all__ = ("BaseSource", "Source", "StatefullSource")
 
 
 class BaseSource(ABC):
@@ -86,21 +84,15 @@ class BaseSource(ABC):
     def __init__(self):
         self._producer: Optional[RowProducer] = None
         self._producer_topic: Optional[Topic] = None
-        self._configured: bool = False
 
-    def configure(self, topic: Topic, producer: RowProducer) -> None:
+    def configure(self, topic: Topic, producer: RowProducer, **kwargs) -> None:
         """
-        This method is triggered when the source is registered to the Application.
+        This method is triggered before the source is started.
 
-        It configures the source's Kafka producer and the topic it will produce to.
+        It configures the source's Kafka producer, the topic it will produce to and optional dependencies.
         """
         self._producer = producer
         self._producer_topic = topic
-        self._configured = True
-
-    @property
-    def configured(self):
-        return self._configured
 
     @property
     def producer_topic(self):
@@ -320,3 +312,76 @@ class Source(BaseSource):
 
     def __repr__(self):
         return self.name
+
+
+class StatefullSource(Source):
+    def __init__(self, name: str, shutdown_timeout: float = 10) -> None:
+        super().__init__(name, shutdown_timeout)
+        self._store_partition: Optional[StorePartition] = None
+        self._store_transaction: Optional[PartitionTransaction] = None
+
+    def configure(
+        self,
+        topic: Topic,
+        producer: RowProducer,
+        *,
+        store_partition: StorePartition,
+        **kwargs,
+    ) -> None:
+        """
+        This method is triggered before the source is started.
+
+        It configures the source's Kafka producer, the topic it will produce to and the store partition.
+        """
+        super().configure(topic=topic, producer=producer)
+        self._store_partition = store_partition
+        self._store_transaction = None
+
+    @property
+    def changelog_partition(self):
+        """
+        Changelog topic partition assigned to this source
+        """
+        return 0
+
+    @property
+    def store_name(self):
+        """
+        Store name assigned to this source
+        """
+        return self.name
+
+    def state(self) -> State:
+        """
+        Create an instance of the `State` protocol that can be used by the source.
+
+        The instance is only valid as long as the transaction is open. After a `flush` a new state
+        MUST be created.
+
+        :return: an instance of the `State` protocol
+        """
+        if self._store_partition is None:
+            raise RuntimeError("source is not configured")
+
+        if self._store_transaction is None:
+            self._store_transaction = self._store_partition.begin()
+
+        return self._store_transaction.as_state()
+
+    def flush(self, timeout: Optional[float] = None) -> None:
+        """
+        This method commit the state and flush the producer.
+
+        It ensures the state is published to the changelog topic and all messages are successfully delivered to Kafka.
+
+        :param float timeout: time to attempt flushing (seconds).
+            None use producer default or -1 is infinite. Default: None
+
+        :raises CheckpointProducerTimeout: if any message fails to produce before the timeout
+        """
+        if self._store_transaction:
+            self._store_transaction.prepare(None)
+            self._store_transaction.flush()
+            self._store_transaction = None
+
+        super().flush(timeout)

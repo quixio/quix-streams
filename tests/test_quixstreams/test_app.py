@@ -1425,7 +1425,7 @@ class TestApplicationWithRocksDBState:
             # Do some change to probe the Writebatch
             tx.set("key", "value", prefix=b"__key__")
             tx.flush(processed_offset=9999)
-            assert state_partitions[partition_num].get_processed_offset() == 9999
+            assert state_partitions["default"].get_processed_offset() == 9999
 
         # Define some stateful function so the App assigns store partitions
         done = Future()
@@ -1857,7 +1857,7 @@ class TestApplicationRecovery:
                     state_manager.register_store(topic.name, store_name)
                     partition = state_manager.on_partition_assign(
                         topic=topic.name, partition=0, committed_offset=committed_offset
-                    )[0]
+                    )["default"]
                     with partition.begin() as tx:
                         _validate_transaction_state(tx)
 

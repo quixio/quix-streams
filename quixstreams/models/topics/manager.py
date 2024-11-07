@@ -67,7 +67,7 @@ class TopicManager:
         self._consumer_group = consumer_group
         self._topics: Dict[str, Topic] = {}
         self._repartition_topics: Dict[str, Topic] = {}
-        self._changelog_topics: Dict[str, Dict[str, Topic]] = {}
+        self._changelog_topics: Dict[Optional[str], Dict[str, Topic]] = {}
         self._timeout = timeout
         self._create_timeout = create_timeout
         self._auto_create_topics = auto_create_topics
@@ -101,7 +101,7 @@ class TopicManager:
         return self._repartition_topics
 
     @property
-    def changelog_topics(self) -> Dict[str, Dict[str, Topic]]:
+    def changelog_topics(self) -> Dict[Optional[str], Dict[str, Topic]]:
         """
         Note: `Topic`s are the changelogs.
 
@@ -152,7 +152,7 @@ class TopicManager:
     def _internal_name(
         self,
         topic_type: Literal["changelog", "repartition"],
-        topic_name: str,
+        topic_name: Optional[str],
         suffix: str,
     ) -> str:
         """
@@ -163,13 +163,19 @@ class TopicManager:
         The internal format is <{TYPE}__{GROUP}--{NAME}--{SUFFIX}>
 
         :param topic_type: topic type, added as prefix (changelog, repartition)
-        :param topic_name: name of consumed topic (app input topic)
+        :param topic_name: name of consumed topic, if exist (app input topic)
         :param suffix: a unique descriptor related to topic type, added as suffix
 
         :return: formatted topic name
         """
-        nested_name = self._format_nested_name(topic_name)
-        return f"{topic_type}__{'--'.join([self._consumer_group, nested_name, suffix])}"
+
+        if topic_name is None:
+            parts = [self._consumer_group, suffix]
+        else:
+            nested_name = self._format_nested_name(topic_name)
+            parts = [self._consumer_group, nested_name, suffix]
+
+        return f"{topic_type}__{'--'.join(parts)}"
 
     def _create_topics(
         self, topics: List[Topic], timeout: float, create_timeout: float
@@ -341,13 +347,13 @@ class TopicManager:
 
     def changelog_topic(
         self,
-        topic_name: str,
+        topic_name: Optional[str],
         store_name: str,
         timeout: Optional[float] = None,
     ) -> Topic:
         """
-        Performs all the logic necessary to generate a changelog topic based on a
-        "source topic" (aka input/consumed topic).
+        Performs all the logic necessary to generate a changelog topic based on an
+        optional "source topic" (aka input/consumed topic).
 
         Its main goal is to ensure partition counts of the to-be generated changelog
         match the source topic, and ensure the changelog topic is compacted. Also
@@ -371,18 +377,27 @@ class TopicManager:
         :return: `Topic` object (which is also stored on the TopicManager)
         """
 
-        source_topic_config = self._get_source_topic_config(
-            topic_name,
-            extras_imports=self._changelog_extra_config_imports_defaults,
-            timeout=timeout if timeout is not None else self._timeout,
-        )
-        source_topic_config.extra_config.update(self._changelog_extra_config_defaults)
+        if topic_name is None:
+            changelog_config = self.topic_config(
+                num_partitions=self.default_num_partitions,
+                replication_factor=self.default_replication_factor,
+                extra_config=self._changelog_extra_config_defaults,
+            )
+        else:
+            source_topic_config = self._get_source_topic_config(
+                topic_name,
+                extras_imports=self._changelog_extra_config_imports_defaults,
+                timeout=timeout if timeout is not None else self._timeout,
+            )
+            source_topic_config.extra_config.update(
+                self._changelog_extra_config_defaults
+            )
 
-        changelog_config = self.topic_config(
-            num_partitions=source_topic_config.num_partitions,
-            replication_factor=source_topic_config.replication_factor,
-            extra_config=source_topic_config.extra_config,
-        )
+            changelog_config = self.topic_config(
+                num_partitions=source_topic_config.num_partitions,
+                replication_factor=source_topic_config.replication_factor,
+                extra_config=source_topic_config.extra_config,
+            )
 
         topic = self._finalize_topic(
             Topic(

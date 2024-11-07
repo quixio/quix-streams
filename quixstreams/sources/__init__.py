@@ -1,4 +1,11 @@
-from .base import BaseSource, Source, SourceException, SourceManager, multiprocessing
+from .base import (
+    BaseSource,
+    Source,
+    SourceException,
+    SourceManager,
+    StatefullSource,
+    multiprocessing,
+)
 from .core.csv import CSVSource
 from .core.kafka import KafkaReplicatorSource, QuixEnvironmentSource
 
@@ -11,4 +18,5 @@ __all__ = [
     "Source",
     "SourceException",
     "SourceManager",
+    "StatefullSource",
 ]

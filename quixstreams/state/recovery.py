@@ -261,7 +261,7 @@ class RecoveryManager:
         """
         return self.has_assignments and self._running
 
-    def register_changelog(self, topic_name: str, store_name: str) -> Topic:
+    def register_changelog(self, topic_name: Optional[str], store_name: str) -> Topic:
         """
         Register a changelog Topic with the TopicManager.
 
@@ -297,7 +297,7 @@ class RecoveryManager:
 
     def _generate_recovery_partitions(
         self,
-        topic_name: str,
+        topic_name: Optional[str],
         partition_num: int,
         store_partitions: Dict[str, StorePartition],
         committed_offset: int,
@@ -328,7 +328,7 @@ class RecoveryManager:
 
     def assign_partition(
         self,
-        topic: str,
+        topic: Optional[str],
         partition: int,
         committed_offset: int,
         store_partitions: Dict[str, StorePartition],

@@ -1,7 +1,7 @@
 import logging
 import shutil
 from pathlib import Path
-from typing import Dict, List, Optional, Type, Union
+from typing import Dict, Optional, Type, Union
 
 from quixstreams.rowproducer import RowProducer
 
@@ -38,21 +38,24 @@ class StateStoreManager:
 
     def __init__(
         self,
-        group_id: str,
-        state_dir: Union[str, Path],
+        group_id: Optional[str] = None,
+        state_dir: Optional[Union[str, Path]] = None,
         rocksdb_options: Optional[RocksDBOptionsType] = None,
         producer: Optional[RowProducer] = None,
         recovery_manager: Optional[RecoveryManager] = None,
         default_store_type: StoreTypes = RocksDBStore,
     ):
-        self._state_dir = (Path(state_dir) / group_id).absolute()
+        self._state_dir = (Path(state_dir) / group_id).absolute() if state_dir else None
         self._rocksdb_options = rocksdb_options
-        self._stores: Dict[str, Dict[str, Store]] = {}
+        self._stores: Dict[Optional[str], Dict[str, Store]] = {}
         self._producer = producer
         self._recovery_manager = recovery_manager
         self._default_store_type = default_store_type
 
     def _init_state_dir(self):
+        if self._state_dir is None:
+            return
+
         logger.info(f'Initializing state directory at "{self._state_dir}"')
         if self._state_dir.exists():
             if not self._state_dir.is_dir():
@@ -66,7 +69,7 @@ class StateStoreManager:
             logger.debug(f'Created state directory at "{self._state_dir}"')
 
     @property
-    def stores(self) -> Dict[str, Dict[str, Store]]:
+    def stores(self) -> Dict[Optional[str], Dict[str, Store]]:
         """
         Map of registered state stores
         :return: dict in format {topic: {store_name: store}}
@@ -124,7 +127,7 @@ class StateStoreManager:
         return store
 
     def _setup_changelogs(
-        self, topic_name: str, store_name: str
+        self, topic_name: Optional[str], store_name: str
     ) -> ChangelogProducerFactory:
         if self._recovery_manager:
             logger.debug(
@@ -142,7 +145,7 @@ class StateStoreManager:
 
     def register_store(
         self,
-        topic_name: str,
+        topic_name: Optional[str],
         store_name: str = DEFAULT_STATE_STORE_NAME,
         store_type: Optional[StoreTypes] = None,
     ):
@@ -224,8 +227,8 @@ class StateStoreManager:
         shutil.rmtree(self._state_dir)
 
     def on_partition_assign(
-        self, topic: str, partition: int, committed_offset: int
-    ) -> List[StorePartition]:
+        self, topic: Optional[str], partition: int, committed_offset: int
+    ) -> Dict[str, StorePartition]:
         """
         Assign store partitions for each registered store for the given `TopicPartition`
         and return a list of assigned `StorePartition` objects.
@@ -247,7 +250,7 @@ class StateStoreManager:
                 committed_offset=committed_offset,
                 store_partitions=store_partitions,
             )
-        return list(store_partitions.values())
+        return store_partitions
 
     def on_partition_revoke(self, topic: str, partition: int):
         """

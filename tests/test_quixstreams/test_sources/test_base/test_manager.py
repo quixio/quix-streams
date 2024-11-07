@@ -19,30 +19,23 @@ class TestSourceManager:
         topic1 = Topic("topic1", None)
         topic2 = Topic("topic2", None)
 
-        with pytest.raises(ValueError):
-            manager.register(source1)
-
-        source1.configure(topic1, None)
-        manager.register(source1)
+        manager.register(source1, topic1, None, None, None)
 
         # registering the same source twice fails
         with pytest.raises(ValueError):
-            manager.register(source1)
+            manager.register(source1, topic2, None, None, None)
 
-        source2.configure(topic1, None)
         # registering a source with the same topic fails
         with pytest.raises(ValueError):
-            manager.register(source2)
+            manager.register(source2, topic1, None, None, None)
 
-        source2.configure(topic2, None)
-        manager.register(source2)
+        manager.register(source2, topic2, None, None, None)
 
     def test_is_alives(self):
         manager = SourceManager()
         source = DummySource()
 
-        source.configure(Topic("topic", None), None)
-        manager.register(source)
+        manager.register(source, Topic("topic", None), None, None, None)
 
         assert not manager.is_alive()
 
@@ -56,8 +49,7 @@ class TestSourceManager:
         manager = SourceManager()
         source = DummySource()
 
-        source.configure(Topic("topic", None), None)
-        process = manager.register(source)
+        process = manager.register(source, Topic("topic", None), None, None, None)
 
         assert not manager.is_alive()
 
@@ -80,8 +72,7 @@ class TestSourceManager:
         manager = SourceManager()
         source = DummySource()
 
-        source.configure(Topic("topic", None), None)
-        process = manager.register(source)
+        process = manager.register(source, Topic("topic", None), None, None, None)
 
         assert not manager.is_alive()
 
@@ -107,8 +98,7 @@ class TestSourceManager:
             error_in=when, pickeable_error=pickleable, finished=finished
         )
 
-        source.configure(Topic("topic", None), None)
-        process = manager.register(source)
+        process = manager.register(source, Topic("topic", None), None, None, None)
 
         # never raise when not started
         manager.raise_for_error()
