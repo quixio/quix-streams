@@ -35,6 +35,7 @@ class QuixTopicManager(TopicManager):
         quix_config_builder: QuixKafkaConfigsBuilder,
         timeout: float = 30,
         create_timeout: float = 60,
+        auto_create_topics: bool = True,
     ):
         """
         :param topic_admin: an `Admin` instance
@@ -50,6 +51,7 @@ class QuixTopicManager(TopicManager):
             ),
             timeout=timeout,
             create_timeout=create_timeout,
+            auto_create_topics=auto_create_topics,
         )
         self._quix_config_builder = quix_config_builder
         self._topic_id_to_name = {}
