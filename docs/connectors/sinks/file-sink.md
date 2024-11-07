@@ -9,12 +9,13 @@
 This sink writes batches of data to files on disk in various formats.  
 By default, the data will include the kafka message key, value, and timestamp.  
 
-Currently supports the following formats:
+Currently, it supports the following formats:
 
 - JSON
 - Parquet
 
 ## How the File Sink Works
+
 `FileSink` is a batching sink.  
 
 It batches processed records in memory per topic partition and writes them to files in a specified directory structure. Files are organized by topic and partition, with each batch being written to a separate file named by its starting offset.
