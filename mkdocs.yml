@@ -57,7 +57,7 @@ nav:
     - Sources:
         - 'connectors/sources/README.md'
         - CSV Source: connectors/sources/csv-source.md
-        - File Source: connectors/source/file-source.md
+        - File Source: connectors/sources/file-source.md
         - Kafka Replicator Source: connectors/sources/kafka-source.md
         - Quix Source: connectors/sources/quix-source.md
         - Creating a Custom Source: connectors/sources/custom-sources.md
