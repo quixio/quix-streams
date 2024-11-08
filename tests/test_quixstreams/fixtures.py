@@ -297,7 +297,6 @@ def app_factory(kafka_container, random_consumer_group, tmp_path, store_type):
         topic_manager: Optional[TopicManager] = None,
         processing_guarantee: ProcessingGuarantee = "at-least-once",
         request_timeout: float = 30,
-        store_type: StoreTypes = store_type,
     ) -> Application:
         state_dir = state_dir or (tmp_path / "state").absolute()
         return Application(

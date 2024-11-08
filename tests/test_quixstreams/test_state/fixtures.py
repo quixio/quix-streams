@@ -7,6 +7,7 @@ import pytest
 from quixstreams.kafka import Consumer
 from quixstreams.models import TopicManager
 from quixstreams.state.base import StorePartition
+from quixstreams.state.memory import MemoryStore, MemoryStorePartition
 from quixstreams.state.recovery import (
     ChangelogProducer,
     ChangelogProducerFactory,
@@ -65,6 +66,21 @@ def store_type(request):
         return RocksDBStore
 
 
+def memory_store_factory():
+    def factory(
+        topic: Optional[str] = None,
+        name: str = "default",
+        changelog_producer_factory: Optional[ChangelogProducerFactory] = None,
+    ):
+        return MemoryStore(
+            topic=topic or str(uuid.uuid4()),
+            name=name,
+            changelog_producer_factory=changelog_producer_factory,
+        )
+
+    return factory
+
+
 def rocksdb_store_factory(tmp_path):
     def factory(
         topic: Optional[str] = None,
@@ -86,6 +102,8 @@ def rocksdb_store_factory(tmp_path):
 def store_factory(store_type, tmp_path):
     if store_type == RocksDBStore:
         return rocksdb_store_factory(tmp_path)
+    elif store_type == MemoryStore:
+        return memory_store_factory()
     else:
         raise ValueError(f"invalid store type {store_type}")
 
@@ -95,6 +113,17 @@ def store(store_factory):
     store = store_factory()
     yield store
     store.close()
+
+
+def memory_partition_factory(changelog_producer_mock):
+    def factory(
+        changelog_producer: Optional[ChangelogProducer] = None,
+    ):
+        return MemoryStorePartition(
+            changelog_producer=changelog_producer or changelog_producer_mock,
+        )
+
+    return factory
 
 
 def rocksdb_partition_factory(tmp_path, changelog_producer_mock):
@@ -118,6 +147,8 @@ def rocksdb_partition_factory(tmp_path, changelog_producer_mock):
 def store_partition_factory(store_type, tmp_path, changelog_producer_mock):
     if store_type == RocksDBStore:
         return rocksdb_partition_factory(tmp_path, changelog_producer_mock)
+    elif store_type == MemoryStore:
+        return memory_partition_factory(changelog_producer_mock)
     else:
         raise ValueError(f"invalid store type {store_type}")
 

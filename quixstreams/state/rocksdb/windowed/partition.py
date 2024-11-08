@@ -3,9 +3,9 @@ from typing import Optional
 
 from rocksdict import RdictItems, ReadOptions  # type: ignore
 
+from quixstreams.state.exceptions import ColumnFamilyDoesNotExist
 from quixstreams.state.recovery import ChangelogProducer
 
-from ..exceptions import ColumnFamilyDoesNotExist
 from ..partition import RocksDBStorePartition
 from ..types import RocksDBOptionsType
 from .metadata import (
