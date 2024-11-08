@@ -351,7 +351,7 @@ class Application:
             '"Quix__Sdk__Token" environment variable'
         )
 
-    def _get_topic_manager(self):
+    def _get_topic_manager(self) -> TopicManager:
         """
         Create a TopicAdmin using the application config
 
@@ -673,7 +673,6 @@ class Application:
             self._get_rowproducer(transactional=False),
             self._get_rowconsumer(),
             self._get_topic_manager(),
-            auto_create_topics=self.config.auto_create_topics,
         )
         return topic
 

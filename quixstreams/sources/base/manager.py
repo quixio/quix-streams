@@ -26,9 +26,7 @@ class SourceProcess(multiprocessing.Process):
     Some methods are designed to be used from the parent process, and others from the child process.
     """
 
-    def __init__(
-        self, source, topic, producer, consumer, topic_manager, auto_create_topics=True
-    ):
+    def __init__(self, source, topic, producer, consumer, topic_manager):
         super().__init__()
         self.topic = topic
         self.source: BaseSource = source
@@ -38,7 +36,6 @@ class SourceProcess(multiprocessing.Process):
         self._stopping = False
 
         self._topic_manager = topic_manager
-        self._auto_create_topics = auto_create_topics
 
         self._consumer = consumer
         self._producer = producer
@@ -118,8 +115,7 @@ class SourceProcess(multiprocessing.Process):
         store_name = f"source-{source.store_name}"
         state_manager.register_store(None, store_name, MemoryStore)
 
-        if self._auto_create_topics:
-            self._topic_manager.create_all_topics()
+        self._topic_manager.create_all_topics()
         self._topic_manager.validate_all_topics()
 
         store_partitions = state_manager.on_partition_assign(
@@ -231,7 +227,6 @@ class SourceManager:
         producer,
         consumer,
         topic_manager,
-        auto_create_topics=True,
     ):
         """
         Register a new source in the manager.
@@ -249,7 +244,6 @@ class SourceManager:
             producer=producer,
             consumer=consumer,
             topic_manager=topic_manager,
-            auto_create_topics=auto_create_topics,
         )
         self.processes.append(process)
         return process
