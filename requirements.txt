@@ -1,4 +1,4 @@
-confluent-kafka>=2.6,<2.7
+confluent-kafka>=2.4,<2.5
 requests>=2.32
 rocksdict>=0.3,<0.4
 typing_extensions>=4.8
