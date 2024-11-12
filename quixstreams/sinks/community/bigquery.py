@@ -71,7 +71,9 @@ class BigQuerySink(BatchingSink):
         The column names and types are inferred from individual records.
         Each key in the record's dictionary will be inserted as a column to the resulting BigQuery table.
 
-        If the column is not present in the schema, the sink will try to add new columns on-the-fly with a type inferred from the value.
+        The table schema must define at least two columns: "timestamp" with a type TIMESTAMP, and "__key" with a type of the expected message key.
+
+        If the column is not present in the schema, the sink will try to add new nullable columns on-the-fly with types inferred from individual values.
         To bypass this behavior, you can create a table with the necessary schema upfront.
 
         :param location: BigQuery location.
