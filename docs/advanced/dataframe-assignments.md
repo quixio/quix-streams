@@ -108,7 +108,7 @@ just assign everything.
 
 The `.sink()` operation is a special case: it is an in-place operation with no return, 
 so **DO NOT assign it** if you wish to branch from its `StreamingDataFrame afterward.
-See [sinks](../connectors/sinks/README.md#sinks-are-terminal-operations) for details.
+See [sinks](../quix-connectors/quix-streams/sinks/index.md#sinks-are-terminal-operations) for details.
 
 ## The Impact of Branching
 
