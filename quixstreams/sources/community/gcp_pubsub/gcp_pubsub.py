@@ -3,18 +3,13 @@ import os
 import time
 from concurrent.futures import TimeoutError
 from dataclasses import dataclass
-from typing import Callable, MutableSequence, Optional
+from typing import Callable, Optional
 
-from google.api_core import retry
 from google.cloud.pubsub_v1 import SubscriberClient
 from google.cloud.pubsub_v1.subscriber.client import Client as SClient
 from google.cloud.pubsub_v1.subscriber.futures import StreamingPullFuture
 from google.cloud.pubsub_v1.subscriber.message import Message
-from google.pubsub_v1.types import (
-    PullResponse,
-    ReceivedMessage,
-    Subscription,
-)
+from google.pubsub_v1.types import Subscription
 from proto.datetime_helpers import DatetimeWithNanoseconds
 
 from quixstreams.models import Topic
@@ -28,9 +23,11 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class GCPPubSubConfig:
-    project_id: str
-    subscription_name: str
-    topic_name: str
+    """
+    A convenient way to utilize authentication that normally can only be done
+    with environment variables.
+    """
+
     credentials_path: Optional[str] = None
     emulated_host_url: Optional[str] = None
 
@@ -50,7 +47,6 @@ class GCPPubSubConfig:
                 "to the provided 'emulated_host_url'"
             )
             os.environ["PUBSUB_EMULATOR_HOST"] = self.emulated_host_url
-            print("USING EMULATOR HOST!")
             return
 
         if creds_env := os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
@@ -75,6 +71,9 @@ class GCPPubSubConsumer:
     def __init__(
         self,
         config: GCPPubSubConfig,
+        project_id: str,
+        topic_name: str,
+        subscription_name: str,
         max_batch_size: int = 100,
         commit_timeout_secs: int = 30,
         default_poll_timeout: float = 5.0,
@@ -82,6 +81,9 @@ class GCPPubSubConsumer:
         async_function: Optional[Callable[[Message], None]] = None,
     ):
         self._config = config
+        self._project_id = project_id
+        self._topic_name = topic_name
+        self._subscription_name = subscription_name
         self._max_batch_size = max_batch_size
         self._commit_timeout_secs = commit_timeout_secs
         self._create_subscription = create_subscription
@@ -110,53 +112,39 @@ class GCPPubSubConsumer:
 
     @property
     def topic_path(self):
-        return self._consumer.topic_path(
-            self._config.project_id, self._config.topic_name
-        )
+        return self._consumer.topic_path(self._project_id, self._topic_name)
 
     @property
     def subscription_path(self):
         return self._consumer.subscription_path(
-            self._config.project_id, self._config.subscription_name
+            self._project_id, self._subscription_name
         )
 
     def _async_pull_callback(self, message: Message) -> None:
         # this should produce the message to kafka
         self._async_function(message)
-        # append messages for later committing once producer is flushed
+        # append messages for committing once producer is flushed
         self._messages.append(message)
 
-    def poll_async(self, timeout: Optional[float] = None):
+    def poll(self, timeout: Optional[float] = None):
+        """
+        This uses the asynchronous puller with a callback to handle messages.
+        """
         if not timeout:
             timeout = self._default_poll_timeout
         poll_start_time = time.monotonic()
         while (
             len(self._messages) < self._max_batch_size
-            and time.monotonic() - poll_start_time < timeout
+            and (elapsed := (time.monotonic() - poll_start_time)) < timeout
         ):
             try:
-                self._async_listener.result(timeout=timeout)
+                self._async_listener.result(timeout=timeout - elapsed)
             except TimeoutError:
-                pass
-
-    def poll(self, timeout: Optional[float] = None) -> MutableSequence[ReceivedMessage]:
-        if not timeout:
-            timeout = self._default_poll_timeout
-        response: PullResponse = self._consumer.pull(
-            subscription=self.subscription_path,
-            max_messages=self._max_batch_size,
-            timeout=timeout,
-            retry=retry.Retry(deadline=300),
-        )
-        logger.debug(
-            f"Consumed {len(response.received_messages)} messages from {self.topic_path}"
-        )
-        self._messages = response.received_messages
-        return self._messages
+                return
 
     def subscribe(self):
         """
-        Only required for asynchronous pulling
+        Asynchronous subscribers require pulling.
         """
         self._async_listener = self._consumer.subscribe(
             self.subscription_path, callback=self._async_pull_callback
@@ -164,12 +152,10 @@ class GCPPubSubConsumer:
 
     def handle_subscription(self) -> Subscription:
         """
-        Subscriptions work similarly to Kafka consumer groups, though there is no true
-        "subscribe" action with synchronous pulling; this just creates a subscription
-        if it doesn't exist.
+        Subscriptions work similarly to Kafka consumer groups.
         - Each topic can have multiple subscriptions (consumer group ~= subscription)
         - A subscription can have multiple subscribers (similar to consumers in a group)
-        - Note that "exactly-once" MUST be set on the subscription itself to enable it.
+        - NOTE: exactly once adds message methods (ack_with_response) when enabled.
         """
         try:
             return self._consumer.get_subscription(subscription=self.subscription_path)
@@ -210,24 +196,29 @@ class GCPPubSubSource(Source):
     def __init__(
         self,
         config: GCPPubSubConfig,
-        name: Optional[str] = None,
-        poll_timeout: float = 30.0,
-        shutdown_timeout: float = 60.0,
+        project_id: str,
+        topic_name: str,
+        subscription_name: str,
+        commit_every: int = 100,
+        commit_interval: float = 5.0,
         create_subscription: bool = False,
-        as_async: bool = True,
+        shutdown_timeout: float = 10.0,
     ):
         self._config = config
-        self._poll_timeout = poll_timeout
-        self._as_asyc = as_async
+        self._project_id = project_id
+        self._topic_name = topic_name
+        self._subscription_name = subscription_name
+        self._commit_every = commit_every
+        self._commit_interval = commit_interval
         self._create_subscription = create_subscription
         super().__init__(
-            name=name or self._config.subscription_name,
+            name=subscription_name,
             shutdown_timeout=shutdown_timeout,
         )
 
     def default_topic(self) -> Topic:
         return Topic(
-            name=self.name,
+            name=f"gcp-pubsub_{self._subscription_name}_{self._topic_name}",
             key_deserializer="str",
             value_deserializer="bytes",
             key_serializer="str",
@@ -247,24 +238,18 @@ class GCPPubSubSource(Source):
             timestamp=kafka_msg.timestamp,
         )
 
-    def _handle_messages(self, consumer):
-        for item in consumer.poll():
-            self._handle_pubsub_item(item.message)
-
-    def _handle_messages_async(self, consumer):
-        consumer.poll_async()
-
     def run(self):
         with GCPPubSubConsumer(
             config=self._config,
+            project_id=self._project_id,
+            topic_name=self._topic_name,
+            subscription_name=self._subscription_name,
             create_subscription=self._create_subscription,
-            async_function=self._handle_pubsub_item if self._as_asyc else None,
-            default_poll_timeout=self._poll_timeout,
+            async_function=self._handle_pubsub_item,
+            default_poll_timeout=self._commit_interval,
+            max_batch_size=self._commit_every,
         ) as consumer:
             while self._running:
-                if self._as_asyc:
-                    self._handle_messages_async(consumer)
-                else:
-                    self._handle_messages(consumer)
+                consumer.poll()
                 self.flush()
                 consumer.commit()
