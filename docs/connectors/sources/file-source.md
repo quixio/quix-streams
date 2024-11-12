@@ -17,7 +17,7 @@ The File Source connector is generally intended to be used alongside the related
 
 ## How To Use
 
-To use a CSV Source, you need to create and instance of `FileSource` 
+To use a File Source, you need to create an instance of `FileSource` 
 and pass it to the `app.dataframe()` method.
 
 One important thing to note is that you should in general point to a single topic folder
