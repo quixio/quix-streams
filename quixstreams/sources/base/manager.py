@@ -6,6 +6,7 @@ from typing import List
 
 from quixstreams.logging import LOGGER_NAME, configure_logging
 from quixstreams.models import Topic
+from quixstreams.models.topics import TopicConfig
 from quixstreams.state import RecoveryManager, StateStoreManager
 from quixstreams.state.memory import MemoryStore
 
@@ -113,14 +114,22 @@ class SourceProcess(multiprocessing.Process):
         )
 
         store_name = f"source-{source.store_name}"
-        state_manager.register_store(None, store_name, MemoryStore)
+        state_manager.register_store(
+            topic_name=None,
+            store_name=store_name,
+            store_type=MemoryStore,
+            topic_config=TopicConfig(
+                num_partitions=source.store_partitions_count,
+                replication_factor=1,
+            ),
+        )
 
         self._topic_manager.create_all_topics()
         self._topic_manager.validate_all_topics()
 
         store_partitions = state_manager.on_partition_assign(
             topic=None,
-            partition=source.changelog_partition,
+            partition=source.assigned_store_partition,
             committed_offset=0,
         )
 

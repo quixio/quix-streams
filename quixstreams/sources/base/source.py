@@ -338,7 +338,14 @@ class StatefullSource(Source):
         self._store_transaction = None
 
     @property
-    def changelog_partition(self):
+    def store_partitions_count(self) -> int:
+        """
+        Changelog topic partition assigned to this source
+        """
+        return 1
+
+    @property
+    def assigned_store_partition(self) -> int:
         """
         Changelog topic partition assigned to this source
         """

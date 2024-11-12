@@ -3,6 +3,7 @@ import shutil
 from pathlib import Path
 from typing import Dict, Optional, Type, Union
 
+from quixstreams.models.topics import TopicConfig
 from quixstreams.rowproducer import RowProducer
 
 from .base import Store, StorePartition
@@ -127,7 +128,10 @@ class StateStoreManager:
         return store
 
     def _setup_changelogs(
-        self, topic_name: Optional[str], store_name: str
+        self,
+        topic_name: Optional[str],
+        store_name: str,
+        topic_config: Optional[TopicConfig] = None,
     ) -> ChangelogProducerFactory:
         if self._recovery_manager:
             logger.debug(
@@ -135,8 +139,7 @@ class StateStoreManager:
                 f'(topic "{topic_name}")'
             )
             changelog_topic = self._recovery_manager.register_changelog(
-                topic_name=topic_name,
-                store_name=store_name,
+                topic_name=topic_name, store_name=store_name, topic_config=topic_config
             )
             return ChangelogProducerFactory(
                 changelog_name=changelog_topic.name,
@@ -148,6 +151,7 @@ class StateStoreManager:
         topic_name: Optional[str],
         store_name: str = DEFAULT_STATE_STORE_NAME,
         store_type: Optional[StoreTypes] = None,
+        topic_config: Optional[TopicConfig] = None,
     ):
         """
         Register a state store to be managed by StateStoreManager.
@@ -163,7 +167,9 @@ class StateStoreManager:
             Default to StateStoreManager `default_store_type`
         """
         if self._stores.get(topic_name, {}).get(store_name) is None:
-            changelog_producer_factory = self._setup_changelogs(topic_name, store_name)
+            changelog_producer_factory = self._setup_changelogs(
+                topic_name, store_name, topic_config=topic_config
+            )
 
             store_type = store_type or self.default_store_type
             if store_type == RocksDBStore:

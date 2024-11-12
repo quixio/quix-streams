@@ -46,7 +46,7 @@ class TopicManager:
     _max_topic_name_len = 255
 
     _groupby_extra_config_imports_defaults = {"retention.bytes", "retention.ms"}
-    _changelog_extra_config_defaults = {"cleanup.policy": "compact"}
+    _changelog_extra_config_override = {"cleanup.policy": "compact"}
     _changelog_extra_config_imports_defaults = {"retention.bytes", "retention.ms"}
 
     def __init__(
@@ -349,6 +349,7 @@ class TopicManager:
         self,
         topic_name: Optional[str],
         store_name: str,
+        config: Optional[TopicConfig] = None,
         timeout: Optional[float] = None,
     ) -> Topic:
         """
@@ -372,32 +373,32 @@ class TopicManager:
             > NOTE: normally contain any prefixes added by TopicManager.topic()
         :param store_name: name of the store this changelog belongs to
             (default, rolling10s, etc.)
+        :param config: the changelog topic configuration. Default to `topic_name` configuration or TopicManager default
         :param timeout: config lookup timeout (seconds); Default 30
 
         :return: `Topic` object (which is also stored on the TopicManager)
         """
+        if config is None:
+            if topic_name is None:
+                config = self.topic_config(
+                    num_partitions=self.default_num_partitions,
+                    replication_factor=self.default_replication_factor,
+                )
+            else:
+                source_topic_config = self._get_source_topic_config(
+                    topic_name,
+                    extras_imports=self._changelog_extra_config_imports_defaults,
+                    timeout=timeout if timeout is not None else self._timeout,
+                )
 
-        if topic_name is None:
-            changelog_config = self.topic_config(
-                num_partitions=self.default_num_partitions,
-                replication_factor=self.default_replication_factor,
-                extra_config=self._changelog_extra_config_defaults,
-            )
-        else:
-            source_topic_config = self._get_source_topic_config(
-                topic_name,
-                extras_imports=self._changelog_extra_config_imports_defaults,
-                timeout=timeout if timeout is not None else self._timeout,
-            )
-            source_topic_config.extra_config.update(
-                self._changelog_extra_config_defaults
-            )
+                config = self.topic_config(
+                    num_partitions=source_topic_config.num_partitions,
+                    replication_factor=source_topic_config.replication_factor,
+                    extra_config=source_topic_config.extra_config,
+                )
 
-            changelog_config = self.topic_config(
-                num_partitions=source_topic_config.num_partitions,
-                replication_factor=source_topic_config.replication_factor,
-                extra_config=source_topic_config.extra_config,
-            )
+        # always override some default configuration
+        config.extra_config.update(self._changelog_extra_config_override)
 
         topic = self._finalize_topic(
             Topic(
@@ -406,7 +407,7 @@ class TopicManager:
                 value_serializer="bytes",
                 key_deserializer="bytes",
                 value_deserializer="bytes",
-                config=changelog_config,
+                config=config,
             )
         )
         self._changelog_topics.setdefault(topic_name, {})[store_name] = topic
