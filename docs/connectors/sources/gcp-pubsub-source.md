@@ -63,11 +63,11 @@ The incoming message value will be in bytes, so transform accordingly in your SD
 
 ## Source Processing Guarantees
 
-The GCP PubSub Source offers "at-least-once" guarantees.
+The GCP PubSub Source offers "at-least-once" guarantees: there is no confirmation that
+message acknowledgements for the GCP PubSub Subscriber succeeded.
 
-As such, in rare circumstances, messages may be produced to your outbound topic more
-than once (and additionally out of order) due to the commit structure of the PubSub
-ecosystem.
+As such, in rare circumstances where acknowledgement ends up failing, messages may be 
+processed (produced) more than once (and additionally, out of their original order).
     
 ## Topic
 

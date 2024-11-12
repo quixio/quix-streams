@@ -142,6 +142,7 @@ doc_map = {
             "quixstreams.sources.community.file.formats.json",
             "quixstreams.sources.community.file.formats.parquet",
             "quixstreams.sources.community.gcp_pubsub.gcp_pubsub",
+            "quixstreams.sources.community.gcp_pubsub.components.config",
         ]
     },
 }
