@@ -6,9 +6,15 @@ from decimal import Decimal
 from types import NoneType
 from typing import Any, Mapping
 
-from google.cloud import bigquery
-from google.cloud.exceptions import NotFound
-from google.oauth2 import service_account
+try:
+    from google.cloud import bigquery
+    from google.cloud.exceptions import NotFound
+    from google.oauth2 import service_account
+except ImportError as exc:
+    raise ImportError(
+        'Package "google-cloud-bigquery" is missing: '
+        "run pip install quixstreams[bigquery] to fix it"
+    ) from exc
 
 from quixstreams.exceptions import QuixException
 from quixstreams.models import HeaderValue
