@@ -3,7 +3,6 @@ import logging
 import time
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-from types import NoneType
 from typing import Any, Mapping
 
 try:
@@ -124,8 +123,8 @@ class BigQuerySink(BatchingSink):
         for item in batch:
             row = {}
             # Check the message key type and add it to the row if it's not None
-            key_type = type(item.key)
-            if key_type != NoneType:
+            if item.key is not None:
+                key_type = type(item.key)
                 cols_types.setdefault(_KEY_COLUMN_NAME, key_type)
                 row[_KEY_COLUMN_NAME] = item.key
 
