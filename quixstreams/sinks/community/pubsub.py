@@ -1,7 +1,8 @@
 import concurrent.futures
+import json
 import logging
 from collections import defaultdict
-from typing import Any
+from typing import Any, Callable, Union
 
 try:
     from google.api_core.future import Future
@@ -14,38 +15,49 @@ except ImportError as exc:
     ) from exc
 
 from quixstreams.models.types import HeaderValue
-from quixstreams.sinks.base import BaseSink
+from quixstreams.sinks.base import BaseSink, SinkBackpressureError
 
 logger = logging.getLogger(__name__)
 
 TopicPartition = tuple[str, int]
 
 
-class PubSubSinkTopicNotFoundError(Exception):
+class PubSubTopicNotFoundError(Exception):
     """Raised when the specified topic does not exist."""
 
 
 class PubSubSink(BaseSink):
     """A sink that publishes messages to Google Cloud Pub/Sub."""
 
-    def __init__(self, project_id: str, topic_id: str, **kwargs) -> None:
+    def __init__(
+        self,
+        project_id: str,
+        topic_id: str,
+        value_serializer: Callable[[Any], Union[bytes, str]] = json.dumps,
+        key_serializer: Callable[[Any], str] = bytes.decode,
+        flush_timeout: int = 5,
+        **kwargs,
+    ) -> None:
         """
         Initialize the PubSubSink.
 
-        :param project_id: GCP project ID
-        :param topic_id: Pub/Sub topic ID
-        :param kwargs: Additional keyword arguments passed to PublisherClient
-            Most notably, `credentials` can be used to specify credentials to use
-            for authentication.
+        :param project_id: GCP project ID.
+        :param topic_id: Pub/Sub topic ID.
+        :param value_serializer: Function to serialize the value to string or bytes (defaults to json.dumps).
+        :param key_serializer: Function to serialize the key to string (defaults to bytes.decode).
+        :param kwargs: Additional keyword arguments passed to PublisherClient.
         """
         self._publisher = pubsub_v1.PublisherClient(**kwargs)
         self._topic = self._publisher.topic_path(project_id, topic_id)
+        self._value_serializer = value_serializer
+        self._key_serializer = key_serializer
+        self._flush_timeout = flush_timeout
         self._futures: dict[TopicPartition, list[Future]] = defaultdict(list)
 
         try:
             self._publisher.get_topic(request={"topic": self._topic})
         except google_exceptions.NotFound:
-            raise PubSubSinkTopicNotFoundError(f"Topic `{self._topic}` does not exist.")
+            raise PubSubTopicNotFoundError(f"Topic `{self._topic}` does not exist.")
 
     def add(
         self,
@@ -60,20 +72,39 @@ class PubSubSink(BaseSink):
         """
         Publish a message to Pub/Sub.
         """
-        data = value if isinstance(value, bytes) else str(value).encode()
-        key = key if isinstance(key, bytes) else str(key)
-        future = self._publisher.publish(
-            topic=self._topic,
-            data=data,
-            _key=key,
-            _timestamp=str(timestamp),
-            **dict(headers),  # non-unique header keys are overwritten by the last one
-        )
+        if isinstance(value, bytes):
+            data = value
+        else:
+            data = self._value_serializer(value)
+            if not isinstance(data, bytes):
+                data = str(data).encode()
+
+        key = self._key_serializer(key)
+        kwargs = {
+            "topic": self._topic,
+            "data": data,
+            "_key": key,
+            "_timestamp": str(timestamp),
+            "_offset": str(offset),
+            **dict(headers),
+        }
+
+        future = self._publisher.publish(**kwargs)
         self._futures[(topic, partition)].append(future)
 
     def flush(self, topic: str, partition: int) -> None:
         """
-        Wait for all publish operations to complete.
+        Wait for all publish operations to complete successfully.
         """
         if futures := self._futures.pop((topic, partition), None):
-            concurrent.futures.wait(futures)
+            result = concurrent.futures.wait(
+                futures,
+                timeout=self._flush_timeout,
+                return_when=concurrent.futures.FIRST_EXCEPTION,
+            )
+            if result.not_done or any(f.exception() for f in result.done):
+                raise SinkBackpressureError(
+                    retry_after=5.0,
+                    topic=topic,
+                    partition=partition,
+                )
