@@ -50,6 +50,7 @@ class BigQuerySinkException(QuixException): ...
 class BigQuerySink(BatchingSink):
     def __init__(
         self,
+        project_id: str,
         location: str,
         dataset_id: str,
         table_name: str,
@@ -75,6 +76,7 @@ class BigQuerySink(BatchingSink):
         If the column is not present in the schema, the sink will try to add new nullable columns on-the-fly with types inferred from individual values.
         To bypass this behavior, you can create a table with the necessary schema upfront.
 
+        :param project_id: BigQuery project id.
         :param location: BigQuery location.
         :param dataset_id: BigQuery dataset id.
             If the dataset does not exist, the sink will try to create it.
@@ -98,15 +100,14 @@ class BigQuerySink(BatchingSink):
 
         # Parse the service account credentials from JSON
         service_account_info = json.loads(service_account_json, strict=False)
-        # TODO: Do credentials always have ONE project id? Or project id at all?
         self._credentials = service_account.Credentials.from_service_account_info(
             service_account_info,
             scopes=["https://www.googleapis.com/auth/cloud-platform"],
         )
+        self.project_id = project_id
         self._client = bigquery.Client(
-            credentials=self._credentials, project=self._credentials.project_id
+            credentials=self._credentials, project=self.project_id
         )
-        self.project_id = self._credentials.project_id
         self.dataset_id = dataset_id
         self.table_id = f"{self.dataset_id}.{self.table_name}"
         self.ddl_timeout = ddl_timeout
