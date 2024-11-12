@@ -7,7 +7,7 @@ from typing import List
 from quixstreams.logging import LOGGER_NAME, configure_logging
 from quixstreams.models import Topic
 from quixstreams.models.topics import TopicConfig
-from quixstreams.state import RecoveryManager, StateStoreManager
+from quixstreams.state import RecoveryManager, StateStoreManager, StorePartition
 from quixstreams.state.memory import MemoryStore
 
 from .exceptions import SourceException
@@ -78,12 +78,11 @@ class SourceProcess(multiprocessing.Process):
 
         if isinstance(self.source, StatefullSource):
             try:
-                store_partition = self._recover_state(self.source)
+                configuration["store_partition"] = self._recover_state(self.source)
             except BaseException as err:
                 logger.exception("Error in source")
                 self._report_exception(err)
                 return
-            configuration["store_partition"] = store_partition
 
         self.source.configure(**configuration)
 
@@ -103,7 +102,12 @@ class SourceProcess(multiprocessing.Process):
             "s" if threadcount > 1 else "",
         )
 
-    def _recover_state(self, source: StatefullSource):
+    def _recover_state(self, source: StatefullSource) -> StorePartition:
+        """
+        Recover the state from the changelog topic and return the assigned partition
+
+        For stateful sources only.
+        """
         recovery_manager = RecoveryManager(
             consumer=self._consumer,
             topic_manager=self._topic_manager,

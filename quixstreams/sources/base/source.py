@@ -135,9 +135,10 @@ class Source(BaseSource):
     Example:
 
     ```python
-    from quixstreams import Application
     import random
+    import time
 
+    from quixstreams import Application
     from quixstreams.sources import Source
 
 
@@ -147,6 +148,7 @@ class Source(BaseSource):
                 number = random.randint(0, 100)
                 serialized = self._producer_topic.serialize(value=number)
                 self.produce(key=str(number), value=serialized.value)
+                time.sleep(0.5)
 
 
     def main():
@@ -315,7 +317,62 @@ class Source(BaseSource):
 
 
 class StatefullSource(Source):
+    """
+    A `Source` class for custom Sources that need a state.
+
+    Subclasses are responsible for flushing, by calling `flush`, at reasonable intervals.
+
+    Example:
+
+    ```python
+    import random
+    import time
+
+    from quixstreams import Application
+    from quixstreams.sources import Source
+
+
+    class RandomNumbersSource(StatefullSource):
+        def run(self):
+
+            i = 0
+            state = self.state()
+            while self.running:
+                previous = state.get("number", 0)
+                current = random.randint(0, 100)
+                state.set("number", current)
+
+                serialized = self._producer_topic.serialize(value=current + previous)
+                self.produce(key=str(current), value=serialized.value)
+                time.sleep(0.5)
+
+                # flush the state every 10 messages
+                i += 1
+                if i % 10 == 0:
+                    self.flush()
+                    state = self.state()
+
+
+    def main():
+        app = Application(broker_address="localhost:9092")
+        source = RandomNumbersSource(name="random-source")
+
+        sdf = app.dataframe(source=source)
+        sdf.print(metadata=True)
+
+        app.run()
+
+
+    if __name__ == "__main__":
+        main()
+    ```
+    """
+
     def __init__(self, name: str, shutdown_timeout: float = 10) -> None:
+        """
+        :param name: The source unique name. It is used to generate the topic configuration.
+        :param shutdown_timeout: Time in second the application waits for the source to gracefully shutdown.
+        """
         super().__init__(name, shutdown_timeout)
         self._store_partition: Optional[StorePartition] = None
         self._store_transaction: Optional[PartitionTransaction] = None
@@ -340,21 +397,23 @@ class StatefullSource(Source):
     @property
     def store_partitions_count(self) -> int:
         """
-        Changelog topic partition assigned to this source
+        Count of store partitions.
+
+        Used to configure the number of partition in the changelog topic.
         """
         return 1
 
     @property
     def assigned_store_partition(self) -> int:
         """
-        Changelog topic partition assigned to this source
+        The store partition assigned to this instance
         """
         return 0
 
     @property
     def store_name(self):
         """
-        Store name assigned to this source
+        The source store name
         """
         return self.name
 
