@@ -62,9 +62,9 @@ class PubSubSource(Source):
         shutdown_timeout: float = 10.0,
     ):
         """
-        :param project_id: a GCP project ID.
-        :param topic_id: a GCP PubSub topic name (NOT the full path).
-        :param subscription_id: a GCP PubSub subscription name (NOT the full path).
+        :param project_id: a Google Cloud project ID.
+        :param topic_id: a Pub/Sub topic ID (NOT the full path).
+        :param subscription_id: a Pub/Sub subscription ID (NOT the full path).
         :param service_account_json: a Google Cloud Credentials JSON as a string
             Can instead use environment variables:
             - "GOOGLE_APPLICATION_CREDENTIALS" set to a JSON filepath
