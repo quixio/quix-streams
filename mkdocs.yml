@@ -61,7 +61,7 @@ nav:
         - CSV Source: connectors/sources/csv-source.md
         - File Source: connectors/sources/file-source.md
         - Kafka Replicator Source: connectors/sources/kafka-source.md
-        - Google Cloud Platform PubSub Source: connectors/sources/gcp-pubsub-source.md
+        - Google Cloud Pub/Sub Source: connectors/sources/gcp-pubsub-source.md
         - Quix Source: connectors/sources/quix-source.md
         - Creating a Custom Source: connectors/sources/custom-sources.md
     - Contribution Guide: 'connectors/contribution-guide.md'

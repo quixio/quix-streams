@@ -1,43 +1,58 @@
 from __future__ import annotations
 
+import json
 import logging
 import time
 from concurrent.futures import TimeoutError
-from typing import TYPE_CHECKING, Callable, Optional
+from typing import Callable, Optional
 
-if TYPE_CHECKING:
-    # This allows the typing to work while not necessarily having the package installed
+try:
     from google.cloud.pubsub_v1 import SubscriberClient
     from google.cloud.pubsub_v1.subscriber.client import Client as SClient
     from google.cloud.pubsub_v1.subscriber.futures import StreamingPullFuture
-    from google.cloud.pubsub_v1.subscriber.message import Message
+    from google.cloud.pubsub_v1.subscriber.message import Message as PubSubMessage
+    from google.oauth2 import service_account
     from google.pubsub_v1.types import Subscription
+except ImportError as exc:
+    raise ImportError(
+        f"Package {exc.name} is missing: "
+        'run "pip install quixstreams[gcp_pubsub]" to use PubSubSource'
+    ) from exc
 
-from .config import GCPPubSubConfig
 
-__all__ = ("GCPPubSubConsumer",)
+# Include PubSubMessage here so all google package imports happen in 1 location
+__all__ = ("PubSubConsumer", "PubSubMessage")
 
 logger = logging.getLogger(__name__)
 
 
-class GCPPubSubConsumer:
+class PubSubConsumer:
     def __init__(
         self,
-        config: GCPPubSubConfig,
         project_id: str,
-        topic_name: str,
-        subscription_name: str,
+        topic_id: str,
+        subscription_id: str,
+        credentials: Optional[str] = None,
         max_batch_size: int = 100,
         commit_timeout_secs: int = 30,
         default_poll_timeout: float = 5.0,
         create_subscription: bool = False,
-        async_function: Optional[Callable[[Message], None]] = None,
+        async_function: Optional[Callable[[PubSubMessage], None]] = None,
     ):
-        _handle_imports()
-        self._config = config
+        if credentials:
+            self._credentials = service_account.Credentials.from_service_account_info(
+                json.loads(credentials, strict=False),
+                scopes=["https://www.googleapis.com/auth/cloud-platform"],
+            )
+        else:
+            self._credentials = None
+            logger.info(
+                "No credential JSON argument was handed; defaulting to Google Cloud's "
+                "environment variables for authentication"
+            )
         self._project_id = project_id
-        self._topic_name = topic_name
-        self._subscription_name = subscription_name
+        self._topic_id = topic_id
+        self._subscription_id = subscription_id
         self._max_batch_size = max_batch_size
         self._commit_timeout_secs = commit_timeout_secs
         self._create_subscription = create_subscription
@@ -50,7 +65,7 @@ class GCPPubSubConsumer:
 
     def start_consumer(self):
         if not self._consumer:
-            self._consumer = SubscriberClient().__enter__()
+            self._consumer = SubscriberClient(credentials=self._credentials).__enter__()
             if self._create_subscription:
                 subscription_result = self.handle_subscription()
                 logger.debug(f"Subscription info: {subscription_result}")
@@ -66,15 +81,13 @@ class GCPPubSubConsumer:
 
     @property
     def topic_path(self):
-        return self._consumer.topic_path(self._project_id, self._topic_name)
+        return self._consumer.topic_path(self._project_id, self._topic_id)
 
     @property
     def subscription_path(self):
-        return self._consumer.subscription_path(
-            self._project_id, self._subscription_name
-        )
+        return self._consumer.subscription_path(self._project_id, self._subscription_id)
 
-    def _async_pull_callback(self, message: Message) -> None:
+    def _async_pull_callback(self, message: PubSubMessage) -> None:
         # this should produce the message to kafka
         self._async_function(message)
         # append messages for committing once producer is flushed
@@ -98,7 +111,7 @@ class GCPPubSubConsumer:
 
     def subscribe(self):
         """
-        Asynchronous subscribers require pulling.
+        Asynchronous subscribers require subscribing (synchronous do not).
         """
         self._async_listener = self._consumer.subscribe(
             self.subscription_path, callback=self._async_pull_callback
@@ -112,7 +125,7 @@ class GCPPubSubConsumer:
 
         - A subscription can have multiple subscribers (similar to consumers in a group).
 
-        - NOTE: exactly once adds message methods (ack_with_response) when enabled.
+        - NOTE: exactly-once adds message methods (ack_with_response) when enabled.
         """
         try:
             return self._consumer.get_subscription(subscription=self.subscription_path)
@@ -150,26 +163,3 @@ class GCPPubSubConsumer:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self._consumer.__exit__(exc_type, exc_val, exc_tb)
-
-
-def _handle_imports():
-    """
-    Do actual importing of modules (the initial imports are just for type checking)
-    """
-    try:
-        from google.cloud.pubsub_v1 import SubscriberClient  # noqa: F401
-        from google.cloud.pubsub_v1.subscriber.client import (
-            Client as SClient,  # noqa: F401
-        )
-        from google.cloud.pubsub_v1.subscriber.futures import (
-            StreamingPullFuture,  # noqa: F401
-        )
-        from google.cloud.pubsub_v1.subscriber.message import (
-            Message,  # noqa: F401
-        )
-        from google.pubsub_v1.types import Subscription  # noqa: F401
-    except ImportError:
-        raise ImportError(
-            "Missing python package 'google-cloud-pubsub'; do "
-            "`pip install google-cloud-pubsub` to use this connector."
-        )

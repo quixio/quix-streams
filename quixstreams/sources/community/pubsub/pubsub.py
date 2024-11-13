@@ -1,20 +1,19 @@
+import datetime
 import logging
-
-from proto.datetime_helpers import DatetimeWithNanoseconds
+from typing import Optional
 
 from quixstreams.models import Topic
 from quixstreams.sources import Source
 
-from .components import GCPPubSubConfig
-from .components.gcp_consumer import GCPPubSubConsumer
+from .components.pubsub_consumer import PubSubConsumer, PubSubMessage
 
-__all__ = ("GCPPubSubSource",)
+__all__ = ("PubSubSource",)
 
 
 logger = logging.getLogger(__name__)
 
 
-class GCPPubSubSource(Source):
+class PubSubSource(Source):
     """
     This source enables reading from a Google Cloud Platform (GCP) PubSub topic,
     dumping it to a kafka topic using desired SDF-based transformations.
@@ -29,17 +28,13 @@ class GCPPubSubSource(Source):
 
     ```python
     from quixstreams import Application
-    from quixstreams.sources.community.gcp_pubsub import GCPPubSubConfig, GCPPubSubSource
+    from quixstreams.sources.community.pubsub import PubSubSource
 
-    # for authorization
-    config = GCPPubSubConfig(
-        credentials_path="/path/to/google/auth/creds.json"
-    )
-    source = GCPPubSubSource(
-        config=config,
-        project_id="my_gcp_project",
-        topic_name="my_gcp_pubsub_topic_name",  # NOTE: NOT the full GCP path!
-        subscription_name="my_gcp_pubsub_topic_name",  # NOTE: NOT the full GCP path!
+    source = PubSubSource(
+        service_account_json='{"my": "creds"}',
+        project_id="my_project",
+        topic_id="pubsub_topic_name",  # NOTE: NOT the full GCP path!
+        subscription_id="pubsub_topic_name",  # NOTE: NOT the full GCP path!
         create_subscription=True,
     )
     app = Application(
@@ -57,51 +52,54 @@ class GCPPubSubSource(Source):
 
     def __init__(
         self,
-        config: GCPPubSubConfig,
         project_id: str,
-        topic_name: str,
-        subscription_name: str,
+        topic_id: str,
+        subscription_id: str,
+        service_account_json: Optional[str] = None,
         commit_every: int = 100,
         commit_interval: float = 5.0,
         create_subscription: bool = False,
         shutdown_timeout: float = 10.0,
     ):
         """
-        :param config: a CGPPubSubConfig (authentication).
         :param project_id: a GCP project ID.
-        :param topic_name: a GCP PubSub topic name (NOT the full path).
-        :param subscription_name: a GCP PubSub subscription name (NOT the full path).
+        :param topic_id: a GCP PubSub topic name (NOT the full path).
+        :param subscription_id: a GCP PubSub subscription name (NOT the full path).
+        :param service_account_json: a Google Cloud Credentials JSON as a string
+            Can instead use environment variables:
+            - "GOOGLE_APPLICATION_CREDENTIALS" set to a JSON filepath
+            - "PUBSUB_EMULATOR_HOST" set to a URL if using an emulated Pub/Sub
         :param commit_every: max records allowed to be processed before committing.
         :param commit_interval: max allowed elapsed time between commits.
         :param create_subscription: whether to attempt to create a subscription at
             startup; if it already exists, it instead logs its details (DEBUG level).
         :param shutdown_timeout: How long to wait for a graceful shutdown of the source.
         """
-        self._config = config
+        self._credentials = service_account_json
         self._project_id = project_id
-        self._topic_name = topic_name
-        self._subscription_name = subscription_name
+        self._topic_id = topic_id
+        self._subscription_id = subscription_id
         self._commit_every = commit_every
         self._commit_interval = commit_interval
         self._create_subscription = create_subscription
         super().__init__(
-            name=subscription_name,
+            name=subscription_id,
             shutdown_timeout=shutdown_timeout,
         )
 
     def default_topic(self) -> Topic:
         return Topic(
-            name=f"gcp-pubsub_{self._subscription_name}_{self._topic_name}",
+            name=f"pubsub_{self._subscription_id}_{self._topic_id}",
             key_deserializer="str",
             value_deserializer="bytes",
             key_serializer="str",
             value_serializer="bytes",
         )
 
-    def _handle_pubsub_item(self, message):
-        timestamp: DatetimeWithNanoseconds = message.publish_time
+    def _handle_pubsub_message(self, message: PubSubMessage):
+        timestamp: datetime.datetime = message.publish_time
         kafka_msg = self.serialize(
-            key=message.ordering_key or None,
+            key=message.ordering_key,  # an empty string if ordering not enabled
             value=message.data,
             timestamp_ms=int(timestamp.timestamp() * 1000),
         )
@@ -112,13 +110,13 @@ class GCPPubSubSource(Source):
         )
 
     def run(self):
-        with GCPPubSubConsumer(
-            config=self._config,
+        with PubSubConsumer(
+            credentials=self._credentials,
             project_id=self._project_id,
-            topic_name=self._topic_name,
-            subscription_name=self._subscription_name,
+            topic_id=self._topic_id,
+            subscription_id=self._subscription_id,
             create_subscription=self._create_subscription,
-            async_function=self._handle_pubsub_item,
+            async_function=self._handle_pubsub_message,
             default_poll_timeout=self._commit_interval,
             max_batch_size=self._commit_every,
         ) as consumer:
