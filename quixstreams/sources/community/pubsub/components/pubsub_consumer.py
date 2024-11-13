@@ -16,7 +16,7 @@ try:
 except ImportError as exc:
     raise ImportError(
         f"Package {exc.name} is missing: "
-        'run "pip install quixstreams[gcp_pubsub]" to use PubSubSource'
+        'run "pip install quixstreams[pubsub]" to use PubSubSource'
     ) from exc
 
 
