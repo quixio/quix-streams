@@ -54,11 +54,16 @@ a local "emulated" Pub/Sub host via docker:
 
     `docker run -d --name pubsub-emulator -p 8085:8085 gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators gcloud beta emulators pubsub start --host-port=0.0.0.0:8085`
 
+## Message ordering (keys)
+
+Currently, forwarding message keys (also known as "ordered messages" with in Pub/Sub) 
+is only supported when the subscription is NOT created by the Pub/Sub Source.
+
 ## Message data format/schema
 
-Currently, forwarding message keys (also known as "ordered messages" with Google Cloud Pub/Sub) is unsupported.
+Incoming message keys will be strings (non-ordered messages will be empty strings).
 
-The incoming message value will be in bytes, so transform accordingly in your SDF directly.
+Incoming message values will be in bytes, so transform accordingly in your SDF directly.
 
 ## Source Processing Guarantees
 
