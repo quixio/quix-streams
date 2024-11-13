@@ -1,13 +1,17 @@
+from __future__ import annotations
+
 import logging
 import time
 from concurrent.futures import TimeoutError
-from typing import Callable, Optional
+from typing import TYPE_CHECKING, Callable, Optional
 
-from google.cloud.pubsub_v1 import SubscriberClient
-from google.cloud.pubsub_v1.subscriber.client import Client as SClient
-from google.cloud.pubsub_v1.subscriber.futures import StreamingPullFuture
-from google.cloud.pubsub_v1.subscriber.message import Message
-from google.pubsub_v1.types import Subscription
+if TYPE_CHECKING:
+    # This allows the typing to work while not necessarily having the package installed
+    from google.cloud.pubsub_v1 import SubscriberClient
+    from google.cloud.pubsub_v1.subscriber.client import Client as SClient
+    from google.cloud.pubsub_v1.subscriber.futures import StreamingPullFuture
+    from google.cloud.pubsub_v1.subscriber.message import Message
+    from google.pubsub_v1.types import Subscription
 
 from .config import GCPPubSubConfig
 
@@ -26,9 +30,27 @@ class GCPPubSubConsumer:
         max_batch_size: int = 100,
         commit_timeout_secs: int = 30,
         default_poll_timeout: float = 5.0,
-        create_subscription=False,
+        create_subscription: bool = False,
         async_function: Optional[Callable[[Message], None]] = None,
     ):
+        try:
+            from google.cloud.pubsub_v1 import SubscriberClient  # noqa: F401
+            from google.cloud.pubsub_v1.subscriber.client import (
+                Client as SClient,  # noqa: F401
+            )
+            from google.cloud.pubsub_v1.subscriber.futures import (
+                StreamingPullFuture,  # noqa: F401
+            )
+            from google.cloud.pubsub_v1.subscriber.message import (
+                Message,  # noqa: F401
+            )
+            from google.pubsub_v1.types import Subscription  # noqa: F401
+        except ImportError:
+            raise ImportError(
+                "Missing python package 'google-cloud-pubsub'; do "
+                "`pip install google-cloud-pubsub` to use this connector."
+            )
+
         self._config = config
         self._project_id = project_id
         self._topic_name = topic_name
