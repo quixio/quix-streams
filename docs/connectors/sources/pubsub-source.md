@@ -11,12 +11,9 @@ kafka topic using desired `StreamingDataFrame`-based transformations.
 
 ## How to use Google Cloud Pub/Sub Source
 
-To use a GCP PubSub Source, you need two components:
+To use Pub/Sub Source, hand `PubSubSource` to `app.dataframe()`.
 
-1. `GoogleCloudCredentials` for Google Cloud client authentication details.
-2. `PubSubSource` (which uses the `GoogleCloudCredentials`); hand it to `app.dataframe()`.
-
-For the full description of expected parameters of each, see the [GCP PubSub Source API](../../api-reference/sources.md#gcppubsubsource) page.  
+For the full description of expected parameters of each, see the [PubSub Source API](../../api-reference/sources.md#pubsubsource) page.  
 
 ```python
 from quixstreams import Application
