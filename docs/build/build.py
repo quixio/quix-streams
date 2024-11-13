@@ -111,21 +111,23 @@ doc_map = {
             "quixstreams.context",
         ]
     },
+    # Order: base, core, community
     "sinks.md": {
         k: None
         for k in [
+            "quixstreams.sinks.base.sink",
+            "quixstreams.sinks.base.batch",
+            "quixstreams.sinks.base.exceptions",
+            "quixstreams.sinks.core.influxdb3",
+            "quixstreams.sinks.core.csv",
             "quixstreams.sinks.community.iceberg",
             "quixstreams.sinks.community.file.sink",
             "quixstreams.sinks.community.file.formats.base",
             "quixstreams.sinks.community.file.formats.json",
             "quixstreams.sinks.community.file.formats.parquet",
-            "quixstreams.sinks.core.influxdb3",
-            "quixstreams.sinks.core.csv",
-            "quixstreams.sinks.base.sink",
-            "quixstreams.sinks.base.exceptions",
-            "quixstreams.sinks.base.batch",
         ]
     },
+    # Order: base, core, community
     "sources.md": {
         k: None
         for k in [
