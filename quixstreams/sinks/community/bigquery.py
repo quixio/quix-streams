@@ -59,7 +59,7 @@ class BigQuerySink(BatchingSink):
         retry_timeout: float = 30.0,
     ):
         """
-        A connector to sink processed data to Google BigQuery.
+        A connector to sink processed data to Google Cloud BigQuery.
 
         It batches the processed records in memory per topic partition, and flushes them to BigQuery at the checkpoint.
 
