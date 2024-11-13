@@ -6,7 +6,7 @@
 
     To learn more about differences between Core and Community connectors, see the [Community and Core Connectors](../community-and-core.md) page.
 
-Google Cloud BigQuery is a managed, serverless data warehouse developed by Google, offering scalable analysis over large quantities of data. 
+Google Cloud BigQuery is a managed, serverless data warehouse offerred by Google. 
 
 Quix Streams provides a sink to write processed data to BigQuery.
 
