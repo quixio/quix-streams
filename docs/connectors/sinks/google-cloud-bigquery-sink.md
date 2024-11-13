@@ -117,5 +117,5 @@ For example, values of type `BYTES` are encoded to `base64` format before being 
 `BigQuerySink` provides at-least-once guarantees, and the same records may be written multiple times in case of errors during processing.  
 
 ## Configuration
-For the full description of expected parameters, see the [BigQuery Sink API](../../api-reference/sinks.md#bigquerysink) page.
+For the full description of expected parameters, see the [BigQuerySink API](../../api-reference/sinks.md#bigquerysink) page.
 
