@@ -1,4 +1,4 @@
-# BigQuery Sink
+# Google BigQuery Sink
 
 !!! info
 
@@ -8,7 +8,7 @@
 
 BigQuery is a managed, serverless data warehouse developed by Google, offering scalable analysis over large quantities of data. 
 
-Quix Streams provides a sink to write processed data to BigQuery
+Quix Streams provides a sink to write processed data to BigQuery.
 
 ## How To Install
 The dependencies for this sink are not included to the default `quixstreams` package.
