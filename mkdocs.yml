@@ -50,6 +50,7 @@ nav:
     -  Sinks:
         - 'connectors/sinks/README.md'
         - Apache Iceberg Sink: connectors/sinks/apache-iceberg-sink.md
+        - BigQuery Sink: connectors/sinks/bigquery-sink.md
         - CSV Sink: connectors/sinks/csv-sink.md
         - InfluxDB v3 Sink: connectors/sinks/influxdb3-sink.md
         - File Sink: connectors/sinks/file-sink.md

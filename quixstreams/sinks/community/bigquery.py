@@ -1,7 +1,7 @@
 import json
 import logging
 import time
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Mapping
 
@@ -40,7 +40,6 @@ _BIGQUERY_TYPES_MAP: dict[type, str] = {
     dict: "JSON",
     tuple: "JSON",
     bool: "BOOLEAN",
-    timedelta: "INTERVAL",
 }
 
 
@@ -73,7 +72,7 @@ class BigQuerySink(BatchingSink):
 
         The table schema must define at least two columns: "timestamp" with a type TIMESTAMP, and "__key" with a type of the expected message key.
 
-        If the column is not present in the schema, the sink will try to add new nullable columns on-the-fly with types inferred from individual values.
+        If the column is not present in the schema, the sink will try to add new nullable columns on the fly with types inferred from individual values.
         To bypass this behavior, you can create a table with the necessary schema upfront.
 
         :param project_id: BigQuery project id.
@@ -93,7 +92,7 @@ class BigQuerySink(BatchingSink):
             to the client's default retrying policy.
         """
         # TODO: Maybe list what permissions should be given upfront
-        # TODO: BigQuery has max limit of 10mb per INSERT
+
         super().__init__()
         self.location = location
         self.table_name = table_name
@@ -145,8 +144,6 @@ class BigQuerySink(BatchingSink):
 
         table = self._client.get_table(self.table_id, timeout=self.ddl_timeout)
         self._add_new_columns(table=table, columns=cols_types)
-        # TODO: We may want to upload data multiple HTTP requests instead
-        #  of a single one (there's a limit 10mb per insert)
         self._insert_rows(table=table, rows=rows)
 
     def add(
