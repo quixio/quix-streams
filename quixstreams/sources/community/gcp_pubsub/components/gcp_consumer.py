@@ -33,24 +33,7 @@ class GCPPubSubConsumer:
         create_subscription: bool = False,
         async_function: Optional[Callable[[Message], None]] = None,
     ):
-        try:
-            from google.cloud.pubsub_v1 import SubscriberClient  # noqa: F401
-            from google.cloud.pubsub_v1.subscriber.client import (
-                Client as SClient,  # noqa: F401
-            )
-            from google.cloud.pubsub_v1.subscriber.futures import (
-                StreamingPullFuture,  # noqa: F401
-            )
-            from google.cloud.pubsub_v1.subscriber.message import (
-                Message,  # noqa: F401
-            )
-            from google.pubsub_v1.types import Subscription  # noqa: F401
-        except ImportError:
-            raise ImportError(
-                "Missing python package 'google-cloud-pubsub'; do "
-                "`pip install google-cloud-pubsub` to use this connector."
-            )
-
+        _handle_imports()
         self._config = config
         self._project_id = project_id
         self._topic_name = topic_name
@@ -167,3 +150,26 @@ class GCPPubSubConsumer:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self._consumer.__exit__(exc_type, exc_val, exc_tb)
+
+
+def _handle_imports():
+    """
+    Do actual importing of modules (the initial imports are just for type checking)
+    """
+    try:
+        from google.cloud.pubsub_v1 import SubscriberClient  # noqa: F401
+        from google.cloud.pubsub_v1.subscriber.client import (
+            Client as SClient,  # noqa: F401
+        )
+        from google.cloud.pubsub_v1.subscriber.futures import (
+            StreamingPullFuture,  # noqa: F401
+        )
+        from google.cloud.pubsub_v1.subscriber.message import (
+            Message,  # noqa: F401
+        )
+        from google.pubsub_v1.types import Subscription  # noqa: F401
+    except ImportError:
+        raise ImportError(
+            "Missing python package 'google-cloud-pubsub'; do "
+            "`pip install google-cloud-pubsub` to use this connector."
+        )
