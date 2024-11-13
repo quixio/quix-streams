@@ -59,7 +59,7 @@ class BigQuerySink(BatchingSink):
         retry_timeout: float = 30.0,
     ):
         """
-        A connector to sink processed data to BigQuery.
+        A connector to sink processed data to Google BigQuery.
 
         It batches the processed records in memory per topic partition, and flushes them to BigQuery at the checkpoint.
 
@@ -75,9 +75,9 @@ class BigQuerySink(BatchingSink):
         If the column is not present in the schema, the sink will try to add new nullable columns on the fly with types inferred from individual values.
         To bypass this behavior, you can create a table with the necessary schema upfront.
 
-        :param project_id: BigQuery project id.
-        :param location: BigQuery location.
-        :param dataset_id: BigQuery dataset id.
+        :param project_id: a Google project id.
+        :param location: a BigQuery location.
+        :param dataset_id: a BigQuery dataset id.
             If the dataset does not exist, the sink will try to create it.
         :param table_name: BigQuery table name.
             If the table does not exist, the sink will try to create it with a default schema.
