@@ -53,6 +53,7 @@ nav:
         - InfluxDB v3 Sink: connectors/sinks/influxdb3-sink.md
         - Apache Iceberg Sink: connectors/sinks/apache-iceberg-sink.md
         - File Sink: connectors/sinks/file-sink.md
+        - GCP Pub/Sub Sink: connectors/sinks/gcp-pubsub-sink.md
         - Creating a Custom Sink: connectors/sinks/custom-sinks.md
     - Sources:
         - 'connectors/sources/README.md'
