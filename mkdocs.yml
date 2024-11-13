@@ -53,7 +53,7 @@ nav:
         - CSV Sink: connectors/sinks/csv-sink.md
         - InfluxDB v3 Sink: connectors/sinks/influxdb3-sink.md
         - File Sink: connectors/sinks/file-sink.md
-        - Google BigQuery Sink: connectors/sinks/bigquery-sink.md
+        - Google Cloud BigQuery Sink: connectors/sinks/google-cloud-bigquery-sink.md
         - Creating a Custom Sink: connectors/sinks/custom-sinks.md
     - Sources:
         - 'connectors/sources/README.md'
