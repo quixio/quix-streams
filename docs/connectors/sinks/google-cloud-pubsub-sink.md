@@ -96,17 +96,17 @@ You can test the PubSubSink locally using the Google Cloud Pub/Sub emulator. Her
 
 1. Start the emulator using Docker:
 
-```shell
-docker run -d --name pubsub-emulator \
-    -p 8085:8085 \
-    gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators \
-    gcloud beta emulators pubsub start --host-port=0.0.0.0:8085
-```
+    ```shell
+    docker run -d --name pubsub-emulator \
+        -p 8085:8085 \
+        gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators \
+        gcloud beta emulators pubsub start --host-port=0.0.0.0:8085
+    ```
 
 2. Set the environment variable to point to the local emulator:
 
-```shell
-export PUBSUB_EMULATOR_HOST=localhost:8085
-```
+    ```shell
+    export PUBSUB_EMULATOR_HOST=localhost:8085
+    ```
 
 When this environment variable is set, the PubSubSink will automatically connect to the local emulator instead of Google Cloud. No service account credentials are required when using the emulator.
