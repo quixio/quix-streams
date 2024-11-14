@@ -118,5 +118,19 @@ For example, values of type `BYTES` are encoded to `base64` format before being 
 `BigQuerySink` provides at-least-once guarantees, and the same records may be written multiple times in case of errors during processing.  
 
 ## Configuration
-For the full description of expected parameters, see the [BigQuerySink API](../../api-reference/sinks.md#bigquerysink) page.
+
+Main configuration parameters: 
+
+- `project_id`: Your Google Cloud project ID.
+- `location`: a BigQuery location.
+- `table_name`: a BigQuery table name.
+- `service_account_json`: an optional JSON string with service account credentials to connect to BigQuery.  
+The sink will use the Application Default Credentials if not provided.  
+See https://cloud.google.com/docs/authentication/provide-credentials-adc for more info.
+
+- `schema_auto_update`: if True, the sink will try to create a dataset and a table if they don't exist.  
+It will also add missing columns on the fly with types inferred from individual values.
+
+For the full list of expected parameters, see the [BigQuerySink API](../../api-reference/sinks.md#bigquerysink) page.
+
 
