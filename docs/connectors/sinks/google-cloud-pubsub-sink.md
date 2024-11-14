@@ -35,12 +35,18 @@ from google.cloud.pubsub_v1.types import PublisherOptions
 from quixstreams import Application
 from quixstreams.sinks.community.pubsub import PubSubSink
 
+app = Application(broker_address="localhost:9092")
+topic = app.topic("topic-name")
+
+# Read the service account credentials in JSON format from some environment variable.
+service_account_json = os.environ["PUBSUB_SERVICE_ACCOUNT_JSON"]
+
 # Configure the sink
 pubsub_sink = PubSubSink(
-    project_id="your-project-id",
-    topic_id="your-topic-id",
+    project_id="<project ID>",
+    topic_id="<topic ID>",
     # Optional: service account credentials as a JSON string
-    service_account_json='{"type": "service_account", "project_id": "your-project", ...}',
+    service_account_json=service_account_json,
     # Optional: customize serialization and flush timeout
     value_serializer=json.dumps,
     key_serializer=str,
@@ -52,13 +58,7 @@ pubsub_sink = PubSubSink(
     )
 )
 
-app = Application(broker_address="localhost:9092")
-topic = app.topic("input_topic")
-
-# Do some processing here
-sdf = app.dataframe(topic=topic).print(metadata=True)
-
-# Sink results to the PubSubSink
+sdf = app.dataframe(topic=topic)
 sdf.sink(pubsub_sink)
 
 if __name__ == "__main__":
