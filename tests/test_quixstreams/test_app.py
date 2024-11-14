@@ -33,7 +33,7 @@ from quixstreams.sources import SourceException, multiprocessing
 from quixstreams.state import State
 from quixstreams.state.manager import SUPPORTED_STORES
 from quixstreams.state.rocksdb import RocksDBStore
-from tests.utils import DummySink, DummySource
+from tests.utils import DummySink, DummySource, DummyStatefulSource
 
 
 def _stop_app_on_future(app: Application, future: Future, timeout: float):
@@ -2269,6 +2269,42 @@ class TestApplicationSource:
         else:
             assert isinstance(exc.value.__cause__, RuntimeError)
         assert str(exc.value.__cause__) == f"test {raise_is} error"
+
+    def test_stateful_source(self, app_factory, executor):
+        def _run_app(source, done):
+            app = app_factory(
+                auto_offset_reset="earliest",
+            )
+
+            sdf = app.dataframe(source=source)
+            executor.submit(self.wait_finished, app, done, 15.0)
+
+            # The app stops on source error
+            try:
+                app.run(sdf)
+            finally:
+                # shutdown the thread waiting for exit
+                done.set()
+
+        source_name = str(uuid.uuid4())
+        finished = multiprocessing.Event()
+        source = DummyStatefulSource(
+            name=source_name,
+            values=range(self.MESSAGES_COUNT),
+            finished=finished,
+            state_key="test",
+        )
+        _run_app(source, finished)
+
+        finished = multiprocessing.Event()
+        source = DummyStatefulSource(
+            name=source_name,
+            values=range(self.MESSAGES_COUNT),
+            finished=finished,
+            state_key="test",
+            assert_state_value=self.MESSAGES_COUNT - 1,
+        )
+        _run_app(source, finished)
 
 
 class TestApplicationMultipleSdf:

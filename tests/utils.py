@@ -9,7 +9,7 @@ from confluent_kafka import OFFSET_INVALID
 from quixstreams.sinks import BatchingSink
 from quixstreams.sinks.base import SinkBatch
 from quixstreams.sinks.base.item import SinkItem
-from quixstreams.sources import Source
+from quixstreams.sources import Source, StatefulSource
 
 DEFAULT_TIMEOUT = 10.0
 
@@ -127,10 +127,10 @@ class DummySource(Source):
         name: Optional[str] = None,
         values: Optional[List[Any]] = None,
         finished: threading.Event = None,
-        error_in: Union[str, List[str]] = None,
+        error_in: Optional[Union[str, List[str]]] = None,
         pickeable_error: bool = True,
     ) -> None:
-        super().__init__(name or str(uuid.uuid4()), 1)
+        super().__init__(name or str(uuid.uuid4()), 10)
 
         self.key = "dummy"
         self.values = values or []
@@ -139,9 +139,7 @@ class DummySource(Source):
         self.pickeable_error = pickeable_error
 
     def run(self):
-        for value in self.values:
-            msg = self.serialize(key=self.key, value=value)
-            self.produce(value=msg.value, key=msg.key)
+        self._produce()
 
         if "run" in self.error_in:
             self.error("test run error")
@@ -151,6 +149,11 @@ class DummySource(Source):
 
         while self.running:
             time.sleep(0.1)
+
+    def _produce(self):
+        for value in self.values:
+            msg = self.serialize(key=self.key, value=value)
+            self.produce(value=msg.value, key=msg.key)
 
     def cleanup(self, failed):
         if "cleanup" in self.error_in:
@@ -167,6 +170,35 @@ class DummySource(Source):
             raise ValueError(msg)
         else:
             raise UnpickleableError(msg)
+
+
+class DummyStatefulSource(DummySource, StatefulSource):
+    def __init__(
+        self,
+        name: Optional[str] = None,
+        values: Optional[List[Any]] = None,
+        finished: threading.Event = None,
+        error_in: Optional[Union[str, List[str]]] = None,
+        pickeable_error: bool = True,
+        state_key: str = "",
+        assert_state_value: Any = None,
+    ) -> None:
+        super().__init__(name, values, finished, error_in, pickeable_error)
+        self._state_key = state_key
+        self._assert_state_value = assert_state_value
+
+    def run(self):
+        if self._assert_state_value:
+            assert self._assert_state_value == self.state().get(self._state_key)
+        super().run()
+
+    def _produce(self):
+        for value in self.values:
+            state = self.state()
+            msg = self.serialize(key=self.key, value=value)
+            self.produce(value=msg.value, key=msg.key)
+            state.set(self._state_key, value)
+            self.flush()
 
 
 class UnpickleableError(Exception):

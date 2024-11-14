@@ -3,7 +3,7 @@ from .base import (
     Source,
     SourceException,
     SourceManager,
-    StatefullSource,
+    StatefulSource,
     multiprocessing,
 )
 from .core.csv import CSVSource
@@ -18,5 +18,5 @@ __all__ = [
     "Source",
     "SourceException",
     "SourceManager",
-    "StatefullSource",
+    "StatefulSource",
 ]

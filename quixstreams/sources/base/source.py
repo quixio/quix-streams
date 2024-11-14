@@ -11,7 +11,7 @@ from quixstreams.state import PartitionTransaction, State, StorePartition
 
 logger = logging.getLogger(__name__)
 
-__all__ = ("BaseSource", "Source", "StatefullSource")
+__all__ = ("BaseSource", "Source", "StatefulSource")
 
 
 class BaseSource(ABC):
@@ -316,7 +316,7 @@ class Source(BaseSource):
         return self.name
 
 
-class StatefullSource(Source):
+class StatefulSource(Source):
     """
     A `Source` class for custom Sources that need a state.
 
@@ -329,10 +329,10 @@ class StatefullSource(Source):
     import time
 
     from quixstreams import Application
-    from quixstreams.sources import Source
+    from quixstreams.sources import StatefulSource
 
 
-    class RandomNumbersSource(StatefullSource):
+    class RandomNumbersSource(StatefulSource):
         def run(self):
 
             i = 0

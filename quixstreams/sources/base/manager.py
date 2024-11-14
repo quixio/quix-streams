@@ -12,7 +12,7 @@ from quixstreams.state.memory import MemoryStore
 
 from .exceptions import SourceException
 from .multiprocessing import multiprocessing
-from .source import BaseSource, StatefullSource
+from .source import BaseSource, StatefulSource
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +76,7 @@ class SourceProcess(multiprocessing.Process):
 
         configuration = {"topic": self.topic, "producer": self._producer}
 
-        if isinstance(self.source, StatefullSource):
+        if isinstance(self.source, StatefulSource):
             try:
                 configuration["store_partition"] = self._recover_state(self.source)
             except BaseException as err:
@@ -102,7 +102,7 @@ class SourceProcess(multiprocessing.Process):
             "s" if threadcount > 1 else "",
         )
 
-    def _recover_state(self, source: StatefullSource) -> StorePartition:
+    def _recover_state(self, source: StatefulSource) -> StorePartition:
         """
         Recover the state from the changelog topic and return the assigned partition
 
