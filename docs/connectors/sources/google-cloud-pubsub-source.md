@@ -9,11 +9,31 @@
 This source enables reading from a Google Cloud Pub/Sub topic, dumping it to a
 kafka topic using desired `StreamingDataFrame`-based transformations.
 
-## How to use Google Cloud Pub/Sub Source
+## How To Install
+
+To use the Pub/Sub source, you need to install the required dependencies:
+
+```bash
+pip install quixstreams[pubsub]
+```
+
+## How It Works
+
+`PubSubSource` subscribes to a Pub/Sub subscription and produces its messages to a Kafka topic. 
+
+Messages are read in a streaming fashion and committed intermittently, offering 
+[at-least-once guarantees](#processingdelivery-guarantees).
+
+You can learn more details about 
+[read ordering](#message-read-ordering), 
+[kafka message format](#message-data-formatschema), and 
+[message keys](#message-keys) below.
+
+## How To Use
 
 To use Pub/Sub Source, hand `PubSubSource` to `app.dataframe()`.
 
-For the full description of expected parameters of each, see the [PubSub Source API](../../api-reference/sources.md#pubsubsource) page.  
+For more details around various settings, see [configuration](#configuration).
 
 ```python
 from quixstreams import Application
@@ -40,20 +60,29 @@ if __name__ == "__main__":
     app.run()
 ```
 
-## Testing locally
+## Configuration
 
-Rather than connect to Google Cloud, you can alternatively test your application using 
-a local "emulated" Pub/Sub host via docker:
+Here are some important configurations to be aware of (see [PubSub Source API](../../api-reference/sources.md#pubsubsource) for all parameters).
 
-1. DO NOT pass a `service_account_json` to `PubSubSource`, instead set environment variable:
-    
-    `PUBSUB_EMULATOR_HOST=localhost:8085`
+### Required:
 
-2. execute in terminal:
+- `project_id`: a Google Cloud project ID.
+- `topic_id`: a Pub/Sub topic ID (NOT the full path).
+- `subscription_id`: a Pub/Sub subscription ID (NOT the full path).
+- `service_account_json`: Google Cloud Credentials JSON as a string
+    - Though "optional", you MUST either use this OR set one of the following
+      environment variables (which have different behavior):
+        - `GOOGLE_APPLICATION_CREDENTIALS` set to a JSON filepath i.e. `/x/y/z.json`
+        - `PUBSUB_EMULATOR_HOST` set to a URL if using an emulated Pub/Sub
 
-    `docker run -d --name pubsub-emulator -p 8085:8085 gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators gcloud beta emulators pubsub start --host-port=0.0.0.0:8085`
+### Optional:
 
-## Message keys
+- `create_subscription`: whether to attempt to create a subscription at
+  startup; if it already exists, it instead logs its details (DEBUG level).
+- `enable_message_ordering` When creating a Pub/Sub subscription, whether
+  to allow message ordering. NOTE: does NOT affect existing subscriptions!
+
+## Message Keys
 
 If a Pub/Sub message was published as an ordered message, it will contain a 
 message key, else an empty string.
@@ -63,9 +92,9 @@ regardless of the Pub/Sub's `enable_message_ordering` subscription setting**.
 
 The [message read order](#message-read-ordering) depends on the subscription setting.
 
-## Message read ordering
+## Message Read Ordering
 
-Message read order depends on 
+Message read order depends on:
 
 1. a Pub/Sub message being published as an ordered message (has a key)
 2. a Pub/Sub subscription enabling ordered messages (set at subscription creation)
@@ -77,20 +106,37 @@ Assuming proper permissions, new subscriptions can be generated using `create_su
 with ordering enabled via `enable_message_ordering=True` (they must be set **simultaneously**
  else ordering won't work, due to above).
 
-## Message data format/schema
+## Message Data Format/Schema
 
 Incoming message keys will be strings (non-ordered messages will be empty strings).
 
 Incoming message values will be in bytes, so transform accordingly in your SDF directly.
 
-## Source Processing Guarantees
+Incoming message timestamp will reflect original Pub/Sub message publish time (ms).
+
+## Processing/Delivery Guarantees
 
 The Pub/Sub Source offers "at-least-once" guarantees: there is no confirmation that
 message acknowledgements for the Pub/Sub Subscriber succeeded.
 
 As such, in rare circumstances where acknowledgement ends up failing, messages may be 
-processed (produced) more than once (and additionally, out of their original order).
+processed (produced) more than once (and additionally, out of their original order, 
+regardless of ordering settings).
     
 ## Topic
 
 The default topic name the Application dumps to is `gcp-pubsub_{subscription_name}_{topic_name}`.
+
+
+## Testing Locally
+
+Rather than connect to Google Cloud, you can alternatively test your application using 
+a local "emulated" Pub/Sub host via docker:
+
+1. DO NOT pass a `service_account_json` to `PubSubSource`, instead set environment variable:
+    
+    `PUBSUB_EMULATOR_HOST=localhost:8085`
+
+2. execute in terminal:
+
+    `docker run -d --name pubsub-emulator -p 8085:8085 gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators gcloud beta emulators pubsub start --host-port=0.0.0.0:8085`
