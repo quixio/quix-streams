@@ -5,6 +5,8 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Mapping
 
+from typing_extensions import Optional
+
 try:
     from google.cloud import bigquery
     from google.cloud.exceptions import NotFound
@@ -55,11 +57,12 @@ class BigQuerySink(BatchingSink):
         location: str,
         dataset_id: str,
         table_name: str,
-        service_account_json: str,
+        service_account_json: Optional[str] = None,
         schema_auto_update: bool = True,
         ddl_timeout: float = 10.0,
         insert_timeout: float = 10.0,
         retry_timeout: float = 30.0,
+        **kwargs,
     ):
         """
         A connector to sink processed data to Google Cloud BigQuery.
@@ -84,8 +87,11 @@ class BigQuerySink(BatchingSink):
             If the dataset does not exist, the sink will try to create it.
         :param table_name: BigQuery table name.
             If the table does not exist, the sink will try to create it with a default schema.
-        :param service_account_json: a JSON string with service account credentials
+        :param service_account_json: an optional JSON string with service account credentials
             to connect to BigQuery.
+            The internal `google.cloud.bigquery.Client` will use the Application Default Credentials if not provided.
+            See https://cloud.google.com/docs/authentication/provide-credentials-adc for more info.
+            Default - `None`.
         :param schema_auto_update: if True, the sink will try to create a dataset and a table if they don't exist.
             It will also add missing columns on the fly with types inferred from individual values.
         :param ddl_timeout: a timeout for a single DDL operation (adding tables, columns, etc.).
@@ -95,6 +101,7 @@ class BigQuerySink(BatchingSink):
         :param retry_timeout: a total timeout for each request to BigQuery API.
             During this timeout, a request can be retried according
             to the client's default retrying policy.
+        :param kwargs: Additional keyword arguments passed to `bigquery.Client`.
         """
 
         super().__init__()
@@ -110,13 +117,17 @@ class BigQuerySink(BatchingSink):
         self.retry = bigquery.DEFAULT_RETRY.with_timeout(timeout=retry_timeout)
         self.schema_auto_update = schema_auto_update
 
-        # Parse the service account credentials from JSON
-        service_account_info = json.loads(service_account_json, strict=False)
-        credentials = service_account.Credentials.from_service_account_info(
-            service_account_info,
-            scopes=["https://www.googleapis.com/auth/bigquery"],
-        )
-        self._client = bigquery.Client(credentials=credentials, project=self.project_id)
+        kwargs["project"] = self.project_id
+        if service_account_json is not None:
+            # Parse the service account credentials from JSON
+            service_account_info = json.loads(service_account_json, strict=False)
+            credentials = service_account.Credentials.from_service_account_info(
+                service_account_info,
+                scopes=["https://www.googleapis.com/auth/bigquery"],
+            )
+            kwargs["credentials"] = credentials
+
+        self._client = bigquery.Client(**kwargs)
         if self.schema_auto_update:
             # Initialize a table in BigQuery if it doesn't exist already
             self._init_table()
