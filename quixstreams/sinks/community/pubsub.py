@@ -2,12 +2,13 @@ import concurrent.futures
 import json
 import logging
 from collections import defaultdict
-from typing import Any, Callable, Union
+from typing import Any, Callable, Optional, Union
 
 try:
     from google.api_core.future import Future
     from google.cloud import exceptions as google_exceptions
     from google.cloud import pubsub_v1
+    from google.oauth2 import service_account
 except ImportError as exc:
     raise ImportError(
         f"Package {exc.name} is missing: "
@@ -33,6 +34,7 @@ class PubSubSink(BaseSink):
         self,
         project_id: str,
         topic_id: str,
+        service_account_json: Optional[str] = None,
         value_serializer: Callable[[Any], Union[bytes, str]] = json.dumps,
         key_serializer: Callable[[Any], str] = bytes.decode,
         flush_timeout: int = 5,
@@ -43,10 +45,25 @@ class PubSubSink(BaseSink):
 
         :param project_id: GCP project ID.
         :param topic_id: Pub/Sub topic ID.
-        :param value_serializer: Function to serialize the value to string or bytes (defaults to json.dumps).
-        :param key_serializer: Function to serialize the key to string (defaults to bytes.decode).
+        :param service_account_json: a JSON string with service account credentials
+            to connect to Pub/Sub.
+        :param value_serializer: Function to serialize the value to string or bytes
+            (defaults to json.dumps).
+        :param key_serializer: Function to serialize the key to string
+            (defaults to bytes.decode).
         :param kwargs: Additional keyword arguments passed to PublisherClient.
         """
+
+        # Parse the service account credentials from JSON
+        if service_account_json is not None:
+            service_account_info = json.loads(service_account_json, strict=False)
+            kwargs["credentials"] = (
+                service_account.Credentials.from_service_account_info(
+                    service_account_info,
+                    scopes=["https://www.googleapis.com/auth/pubsub"],
+                )
+            )
+
         self._publisher = pubsub_v1.PublisherClient(**kwargs)
         self._topic = self._publisher.topic_path(project_id, topic_id)
         self._value_serializer = value_serializer
