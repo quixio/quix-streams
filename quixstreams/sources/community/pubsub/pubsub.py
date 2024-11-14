@@ -5,7 +5,7 @@ from typing import Optional
 from quixstreams.models import Topic
 from quixstreams.sources import Source
 
-from .components.pubsub_consumer import PubSubConsumer, PubSubMessage
+from .consumer import PubSubConsumer, PubSubMessage
 
 __all__ = ("PubSubSource",)
 
@@ -15,12 +15,12 @@ logger = logging.getLogger(__name__)
 
 class PubSubSource(Source):
     """
-    This source enables reading from a Google Cloud Platform (GCP) PubSub topic,
+    This source enables reading from a Google Cloud Pub/Sub topic,
     dumping it to a kafka topic using desired SDF-based transformations.
 
     Provides "at-least-once" guarantees.
 
-    Currently, forwarding message keys ("ordered messages" in GCP) is unsupported.
+    Currently, forwarding message keys ("ordered messages" in Pub/Sub) is unsupported.
 
     The incoming message value will be in bytes, so transform in your SDF accordingly.
 
@@ -29,19 +29,21 @@ class PubSubSource(Source):
     ```python
     from quixstreams import Application
     from quixstreams.sources.community.pubsub import PubSubSource
+    from os import environ
 
     source = PubSubSource(
-        service_account_json='{"my": "creds"}',
-        project_id="my_project",
-        topic_id="pubsub_topic_name",  # NOTE: NOT the full GCP path!
-        subscription_id="pubsub_topic_name",  # NOTE: NOT the full GCP path!
+        # Suggested: pass JSON-formatted credentials from an environment variable.
+        service_account_json = environ["PUBSUB_SERVICE_ACCOUNT_JSON"],
+        project_id="<project ID>",
+        topic_id="<topic ID>",  # NOTE: NOT the full /x/y/z path!
+        subscription_id="<subscription ID>",  # NOTE: NOT the full /x/y/z path!
         create_subscription=True,
     )
     app = Application(
         broker_address="localhost:9092",
         auto_offset_reset="earliest",
         consumer_group="gcp",
-        loglevel="DEBUG"
+        loglevel="INFO"
     )
     sdf = app.dataframe(source=source).print(metadata=True)
 
@@ -59,6 +61,7 @@ class PubSubSource(Source):
         commit_every: int = 100,
         commit_interval: float = 5.0,
         create_subscription: bool = False,
+        enable_message_ordering: bool = False,
         shutdown_timeout: float = 10.0,
     ):
         """
@@ -66,13 +69,15 @@ class PubSubSource(Source):
         :param topic_id: a Pub/Sub topic ID (NOT the full path).
         :param subscription_id: a Pub/Sub subscription ID (NOT the full path).
         :param service_account_json: a Google Cloud Credentials JSON as a string
-            Can instead use environment variables:
-            - "GOOGLE_APPLICATION_CREDENTIALS" set to a JSON filepath
+            Can instead use environment variables (which have different behavior):
+            - "GOOGLE_APPLICATION_CREDENTIALS" set to a JSON filepath i.e. /x/y/z.json
             - "PUBSUB_EMULATOR_HOST" set to a URL if using an emulated Pub/Sub
         :param commit_every: max records allowed to be processed before committing.
         :param commit_interval: max allowed elapsed time between commits.
         :param create_subscription: whether to attempt to create a subscription at
             startup; if it already exists, it instead logs its details (DEBUG level).
+        :param enable_message_ordering: When creating a Pub/Sub subscription, whether
+            to allow message ordering. NOTE: does NOT affect existing subscriptions!
         :param shutdown_timeout: How long to wait for a graceful shutdown of the source.
         """
         self._credentials = service_account_json
@@ -82,6 +87,7 @@ class PubSubSource(Source):
         self._commit_every = commit_every
         self._commit_interval = commit_interval
         self._create_subscription = create_subscription
+        self._enable_message_ordering = enable_message_ordering
         super().__init__(
             name=subscription_id,
             shutdown_timeout=shutdown_timeout,
@@ -116,11 +122,12 @@ class PubSubSource(Source):
             topic_id=self._topic_id,
             subscription_id=self._subscription_id,
             create_subscription=self._create_subscription,
+            enable_message_ordering=self._enable_message_ordering,
             async_function=self._handle_pubsub_message,
-            default_poll_timeout=self._commit_interval,
             max_batch_size=self._commit_every,
+            batch_timeout_secs=self._commit_interval,
         ) as consumer:
             while self._running:
-                consumer.poll()
+                consumer.poll_and_process_batch()
                 self.flush()
                 consumer.commit()

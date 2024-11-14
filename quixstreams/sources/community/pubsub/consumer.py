@@ -6,7 +6,10 @@ import time
 from concurrent.futures import TimeoutError
 from typing import Callable, Optional
 
+from typing_extensions import Self
+
 try:
+    from google.api_core.exceptions import NotFound
     from google.cloud.pubsub_v1 import SubscriberClient
     from google.cloud.pubsub_v1.subscriber.client import Client as SClient
     from google.cloud.pubsub_v1.subscriber.futures import StreamingPullFuture
@@ -26,6 +29,10 @@ __all__ = ("PubSubConsumer", "PubSubMessage")
 logger = logging.getLogger(__name__)
 
 
+class PubSubSubscriptionNotFound(Exception):
+    """Raised when an expected subscription does not exist"""
+
+
 class PubSubConsumer:
     def __init__(
         self,
@@ -34,15 +41,17 @@ class PubSubConsumer:
         subscription_id: str,
         credentials: Optional[str] = None,
         max_batch_size: int = 100,
+        batch_timeout_secs: float = 10.0,
         commit_timeout_secs: int = 30,
-        default_poll_timeout: float = 5.0,
+        default_poll_timeout_secs: float = 5.0,
         create_subscription: bool = False,
+        enable_message_ordering: bool = False,
         async_function: Optional[Callable[[PubSubMessage], None]] = None,
     ):
         if credentials:
             self._credentials = service_account.Credentials.from_service_account_info(
                 json.loads(credentials, strict=False),
-                scopes=["https://www.googleapis.com/auth/cloud-platform"],
+                scopes=["https://www.googleapis.com/auth/pubsub"],
             )
         else:
             self._credentials = None
@@ -54,16 +63,18 @@ class PubSubConsumer:
         self._topic_id = topic_id
         self._subscription_id = subscription_id
         self._max_batch_size = max_batch_size
-        self._commit_timeout_secs = commit_timeout_secs
+        self._batch_timeout = batch_timeout_secs
+        self._commit_timeout = commit_timeout_secs
         self._create_subscription = create_subscription
+        self._enable_message_ordering = enable_message_ordering
         self._async_function = async_function
-        self._default_poll_timeout = default_poll_timeout
+        self._default_poll_timeout = default_poll_timeout_secs
 
         self._messages = []
         self._consumer: Optional[SClient] = None
         self._async_listener: Optional[StreamingPullFuture] = None
 
-    def start_consumer(self):
+    def start(self):
         if not self._consumer:
             self._consumer = SubscriberClient(credentials=self._credentials).__enter__()
             if self._create_subscription:
@@ -72,7 +83,7 @@ class PubSubConsumer:
             if self._async_function:
                 self.subscribe()
 
-    def stop_consumer(self):
+    def stop(self):
         if self._consumer:
             if self._async_listener:
                 self._async_listener.cancel()
@@ -90,28 +101,43 @@ class PubSubConsumer:
     def _async_pull_callback(self, message: PubSubMessage) -> None:
         # this should produce the message to kafka
         self._async_function(message)
-        # append messages for committing once producer is flushed
+        # append messages for later committing once producer is flushed
         self._messages.append(message)
 
-    def poll(self, timeout: Optional[float] = None):
+    def poll_and_process(self, timeout: Optional[float] = None):
         """
-        This uses the asynchronous puller with a callback to handle messages.
+        This uses the asynchronous puller to retrieve and handle a message with its
+        assigned callback.
+
+        Committing is a separate step.
         """
-        if not timeout:
-            timeout = self._default_poll_timeout
+        try:
+            self._async_listener.result(timeout=timeout or self._default_poll_timeout)
+        except TimeoutError:
+            return
+        except NotFound:
+            raise PubSubSubscriptionNotFound(
+                f"Subscription '{self._subscription_id}' (to topic '{self._topic_id}') "
+                f"does not exist. Set `create_subscription=True` to create it."
+            )
+
+    def poll_and_process_batch(self):
+        """
+        Polls and processes until either the max_batch_size or batch_timeout is reached.
+        """
+        timeout = self._batch_timeout
         poll_start_time = time.monotonic()
         while (
             len(self._messages) < self._max_batch_size
             and (elapsed := (time.monotonic() - poll_start_time)) < timeout
         ):
-            try:
-                self._async_listener.result(timeout=timeout - elapsed)
-            except TimeoutError:
-                return
+            self.poll_and_process(timeout=timeout - elapsed)
 
     def subscribe(self):
         """
         Asynchronous subscribers require subscribing (synchronous do not).
+
+        NOTE: This will not detect whether the subscription exists.
         """
         self._async_listener = self._consumer.subscribe(
             self.subscription_path, callback=self._async_pull_callback
@@ -119,6 +145,8 @@ class PubSubConsumer:
 
     def handle_subscription(self) -> Subscription:
         """
+        Handles subscription management in one place.
+
         Subscriptions work similarly to Kafka consumer groups.
 
         - Each topic can have multiple subscriptions (consumer group ~= subscription).
@@ -129,20 +157,15 @@ class PubSubConsumer:
         """
         try:
             return self._consumer.get_subscription(subscription=self.subscription_path)
-        except Exception as e:
-            print(e.__class__)
+        except NotFound:
             logger.debug(f"creating subscription {self.subscription_path}")
             return self._consumer.create_subscription(
-                request=dict(
-                    # TODO: create pattern for exactly once behavior
-                    #  (although not sure we can truly guarantee it)
-                    # enable_exactly_once_delivery=True,
-                    # TODO: setting for message ordering
-                    # enable_message_ordering=True,
-                    ack_deadline_seconds=self._commit_timeout_secs,
-                    name=self.subscription_path,
-                    topic=self.topic_path,
-                ),
+                request={
+                    "ack_deadline_seconds": self._commit_timeout,
+                    "name": self.subscription_path,
+                    "topic": self.topic_path,
+                    "enable_message_ordering": self._enable_message_ordering,
+                },
             )
 
     def commit(self):
@@ -153,13 +176,14 @@ class PubSubConsumer:
             ack_ids=[message.ack_id for message in self._messages],
         )
         logger.debug(
-            f"Sending acknowledgments for {len(self._messages)} PubSub messages..."
+            f"Sending acknowledgments for {len(self._messages)} Pub/Sub messages..."
         )
         self._messages = []
 
-    def __enter__(self):
-        self.start_consumer()
+    def __enter__(self) -> Self:
+        self.start()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        self.stop()
         self._consumer.__exit__(exc_type, exc_val, exc_tb)
