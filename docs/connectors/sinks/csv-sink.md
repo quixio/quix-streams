@@ -4,7 +4,7 @@ A basic sink to write processed data to a single CSV file.
 
 It's meant to be used mostly for local debugging.
 
-## How To Use CSV Sink
+## How To Use
 
 To use a CSV sink, you need to create an instance of `CSVSink` and pass 
 it to the `StreamingDataFrame.sink()` method:
@@ -28,7 +28,7 @@ if __name__ == '__main__':
     app.run()
 ```
 
-## How the CSV Sink Works
+## How It Works
 `CSVSink` is a batching sink.  
 It batches processed records in memory per topic partition, and writes them to the file when a checkpoint is committed.  
 

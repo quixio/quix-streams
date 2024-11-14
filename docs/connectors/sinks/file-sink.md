@@ -14,7 +14,7 @@ Currently, it supports the following formats:
 - JSON
 - Parquet
 
-## How the File Sink Works
+## How It Works
 
 `FileSink` is a batching sink.  
 
@@ -22,7 +22,7 @@ It batches processed records in memory per topic partition and writes them to fi
 
 The sink can either create new files for each batch or append to existing files (when using formats that support appending).
 
-## How To Use File Sink
+## How To Use
 
 Create an instance of `FileSink` and pass it to the `StreamingDataFrame.sink()` method.
 

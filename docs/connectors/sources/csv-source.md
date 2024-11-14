@@ -4,7 +4,7 @@ A base CSV source that reads data from a CSV file and produces rows to the Kafka
 
 The CSV source reads the file, produce the data and exit. It doesn't keep any state. On restart, the whole file will be re-consumed.
 
-## How to use CSV Source
+## How To Use
 
 To use a CSV Source, you need to create and instance of `CSVSource` and pass it to the `app.dataframe()` method.
 

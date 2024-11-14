@@ -15,7 +15,7 @@ producing is matched as close as possible to the original. (per topic partition 
 The File Source connector is generally intended to be used alongside the related 
 [File Sink](../sinks/file-sink.md) (in terms of expected file and data formatting).
 
-## How to use CSV Source
+## How To Use
 
 To use a CSV Source, you need to create and instance of `FileSource` 
 and pass it to the `app.dataframe()` method.
