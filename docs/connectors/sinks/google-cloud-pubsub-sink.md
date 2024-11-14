@@ -90,7 +90,7 @@ The sink provides **at-least-once** delivery guarantees, which means:
 
 This behavior makes the sink reliable but means downstream systems should be prepared to handle duplicate messages. If your application requires exactly-once semantics, you'll need to implement deduplication logic in your consumer.
 
-### Local Testing
+## Local Testing
 
 You can test the PubSubSink locally using the Google Cloud Pub/Sub emulator. Here's how to set it up:
 
