@@ -1,4 +1,4 @@
-# GCP Pub/Sub Sink
+# Google Cloud Pub/Sub Sink
 
 !!! info
 
@@ -18,7 +18,7 @@ pip install quixstreams[pubsub]
 
 ## How the Pub/Sub Sink Works
 
-`PubSubSink` is a streaming sink that publishes messages to Google Cloud Pub/Sub topics. For each message:
+`PubSubSink` is a streaming sink that publishes messages to Pub/Sub topics. For each message:
 
 - The value is serialized (defaults to JSON)
 - The key is converted to string
@@ -39,6 +39,8 @@ from quixstreams.sinks.community.pubsub import PubSubSink
 pubsub_sink = PubSubSink(
     project_id="your-project-id",
     topic_id="your-topic-id",
+    # Optional: service account credentials as a JSON string
+    service_account_json='{"type": "service_account", "project_id": "your-project", ...}',
     # Optional: customize serialization and flush timeout
     value_serializer=json.dumps,
     key_serializer=str,
@@ -67,6 +69,7 @@ if __name__ == "__main__":
 
 - `project_id`: Your Google Cloud project ID
 - `topic_id`: The ID of the Pub/Sub topic
+- `service_account_json`: A JSON string containing service account credentials for authentication
 - `value_serializer`: Function to serialize message values (default: `json.dumps`)
 - `key_serializer`: Function to serialize message keys (default: `bytes.decode`)
 - `flush_timeout`: Maximum time in seconds to wait for pending publishes during flush (default: 5)
@@ -86,3 +89,24 @@ The sink provides **at-least-once** delivery guarantees, which means:
   - This ensures no messages are lost, but some might be delivered more than once
 
 This behavior makes the sink reliable but means downstream systems should be prepared to handle duplicate messages. If your application requires exactly-once semantics, you'll need to implement deduplication logic in your consumer.
+
+### Local Testing
+
+You can test the PubSubSink locally using the Google Cloud Pub/Sub emulator. Here's how to set it up:
+
+1. Start the emulator using Docker:
+
+```shell
+docker run -d --name pubsub-emulator \
+    -p 8085:8085 \
+    gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators \
+    gcloud beta emulators pubsub start --host-port=0.0.0.0:8085
+```
+
+2. Set the environment variable to point to the local emulator:
+
+```shell
+export PUBSUB_EMULATOR_HOST=localhost:8085
+```
+
+When this environment variable is set, the PubSubSink will automatically connect to the local emulator instead of Google Cloud. No service account credentials are required when using the emulator.

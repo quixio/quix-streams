@@ -49,11 +49,11 @@ nav:
   - 'Connectors [beta]':
     -  Sinks:
         - 'connectors/sinks/README.md'
-        - CSV Sink: connectors/sinks/csv-sink.md
-        - InfluxDB v3 Sink: connectors/sinks/influxdb3-sink.md
         - Apache Iceberg Sink: connectors/sinks/apache-iceberg-sink.md
+        - CSV Sink: connectors/sinks/csv-sink.md
         - File Sink: connectors/sinks/file-sink.md
-        - GCP Pub/Sub Sink: connectors/sinks/gcp-pubsub-sink.md
+        - Google Cloud Pub/Sub Sink: connectors/sinks/google-cloud-pubsub-sink.md
+        - InfluxDB v3 Sink: connectors/sinks/influxdb3-sink.md
         - Creating a Custom Sink: connectors/sinks/custom-sinks.md
     - Sources:
         - 'connectors/sources/README.md'
