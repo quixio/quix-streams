@@ -44,8 +44,11 @@ class PubSubSink(BaseSink):
 
         :param project_id: GCP project ID.
         :param topic_id: Pub/Sub topic ID.
-        :param service_account_json: a JSON string with service account credentials
+        :param service_account_json: an optional JSON string with service account credentials
             to connect to Pub/Sub.
+            The internal `PublisherClient` will use the Application Default Credentials if not provided.
+            See https://cloud.google.com/docs/authentication/provide-credentials-adc for more info.
+            Default - `None`.
         :param value_serializer: Function to serialize the value to string or bytes
             (defaults to json.dumps).
         :param key_serializer: Function to serialize the key to string
