@@ -650,7 +650,8 @@ def __init__(topic_admin: TopicAdmin,
              consumer_group: str,
              quix_config_builder: QuixKafkaConfigsBuilder,
              timeout: float = 30,
-             create_timeout: float = 60)
+             create_timeout: float = 60,
+             auto_create_topics: bool = True)
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/topic_manager.py#L31)
@@ -3704,6 +3705,79 @@ offset.
 
 ## quixstreams.sinks.community.file
 
+<a id="quixstreams.sinks.community.bigquery"></a>
+
+## quixstreams.sinks.community.bigquery
+
+<a id="quixstreams.sinks.community.bigquery.BigQuerySink"></a>
+
+### BigQuerySink
+
+```python
+class BigQuerySink(BatchingSink)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/bigquery.py#L53)
+
+<a id="quixstreams.sinks.community.bigquery.BigQuerySink.__init__"></a>
+
+#### BigQuerySink.\_\_init\_\_
+
+```python
+def __init__(project_id: str,
+             location: str,
+             dataset_id: str,
+             table_name: str,
+             service_account_json: Optional[str] = None,
+             schema_auto_update: bool = True,
+             ddl_timeout: float = 10.0,
+             insert_timeout: float = 10.0,
+             retry_timeout: float = 30.0,
+             **kwargs)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/bigquery.py#L54)
+
+A connector to sink processed data to Google Cloud BigQuery.
+
+It batches the processed records in memory per topic partition, and flushes them to BigQuery at the checkpoint.
+
+>***NOTE***: BigQuerySink can accept only dictionaries.
+> If the record values are not dicts, you need to convert them to dicts before
+> sinking.
+
+The column names and types are inferred from individual records.
+Each key in the record's dictionary will be inserted as a column to the resulting BigQuery table.
+
+If the column is not present in the schema, the sink will try to add new nullable columns on the fly with types inferred from individual values.
+The existing columns will not be affected.
+To disable this behavior, pass `schema_auto_update=False` and define the necessary schema upfront.
+The minimal schema must define two columns: "timestamp" of type TIMESTAMP, and "__key" with a type of the expected message key.
+
+**Arguments**:
+
+- `project_id`: a Google project id.
+- `location`: a BigQuery location.
+- `dataset_id`: a BigQuery dataset id.
+If the dataset does not exist, the sink will try to create it.
+- `table_name`: BigQuery table name.
+If the table does not exist, the sink will try to create it with a default schema.
+- `service_account_json`: an optional JSON string with service account credentials
+to connect to BigQuery.
+The internal `google.cloud.bigquery.Client` will use the Application Default Credentials if not provided.
+See https://cloud.google.com/docs/authentication/provide-credentials-adc for more info.
+Default - `None`.
+- `schema_auto_update`: if True, the sink will try to create a dataset and a table if they don't exist.
+It will also add missing columns on the fly with types inferred from individual values.
+- `ddl_timeout`: a timeout for a single DDL operation (adding tables, columns, etc.).
+Default - 10s.
+- `insert_timeout`: a timeout for a single INSERT operation.
+Default - 10s.
+- `retry_timeout`: a total timeout for each request to BigQuery API.
+During this timeout, a request can be retried according
+to the client's default retrying policy.
+- `kwargs`: Additional keyword arguments passed to `bigquery.Client`.
+
 <a id="quixstreams.sinks.community"></a>
 
 ## quixstreams.sinks.community
@@ -3839,6 +3913,93 @@ Implements retry logic to handle concurrent write conflicts.
 **Arguments**:
 
 - `batch`: The batch of data to write.
+
+<a id="quixstreams.sinks.community.pubsub"></a>
+
+## quixstreams.sinks.community.pubsub
+
+<a id="quixstreams.sinks.community.pubsub.PubSubTopicNotFoundError"></a>
+
+### PubSubTopicNotFoundError
+
+```python
+class PubSubTopicNotFoundError(Exception)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/pubsub.py#L25)
+
+Raised when the specified topic does not exist.
+
+<a id="quixstreams.sinks.community.pubsub.PubSubSink"></a>
+
+### PubSubSink
+
+```python
+class PubSubSink(BaseSink)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/pubsub.py#L29)
+
+A sink that publishes messages to Google Cloud Pub/Sub.
+
+<a id="quixstreams.sinks.community.pubsub.PubSubSink.__init__"></a>
+
+#### PubSubSink.\_\_init\_\_
+
+```python
+def __init__(project_id: str,
+             topic_id: str,
+             service_account_json: Optional[str] = None,
+             value_serializer: Callable[[Any], Union[bytes, str]] = json.dumps,
+             key_serializer: Callable[[Any], str] = bytes.decode,
+             flush_timeout: int = 5,
+             **kwargs) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/pubsub.py#L32)
+
+Initialize the PubSubSink.
+
+**Arguments**:
+
+- `project_id`: GCP project ID.
+- `topic_id`: Pub/Sub topic ID.
+- `service_account_json`: an optional JSON string with service account credentials
+to connect to Pub/Sub.
+The internal `PublisherClient` will use the Application Default Credentials if not provided.
+See https://cloud.google.com/docs/authentication/provide-credentials-adc for more info.
+Default - `None`.
+- `value_serializer`: Function to serialize the value to string or bytes
+(defaults to json.dumps).
+- `key_serializer`: Function to serialize the key to string
+(defaults to bytes.decode).
+- `kwargs`: Additional keyword arguments passed to PublisherClient.
+
+<a id="quixstreams.sinks.community.pubsub.PubSubSink.add"></a>
+
+#### PubSubSink.add
+
+```python
+def add(value: Any, key: Any, timestamp: int,
+        headers: list[tuple[str, HeaderValue]], topic: str, partition: int,
+        offset: int) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/pubsub.py#L81)
+
+Publish a message to Pub/Sub.
+
+<a id="quixstreams.sinks.community.pubsub.PubSubSink.flush"></a>
+
+#### PubSubSink.flush
+
+```python
+def flush(topic: str, partition: int) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/pubsub.py#L114)
+
+Wait for all publish operations to complete successfully.
 
 <a id="quixstreams.sinks.base.sink"></a>
 
@@ -5389,7 +5550,8 @@ To create a Topic, use Application.topic() or generate them directly.
 def __init__(topic_admin: TopicAdmin,
              consumer_group: str,
              timeout: float = 30,
-             create_timeout: float = 60)
+             create_timeout: float = 60,
+             auto_create_topics: bool = True)
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L52)
@@ -5410,7 +5572,7 @@ def __init__(topic_admin: TopicAdmin,
 def changelog_topics() -> Dict[str, Dict[str, Topic]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L102)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L104)
 
 Note: `Topic`s are the changelogs.
 
@@ -5425,7 +5587,7 @@ returns: the changelog topic dict, {topic_name: {suffix: Topic}}
 def all_topics() -> Dict[str, Topic]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L111)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L113)
 
 Every registered topic name mapped to its respective `Topic`.
 
@@ -5441,7 +5603,7 @@ def topic_config(num_partitions: Optional[int] = None,
                  extra_config: Optional[dict] = None) -> TopicConfig
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L215)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L217)
 
 Convenience method for generating a `TopicConfig` with default settings
 
@@ -5469,7 +5631,7 @@ def topic(name: str,
           timestamp_extractor: Optional[TimestampExtractor] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L236)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L238)
 
 A convenience method for generating a `Topic`. Will use default config options
 
@@ -5498,7 +5660,7 @@ Topic object with creation configs
 def register(topic: Topic) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L282)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L284)
 
 Register an already generated :class:`quixstreams.models.topics.Topic` to the topic manager.
 
@@ -5522,7 +5684,7 @@ def repartition_topic(operation: str,
                       timeout: Optional[float] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L300)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L302)
 
 Create an internal repartition topic.
 
@@ -5550,7 +5712,7 @@ def changelog_topic(topic_name: str,
                     timeout: Optional[float] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L340)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L342)
 
 Performs all the logic necessary to generate a changelog topic based on a
 
@@ -5591,7 +5753,7 @@ def create_topics(topics: List[Topic],
                   create_timeout: Optional[float] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L398)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L400)
 
 Creates topics via an explicit list of provided `Topics`.
 
@@ -5613,9 +5775,11 @@ def create_all_topics(timeout: Optional[float] = None,
                       create_timeout: Optional[float] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L426)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L428)
 
 A convenience method to create all Topic objects stored on this TopicManager.
+
+If `auto_create_topics` is set to False no topic will be created.
 
 **Arguments**:
 
@@ -5630,7 +5794,7 @@ A convenience method to create all Topic objects stored on this TopicManager.
 def validate_all_topics(timeout: Optional[float] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L439)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L444)
 
 Validates all topics exist and changelogs have correct topic and rep factor.
 
@@ -6168,7 +6332,7 @@ if using changelogs
 class RocksDBStorePartition(StorePartition)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L32)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L30)
 
 A base class to access state in RocksDB.
 
@@ -6198,7 +6362,7 @@ def write(cache: PartitionTransactionCache,
           batch: Optional[WriteBatch] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L114)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L112)
 
 Write data to RocksDB
 
@@ -6219,7 +6383,7 @@ def get(key: bytes,
         cf_name: str = "default") -> Union[None, bytes, Any]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L179)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L177)
 
 Get a key from RocksDB.
 
@@ -6241,7 +6405,7 @@ a value if the key is present in the DB. Otherwise, `default`
 def exists(key: bytes, cf_name: str = "default") -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L193)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L191)
 
 Check if a key is present in the DB.
 
@@ -6262,7 +6426,7 @@ Check if a key is present in the DB.
 def get_processed_offset() -> Optional[int]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L204)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L202)
 
 Get last processed offset for the given partition
 
@@ -6278,7 +6442,7 @@ offset or `None` if there's no processed offset yet
 def get_changelog_offset() -> Optional[int]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L216)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L214)
 
 Get offset that the changelog is up-to-date with.
 
@@ -6294,7 +6458,7 @@ offset or `None` if there's no processed offset yet
 def close()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L226)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L224)
 
 Close the underlying RocksDB
 
@@ -6307,7 +6471,7 @@ Close the underlying RocksDB
 def path() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L239)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L237)
 
 Absolute path to RocksDB database folder
 
@@ -6324,7 +6488,7 @@ file path
 def destroy(cls, path: str)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L247)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L245)
 
 Delete underlying RocksDB database
 
@@ -6342,7 +6506,7 @@ The database must be closed first.
 def get_column_family_handle(cf_name: str) -> ColumnFamily
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L257)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L255)
 
 Get a column family handle to pass to it WriteBatch.
 
@@ -6365,7 +6529,7 @@ instance of `rocksdict.ColumnFamily`
 def get_column_family(cf_name: str) -> Rdict
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L278)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L276)
 
 Get a column family instance.
 
@@ -6398,6 +6562,172 @@ instance of `rocksdict.Rdict` for the given column family
 <a id="quixstreams.state.metadata"></a>
 
 ## quixstreams.state.metadata
+
+<a id="quixstreams.state.memory.store"></a>
+
+## quixstreams.state.memory.store
+
+<a id="quixstreams.state.memory.store.MemoryStore"></a>
+
+### MemoryStore
+
+```python
+class MemoryStore(Store)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/store.py#L14)
+
+In-memory state store.
+
+It keeps track of individual store partitions and provides access to the
+partitions' transactions.
+
+Requires a full state recovery for each partition on assignment.
+
+<a id="quixstreams.state.memory.store.MemoryStore.__init__"></a>
+
+#### MemoryStore.\_\_init\_\_
+
+```python
+def __init__(
+    name: str,
+    topic: str,
+    changelog_producer_factory: Optional[ChangelogProducerFactory] = None
+) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/store.py#L24)
+
+**Arguments**:
+
+- `name`: a unique store name
+- `topic`: a topic name for this store
+- `changelog_producer_factory`: a ChangelogProducerFactory instance
+if using changelogs topics.
+
+<a id="quixstreams.state.memory.partition"></a>
+
+## quixstreams.state.memory.partition
+
+<a id="quixstreams.state.memory.partition.MemoryStorePartition"></a>
+
+### MemoryStorePartition
+
+```python
+class MemoryStorePartition(StorePartition)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L36)
+
+Class to access in-memory state.
+
+Responsibilities:
+ 1. Recovering from changelog messages
+ 2. Creating transaction to interact with data
+ 3. Track partition state in-memory
+
+<a id="quixstreams.state.memory.partition.MemoryStorePartition.write"></a>
+
+#### MemoryStorePartition.write
+
+```python
+@_validate_partition_state()
+def write(cache: PartitionTransactionCache, processed_offset: Optional[int],
+          changelog_offset: Optional[int]) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L68)
+
+Write data to the state
+
+**Arguments**:
+
+- `cache`: The partition update cache
+- `processed_offset`: The offset processed to generate the data.
+- `changelog_offset`: The changelog message offset of the data.
+
+<a id="quixstreams.state.memory.partition.MemoryStorePartition.get_processed_offset"></a>
+
+#### MemoryStorePartition.get\_processed\_offset
+
+```python
+def get_processed_offset() -> Optional[int]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L122)
+
+Get last processed offset for the given partition
+
+**Returns**:
+
+offset or `None` if there's no processed offset yet
+
+<a id="quixstreams.state.memory.partition.MemoryStorePartition.get_changelog_offset"></a>
+
+#### MemoryStorePartition.get\_changelog\_offset
+
+```python
+def get_changelog_offset() -> Optional[int]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L129)
+
+Get offset that the changelog is up-to-date with.
+
+**Returns**:
+
+offset or `None` if there's no processed offset yet
+
+<a id="quixstreams.state.memory.partition.MemoryStorePartition.get"></a>
+
+#### MemoryStorePartition.get
+
+```python
+@_validate_partition_state()
+def get(key: bytes,
+        default: Any = None,
+        cf_name: str = "default") -> Union[None, bytes, Any]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L137)
+
+Get a key from the store
+
+**Arguments**:
+
+- `key`: a key encoded to `bytes`
+- `default`: a default value to return if the key is not found.
+- `cf_name`: rocksdb column family name. Default - "default"
+
+**Returns**:
+
+a value if the key is present in the store. Otherwise, `default`
+
+<a id="quixstreams.state.memory.partition.MemoryStorePartition.exists"></a>
+
+#### MemoryStorePartition.exists
+
+```python
+@_validate_partition_state()
+def exists(key: bytes, cf_name: str = "default") -> bool
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L151)
+
+Check if a key is present in the store.
+
+**Arguments**:
+
+- `key`: a key encoded to `bytes`.
+- `cf_name`: rocksdb column family name. Default - "default"
+
+**Returns**:
+
+`True` if the key is present, `False` otherwise.
+
+<a id="quixstreams.state.memory"></a>
+
+## quixstreams.state.memory
 
 <a id="quixstreams.state.recovery"></a>
 
@@ -7224,7 +7554,7 @@ Flush the recovery update to the storage.
 class StateStoreManager()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L28)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L29)
 
 Class for managing state stores and partitions.
 
@@ -7242,7 +7572,7 @@ StateStoreManager is responsible for:
 def stores() -> Dict[str, Dict[str, Store]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L68)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L69)
 
 Map of registered state stores
 
@@ -7259,7 +7589,7 @@ dict in format {topic: {store_name: store}}
 def recovery_required() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L76)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L77)
 
 Whether recovery needs to be done.
 
@@ -7272,7 +7602,7 @@ Whether recovery needs to be done.
 def using_changelogs() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L85)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L86)
 
 Whether the StateStoreManager is using changelog topics
 
@@ -7288,7 +7618,7 @@ using changelogs, as bool
 def do_recovery()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L97)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L98)
 
 Perform a state recovery, if necessary.
 
@@ -7300,7 +7630,7 @@ Perform a state recovery, if necessary.
 def stop_recovery()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L103)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L104)
 
 Stop recovery (called during app shutdown).
 
@@ -7312,7 +7642,7 @@ Stop recovery (called during app shutdown).
 def get_store(topic: str, store_name: str = DEFAULT_STATE_STORE_NAME) -> Store
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L109)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L110)
 
 Get a store for given name and topic
 
@@ -7335,7 +7665,7 @@ def register_store(topic_name: str,
                    store_type: Optional[StoreTypes] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L142)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L143)
 
 Register a state store to be managed by StateStoreManager.
 
@@ -7359,7 +7689,7 @@ Default to StateStoreManager `default_store_type`
 def register_windowed_store(topic_name: str, store_name: str)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L178)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L185)
 
 Register a windowed state store to be managed by StateStoreManager.
 
@@ -7381,7 +7711,7 @@ Each window store can be registered only once for each topic.
 def clear_stores()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L204)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L211)
 
 Delete all state stores managed by StateStoreManager.
 
@@ -7394,7 +7724,7 @@ def on_partition_assign(topic: str, partition: int,
                         committed_offset: int) -> List[StorePartition]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L219)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L226)
 
 Assign store partitions for each registered store for the given `TopicPartition`
 
@@ -7418,7 +7748,7 @@ list of assigned `StorePartition`
 def on_partition_revoke(topic: str, partition: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L245)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L252)
 
 Revoke store partitions for each registered store for the given `TopicPartition`
 
@@ -7435,7 +7765,7 @@ Revoke store partitions for each registered store for the given `TopicPartition`
 def init()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L258)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L265)
 
 Initialize `StateStoreManager` and create a store directory
 
@@ -7448,7 +7778,7 @@ Initialize `StateStoreManager` and create a store directory
 def close()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L265)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L272)
 
 Close all registered stores
 
@@ -9449,7 +9779,7 @@ instead of the default one.
 def Quix(cls, *args, **kwargs)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L356)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L357)
 
 RAISES EXCEPTION: DEPRECATED.
 
@@ -9470,7 +9800,7 @@ def topic(name: str,
           timestamp_extractor: Optional[TimestampExtractor] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L371)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L372)
 
 Create a topic definition.
 
@@ -9542,7 +9872,7 @@ def dataframe(topic: Optional[Topic] = None,
               source: Optional[BaseSource] = None) -> StreamingDataFrame
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L451)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L452)
 
 A simple helper method that generates a `StreamingDataFrame`, which is used
 
@@ -9590,7 +9920,7 @@ to be used as an input topic.
 def stop(fail: bool = False)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L506)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L507)
 
 Stop the internal poll loop and the message processing.
 
@@ -9613,7 +9943,7 @@ to unhandled exception, and it shouldn't commit the current checkpoint.
 def get_producer() -> Producer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L551)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L552)
 
 Create and return a pre-configured Producer instance.
 The Producer is initialized with params passed to Application.
@@ -9644,7 +9974,7 @@ with app.get_producer() as producer:
 def get_consumer(auto_commit_enable: bool = True) -> Consumer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L581)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L582)
 
 Create and return a pre-configured Consumer instance.
 
@@ -9695,7 +10025,7 @@ Default - True
 def clear_state()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L631)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L632)
 
 Clear the state of the application.
 
@@ -9707,7 +10037,7 @@ Clear the state of the application.
 def add_source(source: BaseSource, topic: Optional[Topic] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L637)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L638)
 
 Add a source to the application.
 
@@ -9729,7 +10059,7 @@ Default: the source default
 def run(dataframe: Optional[StreamingDataFrame] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L657)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L658)
 
 Start processing data from Kafka using provided `StreamingDataFrame`
 
@@ -9761,7 +10091,7 @@ app.run()
 def setup_topics()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L779)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L780)
 
 Validate and create the topics
 
