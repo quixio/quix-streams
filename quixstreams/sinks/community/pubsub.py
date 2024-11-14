@@ -1,6 +1,5 @@
 import concurrent.futures
 import json
-import logging
 from collections import defaultdict
 from typing import Any, Callable, Optional, Union
 
@@ -18,7 +17,7 @@ except ImportError as exc:
 from quixstreams.models.types import HeaderValue
 from quixstreams.sinks.base import BaseSink, SinkBackpressureError
 
-logger = logging.getLogger(__name__)
+__all__ = ("PubSubSink", "PubSubTopicNotFoundError")
 
 TopicPartition = tuple[str, int]
 
