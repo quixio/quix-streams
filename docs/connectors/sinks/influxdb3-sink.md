@@ -6,7 +6,16 @@ Quix Streams provides a sink to write processed data to InfluxDB v3.
 
 >***NOTE***: This sink only supports InfluxDB v3. Versions 1 and 2 are not supported.
 
-## How To Use the InfluxDB Sink
+## How To Install
+The dependencies for this sink are not included to the default `quixstreams` package.
+
+To install them, run the following command:
+
+```commandline
+pip install quixstreams[influxdb3]
+```
+
+## How To Use
 
 To sink data to InfluxDB, you need to create an instance of `InfluxDB3Sink` and pass 
 it to the `StreamingDataFrame.sink()` method:
@@ -38,7 +47,7 @@ if __name__ == '__main__':
     app.run()
 ```
 
-## How the InfluxDB Sink Works
+## How It Works
 `InfluxDB3Sink` is a batching sink.  
 It batches processed records in memory per topic partition, and writes them to the InfluxDB instance when a checkpoint has been committed.
 

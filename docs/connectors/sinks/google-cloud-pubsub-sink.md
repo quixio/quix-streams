@@ -8,7 +8,7 @@
 
 This sink writes data to a Google Cloud Pub/Sub topic. The sink preserves the original Kafka message metadata including key, timestamp, offset, and headers.
 
-## Prerequisites
+## How To Install
 
 To use the Pub/Sub sink, you need to install the required dependencies:
 
@@ -16,7 +16,7 @@ To use the Pub/Sub sink, you need to install the required dependencies:
 pip install quixstreams[pubsub]
 ```
 
-## How the Pub/Sub Sink Works
+## How It Works
 
 `PubSubSink` is a streaming sink that publishes messages to Pub/Sub topics. For each message:
 
@@ -25,7 +25,7 @@ pip install quixstreams[pubsub]
 - Additional metadata (timestamp, offset, headers) is included as attributes
 - Messages are published asynchronously
 
-## How To Use Pub/Sub Sink
+## How To Use
 
 Create an instance of `PubSubSink` and pass it to the `StreamingDataFrame.sink()` method:
 

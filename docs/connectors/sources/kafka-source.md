@@ -4,7 +4,7 @@ A source that reads data from a Kafka topic and produce it to another Kafka topi
 
 This source supports exactly-once guarantees.
 
-## How to use the Kafka Replicator Source
+## How To Use
 
 To use a Kafka Replicator source, you need to create an instance of `KafkaReplicatorSource` and pass it to the `app.dataframe()` method.
 

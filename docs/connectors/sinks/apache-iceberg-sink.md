@@ -17,17 +17,22 @@ Supported data catalogs:
 
 - AWS Glue
 
-## How the Iceberg Sink Works
-`IcebergSink` is a batching sink.  
+## How To Install
+The dependencies for this sink are not included to the default `quixstreams` package.
 
-It batches processed records in memory per topic partition, serializes incoming data batches into Parquet format, and appends them to the Iceberg table, updating the table schema as necessary.
+To install them, run the following command:
 
-## How To Use Iceberg Sink
+```commandline
+# To use IcebergSink with AWS Glue data catalog
+pip install quixstreams[iceberg_aws]
+```
+
+## How To Use
 
 Create an instance of `IcebergSink` and pass 
 it to the `StreamingDataFrame.sink()` method.
 
-For the full description of expected parameters, ee the [Iceberg Sink API](../../api-reference/sinks.md#icebergsink) page.  
+For the full description of expected parameters, see the [Iceberg Sink API](../../api-reference/sinks.md#icebergsink) page.  
 
 ```python
 from quixstreams import Application
@@ -59,6 +64,11 @@ if __name__ == "__main__":
     # Start the application
     app.run()
 ```
+
+## How It Works
+`IcebergSink` is a batching sink.  
+
+It batches processed records in memory per topic partition, serializes incoming data batches into Parquet format, and appends them to the Iceberg table, updating the table schema as necessary.
 
 ## Retrying Failures
 `IcebergSink` will retry failed commits automatically with a random delay up to 5 seconds.
