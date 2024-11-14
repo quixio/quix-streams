@@ -121,6 +121,7 @@ doc_map = {
             "quixstreams.sinks.core.influxdb3",
             "quixstreams.sinks.core.csv",
             "quixstreams.sinks.community.iceberg",
+            "quixstreams.sinks.community.bigquery",
             "quixstreams.sinks.community.file.sink",
             "quixstreams.sinks.community.file.formats.base",
             "quixstreams.sinks.community.file.formats.json",
