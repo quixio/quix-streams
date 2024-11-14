@@ -78,9 +78,11 @@ Here are some important configurations to be aware of (see [PubSub Source API](.
 ### Optional:
 
 - `create_subscription`: whether to attempt to create a subscription at
-  startup; if it already exists, it instead logs its details (DEBUG level).
-- `enable_message_ordering` When creating a Pub/Sub subscription, whether
-  to allow message ordering. NOTE: does NOT affect existing subscriptions!
+  startup; if it already exists, it instead logs its details at DEBUG level.    
+default value: `False`
+- `enable_message_ordering`: When creating a Pub/Sub subscription, whether
+  to allow message ordering. NOTE: does NOT affect existing subscriptions!    
+default value: `False`
 
 ## Message Keys
 
