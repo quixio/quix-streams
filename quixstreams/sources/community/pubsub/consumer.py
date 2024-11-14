@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import json
 import logging
 import time
@@ -70,7 +68,7 @@ class PubSubConsumer:
         self._async_function = async_function
         self._default_poll_timeout = default_poll_timeout_secs
 
-        self._messages = []
+        self._message_ack_ids = []
         self._consumer: Optional[SClient] = None
         self._async_listener: Optional[StreamingPullFuture] = None
 
@@ -102,7 +100,7 @@ class PubSubConsumer:
         # this should produce the message to kafka
         self._async_function(message)
         # append messages for later committing once producer is flushed
-        self._messages.append(message)
+        self._message_ack_ids.append(message.ack_id)
 
     def poll_and_process(self, timeout: Optional[float] = None):
         """
@@ -128,7 +126,7 @@ class PubSubConsumer:
         timeout = self._batch_timeout
         poll_start_time = time.monotonic()
         while (
-            len(self._messages) < self._max_batch_size
+            len(self._message_ack_ids) < self._max_batch_size
             and (elapsed := (time.monotonic() - poll_start_time)) < timeout
         ):
             self.poll_and_process(timeout=timeout - elapsed)
@@ -169,16 +167,16 @@ class PubSubConsumer:
             )
 
     def commit(self):
-        if not self._messages:
+        if not self._message_ack_ids:
             return
         self._consumer.acknowledge(
             subscription=self.subscription_path,
-            ack_ids=[message.ack_id for message in self._messages],
+            ack_ids=self._message_ack_ids,
         )
         logger.debug(
-            f"Sending acknowledgments for {len(self._messages)} Pub/Sub messages..."
+            f"Sending acknowledgments for {len(self._message_ack_ids)} Pub/Sub messages..."
         )
-        self._messages = []
+        self._message_ack_ids = []
 
     def __enter__(self) -> Self:
         self.start()

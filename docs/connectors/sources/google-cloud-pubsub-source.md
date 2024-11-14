@@ -1,4 +1,4 @@
-# Google Cloud (GCP) Pub/Sub Source
+# Google Cloud Pub/Sub Source
 
 !!! info
 
@@ -78,7 +78,7 @@ Here are some important configurations to be aware of (see [PubSub Source API](.
 ### Optional:
 
 - `create_subscription`: whether to attempt to create a subscription at
-  startup; if it already exists, it instead logs its details at DEBUG level.    
+  startup; if it already exists, it instead logs its details at `DEBUG` level.    
 default value: `False`
 - `enable_message_ordering`: When creating a Pub/Sub subscription, whether
   to allow message ordering. NOTE: does NOT affect existing subscriptions!    
@@ -110,11 +110,16 @@ with ordering enabled via `enable_message_ordering=True` (they must be set **sim
 
 ## Message Data Format/Schema
 
-Incoming message keys will be strings (non-ordered messages will be empty strings).
+This is the default format of messages handled by `Application`:
 
-Incoming message values will be in bytes, so transform accordingly in your SDF directly.
+Message keys will be the "ordering_key" string (non-ordered messages will be empty strings).
 
-Incoming message timestamp will reflect original Pub/Sub message publish time (ms).
+Message values will be the "data" in bytes, so transform accordingly with your SDF as desired.
+
+Message timestamp will reflect original Pub/Sub message "publish_time" (ms).
+
+Message headers will contain all "attribute" (metadata) fields.
+
 
 ## Processing/Delivery Guarantees
 

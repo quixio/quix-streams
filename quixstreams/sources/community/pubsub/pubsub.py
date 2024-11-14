@@ -113,6 +113,7 @@ class PubSubSource(Source):
             key=kafka_msg.key,
             value=kafka_msg.value,
             timestamp=kafka_msg.timestamp,
+            headers=dict(message.attributes),
         )
 
     def run(self):
