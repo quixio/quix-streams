@@ -19,6 +19,8 @@ from quixstreams.exceptions import QuixException
 from quixstreams.models import HeaderValue
 from quixstreams.sinks import BatchingSink, SinkBatch
 
+__all__ = ("BigQuerySink", "BigQuerySinkException")
+
 logger = logging.getLogger(__name__)
 
 # A column name for the records keys
@@ -54,6 +56,7 @@ class BigQuerySink(BatchingSink):
         dataset_id: str,
         table_name: str,
         service_account_json: str,
+        schema_auto_update: bool = True,
         ddl_timeout: float = 10.0,
         insert_timeout: float = 10.0,
         retry_timeout: float = 30.0,
@@ -70,10 +73,10 @@ class BigQuerySink(BatchingSink):
         The column names and types are inferred from individual records.
         Each key in the record's dictionary will be inserted as a column to the resulting BigQuery table.
 
-        The table schema must define at least two columns: "timestamp" with a type TIMESTAMP, and "__key" with a type of the expected message key.
-
         If the column is not present in the schema, the sink will try to add new nullable columns on the fly with types inferred from individual values.
-        To bypass this behavior, you can create a table with the necessary schema upfront.
+        The existing columns will not be affected.
+        To disable this behavior, pass `schema_auto_update=False` and define the necessary schema upfront.
+        The minimal schema must define two columns: "timestamp" of type TIMESTAMP, and "__key" with a type of the expected message key.
 
         :param project_id: a Google project id.
         :param location: a BigQuery location.
@@ -83,6 +86,8 @@ class BigQuerySink(BatchingSink):
             If the table does not exist, the sink will try to create it with a default schema.
         :param service_account_json: a JSON string with service account credentials
             to connect to BigQuery.
+        :param schema_auto_update: if True, the sink will try to create a dataset and a table if they don't exist.
+            It will also add missing columns on the fly with types inferred from individual values.
         :param ddl_timeout: a timeout for a single DDL operation (adding tables, columns, etc.).
             Default - 10s.
         :param insert_timeout: a timeout for a single INSERT operation.
@@ -91,30 +96,30 @@ class BigQuerySink(BatchingSink):
             During this timeout, a request can be retried according
             to the client's default retrying policy.
         """
-        # TODO: Maybe list what permissions should be given upfront
 
         super().__init__()
         self.location = location
         self.table_name = table_name
 
-        # Parse the service account credentials from JSON
-        service_account_info = json.loads(service_account_json, strict=False)
-        self._credentials = service_account.Credentials.from_service_account_info(
-            service_account_info,
-            scopes=["https://www.googleapis.com/auth/cloud-platform"],
-        )
         self.project_id = project_id
-        self._client = bigquery.Client(
-            credentials=self._credentials, project=self.project_id
-        )
+
         self.dataset_id = dataset_id
         self.table_id = f"{self.dataset_id}.{self.table_name}"
         self.ddl_timeout = ddl_timeout
         self.insert_timeout = insert_timeout
         self.retry = bigquery.DEFAULT_RETRY.with_timeout(timeout=retry_timeout)
+        self.schema_auto_update = schema_auto_update
 
-        # Initialize a table in BigQuery if it doesn't exist already
-        self._init_table()
+        # Parse the service account credentials from JSON
+        service_account_info = json.loads(service_account_json, strict=False)
+        credentials = service_account.Credentials.from_service_account_info(
+            service_account_info,
+            scopes=["https://www.googleapis.com/auth/bigquery"],
+        )
+        self._client = bigquery.Client(credentials=credentials, project=self.project_id)
+        if self.schema_auto_update:
+            # Initialize a table in BigQuery if it doesn't exist already
+            self._init_table()
 
     def write(self, batch: SinkBatch):
         rows = []
@@ -143,7 +148,8 @@ class BigQuerySink(BatchingSink):
             rows.append(row)
 
         table = self._client.get_table(self.table_id, timeout=self.ddl_timeout)
-        self._add_new_columns(table=table, columns=cols_types)
+        if self.schema_auto_update:
+            self._add_new_columns(table=table, columns=cols_types)
         self._insert_rows(table=table, rows=rows)
 
     def add(

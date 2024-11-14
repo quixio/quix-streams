@@ -48,6 +48,7 @@ bigquery_sink = BigQuerySink(
     dataset_id="<dataset ID>",
     table_name="<table name>",
     service_account_json=service_account_json,
+    schema_auto_update=True,
     ddl_timeout=10.0,
     insert_timeout=10.0,
     retry_timeout=30.0,
@@ -75,7 +76,7 @@ Under the hood, it uses the BigQuery REST API and writes data in batches in JSON
 Each key in the record's dictionary will be inserted as a column to the resulting BigQuery table.
 
 ### Automatic schema updates
-When it is first initialized, `BigQuerySink` will create the dataset and the table with minimal schema if they don't exist.
+When first initialized, `BigQuerySink` will create the dataset and the table with minimal schema if they don't exist.
 
 The initial table schema will have a single required column "timestamp" of a type `TIMESTAMP`. 
 
@@ -85,6 +86,8 @@ During the processing, the Sink will:
 For example, if the message keys are `bytes`, the Sink will add a new column `__key` of type `BYTES`.
 2. Add new nullable columns to the table based on the keys from the records dictionaries.  
 The column types are also inferred from Python types of the values automatically.
+
+Note that the Sink will not modify any existing columns.
 
 Here is how the Python types are mapped to the BigQuery column types:
 
@@ -104,9 +107,7 @@ Here is how the Python types are mapped to the BigQuery column types:
 }
 ```
 
-To bypass the automatic schema updates, define the table with the necessary schema upfront.  
-
-The Sink will not modify the column if it already exists.
+To turn off the automatic schema updates and table validation, pass `schema_auto_update=False` to the sink.
 
 ### Data conversion
 Some data types may be automatically converted by the underlying `google-cloud-bigquery` library when the data is written.  
