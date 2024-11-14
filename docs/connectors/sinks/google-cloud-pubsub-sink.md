@@ -90,23 +90,15 @@ The sink provides **at-least-once** delivery guarantees, which means:
 
 This behavior makes the sink reliable but means downstream systems should be prepared to handle duplicate messages. If your application requires exactly-once semantics, you'll need to implement deduplication logic in your consumer.
 
-## Local Testing
+## Testing locally
 
-You can test the PubSubSink locally using the Google Cloud Pub/Sub emulator. Here's how to set it up:
+Rather than connect to Google Cloud, you can alternatively test your application using 
+a local "emulated" Pub/Sub host via docker:
 
-1. Start the emulator using Docker:
+1. DO NOT pass a `service_account_json` to `PubSubSource`, instead set environment variable:
 
-    ```shell
-    docker run -d --name pubsub-emulator \
-        -p 8085:8085 \
-        gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators \
-        gcloud beta emulators pubsub start --host-port=0.0.0.0:8085
-    ```
+    `PUBSUB_EMULATOR_HOST=localhost:8085`
 
-2. Set the environment variable to point to the local emulator:
+2. execute in terminal:
 
-    ```shell
-    export PUBSUB_EMULATOR_HOST=localhost:8085
-    ```
-
-When this environment variable is set, the PubSubSink will automatically connect to the local emulator instead of Google Cloud. No service account credentials are required when using the emulator.
+    `docker run -d --name pubsub-emulator -p 8085:8085 gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators gcloud beta emulators pubsub start --host-port=0.0.0.0:8085`
