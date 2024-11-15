@@ -411,7 +411,7 @@ class StatefulSource(Source):
         return 0
 
     @property
-    def store_name(self):
+    def store_name(self) -> str:
         """
         The source store name
         """
