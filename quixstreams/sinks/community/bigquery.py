@@ -33,9 +33,9 @@ _TIMESTAMP_COLUMN_NAME = "timestamp"
 
 # A mapping of Python types to BigQuery column types for schema updates
 _BIGQUERY_TYPES_MAP: dict[type, str] = {
-    int: "NUMERIC",
-    float: "NUMERIC",
-    Decimal: "NUMERIC",
+    int: "FLOAT64",
+    float: "FLOAT64",
+    Decimal: "BIGNUMERIC",
     str: "STRING",
     bytes: "BYTES",
     datetime: "DATETIME",
