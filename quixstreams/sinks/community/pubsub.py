@@ -4,8 +4,8 @@ from collections import defaultdict
 from typing import Any, Callable, Optional, Union
 
 try:
+    from google.api_core import exceptions as google_exceptions
     from google.api_core.future import Future
-    from google.cloud import exceptions as google_exceptions
     from google.cloud import pubsub_v1
     from google.oauth2 import service_account
 except ImportError as exc:
