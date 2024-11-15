@@ -12,9 +12,9 @@ build:
 
 requirements:
   host:
-    - python >=3.8,<3.13
+    - python >=3.9,<3.13
   run:
-    - python >=3.8,<3.13
+    - python >=3.9,<3.13
     - python-confluent-kafka >=2.4,<2.5
     - requests >=2.32
     - typing_extensions >=4.8
