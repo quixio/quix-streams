@@ -3,13 +3,14 @@
 Quix Streams also provides a set of classes to help users implement custom sources.
 
 * [`quixstreams.sources.base.Source`](../../api-reference/sources.md#source): A subclass of `BaseSource` that implements some helpful methods for writing sources. We recommend subclassing `Source` instead of `BaseSource`.
+* [`quixstreams.sources.base.StatefulSource`](../../api-reference/sources.md#statefulsource): A subclass of `Source` that adds a state store to the source.
 * [`quixstreams.sources.base.BaseSource`](../../api-reference/sources.md#basesource): This is the base class for all other sources. It defines the must-have methods.
 
 ## Source
 
 The recomended parent class to create a new source. It handles configuring, starting and stopping the source, as well as implementing a series of helpers.
 
-To get started, implement the `run` method and return when `self.running` is `False`.
+To get started, implement the [`run`](../../api-reference/sources.md#sourcerun) method and return when `self.running` is `False`.
 
 Example subclass:
 
@@ -38,13 +39,49 @@ class MySource(Source):
 
 For more information, see [`quixstreams.sources.base.Source`](../../api-reference/sources.md#source) docstrings.
 
+## Stateful Source
+
+The recommended parent class to create new sources that need a state. Subclass of [`Source`](custom-sources.md#source).
+
+Use the [`state`](../../api-reference/sources.md#statefulsourcestate) method to start a new transaction and get a `State` object. To commit the changes call [`flush`](../../api-reference/sources.md#statefulsourceflush). [`Flush`](../../api-reference/sources.md#statefulsourceflush) will commit the state and ensure all messages are produced. After a [`flush`](../../api-reference/sources.md#statefulsourceflush) the source MUST call [`state`](../../api-reference/sources.md#statefulsourcestate) again to start a new transaction. 
+
+Example subclass:
+
+```python
+import sys
+import time
+
+from quixstreams.sources.base import StatefulSource
+
+class RangeSource(StatefulSource):
+    def run(self):
+        state = self.state()
+
+        start = state.get("current", 0) + 1
+        for i in range(start, sys.maxsize):
+            if not self.running:
+                return
+
+            state.set("current", i)
+            serialized = self._producer_topic.serialize(value=i)
+            self.produce(key="range", value=serialized.value)
+            time.sleep(0.1)
+
+            # flush the state every 10 messages
+            if i % 10 == 0:
+                self.flush()
+                state = self.state()
+```
+
+For more information, see [`quixstreams.sources.base.StatefulSource`](../../api-reference/sources.md#statefulsource) docstrings.
+
 ## BaseSource
 
 This is the base class for all sources. It handles configuring the source and requires the definition of three must-have methods.
 
-* `start`: This method is called, in the subprocess, when the source is started.
-* `stop`: This method is called, in the subporcess, when the application is shutting down.
-* `default_topic`: This method is called, in the main process, when a topic is not provided with the source.
+* [`start`](../../api-reference/sources.md#basesourcestart): This method is called, in the subprocess, when the source is started.
+* [`stop`](../../api-reference/sources.md#basesourcestop): This method is called, in the subporcess, when the application is shutting down.
+* [`default_topic`](../../api-reference/sources.md#basesourcedefault_topic): This method is called, in the main process, when a topic is not provided with the source.
 
 For more information, see [`quixstreams.sources.base.BaseSource`](../../api-reference/sources.md#basesource) docstrings.
 
