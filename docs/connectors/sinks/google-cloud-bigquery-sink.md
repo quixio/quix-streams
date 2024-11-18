@@ -93,9 +93,9 @@ Here is how the Python types are mapped to the BigQuery column types:
 
 ```
 {
-    int: "NUMERIC",
-    float: "NUMERIC",
-    decimal.Decimal: "NUMERIC",
+    int: "FLOAT64",
+    float: "FLOAT64",
+    Decimal: "BIGNUMERIC",
     str: "STRING",
     bytes: "BYTES",
     datetime: "DATETIME",
