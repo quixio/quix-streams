@@ -9,6 +9,8 @@ from mypy_boto3_kinesis.type_defs import GetShardIteratorOutputTypeDef, ShardTyp
 from mypy_boto3_kinesis.type_defs import RecordTypeDef as KinesisRecord
 from typing_extensions import Self
 
+__all__ = ("KinesisRecord", "Authentication")
+
 logger = logging.getLogger(__name__)
 
 _OFFSET_RESET_DICT = {"earliest": "TRIM_HORIZON", "latest": "LATEST"}
@@ -24,35 +26,7 @@ class KinesisCheckpointer(Protocol):
 
     def set(self, key: str, value: str): ...
 
-    def commit(self): ...
-
-
-class State(KinesisCheckpointer):
-    def __init__(self, starting_positions: Optional[dict] = None):
-        self._state = starting_positions or {}
-        self._cache = {}
-
-    def get(self, key) -> Optional[str]:
-        """
-        Retrieve the value of a key. First checks the cache,
-        then falls back to the state if the key isn't in the cache.
-        """
-        if key in self._cache:
-            return self._cache[key]
-        return self._state.get(key)
-
-    def set(self, key, value):
-        """
-        Sets a value in the cache.
-        """
-        self._cache[key] = value
-
-    def commit(self):
-        """
-        Writes all items from the cache into the state and clears the cache.
-        """
-        self._state.update(self._cache)
-        self._cache.clear()
+    def commit(self, force: bool = False): ...
 
 
 class Authentication:
@@ -101,8 +75,13 @@ class KinesisConsumer:
         self._backoff_secs = backoff_secs
         self._auto_offset_reset = _OFFSET_RESET_DICT[auto_offset_reset]
         self._client: Optional[KinesisClient] = None
-        self._total_processed: int = 0
-        self._processed: dict[str, int] = {}
+
+    def __enter__(self) -> Self:
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
 
     def _init_client(self):
         self._client = boto3.client("kinesis", **self._auth.auth)
@@ -113,12 +92,8 @@ class KinesisConsumer:
         )
         self._message_processor(record)
         self._checkpointer.set(shard_id, record["SequenceNumber"])
-        # TODO: remove below once testing done
-        self._processed[shard_id] = self._processed.setdefault(shard_id, 0) + 1
-        self._total_processed += 1
-        logger.debug(f"TOTAL PROCESSED: {self._total_processed}")
 
-    def list_shards(self) -> list[ShardTypeDef]:
+    def _list_shards(self) -> list[ShardTypeDef]:
         """List all shards in the stream."""
         shards: list[ShardTypeDef] = []
         response = self._client.list_shards(StreamName=self._stream)
@@ -144,24 +119,14 @@ class KinesisConsumer:
         return response["ShardIterator"]
 
     def _init_shards(self):
-        if not (shards := [shard["ShardId"] for shard in self.list_shards()]):
+        if not (shards := [shard["ShardId"] for shard in self._list_shards()]):
             raise ValueError(f"No shards for stream {self._stream}")
         self._shard_iterators = {
             shard: self._get_shard_iterator(shard) for shard in shards
         }
 
-    def commit(self):
-        self._checkpointer.commit()
-
     def _poll_and_process_shard(self, shard_id):
-        """
-        Read a limited number of records from a shard.
-
-        Args:
-            shard_id (str): The ID of the shard.
-        Returns:
-            str: Updated shard iterator.
-        """
+        """Read records from a shard."""
         if (
             backoff_time := self._shard_backoff.get(shard_id)
         ) and time.monotonic() < backoff_time:
@@ -201,12 +166,8 @@ class KinesisConsumer:
         self._checkpointer.begin()
         self._init_shards()
 
-    def __enter__(self) -> Self:
-        self.start()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        pass
+    def commit(self, force: bool = False):
+        self._checkpointer.commit(force=force)
 
     def run(self):
         try:
@@ -214,7 +175,7 @@ class KinesisConsumer:
             self._init_shards()
             while True:
                 self.poll_and_process_shards()
-                self._checkpointer.commit()
+                self.commit()
         except Exception as e:
             logger.debug(f"KinesisConsumer encountered an error: {e}")
         finally:

@@ -12,6 +12,8 @@ from .consumer import (
     KinesisRecord,
 )
 
+__all__ = ("KinesisSource",)
+
 
 class SourceCheckpointer(KinesisCheckpointer):
     def __init__(self, stateful_source: StatefulSource, commit_interval: float = 5.0):
@@ -34,8 +36,10 @@ class SourceCheckpointer(KinesisCheckpointer):
     def set(self, key: str, value: str):
         self._state.set(key, value)
 
-    def commit(self):
-        if (now := time.monotonic()) - self._last_committed_at > self._commit_interval:
+    def commit(self, force: bool = False):
+        if (
+            (now := time.monotonic()) - self._last_committed_at > self._commit_interval
+        ) or force:
             self._source.flush()
             self._last_committed_at = now
             self._state = None
