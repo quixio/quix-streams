@@ -1,8 +1,8 @@
 from collections import deque
 from itertools import islice
-from typing import Any, Deque, Iterable, Iterator, List, Tuple
+from typing import Any, Deque, Iterable, Iterator
 
-from quixstreams.models import HeaderValue
+from quixstreams.models import HeadersTuples
 
 from .item import SinkItem
 
@@ -47,7 +47,7 @@ class SinkBatch:
         value: Any,
         key: Any,
         timestamp: int,
-        headers: List[Tuple[str, HeaderValue]],
+        headers: HeadersTuples,
         offset: int,
     ):
         self._buffer.append(

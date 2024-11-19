@@ -32,7 +32,7 @@ def deserialize(value: bytes, loads: LoadsFunc) -> Any:
         return loads(value)
     except Exception as exc:
         raise StateSerializationError(
-            f'Failed to deserialize value: "{value}"'
+            f'Failed to deserialize value: "{value!r}"'
         ) from exc
 
 

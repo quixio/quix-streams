@@ -66,7 +66,7 @@ class WindowedTransactionState(WindowedState):
             window_timestamp_ms=window_timestamp_ms,
         )
 
-    def get_latest_timestamp(self) -> int:
+    def get_latest_timestamp(self) -> Optional[int]:
         """
         Get the latest observed timestamp for the current message key.
 

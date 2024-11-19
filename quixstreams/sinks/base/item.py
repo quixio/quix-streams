@@ -1,6 +1,6 @@
-from typing import Any, List, Tuple
+from typing import Any
 
-from quixstreams.models import HeaderValue
+from quixstreams.models import HeadersTuples
 
 __all__ = ("SinkItem",)
 
@@ -19,7 +19,7 @@ class SinkItem:
         value: Any,
         key: Any,
         timestamp: int,
-        headers: List[Tuple[str, HeaderValue]],
+        headers: HeadersTuples,
         offset: int,
     ):
         self.key = key

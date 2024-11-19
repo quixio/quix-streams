@@ -232,7 +232,11 @@ class TestRecoveryManager:
 @pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
 class TestRecoveryManagerRecover:
     def test_assign_partition(
-        self, state_manager_factory, recovery_manager_factory, topic_manager_factory
+        self,
+        state_manager_factory,
+        recovery_manager_factory,
+        topic_manager_factory,
+        producer,
     ):
         """
         Check that RecoveryManager.assign_partition() assigns proper changelog topic
@@ -253,7 +257,9 @@ class TestRecoveryManagerRecover:
         recovery_manager = recovery_manager_factory(
             consumer=consumer, topic_manager=topic_manager
         )
-        state_manager = state_manager_factory(recovery_manager=recovery_manager)
+        state_manager = state_manager_factory(
+            recovery_manager=recovery_manager, producer=producer
+        )
 
         # Create a topic
         topic_manager.topic(topic_name)

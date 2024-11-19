@@ -1,13 +1,13 @@
 import logging
 import time
-from typing import Any, Dict, List, Optional, Union
+from typing import Dict, List, Literal, Optional, Union, cast
 
 from rocksdict import AccessType, ColumnFamily, Rdict, WriteBatch
 
 from quixstreams.models import ConfluentKafkaMessageProto
 from quixstreams.state.base import PartitionTransactionCache, StorePartition
 from quixstreams.state.exceptions import ColumnFamilyDoesNotExist
-from quixstreams.state.metadata import METADATA_CF_NAME
+from quixstreams.state.metadata import METADATA_CF_NAME, markers
 from quixstreams.state.recovery import ChangelogProducer
 from quixstreams.state.serialization import (
     int_from_int64_bytes,
@@ -102,6 +102,9 @@ class RocksDBStorePartition(StorePartition):
             # Determine whether the update should be applied or skipped based on the
             # latest committed offset and processed offset from the changelog message header
             key = changelog_message.key()
+            if not isinstance(key, bytes):
+                raise ValueError(f"invalid changelog message key {key}")
+
             if value := changelog_message.value():
                 batch.put(key, value, cf_handle)
             else:
@@ -175,8 +178,8 @@ class RocksDBStorePartition(StorePartition):
         self._db.write(batch)
 
     def get(
-        self, key: bytes, default: Any = None, cf_name: str = "default"
-    ) -> Union[None, bytes, Any]:
+        self, key: bytes, cf_name: str = "default"
+    ) -> Union[bytes, Literal[markers.UNDEFINED]]:
         """
         Get a key from RocksDB.
 
@@ -185,8 +188,10 @@ class RocksDBStorePartition(StorePartition):
         :param cf_name: rocksdb column family name. Default - "default"
         :return: a value if the key is present in the DB. Otherwise, `default`
         """
-        cf_dict = self.get_column_family(cf_name)
-        return cf_dict.get(key, default)
+        result = self.get_column_family(cf_name).get(key, default=markers.UNDEFINED)
+
+        # RDict accept Any type as value but we only write bytes so we should only get bytes back.
+        return cast(Union[bytes, Literal[markers.UNDEFINED]], result)
 
     def exists(self, key: bytes, cf_name: str = "default") -> bool:
         """
@@ -208,8 +213,11 @@ class RocksDBStorePartition(StorePartition):
         offset_bytes = metadata_cf.get(PROCESSED_OFFSET_KEY)
         if offset_bytes is None:
             offset_bytes = self._db.get(PROCESSED_OFFSET_KEY)
-        if offset_bytes is not None:
-            return int_from_int64_bytes(offset_bytes)
+
+        if offset_bytes is None:
+            return None
+
+        return int_from_int64_bytes(offset_bytes)
 
     def get_changelog_offset(self) -> Optional[int]:
         """
@@ -218,8 +226,10 @@ class RocksDBStorePartition(StorePartition):
         """
         metadata_cf = self.get_column_family(METADATA_CF_NAME)
         offset_bytes = metadata_cf.get(CHANGELOG_OFFSET_KEY)
-        if offset_bytes is not None:
-            return int_from_int64_bytes(offset_bytes)
+        if offset_bytes is None:
+            return None
+
+        return int_from_int64_bytes(offset_bytes)
 
     def close(self):
         """

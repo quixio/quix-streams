@@ -116,8 +116,6 @@ module = [
     "quixstreams.dataframe.*",
     "quixstreams.models.*",
     "quixstreams.platforms.*",
-    "quixstreams.state.*",
     "quixstreams.rowproducer.*"
 ]
 ignore_errors = true
-

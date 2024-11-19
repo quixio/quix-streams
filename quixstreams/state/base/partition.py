@@ -1,12 +1,13 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Literal, Optional, Union
 
 from quixstreams.models import ConfluentKafkaMessageProto
 from quixstreams.state.exceptions import ColumnFamilyHeaderMissing
 from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER,
+    markers,
 )
 from quixstreams.state.serialization import DumpsFunc, LoadsFunc
 from quixstreams.utils.json import loads as json_loads
@@ -85,8 +86,8 @@ class StorePartition(ABC):
 
     @abstractmethod
     def get(
-        self, key: bytes, default: Any = None, cf_name: str = "default"
-    ) -> Union[None, bytes, Any]:
+        self, key: bytes, cf_name: str = "default"
+    ) -> Union[bytes, Literal[markers.UNDEFINED]]:
         """
         Get a key from the store
 
@@ -121,7 +122,7 @@ class StorePartition(ABC):
 
     def recover_from_changelog_message(
         self, changelog_message: ConfluentKafkaMessageProto, committed_offset: int
-    ):
+    ) -> None:
         """
         Updates state from a given changelog message.
 

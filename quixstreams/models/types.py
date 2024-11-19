@@ -1,13 +1,16 @@
-from typing import Dict, List, Optional, Tuple, Union
+from typing import List, Mapping, Optional, Sequence, Tuple, Union
 
 from typing_extensions import Protocol
 
-MessageKey = Union[str, bytes]
+MessageKey = Optional[Union[str, bytes]]
 MessageValue = Union[str, bytes]
-HeaderValue = Optional[Union[str, bytes]]
-MessageHeadersTuples = List[Tuple[str, HeaderValue]]
-MessageHeadersMapping = Dict[str, HeaderValue]
-Headers = Union[MessageHeadersTuples, MessageHeadersMapping]
+
+HeadersValue = Union[str, bytes]
+HeadersMapping = Mapping[str, HeadersValue]
+HeadersTuples = Sequence[Tuple[str, HeadersValue]]
+Headers = Union[HeadersTuples, HeadersMapping]
+
+KafkaHeaders = Optional[List[Tuple[str, bytes]]]
 
 
 class ConfluentKafkaMessageProto(Protocol):
@@ -21,13 +24,13 @@ class ConfluentKafkaMessageProto(Protocol):
 
     """
 
-    def headers(self, *args, **kwargs) -> Optional[MessageHeadersTuples]: ...
+    def headers(self, *args, **kwargs) -> KafkaHeaders: ...
 
-    def key(self, *args, **kwargs) -> Optional[MessageKey]: ...
+    def key(self, *args, **kwargs) -> MessageKey: ...
 
     def offset(self, *args, **kwargs) -> int: ...
 
-    def partition(self, *args, **kwargs) -> int: ...
+    def partition(self, *args, **kwargs) -> Optional[int]: ...
 
     def timestamp(self, *args, **kwargs) -> Tuple[int, int]: ...
 

@@ -8,7 +8,6 @@ from datetime import timedelta
 from typing import (
     Any,
     Callable,
-    Collection,
     Dict,
     List,
     Literal,
@@ -36,7 +35,7 @@ from quixstreams.core.stream import (
     VoidExecutor,
 )
 from quixstreams.models import (
-    HeaderValue,
+    HeadersTuples,
     MessageContext,
     Row,
     Topic,
@@ -626,8 +625,8 @@ class StreamingDataFrame(BaseStreaming):
     def set_headers(
         self,
         func: Callable[
-            [Any, Any, int, List[Tuple[str, HeaderValue]]],
-            Collection[Tuple[str, HeaderValue]],
+            [Any, Any, int, HeadersTuples],
+            HeadersTuples,
         ],
     ) -> Self:
         """
@@ -663,8 +662,8 @@ class StreamingDataFrame(BaseStreaming):
             value: Any,
             key: Any,
             timestamp: int,
-            headers: Collection[Tuple[str, HeaderValue]],
-        ) -> Tuple[Any, Any, int, Collection[Tuple[str, HeaderValue]]]:
+            headers: HeadersTuples,
+        ) -> Tuple[Any, Any, int, HeadersTuples]:
             # Create a shallow copy of original headers to prevent potential mutations
             # of the same collection
             headers = list(headers) if headers else []
@@ -1102,7 +1101,7 @@ class StreamingDataFrame(BaseStreaming):
         self._processing_context.sink_manager.register(sink)
 
         def _sink_callback(
-            value: Any, key: Any, timestamp: int, headers: List[Tuple[str, HeaderValue]]
+            value: Any, key: Any, timestamp: int, headers: HeadersTuples
         ):
             ctx = message_context()
             sink.add(

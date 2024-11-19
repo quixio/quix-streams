@@ -6,7 +6,7 @@ from confluent_kafka import TopicPartition as ConfluentPartition
 from quixstreams.kafka import BaseConsumer
 from quixstreams.models import ConfluentKafkaMessageProto, Topic
 from quixstreams.models.topics import TopicConfig, TopicManager
-from quixstreams.models.types import MessageHeadersMapping
+from quixstreams.models.types import Headers
 from quixstreams.rowproducer import RowProducer
 from quixstreams.state.base import StorePartition
 from quixstreams.utils.dicts import dict_values
@@ -37,12 +37,14 @@ class RecoveryPartition:
         partition_num: int,
         store_partition: StorePartition,
         committed_offset: int,
+        lowwater: int,
+        highwater: int,
     ):
         self._changelog_name = changelog_name
         self._partition_num = partition_num
         self._store_partition = store_partition
-        self._changelog_lowwater: Optional[int] = None
-        self._changelog_highwater: Optional[int] = None
+        self._changelog_lowwater = lowwater
+        self._changelog_highwater = highwater
         self._committed_offset = committed_offset
         self._recovery_consume_position: Optional[int] = None
         self._initial_offset: Optional[int] = None
@@ -90,7 +92,10 @@ class RecoveryPartition:
         """
         Determine if the current changelog offset stored in state is invalid.
         """
-        return self._changelog_highwater and (self._changelog_highwater <= self.offset)
+        if self._changelog_highwater == 0:
+            return False
+
+        return self._changelog_highwater <= self.offset
 
     @property
     def recovery_consume_position(self) -> Optional[int]:
@@ -111,16 +116,6 @@ class RecoveryPartition:
         self._store_partition.recover_from_changelog_message(
             changelog_message=changelog_message, committed_offset=self._committed_offset
         )
-
-    def set_watermarks(self, lowwater: int, highwater: int):
-        """
-        Set the changelog watermarks as gathered from Consumer.get_watermark_offsets()
-
-        :param lowwater: topic partition lowwater
-        :param highwater: topic partition highwater
-        """
-        self._changelog_lowwater = lowwater
-        self._changelog_highwater = highwater
 
     def set_recovery_consume_position(self, offset: int):
         """
@@ -196,7 +191,7 @@ class ChangelogProducer:
         self,
         key: bytes,
         value: Optional[bytes] = None,
-        headers: Optional[MessageHeadersMapping] = None,
+        headers: Optional[Headers] = None,
     ):
         """
         Produce a message to a changelog topic partition.
@@ -313,23 +308,25 @@ class RecoveryManager:
             changelog_topic = self._topic_manager.changelog_topics[topic_name][
                 store_name
             ]
-            recovery_partition = RecoveryPartition(
-                changelog_name=changelog_topic.name,
-                partition_num=partition_num,
-                store_partition=store_partition,
-                committed_offset=committed_offset,
-            )
 
             lowwater, highwater = self._consumer.get_watermark_offsets(
                 ConfluentPartition(
-                    topic=recovery_partition.changelog_name,
-                    partition=recovery_partition.partition_num,
+                    topic=changelog_topic.name,
+                    partition=partition_num,
                 ),
                 timeout=10,
             )
-            recovery_partition.set_watermarks(lowwater=lowwater, highwater=highwater)
 
-            partitions.append(recovery_partition)
+            partitions.append(
+                RecoveryPartition(
+                    changelog_name=changelog_topic.name,
+                    partition_num=partition_num,
+                    store_partition=store_partition,
+                    committed_offset=committed_offset,
+                    lowwater=lowwater,
+                    highwater=highwater,
+                )
+            )
         return partitions
 
     def assign_partition(

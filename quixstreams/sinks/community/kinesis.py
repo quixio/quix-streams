@@ -13,7 +13,7 @@ except ImportError as exc:
         'run "pip install quixstreams[kinesis]" to use KinesisSink'
     ) from exc
 
-from quixstreams.models.types import HeaderValue
+from quixstreams.models.types import HeadersTuples
 from quixstreams.sinks.base import BaseSink
 from quixstreams.sinks.base.exceptions import SinkBackpressureError
 
@@ -82,7 +82,7 @@ class KinesisSink(BaseSink):
         value: Any,
         key: Any,
         timestamp: int,
-        headers: list[tuple[str, HeaderValue]],
+        headers: HeadersTuples,
         topic: str,
         partition: int,
         offset: int,

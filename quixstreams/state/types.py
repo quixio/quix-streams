@@ -45,7 +45,7 @@ class WindowedState(Protocol):
         """
         ...
 
-    def get_latest_timestamp(self) -> int:
+    def get_latest_timestamp(self) -> Optional[int]:
         """
         Get the latest observed timestamp for the current state partition.
 

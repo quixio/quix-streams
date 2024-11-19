@@ -1,13 +1,13 @@
-from typing import Optional
-
-from quixstreams.models.types import MessageHeadersMapping, MessageHeadersTuples
+from quixstreams.models.types import (
+    HeadersMapping,
+    HeadersTuples,
+    KafkaHeaders,
+)
 
 __all__ = ("merge_headers",)
 
 
-def merge_headers(
-    original: Optional[MessageHeadersTuples], other: MessageHeadersMapping
-) -> MessageHeadersTuples:
+def merge_headers(original: KafkaHeaders, other: HeadersMapping) -> HeadersTuples:
     """
     Merge two sets of Kafka message headers, overwriting headers in "origin"
     by the values from "other".

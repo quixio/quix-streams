@@ -1,9 +1,9 @@
 import logging
 import sys
 import time
-from typing import Any, Iterable, List, Mapping, Optional, Tuple
+from typing import Any, Iterable, Mapping, Optional
 
-from quixstreams.models import HeaderValue
+from quixstreams.models import HeadersTuples
 
 try:
     import influxdb_client_3
@@ -127,7 +127,7 @@ class InfluxDB3Sink(BatchingSink):
         value: Any,
         key: Any,
         timestamp: int,
-        headers: List[Tuple[str, HeaderValue]],
+        headers: HeadersTuples,
         topic: str,
         partition: int,
         offset: int,

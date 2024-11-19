@@ -5,15 +5,14 @@ from abc import ABC
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any, Dict, Optional, Set, Tuple, Union
 
+from quixstreams.models import Headers
 from quixstreams.state.exceptions import InvalidChangelogOffset, StateTransactionError
 from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER,
     DEFAULT_PREFIX,
-    DELETED,
     PREFIX_SEPARATOR,
-    UNDEFINED,
-    Undefined,
+    markers,
 )
 from quixstreams.state.serialization import DumpsFunc, LoadsFunc, deserialize, serialize
 from quixstreams.utils.json import dumps as json_dumps
@@ -43,7 +42,7 @@ class PartitionTransactionCache:
     to simplify the querying over them.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         # A map with updated keys in format {<cf>: {<prefix>: {<key>: <value>}}}
         # Note: "updates" are bucketed per prefix to speed up iterating over the
         # specific set of keys when we merge updates with data from the stores.
@@ -62,7 +61,7 @@ class PartitionTransactionCache:
         key: bytes,
         prefix: bytes,
         cf_name: str = "default",
-    ) -> Union[bytes, Undefined]:
+    ) -> Union[bytes, markers]:
         """
         Get a value for the key.
 
@@ -80,12 +79,12 @@ class PartitionTransactionCache:
         # Check if the key has been deleted
         if key in self._deleted[cf_name]:
             # The key is deleted and the store doesn't need to be checked
-            return DELETED
+            return markers.DELETED
 
         # Check if the key has been updated
         # If the key is not present in the cache, we need to check the store and return
         # UNDEFINED to signify that
-        return self._updated[cf_name][prefix].get(key, UNDEFINED)
+        return self._updated[cf_name][prefix].get(key, markers.UNDEFINED)
 
     def set(self, key: bytes, value: bytes, prefix: bytes, cf_name: str = "default"):
         """
@@ -243,11 +242,13 @@ class PartitionTransaction(ABC):
 
         :return: (topic, partition) or None
         """
-        if self.changelog_producer is not None:
-            return (
-                self.changelog_producer.changelog_name,
-                self.changelog_producer.partition,
-            )
+        if self.changelog_producer is None:
+            return None
+
+        return (
+            self.changelog_producer.changelog_name,
+            self.changelog_producer.partition,
+        )
 
     def _serialize_value(self, value: Any) -> bytes:
         return serialize(value, dumps=self._dumps)
@@ -302,14 +303,14 @@ class PartitionTransaction(ABC):
         cached = self._update_cache.get(
             key=key_serialized, prefix=prefix, cf_name=cf_name
         )
-        if cached is DELETED:
+        if cached is markers.DELETED:
             return default
 
-        if cached is not UNDEFINED:
+        if cached is not markers.UNDEFINED:
             return self._deserialize_value(cached)
 
-        stored = self._partition.get(key_serialized, UNDEFINED, cf_name)
-        if stored is UNDEFINED:
+        stored = self._partition.get(key_serialized, cf_name)
+        if stored is markers.UNDEFINED:
             return default
 
         return self._deserialize_value(stored)
@@ -369,9 +370,9 @@ class PartitionTransaction(ABC):
         cached = self._update_cache.get(
             key=key_serialized, prefix=prefix, cf_name=cf_name
         )
-        if cached is DELETED:
+        if cached is markers.DELETED:
             return False
-        elif cached is not UNDEFINED:
+        elif cached is not markers.UNDEFINED:
             return True
         else:
             return self._partition.exists(key_serialized, cf_name=cf_name)
@@ -413,7 +414,7 @@ class PartitionTransaction(ABC):
         column_families = self._update_cache.get_column_families()
 
         for cf_name in column_families:
-            headers = {
+            headers: Headers = {
                 CHANGELOG_CF_MESSAGE_HEADER: cf_name,
                 CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER: source_tp_offset_header,
             }

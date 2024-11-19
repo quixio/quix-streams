@@ -1,8 +1,8 @@
 import abc
 import logging
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, Tuple
 
-from quixstreams.models import HeaderValue
+from quixstreams.models import HeadersTuples
 from quixstreams.sinks.base.batch import SinkBatch
 
 logger = logging.getLogger(__name__)
@@ -35,7 +35,7 @@ class BaseSink(abc.ABC):
         value: Any,
         key: Any,
         timestamp: int,
-        headers: List[Tuple[str, HeaderValue]],
+        headers: HeadersTuples,
         topic: str,
         partition: int,
         offset: int,
@@ -95,7 +95,7 @@ class BatchingSink(BaseSink):
         value: Any,
         key: Any,
         timestamp: int,
-        headers: List[Tuple[str, HeaderValue]],
+        headers: HeadersTuples,
         topic: str,
         partition: int,
         offset: int,

@@ -46,14 +46,20 @@ class StateStoreManager:
         recovery_manager: Optional[RecoveryManager] = None,
         default_store_type: StoreTypes = RocksDBStore,
     ):
-        self._state_dir = (Path(state_dir) / group_id).absolute() if state_dir else None
+        if state_dir is not None:
+            state_dir = Path(state_dir).absolute()
+
+            if group_id is not None:
+                state_dir = state_dir / group_id
+
+        self._state_dir = state_dir
         self._rocksdb_options = rocksdb_options
         self._stores: Dict[Optional[str], Dict[str, Store]] = {}
         self._producer = producer
         self._recovery_manager = recovery_manager
         self._default_store_type = default_store_type
 
-    def _init_state_dir(self):
+    def _init_state_dir(self) -> None:
         if self._state_dir is None:
             return
 
@@ -99,16 +105,22 @@ class StateStoreManager:
     def default_store_type(self) -> StoreTypes:
         return self._default_store_type
 
-    def do_recovery(self):
+    def do_recovery(self) -> None:
         """
         Perform a state recovery, if necessary.
         """
+        if self._recovery_manager is None:
+            raise RuntimeError("a recovery manager is needed to do a recovery")
+
         return self._recovery_manager.do_recovery()
 
-    def stop_recovery(self):
+    def stop_recovery(self) -> None:
         """
         Stop recovery (called during app shutdown).
         """
+        if self._recovery_manager is None:
+            raise RuntimeError("a recovery manager is needed to do a recovery")
+
         return self._recovery_manager.stop_recovery()
 
     def get_store(
@@ -132,19 +144,21 @@ class StateStoreManager:
         topic_name: Optional[str],
         store_name: str,
         topic_config: Optional[TopicConfig] = None,
-    ) -> ChangelogProducerFactory:
-        if self._recovery_manager:
-            logger.debug(
-                f'State Manager: registering changelog for store "{store_name}" '
-                f'(topic "{topic_name}")'
-            )
-            changelog_topic = self._recovery_manager.register_changelog(
-                topic_name=topic_name, store_name=store_name, topic_config=topic_config
-            )
-            return ChangelogProducerFactory(
-                changelog_name=changelog_topic.name,
-                producer=self._producer,
-            )
+    ) -> Optional[ChangelogProducerFactory]:
+        if self._recovery_manager is None or self._producer is None:
+            return None
+
+        logger.debug(
+            f'State Manager: registering changelog for store "{store_name}" '
+            f'(topic "{topic_name}")'
+        )
+        changelog_topic = self._recovery_manager.register_changelog(
+            topic_name=topic_name, store_name=store_name, topic_config=topic_config
+        )
+        return ChangelogProducerFactory(
+            changelog_name=changelog_topic.name,
+            producer=self._producer,
+        )
 
     def register_store(
         self,
@@ -152,7 +166,7 @@ class StateStoreManager:
         store_name: str = DEFAULT_STATE_STORE_NAME,
         store_type: Optional[StoreTypes] = None,
         topic_config: Optional[TopicConfig] = None,
-    ):
+    ) -> None:
         """
         Register a state store to be managed by StateStoreManager.
 
@@ -173,7 +187,7 @@ class StateStoreManager:
 
             store_type = store_type or self.default_store_type
             if store_type == RocksDBStore:
-                factory = RocksDBStore(
+                factory: Store = RocksDBStore(
                     name=store_name,
                     topic=topic_name,
                     base_dir=str(self._state_dir),
@@ -191,7 +205,7 @@ class StateStoreManager:
 
             self._stores.setdefault(topic_name, {})[store_name] = factory
 
-    def register_windowed_store(self, topic_name: str, store_name: str):
+    def register_windowed_store(self, topic_name: str, store_name: str) -> None:
         """
         Register a windowed state store to be managed by StateStoreManager.
 
@@ -217,7 +231,7 @@ class StateStoreManager:
             options=self._rocksdb_options,
         )
 
-    def clear_stores(self):
+    def clear_stores(self) -> None:
         """
         Delete all state stores managed by StateStoreManager.
         """
@@ -230,7 +244,8 @@ class StateStoreManager:
                 "Cannot clear stores with active partitions assigned"
             )
 
-        shutil.rmtree(self._state_dir)
+        if self._state_dir:
+            shutil.rmtree(self._state_dir)
 
     def on_partition_assign(
         self, topic: Optional[str], partition: int, committed_offset: int
@@ -258,7 +273,7 @@ class StateStoreManager:
             )
         return store_partitions
 
-    def on_partition_revoke(self, topic: str, partition: int):
+    def on_partition_revoke(self, topic: str, partition: int) -> None:
         """
         Revoke store partitions for each registered store for the given `TopicPartition`
 
@@ -271,14 +286,14 @@ class StateStoreManager:
             for store in stores:
                 store.revoke_partition(partition=partition)
 
-    def init(self):
+    def init(self) -> None:
         """
         Initialize `StateStoreManager` and create a store directory
         :return:
         """
         self._init_state_dir()
 
-    def close(self):
+    def close(self) -> None:
         """
         Close all registered stores
         """
