@@ -38,13 +38,12 @@ class Authentication:
         aws_secret_access_key: Optional[str] = None,
     ):
         """
-        :param aws_region: The AWS region for the S3 bucket and Glue catalog.
+        :param aws_region: The AWS region.
+            NOTE: can alternatively set the REGION_NAME environment variable
         :param aws_access_key_id: the AWS access key ID.
             NOTE: can alternatively set the AWS_ACCESS_KEY_ID environment variable
-            when using AWS Glue.
         :param aws_secret_access_key: the AWS secret access key.
             NOTE: can alternatively set the AWS_SECRET_ACCESS_KEY environment variable
-            when using AWS Glue.
         """
         self.auth = {
             "endpoint_url": endpoint_url,
@@ -87,9 +86,6 @@ class KinesisConsumer:
         self._client = boto3.client("kinesis", **self._auth.auth)
 
     def _process_record(self, shard_id: str, record: KinesisRecord):
-        logger.debug(
-            f"ShardId: {shard_id}, Partition Key: {record['PartitionKey']}, Data: {record['Data']}"
-        )
         self._message_processor(record)
         self._checkpointer.set(shard_id, record["SequenceNumber"])
 
@@ -146,14 +142,14 @@ class KinesisConsumer:
 
         except ClientError as e:
             error_code = e.response["Error"]["Code"]
-            logger.debug(f"Error reading from shard {shard_id}: {error_code}")
+            logger.error(f"Error reading from shard {shard_id}: {error_code}")
             if error_code == "ProvisionedThroughputExceededException":
                 self._shard_backoff[shard_id] = time.monotonic() + self._backoff_secs
             elif error_code == "ExpiredIteratorException":
-                logger.debug(f"Shard iterator expired for shard {shard_id}.")
+                logger.error(f"Shard iterator expired for shard {shard_id}.")
                 raise
             else:
-                logger.debug(f"Unrecoverable error: {e}")
+                logger.error(f"Unrecoverable error: {e}")
                 raise
 
     def poll_and_process_shards(self):
@@ -170,9 +166,9 @@ class KinesisConsumer:
         self._checkpointer.commit(force=force)
 
     def run(self):
+        """For running _without_ using Quix Streams Source framework."""
         try:
-            self._init_client()
-            self._init_shards()
+            self.start()
             while True:
                 self.poll_and_process_shards()
                 self.commit()
