@@ -52,7 +52,7 @@ class ProcessingContext:
         :param partition: partition number
         :param offset: message offset
         """
-        self._checkpoint.store_offset(topic=topic, partition=partition, offset=offset)
+        self.checkpoint.store_offset(topic=topic, partition=partition, offset=offset)
 
     def init_checkpoint(self):
         """
@@ -79,13 +79,13 @@ class ProcessingContext:
 
         :param force: if `True`, commit the Checkpoint before its expiration deadline.
         """
-        if self._checkpoint.expired() or force:
-            if self._checkpoint.empty():
-                self._checkpoint.close()
+        if self.checkpoint.expired() or force:
+            if self.checkpoint.empty():
+                self.checkpoint.close()
             else:
                 logger.debug(f"Committing a checkpoint; forced={force}")
                 start = time.monotonic()
-                self._checkpoint.commit()
+                self.checkpoint.commit()
                 elapsed = round(time.monotonic() - start, 2)
                 logger.debug(
                     f"Committed a checkpoint; forced={force}, time_elapsed={elapsed}s"

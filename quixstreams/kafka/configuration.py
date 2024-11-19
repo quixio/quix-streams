@@ -3,7 +3,12 @@ from typing import Callable, Literal, Optional, Tuple, Type
 import pydantic
 from pydantic import AliasChoices, Field, SecretStr
 from pydantic.functional_validators import BeforeValidator
-from pydantic_settings import PydanticBaseSettingsSource
+from pydantic_settings import (
+    BaseSettings as PydanticBaseSettings,
+)
+from pydantic_settings import (
+    PydanticBaseSettingsSource,
+)
 from typing_extensions import Annotated, Self
 
 from quixstreams.utils.settings import BaseSettings
@@ -93,7 +98,7 @@ class ConnectionConfig(BaseSettings):
     @classmethod
     def settings_customise_sources(
         cls,
-        settings_cls: Type[BaseSettings],
+        settings_cls: Type[PydanticBaseSettings],
         init_settings: PydanticBaseSettingsSource,
         env_settings: PydanticBaseSettingsSource,
         dotenv_settings: PydanticBaseSettingsSource,

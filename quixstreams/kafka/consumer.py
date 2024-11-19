@@ -1,7 +1,7 @@
 import functools
 import logging
 import typing
-from typing import Callable, List, Optional, Tuple, Union
+from typing import Any, Callable, List, Optional, Tuple, Union
 
 from confluent_kafka import (
     Consumer as ConfluentConsumer,
@@ -18,6 +18,7 @@ from quixstreams.exceptions import KafkaPartitionError, PartitionAssignmentError
 from .configuration import ConnectionConfig
 
 __all__ = (
+    "BaseConsumer",
     "Consumer",
     "AutoOffsetReset",
     "RebalancingCallback",
@@ -64,7 +65,7 @@ def _wrap_assignment_errors(func):
     return wrapper
 
 
-class Consumer:
+class BaseConsumer:
     def __init__(
         self,
         broker_address: Union[str, ConnectionConfig],
@@ -147,7 +148,7 @@ class Consumer:
         """
         return self._consumer.poll(timeout=timeout if timeout is not None else -1)
 
-    def subscribe(
+    def _subscribe(
         self,
         topics: List[str],
         on_assign: Optional[RebalancingCallback] = None,
@@ -302,7 +303,8 @@ class Consumer:
             raise ValueError(
                 'Parameters "message" and "offsets" are mutually exclusive'
             )
-        kwargs = {
+
+        kwargs: dict[str, Any] = {
             "asynchronous": asynchronous,
         }
         if offsets is not None:
@@ -559,3 +561,14 @@ class Consumer:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
+
+
+class Consumer(BaseConsumer):
+    def subscribe(
+        self,
+        topics: List[str],
+        on_assign: Optional[RebalancingCallback] = None,
+        on_revoke: Optional[RebalancingCallback] = None,
+        on_lost: Optional[RebalancingCallback] = None,
+    ):
+        return super()._subscribe(topics, on_assign, on_revoke, on_lost)

@@ -57,11 +57,11 @@ class KafkaReplicatorSource(Source):
         app_config: "ApplicationConfig",
         topic: str,
         broker_address: Union[str, ConnectionConfig],
-        auto_offset_reset: AutoOffsetReset = "latest",
+        auto_offset_reset: Optional[AutoOffsetReset] = "latest",
         consumer_extra_config: Optional[dict] = None,
         consumer_poll_timeout: Optional[float] = None,
         shutdown_timeout: float = 10,
-        on_consumer_error: Optional[ConsumerErrorCallback] = default_on_consumer_error,
+        on_consumer_error: ConsumerErrorCallback = default_on_consumer_error,
         value_deserializer: DeserializerType = "json",
         key_deserializer: DeserializerType = "bytes",
     ) -> None:
@@ -131,6 +131,36 @@ class KafkaReplicatorSource(Source):
             consumer_group = f"{self._config.consumer_group_prefix}-{consumer_group}"
         return consumer_group
 
+    @property
+    def checkpoint(self) -> Checkpoint:
+        if self._checkpoint is None:
+            raise RuntimeError("source not started")
+        return self._checkpoint
+
+    @property
+    def source_cluster_consumer(self) -> Consumer:
+        if self._source_cluster_consumer is None:
+            raise RuntimeError("source not started")
+        return self._source_cluster_consumer
+
+    @property
+    def target_cluster_consumer(self) -> Consumer:
+        if self._target_cluster_consumer is None:
+            raise RuntimeError("source not started")
+        return self._target_cluster_consumer
+
+    @property
+    def source_cluster_admin(self) -> TopicAdmin:
+        if self._source_cluster_admin is None:
+            raise RuntimeError("source not started")
+        return self._source_cluster_admin
+
+    @property
+    def target_cluster_admin(self) -> TopicAdmin:
+        if self._target_cluster_admin is None:
+            raise RuntimeError("source not started")
+        return self._target_cluster_admin
+
     def run(self) -> None:
         logger.info(
             f'Starting the source "{self.name}" with the config: '
@@ -178,11 +208,9 @@ class KafkaReplicatorSource(Source):
             on_revoke=self.on_revoke,
         )
 
-        super().run()
-
         self.init_checkpoint()
         while self._running:
-            self._producer.poll()
+            self.producer.poll()
             msg = self.poll_source()
             if msg is None:
                 continue
@@ -192,7 +220,7 @@ class KafkaReplicatorSource(Source):
 
     def produce_message(self, msg: Message):
         topic_name, partition, offset = msg.topic(), msg.partition(), msg.offset()
-        self._checkpoint.store_offset(topic_name, partition, offset)
+        self.checkpoint.store_offset(topic_name, partition, offset)
         self.produce(
             value=msg.value(),
             key=msg.key(),
@@ -203,37 +231,35 @@ class KafkaReplicatorSource(Source):
 
     def poll_source(self) -> Optional[Message]:
         try:
-            msg = self._source_cluster_consumer.poll(
-                timeout=self._consumer_poll_timeout
-            )
+            msg = self.source_cluster_consumer.poll(timeout=self._consumer_poll_timeout)
         except Exception as exc:
             if self._on_consumer_error(exc, None, logger):
-                return
+                return None
             raise
 
         if msg is None:
-            return
+            return None
 
         try:
             if err := msg.error():
                 raise KafkaConsumerException(error=err)
         except Exception as exc:
             if self._on_consumer_error(exc, msg, logger):
-                return
+                return None
             raise
 
         return msg
 
     def commit_checkpoint(self, force: bool = False) -> None:
-        if not self._checkpoint.expired() and not force:
+        if not self.checkpoint.expired() and not force:
             return
 
-        if self._checkpoint.empty():
-            self._checkpoint.close()
+        if self.checkpoint.empty():
+            self.checkpoint.close()
         else:
             logger.debug("Committing checkpoint")
             start = time.monotonic()
-            self._checkpoint.commit()
+            self.checkpoint.commit()
             elapsed = round(time.monotonic() - start, 2)
             logger.debug(f"Checkpoint commited in {elapsed}s")
 
@@ -241,9 +267,9 @@ class KafkaReplicatorSource(Source):
 
     def init_checkpoint(self) -> None:
         self._checkpoint = Checkpoint(
-            producer=self._producer,
-            producer_topic=self._producer_topic,
-            consumer=self._target_cluster_consumer,
+            producer=self.producer,
+            producer_topic=self.producer_topic,
+            consumer=self.target_cluster_consumer,
             commit_every=self._config.commit_every,
             commit_interval=self._config.commit_interval,
             flush_timeout=self._flush_timeout,
@@ -251,7 +277,7 @@ class KafkaReplicatorSource(Source):
         )
 
     def _validate_topics(self) -> None:
-        source_topic_config = self._source_cluster_admin.inspect_topics(
+        source_topic_config = self.source_cluster_admin.inspect_topics(
             topic_names=[self._topic], timeout=self._config.request_timeout
         ).get(self._topic)
 
@@ -262,17 +288,17 @@ class KafkaReplicatorSource(Source):
             "source topic %s configuration: %s", self._topic, source_topic_config
         )
 
-        target_topic_config = self._target_cluster_admin.inspect_topics(
-            topic_names=[self._producer_topic.name],
+        target_topic_config = self.target_cluster_admin.inspect_topics(
+            topic_names=[self.producer_topic.name],
             timeout=self._config.request_timeout,
-        ).get(self._producer_topic.name)
+        ).get(self.producer_topic.name)
 
         if target_topic_config is None:
-            raise ValueError(f"Destination topic {self._producer_topic.name} not found")
+            raise ValueError(f"Destination topic {self.producer_topic.name} not found")
 
         logger.debug(
             "destination topic %s configuration: %s",
-            self._producer_topic.name,
+            self.producer_topic.name,
             target_topic_config,
         )
 
@@ -286,11 +312,11 @@ class KafkaReplicatorSource(Source):
     ) -> Dict[int, int]:
         partitions = [
             TopicPartition(
-                topic=self._producer_topic.name, partition=partition.partition
+                topic=self.producer_topic.name, partition=partition.partition
             )
             for partition in partitions
         ]
-        partitions_commited = self._target_cluster_consumer.committed(
+        partitions_commited = self.target_cluster_consumer.committed(
             partitions, timeout=self._config.request_timeout
         )
         a = {partition.partition: partition.offset for partition in partitions_commited}
@@ -307,11 +333,11 @@ class KafkaReplicatorSource(Source):
                 partition.partition,
             )
 
-        self._source_cluster_consumer.incremental_assign(source_partitions)
+        self.source_cluster_consumer.incremental_assign(source_partitions)
 
     def on_revoke(self, *_) -> None:
         if self._failed:
-            self._checkpoint.close()
+            self.checkpoint.close()
         else:
             self.commit_checkpoint(force=True)
 
@@ -324,8 +350,8 @@ class KafkaReplicatorSource(Source):
 
     def cleanup(self, failed: bool) -> None:
         self._failed = failed
-        self._source_cluster_consumer.close()
-        self._target_cluster_consumer.close()
+        self.source_cluster_consumer.close()
+        self.target_cluster_consumer.close()
 
     def default_topic(self) -> Topic:
         admin = TopicAdmin(

@@ -93,13 +93,13 @@ class RowProducer:
     def __init__(
         self,
         broker_address: Union[str, ConnectionConfig],
-        extra_config: dict = None,
+        extra_config: Optional[dict] = None,
         on_error: Optional[ProducerErrorCallback] = None,
         flush_timeout: Optional[float] = None,
         transactional: bool = False,
     ):
         if transactional:
-            self._producer = TransactionalProducer(
+            self._producer: Producer = TransactionalProducer(
                 broker_address=broker_address,
                 extra_config=extra_config,
                 flush_timeout=flush_timeout,
@@ -111,9 +111,7 @@ class RowProducer:
                 flush_timeout=flush_timeout,
             )
 
-        self._on_error: Optional[ProducerErrorCallback] = (
-            on_error or default_on_producer_error
-        )
+        self._on_error: ProducerErrorCallback = on_error or default_on_producer_error
         self._tp_offsets: Dict[Tuple[str, int], int] = {}
         self._error: Optional[KafkaError] = None
         self._active_transaction = False

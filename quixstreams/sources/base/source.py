@@ -81,7 +81,7 @@ class BaseSource(ABC):
     # time in seconds the application will wait for the source to stop.
     shutdown_timeout: float = 10
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._producer: Optional[RowProducer] = None
         self._producer_topic: Optional[Topic] = None
 
@@ -95,7 +95,15 @@ class BaseSource(ABC):
         self._producer_topic = topic
 
     @property
-    def producer_topic(self):
+    def producer(self) -> RowProducer:
+        if self._producer is None:
+            raise RuntimeError("source not configured")
+        return self._producer
+
+    @property
+    def producer_topic(self) -> Topic:
+        if self._producer_topic is None:
+            raise RuntimeError("source not configured")
         return self._producer_topic
 
     @abstractmethod
@@ -214,9 +222,8 @@ class Source(BaseSource):
         It sets the `running` property to `False`.
         """
         self._running = False
-        super().stop()
 
-    def start(self):
+    def start(self) -> None:
         """
         This method is triggered in the subprocess when the source is started.
 
@@ -252,7 +259,7 @@ class Source(BaseSource):
 
         :return: `quixstreams.models.messages.KafkaMessage`
         """
-        return self._producer_topic.serialize(
+        return self.producer_topic.serialize(
             key=key, value=value, headers=headers, timestamp_ms=timestamp_ms
         )
 
@@ -270,8 +277,8 @@ class Source(BaseSource):
         Produce a message to the configured source topic in Kafka.
         """
 
-        self._producer.produce(
-            topic=self._producer_topic.name,
+        self.producer.produce(
+            topic=self.producer_topic.name,
             value=value,
             key=key,
             headers=headers,
@@ -293,7 +300,7 @@ class Source(BaseSource):
         :raises CheckpointProducerTimeout: if any message fails to produce before the timeout
         """
         logger.debug("Flushing source")
-        unproduced_msg_count = self._producer.flush(timeout)
+        unproduced_msg_count = self.producer.flush(timeout)
         if unproduced_msg_count > 0:
             raise CheckpointProducerTimeout(
                 f"'{unproduced_msg_count}' messages failed to be produced before the producer flush timeout"

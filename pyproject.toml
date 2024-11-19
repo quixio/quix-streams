@@ -96,3 +96,39 @@ log_cli_level = "INFO"
 log_cli_format = "[%(levelname)s] %(name)s: %(message)s"
 # Custom markers
 markers = ["timeit"]
+
+[[tool.mypy.overrides]]
+module = "confluent_kafka.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "quixstreams.core.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "quixstreams.dataframe.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "quixstreams.models.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "quixstreams.platforms.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "quixstreams.sinks.community.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "quixstreams.sources.community.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "quixstreams.state.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "quixstreams.rowproducer.*"
+ignore_errors = true

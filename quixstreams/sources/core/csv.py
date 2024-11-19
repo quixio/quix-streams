@@ -2,7 +2,7 @@ import csv
 import logging
 import time
 from pathlib import Path
-from typing import AnyStr, Callable, Optional, Union
+from typing import Callable, Optional, Union
 
 from quixstreams.models.topics import Topic
 from quixstreams.sources.base import Source
@@ -15,7 +15,7 @@ class CSVSource(Source):
         self,
         path: Union[str, Path],
         name: str,
-        key_extractor: Optional[Callable[[dict], AnyStr]] = None,
+        key_extractor: Optional[Callable[[dict], Union[str, bytes]]] = None,
         timestamp_extractor: Optional[Callable[[dict], int]] = None,
         delay: float = 0,
         shutdown_timeout: float = 10,

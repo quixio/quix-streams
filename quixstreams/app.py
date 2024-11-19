@@ -6,10 +6,11 @@ import signal
 import time
 import warnings
 from pathlib import Path
-from typing import Callable, List, Literal, Optional, Tuple, Type, Union
+from typing import Callable, List, Literal, Optional, Protocol, Tuple, Type, Union
 
 from confluent_kafka import TopicPartition
 from pydantic import AliasGenerator, Field
+from pydantic_settings import BaseSettings as PydanticBaseSettings
 from pydantic_settings import PydanticBaseSettingsSource, SettingsConfigDict
 from typing_extensions import Self
 
@@ -58,6 +59,17 @@ MessageProcessedCallback = Callable[[str, int, int], None]
 _default_producer_extra_config = {"enable.idempotence": True}
 
 _default_max_poll_interval_ms = 300000
+
+
+class TopicManagerFactory(Protocol):
+    def __call__(
+        self,
+        topic_admin: TopicAdmin,
+        consumer_group: str,
+        timeout: float = 30,
+        create_timeout: float = 60,
+        auto_create_topics: bool = True,
+    ) -> TopicManager: ...
 
 
 class Application:
@@ -205,19 +217,21 @@ class Application:
         producer_extra_config = producer_extra_config or {}
         consumer_extra_config = consumer_extra_config or {}
 
+        state_dir = Path(state_dir)
+
         # We can't use os.getenv as defaults (and have testing work nicely)
         # since it evaluates getenv when the function is defined.
         # In general this is just a most robust approach.
         broker_address = broker_address or os.getenv("Quix__Broker__Address")
         quix_sdk_token = quix_sdk_token or os.getenv("Quix__Sdk__Token")
-        consumer_group = consumer_group or os.getenv(
-            "Quix__Consumer_Group", "quixstreams-default"
-        )
+
+        if not consumer_group:
+            consumer_group = os.getenv("Quix__Consumer_Group", "quixstreams-default")
 
         if broker_address:
             # If broker_address is passed to the app it takes priority over any quix configuration
             self._is_quix_app = False
-            self._topic_manager_factory = TopicManager
+            self._topic_manager_factory: TopicManagerFactory = TopicManager
             if isinstance(broker_address, str):
                 broker_address = ConnectionConfig(bootstrap_servers=broker_address)
         else:
@@ -249,7 +263,6 @@ class Application:
                 QuixTopicManager, quix_config_builder=quix_config_builder
             )
             # Check if the state dir points to the mounted PVC while running on Quix
-            state_dir = Path(state_dir)
             check_state_dir(state_dir=state_dir)
             quix_app_config = quix_config_builder.get_application_config(consumer_group)
 
@@ -487,11 +500,12 @@ class Application:
         :param source: a `quixstreams.sources` "BaseSource" instance
         :return: `StreamingDataFrame` object
         """
-        if not source and not topic:
-            raise ValueError("one of `source` or `topic` is required")
 
-        if source:
+        if source is not None:
             topic = self.add_source(source, topic)
+
+        if topic is None:
+            raise ValueError("one of `source` or `topic` is required")
 
         sdf = StreamingDataFrame(
             topic=topic,
@@ -1012,7 +1026,7 @@ class ApplicationConfig(BaseSettings):
     @classmethod
     def settings_customise_sources(
         cls,
-        settings_cls: Type[BaseSettings],
+        settings_cls: Type[PydanticBaseSettings],
         init_settings: PydanticBaseSettingsSource,
         env_settings: PydanticBaseSettingsSource,
         dotenv_settings: PydanticBaseSettingsSource,

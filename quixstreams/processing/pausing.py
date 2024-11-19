@@ -5,7 +5,7 @@ from typing import Dict, Tuple
 
 from confluent_kafka import TopicPartition
 
-from quixstreams.kafka import Consumer
+from quixstreams.kafka import BaseConsumer
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,7 @@ class PausingManager:
 
     _paused_tps: Dict[Tuple[str, int], float]
 
-    def __init__(self, consumer: Consumer):
+    def __init__(self, consumer: BaseConsumer):
         self._consumer = consumer
         self._paused_tps = {}
         self._next_resume_at = _MAX_FLOAT

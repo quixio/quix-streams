@@ -341,13 +341,11 @@ class TestQuixEnvironmentSource(Base):
                 "id": f"{workspace_id}-{topic.name}",
                 "name": topic.name,
                 "configuration": {
-                    "partitions": topic.config.num_partitions,
-                    "replicationFactor": topic.config.replication_factor,
+                    "partitions": 1,
+                    "replicationFactor": 1,
                     "retentionInMinutes": 1,
                     "retentionInBytes": 1,
-                    "cleanupPolicy": topic.config.extra_config.get(
-                        "cleanup.policy", "Delete"
-                    ),
+                    "cleanupPolicy": "Delete",
                 },
             }
 
