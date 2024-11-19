@@ -43,7 +43,9 @@ For more information, see [`quixstreams.sources.base.Source`](../../api-referenc
 
 The recommended parent class to create new sources that need a state. Subclass of [`Source`](custom-sources.md#source).
 
-Use the [`state`](../../api-reference/sources.md#statefulsourcestate) method to start a new transaction and get a `State` object. To commit the changes call [`flush`](../../api-reference/sources.md#statefulsourceflush). [`Flush`](../../api-reference/sources.md#statefulsourceflush) will commit the state and ensure all messages are produced. After a [`flush`](../../api-reference/sources.md#statefulsourceflush) the source MUST call [`state`](../../api-reference/sources.md#statefulsourcestate) again to start a new transaction. 
+Use the [`state`](../../api-reference/sources.md#statefulsourcestate) method to start a new transaction and get a `State` object. To commit the changes call [`flush`](../../api-reference/sources.md#statefulsourceflush). [`Flush`](../../api-reference/sources.md#statefulsourceflush) will commit the state and ensure all messages are produced. After a [`flush`](../../api-reference/sources.md#statefulsourceflush) the source MUST call [`state`](../../api-reference/sources.md#statefulsourcestate) again to start a new transaction.
+
+Stateful sources store the state in memory. To prevent data loss when the application restarts the store is backed by a changelog topic in Kafka. On startup the application will consume the changelog topic to rebuild the source state. For more information see the [stateful application documentation](../../advanced/stateful-processing.md).
 
 Example subclass:
 
