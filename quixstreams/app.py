@@ -755,6 +755,7 @@ class Application:
                 self._source_manager.raise_for_error()
 
         logger.info("Stop processing of StreamingDataFrame")
+        self._processing_context.commit_checkpoint(force=True)
 
     def _run_sources(self):
         self._running = True
