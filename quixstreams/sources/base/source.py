@@ -374,6 +374,7 @@ class StatefulSource(Source):
         super().__init__(name, shutdown_timeout)
         self._store_partition: Optional[StorePartition] = None
         self._store_transaction: Optional[PartitionTransaction] = None
+        self._store_state: Optional[State] = None
 
     def configure(
         self,
@@ -414,17 +415,16 @@ class StatefulSource(Source):
         """
         The source store name
         """
-        return self.name
+        return f"source-{self.name}"
 
     @property
     def state(self) -> State:
         """
-        Create an instance of the `State` protocol that can be used by the source.
+        Access the `State` of the source.
 
-        The instance is only valid as long as the transaction is open. After a `flush` a new state
-        MUST be created.
+        The `State` lifecycle is tied to the store transaction. A transaction is only valid until the next `.flush()` call. If no valid transaction exist, a new transaction is created.
 
-        :return: an instance of the `State` protocol
+        Important: after each `.flush()` call, a previously returned instance is invalidated and cannot be used. The property must be called again.
         """
         if self._store_partition is None:
             raise RuntimeError("source is not configured")

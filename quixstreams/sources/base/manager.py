@@ -4,8 +4,10 @@ import threading
 from pickle import PicklingError
 from typing import List
 
+from confluent_kafka import OFFSET_BEGINNING
+
 from quixstreams.logging import LOGGER_NAME, configure_logging
-from quixstreams.models import Topic, TopicAdmin
+from quixstreams.models import Topic, TopicManager
 from quixstreams.models.topics import TopicConfig
 from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
@@ -35,7 +37,7 @@ class SourceProcess(multiprocessing.Process):
         topic: Topic,
         producer: RowProducer,
         consumer: RowConsumer,
-        topic_manager: TopicAdmin,
+        topic_manager: TopicManager,
     ):
         super().__init__()
         self.topic = topic
@@ -126,10 +128,9 @@ class SourceProcess(multiprocessing.Process):
             producer=self._producer, recovery_manager=recovery_manager
         )
 
-        store_name = f"source-{source.store_name}"
         state_manager.register_store(
             topic_name=None,
-            store_name=store_name,
+            store_name=source.store_name,
             store_type=MemoryStore,
             topic_config=TopicConfig(
                 num_partitions=source.store_partitions_count,
@@ -143,13 +144,13 @@ class SourceProcess(multiprocessing.Process):
         store_partitions = state_manager.on_partition_assign(
             topic=None,
             partition=source.assigned_store_partition,
-            committed_offset=0,
+            committed_offset=OFFSET_BEGINNING,
         )
 
         if state_manager.recovery_required:
             state_manager.do_recovery()
 
-        return store_partitions[store_name]
+        return store_partitions[source.store_name]
 
     def _stop(self, signum, _):
         """
@@ -256,9 +257,9 @@ class SourceManager:
         Each source need to already be configured, can't reuse a topic and must be unique
         """
         if topic in self.topics:
-            raise ValueError(f"topic '{topic.name}' already in use")
+            raise ValueError(f'Topic name "{topic.name}" is already in use')
         elif source in self.sources:
-            raise ValueError(f"source '{source}' already registered")
+            raise ValueError(f'Source "{source}" is already registered')
 
         process = SourceProcess(
             source=source,
