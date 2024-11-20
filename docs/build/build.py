@@ -127,6 +127,7 @@ doc_map = {
             "quixstreams.sinks.community.file.formats.json",
             "quixstreams.sinks.community.file.formats.parquet",
             "quixstreams.sinks.community.pubsub",
+            "quixstreams.sinks.community.postgres",
         ]
     },
     # Order: base, core, community
