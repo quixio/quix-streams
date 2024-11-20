@@ -5,12 +5,11 @@ PostgreSQL is a powerful, open-source object-relational database system.
 Quix Streams provides a sink to write processed data to PostgreSQL.
 
 ## How To Install
-The dependencies for this sink are not included in the default `quixstreams` package.
 
-To install them, run the following command:
+To use the PostgreSQL sink, you need to install the required dependencies:
 
 ```bash
-pip install quixstreams[influxdb3]
+pip install quixstreams[postgresql]
 ```
 
 ## How To Use

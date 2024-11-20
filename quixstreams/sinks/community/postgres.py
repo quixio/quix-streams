@@ -9,8 +9,8 @@ try:
     from psycopg2.extras import execute_values
 except ImportError as exc:
     raise ImportError(
-        'Package "psycopg2" is missing: '
-        "run pip install quixstreams[postgresql] to fix it"
+        f"Package `{exc.name}` is missing: "
+        'run "pip install quixstreams[postgresql]" to fix it'
     ) from exc
 
 from quixstreams.exceptions import QuixException
