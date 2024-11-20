@@ -141,6 +141,7 @@ doc_map = {
             "quixstreams.sources.community.file.compressions.gzip",
             "quixstreams.sources.community.file.formats.json",
             "quixstreams.sources.community.file.formats.parquet",
+            "quixstreams.sources.community.kinesis.kinesis",
             "quixstreams.sources.community.pubsub.pubsub",
         ]
     },
