@@ -42,12 +42,11 @@ class SourceCheckpointer(KinesisCheckpointer):
 class KinesisSource(StatefulSource):
     def __init__(
         self,
-        name: str,
         stream_name: str,
         auth: Authentication,
         shutdown_timeout: float = 10,
         auto_offset_reset: AutoOffsetResetType = "latest",
-        max_records_per_shard: int = 10,
+        max_records_per_shard: int = 1000,
         commit_interval: float = 5.0,
         retry_backoff_secs: float = 5.0,
     ):
@@ -58,12 +57,12 @@ class KinesisSource(StatefulSource):
         self._retry_backoff_secs = retry_backoff_secs
         self._checkpointer = SourceCheckpointer(self, commit_interval)
         super().__init__(
-            name=f"{name}_{self._stream_name}", shutdown_timeout=shutdown_timeout
+            name=f"kinesis_{self._stream_name}", shutdown_timeout=shutdown_timeout
         )
 
     def default_topic(self) -> Topic:
         return Topic(
-            name=f"kinesis_{self.name}",
+            name=self.name,
             key_deserializer="str",
             value_deserializer="bytes",
             key_serializer="str",

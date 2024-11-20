@@ -66,7 +66,7 @@ class KinesisConsumer:
         message_processor: Callable[[KinesisRecord], None],
         checkpointer: KinesisCheckpointer,
         auto_offset_reset: AutoOffsetResetType = "latest",
-        max_records_per_shard: int = 10,
+        max_records_per_shard: int = 1000,
         backoff_secs: float = 5.0,
     ):
         self._stream = stream_name
