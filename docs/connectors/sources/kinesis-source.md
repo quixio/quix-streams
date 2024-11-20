@@ -120,7 +120,10 @@ a local Kinesis host via docker:
     
     `localhost:8085`
 
-2. execute in terminal:
+2. Set all other `aws_` parameters for `KinesisSource` to _any_ string. 
+They will not be used, but they must still be populated!
+
+3. execute in terminal:
 
     `docker run --rm -d --name kinesis \
   -p 4566:4566 \
