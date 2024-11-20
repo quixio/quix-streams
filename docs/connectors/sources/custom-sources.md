@@ -41,15 +41,31 @@ For more information, see [`quixstreams.sources.base.Source`](../../api-referenc
 
 ## Stateful Source
 
-The recommended parent class to create new sources that need a state. Subclass of [`Source`](custom-sources.md#source). Use the [`state`](../../api-reference/sources.md#statefulsourcestate) property to access the `State` object. To commit the changes call [`flush`](../../api-reference/sources.md#statefulsourceflush).
+The recommended parent class to create new sources that need a state. Subclass of [`Source`](custom-sources.md#source). 
 
-Stateful sources store the state in memory. To prevent data loss when the application restarts the store is backed by a changelog topic in Kafka. On startup the application will consume the changelog topic to rebuild the source state. For more information see the [stateful application documentation](../../advanced/stateful-processing.md).
+### Fault Tolerance & Recovery
+Stateful sources store the state in memory.
+To prevent data loss when the application restarts, the store is backed by a changelog topic in Kafka. 
+On startup, the application will consume the changelog topic to rebuild the source state.  
 
-The `State` lifecycle is tied to the store transaction. If no valid transaction exist, a new transaction is created by the [`state`](../../api-reference/sources.md#statefulsourcestate) property. [`Flush`](../../api-reference/sources.md#statefulsourceflush) will commit the transaction to the store and ensure all messages are produced. When the transaction is commited all `State` are invalidated and cannot be used. You must acquire a fresh `State` from the [`state`](../../api-reference/sources.md#statefulsourcestate) property.
+### How to Use State in Sources
+There are two main moving parts:
+
+- The [`StatefulSource.state`](../../api-reference/sources.md#statefulsourcestate) property - use it to access the [`State`](../../api-reference/state.md#state) object which provides an interface to update and retrieve keys from the state. 
+- The [`StatefulSource.flush`](../../api-reference/sources.md#statefulsourceflush) method - call it to commit the state changes and the progress of the Source.
+
+
+In Stateful sources, the lifecycle of the [`State`](../../api-reference/state.md#state) object is tied to the store transaction.  
+When the [`StatefulSource.flush`](../../api-reference/sources.md#statefulsourceflush) is called, it commits the current store transaction to guarantee that the state changes are saved. 
+
+After that, the [`State`](../../api-reference/state.md#state) returned by [`StatefulSource.state`](../../api-reference/sources.md#statefulsourcestate) is no longer valid, and you must call [`StatefulSource.state`](../../api-reference/sources.md#statefulsourcestate) again to get a fresh [`State`](../../api-reference/state.md#state) instance.
 
 We recommend always accessing the `State` through the [`state`](../../api-reference/sources.md#statefulsourcestate) property as it handles the lifecycle for you.
 
-Example subclass:
+To learn more about the State, see the [Stateful Processing page](../../advanced/stateful-processing.md) and For more information, see [`quixstreams.sources.base.StatefulSource`](../../api-reference/sources.md#statefulsource) API docs.
+
+
+**Example subclass:**
 
 ```python
 import sys
@@ -59,22 +75,23 @@ from quixstreams.sources.base import StatefulSource
 
 class RangeSource(StatefulSource):
     def run(self):
+        # Get the key "current" from the state
         self.state.get("current", 0) + 1
-        for i in range(start, sys.maxsize):
+        for i in range(0, sys.maxsize):
             if not self.running:
                 return
-
+            
+            # Update the key in the state
             self.state.set("current", i)
             serialized = self._producer_topic.serialize(value=i)
             self.produce(key="range", value=serialized.value)
             time.sleep(0.1)
 
-            # flush the state every 10 messages
+            # Flush the state changes every 10 messages
             if i % 10 == 0:
                 self.flush()
 ```
 
-For more information, see [`quixstreams.sources.base.StatefulSource`](../../api-reference/sources.md#statefulsource) docstrings.
 
 ## BaseSource
 
