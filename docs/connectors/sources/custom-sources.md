@@ -59,14 +59,12 @@ from quixstreams.sources.base import StatefulSource
 
 class RangeSource(StatefulSource):
     def run(self):
-        state = self.state()
-
-        start = state.get("current", 0) + 1
+        self.state.get("current", 0) + 1
         for i in range(start, sys.maxsize):
             if not self.running:
                 return
 
-            state.set("current", i)
+            self.state.set("current", i)
             serialized = self._producer_topic.serialize(value=i)
             self.produce(key="range", value=serialized.value)
             time.sleep(0.1)
@@ -74,7 +72,6 @@ class RangeSource(StatefulSource):
             # flush the state every 10 messages
             if i % 10 == 0:
                 self.flush()
-                state = self.state()
 ```
 
 For more information, see [`quixstreams.sources.base.StatefulSource`](../../api-reference/sources.md#statefulsource) docstrings.
