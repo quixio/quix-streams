@@ -336,11 +336,10 @@ class StatefulSource(Source):
         def run(self):
 
             i = 0
-            state = self.state()
             while self.running:
-                previous = state.get("number", 0)
+                previous = self.state.get("number", 0)
                 current = random.randint(0, 100)
-                state.set("number", current)
+                self.state.set("number", current)
 
                 serialized = self._producer_topic.serialize(value=current + previous)
                 self.produce(key=str(current), value=serialized.value)
@@ -350,7 +349,6 @@ class StatefulSource(Source):
                 i += 1
                 if i % 10 == 0:
                     self.flush()
-                    state = self.state()
 
 
     def main():
@@ -393,6 +391,7 @@ class StatefulSource(Source):
         super().configure(topic=topic, producer=producer)
         self._store_partition = store_partition
         self._store_transaction = None
+        self._store_state = None
 
     @property
     def store_partitions_count(self) -> int:
@@ -417,6 +416,7 @@ class StatefulSource(Source):
         """
         return self.name
 
+    @property
     def state(self) -> State:
         """
         Create an instance of the `State` protocol that can be used by the source.
@@ -432,7 +432,10 @@ class StatefulSource(Source):
         if self._store_transaction is None:
             self._store_transaction = self._store_partition.begin()
 
-        return self._store_transaction.as_state()
+        if self._store_state is None:
+            self._store_state = self._store_transaction.as_state()
+
+        return self._store_state
 
     def flush(self, timeout: Optional[float] = None) -> None:
         """
@@ -449,5 +452,6 @@ class StatefulSource(Source):
             self._store_transaction.prepare(None)
             self._store_transaction.flush()
             self._store_transaction = None
+            self._store_state = None
 
         super().flush(timeout)

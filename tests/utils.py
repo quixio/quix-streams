@@ -2,7 +2,7 @@ import dataclasses
 import threading
 import time
 import uuid
-from typing import Any, List, Optional, Tuple, Union
+from typing import Any, Iterable, List, Optional, Tuple, Union
 
 from confluent_kafka import OFFSET_INVALID
 
@@ -176,7 +176,7 @@ class DummyStatefulSource(DummySource, StatefulSource):
     def __init__(
         self,
         name: Optional[str] = None,
-        values: Optional[List[Any]] = None,
+        values: Optional[Iterable[Any]] = None,
         finished: threading.Event = None,
         error_in: Optional[Union[str, List[str]]] = None,
         pickeable_error: bool = True,
@@ -189,15 +189,14 @@ class DummyStatefulSource(DummySource, StatefulSource):
 
     def run(self):
         if self._assert_state_value:
-            assert self._assert_state_value == self.state().get(self._state_key)
+            assert self._assert_state_value == self.state.get(self._state_key)
         super().run()
 
     def _produce(self):
         for value in self.values:
-            state = self.state()
             msg = self.serialize(key=self.key, value=value)
             self.produce(value=msg.value, key=msg.key)
-            state.set(self._state_key, value)
+            self.state.set(self._state_key, value)
             self.flush()
 
 
