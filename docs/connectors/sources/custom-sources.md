@@ -58,9 +58,9 @@ There are two main moving parts:
 In Stateful sources, the lifecycle of the [`State`](../../api-reference/state.md#state) object is tied to the store transaction.  
 When the [`StatefulSource.flush`](../../api-reference/sources.md#statefulsourceflush) is called, it commits the current store transaction to guarantee that the state changes are saved. 
 
-After that, the [`State`](../../api-reference/state.md#state) returned by [`StatefulSource.state`](../../api-reference/sources.md#statefulsourcestate) is no longer valid, and you must call [`StatefulSource.state`](../../api-reference/sources.md#statefulsourcestate) again to get a fresh [`State`](../../api-reference/state.md#state) instance.
+After that, the [`State`](../../api-reference/state.md#state) returned by [`StatefulSource.state`](../../api-reference/sources.md#statefulsourcestate) **is no longer valid**, and you must call [`StatefulSource.state`](../../api-reference/sources.md#statefulsourcestate) again to get a fresh [`State`](../../api-reference/state.md#state) instance.
 
-We recommend always accessing the `State` through the [`state`](../../api-reference/sources.md#statefulsourcestate) property as it handles the lifecycle for you.
+We recommend to access the `State` through the [`state`](../../api-reference/sources.md#statefulsourcestate) property as it handles the lifecycle for you.
 
 To learn more about the State, see the [Stateful Processing page](../../advanced/stateful-processing.md) and For more information, see [`quixstreams.sources.base.StatefulSource`](../../api-reference/sources.md#statefulsource) API docs.
 
