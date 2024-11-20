@@ -3,8 +3,6 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any, Mapping
 
-
-
 try:
     import psycopg2
     from psycopg2 import sql
@@ -177,11 +175,10 @@ class PostgresSink(BatchingSink):
             return
 
         with self.connection.cursor() as cursor:
-            columns = list(rows[0].keys())  # Collect all column names from the first row
-            values = [
-                [row.get(col, None) for col in columns]  # Handle missing keys gracefully
-                for row in rows
-            ]
+            # Collect all column names from the first row
+            columns = list(rows[0].keys())
+            # Handle missing keys gracefully
+            values = [[row.get(col, None) for col in columns] for row in rows]
 
             query = sql.SQL(
                 """
