@@ -61,9 +61,9 @@ What Data Can Be Sent to PostgreSQL?
 PostgresSink can accept only dictionary values.
 
 If the record values are not dictionaries, you need to convert them to dictionaries using StreamingDataFrame.apply() before sinking.
-	-	Key Column: The record key is inserted into a column named __key, if present.
-	-	Timestamp Column: The record timestamp is inserted into a column named timestamp, with values stored in PostgreSQL’s TIMESTAMP format.
-	-	Other Columns: Additional fields in the dictionary will be mapped to table columns. New columns are automatically added to the schema if schema_auto_update=True.
+- Key Column: The record key is inserted into a column named __key, if present.
+- Timestamp Column: The record timestamp is inserted into a column named timestamp, with values stored in PostgreSQL’s TIMESTAMP format.
+- Other Columns: Additional fields in the dictionary will be mapped to table columns. New columns are automatically added to the schema if schema_auto_update=True.
 
 ### Delivery Guarantees
 
@@ -73,14 +73,14 @@ PostgresSink provides at-least-once guarantees, meaning that the same records ma
 ## Configuration
 
 PostgresSink accepts the following configuration parameters:
-	-	host - The address of the PostgreSQL server.
-	-	port - The port of the PostgreSQL server.
-	-	dbname - The name of the PostgreSQL database.
-	-	user - The database user name.
-	-	password - The database user password.
-	-	table_name - The name of the PostgreSQL table where data will be written.
-	-	schema_auto_update - If True, the sink will automatically update the schema by adding new columns when new fields are detected. Default: True.
-	-	ddl_timeout - Timeout (in seconds) for DDL operations such as creating tables or adding columns. Default: 10.
-	-	batch_size - The number of records to write to PostgreSQL in one request. Default: 1000.
-	-	request_timeout - Timeout (in seconds) for each write request. Default: 10.
 
+- `host`: The address of the PostgreSQL server.
+- `port`: The port of the PostgreSQL server.
+- `dbname`: The name of the PostgreSQL database.
+- `user`: The database user name.
+- `password`: The database user password.
+- `table_name`: The name of the PostgreSQL table where data will be written.
+- `schema_auto_update`: If True, the sink will automatically update the schema by adding new columns when new fields are detected. Default: True.
+- `ddl_timeout`: Timeout (in seconds) for DDL operations such as creating tables or adding columns. Default: 10.
+- `batch_size`: The number of records to write to PostgreSQL in one request. Default: 1000.
+- `request_timeout`: Timeout (in seconds) for each write request. Default: 10.
