@@ -380,7 +380,7 @@ class StatefulSource(Source):
         topic: Topic,
         producer: RowProducer,
         *,
-        store_partition: StorePartition,
+        store_partition: Optional[StorePartition] = None,
         **kwargs,
     ) -> None:
         """
