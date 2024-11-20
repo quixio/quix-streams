@@ -351,7 +351,7 @@ def __init__(topic_admin: TopicAdmin,
 
 ```python
 @property
-def changelog_topics() -> Dict[str, Dict[str, Topic]]
+def changelog_topics() -> Dict[Optional[str], Dict[str, Topic]]
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L104)
@@ -389,7 +389,7 @@ def topic_config(num_partitions: Optional[int] = None,
                  extra_config: Optional[dict] = None) -> TopicConfig
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L217)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L223)
 
 Convenience method for generating a `TopicConfig` with default settings
 
@@ -423,7 +423,7 @@ def topic(name: str,
           timestamp_extractor: Optional[TimestampExtractor] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L238)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L244)
 
 A convenience method for generating a `Topic`. Will use default config options
 
@@ -458,7 +458,7 @@ Topic object with creation configs
 def register(topic: Topic) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L284)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L290)
 
 Register an already generated :class:`quixstreams.models.topics.Topic` to the topic manager.
 
@@ -486,7 +486,7 @@ def repartition_topic(operation: str,
                       timeout: Optional[float] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L302)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L308)
 
 Create an internal repartition topic.
 
@@ -515,16 +515,17 @@ Create an internal repartition topic.
 #### TopicManager.changelog\_topic
 
 ```python
-def changelog_topic(topic_name: str,
+def changelog_topic(topic_name: Optional[str],
                     store_name: str,
+                    config: Optional[TopicConfig] = None,
                     timeout: Optional[float] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L342)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L348)
 
-Performs all the logic necessary to generate a changelog topic based on a
+Performs all the logic necessary to generate a changelog topic based on an
 
-"source topic" (aka input/consumed topic).
+optional "source topic" (aka input/consumed topic).
 
 Its main goal is to ensure partition counts of the to-be generated changelog
 match the source topic, and ensure the changelog topic is compacted. Also
@@ -547,6 +548,7 @@ generate changelog topics. To turn off changelogs, init an Application with
 > NOTE: normally contain any prefixes added by TopicManager.topic()
 - `store_name`: name of the store this changelog belongs to
 (default, rolling10s, etc.)
+- `config`: the changelog topic configuration. Default to `topic_name` configuration or TopicManager default
 - `timeout`: config lookup timeout (seconds); Default 30
 
 
@@ -567,7 +569,7 @@ def create_topics(topics: List[Topic],
                   create_timeout: Optional[float] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L400)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L416)
 
 Creates topics via an explicit list of provided `Topics`.
 
@@ -593,7 +595,7 @@ def create_all_topics(timeout: Optional[float] = None,
                       create_timeout: Optional[float] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L428)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L444)
 
 A convenience method to create all Topic objects stored on this TopicManager.
 
@@ -616,7 +618,7 @@ If `auto_create_topics` is set to False no topic will be created.
 def validate_all_topics(timeout: Optional[float] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L444)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L460)
 
 Validates all topics exist and changelogs have correct topic and rep factor.
 
