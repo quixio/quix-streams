@@ -1,6 +1,6 @@
 import logging
 import time
-from typing import Callable, Literal, Optional, Protocol, Type
+from typing import Callable, Literal, Optional, Protocol
 
 import boto3
 from botocore.exceptions import ClientError
@@ -54,20 +54,25 @@ class Authentication:
 
 
 class KinesisConsumer:
+    """
+    Consume all shards for a given Kinesis stream in a batched, round-robin fashion.
+    Also handles checkpointing of said stream (requires a `KinesisCheckpointer`).
+    """
+
     def __init__(
         self,
         stream_name: str,
         auth: Authentication,
-        message_processor: Callable,
+        message_processor: Callable[[KinesisRecord], None],
+        checkpointer: KinesisCheckpointer,
         auto_offset_reset: Literal["earliest", "latest"] = "latest",
-        checkpointer: Optional[Type[KinesisCheckpointer]] = None,
         max_records_per_shard: int = 10,
         backoff_secs: float = 5.0,
     ):
         self._stream = stream_name
         self._auth = auth
         self._message_processor = message_processor
-        self._checkpointer: KinesisCheckpointer = checkpointer
+        self._checkpointer = checkpointer
         self._shard_iterators: dict[str, str] = {}
         self._shard_backoff: dict[str, float] = {}
         self._max_records_per_shard = max_records_per_shard
