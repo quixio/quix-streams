@@ -20,17 +20,17 @@ pip install quixstreams[postgresql]
 
 ## How To Use
 
-To sink data to PostgreSQL, you need to create an instance of PostgresSink and pass it to the StreamingDataFrame.sink() method:
+To sink data to PostgreSQL, you need to create an instance of PostgreSQLSink and pass it to the StreamingDataFrame.sink() method:
 
 ```python
 from quixstreams import Application
-from postgres_sink import PostgresSink
+from quixstreams.sinks.community.postgresql import PostgreSQLSink
 
 app = Application(broker_address="localhost:9092")
 topic = app.topic("numbers-topic")
 
-# Initialize PostgresSink
-postgres_sink = PostgresSink(
+# Initialize PostgreSQLSink
+postgres_sink = PostgreSQLSink(
     host="localhost",
     port=5432,
     dbname="mydatabase",
@@ -51,14 +51,14 @@ if __name__ == '__main__':
 
 ## How It Works
 
-PostgresSink is a batching sink.
+PostgreSQLSink is a batching sink.
 It batches processed records in memory per topic partition and writes them to the PostgreSQL database when a checkpoint has been committed.
 
 Under the hood, it dynamically adjusts the schema by adding new columns if schema_auto_update is enabled. Processed records are written as rows in the specified table.
 
 What Data Can Be Sent to PostgreSQL?
 
-PostgresSink can accept only dictionary values.
+PostgreSQLSink can accept only dictionary values.
 
 If the record values are not dictionaries, you need to convert them to dictionaries using StreamingDataFrame.apply() before sinking.
 
@@ -68,12 +68,12 @@ If the record values are not dictionaries, you need to convert them to dictionar
 
 ### Delivery Guarantees
 
-PostgresSink provides at-least-once guarantees, meaning that the same records may be written multiple times in case of errors during processing.
+PostgreSQLSink provides at-least-once guarantees, meaning that the same records may be written multiple times in case of errors during processing.
 
 
 ## Configuration
 
-PostgresSink accepts the following configuration parameters:
+PostgreSQLSink accepts the following configuration parameters:
 
 - `host`: The address of the PostgreSQL server.
 - `port`: The port of the PostgreSQL server.

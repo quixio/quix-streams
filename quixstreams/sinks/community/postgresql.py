@@ -17,7 +17,7 @@ from quixstreams.exceptions import QuixException
 from quixstreams.models import HeaderValue
 from quixstreams.sinks import BatchingSink, SinkBatch
 
-__all__ = ("PostgresSink", "PostgresSinkException")
+__all__ = ("PostgreSQLSink", "PostgreSQLSinkException")
 
 logger = logging.getLogger(__name__)
 
@@ -42,10 +42,10 @@ _POSTGRES_TYPES_MAP: dict[type, str] = {
 }
 
 
-class PostgresSinkException(QuixException): ...
+class PostgreSQLSinkException(QuixException): ...
 
 
-class PostgresSink(BatchingSink):
+class PostgreSQLSink(BatchingSink):
     def __init__(
         self,
         host: str,
@@ -154,7 +154,7 @@ class PostgresSink(BatchingSink):
             for col_name, py_type in columns.items():
                 postgres_col_type = _POSTGRES_TYPES_MAP.get(py_type)
                 if postgres_col_type is None:
-                    raise PostgresSinkException(
+                    raise PostgreSQLSinkException(
                         f'Failed to add new column "{col_name}": '
                         f'cannot map Python type "{py_type}" to a PostgreSQL column type'
                     )
