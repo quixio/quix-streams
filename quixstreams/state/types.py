@@ -128,7 +128,7 @@ class WindowedPartitionTransaction(Protocol):
         """
         ...
 
-    def prepare(self, processed_offset: int):
+    def prepare(self, processed_offset: Optional[int]):
         """
         Produce changelog messages to the changelog topic for all changes accumulated
         in this transaction and prepare transcation to flush its state to the state

@@ -20,7 +20,9 @@ class TestRecoveryManager:
         with patch.object(TopicManager, "changelog_topic") as make_changelog:
             recovery_manager.register_changelog(topic_name=topic, store_name=store_name)
 
-        make_changelog.assert_called_with(topic_name=topic, store_name=store_name)
+        make_changelog.assert_called_with(
+            topic_name=topic, store_name=store_name, config=None
+        )
 
     def test_assign_partition_invalid_offset(
         self,

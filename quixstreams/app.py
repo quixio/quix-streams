@@ -217,7 +217,7 @@ class Application:
         if broker_address:
             # If broker_address is passed to the app it takes priority over any quix configuration
             self._is_quix_app = False
-            topic_manager_factory = TopicManager
+            self._topic_manager_factory = TopicManager
             if isinstance(broker_address, str):
                 broker_address = ConnectionConfig(bootstrap_servers=broker_address)
         else:
@@ -245,7 +245,7 @@ class Application:
                 f"{quix_app_source} detected; "
                 f"the application will connect to Quix Cloud brokers"
             )
-            topic_manager_factory = functools.partial(
+            self._topic_manager_factory = functools.partial(
                 QuixTopicManager, quix_config_builder=quix_config_builder
             )
             # Check if the state dir points to the mounted PVC while running on Quix
@@ -288,30 +288,12 @@ class Application:
         self._on_message_processed = on_message_processed
         self._on_processing_error = on_processing_error or default_on_processing_error
 
-        self._consumer = RowConsumer(
-            broker_address=self._config.broker_address,
-            consumer_group=self._config.consumer_group,
-            auto_offset_reset=self._config.auto_offset_reset,
-            auto_commit_enable=False,  # Disable auto commit and manage commits manually
-            extra_config=self._config.consumer_extra_config,
-            on_error=on_consumer_error,
-        )
+        self._consumer = self._get_rowconsumer(on_error=on_consumer_error)
         self._producer = self._get_rowproducer(on_error=on_producer_error)
         self._running = False
         self._failed = False
 
-        if not topic_manager:
-            topic_manager = topic_manager_factory(
-                topic_admin=TopicAdmin(
-                    broker_address=self._config.broker_address,
-                    extra_config=self._config.producer_extra_config,
-                ),
-                consumer_group=self._config.consumer_group,
-                timeout=self._config.request_timeout,
-                create_timeout=self._config.topic_create_timeout,
-                auto_create_topics=self._config.auto_create_topics,
-            )
-        self._topic_manager = topic_manager
+        self._topic_manager = topic_manager or self._get_topic_manager()
 
         producer = None
         recovery_manager = None
@@ -367,6 +349,23 @@ class Application:
             "To connect to Quix Cloud, "
             'use Application() with "quix_sdk_token" parameter or set the '
             '"Quix__Sdk__Token" environment variable'
+        )
+
+    def _get_topic_manager(self) -> TopicManager:
+        """
+        Create a TopicAdmin using the application config
+
+        Used to create the application topic admin as well as the sources topic admins
+        """
+        return self._topic_manager_factory(
+            topic_admin=TopicAdmin(
+                broker_address=self._config.broker_address,
+                extra_config=self._config.producer_extra_config,
+            ),
+            consumer_group=self._config.consumer_group,
+            timeout=self._config.request_timeout,
+            create_timeout=self._config.topic_create_timeout,
+            auto_create_topics=self._config.auto_create_topics,
         )
 
     def topic(
@@ -579,6 +578,24 @@ class Application:
             extra_config=self._config.producer_extra_config,
         )
 
+    def _get_rowconsumer(
+        self, on_error: Optional[ConsumerErrorCallback] = None
+    ) -> RowConsumer:
+        """
+        Create a RowConsumer using the application config
+
+        Used to create the application consumer as well as the sources consumers
+        """
+
+        return RowConsumer(
+            broker_address=self._config.broker_address,
+            consumer_group=self._config.consumer_group,
+            auto_offset_reset=self._config.auto_offset_reset,
+            auto_commit_enable=False,  # Disable auto commit and manage commits manually
+            extra_config=self._config.consumer_extra_config,
+            on_error=on_error,
+        )
+
     def get_consumer(self, auto_commit_enable: bool = True) -> Consumer:
         """
         Create and return a pre-configured Consumer instance.
@@ -650,9 +667,13 @@ class Application:
         if not topic:
             topic = self._topic_manager.register(source.default_topic())
 
-        producer = self._get_rowproducer(transactional=False)
-        source.configure(topic, producer)
-        self._source_manager.register(source)
+        self._source_manager.register(
+            source,
+            topic,
+            self._get_rowproducer(transactional=False),
+            self._get_rowconsumer(),
+            self._get_topic_manager(),
+        )
         return topic
 
     def run(self, dataframe: Optional[StreamingDataFrame] = None):
@@ -879,7 +900,8 @@ class Application:
                 stored_offsets = [
                     offset
                     for offset in (
-                        store_tp.get_processed_offset() for store_tp in store_partitions
+                        store_tp.get_processed_offset()
+                        for store_tp in store_partitions.values()
                     )
                     if offset is not None
                 ]

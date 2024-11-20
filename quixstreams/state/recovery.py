@@ -5,7 +5,7 @@ from confluent_kafka import TopicPartition as ConfluentPartition
 
 from quixstreams.kafka import Consumer
 from quixstreams.models import ConfluentKafkaMessageProto, Topic
-from quixstreams.models.topics import TopicManager
+from quixstreams.models.topics import TopicConfig, TopicManager
 from quixstreams.models.types import MessageHeadersMapping
 from quixstreams.rowproducer import RowProducer
 from quixstreams.state.base import StorePartition
@@ -261,7 +261,12 @@ class RecoveryManager:
         """
         return self.has_assignments and self._running
 
-    def register_changelog(self, topic_name: str, store_name: str) -> Topic:
+    def register_changelog(
+        self,
+        topic_name: Optional[str],
+        store_name: str,
+        topic_config: Optional[TopicConfig] = None,
+    ) -> Topic:
         """
         Register a changelog Topic with the TopicManager.
 
@@ -271,6 +276,7 @@ class RecoveryManager:
         return self._topic_manager.changelog_topic(
             topic_name=topic_name,
             store_name=store_name,
+            config=topic_config,
         )
 
     def do_recovery(self):
@@ -297,7 +303,7 @@ class RecoveryManager:
 
     def _generate_recovery_partitions(
         self,
-        topic_name: str,
+        topic_name: Optional[str],
         partition_num: int,
         store_partitions: Dict[str, StorePartition],
         committed_offset: int,
@@ -328,7 +334,7 @@ class RecoveryManager:
 
     def assign_partition(
         self,
-        topic: str,
+        topic: Optional[str],
         partition: int,
         committed_offset: int,
         store_partitions: Dict[str, StorePartition],

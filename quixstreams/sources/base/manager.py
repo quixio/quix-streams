@@ -4,12 +4,19 @@ import threading
 from pickle import PicklingError
 from typing import List
 
+from confluent_kafka import OFFSET_BEGINNING
+
 from quixstreams.logging import LOGGER_NAME, configure_logging
-from quixstreams.models import Topic
+from quixstreams.models import Topic, TopicManager
+from quixstreams.models.topics import TopicConfig
+from quixstreams.rowconsumer import RowConsumer
+from quixstreams.rowproducer import RowProducer
+from quixstreams.state import RecoveryManager, StateStoreManager, StorePartition
+from quixstreams.state.memory import MemoryStore
 
 from .exceptions import SourceException
 from .multiprocessing import multiprocessing
-from .source import BaseSource
+from .source import BaseSource, StatefulSource
 
 logger = logging.getLogger(__name__)
 
@@ -24,13 +31,26 @@ class SourceProcess(multiprocessing.Process):
     Some methods are designed to be used from the parent process, and others from the child process.
     """
 
-    def __init__(self, source):
+    def __init__(
+        self,
+        source: BaseSource,
+        topic: Topic,
+        producer: RowProducer,
+        consumer: RowConsumer,
+        topic_manager: TopicManager,
+    ):
         super().__init__()
-        self.source: BaseSource = source
+        self.topic = topic
+        self.source = source
 
         self._exceptions: List[Exception] = []
         self._started = False
         self._stopping = False
+
+        self._topic_manager = topic_manager
+
+        self._consumer = consumer
+        self._producer = producer
 
         # copy parent process log level to the child process
         self._loglevel = logging.getLogger(LOGGER_NAME).level
@@ -39,7 +59,7 @@ class SourceProcess(multiprocessing.Process):
         self._rpipe, self._wpipe = multiprocessing.Pipe(duplex=False)
 
     @property
-    def started(self):
+    def started(self) -> bool:
         return self._started
 
     # --- CHILD PROCESS METHODS --- #
@@ -63,13 +83,27 @@ class SourceProcess(multiprocessing.Process):
         self._started = True
         self._setup_signal_handlers()
         configure_logging(self._loglevel, str(self.source), pid=True)
-        logger.info("Source started")
+        logger.info("Starting source")
 
+        configuration = {"topic": self.topic, "producer": self._producer}
+
+        if isinstance(self.source, StatefulSource):
+            try:
+                configuration["store_partition"] = self._recover_state(self.source)
+            except BaseException as err:
+                logger.exception("Error in source")
+                self._report_exception(err)
+                return
+
+        self.source.configure(**configuration)
+
+        logger.info("Source started")
         try:
             self.source.start()
         except BaseException as err:
             logger.exception("Error in source")
             self._report_exception(err)
+            return
 
         logger.info("Source completed")
         threadcount = threading.active_count()
@@ -78,6 +112,45 @@ class SourceProcess(multiprocessing.Process):
             threadcount,
             "s" if threadcount > 1 else "",
         )
+
+    def _recover_state(self, source: StatefulSource) -> StorePartition:
+        """
+        Recover the state from the changelog topic and return the assigned partition
+
+        For stateful sources only.
+        """
+        recovery_manager = RecoveryManager(
+            consumer=self._consumer,
+            topic_manager=self._topic_manager,
+        )
+
+        state_manager = StateStoreManager(
+            producer=self._producer, recovery_manager=recovery_manager
+        )
+
+        state_manager.register_store(
+            topic_name=None,
+            store_name=source.store_name,
+            store_type=MemoryStore,
+            topic_config=TopicConfig(
+                num_partitions=source.store_partitions_count,
+                replication_factor=self._topic_manager.default_replication_factor,
+            ),
+        )
+
+        self._topic_manager.create_all_topics()
+        self._topic_manager.validate_all_topics()
+
+        store_partitions = state_manager.on_partition_assign(
+            topic=None,
+            partition=source.assigned_store_partition,
+            committed_offset=OFFSET_BEGINNING,
+        )
+
+        if state_manager.recovery_required:
+            state_manager.do_recovery()
+
+        return store_partitions[source.store_name]
 
     def _stop(self, signum, _):
         """
@@ -108,7 +181,7 @@ class SourceProcess(multiprocessing.Process):
 
     # --- PARENT PROCESS METHODS --- #
 
-    def start(self) -> "SourceProcess":
+    def start(self) -> None:
         logger.info("Starting source %s", self.source)
         self._started = True
         return super().start()
@@ -170,20 +243,31 @@ class SourceManager:
     def __init__(self):
         self.processes: List[SourceProcess] = []
 
-    def register(self, source: BaseSource):
+    def register(
+        self,
+        source: BaseSource,
+        topic,
+        producer,
+        consumer,
+        topic_manager,
+    ) -> SourceProcess:
         """
         Register a new source in the manager.
 
         Each source need to already be configured, can't reuse a topic and must be unique
         """
-        if not source.configured:
-            raise ValueError("Accepts configured Source only")
-        if source.producer_topic in self.topics:
-            raise ValueError(f"topic '{source.producer_topic.name}' already in use")
+        if topic in self.topics:
+            raise ValueError(f'Topic name "{topic.name}" is already in use')
         elif source in self.sources:
-            raise ValueError(f"source '{source}' already registered")
+            raise ValueError(f'Source "{source}" is already registered')
 
-        process = SourceProcess(source)
+        process = SourceProcess(
+            source=source,
+            topic=topic,
+            producer=producer,
+            consumer=consumer,
+            topic_manager=topic_manager,
+        )
         self.processes.append(process)
         return process
 
@@ -193,7 +277,7 @@ class SourceManager:
 
     @property
     def topics(self) -> List[Topic]:
-        return [process.source.producer_topic for process in self.processes]
+        return [process.topic for process in self.processes]
 
     def start_sources(self) -> None:
         for process in self.processes:

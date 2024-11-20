@@ -377,7 +377,7 @@ class PartitionTransaction(ABC):
             return self._partition.exists(key_serialized, cf_name=cf_name)
 
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
-    def prepare(self, processed_offset: int):
+    def prepare(self, processed_offset: Optional[int]):
         """
         Produce changelog messages to the changelog topic for all changes accumulated
         in this transaction and prepare transaction to flush its state to the state
@@ -399,7 +399,7 @@ class PartitionTransaction(ABC):
             self._status = PartitionTransactionStatus.FAILED
             raise
 
-    def _prepare(self, processed_offset: int):
+    def _prepare(self, processed_offset: Optional[int]):
         if self._changelog_producer is None:
             return
 

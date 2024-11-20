@@ -7,13 +7,11 @@ from quixstreams.models.messages import KafkaMessage
 from quixstreams.models.topics import Topic
 from quixstreams.models.types import Headers
 from quixstreams.rowproducer import RowProducer
+from quixstreams.state import PartitionTransaction, State, StorePartition
 
 logger = logging.getLogger(__name__)
 
-__all__ = (
-    "BaseSource",
-    "Source",
-)
+__all__ = ("BaseSource", "Source", "StatefulSource")
 
 
 class BaseSource(ABC):
@@ -86,21 +84,15 @@ class BaseSource(ABC):
     def __init__(self):
         self._producer: Optional[RowProducer] = None
         self._producer_topic: Optional[Topic] = None
-        self._configured: bool = False
 
-    def configure(self, topic: Topic, producer: RowProducer) -> None:
+    def configure(self, topic: Topic, producer: RowProducer, **kwargs) -> None:
         """
-        This method is triggered when the source is registered to the Application.
+        This method is triggered before the source is started.
 
-        It configures the source's Kafka producer and the topic it will produce to.
+        It configures the source's Kafka producer, the topic it will produce to and optional dependencies.
         """
         self._producer = producer
         self._producer_topic = topic
-        self._configured = True
-
-    @property
-    def configured(self):
-        return self._configured
 
     @property
     def producer_topic(self):
@@ -143,9 +135,10 @@ class Source(BaseSource):
     Example:
 
     ```python
-    from quixstreams import Application
     import random
+    import time
 
+    from quixstreams import Application
     from quixstreams.sources import Source
 
 
@@ -155,6 +148,7 @@ class Source(BaseSource):
                 number = random.randint(0, 100)
                 serialized = self._producer_topic.serialize(value=number)
                 self.produce(key=str(number), value=serialized.value)
+                time.sleep(0.5)
 
 
     def main():
@@ -320,3 +314,144 @@ class Source(BaseSource):
 
     def __repr__(self):
         return self.name
+
+
+class StatefulSource(Source):
+    """
+    A `Source` class for custom Sources that need a state.
+
+    Subclasses are responsible for flushing, by calling `flush`, at reasonable intervals.
+
+    Example:
+
+    ```python
+    import random
+    import time
+
+    from quixstreams import Application
+    from quixstreams.sources import StatefulSource
+
+
+    class RandomNumbersSource(StatefulSource):
+        def run(self):
+
+            i = 0
+            while self.running:
+                previous = self.state.get("number", 0)
+                current = random.randint(0, 100)
+                self.state.set("number", current)
+
+                serialized = self._producer_topic.serialize(value=current + previous)
+                self.produce(key=str(current), value=serialized.value)
+                time.sleep(0.5)
+
+                # flush the state every 10 messages
+                i += 1
+                if i % 10 == 0:
+                    self.flush()
+
+
+    def main():
+        app = Application(broker_address="localhost:9092")
+        source = RandomNumbersSource(name="random-source")
+
+        sdf = app.dataframe(source=source)
+        sdf.print(metadata=True)
+
+        app.run()
+
+
+    if __name__ == "__main__":
+        main()
+    ```
+    """
+
+    def __init__(self, name: str, shutdown_timeout: float = 10) -> None:
+        """
+        :param name: The source unique name. It is used to generate the topic configuration.
+        :param shutdown_timeout: Time in second the application waits for the source to gracefully shutdown.
+        """
+        super().__init__(name, shutdown_timeout)
+        self._store_partition: Optional[StorePartition] = None
+        self._store_transaction: Optional[PartitionTransaction] = None
+        self._store_state: Optional[State] = None
+
+    def configure(
+        self,
+        topic: Topic,
+        producer: RowProducer,
+        *,
+        store_partition: Optional[StorePartition] = None,
+        **kwargs,
+    ) -> None:
+        """
+        This method is triggered before the source is started.
+
+        It configures the source's Kafka producer, the topic it will produce to and the store partition.
+        """
+        super().configure(topic=topic, producer=producer)
+        self._store_partition = store_partition
+        self._store_transaction = None
+        self._store_state = None
+
+    @property
+    def store_partitions_count(self) -> int:
+        """
+        Count of store partitions.
+
+        Used to configure the number of partition in the changelog topic.
+        """
+        return 1
+
+    @property
+    def assigned_store_partition(self) -> int:
+        """
+        The store partition assigned to this instance
+        """
+        return 0
+
+    @property
+    def store_name(self) -> str:
+        """
+        The source store name
+        """
+        return f"source-{self.name}"
+
+    @property
+    def state(self) -> State:
+        """
+        Access the `State` of the source.
+
+        The `State` lifecycle is tied to the store transaction. A transaction is only valid until the next `.flush()` call. If no valid transaction exist, a new transaction is created.
+
+        Important: after each `.flush()` call, a previously returned instance is invalidated and cannot be used. The property must be called again.
+        """
+        if self._store_partition is None:
+            raise RuntimeError("source is not configured")
+
+        if self._store_transaction is None:
+            self._store_transaction = self._store_partition.begin()
+
+        if self._store_state is None:
+            self._store_state = self._store_transaction.as_state()
+
+        return self._store_state
+
+    def flush(self, timeout: Optional[float] = None) -> None:
+        """
+        This method commit the state and flush the producer.
+
+        It ensures the state is published to the changelog topic and all messages are successfully delivered to Kafka.
+
+        :param float timeout: time to attempt flushing (seconds).
+            None use producer default or -1 is infinite. Default: None
+
+        :raises CheckpointProducerTimeout: if any message fails to produce before the timeout
+        """
+        if self._store_transaction:
+            self._store_transaction.prepare(None)
+            self._store_transaction.flush()
+            self._store_transaction = None
+            self._store_state = None
+
+        super().flush(timeout)
