@@ -2,14 +2,20 @@ import logging
 import time
 from typing import Callable, Literal, Optional, Protocol
 
-import boto3
-from botocore.exceptions import ClientError
-from mypy_boto3_kinesis import KinesisClient
-from mypy_boto3_kinesis.type_defs import GetShardIteratorOutputTypeDef, ShardTypeDef
-from mypy_boto3_kinesis.type_defs import RecordTypeDef as KinesisRecord
 from typing_extensions import Self
 
-__all__ = ("KinesisRecord", "Authentication")
+try:
+    import boto3
+    from botocore.exceptions import ClientError
+    from mypy_boto3_kinesis import KinesisClient
+    from mypy_boto3_kinesis.type_defs import GetShardIteratorOutputTypeDef, ShardTypeDef
+    from mypy_boto3_kinesis.type_defs import RecordTypeDef as KinesisRecord
+except ImportError as exc:
+    raise ImportError(
+        f"Package {exc.name} is missing: "
+        'run "pip install quixstreams[kinesis]" to use KinesisSource'
+    ) from exc
+
 
 logger = logging.getLogger(__name__)
 
@@ -32,21 +38,24 @@ class KinesisCheckpointer(Protocol):
 class Authentication:
     def __init__(
         self,
-        endpoint_url: Optional[str] = None,
         aws_region: Optional[str] = None,
         aws_access_key_id: Optional[str] = None,
         aws_secret_access_key: Optional[str] = None,
+        aws_endpoint_url: Optional[str] = None,
     ):
         """
         :param aws_region: The AWS region.
-            NOTE: can alternatively set the REGION_NAME environment variable
+            NOTE: can alternatively set the AWS_REGION environment variable
         :param aws_access_key_id: the AWS access key ID.
             NOTE: can alternatively set the AWS_ACCESS_KEY_ID environment variable
         :param aws_secret_access_key: the AWS secret access key.
             NOTE: can alternatively set the AWS_SECRET_ACCESS_KEY environment variable
+        :param aws_endpoint_url: the endpoint URL to use; only required for connecting
+        to a locally hosted Kinesis.
+            NOTE: can alternatively set the AWS_ENDPOINT_URL_KINESIS environment variable
         """
         self.auth = {
-            "endpoint_url": endpoint_url,
+            "endpoint_url": aws_endpoint_url,
             "region_name": aws_region,
             "aws_access_key_id": aws_access_key_id,
             "aws_secret_access_key": aws_secret_access_key,

@@ -15,43 +15,85 @@ from .consumer import (
 __all__ = ("KinesisSource",)
 
 
-class SourceCheckpointer(KinesisCheckpointer):
-    def __init__(self, stateful_source: StatefulSource, commit_interval: float = 5.0):
-        self._source = stateful_source
-        self._last_committed_at = time.monotonic()
-        self._commit_interval = commit_interval
-
-    @property
-    def last_committed_at(self) -> float:
-        return self._last_committed_at
-
-    def get(self, key: str) -> Optional[str]:
-        return self._source.state.get(key)
-
-    def set(self, key: str, value: str):
-        self._source.state.set(key, value)
-
-    def commit(self, force: bool = False):
-        if (
-            (now := time.monotonic()) - self._last_committed_at > self._commit_interval
-        ) or force:
-            self._source.flush()
-            self._last_committed_at = now
-
-
 class KinesisSource(StatefulSource):
+    """
+    NOTE: Requires `pip install quixstreams[kinesis]` to work.
+
+    This source reads data from an Amazon Kinesis stream, dumping it to a
+    kafka topic using desired `StreamingDataFrame`-based transformations.
+
+    Provides "at-least-once" guarantees.
+
+    The incoming message value will be in bytes, so transform in your SDF accordingly.
+
+    Example Usage:
+
+    ```python
+    from quixstreams import Application
+    from quixstreams.sources.community.kinesis import KinesisSource
+
+
+    kinesis = KinesisSource(
+        stream_name="<YOUR STREAM>",
+        aws_access_key_id="<YOUR KEY ID>",
+        aws_secret_access_key="<YOUR SECRET KEY>",
+        aws_region="<YOUR REGION>",
+        auto_offset_reset="earliest",  # start from the beginning of the stream (vs end)
+    )
+
+    app = Application(
+        broker_address="<YOUR BROKER INFO>",
+        consumer_group="<YOUR GROUP>",
+    )
+
+    sdf = app.dataframe(source=kinesis).print(metadata=True)
+    # YOUR LOGIC HERE!
+
+    if __name__ == "__main__":
+        app.run()
+    ```
+    """
+
     def __init__(
         self,
         stream_name: str,
-        auth: Authentication,
+        aws_region: Optional[str] = None,
+        aws_access_key_id: Optional[str] = None,
+        aws_secret_access_key: Optional[str] = None,
+        aws_endpoint_url: Optional[str] = None,
         shutdown_timeout: float = 10,
         auto_offset_reset: AutoOffsetResetType = "latest",
         max_records_per_shard: int = 1000,
         commit_interval: float = 5.0,
         retry_backoff_secs: float = 5.0,
     ):
+        """
+        :param stream_name: name of the desired Kinesis stream to consume.
+        :param aws_region: The AWS region.
+            NOTE: can alternatively set the AWS_REGION environment variable
+        :param aws_access_key_id: the AWS access key ID.
+            NOTE: can alternatively set the AWS_ACCESS_KEY_ID environment variable
+        :param aws_secret_access_key: the AWS secret access key.
+            NOTE: can alternatively set the AWS_SECRET_ACCESS_KEY environment variable
+        :param aws_endpoint_url: the endpoint URL to use; only required for connecting
+        to a locally hosted Kinesis.
+            NOTE: can alternatively set the AWS_ENDPOINT_URL_KINESIS environment variable
+        :param shutdown_timeout:
+        :param auto_offset_reset: When no previous offset has been recorded, whether to
+            start from the beginning ("earliest") or end ("latest") of the stream.
+        :param max_records_per_shard: During round-robin consumption, how many records
+            to consume per shard (partition) per consume (NOT per-commit).
+        :param commit_interval: the time between commits
+        :param retry_backoff_secs: how long to back off from doing HTTP calls for a
+             shard when Kinesis consumer encounters handled/expected errors.
+        """
         self._stream_name = stream_name
-        self._auth = auth
+        self._auth = Authentication(
+            aws_endpoint_url=aws_endpoint_url,
+            aws_region=aws_region,
+            aws_access_key_id=aws_access_key_id,
+            aws_secret_access_key=aws_secret_access_key,
+        )
         self._auto_offset_reset = auto_offset_reset
         self._max_records_per_shard = max_records_per_shard
         self._retry_backoff_secs = retry_backoff_secs
@@ -94,3 +136,27 @@ class KinesisSource(StatefulSource):
             while self._running:
                 consumer.poll_and_process_shards()
                 consumer.commit()
+
+
+class SourceCheckpointer(KinesisCheckpointer):
+    def __init__(self, stateful_source: StatefulSource, commit_interval: float = 5.0):
+        self._source = stateful_source
+        self._last_committed_at = time.monotonic()
+        self._commit_interval = commit_interval
+
+    @property
+    def last_committed_at(self) -> float:
+        return self._last_committed_at
+
+    def get(self, key: str) -> Optional[str]:
+        return self._source.state.get(key)
+
+    def set(self, key: str, value: str):
+        self._source.state.set(key, value)
+
+    def commit(self, force: bool = False):
+        if (
+            (now := time.monotonic()) - self._last_committed_at > self._commit_interval
+        ) or force:
+            self._source.flush()
+            self._last_committed_at = now

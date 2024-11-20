@@ -58,6 +58,7 @@ nav:
         - Creating a Custom Sink: connectors/sinks/custom-sinks.md
     - Sources:
         - 'connectors/sources/README.md'
+        - Amazon Kinesis Source: connectors/sources/kinesis-source.md
         - CSV Source: connectors/sources/csv-source.md
         - File Source: connectors/sources/file-source.md
         - Google Cloud Pub/Sub Source: connectors/sources/google-cloud-pubsub-source.md
