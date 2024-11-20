@@ -1,5 +1,11 @@
 # PostgreSQL Sink
 
+!!! info
+
+    This is a **Community** connector. Test it before using in production.
+
+    To learn more about differences between Core and Community connectors, see the [Community and Core Connectors](../community-and-core.md) page.
+
 PostgreSQL is a powerful, open-source object-relational database system.
 
 Quix Streams provides a sink to write processed data to PostgreSQL.
