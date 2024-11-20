@@ -14,13 +14,13 @@ __all__ = ("KinesisRecord", "Authentication")
 logger = logging.getLogger(__name__)
 
 _OFFSET_RESET_DICT = {"earliest": "TRIM_HORIZON", "latest": "LATEST"}
+AutoOffsetResetType = Literal["earliest", "latest"]
 
 
 class KinesisCheckpointer(Protocol):
     @property
-    def last_committed_at(self) -> float: ...
-
-    def begin(self): ...
+    def last_committed_at(self) -> float:
+        yield ...
 
     def get(self, key: str) -> Optional[str]: ...
 
@@ -65,7 +65,7 @@ class KinesisConsumer:
         auth: Authentication,
         message_processor: Callable[[KinesisRecord], None],
         checkpointer: KinesisCheckpointer,
-        auto_offset_reset: Literal["earliest", "latest"] = "latest",
+        auto_offset_reset: AutoOffsetResetType = "latest",
         max_records_per_shard: int = 10,
         backoff_secs: float = 5.0,
     ):
@@ -157,15 +157,13 @@ class KinesisConsumer:
                 logger.error(f"Unrecoverable error: {e}")
                 raise
 
-    def poll_and_process_shards(self):
-        self._checkpointer.begin()
-        for shard in self._shard_iterators:
-            self._poll_and_process_shard(shard)
-
     def start(self):
         self._init_client()
-        self._checkpointer.begin()
         self._init_shards()
+
+    def poll_and_process_shards(self):
+        for shard in self._shard_iterators:
+            self._poll_and_process_shard(shard)
 
     def commit(self, force: bool = False):
         self._checkpointer.commit(force=force)

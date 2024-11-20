@@ -1,12 +1,12 @@
 import time
-from typing import Literal, Optional
+from typing import Optional
 
 from quixstreams.models.topics import Topic
 from quixstreams.sources.base import StatefulSource
-from quixstreams.state import State
 
 from .consumer import (
     Authentication,
+    AutoOffsetResetType,
     KinesisCheckpointer,
     KinesisConsumer,
     KinesisRecord,
@@ -20,21 +20,16 @@ class SourceCheckpointer(KinesisCheckpointer):
         self._source = stateful_source
         self._last_committed_at = time.monotonic()
         self._commit_interval = commit_interval
-        self._state: Optional[State] = None
 
     @property
     def last_committed_at(self) -> float:
         return self._last_committed_at
 
-    def begin(self):
-        if not self._state:
-            self._state = self._source.state()
-
     def get(self, key: str) -> Optional[str]:
-        return self._state.get(key)
+        return self._source.state.get(key)
 
     def set(self, key: str, value: str):
-        self._state.set(key, value)
+        self._source.state.set(key, value)
 
     def commit(self, force: bool = False):
         if (
@@ -42,7 +37,6 @@ class SourceCheckpointer(KinesisCheckpointer):
         ) or force:
             self._source.flush()
             self._last_committed_at = now
-            self._state = None
 
 
 class KinesisSource(StatefulSource):
@@ -52,7 +46,7 @@ class KinesisSource(StatefulSource):
         stream_name: str,
         auth: Authentication,
         shutdown_timeout: float = 10,
-        auto_offset_reset: Literal["earliest", "latest"] = "latest",
+        auto_offset_reset: AutoOffsetResetType = "latest",
         max_records_per_shard: int = 10,
         commit_interval: float = 5.0,
         retry_backoff_secs: float = 5.0,
