@@ -41,11 +41,13 @@ For more information, see [`quixstreams.sources.base.Source`](../../api-referenc
 
 ## Stateful Source
 
-The recommended parent class to create new sources that need a state. Subclass of [`Source`](custom-sources.md#source).
-
-Use the [`state`](../../api-reference/sources.md#statefulsourcestate) method to start a new transaction and get a `State` object. To commit the changes call [`flush`](../../api-reference/sources.md#statefulsourceflush). [`Flush`](../../api-reference/sources.md#statefulsourceflush) will commit the state and ensure all messages are produced. After a [`flush`](../../api-reference/sources.md#statefulsourceflush) the source MUST call [`state`](../../api-reference/sources.md#statefulsourcestate) again to start a new transaction.
+The recommended parent class to create new sources that need a state. Subclass of [`Source`](custom-sources.md#source). Use the [`state`](../../api-reference/sources.md#statefulsourcestate) property to access the `State` object. To commit the changes call [`flush`](../../api-reference/sources.md#statefulsourceflush).
 
 Stateful sources store the state in memory. To prevent data loss when the application restarts the store is backed by a changelog topic in Kafka. On startup the application will consume the changelog topic to rebuild the source state. For more information see the [stateful application documentation](../../advanced/stateful-processing.md).
+
+The `State` lifecycle is tied to the store transaction. If no valid transaction exist, a new transaction is created by the [`state`](../../api-reference/sources.md#statefulsourcestate) property. [`Flush`](../../api-reference/sources.md#statefulsourceflush) will commit the transaction to the store and ensure all messages are produced. When the transaction is commited all `State` are invalidated and cannot be used. You must acquire a fresh `State` from the [`state`](../../api-reference/sources.md#statefulsourcestate) property.
+
+We recommend always accessing the `State` through the [`state`](../../api-reference/sources.md#statefulsourcestate) property as it handles the lifecycle for you.
 
 Example subclass:
 
