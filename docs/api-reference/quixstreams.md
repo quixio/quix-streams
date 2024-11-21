@@ -3359,6 +3359,51 @@ Default - `json.dumps`.
 
 ## quixstreams.sinks
 
+<a id="quixstreams.sinks.community.postgresql"></a>
+
+## quixstreams.sinks.community.postgresql
+
+<a id="quixstreams.sinks.community.postgresql.PostgreSQLSink"></a>
+
+### PostgreSQLSink
+
+```python
+class PostgreSQLSink(BatchingSink)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/postgresql.py#L48)
+
+<a id="quixstreams.sinks.community.postgresql.PostgreSQLSink.__init__"></a>
+
+#### PostgreSQLSink.\_\_init\_\_
+
+```python
+def __init__(host: str,
+             port: int,
+             dbname: str,
+             user: str,
+             password: str,
+             table_name: str,
+             schema_auto_update: bool = True,
+             **kwargs)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/postgresql.py#L49)
+
+A connector to sink topic data to PostgreSQL.
+
+**Arguments**:
+
+- `host`: PostgreSQL server address.
+- `port`: PostgreSQL server port.
+- `dbname`: PostgreSQL database name.
+- `user`: Database user name.
+- `password`: Database user password.
+- `table_name`: PostgreSQL table name.
+- `schema_auto_update`: Automatically update the schema when new columns are detected.
+- `ddl_timeout`: Timeout for DDL operations such as table creation or schema updates.
+- `kwargs`: Additional parameters for `psycopg2.connect`.
+
 <a id="quixstreams.sinks.community.file.formats.parquet"></a>
 
 ## quixstreams.sinks.community.file.formats.parquet
