@@ -112,23 +112,22 @@ The default topic name the Application dumps to is `source-kinesis_<stream name>
 
 ## Testing Locally
 
-Rather than connect to AWS, you can alternatively test your application using 
-a local Kinesis host via docker:
+Rather than connect to AWS, you can alternatively test your application using a local Kinesis host via Docker:
 
-1. Set `aws_endpoint_url` for `KinesisSource` _OR_ the `AWS_ENDPOINT_URL_KINESIS` 
-    environment variable to:
-    
-    `localhost:8085`
+1. Execute in terminal:
 
-2. Set all other `aws_` parameters for `KinesisSource` to _any_ string. 
+    ```bash
+    docker run --rm -d --name kinesis \
+    -p 4566:4566 \
+    -e SERVICES=kinesis \
+    -e EDGE_PORT=4566 \
+    -e DEBUG=1 \
+    localstack/localstack:latest
+    ```
+
+2. Set `aws_endpoint_url` for `KinesisSource` _OR_ the `AWS_ENDPOINT_URL_KINESIS` 
+    environment variable to `http://localhost:4566`
+
+3. Set all other `aws_` parameters for `KinesisSource` to _any_ string. 
 They will not be used, but they must still be populated!
 
-3. execute in terminal:
-
-    `docker run --rm -d --name kinesis \
-  -p 4566:4566 \
-  -e SERVICES=kinesis \
-  -e EDGE_PORT=4566 \
-  -e DEBUG=1 \
-  localstack/localstack:latest
-`
