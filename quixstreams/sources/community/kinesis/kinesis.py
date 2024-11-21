@@ -1,12 +1,11 @@
-import time
 from typing import Optional
 
 from quixstreams.models.topics import Topic
 from quixstreams.sources.base import StatefulSource
 
 from .consumer import (
-    Authentication,
     AutoOffsetResetType,
+    AWSCredentials,
     KinesisCheckpointer,
     KinesisConsumer,
     KinesisRecord,
@@ -88,16 +87,19 @@ class KinesisSource(StatefulSource):
              shard when Kinesis consumer encounters handled/expected errors.
         """
         self._stream_name = stream_name
-        self._auth = Authentication(
-            aws_endpoint_url=aws_endpoint_url,
-            aws_region=aws_region,
-            aws_access_key_id=aws_access_key_id,
-            aws_secret_access_key=aws_secret_access_key,
-        )
+        self._credentials: AWSCredentials = {
+            "endpoint_url": aws_endpoint_url,
+            "region_name": aws_region,
+            "aws_access_key_id": aws_access_key_id,
+            "aws_secret_access_key": aws_secret_access_key,
+        }
+
         self._auto_offset_reset = auto_offset_reset
         self._max_records_per_shard = max_records_per_shard
         self._retry_backoff_secs = retry_backoff_secs
-        self._checkpointer = SourceCheckpointer(self, commit_interval)
+        self._checkpointer = KinesisCheckpointer(
+            stateful_source=self, commit_interval=commit_interval
+        )
         super().__init__(
             name=f"kinesis_{self._stream_name}", shutdown_timeout=shutdown_timeout
         )
@@ -126,7 +128,7 @@ class KinesisSource(StatefulSource):
     def run(self):
         with KinesisConsumer(
             stream_name=self._stream_name,
-            auth=self._auth,
+            credentials=self._credentials,
             message_processor=self._handle_kinesis_message,
             auto_offset_reset=self._auto_offset_reset,
             checkpointer=self._checkpointer,
@@ -134,29 +136,5 @@ class KinesisSource(StatefulSource):
             backoff_secs=self._retry_backoff_secs,
         ) as consumer:
             while self._running:
-                consumer.poll_and_process_shards()
+                consumer.process_shards()
                 consumer.commit()
-
-
-class SourceCheckpointer(KinesisCheckpointer):
-    def __init__(self, stateful_source: StatefulSource, commit_interval: float = 5.0):
-        self._source = stateful_source
-        self._last_committed_at = time.monotonic()
-        self._commit_interval = commit_interval
-
-    @property
-    def last_committed_at(self) -> float:
-        return self._last_committed_at
-
-    def get(self, key: str) -> Optional[str]:
-        return self._source.state.get(key)
-
-    def set(self, key: str, value: str):
-        self._source.state.set(key, value)
-
-    def commit(self, force: bool = False):
-        if (
-            (now := time.monotonic()) - self._last_committed_at > self._commit_interval
-        ) or force:
-            self._source.flush()
-            self._last_committed_at = now
