@@ -1,7 +1,7 @@
 import json
 from collections import defaultdict
 from concurrent.futures import FIRST_EXCEPTION, ThreadPoolExecutor, wait
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 try:
     import boto3
@@ -27,6 +27,9 @@ class KinesisSink(BaseSink):
     def __init__(
         self,
         stream_name: str,
+        aws_access_key_id: Optional[str] = None,
+        aws_secret_access_key: Optional[str] = None,
+        region_name: Optional[str] = None,
         value_serializer: Callable[[Any], str] = json.dumps,
         key_serializer: Callable[[Any], str] = bytes.decode,
         **kwargs,
@@ -35,6 +38,9 @@ class KinesisSink(BaseSink):
         Initialize the KinesisSink.
 
         :param stream_name: Kinesis stream name.
+        :param aws_access_key_id: AWS access key ID.
+        :param aws_secret_access_key: AWS secret access key.
+        :param region_name: AWS region name (e.g., 'us-east-1').
         :param value_serializer: Function to serialize the value to string
             (defaults to json.dumps).
         :param key_serializer: Function to serialize the key to string
@@ -42,7 +48,6 @@ class KinesisSink(BaseSink):
         :param kwargs: Additional keyword arguments passed to boto3.client.
         """
         self._stream_name = stream_name
-        self._kinesis = boto3.client("kinesis", **kwargs)
         self._value_serializer = value_serializer
         self._key_serializer = key_serializer
 
@@ -52,6 +57,14 @@ class KinesisSink(BaseSink):
         # Thread pool executor for asynchronous operations. Single thread ensures
         # that records are sent in order at the expense of throughput.
         self._executor = ThreadPoolExecutor(max_workers=1)
+
+        self._kinesis = boto3.client(
+            "kinesis",
+            aws_access_key_id=aws_access_key_id,
+            aws_secret_access_key=aws_secret_access_key,
+            region_name=region_name,
+            **kwargs,
+        )
 
         # Check if the Kinesis stream exists
         try:
