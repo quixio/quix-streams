@@ -18,14 +18,19 @@ pip install quixstreams[kinesis]
 
 ## How It Works
 
-`KinesisSink` is a streaming sink that publishes messages to Kinesis Data Streams. For each message:
+`KinesisSink` is a streaming sink that publishes messages to Kinesis Data Streams as soon as they are processed. 
+
+For each message:
 
 - The value is serialized (defaults to JSON)
 - The key is converted to a string
 - Messages are published in batches of up to 500 records
 - The sink ensures that the order of messages is preserved within each partition. This means that messages are sent to Kinesis in the same order they are received from Kafka for each specific partition.
 
-**Important:** The Kinesis stream must already exist. The sink does not create the stream automatically. If the stream does not exist, an error will be raised when initializing the sink.
+!!! note
+
+    The Kinesis stream must already exist. The sink does not create the stream automatically.  
+    If the stream does not exist, an error will be raised when initializing the sink.
 
 ## How To Use
 
@@ -77,4 +82,4 @@ The sink provides **at-least-once** delivery guarantees, which means:
     - Some messages that were successfully published in the failed batch may be published again
     - This ensures no messages are lost, but some might be delivered more than once
 
-This behavior makes the sink reliable but means downstream systems should be prepared to handle duplicate messages. If your application requires exactly-once semantics, you'll need to implement deduplication logic in your consumer.
+This behavior makes the sink reliable but the downstream systems must be prepared to handle duplicate messages. If your application requires exactly-once semantics, you'll need to implement deduplication logic in your consumer.
