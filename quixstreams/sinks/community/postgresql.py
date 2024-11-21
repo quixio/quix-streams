@@ -79,7 +79,6 @@ class PostgreSQLSink(BatchingSink):
         self.connection = psycopg2.connect(
             host=host, port=port, dbname=dbname, user=user, password=password, **kwargs
         )
-        self.connection.autocommit = True
 
         # Initialize table if schema_auto_update is enabled
         if self.schema_auto_update:
@@ -104,9 +103,14 @@ class PostgreSQLSink(BatchingSink):
             row[_TIMESTAMP_COLUMN_NAME] = datetime.fromtimestamp(item.timestamp / 1000)
             rows.append(row)
 
-        if self.schema_auto_update:
-            self._add_new_columns(cols_types)
-        self._insert_rows(rows)
+        try:
+            with self.connection:
+                if self.schema_auto_update:
+                    self._add_new_columns(cols_types)
+                self._insert_rows(rows)
+        except psycopg2.Error as e:
+            self.connection.rollback()
+            raise PostgreSQLSinkException(f"Failed to write batch: {str(e)}") from e
 
     def add(
         self,
@@ -134,60 +138,57 @@ class PostgreSQLSink(BatchingSink):
         )
 
     def _init_table(self):
+        query = sql.SQL(
+            """
+            CREATE TABLE IF NOT EXISTS {table} (
+                {timestamp_col} TIMESTAMP NOT NULL,
+                {key_col} TEXT
+            )
+            """
+        ).format(
+            table=sql.Identifier(self.table_name),
+            timestamp_col=sql.Identifier(_TIMESTAMP_COLUMN_NAME),
+            key_col=sql.Identifier(_KEY_COLUMN_NAME),
+        )
+
         with self.connection.cursor() as cursor:
+            cursor.execute(query)
+
+    def _add_new_columns(self, columns: dict[str, type]) -> None:
+        for col_name, py_type in columns.items():
+            postgres_col_type = _POSTGRES_TYPES_MAP.get(py_type)
+            if postgres_col_type is None:
+                raise PostgreSQLSinkException(
+                    f'Failed to add new column "{col_name}": '
+                    f'cannot map Python type "{py_type}" to a PostgreSQL column type'
+                )
             query = sql.SQL(
                 """
-                CREATE TABLE IF NOT EXISTS {table} (
-                    {timestamp_col} TIMESTAMP NOT NULL,
-                    {key_col} TEXT
-                )
+                ALTER TABLE {table}
+                ADD COLUMN IF NOT EXISTS {column} {col_type}
                 """
             ).format(
                 table=sql.Identifier(self.table_name),
-                timestamp_col=sql.Identifier(_TIMESTAMP_COLUMN_NAME),
-                key_col=sql.Identifier(_KEY_COLUMN_NAME),
+                column=sql.Identifier(col_name),
+                col_type=sql.SQL(postgres_col_type),
             )
-            cursor.execute(query)
 
-    def _add_new_columns(self, columns: dict[str, type]):
-        with self.connection.cursor() as cursor:
-            for col_name, py_type in columns.items():
-                postgres_col_type = _POSTGRES_TYPES_MAP.get(py_type)
-                if postgres_col_type is None:
-                    raise PostgreSQLSinkException(
-                        f'Failed to add new column "{col_name}": '
-                        f'cannot map Python type "{py_type}" to a PostgreSQL column type'
-                    )
-                query = sql.SQL(
-                    """
-                    ALTER TABLE {table}
-                    ADD COLUMN IF NOT EXISTS {column} {col_type}
-                    """
-                ).format(
-                    table=sql.Identifier(self.table_name),
-                    column=sql.Identifier(col_name),
-                    col_type=sql.SQL(postgres_col_type),
-                )
+            with self.connection.cursor() as cursor:
                 cursor.execute(query)
 
-    def _insert_rows(self, rows: list[dict]):
+    def _insert_rows(self, rows: list[dict]) -> None:
         if not rows:
             return
 
+        # Collect all column names from the first row
+        columns = list(rows[0].keys())
+        # Handle missing keys gracefully
+        values = [[row.get(col, None) for col in columns] for row in rows]
+
+        query = sql.SQL("INSERT INTO {table} ({columns}) VALUES %s").format(
+            table=sql.Identifier(self.table_name),
+            columns=sql.SQL(", ").join(map(sql.Identifier, columns)),
+        )
+
         with self.connection.cursor() as cursor:
-            # Collect all column names from the first row
-            columns = list(rows[0].keys())
-            # Handle missing keys gracefully
-            values = [[row.get(col, None) for col in columns] for row in rows]
-
-            query = sql.SQL(
-                """
-                INSERT INTO {table} ({columns})
-                VALUES %s
-                """
-            ).format(
-                table=sql.Identifier(self.table_name),
-                columns=sql.SQL(", ").join(map(sql.Identifier, columns)),
-            )
-
             execute_values(cursor, query, values)
