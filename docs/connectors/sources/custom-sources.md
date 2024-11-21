@@ -76,8 +76,8 @@ from quixstreams.sources.base import StatefulSource
 class RangeSource(StatefulSource):
     def run(self):
         # Get the key "current" from the state
-        self.state.get("current", 0) + 1
-        for i in range(0, sys.maxsize):
+        start = self.state.get("current", 0) + 1
+        for i in range(start, sys.maxsize):
             if not self.running:
                 return
             
