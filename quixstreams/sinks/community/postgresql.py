@@ -55,7 +55,6 @@ class PostgreSQLSink(BatchingSink):
         password: str,
         table_name: str,
         schema_auto_update: bool = True,
-        ddl_timeout: float = 10.0,
         **kwargs,
     ):
         """
@@ -74,7 +73,6 @@ class PostgreSQLSink(BatchingSink):
         super().__init__()
         self.table_name = table_name
         self.schema_auto_update = schema_auto_update
-        self.ddl_timeout = ddl_timeout
 
         self.connection = psycopg2.connect(
             host=host, port=port, dbname=dbname, user=user, password=password, **kwargs

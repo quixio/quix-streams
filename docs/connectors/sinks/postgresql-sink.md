@@ -82,4 +82,3 @@ PostgreSQLSink accepts the following configuration parameters:
 - `password`: The database user password.
 - `table_name`: The name of the PostgreSQL table where data will be written.
 - `schema_auto_update`: If True, the sink will automatically update the schema by adding new columns when new fields are detected. Default: True.
-- `ddl_timeout`: Timeout (in seconds) for DDL operations such as creating tables or adding columns. Default: 10.
