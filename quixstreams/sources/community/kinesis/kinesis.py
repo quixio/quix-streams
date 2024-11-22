@@ -1,3 +1,4 @@
+from os import getenv
 from typing import Optional
 
 from quixstreams.models.topics import Topic
@@ -56,10 +57,10 @@ class KinesisSource(StatefulSource):
     def __init__(
         self,
         stream_name: str,
-        aws_region: Optional[str] = None,
-        aws_access_key_id: Optional[str] = None,
-        aws_secret_access_key: Optional[str] = None,
-        aws_endpoint_url: Optional[str] = None,
+        aws_region: Optional[str] = getenv("AWS_REGION"),
+        aws_access_key_id: Optional[str] = getenv("AWS_ACCESS_KEY_ID"),
+        aws_secret_access_key: Optional[str] = getenv("AWS_SECRET_ACCESS_KEY"),
+        aws_endpoint_url: Optional[str] = getenv("AWS_ENDPOINT_URL_KINESIS"),
         shutdown_timeout: float = 10,
         auto_offset_reset: AutoOffsetResetType = "latest",
         max_records_per_shard: int = 1000,
