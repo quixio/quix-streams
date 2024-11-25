@@ -1,7 +1,8 @@
+import contextlib
 from abc import ABC, abstractmethod
 from io import BytesIO
 from pathlib import Path
-from typing import BinaryIO, Generator, Iterable, Literal, Optional
+from typing import BinaryIO, Generator, Iterable, Literal, Optional, Union
 
 from ..compressions import COMPRESSION_MAPPER, CompressionName, Decompressor
 
@@ -26,7 +27,6 @@ class Format(ABC):
         """
         super().__init__() this for a usable init.
         """
-        self._file: Optional[BinaryIO] = None
         self._decompressor: Optional[Decompressor] = None
         if compression:
             self._set_decompressor(compression)
@@ -48,22 +48,23 @@ class Format(ABC):
         """
         ...
 
+    def _decompress(self, filestream: BinaryIO) -> BinaryIO:
+        if not self._decompressor:
+            return filestream
+        return BytesIO(self._decompressor.decompress(filestream))
+
+    @contextlib.contextmanager
+    def _open(self, file: Union[Path, BinaryIO]) -> BinaryIO:
+        if isinstance(file, Path):
+            with open(file, "rb") as f:
+                # yield for when no decompression is done
+                yield self._decompress(f)
+        else:
+            yield self._decompress(file)
+
     def _set_decompressor(self, extension_or_name: CompressionName):
         self._decompressor = COMPRESSION_MAPPER[extension_or_name]()
 
-    def _open_filestream(self, filepath: Path):
-        # TODO: maybe check that file extension is valid?
-        if self._decompressor:
-            self._file = BytesIO(self._decompressor.decompress(filepath))
-        else:
-            self._file = open(filepath, "rb")
-
-    def _close_filestream(self):
-        if self._file:
-            self._file.close()
-        self._file = None
-
-    def file_read(self, filepath: Path) -> Generator[dict, None, None]:
-        self._open_filestream(filepath)
-        yield from self.deserialize(self._file)
-        self._close_filestream()
+    def file_read(self, file: Union[Path, BinaryIO]) -> Generator[dict, None, None]:
+        with self._open(file) as filestream:
+            yield from self.deserialize(filestream)
