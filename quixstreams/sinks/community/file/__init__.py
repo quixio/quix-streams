@@ -1,5 +1,5 @@
-from .formats import JSONFormat, ParquetFormat
-from .sink import FileSink, InvalidFormatError
+from .formats import InvalidFormatError, JSONFormat, ParquetFormat
+from .sink import FileSink
 
 __all__ = [
     "FileSink",

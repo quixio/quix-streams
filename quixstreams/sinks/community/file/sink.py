@@ -1,30 +1,17 @@
 import logging
 import re
 from pathlib import Path
-from typing import Literal, Union
+from typing import Union
 
 from quixstreams.sinks import BatchingSink, SinkBatch
 
-from .formats import Format, JSONFormat, ParquetFormat
+from .formats import Format, FormatName, resolve_format
 
-__all__ = ["FileSink", "InvalidFormatError"]
+__all__ = ("FileSink",)
 
 logger = logging.getLogger(__name__)
 
-FormatName = Literal["json", "parquet"]
-
-_FORMATS: dict[FormatName, Format] = {
-    "json": JSONFormat(),
-    "parquet": ParquetFormat(),
-}
-
 _UNSAFE_CHARACTERS_REGEX = re.compile(r"[^a-zA-Z0-9 ._]")
-
-
-class InvalidFormatError(Exception):
-    """
-    Raised when the format is specified incorrectly.
-    """
 
 
 class FileSink(BatchingSink):
@@ -57,7 +44,7 @@ class FileSink(BatchingSink):
             support appending.
         """
         super().__init__()
-        self._format = self._resolve_format(format)
+        self._format = resolve_format(format)
         self._output_dir = output_dir  # TODO: validate
         if append and not self._format.supports_append:
             raise ValueError(f"`{format}` format does not support appending.")
@@ -139,25 +126,4 @@ class FileSink(BatchingSink):
             path
             for path in directory.iterdir()
             if path.suffix == self._format.file_extension
-        )
-
-    def _resolve_format(self, format: Union[FormatName, Format]) -> Format:
-        """
-        Resolves the format into a `Format` instance.
-
-        :param format: The format to resolve, either a format name ("json",
-            "parquet") or a `Format` instance.
-        :return: An instance of `Format` corresponding to the specified format.
-        :raises InvalidFormatError: If the format name is invalid.
-        """
-        if isinstance(format, Format):
-            return format
-        elif format_obj := _FORMATS.get(format):
-            return format_obj
-
-        allowed_formats = ", ".join(FormatName.__args__)
-        raise InvalidFormatError(
-            f'Invalid format name "{format}". '
-            f"Allowed values: {allowed_formats}, "
-            f"or an instance of a subclass of `Format`."
         )
