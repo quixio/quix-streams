@@ -1,6 +1,7 @@
 import json
 from collections import defaultdict
 from concurrent.futures import FIRST_EXCEPTION, ThreadPoolExecutor, wait
+from os import getenv
 from typing import Any, Callable, Optional
 
 try:
@@ -27,9 +28,9 @@ class KinesisSink(BaseSink):
     def __init__(
         self,
         stream_name: str,
-        aws_access_key_id: Optional[str] = None,
-        aws_secret_access_key: Optional[str] = None,
-        region_name: Optional[str] = None,
+        aws_access_key_id: Optional[str] = getenv("AWS_ACCESS_KEY_ID"),
+        aws_secret_access_key: Optional[str] = getenv("AWS_SECRET_ACCESS_KEY"),
+        region_name: Optional[str] = getenv("AWS_REGION", getenv("AWS_DEFAULT_REGION")),
         value_serializer: Callable[[Any], str] = json.dumps,
         key_serializer: Callable[[Any], str] = bytes.decode,
         **kwargs,
