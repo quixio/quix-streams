@@ -2175,9 +2175,7 @@ class TestApplicationSource:
             app.stop()
 
     def test_run_with_source_success(
-        self,
-        app_factory,
-        executor,
+        self, app_factory, executor, topic_manager_factory
     ):
         done = Future()
         processed_count = 0
@@ -2192,11 +2190,17 @@ class TestApplicationSource:
             if processed_count == self.MESSAGES_COUNT:
                 done.set_result(True)
 
+        topic_manager = topic_manager_factory()
         app = app_factory(
-            auto_offset_reset="earliest", on_message_processed=on_message_processed
+            auto_offset_reset="earliest",
+            on_message_processed=on_message_processed,
+            topic_manager=topic_manager,
         )
         source = DummySource(values=range(self.MESSAGES_COUNT))
         sdf = app.dataframe(source=source)
+
+        default_topic_name = f"source__{source.default_topic().name}"
+        assert default_topic_name in topic_manager.topics
 
         executor.submit(_stop_app_on_future, app, done, 10.0)
 
