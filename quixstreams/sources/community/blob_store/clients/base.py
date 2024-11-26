@@ -11,7 +11,7 @@ __all__ = ("BlobClient",)
 class BlobClient:
     _client: Any
     _credentials: Union[dict, str]
-    location: Union[str, Path]
+    root_location: Union[str, Path]
 
     @property
     @abstractmethod

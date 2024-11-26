@@ -43,7 +43,7 @@ class AwsS3BlobClient(BlobClient):
         to a locally hosted Kinesis.
             NOTE: can alternatively set the AWS_ENDPOINT_URL_KINESIS environment variable
         """
-        self.location = aws_s3_bucket
+        self.root_location = aws_s3_bucket
         self._client: Optional[S3Client] = None
         self._credentials = {
             "region_name": aws_region,

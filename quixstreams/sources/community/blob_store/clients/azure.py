@@ -14,20 +14,24 @@ __all__ = ("AzureBlobClient",)
 
 
 class AzureBlobClient(BlobClient):
+    def get_root_folder_count(self, filepath: Path) -> int:
+        # TODO: implement
+        ...
+
     def __init__(
         self,
         connection_string: str,
         container: str,
     ):
         self._client: Optional[ContainerClient] = None
-        self.location = container
+        self.root_location = container
         self._credentials = connection_string
 
     @property
     def client(self):
         if not self._client:
             blob_client = BlobServiceClient.from_connection_string(self._credentials)
-            container_client = blob_client.get_container_client(self.location)
+            container_client = blob_client.get_container_client(self.root_location)
             self._client: ContainerClient = container_client
         return self._client
 
