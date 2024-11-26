@@ -1,13 +1,15 @@
 import logging
 from pathlib import Path
 from time import sleep
-from typing import BinaryIO, Generator, Optional, Union
+from typing import Optional, Union
 
 from quixstreams.models import Topic, TopicConfig
 from quixstreams.sources import Source
 
 from .compressions import CompressionName
 from .formats import FORMATS, Format, FormatName
+from .origins import LocalFileOrigin
+from .origins.base import FileOrigin
 
 __all__ = ("FileSource",)
 
@@ -63,7 +65,8 @@ class FileSource(Source):
     def __init__(
         self,
         filepath: Union[str, Path],
-        file_format: Union[Format, FormatName],
+        file_format: Union[Format, FormatName] = "json",
+        file_origin: Optional[FileOrigin] = LocalFileOrigin(),
         file_compression: Optional[CompressionName] = None,
         as_replay: bool = True,
         name: Optional[str] = None,
@@ -75,6 +78,7 @@ class FileSource(Source):
         :param file_format: what format the message files are in (ex: json, parquet).
             Optionally, can provide a `Format` instance if more than file_compression
             is necessary to define (file_compression will then be ignored).
+        :param file_origin: a FileOrigin type (defaults to reading local files).
         :param file_compression: what compression is used on the given files, if any.
         :param as_replay: Produce the messages with the original time delay between them.
             Otherwise, produce the messages as fast as possible.
@@ -84,6 +88,7 @@ class FileSource(Source):
             to gracefully shutdown
         """
         self._filepath = Path(filepath)
+        self._origin = file_origin
         self._formatter = _get_formatter(file_format, file_compression)
         self._as_replay = as_replay
         self._previous_timestamp = None
@@ -104,9 +109,6 @@ class FileSource(Source):
                 sleep(time_diff)
         self._previous_timestamp = current_timestamp
 
-    def _get_partition_count(self) -> int:
-        return len([f for f in self._filepath.iterdir()])
-
     def _check_file_partition_number(self, file: Path):
         """
         Checks whether the next file is the start of a new partition so the timestamp
@@ -117,12 +119,6 @@ class FileSource(Source):
             self._previous_timestamp = None
             self._previous_partition = partition
             logger.debug(f"Beginning reading partition {partition}")
-
-    def _file_read(self, file: Union[Path, BinaryIO]) -> Generator[dict, None, None]:
-        yield from self._formatter.file_read(file)
-
-    def _file_list(self) -> Generator[Path, None, None]:
-        yield from _file_finder(self._filepath)
 
     def _produce(self, record: dict):
         kafka_msg = self._producer_topic.serialize(
@@ -142,16 +138,19 @@ class FileSource(Source):
         """
         topic = super().default_topic()
         topic.config = TopicConfig(
-            num_partitions=self._get_partition_count(), replication_factor=1
+            num_partitions=self._origin.get_root_folder_count(self._filepath),
+            replication_factor=1,
         )
         return topic
 
     def run(self):
         while self._running:
-            for file in self._file_list():
-                logger.info(f"Reading files from topic {self._filepath.name}")
+            logger.info(f"Reading files from topic {self._filepath.name}")
+            for file in self._origin.file_collector(self._filepath):
+                logger.debug(f"Reading file {file}")
                 self._check_file_partition_number(file)
-                for record in self._file_read(file):
+                filestream = self._origin.get_raw_file_stream(file)
+                for record in self._formatter.read(filestream):
                     if self._as_replay and (timestamp := record.get("_timestamp")):
                         self._replay_delay(timestamp)
                     self._produce(record)
@@ -173,11 +172,3 @@ def _get_formatter(
         f"Allowed values: {allowed_formats}, "
         f"or an instance of a subclass of `Format`."
     )
-
-
-def _file_finder(filepath: Path) -> Generator[Path, None, None]:
-    if filepath.is_dir():
-        for i in sorted(filepath.iterdir(), key=lambda x: x.name):
-            yield from _file_finder(i)
-    else:
-        yield filepath

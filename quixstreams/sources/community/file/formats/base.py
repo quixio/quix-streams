@@ -57,7 +57,6 @@ class Format(ABC):
     def _open(self, file: Union[Path, BinaryIO]) -> BinaryIO:
         if isinstance(file, Path):
             with open(file, "rb") as f:
-                # yield for when no decompression is done
                 yield self._decompress(f)
         else:
             yield self._decompress(file)
@@ -65,6 +64,6 @@ class Format(ABC):
     def _set_decompressor(self, extension_or_name: CompressionName):
         self._decompressor = COMPRESSION_MAPPER[extension_or_name]()
 
-    def file_read(self, file: Union[Path, BinaryIO]) -> Generator[dict, None, None]:
+    def read(self, file: Union[Path, BinaryIO]) -> Generator[dict, None, None]:
         with self._open(file) as filestream:
             yield from self.deserialize(filestream)
