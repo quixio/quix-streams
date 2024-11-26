@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from typing import Optional, Union
+from typing import Generator, Optional, Union
 
 from quixstreams.sources.community.file import FileSource
 from quixstreams.sources.community.file.compressions import CompressionName
@@ -20,15 +20,15 @@ class BlobFileSource(FileSource):
         blob_client: BlobClient,
         blob_format: Union[FormatName, Format],
         blob_compression: Optional[CompressionName] = None,
-        blob_folder: Optional[str] = None,
-        blob_file: Optional[str] = None,
+        blob_folder: Optional[Union[str, Path]] = None,
+        blob_file: Optional[Union[str, Path]] = None,
         as_replay: bool = True,
         name: Optional[str] = None,
         shutdown_timeout: float = 10.0,
     ):
         self._client = blob_client
-        self._blob_file = blob_file
-        self._blob_folder = blob_folder
+        self._blob_file = Path(blob_file) if blob_file else None
+        self._blob_folder = Path(blob_folder) if blob_folder else None
 
         super().__init__(
             filepath=self._client.location,
@@ -40,24 +40,13 @@ class BlobFileSource(FileSource):
         )
 
     def _get_partition_count(self) -> int:
-        return 1
+        return self._client.get_root_folder_count(self._blob_folder)
 
-    def _check_file_partition_number(self, file: Path) -> int:
-        return 0
+    def _file_read(self, file: Path) -> Generator[dict, None, None]:
+        yield from super()._file_read(self._client.get_raw_blob_stream(file))
 
-    def run(self):
-        blobs = (
-            [self._blob_file]
-            if self._blob_file
-            else self._client.blob_finder(self._blob_folder)
-        )
-        while self._running:
-            for file in blobs:
-                self._check_file_partition_number(Path(file))
-                filestream = self._client.get_raw_blob_stream(file)
-                for record in self._formatter.file_read(filestream):
-                    if self._as_replay and (timestamp := record.get("_timestamp")):
-                        self._replay_delay(timestamp)
-                    self._produce(record)
-                self.flush()
-            return
+    def _file_list(self) -> Generator[Path, None, None]:
+        if self._blob_file:
+            yield self._blob_file
+        else:
+            yield from self._client.blob_collector(self._blob_folder)

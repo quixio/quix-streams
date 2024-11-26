@@ -1,4 +1,5 @@
 from io import BytesIO
+from pathlib import Path
 from typing import Generator, Optional
 
 from .base import BlobClient
@@ -30,11 +31,12 @@ class AzureBlobClient(BlobClient):
             self._client: ContainerClient = container_client
         return self._client
 
-    def blob_finder(self, folder: str) -> Generator[str, None, None]:
-        for item in self.client.list_blob_names(name_starts_with=folder):
+    def blob_collector(self, folder: Path) -> Generator[str, None, None]:
+        # TODO: Recursively navigate folders.
+        for item in self.client.list_blob_names(name_starts_with=str(folder)):
             yield item
 
-    def get_raw_blob_stream(self, blob_name) -> BytesIO:
-        blob_client = self.client.get_blob_client(blob_name)
+    def get_raw_blob_stream(self, blob_name: Path) -> BytesIO:
+        blob_client = self.client.get_blob_client(str(blob_name))
         data = blob_client.download_blob().readall()
         return BytesIO(data)

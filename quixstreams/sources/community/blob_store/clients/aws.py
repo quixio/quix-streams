@@ -1,6 +1,8 @@
+import logging
 from io import BytesIO
 from os import getenv
-from typing import Generator, Optional
+from pathlib import Path
+from typing import Generator, Optional, Union
 
 from .base import BlobClient
 
@@ -10,6 +12,8 @@ try:
 except Exception:
     raise
 
+
+logger = logging.getLogger(__name__)
 
 __all__ = ("AwsS3BlobClient",)
 
@@ -55,16 +59,27 @@ class AwsS3BlobClient(BlobClient):
             self._client: S3Client = boto_client("s3", **self._credentials)
         return self._client
 
-    def get_raw_blob_stream(self, blob_path: str) -> BytesIO:
-        data = self.client.get_object(Bucket=self.location, Key=blob_path)[
+    def get_raw_blob_stream(self, blob_path: Path) -> BytesIO:
+        data = self.client.get_object(Bucket=self.location, Key=str(blob_path))[
             "Body"
         ].read()
         return BytesIO(data)
 
-    def blob_finder(self, folder: str) -> Generator[str, None, None]:
-        # TODO: Recursively navigate through folders.
+    def get_root_folder_count(self, folder: Path) -> int:
         resp = self.client.list_objects(
-            Bucket=self.location, Prefix=folder, Delimiter="/"
+            Bucket=self.location, Prefix=str(folder), Delimiter="/"
         )
-        for item in resp["Contents"]:
-            yield item["Key"]
+        self._client = None
+        return len(resp["CommonPrefixes"])
+
+    def blob_collector(self, folder: Union[str, Path]) -> Generator[Path, None, None]:
+        resp = self.client.list_objects(
+            Bucket=self.location,
+            Prefix=str(folder),
+            Delimiter="/",
+        )
+        for folder in resp.get("CommonPrefixes", []):
+            yield from self.blob_collector(folder["Prefix"])
+
+        for file in resp.get("Contents", []):
+            yield Path(file["Key"])

@@ -1,6 +1,7 @@
 from abc import abstractmethod
 from dataclasses import dataclass
 from io import BytesIO
+from pathlib import Path
 from typing import Any, Iterable, Union
 
 __all__ = ("BlobClient",)
@@ -10,10 +11,10 @@ __all__ = ("BlobClient",)
 class BlobClient:
     _client: Any
     _credentials: Union[dict, str]
-    location: str
+    location: Union[str, Path]
 
-    @abstractmethod
     @property
+    @abstractmethod
     def client(self): ...
 
     """
@@ -24,7 +25,7 @@ class BlobClient:
     """
 
     @abstractmethod
-    def blob_finder(self, folder: str) -> Iterable[str]: ...
+    def blob_collector(self, folder: Path) -> Iterable[Path]: ...
 
     """
     Find all blobs starting from a root folder.
@@ -33,7 +34,12 @@ class BlobClient:
     """
 
     @abstractmethod
-    def get_raw_blob_stream(self, blob_path: str) -> BytesIO: ...
+    def get_root_folder_count(self, filepath: Path) -> int: ...
+
+    """Counts the number of folders at filepath to assume partition counts."""
+
+    @abstractmethod
+    def get_raw_blob_stream(self, blob_path: Path) -> BytesIO: ...
 
     """
     Obtain a specific blob in its raw form.

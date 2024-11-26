@@ -1,7 +1,7 @@
 import logging
 from pathlib import Path
 from time import sleep
-from typing import Generator, Optional, Union
+from typing import BinaryIO, Generator, Optional, Union
 
 from quixstreams.models import Topic, TopicConfig
 from quixstreams.sources import Source
@@ -107,6 +107,33 @@ class FileSource(Source):
     def _get_partition_count(self) -> int:
         return len([f for f in self._filepath.iterdir()])
 
+    def _check_file_partition_number(self, file: Path):
+        """
+        Checks whether the next file is the start of a new partition so the timestamp
+        tracker can be reset.
+        """
+        partition = int(file.parent.name)
+        if self._previous_partition != partition:
+            self._previous_timestamp = None
+            self._previous_partition = partition
+            logger.debug(f"Beginning reading partition {partition}")
+
+    def _file_read(self, file: Union[Path, BinaryIO]) -> Generator[dict, None, None]:
+        yield from self._formatter.file_read(file)
+
+    def _file_list(self) -> Generator[Path, None, None]:
+        yield from _file_finder(self._filepath)
+
+    def _produce(self, record: dict):
+        kafka_msg = self._producer_topic.serialize(
+            key=record["_key"],
+            value=record["_value"],
+            timestamp_ms=record["_timestamp"],
+        )
+        self.produce(
+            key=kafka_msg.key, value=kafka_msg.value, timestamp=kafka_msg.timestamp
+        )
+
     def default_topic(self) -> Topic:
         """
         Uses the file structure to generate the desired partition count for the
@@ -119,35 +146,14 @@ class FileSource(Source):
         )
         return topic
 
-    def _check_file_partition_number(self, file: Path):
-        """
-        Checks whether the next file is the start of a new partition so the timestamp
-        tracker can be reset.
-        """
-        partition = int(file.parent.name)
-        if self._previous_partition != partition:
-            self._previous_timestamp = None
-            self._previous_partition = partition
-            logger.debug(f"Beginning reading partition {partition}")
-
-    def _produce(self, record: dict):
-        kafka_msg = self._producer_topic.serialize(
-            key=record["_key"],
-            value=record["_value"],
-            timestamp_ms=record["_timestamp"],
-        )
-        self.produce(
-            key=kafka_msg.key, value=kafka_msg.value, timestamp=kafka_msg.timestamp
-        )
-
     def run(self):
         while self._running:
-            for file in _file_finder(self._filepath):
+            for file in self._file_list():
                 logger.info(f"Reading files from topic {self._filepath.name}")
                 self._check_file_partition_number(file)
-                for record in self._formatter.file_read(file):
-                    if self._as_replay:
-                        self._replay_delay(record["_timestamp"])
+                for record in self._file_read(file):
+                    if self._as_replay and (timestamp := record.get("_timestamp")):
+                        self._replay_delay(timestamp)
                     self._produce(record)
                 self.flush()
             return
