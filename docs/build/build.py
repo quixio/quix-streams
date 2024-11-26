@@ -129,6 +129,7 @@ doc_map = {
             "quixstreams.sinks.community.pubsub",
             "quixstreams.sinks.community.postgresql",
             "quixstreams.sinks.community.kinesis",
+            "quixstreams.sinks.community.redis",
         ]
     },
     # Order: base, core, community

@@ -6,3 +6,4 @@ fastavro>=1.8,<2.0
 protobuf>=5.27.2
 influxdb3-python>=0.7.0,<1.0
 pyiceberg[pyarrow,glue]>=0.7,<0.8
+redis[hiredis]>=5.2.0,<6
