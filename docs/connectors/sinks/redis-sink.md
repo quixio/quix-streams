@@ -8,7 +8,7 @@
 
 Redis is an in-memory database that persists on disk.
 
-Quix Streams provides a sink to write processed data to BigQuery.
+Quix Streams provides a sink to write processed data to Redis.
 
 ## How To Install
 
