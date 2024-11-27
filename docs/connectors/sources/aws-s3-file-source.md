@@ -53,7 +53,7 @@ from quixstreams.sources.community.file.origins import S3FileOrigin
 app = Application(broker_address="localhost:9092", auto_offset_reset="earliest")
 
 file_origin = S3FileOrigin(
-    aws_s3_bucket="<YOUR BUCKET>",
+    aws_s3_bucket="<YOUR BUCKET NAME>",
     aws_access_key_id="<YOUR KEY ID>",
     aws_secret_access_key="<YOUR SECRET KEY>",
     aws_region="<YOUR REGION>",
@@ -79,7 +79,7 @@ Here are some important configurations to be aware of (see [File Source API](../
 
 `S3FileOrigin`:
 
-- `aws_s3_bucket`: The S3 URI with bucket name only (ex: 's3://your-bucket').
+- `aws_s3_bucket`: The S3 bucket name only (ex: `"your-bucket"`).
 - `aws_region`: AWS region (ex: us-east-1).    
     **Note**: can alternatively set the `AWS_REGION` environment variable.
 - `aws_access_key_id`: AWS User key ID.

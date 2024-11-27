@@ -4,7 +4,7 @@ from os import getenv
 from pathlib import Path
 from typing import Generator, Optional, Union
 
-from .base import FileOrigin
+from .base import ExternalOrigin
 
 try:
     from boto3 import client as boto_client
@@ -12,15 +12,15 @@ try:
 except ImportError as exc:
     raise ImportError(
         f"Package {exc.name} is missing: "
-        'run "pip install quixstreams[aws]" to use S3FileOrigin'
+        'run "pip install quixstreams[s3]" to use S3Origin'
     ) from exc
 
 logger = logging.getLogger(__name__)
 
-__all__ = ("S3FileOrigin",)
+__all__ = ("S3Origin",)
 
 
-class S3FileOrigin(FileOrigin):
+class S3Origin(ExternalOrigin):
     def __init__(
         self,
         aws_s3_bucket: str,
@@ -32,7 +32,7 @@ class S3FileOrigin(FileOrigin):
         """
         Configure IcebergSink to work with AWS Glue.
 
-        :param aws_s3_bucket: The S3 URI with bucket name only (ex: 's3://your-bucket').
+        :param aws_s3_bucket: The S3 bucket name only (ex: 'your-bucket').
         :param aws_region: The AWS region.
             NOTE: can alternatively set the AWS_REGION environment variable
         :param aws_access_key_id: the AWS access key ID.
@@ -44,35 +44,35 @@ class S3FileOrigin(FileOrigin):
             NOTE: can alternatively set the AWS_ENDPOINT_URL_S3 environment variable
         """
         self.root_location = aws_s3_bucket
-        self._client: Optional[S3Client] = None
         self._credentials = {
             "region_name": aws_region,
             "aws_access_key_id": aws_access_key_id,
             "aws_secret_access_key": aws_secret_access_key,
             "endpoint_url": aws_endpoint_url,
         }
+        # S3 client runs into pickling errors with multiprocessing. We can't set it
+        # until multiprocessing starts it.
+        # We can work around it by setting it during file collection
+        self._client: Optional[S3Client] = None
 
-    @property
-    def client(self):
-        if not self._client:
-            self._client: S3Client = boto_client("s3", **self._credentials)
-        return self._client
+    def _get_client(self) -> S3Client:
+        return boto_client("s3", **self._credentials)
 
     def get_raw_file_stream(self, filepath: Path) -> BytesIO:
-        data = self.client.get_object(Bucket=self.root_location, Key=str(filepath))[
+        data = self._client.get_object(Bucket=self.root_location, Key=str(filepath))[
             "Body"
         ].read()
         return BytesIO(data)
 
     def get_folder_count(self, folder: Path) -> int:
-        resp = self.client.list_objects(
+        resp = self._get_client().list_objects(
             Bucket=self.root_location, Prefix=str(folder), Delimiter="/"
         )
-        self._client = None
         return len(resp["CommonPrefixes"])
 
     def file_collector(self, folder: Union[str, Path]) -> Generator[Path, None, None]:
-        resp = self.client.list_objects(
+        self._client = self._get_client()
+        resp = self._client.list_objects(
             Bucket=self.root_location,
             Prefix=str(folder),
             Delimiter="/",

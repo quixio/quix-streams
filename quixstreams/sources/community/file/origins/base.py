@@ -1,32 +1,19 @@
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, BinaryIO, Iterable, Union
 
-__all__ = ("FileOrigin",)
+__all__ = (
+    "Origin",
+    "ExternalOrigin",
+)
 
 
-@dataclass
-class FileOrigin:
+class Origin(ABC):
     """
     An interface for interacting with a file-based client.
 
     Provides methods for navigating folders and retrieving/opening raw files.
-    """
-
-    _client: Any
-    _credentials: Union[dict, str]
-    root_location: Union[str, Path]
-
-    @property
-    @abstractmethod
-    def client(self): ...
-
-    """
-    Set _client here.
-    
-    Circumvents pickling issues with multiprocessing by init-ing the client in a 
-    later step (when Application.run() is called).
     """
 
     @abstractmethod
@@ -51,3 +38,11 @@ class FileOrigin:
     
     Result should be ready for deserialization (and/or decompression).
     """
+
+
+@dataclass
+class ExternalOrigin(Origin, ABC):
+    """An interface for interacting with an external file-based client"""
+
+    _client: Any
+    root_location: Union[str, Path]

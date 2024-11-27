@@ -1,13 +1,13 @@
 from io import BytesIO
 from pathlib import Path
-from typing import Generator, Optional
+from typing import Generator
 
-from .base import FileOrigin
+from .base import Origin
 
-__all__ = ("LocalFileOrigin",)
+__all__ = ("LocalOrigin",)
 
 
-class LocalFileOrigin(FileOrigin):
+class LocalOrigin(Origin):
     def __init__(
         self,
     ):
@@ -19,9 +19,7 @@ class LocalFileOrigin(FileOrigin):
     def client(self):
         return
 
-    def file_collector(
-        self, filepath: Optional[Path] = None
-    ) -> Generator[Path, None, None]:
+    def file_collector(self, filepath: Path) -> Generator[Path, None, None]:
         if filepath.is_dir():
             for i in sorted(filepath.iterdir(), key=lambda x: x.name):
                 yield from self.file_collector(i)
@@ -32,5 +30,4 @@ class LocalFileOrigin(FileOrigin):
         return len([f for f in folder.iterdir()])
 
     def get_raw_file_stream(self, filepath: Path) -> BytesIO:
-        with open(filepath, "rb") as f:
-            return BytesIO(f.read())
+        return BytesIO(filepath.read_bytes())
