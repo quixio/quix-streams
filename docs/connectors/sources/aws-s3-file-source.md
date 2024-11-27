@@ -18,7 +18,7 @@ producing is matched as close as possible to the original. (per topic partition 
 Install Quix Streams with the following optional dependencies:
 
 ```bash
-pip install quixstreams[aws]
+pip install quixstreams[s3]
 ```
 
 ## How It Works
