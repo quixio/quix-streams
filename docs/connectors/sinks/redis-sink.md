@@ -22,7 +22,7 @@ pip install quixstreams[redis]
 
 ## How To Use
 
-To sink data to Redis, you need to create an instance of `Redis` and pass
+To sink data to Redis, you need to create an instance of `RedisSink` and pass
 it to the `StreamingDataFrame.sink()` method:
 
 ```python
