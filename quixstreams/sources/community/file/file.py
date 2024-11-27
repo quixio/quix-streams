@@ -61,7 +61,7 @@ class FileSource(Source):
         aws_region="<YOUR REGION>",
     )
     source = FileSource(
-        filepath="/path/to/your/topic_folder",
+        filepath="path/to/your/topic_folder/",
         file_origin=file_origin,
         file_format="json",
         file_compression="gzip",

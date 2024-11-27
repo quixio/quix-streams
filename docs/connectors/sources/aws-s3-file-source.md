@@ -6,7 +6,7 @@
 
     To learn more about differences between Core and Community connectors, see the [Community and Core Connectors](../community-and-core.md) page.
 
-This source reads records from files located in an Amazon S3 bucket path and produces 
+This source reads records from files located in an AWS S3 bucket path and produces 
 them as messages to a kafka topic using any desired `StreamingDataFrame`-based transformations. 
 
 The resulting messages can be produced in "replay" mode, where the time between record 
@@ -59,7 +59,7 @@ file_origin = S3FileOrigin(
     aws_region="<YOUR REGION>",
 )
 source = FileSource(
-    filepath="/path/to/your/topic_folder",
+    filepath="path/to/your/topic_folder/",
     file_origin=file_origin,
     file_format="json",
     file_compression="gzip",
