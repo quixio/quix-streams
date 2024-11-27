@@ -23,7 +23,7 @@ __all__ = ("S3Origin",)
 class S3Origin(ExternalOrigin):
     def __init__(
         self,
-        aws_s3_bucket: str,
+        bucket: str,
         aws_region: Optional[str] = getenv("AWS_REGION"),
         aws_access_key_id: Optional[str] = getenv("AWS_ACCESS_KEY_ID"),
         aws_secret_access_key: Optional[str] = getenv("AWS_SECRET_ACCESS_KEY"),
@@ -32,7 +32,7 @@ class S3Origin(ExternalOrigin):
         """
         Configure IcebergSink to work with AWS Glue.
 
-        :param aws_s3_bucket: The S3 bucket name only (ex: 'your-bucket').
+        :param bucket: The S3 bucket name only (ex: 'your-bucket').
         :param aws_region: The AWS region.
             NOTE: can alternatively set the AWS_REGION environment variable
         :param aws_access_key_id: the AWS access key ID.
@@ -43,7 +43,7 @@ class S3Origin(ExternalOrigin):
         to a locally hosted Kinesis.
             NOTE: can alternatively set the AWS_ENDPOINT_URL_S3 environment variable
         """
-        self.root_location = aws_s3_bucket
+        self.root_location = bucket
         self._credentials = {
             "region_name": aws_region,
             "aws_access_key_id": aws_access_key_id,

@@ -57,7 +57,7 @@ class FileSource(Source):
     app = Application(broker_address="localhost:9092", auto_offset_reset="earliest")
 
     file_origin = S3Origin(
-        aws_s3_bucket="<YOUR BUCKET>",
+        bucket="<YOUR BUCKET>",
         aws_access_key_id="<YOUR KEY ID>",
         aws_secret_access_key="<YOUR SECRET KEY>",
         aws_region="<YOUR REGION>",
