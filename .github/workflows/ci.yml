@@ -28,7 +28,7 @@ jobs:
       - name: Install requirements
         run: |
           python -m pip install -U pip
-        python -m pip install -U -r requirements.txt -r tests/requirements.txt -r requirements-mypy.txt
+          python -m pip install -U -r requirements.txt -r tests/requirements.txt -r requirements-mypy.txt
       - uses: pre-commit/action@v3.0.1
 
   test:
