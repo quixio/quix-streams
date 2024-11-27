@@ -27,6 +27,10 @@ class AzureOrigin(ExternalOrigin):
         connection_string: str,
         container: str,
     ):
+        """
+        :param connection_string: Azure client authentication string.
+        :param container: Azure container name.
+        """
         self._client: Optional[ContainerClient] = self._get_client(connection_string)
         self.root_location = container
 

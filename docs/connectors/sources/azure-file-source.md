@@ -1,4 +1,4 @@
-# AWS S3 File Source
+# Microsoft Azure File Source
 
 !!! info
 
@@ -6,7 +6,7 @@
 
     To learn more about differences between Core and Community connectors, see the [Community and Core Connectors](../community-and-core.md) page.
 
-This source reads records from files located in an AWS S3 bucket path and produces 
+This source reads records from files located in an Azure container path and produces 
 them as messages to a kafka topic using any desired `StreamingDataFrame`-based transformations. 
 
 The resulting messages can be produced in "replay" mode, where the time between record 
@@ -18,7 +18,7 @@ producing is matched as close as possible to the original. (per topic partition 
 Install Quix Streams with the following optional dependencies:
 
 ```bash
-pip install quixstreams[s3]
+pip install quixstreams[azure]
 ```
 
 ## How It Works
@@ -37,9 +37,9 @@ You can learn more details about the [expected kafka message format](#message-da
 
 ## How To Use
 
-S3 File Source is just a special configuration of the `FileSource` connector.
+Azure File Source is just a special configuration of the `FileSource` connector.
 
-Simply provide it an `S3Origin` (`FileSource(origin=<ORIGIN>)`).
+Simply provide it an `AzureOrigin` (`FileSource(origin=<ORIGIN>)`).
 
 Then, hand the configured `FileSource` to your `SDF` (`app.dataframe(source=<SOURCE>)`).
 
@@ -48,15 +48,13 @@ For more details around various settings, see [configuration](#configuration).
 ```python
 from quixstreams import Application
 from quixstreams.sources.community.file import FileSource
-from quixstreams.sources.community.file.origins import S3Origin
+from quixstreams.sources.community.file.origins import AzureOrigin
 
 app = Application(broker_address="localhost:9092", auto_offset_reset="earliest")
 
-file_origin = S3Origin(
-    bucket="<YOUR BUCKET NAME>",
-    aws_access_key_id="<YOUR KEY ID>",
-    aws_secret_access_key="<YOUR SECRET KEY>",
-    aws_region="<YOUR REGION>",
+file_origin = AzureOrigin(
+    container="<YOUR CONTAINER NAME>",
+    connection_string="<YOUR CONNECTION STRING>",
 )
 source = FileSource(
     filepath="path/to/your/topic_folder/",
@@ -77,22 +75,17 @@ Here are some important configurations to be aware of (see [File Source API](../
 
 ### Required:
 
-`S3Origin`:
+`AzureOrigin`:
 
-- `bucket`: The S3 bucket name only (ex: `"your-bucket"`).
-- `aws_region`: AWS region (ex: us-east-1).    
-    **Note**: can alternatively set the `AWS_REGION` environment variable.
-- `aws_access_key_id`: AWS User key ID.
-    **Note**: can alternatively set the `AWS_ACCESS_KEY_ID` environment variable.
-- `aws_secret_access_key`: AWS secret key.    
-    **Note**: can alternatively set the `AWS_SECRET_ACCESS_KEY` environment variable.
+- `connection_string`: Azure client authentication string.
+- `container`: Azure container name.
 
 
 `FileSource`:
 
 - `filepath`: a filepath to recursively read through (exclude bucket name).    
     **Note**: If using alongside `FileSink`, provide the path to the topic name folder (ex: `"path/to/topic_a/"`).    
-- `file_origin`: An `S3Origin` instance.
+- `file_origin`: An `AzureOrigin` instance.
 
 
 ### Optional:
