@@ -9,9 +9,11 @@ from .base import FileOrigin
 try:
     from boto3 import client as boto_client
     from mypy_boto3_s3 import S3Client
-except Exception:
-    raise
-
+except ImportError as exc:
+    raise ImportError(
+        f"Package {exc.name} is missing: "
+        'run "pip install quixstreams[aws]" to use S3FileOrigin'
+    ) from exc
 
 logger = logging.getLogger(__name__)
 
@@ -26,13 +28,11 @@ class S3FileOrigin(FileOrigin):
         aws_access_key_id: Optional[str] = getenv("AWS_ACCESS_KEY_ID"),
         aws_secret_access_key: Optional[str] = getenv("AWS_SECRET_ACCESS_KEY"),
         aws_endpoint_url: Optional[str] = getenv("AWS_ENDPOINT_URL_S3"),
-        aws_session_token: Optional[str] = None,
     ):
         """
         Configure IcebergSink to work with AWS Glue.
 
-        :param aws_s3_bucket: The S3 URI where the table data will be stored
-            (e.g., 's3://your-bucket/warehouse/').
+        :param aws_s3_bucket: The S3 URI with bucket name (e.g., 's3://your-bucket').
         :param aws_region: The AWS region.
             NOTE: can alternatively set the AWS_REGION environment variable
         :param aws_access_key_id: the AWS access key ID.
@@ -41,7 +41,7 @@ class S3FileOrigin(FileOrigin):
             NOTE: can alternatively set the AWS_SECRET_ACCESS_KEY environment variable
         :param aws_endpoint_url: the endpoint URL to use; only required for connecting
         to a locally hosted Kinesis.
-            NOTE: can alternatively set the AWS_ENDPOINT_URL_KINESIS environment variable
+            NOTE: can alternatively set the AWS_ENDPOINT_URL_S3 environment variable
         """
         self.root_location = aws_s3_bucket
         self._client: Optional[S3Client] = None
@@ -49,7 +49,6 @@ class S3FileOrigin(FileOrigin):
             "region_name": aws_region,
             "aws_access_key_id": aws_access_key_id,
             "aws_secret_access_key": aws_secret_access_key,
-            "aws_session_token": aws_session_token,
             "endpoint_url": aws_endpoint_url,
         }
 
@@ -65,7 +64,7 @@ class S3FileOrigin(FileOrigin):
         ].read()
         return BytesIO(data)
 
-    def get_root_folder_count(self, folder: Path) -> int:
+    def get_folder_count(self, folder: Path) -> int:
         resp = self.client.list_objects(
             Bucket=self.root_location, Prefix=str(folder), Delimiter="/"
         )

@@ -1,8 +1,6 @@
-import contextlib
 from abc import ABC, abstractmethod
 from io import BytesIO
-from pathlib import Path
-from typing import BinaryIO, Generator, Iterable, Literal, Optional, Union
+from typing import BinaryIO, Generator, Iterable, Literal, Optional
 
 from ..compressions import COMPRESSION_MAPPER, CompressionName, Decompressor
 
@@ -53,17 +51,8 @@ class Format(ABC):
             return filestream
         return BytesIO(self._decompressor.decompress(filestream))
 
-    @contextlib.contextmanager
-    def _open(self, file: Union[Path, BinaryIO]) -> BinaryIO:
-        if isinstance(file, Path):
-            with open(file, "rb") as f:
-                yield self._decompress(f)
-        else:
-            yield self._decompress(file)
-
     def _set_decompressor(self, extension_or_name: CompressionName):
         self._decompressor = COMPRESSION_MAPPER[extension_or_name]()
 
-    def read(self, file: Union[Path, BinaryIO]) -> Generator[dict, None, None]:
-        with self._open(file) as filestream:
-            yield from self.deserialize(filestream)
+    def read(self, filestream: BinaryIO) -> Generator[dict, None, None]:
+        yield from self.deserialize(self._decompress(filestream))

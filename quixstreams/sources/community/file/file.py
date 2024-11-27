@@ -138,7 +138,7 @@ class FileSource(Source):
         """
         topic = super().default_topic()
         topic.config = TopicConfig(
-            num_partitions=self._origin.get_root_folder_count(self._filepath),
+            num_partitions=self._origin.get_folder_count(self._filepath),
             replication_factor=1,
         )
         return topic

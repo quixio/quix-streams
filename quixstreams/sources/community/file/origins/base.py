@@ -39,7 +39,7 @@ class FileOrigin:
     """
 
     @abstractmethod
-    def get_root_folder_count(self, folder: Path) -> int: ...
+    def get_folder_count(self, folder: Path) -> int: ...
 
     """Counts the number of folders at filepath to assume partition counts."""
 

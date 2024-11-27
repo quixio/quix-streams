@@ -28,7 +28,7 @@ class LocalFileOrigin(FileOrigin):
         else:
             yield filepath
 
-    def get_root_folder_count(self, folder: Path) -> int:
+    def get_folder_count(self, folder: Path) -> int:
         return len([f for f in folder.iterdir()])
 
     def get_raw_file_stream(self, filepath: Path) -> BytesIO:
