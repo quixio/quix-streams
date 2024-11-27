@@ -7,8 +7,8 @@ from quixstreams.checkpointing.exceptions import (
     CheckpointConsumerCommitError,
     CheckpointProducerTimeout,
 )
+from quixstreams.kafka.consumer import BaseConsumer
 from quixstreams.models.topics import Topic
-from quixstreams.rowconsumer import Consumer
 from quixstreams.rowproducer import RowProducer
 
 
@@ -21,7 +21,7 @@ class Checkpoint(BaseCheckpoint):
         self,
         producer: RowProducer,
         producer_topic: Topic,
-        consumer: Consumer,
+        consumer: BaseConsumer,
         commit_interval: float,
         commit_every: int = 0,
         flush_timeout: float = 10,
@@ -83,6 +83,7 @@ class Checkpoint(BaseCheckpoint):
             )
         else:
             partitions = self._consumer.commit(offsets=offsets, asynchronous=False)
-            for partition in partitions:
-                if partition.error:
-                    raise CheckpointConsumerCommitError(partition.error)
+            if partitions:
+                for partition in partitions:
+                    if partition.error:
+                        raise CheckpointConsumerCommitError(partition.error)

@@ -77,7 +77,7 @@ class QuixApplicationConfig:
 
     librdkafka_connection_config: ConnectionConfig
     librdkafka_extra_config: dict
-    consumer_group: Optional[str] = None
+    consumer_group: str
 
 
 class QuixKafkaConfigsBuilder:

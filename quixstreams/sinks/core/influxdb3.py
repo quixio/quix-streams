@@ -31,7 +31,7 @@ class InfluxDB3Sink(BatchingSink):
         fields_keys: Iterable[str] = (),
         tags_keys: Iterable[str] = (),
         time_key: Optional[str] = None,
-        time_precision: WritePrecision = WritePrecision.MS,
+        time_precision: WritePrecision = WritePrecision.MS,  # type: ignore
         include_metadata_tags: bool = False,
         batch_size: int = 1000,
         enable_gzip: bool = True,

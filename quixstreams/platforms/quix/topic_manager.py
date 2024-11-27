@@ -22,8 +22,8 @@ class QuixTopicManager(TopicManager):
 
     # Default topic params
     # Set these to None to use defaults defined in Quix Cloud
-    default_num_partitions = None
-    default_replication_factor = None
+    default_num_partitions: None = None
+    default_replication_factor: None = None
 
     # Max topic name length for the new topics
     _max_topic_name_len = 249

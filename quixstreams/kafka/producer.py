@@ -46,7 +46,7 @@ class Producer:
         logger: logging.Logger = logger,
         error_callback: Callable[[KafkaError], None] = _default_error_cb,
         extra_config: Optional[dict] = None,
-        flush_timeout: Optional[int] = None,
+        flush_timeout: Optional[float] = None,
     ):
         """
         A wrapper around `confluent_kafka.Producer`.
@@ -190,7 +190,7 @@ class TransactionalProducer(Producer):
         logger: logging.Logger = logger,
         error_callback: Callable[[KafkaError], None] = _default_error_cb,
         extra_config: Optional[dict] = None,
-        flush_timeout: Optional[int] = None,
+        flush_timeout: Optional[float] = None,
     ):
         super().__init__(
             broker_address=broker_address,

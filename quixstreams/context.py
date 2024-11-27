@@ -11,7 +11,9 @@ __all__ = (
     "copy_context",
 )
 
-_current_message_context = ContextVar("current_message_context")
+_current_message_context: ContextVar[Optional[MessageContext]] = ContextVar(
+    "current_message_context"
+)
 
 
 class MessageContextNotSetError(QuixException): ...
@@ -48,7 +50,7 @@ def set_message_context(context: Optional[MessageContext]):
     _current_message_context.set(context)
 
 
-def message_context() -> MessageContext:
+def message_context() -> Optional[MessageContext]:
     """
     Get a MessageContext for the current message, which houses most of the message
     metadata, like:
@@ -74,6 +76,5 @@ def message_context() -> MessageContext:
     """
     try:
         return _current_message_context.get()
-
     except LookupError:
         raise MessageContextNotSetError("Message context is not set")

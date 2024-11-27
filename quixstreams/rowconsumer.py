@@ -5,7 +5,7 @@ from confluent_kafka import KafkaError, TopicPartition
 
 from .error_callbacks import ConsumerErrorCallback, default_on_consumer_error
 from .exceptions import PartitionAssignmentError
-from .kafka import AutoOffsetReset, ConnectionConfig, Consumer
+from .kafka import AutoOffsetReset, BaseConsumer, ConnectionConfig
 from .kafka.consumer import RebalancingCallback
 from .kafka.exceptions import KafkaConsumerException
 from .models import Row, Topic
@@ -16,14 +16,16 @@ logger = logging.getLogger(__name__)
 __all__ = ("RowConsumer",)
 
 
-class RowConsumer(Consumer):
+class RowConsumer(BaseConsumer):
     def __init__(
         self,
         broker_address: Union[str, ConnectionConfig],
         consumer_group: str,
         auto_offset_reset: AutoOffsetReset,
         auto_commit_enable: bool = True,
-        on_commit: Callable[[Optional[KafkaError], List[TopicPartition]], None] = None,
+        on_commit: Optional[
+            Callable[[Optional[KafkaError], List[TopicPartition]], None]
+        ] = None,
         extra_config: Optional[dict] = None,
         on_error: Optional[ConsumerErrorCallback] = None,
     ):
@@ -64,9 +66,7 @@ class RowConsumer(Consumer):
             on_commit=on_commit,
             extra_config=extra_config,
         )
-        self._on_error: Optional[ConsumerErrorCallback] = (
-            on_error or default_on_consumer_error
-        )
+        self._on_error: ConsumerErrorCallback = on_error or default_on_consumer_error
         self._topics: Mapping[str, Topic] = {}
 
     def subscribe(
@@ -95,15 +95,15 @@ class RowConsumer(Consumer):
         """
         topics_map = {t.name: t for t in topics}
         topics_names = list(topics_map.keys())
-        super().subscribe(
+        super()._subscribe(
             topics=topics_names,
             on_assign=on_assign,
             on_revoke=on_revoke,
             on_lost=on_lost,
         )
-        self._topics = {t.name: t for t in topics}
+        self._topics = topics_map
 
-    def poll_row(self, timeout: float = None) -> Union[Row, List[Row], None]:
+    def poll_row(self, timeout: Optional[float] = None) -> Union[Row, List[Row], None]:
         """
         Consumes a single message and deserialize it to Row or a list of Rows.
 
@@ -122,11 +122,11 @@ class RowConsumer(Consumer):
         except Exception as exc:
             to_suppress = self._on_error(exc, None, logger)
             if to_suppress:
-                return
+                return None
             raise
 
         if msg is None:
-            return
+            return None
 
         topic_name = msg.topic()
         try:
@@ -139,9 +139,9 @@ class RowConsumer(Consumer):
             return row_or_rows
         except IgnoreMessage:
             # Deserializer decided to ignore the message
-            return
+            return None
         except Exception as exc:
             to_suppress = self._on_error(exc, msg, logger)
             if to_suppress:
-                return
+                return None
             raise

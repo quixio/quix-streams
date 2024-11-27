@@ -24,7 +24,11 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: 3.9
+          python-version: 3.12
+      - name: Install requirements
+        run: |
+          python -m pip install -U pip
+          python -m pip install -U -r requirements.txt -r tests/requirements.txt -r requirements-mypy.txt
       - uses: pre-commit/action@v3.0.1
 
   test:
@@ -44,13 +48,10 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python }}
-      - name: Update pip
-        run: |
-          python -m pip install -U pip
       - name: Install requirements
         run: |
-          python -m pip install -U -r tests/requirements.txt
-          python -m pip install -U -r requirements.txt
+          python -m pip install -U pip
+          python -m pip install -U -r requirements.txt -r tests/requirements.txt
       - name: Run tests
         run: |
           python -m pytest -v --log-cli-level=ERROR

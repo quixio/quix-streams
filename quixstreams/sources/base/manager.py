@@ -1,8 +1,9 @@
 import logging
 import signal
 import threading
+from multiprocessing.context import SpawnProcess
 from pickle import PicklingError
-from typing import List
+from typing import TYPE_CHECKING, List
 
 from confluent_kafka import OFFSET_BEGINNING
 
@@ -20,8 +21,13 @@ from .source import BaseSource, StatefulSource
 
 logger = logging.getLogger(__name__)
 
+if TYPE_CHECKING:
+    process = SpawnProcess
+else:
+    process = multiprocessing.Process
 
-class SourceProcess(multiprocessing.Process):
+
+class SourceProcess(process):
     """
     An implementation of the Source subprocess.
 
@@ -38,7 +44,7 @@ class SourceProcess(multiprocessing.Process):
         producer: RowProducer,
         consumer: RowConsumer,
         topic_manager: TopicManager,
-    ):
+    ) -> None:
         super().__init__()
         self.topic = topic
         self.source = source
@@ -85,8 +91,7 @@ class SourceProcess(multiprocessing.Process):
         configure_logging(self._loglevel, str(self.source), pid=True)
         logger.info("Starting source")
 
-        configuration = {"topic": self.topic, "producer": self._producer}
-
+        configuration = {}
         if isinstance(self.source, StatefulSource):
             try:
                 configuration["store_partition"] = self._recover_state(self.source)
@@ -95,7 +100,9 @@ class SourceProcess(multiprocessing.Process):
                 self._report_exception(err)
                 return
 
-        self.source.configure(**configuration)
+        self.source.configure(
+            topic=self.topic, producer=self._producer, **configuration
+        )
 
         logger.info("Source started")
         try:
@@ -184,7 +191,7 @@ class SourceProcess(multiprocessing.Process):
     def start(self) -> None:
         logger.info("Starting source %s", self.source)
         self._started = True
-        return super().start()
+        super().start()
 
     def raise_for_error(self) -> None:
         """
@@ -240,7 +247,7 @@ class SourceManager:
     Sources run in their separate process pay attention about cross-process communication
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.processes: List[SourceProcess] = []
 
     def register(

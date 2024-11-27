@@ -3,7 +3,7 @@ from typing import Dict, List, Optional
 
 from confluent_kafka import TopicPartition as ConfluentPartition
 
-from quixstreams.kafka import Consumer
+from quixstreams.kafka import BaseConsumer
 from quixstreams.models import ConfluentKafkaMessageProto, Topic
 from quixstreams.models.topics import TopicConfig, TopicManager
 from quixstreams.models.types import MessageHeadersMapping
@@ -229,7 +229,7 @@ class RecoveryManager:
     Recovery is attempted from the `Application` after any new partition assignment.
     """
 
-    def __init__(self, consumer: Consumer, topic_manager: TopicManager):
+    def __init__(self, consumer: BaseConsumer, topic_manager: TopicManager):
         self._running = False
         self._consumer = consumer
         self._topic_manager = topic_manager

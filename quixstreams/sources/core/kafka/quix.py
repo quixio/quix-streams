@@ -3,8 +3,8 @@ from typing import TYPE_CHECKING, Optional
 from quixstreams.error_callbacks import ConsumerErrorCallback, default_on_consumer_error
 from quixstreams.kafka import AutoOffsetReset
 from quixstreams.models.serializers import DeserializerType
-from quixstreams.models.topics import Topic, TopicConfig
-from quixstreams.platforms.quix import QuixKafkaConfigsBuilder, QuixTopicManager
+from quixstreams.models.topics import Topic
+from quixstreams.platforms.quix import QuixKafkaConfigsBuilder
 from quixstreams.platforms.quix.api import QuixPortalApiService
 
 from .kafka import KafkaReplicatorSource
@@ -59,7 +59,7 @@ class QuixEnvironmentSource(KafkaReplicatorSource):
         consumer_extra_config: Optional[dict] = None,
         consumer_poll_timeout: Optional[float] = None,
         shutdown_timeout: float = 10,
-        on_consumer_error: Optional[ConsumerErrorCallback] = default_on_consumer_error,
+        on_consumer_error: ConsumerErrorCallback = default_on_consumer_error,
         value_deserializer: DeserializerType = "json",
         key_deserializer: DeserializerType = "bytes",
     ) -> None:
@@ -86,15 +86,7 @@ class QuixEnvironmentSource(KafkaReplicatorSource):
         )
 
         quix_topic = self._quix_config.convert_topic_response(
-            self._quix_config.get_or_create_topic(
-                Topic(
-                    name=topic,
-                    config=TopicConfig(
-                        num_partitions=QuixTopicManager.default_num_partitions,
-                        replication_factor=QuixTopicManager.default_replication_factor,
-                    ),
-                )
-            )
+            self._quix_config.get_or_create_topic(Topic(name=topic))
         )
 
         consumer_extra_config.update(self._quix_config.librdkafka_extra_config)

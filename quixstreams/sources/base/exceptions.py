@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from .manager import SourceProcess
@@ -12,7 +12,7 @@ class SourceException(Exception):
     """
 
     def __init__(self, process: "SourceProcess") -> None:
-        self.pid: int = process.pid
+        self.pid: Optional[int] = process.pid
         self.process: SourceProcess = process
         self.exitcode = self.process.exitcode
 

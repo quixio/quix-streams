@@ -5,7 +5,7 @@ from typing import Dict, Tuple
 
 from confluent_kafka import KafkaException, TopicPartition
 
-from quixstreams.kafka import Consumer
+from quixstreams.kafka import BaseConsumer
 from quixstreams.processing.pausing import PausingManager
 from quixstreams.rowproducer import RowProducer
 from quixstreams.sinks import SinkManager
@@ -48,7 +48,7 @@ class BaseCheckpoint:
         # processed offsets within the checkpoint
         self._starting_tp_offsets: Dict[Tuple[str, int], int] = {}
         # A mapping of <(topic, partition, store_name): PartitionTransaction>
-        self._store_transactions: Dict[(str, int, str), PartitionTransaction] = {}
+        self._store_transactions: Dict[Tuple[str, int, str], PartitionTransaction] = {}
         # Passing zero or lower will flush the checkpoint after each processed message
         self._commit_interval = max(commit_interval, 0)
 
@@ -123,7 +123,7 @@ class Checkpoint(BaseCheckpoint):
         self,
         commit_interval: float,
         producer: RowProducer,
-        consumer: Consumer,
+        consumer: BaseConsumer,
         state_manager: StateStoreManager,
         sink_manager: SinkManager,
         pausing_manager: PausingManager,
