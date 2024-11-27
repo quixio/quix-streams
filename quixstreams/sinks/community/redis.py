@@ -60,7 +60,7 @@ class RedisSink(BatchingSink):
         self._key_serializer = key_serializer
         self._value_serializer = value_serializer
 
-    def write(self, batch: SinkBatch):
+    def write(self, batch: SinkBatch) -> None:
         # Execute Redis updates atomically using a transaction pipeline
         start = time.monotonic()
         with self._client.pipeline(transaction=True) as pipe:
