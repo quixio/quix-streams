@@ -32,7 +32,7 @@ class S3FileOrigin(FileOrigin):
         """
         Configure IcebergSink to work with AWS Glue.
 
-        :param aws_s3_bucket: The S3 URI with bucket name (e.g., 's3://your-bucket').
+        :param aws_s3_bucket: The S3 URI with bucket name only (ex: 's3://your-bucket').
         :param aws_region: The AWS region.
             NOTE: can alternatively set the AWS_REGION environment variable
         :param aws_access_key_id: the AWS access key ID.
