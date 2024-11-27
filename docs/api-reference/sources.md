@@ -971,6 +971,101 @@ with {_key: str, _value: dict, _timestamp: int}.
 
 ## quixstreams.sources.community.file.formats.parquet
 
+<a id="quixstreams.sources.community.kinesis.kinesis"></a>
+
+## quixstreams.sources.community.kinesis.kinesis
+
+<a id="quixstreams.sources.community.kinesis.kinesis.KinesisSource"></a>
+
+### KinesisSource
+
+```python
+class KinesisSource(StatefulSource)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/kinesis/kinesis.py#L18)
+
+NOTE: Requires `pip install quixstreams[kinesis]` to work.
+
+This source reads data from an Amazon Kinesis stream, dumping it to a
+kafka topic using desired `StreamingDataFrame`-based transformations.
+
+Provides "at-least-once" guarantees.
+
+The incoming message value will be in bytes, so transform in your SDF accordingly.
+
+Example Usage:
+
+```python
+from quixstreams import Application
+from quixstreams.sources.community.kinesis import KinesisSource
+
+
+kinesis = KinesisSource(
+    stream_name="<YOUR STREAM>",
+    aws_access_key_id="<YOUR KEY ID>",
+    aws_secret_access_key="<YOUR SECRET KEY>",
+    aws_region="<YOUR REGION>",
+    auto_offset_reset="earliest",  # start from the beginning of the stream (vs end)
+)
+
+app = Application(
+    broker_address="<YOUR BROKER INFO>",
+    consumer_group="<YOUR GROUP>",
+)
+
+sdf = app.dataframe(source=kinesis).print(metadata=True)
+# YOUR LOGIC HERE!
+
+if __name__ == "__main__":
+    app.run()
+```
+
+<a id="quixstreams.sources.community.kinesis.kinesis.KinesisSource.__init__"></a>
+
+<br><br>
+
+#### KinesisSource.\_\_init\_\_
+
+```python
+def __init__(
+        stream_name: str,
+        aws_region: Optional[str] = getenv("AWS_REGION"),
+        aws_access_key_id: Optional[str] = getenv("AWS_ACCESS_KEY_ID"),
+        aws_secret_access_key: Optional[str] = getenv("AWS_SECRET_ACCESS_KEY"),
+        aws_endpoint_url: Optional[str] = getenv("AWS_ENDPOINT_URL_KINESIS"),
+        shutdown_timeout: float = 10,
+        auto_offset_reset: AutoOffsetResetType = "latest",
+        max_records_per_shard: int = 1000,
+        commit_interval: float = 5.0,
+        retry_backoff_secs: float = 5.0)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/kinesis/kinesis.py#L57)
+
+
+<br>
+***Arguments:***
+
+- `stream_name`: name of the desired Kinesis stream to consume.
+- `aws_region`: The AWS region.
+NOTE: can alternatively set the AWS_REGION environment variable
+- `aws_access_key_id`: the AWS access key ID.
+NOTE: can alternatively set the AWS_ACCESS_KEY_ID environment variable
+- `aws_secret_access_key`: the AWS secret access key.
+NOTE: can alternatively set the AWS_SECRET_ACCESS_KEY environment variable
+- `aws_endpoint_url`: the endpoint URL to use; only required for connecting
+to a locally hosted Kinesis.
+NOTE: can alternatively set the AWS_ENDPOINT_URL_KINESIS environment variable
+- `shutdown_timeout`: 
+- `auto_offset_reset`: When no previous offset has been recorded, whether to
+start from the beginning ("earliest") or end ("latest") of the stream.
+- `max_records_per_shard`: During round-robin consumption, how many records
+to consume per shard (partition) per consume (NOT per-commit).
+- `commit_interval`: the time between commits
+- `retry_backoff_secs`: how long to back off from doing HTTP calls for a
+shard when Kinesis consumer encounters handled/expected errors.
+
 <a id="quixstreams.sources.community.pubsub.pubsub"></a>
 
 ## quixstreams.sources.community.pubsub.pubsub
