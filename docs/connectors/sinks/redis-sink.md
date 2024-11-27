@@ -68,12 +68,20 @@ when a checkpoint has been committed.
 By default, `RedisSink` serializes records values to JSON and uses Kafka message keys as
 Redis keys.
 
-To change that, pass custom functions to the `key_serializer` and `value_serializer`
-parameters:
+If you want to use a different encoding or change what keys will be inserted to Redis,
+you may use `key_serializer` and `value_serializer` callbacks.
+
+**Example**:
+
+Use a combination of record's key and value to create a new Redis key, 
+and convert values using the MessagePack format instead of JSON.
 
 ```python
 from quixstreams import Application
 from quixstreams.sinks.community.redis import RedisSink
+
+# Assuming "msgpack-python" is installed
+import msgpack
 
 app = Application(
     broker_address="localhost:9092",
@@ -87,9 +95,9 @@ redis_sink = RedisSink(
     host="<Redis host>",
     port="<Redis port>",
     db="<Redis db>",
-    # Convert records' values to strings before writing to Redis
-    value_serializer=lambda value: str(value),
-    # Combine records' keys and values into new keys
+    # Serialize records' values using msgpack format before writing to Redis
+    value_serializer=msgpack.dumps,
+    # Combine a new Redis key from the record's key and value.
     key_serializer=lambda key, value: f'{key}-{value}',
 )
 
