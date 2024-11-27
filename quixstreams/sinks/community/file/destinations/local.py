@@ -2,8 +2,8 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from quixstreams.sinks.base.batch import SinkBatch
-from quixstreams.sources.community.file.formats.base import Format
+from quixstreams.sinks.base import SinkBatch
+from quixstreams.sinks.community.file.formats import Format
 
 from .base import Destination
 
