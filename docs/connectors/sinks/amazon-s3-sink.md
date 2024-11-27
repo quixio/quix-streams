@@ -23,6 +23,8 @@ pip install quixstreams[s3]
 
 It batches processed records in memory per topic partition and writes them to S3 objects in a specified bucket and prefix structure. Objects are organized by topic and partition, with each batch being written to a separate object named by its starting offset.
 
+Batches are written to S3 during the commit phase of processing. This means the size of each batch (and therefore each S3 object) is influenced by your application's commit settings - either through `commit_interval` or the `commit_every` parameters.
+
 !!! note
 
     The S3 bucket must already exist and be accessible. The sink does not create the bucket automatically. If the bucket does not exist or access is denied, an error will be raised when initializing the sink.
