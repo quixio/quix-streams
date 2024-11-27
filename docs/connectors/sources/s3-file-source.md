@@ -41,7 +41,7 @@ S3 File Source is just a special configuration of the `FileSource` connector.
 
 Simply provide it an `S3FileOrigin` (`FileSource(origin=<ORIGIN>)`).
 
-Then, hand the configured `FileSource` to your SDF (`app.dataframe(source=<SOURCE>)`).
+Then, hand the configured `FileSource` to your `SDF` (`app.dataframe(source=<SOURCE>)`).
 
 For more details around various settings, see [configuration](#configuration).
 
@@ -107,6 +107,23 @@ Here are some important configurations to be aware of (see [File Source API](../
 - `as_replay`: Produce the messages with the original time delay between them, else as fast as possible.    
     **Note**: Time delay will only be accurate _per partition_, NOT overall.    
     **Default**: `True`
+
+## File hierarchy/structure
+
+The File Source expects a folder structure like so:
+
+```
+    my_sinked_topics/
+    ├── topic_a/          # topic name (use this path to File Source!)
+    │   ├── 0/            # topic partition number
+    │   │   ├── 0000.ext  # formatted offset files (ex: JSON)
+    │   │   └── 0011.ext
+    │   └── 1/
+    │       ├── 0003.ext
+    │       └── 0016.ext
+    └── topic_b/
+        └── etc...
+```
 
 ## Message Data Format/Schema
 
