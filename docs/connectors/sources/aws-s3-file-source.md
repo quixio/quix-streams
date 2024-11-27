@@ -12,9 +12,6 @@ them as messages to a kafka topic using any desired `StreamingDataFrame`-based t
 The resulting messages can be produced in "replay" mode, where the time between record 
 producing is matched as close as possible to the original. (per topic partition only).
 
-The `FileSource` connector is generally intended to be used alongside the related 
-[`FileSink`](../sinks/file-sink.md) (in terms of expected file and data formatting).
-
 
 ## How To Install
 
@@ -113,30 +110,50 @@ Here are some important configurations to be aware of (see [File Source API](../
 
 ## Message Data Format/Schema
 
-The expected data schema produced by `Application` is largely dependent on the chosen 
+The expected file schema largely depends on the chosen 
 file format.
 
-For easiest use (especially alongside [`FileSink`](../sinks/file-sink.md)), you can follow these patterns: 
+For easiest use (especially alongside [`FileSink`](../sinks/file-sink.md)), 
+you can follow these patterns: 
 
-- for row-based formats (like JSON), the expected data should have records
-with the following fields, where value is the entirety of the message value, 
-ideally as a JSON-deserializable item:
+### Row-based Formats (ex: JSON)
+
+Files should have records with the following fields, with `_value` being a 
+JSON-deserializable item:
+
   - `_key`
   - `_value`
   - `_timestamp`
 
-- for columnar formats (like Parquet), they do not expect an explicit `value` 
-field; instead all columns should be included individually while including `_key` and `_timestamp`:
+
+This will result in the following Kafka message format for `Application`:
+
+- Message `key` will be the record `_key` as `bytes`.
+- Message `value` will be the record `_value` as a `json`/`dict`
+- Message `timestamp` will be the record `_timestamp` (ms).
+
+### Columnar Formats (ex: Parquet)
+These do not expect an explicit `value` field; instead all columns should be included 
+individually while including `_key` and `_timestamp`:
+
   - `_key`
   - `_timestamp`
   - `field_a`
   - `field_b`    
   etc...
 
+
+This will result in the following Kafka message format for `Application`:
+
+- Message `key` will be the record `_key` as `bytes`.
+- Message `value` will be every record field except `_key` and `_timestamp` packed as a `json`/`dict`
+- Message `timestamp` will be the record `_timestamp` (ms).
+
+
 ### Custom Schemas (Advanced)
 
-Alternatively, custom schemas can be defined by supplying a configured `Format`
-(ex: `JsonFormat`) to `FileSource(file_format=<Format>)`.
+If the original files are not formatted as expected, custom loaders can be configured 
+on some `Format` classes (ex: `JsonFormat`) which can be handed to `FileSource(file_format=<Format>)`.
 
 Formats can be imported from `quixstreams.sources.community.file.formats`.
 
