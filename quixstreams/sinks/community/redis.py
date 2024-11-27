@@ -29,7 +29,7 @@ class RedisSink(BatchingSink):
         password: Optional[str] = None,
         socket_timeout: float = 30.0,
         **kwargs,
-    ):
+    ) -> None:
         """
         A connector to sink processed data to Redis.
         It batches the processed records in memory per topic partition, and flushes them to Redis at the checkpoint.
