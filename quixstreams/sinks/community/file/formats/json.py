@@ -47,7 +47,7 @@ class JSONFormat(Format):
         if self._compress:
             self._file_extension += ".gz"
 
-        self._writer_arguments = {"compact": True}
+        self._writer_arguments: dict[str, Any] = {"compact": True}
 
         # If `dumps` is provided, `compact` will be ignored
         if dumps is not None:

@@ -104,7 +104,10 @@ log_cli_format = "[%(levelname)s] %(name)s: %(message)s"
 markers = ["timeit"]
 
 [[tool.mypy.overrides]]
-module = "confluent_kafka.*"
+module = [
+  "confluent_kafka.*",
+  "pyarrow.*",
+]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

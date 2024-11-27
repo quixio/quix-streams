@@ -34,7 +34,7 @@ def resolve_format(format: Union[FormatName, Format]) -> Format:
     elif format_obj := _FORMATS.get(format):
         return format_obj
 
-    allowed_formats = ", ".join(FormatName.__args__)
+    allowed_formats = ", ".join(FormatName.__args__)  # type: ignore[attr-defined]
     raise InvalidFormatError(
         f'Invalid format name "{format}". '
         f"Allowed values: {allowed_formats}, "
