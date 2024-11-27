@@ -102,33 +102,20 @@ module = "confluent_kafka.*"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = "quixstreams.core.*"
+module = [
+  "quixstreams.sinks.community.*",
+  "quixstreams.sources.community.*",
+]
 ignore_errors = true
 
 [[tool.mypy.overrides]]
-module = "quixstreams.dataframe.*"
+module = [
+    "quixstreams.core.*",
+    "quixstreams.dataframe.*",
+    "quixstreams.models.*",
+    "quixstreams.platforms.*",
+    "quixstreams.state.*",
+    "quixstreams.rowproducer.*"
+]
 ignore_errors = true
 
-[[tool.mypy.overrides]]
-module = "quixstreams.models.*"
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = "quixstreams.platforms.*"
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = "quixstreams.sinks.community.*"
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = "quixstreams.sources.community.*"
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = "quixstreams.state.*"
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = "quixstreams.rowproducer.*"
-ignore_errors = true
