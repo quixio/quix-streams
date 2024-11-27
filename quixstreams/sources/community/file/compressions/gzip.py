@@ -10,5 +10,5 @@ class GZipDecompressor(Decompressor):
     def __init__(self):
         self._decompressor = decompress
 
-    def _decompress(self, filestream: BinaryIO) -> bytes:
+    def decompress(self, filestream: BinaryIO) -> bytes:
         return self._decompressor(filestream.read())
