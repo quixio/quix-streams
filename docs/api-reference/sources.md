@@ -100,7 +100,7 @@ It configures the source's Kafka producer, the topic it will produce to and opti
 def start() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L102)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L110)
 
 This method is triggered in the subprocess when the source is started.
 
@@ -118,7 +118,7 @@ Use it to fetch data and produce it to Kafka.
 def stop() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L111)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L119)
 
 This method is triggered when the application is shutting down.
 
@@ -135,7 +135,7 @@ The source must ensure that the `run` method is completed soon.
 def default_topic() -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L119)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L127)
 
 This method is triggered when the topic is not provided to the source.
 
@@ -149,7 +149,7 @@ The source must return a default topic configuration.
 class Source(BaseSource)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L127)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L135)
 
 A base class for custom Sources that provides a basic implementation of `BaseSource`
 interface.
@@ -209,7 +209,7 @@ if __name__ == "__main__":
 def __init__(name: str, shutdown_timeout: float = 10) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L177)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L185)
 
 
 <br>
@@ -229,7 +229,7 @@ def __init__(name: str, shutdown_timeout: float = 10) -> None
 def running() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L191)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L199)
 
 Property indicating if the source is running.
 
@@ -245,7 +245,7 @@ The `stop` method will set it to `False`. Use it to stop the source gracefully.
 def cleanup(failed: bool) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L199)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L207)
 
 This method is triggered once the `run` method completes.
 
@@ -263,7 +263,7 @@ It flushes the producer when `_run` completes successfully.
 def stop() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L210)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L218)
 
 This method is triggered when the application is shutting down.
 
@@ -276,10 +276,10 @@ It sets the `running` property to `False`.
 #### Source.start
 
 ```python
-def start()
+def start() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L219)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L226)
 
 This method is triggered in the subprocess when the source is started.
 
@@ -296,7 +296,7 @@ It marks the source as running, execute it's run method and ensure cleanup happe
 def run()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L235)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L242)
 
 This method is triggered in the subprocess when the source is started.
 
@@ -316,7 +316,7 @@ def serialize(key: Optional[object] = None,
               timestamp_ms: Optional[int] = None) -> KafkaMessage
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L243)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L250)
 
 Serialize data to bytes using the producer topic serializers and return a `quixstreams.models.messages.KafkaMessage`.
 
@@ -342,7 +342,7 @@ def produce(value: Optional[Union[str, bytes]] = None,
             buffer_error_max_tries: int = 3) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L259)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L266)
 
 Produce a message to the configured source topic in Kafka.
 
@@ -356,7 +356,7 @@ Produce a message to the configured source topic in Kafka.
 def flush(timeout: Optional[float] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L284)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L291)
 
 This method flush the producer.
 
@@ -383,7 +383,7 @@ None use producer default or -1 is infinite. Default: None
 def default_topic() -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L302)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L309)
 
 Return a default topic matching the source name.
 
@@ -403,7 +403,7 @@ The default topic will not be used if the topic has already been provided to the
 class StatefulSource(Source)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L319)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L326)
 
 A `Source` class for custom Sources that need a state.
 
@@ -463,7 +463,7 @@ if __name__ == "__main__":
 def __init__(name: str, shutdown_timeout: float = 10) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L369)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L376)
 
 
 <br>
@@ -486,7 +486,7 @@ def configure(topic: Topic,
               **kwargs) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L379)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L386)
 
 This method is triggered before the source is started.
 
@@ -503,7 +503,7 @@ It configures the source's Kafka producer, the topic it will produce to and the 
 def store_partitions_count() -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L398)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L405)
 
 Count of store partitions.
 
@@ -520,7 +520,7 @@ Used to configure the number of partition in the changelog topic.
 def assigned_store_partition() -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L407)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L414)
 
 The store partition assigned to this instance
 
@@ -535,7 +535,7 @@ The store partition assigned to this instance
 def store_name() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L414)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L421)
 
 The source store name
 
@@ -550,7 +550,7 @@ The source store name
 def state() -> State
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L421)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L428)
 
 Access the `State` of the source.
 
@@ -568,7 +568,7 @@ Important: after each `.flush()` call, a previously returned instance is invalid
 def flush(timeout: Optional[float] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L440)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L447)
 
 This method commit the state and flush the producer.
 
@@ -608,7 +608,8 @@ class CSVSource(Source)
 ```python
 def __init__(path: Union[str, Path],
              name: str,
-             key_extractor: Optional[Callable[[dict], AnyStr]] = None,
+             key_extractor: Optional[Callable[[dict], Union[str,
+                                                            bytes]]] = None,
              timestamp_extractor: Optional[Callable[[dict], int]] = None,
              delay: float = 0,
              shutdown_timeout: float = 10,
@@ -692,18 +693,18 @@ app.run()
 #### KafkaReplicatorSource.\_\_init\_\_
 
 ```python
-def __init__(name: str,
-             app_config: "ApplicationConfig",
-             topic: str,
-             broker_address: Union[str, ConnectionConfig],
-             auto_offset_reset: AutoOffsetReset = "latest",
-             consumer_extra_config: Optional[dict] = None,
-             consumer_poll_timeout: Optional[float] = None,
-             shutdown_timeout: float = 10,
-             on_consumer_error: Optional[
-                 ConsumerErrorCallback] = default_on_consumer_error,
-             value_deserializer: DeserializerType = "json",
-             key_deserializer: DeserializerType = "bytes") -> None
+def __init__(
+        name: str,
+        app_config: "ApplicationConfig",
+        topic: str,
+        broker_address: Union[str, ConnectionConfig],
+        auto_offset_reset: Optional[AutoOffsetReset] = "latest",
+        consumer_extra_config: Optional[dict] = None,
+        consumer_poll_timeout: Optional[float] = None,
+        shutdown_timeout: float = 10,
+        on_consumer_error: ConsumerErrorCallback = default_on_consumer_error,
+        value_deserializer: DeserializerType = "json",
+        key_deserializer: DeserializerType = "bytes") -> None
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/core/kafka/kafka.py#L54)
@@ -784,20 +785,20 @@ app.run()
 #### QuixEnvironmentSource.\_\_init\_\_
 
 ```python
-def __init__(name: str,
-             app_config: "ApplicationConfig",
-             topic: str,
-             quix_sdk_token: str,
-             quix_workspace_id: str,
-             quix_portal_api: Optional[str] = None,
-             auto_offset_reset: Optional[AutoOffsetReset] = None,
-             consumer_extra_config: Optional[dict] = None,
-             consumer_poll_timeout: Optional[float] = None,
-             shutdown_timeout: float = 10,
-             on_consumer_error: Optional[
-                 ConsumerErrorCallback] = default_on_consumer_error,
-             value_deserializer: DeserializerType = "json",
-             key_deserializer: DeserializerType = "bytes") -> None
+def __init__(
+        name: str,
+        app_config: "ApplicationConfig",
+        topic: str,
+        quix_sdk_token: str,
+        quix_workspace_id: str,
+        quix_portal_api: Optional[str] = None,
+        auto_offset_reset: Optional[AutoOffsetReset] = None,
+        consumer_extra_config: Optional[dict] = None,
+        consumer_poll_timeout: Optional[float] = None,
+        shutdown_timeout: float = 10,
+        on_consumer_error: ConsumerErrorCallback = default_on_consumer_error,
+        value_deserializer: DeserializerType = "json",
+        key_deserializer: DeserializerType = "bytes") -> None
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/core/kafka/quix.py#L50)
