@@ -596,18 +596,6 @@ to the client's default retrying policy.
 
 ## quixstreams.sinks.community.file.sink
 
-<a id="quixstreams.sinks.community.file.sink.InvalidFormatError"></a>
-
-### InvalidFormatError
-
-```python
-class InvalidFormatError(Exception)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/sink.py#L24)
-
-Raised when the format is specified incorrectly.
-
 <a id="quixstreams.sinks.community.file.sink.FileSink"></a>
 
 ### FileSink
@@ -616,18 +604,19 @@ Raised when the format is specified incorrectly.
 class FileSink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/sink.py#L30)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/sink.py#L11)
 
-Writes batches of data to files on disk using specified formats.
+A sink that writes data batches to files using configurable formats and
+destinations.
 
-Messages are grouped by their topic and partition. Data from messages with
-the same topic and partition are saved in the same directory. Each batch of
-messages is serialized and saved to a file within that directory. Files are
-named using the batch's starting offset to ensure uniqueness and order.
+The sink groups messages by their topic and partition, ensuring data from the
+same source is stored together. Each batch is serialized using the specified
+format (e.g., JSON, Parquet) before being written to the configured
+destination.
 
-If `append` is set to `True`, the sink will attempt to append data to an
-existing file rather than creating a new one. This is only supported for
-formats that allow appending.
+The destination determines the storage location and write behavior. By default,
+it uses LocalDestination for writing to the local filesystem, but can be
+configured to use other storage backends (e.g., cloud storage).
 
 <a id="quixstreams.sinks.community.file.sink.FileSink.__init__"></a>
 
@@ -636,30 +625,25 @@ formats that allow appending.
 #### FileSink.\_\_init\_\_
 
 ```python
-def __init__(output_dir: str,
-             format: Union[FormatName, Format],
-             append: bool = False) -> None
+def __init__(directory: str = "",
+             format: Union[FormatName, Format] = "json",
+             destination: Optional[Destination] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/sink.py#L44)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/sink.py#L25)
 
-Initializes the FileSink.
+Initialize the FileSink with the specified configuration.
 
 
 <br>
 ***Arguments:***
 
-- `output_dir`: The directory where files will be written.
-- `format`: The data serialization format to use. This can be either a
-format name ("json", "parquet") or an instance of a `Format`
-subclass.
-- `append`: If `True`, data will be appended to existing files when possible.
-Note that not all formats support appending. Defaults to `False`.
-
-**Raises**:
-
-- `ValueError`: If `append` is `True` but the specified format does not
-support appending.
+- `directory`: Base directory path for storing files. Defaults to
+current directory.
+- `format`: Data serialization format, either as a string
+("json", "parquet") or a Format instance.
+- `destination`: Storage destination handler. Defaults to
+LocalDestination if not specified.
 
 <a id="quixstreams.sinks.community.file.sink.FileSink.write"></a>
 
@@ -671,19 +655,303 @@ support appending.
 def write(batch: SinkBatch) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/sink.py#L68)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/sink.py#L46)
 
-Writes a batch of data to files on disk, grouping data by topic and partition.
+Write a batch of data using the configured format and destination.
 
-If `append` is `True` and an existing file is found, data will be appended to
-the last file. Otherwise, a new file is created based on the batch's starting
-offset.
+The method performs the following steps:
+1. Serializes the batch data using the configured format
+2. Writes the serialized data to the destination
+3. Handles any write failures by raising a backpressure error
 
 
 <br>
 ***Arguments:***
 
 - `batch`: The batch of data to write.
+
+**Raises**:
+
+- `SinkBackpressureError`: If the write operation fails, indicating
+that the sink needs backpressure with a 5-second retry delay.
+
+<a id="quixstreams.sinks.community.file.destinations.base"></a>
+
+## quixstreams.sinks.community.file.destinations.base
+
+<a id="quixstreams.sinks.community.file.destinations.base.Destination"></a>
+
+### Destination
+
+```python
+class Destination(ABC)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/base.py#L16)
+
+Abstract base class for defining where and how data should be stored.
+
+Destinations handle the storage of serialized data, whether that's to local
+disk, cloud storage, or other locations. They manage the physical writing of
+data while maintaining a consistent directory/path structure based on topics
+and partitions.
+
+<a id="quixstreams.sinks.community.file.destinations.base.Destination.set_directory"></a>
+
+<br><br>
+
+#### Destination.set\_directory
+
+```python
+def set_directory(directory: str) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/base.py#L28)
+
+Configure the base directory for storing files.
+
+
+<br>
+***Arguments:***
+
+- `directory`: The base directory path where files will be stored.
+
+**Raises**:
+
+- `ValueError`: If the directory path contains invalid characters.
+Only alphanumeric characters (a-zA-Z0-9), spaces, dots, and
+underscores are allowed.
+
+<a id="quixstreams.sinks.community.file.destinations.base.Destination.set_extension"></a>
+
+<br><br>
+
+#### Destination.set\_extension
+
+```python
+def set_extension(format: Format) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/base.py#L45)
+
+Set the file extension based on the format.
+
+
+<br>
+***Arguments:***
+
+- `format`: The Format instance that defines the file extension.
+
+<a id="quixstreams.sinks.community.file.destinations.base.Destination.write"></a>
+
+<br><br>
+
+#### Destination.write
+
+```python
+@abstractmethod
+def write(data: bytes, batch: SinkBatch) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/base.py#L54)
+
+Write the serialized data to storage.
+
+
+<br>
+***Arguments:***
+
+- `data`: The serialized data to write.
+- `batch`: The batch information containing topic, partition and offset
+details.
+
+<a id="quixstreams.sinks.community.file.destinations.local"></a>
+
+## quixstreams.sinks.community.file.destinations.local
+
+<a id="quixstreams.sinks.community.file.destinations.local.LocalDestination"></a>
+
+### LocalDestination
+
+```python
+class LocalDestination(Destination)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/local.py#L15)
+
+A destination that writes data to the local filesystem.
+
+Handles writing data to local files with support for both creating new files
+and appending to existing ones.
+
+<a id="quixstreams.sinks.community.file.destinations.local.LocalDestination.__init__"></a>
+
+<br><br>
+
+#### LocalDestination.\_\_init\_\_
+
+```python
+def __init__(append: bool = False) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/local.py#L22)
+
+Initialize the local destination.
+
+
+<br>
+***Arguments:***
+
+- `append`: If True, append to existing files instead of creating new
+ones. Defaults to False.
+
+<a id="quixstreams.sinks.community.file.destinations.local.LocalDestination.set_extension"></a>
+
+<br><br>
+
+#### LocalDestination.set\_extension
+
+```python
+def set_extension(format: Format) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/local.py#L32)
+
+Set the file extension and validate append mode compatibility.
+
+
+<br>
+***Arguments:***
+
+- `format`: The Format instance that defines the file extension.
+
+**Raises**:
+
+- `ValueError`: If append mode is enabled but the format doesn't
+support appending.
+
+<a id="quixstreams.sinks.community.file.destinations.local.LocalDestination.write"></a>
+
+<br><br>
+
+#### LocalDestination.write
+
+```python
+def write(data: bytes, batch: SinkBatch) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/local.py#L43)
+
+Write data to a local file.
+
+
+<br>
+***Arguments:***
+
+- `data`: The serialized data to write.
+- `batch`: The batch information containing topic and partition details.
+
+<a id="quixstreams.sinks.community.file.destinations.s3"></a>
+
+## quixstreams.sinks.community.file.destinations.s3
+
+<a id="quixstreams.sinks.community.file.destinations.s3.S3BucketNotFoundError"></a>
+
+### S3BucketNotFoundError
+
+```python
+class S3BucketNotFoundError(Exception)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/s3.py#L13)
+
+Raised when the specified S3 bucket does not exist.
+
+<a id="quixstreams.sinks.community.file.destinations.s3.S3BucketAccessDeniedError"></a>
+
+### S3BucketAccessDeniedError
+
+```python
+class S3BucketAccessDeniedError(Exception)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/s3.py#L17)
+
+Raised when the specified S3 bucket access is denied.
+
+<a id="quixstreams.sinks.community.file.destinations.s3.S3Destination"></a>
+
+### S3Destination
+
+```python
+class S3Destination(Destination)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/s3.py#L21)
+
+A destination that writes data to Amazon S3.
+
+Handles writing data to S3 buckets using the AWS SDK. Credentials can be
+provided directly or via environment variables.
+
+<a id="quixstreams.sinks.community.file.destinations.s3.S3Destination.__init__"></a>
+
+<br><br>
+
+#### S3Destination.\_\_init\_\_
+
+```python
+def __init__(bucket: str,
+             aws_access_key_id: Optional[str] = getenv("AWS_ACCESS_KEY_ID"),
+             aws_secret_access_key: Optional[str] = getenv(
+                 "AWS_SECRET_ACCESS_KEY"),
+             region_name: Optional[str] = getenv("AWS_REGION",
+                                                 getenv("AWS_DEFAULT_REGION")),
+             **kwargs) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/s3.py#L28)
+
+Initialize the S3 destination.
+
+
+<br>
+***Arguments:***
+
+- `bucket`: Name of the S3 bucket to write to.
+- `aws_access_key_id`: AWS access key ID. Defaults to AWS_ACCESS_KEY_ID
+environment variable.
+- `aws_secret_access_key`: AWS secret access key. Defaults to
+AWS_SECRET_ACCESS_KEY environment variable.
+- `region_name`: AWS region name. Defaults to AWS_REGION or
+AWS_DEFAULT_REGION environment variable.
+- `kwargs`: Additional keyword arguments passed to boto3.client.
+
+**Raises**:
+
+- `S3BucketNotFoundError`: If the specified bucket doesn't exist.
+- `S3BucketAccessDeniedError`: If access to the bucket is denied.
+
+<a id="quixstreams.sinks.community.file.destinations.s3.S3Destination.write"></a>
+
+<br><br>
+
+#### S3Destination.write
+
+```python
+def write(data: bytes, batch: SinkBatch) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/s3.py#L78)
+
+Write data to S3.
+
+
+<br>
+***Arguments:***
+
+- `data`: The serialized data to write.
+- `batch`: The batch information containing topic and partition details.
 
 <a id="quixstreams.sinks.community.file.formats.base"></a>
 
