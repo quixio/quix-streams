@@ -190,3 +190,25 @@ within the provided topic's folder structure.
 
 The default topic name the Application dumps to is based on the last folder name of 
 the `FileSource` `filepath` as: `source__<last folder name>`.
+
+## Testing Locally
+
+Rather than connect to AWS, you can alternatively test your application using a local 
+emulated S3 host via Docker:
+
+1. Execute in terminal:
+
+    ```bash
+    docker run --rm -d --name s3 \
+    -p 4566:4566 \
+    -e SERVICES=s3 \
+    -e EDGE_PORT=4566 \
+    -e DEBUG=1 \
+    localstack/localstack:latest
+    ```
+
+2. Set `aws_endpoint_url` for `S3Origin` _OR_ the `AWS_ENDPOINT_URL_S3` 
+    environment variable to `http://localhost:4566`
+
+3. Set all other `aws_` parameters for `S3Origin` to _any_ string. 
+They will not be used, but they must still be populated!

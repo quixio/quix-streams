@@ -183,3 +183,23 @@ within the provided topic's folder structure.
 
 The default topic name the Application dumps to is based on the last folder name of 
 the `FileSource` `filepath` as: `source__<last folder name>`.
+
+
+## Testing Locally
+
+Rather than connect to Azure, you can alternatively test your application using a local 
+emulated Azure host via Docker:
+
+1. Execute in terminal:
+
+    ```bash
+    docker run --rm -d --name azurite \
+    -p 10000:10000 \
+    mcr.microsoft.com/azure-storage/azurite:latest
+    ```
+
+2. Set `connection_string` for `AzureOrigin` to: 
+
+```python
+"DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;"
+```

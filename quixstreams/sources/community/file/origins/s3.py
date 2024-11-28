@@ -40,7 +40,7 @@ class S3Origin(ExternalOrigin):
         :param aws_secret_access_key: the AWS secret access key.
             NOTE: can alternatively set the AWS_SECRET_ACCESS_KEY environment variable
         :param aws_endpoint_url: the endpoint URL to use; only required for connecting
-        to a locally hosted Kinesis.
+        to a locally hosted S3.
             NOTE: can alternatively set the AWS_ENDPOINT_URL_S3 environment variable
         """
         self.root_location = bucket
@@ -66,7 +66,7 @@ class S3Origin(ExternalOrigin):
 
     def get_folder_count(self, folder: Path) -> int:
         resp = self._get_client().list_objects(
-            Bucket=self.root_location, Prefix=str(folder), Delimiter="/"
+            Bucket=self.root_location, Prefix=f"{folder}/", Delimiter="/"
         )
         return len(resp["CommonPrefixes"])
 
@@ -77,8 +77,8 @@ class S3Origin(ExternalOrigin):
             Prefix=str(folder),
             Delimiter="/",
         )
-        for folder in resp.get("CommonPrefixes", []):
-            yield from self.file_collector(folder["Prefix"])
+        for _folder in resp.get("CommonPrefixes", []):
+            yield from self.file_collector(_folder["Prefix"])
 
         for file in resp.get("Contents", []):
             yield Path(file["Key"])
