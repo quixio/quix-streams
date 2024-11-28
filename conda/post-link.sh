@@ -8,4 +8,5 @@ $PREFIX/bin/pip install \
 'redis[hiredis]>=5.2.0,<6' \
 'confluent-kafka[avro,json,protobuf,schemaregistry]>=2.8.2,<2.10' \
 'influxdb>=5.3,<6' \
-'jsonpath_ng>=1.7.0,<2'
+'jsonpath_ng>=1.7.0,<2' \
+'paho-mqtt>=2.1.0,<3'
