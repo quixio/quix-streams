@@ -129,6 +129,8 @@ class BaseSource(ABC):
         This method is triggered when the topic is not provided to the source.
 
         The source must return a default topic configuration.
+
+        Note: if the default topic is used, the Application will prefix its name with "source__".
         """
 
 
@@ -310,6 +312,8 @@ class Source(BaseSource):
         """
         Return a default topic matching the source name.
         The default topic will not be used if the topic has already been provided to the source.
+
+        Note: if the default topic is used, the Application will prefix its name with "source__".
 
         :return: `quixstreams.models.topics.Topic`
         """
