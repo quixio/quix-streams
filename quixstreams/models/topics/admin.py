@@ -83,6 +83,9 @@ class TopicAdmin:
     def admin_client(self) -> AdminClient:
         if not self._inner_admin:
             self._inner_admin = AdminClient(self._config)
+            # Poll the AdminClient once to trigger the OAuth callback
+            # in case it's provided
+            self._inner_admin.poll(0)
         return self._inner_admin
 
     def list_topics(self, timeout: float = -1) -> Dict[str, ConfluentTopicMetadata]:
