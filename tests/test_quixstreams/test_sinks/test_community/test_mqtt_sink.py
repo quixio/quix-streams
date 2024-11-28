@@ -1,7 +1,10 @@
-from unittest.mock import MagicMock, patch
-import pytest
 from datetime import datetime
+from unittest.mock import patch
+
+import pytest
+
 from quixstreams.sinks.community.mqtt import MQTTSink
+
 
 @pytest.fixture()
 def mqtt_sink_factory():
@@ -16,7 +19,7 @@ def mqtt_sink_factory():
         tls_enabled: bool = True,
         qos: int = 1,
     ) -> MQTTSink:
-        with patch('paho.mqtt.client.Client') as MockClient:
+        with patch("paho.mqtt.client.Client") as MockClient:
             mock_mqtt_client = MockClient.return_value
             sink = MQTTSink(
                 mqtt_client_id=mqtt_client_id,
@@ -27,12 +30,13 @@ def mqtt_sink_factory():
                 mqtt_password=mqtt_password,
                 mqtt_version=mqtt_version,
                 tls_enabled=tls_enabled,
-                qos=qos
+                qos=qos,
             )
             sink.mqtt_client = mock_mqtt_client
             return sink, mock_mqtt_client
 
     return factory
+
 
 class TestMQTTSink:
     def test_mqtt_connect(self, mqtt_sink_factory):
@@ -59,9 +63,9 @@ class TestMQTTSink:
             partition=0,
             offset=1,
             key=key,
-            value=data.encode('utf-8'),
+            value=data.encode("utf-8"),
             timestamp=timestamp,
-            headers=headers
+            headers=headers,
         )
 
         mock_mqtt_client.publish.assert_called_once_with(
@@ -69,7 +73,9 @@ class TestMQTTSink:
         )
 
     def test_mqtt_authentication(self, mqtt_sink_factory):
-        sink, mock_mqtt_client = mqtt_sink_factory(mqtt_username="user", mqtt_password="pass")
+        sink, mock_mqtt_client = mqtt_sink_factory(
+            mqtt_username="user", mqtt_password="pass"
+        )
         mock_mqtt_client.username_pw_set.assert_called_once_with("user", "pass")
 
     def test_mqtt_disconnect_on_delete(self, mqtt_sink_factory):
