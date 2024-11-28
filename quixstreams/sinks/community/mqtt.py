@@ -10,8 +10,7 @@ try:
     from paho import mqtt
 except ImportError as exc:
     raise ImportError(
-        'Package "paho-mqtt" is missing: '
-        "run pip install quixstreams[paho-mqtt] to fix it"
+        'Package "paho-mqtt" is missing: ' "run pip install quixstreams[mqtt] to fix it"
     ) from exc
 
 
