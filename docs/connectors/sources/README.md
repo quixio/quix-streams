@@ -23,13 +23,11 @@ if __name__ == "__main__":
 
 ## Supported sources
 
-Quix Streams provides the following sources out of the box:
+Quix Streams comes with pre-built Sources for popular data sources.  
+They can be found in the left menu under `Quix Connectors -> Quix Streams -> Sources`.
 
-* [CSVSource](./csv-source.md): A source that reads data from a single CSV file.
-* [KafkaReplicatorSource](./kafka-source.md): A source that replicates a topic from a Kafka broker to your application broker.
-* [QuixEnvironmentSource](./quix-source.md): A source that replicates a topic from a Quix Cloud environment to your application broker.
-
-To create a custom source, read [Creating a Custom Source](custom-sources.md).
+It is also possible to implement new Sources.   
+See [Creating a Custom Source](custom-sources.md) to learn how to do that.
 
 ## Multiprocessing
 

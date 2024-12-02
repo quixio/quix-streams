@@ -76,11 +76,8 @@ sdf = sdf.apply()  # continue different operations with another branch...
 
 ## Supported Sinks
 
-Currently, Quix Streams provides these sinks out of the box:
-
-- [Apache Iceberg Sink](apache-iceberg-sink.md) - a sink to write data in Apache Iceberg format.
-- [CSV Sink](csv-sink.md) - a simple CSV sinks that writes data to a single CSV file.
-- [InfluxDB 3 Sink](influxdb3-sink.md) - a sink to write data to InfluxDB 3.
+Quix Streams comes with pre-built Sinks for popular destinations.  
+They can be found in the left menu under `Quix Connectors -> Quix Streams -> Sinks`.
 
 It's also possible to implement your own custom sinks.  
 Please see the [Creating a Custom Sink](custom-sinks.md) page on how to do that.
