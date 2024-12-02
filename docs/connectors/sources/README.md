@@ -37,12 +37,19 @@ For good performance, each source runs in a subprocess. Quix Streams automatical
 
 For multiplatform support, Quix Streams starts the source process using the [spawn](https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods) approach. As a side effect, each Source instance must be pickleable. If a source needs to handle unpickleable objects, it's best to initialize those in the source subprocess (in the `BaseSource.start` or `Source.run` methods).  
 
-## Customize Topic Configuration
+## Topics
 
 Sources work by sending data to intermediate Kafka topics, which StreamingDataFrames then consume and process.
 
-By default, each Source provides a default topic based on its configuration.  
-To customize the topic config, pass a new `Topic` object to the `app.dataframe()` method together with the Source instance. 
+By default, each Source provides a default topic based on its configuration by implementing the `default_topic()` method.
+
+!!! warning "New in 3.4.0" 
+
+    Since v3.4.0, the default topics names are always prefixed with `"source__"`.
+
+
+To customize the topic name or configuration, pass a new `Topic` object to the `app.dataframe()` method together with the Source instance.
+
 
 **Example:**
 
@@ -109,7 +116,6 @@ To customize the topic the Source will use, create a new `Topic` and pass it to 
 
 ```python
 from quixstreams import Application
-from quixstreams.sources import CSVSource
 from quixstreams.models.topics import TopicConfig
 
 def main():
