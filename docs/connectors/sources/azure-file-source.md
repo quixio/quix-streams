@@ -48,11 +48,11 @@ For more details around various settings, see [configuration](#configuration).
 ```python
 from quixstreams import Application
 from quixstreams.sources.community.file import FileSource
-from quixstreams.sources.community.file.origins import AzureOrigin
+from quixstreams.sources.community.file.origins import AzureFilesOrigin
 
 app = Application(broker_address="localhost:9092", auto_offset_reset="earliest")
 
-origin = AzureOrigin(
+origin = AzureFilesOrigin(
     container="<YOUR CONTAINER NAME>",
     connection_string="<YOUR CONNECTION STRING>",
 )
