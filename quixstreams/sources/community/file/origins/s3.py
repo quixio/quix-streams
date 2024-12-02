@@ -24,31 +24,31 @@ class S3Origin(Origin):
     def __init__(
         self,
         bucket: str,
-        aws_region: Optional[str] = getenv("AWS_REGION"),
+        region_name: Optional[str] = getenv("AWS_REGION"),
         aws_access_key_id: Optional[str] = getenv("AWS_ACCESS_KEY_ID"),
         aws_secret_access_key: Optional[str] = getenv("AWS_SECRET_ACCESS_KEY"),
-        aws_endpoint_url: Optional[str] = getenv("AWS_ENDPOINT_URL_S3"),
+        endpoint_url: Optional[str] = getenv("AWS_ENDPOINT_URL_S3"),
     ):
         """
         Configure IcebergSink to work with AWS Glue.
 
         :param bucket: The S3 bucket name only (ex: 'your-bucket').
-        :param aws_region: The AWS region.
+        :param region_name: The AWS region.
             NOTE: can alternatively set the AWS_REGION environment variable
         :param aws_access_key_id: the AWS access key ID.
             NOTE: can alternatively set the AWS_ACCESS_KEY_ID environment variable
         :param aws_secret_access_key: the AWS secret access key.
             NOTE: can alternatively set the AWS_SECRET_ACCESS_KEY environment variable
-        :param aws_endpoint_url: the endpoint URL to use; only required for connecting
+        :param endpoint_url: the endpoint URL to use; only required for connecting
         to a locally hosted S3.
             NOTE: can alternatively set the AWS_ENDPOINT_URL_S3 environment variable
         """
         self.root_location = bucket
         self._credentials = {
-            "region_name": aws_region,
+            "region_name": region_name,
             "aws_access_key_id": aws_access_key_id,
             "aws_secret_access_key": aws_secret_access_key,
-            "endpoint_url": aws_endpoint_url,
+            "endpoint_url": endpoint_url,
         }
         # S3 client runs into pickling errors with multiprocessing. We can't set it
         # until multiprocessing starts it.

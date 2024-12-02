@@ -56,7 +56,7 @@ origin = S3Origin(
     bucket="<YOUR BUCKET NAME>",
     aws_access_key_id="<YOUR KEY ID>",
     aws_secret_access_key="<YOUR SECRET KEY>",
-    aws_region="<YOUR REGION>",
+    region_name="<YOUR REGION>",
 )
 source = FileSource(
     directory="path/to/your/topic_folder/",
@@ -80,7 +80,7 @@ Here are some important configurations to be aware of (see [File Source API](../
 `S3Origin`:
 
 - `bucket`: The S3 bucket name only (ex: `"your-bucket"`).
-- `aws_region`: AWS region (ex: us-east-1).    
+- `region_name`: AWS region (ex: us-east-1).    
     **Note**: can alternatively set the `AWS_REGION` environment variable.
 - `aws_access_key_id`: AWS User key ID.
     **Note**: can alternatively set the `AWS_ACCESS_KEY_ID` environment variable.
@@ -90,7 +90,7 @@ Here are some important configurations to be aware of (see [File Source API](../
 
 `FileSource`:
 
-- `directory`: a directory to recursively read through (exclude bucket name).    
+- `directory`: a directory to recursively read through (exclude bucket name or starting "/").    
     **Note**: If using alongside `FileSink`, provide the path to the topic name folder (ex: `"path/to/topic_a/"`).    
 - `origin`: An `S3Origin` instance.
 
@@ -207,7 +207,7 @@ emulated S3 host via Docker:
     localstack/localstack:latest
     ```
 
-2. Set `aws_endpoint_url` for `S3Origin` _OR_ the `AWS_ENDPOINT_URL_S3` 
+2. Set `endpoint_url` for `S3Origin` _OR_ the `AWS_ENDPOINT_URL_S3` 
     environment variable to `http://localhost:4566`
 
 3. Set all other `aws_` parameters for `S3Origin` to _any_ string. 
