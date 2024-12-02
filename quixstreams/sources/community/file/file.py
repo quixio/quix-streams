@@ -117,10 +117,10 @@ class FileSource(Source):
         based on their timestamps.
         """
         if self._previous_timestamp is not None:
-            time_diff = (current_timestamp - self._previous_timestamp) / 1000
-            if time_diff > 0:
-                logger.debug(f"Sleeping for {time_diff} seconds...")
-                sleep(time_diff)
+            time_diff_seconds = (current_timestamp - self._previous_timestamp) / 1000
+            if time_diff_seconds > 0.01:  # only sleep when diff is "big enough"
+                logger.debug(f"Sleeping for {time_diff_seconds} seconds...")
+                sleep(time_diff_seconds)
         self._previous_timestamp = current_timestamp
 
     def _check_file_partition_number(self, file: Path):
