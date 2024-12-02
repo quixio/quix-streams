@@ -3,7 +3,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Generator
 
-from .base import ExternalOrigin
+from .base import Origin
 
 try:
     from azure.storage.blob import BlobServiceClient
@@ -14,23 +14,10 @@ except ImportError as exc:
         'run "pip install quixstreams[azure]" to use AzureOrigin'
     ) from exc
 
-__all__ = ("AzureOrigin",)
+__all__ = ("AzureFilesOrigin",)
 
 
-class AzureOrigin(ExternalOrigin):
-    def get_folder_count(self, path: Path) -> int:
-        """
-        This is a simplified version of the recommended way to retrieve folder
-        names based on the azure SDK docs examples.
-        """
-        path = f"{path}/"
-        folders = set()
-        for blob in self._client.list_blobs(name_starts_with=path):
-            relative_dir = os.path.dirname(os.path.relpath(blob.name, path))
-            if relative_dir and ("/" not in relative_dir):
-                folders.add(relative_dir)
-        return len(folders)
-
+class AzureFilesOrigin(Origin):
     def __init__(
         self,
         connection_string: str,
@@ -47,13 +34,26 @@ class AzureOrigin(ExternalOrigin):
         blob_client = BlobServiceClient.from_connection_string(auth)
         return blob_client.get_container_client(self.root_location)
 
-    def file_collector(self, folder: Path) -> Generator[Path, None, None]:
-        data = self._client.list_blob_names(name_starts_with=str(folder))
+    def file_collector(self, filepath: Path) -> Generator[Path, None, None]:
+        data = self._client.list_blob_names(name_starts_with=str(filepath))
         for page in data.by_page():
             for item in page:
                 yield Path(item)
 
-    def get_raw_file_stream(self, blob_name: Path) -> BytesIO:
-        blob_client = self._client.get_blob_client(str(blob_name))
+    def get_folder_count(self, directory: Path) -> int:
+        """
+        This is a simplified version of the recommended way to retrieve folder
+        names based on the azure SDK docs examples.
+        """
+        path = f"{directory}/"
+        folders = set()
+        for blob in self._client.list_blobs(name_starts_with=path):
+            relative_dir = os.path.dirname(os.path.relpath(blob.name, path))
+            if relative_dir and ("/" not in relative_dir):
+                folders.add(relative_dir)
+        return len(folders)
+
+    def get_raw_file_stream(self, filepath: Path) -> BytesIO:
+        blob_client = self._client.get_blob_client(str(filepath))
         data = blob_client.download_blob().readall()
         return BytesIO(data)

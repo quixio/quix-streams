@@ -6,7 +6,7 @@
 
     To learn more about differences between Core and Community connectors, see the [Community and Core Connectors](../community-and-core.md) page.
 
-This source reads records from files at a local filepath and produces 
+This source reads records from files at a local directory and produces 
 them as messages to a kafka topic using any desired `StreamingDataFrame`-based transformations. 
 
 The resulting messages can be produced in "replay" mode, where the time between record 
@@ -39,7 +39,7 @@ You can learn more details about the [expected kafka message format](#message-da
 
 Local File Source is the default configuration of the `FileSource` connector.
 
-Simply hand the configured `FileSource` (without a `file_origin`) to your `SDF` 
+Simply hand the configured `FileSource` (without a `origin`) to your `SDF` 
 (`app.dataframe(source=<SOURCE>)`).
 
 For more details around various settings, see [configuration](#configuration).
@@ -50,9 +50,9 @@ from quixstreams.sources.community.file import FileSource
 
 app = Application(broker_address="localhost:9092")
 source = FileSource(
-    filepath="/path/to/my/topic_folder",
-    file_format="json",
-    file_compression="gzip",
+    directory="/path/to/my/topic_folder",
+    format="json",
+    compression="gzip",
     as_replay=True,
 )
 sdf = app.dataframe(source=source).print(metadata=True)
@@ -68,15 +68,15 @@ Here are some important configurations to be aware of (see [File Source API](../
 
 ### Required:
 
-- `filepath`: a filepath to recursively read through (exclude bucket name).    
+- `directory`: a directory to recursively read through (exclude bucket name).    
     **Note**: If using alongside `FileSink`, provide the path to the topic name folder (ex: `"path/to/topic_a/"`).
 
 ### Optional:
 
-- `file_format`: what format the message files are in (ex: `"json"`, `"parquet"`).    
-    **Advanced**: can optionally provide a `Format` instance (`file_compression` will then be ignored).    
+- `format`: what format the message files are in (ex: `"json"`, `"parquet"`).    
+    **Advanced**: can optionally provide a `Format` instance (`compression` will then be ignored).    
     **Default**: `"json"`
-- `file_compression`: what compression is used on the given files, if any (ex: `"gzip"`)    
+- `compression`: what compression is used on the given files, if any (ex: `"gzip"`)    
     **Default**: `None`
 - `as_replay`: Produce the messages with the original time delay between them, else as fast as possible.    
     **Note**: Time delay will only be accurate _per partition_, NOT overall.    
@@ -147,7 +147,7 @@ This will result in the following Kafka message format for `Application`:
 ### Custom Schemas (Advanced)
 
 If the original files are not formatted as expected, custom loaders can be configured 
-on some `Format` classes (ex: `JsonFormat`) which can be handed to `FileSource(file_format=<Format>)`.
+on some `Format` classes (ex: `JsonFormat`) which can be handed to `FileSource(format=<Format>)`.
 
 Formats can be imported from `quixstreams.sources.community.file.formats`.
 
@@ -166,4 +166,4 @@ The default topic will have a partition count that reflects the partition count 
 within the provided topic's folder structure.
 
 The default topic name the Application dumps to is based on the last folder name of 
-the `FileSource` `filepath` as: `source__<last folder name>`.
+the `FileSource` `directory` as: `source__<last folder name>`.

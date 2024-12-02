@@ -52,15 +52,15 @@ from quixstreams.sources.community.file.origins import AzureOrigin
 
 app = Application(broker_address="localhost:9092", auto_offset_reset="earliest")
 
-file_origin = AzureOrigin(
+origin = AzureOrigin(
     container="<YOUR CONTAINER NAME>",
     connection_string="<YOUR CONNECTION STRING>",
 )
 source = FileSource(
-    filepath="path/to/your/topic_folder/",
-    file_origin=file_origin,
-    file_format="json",
-    file_compression="gzip",
+    directory="path/to/your/topic_folder/",
+    origin=origin,
+    format="json",
+    compression="gzip",
 )
 sdf = app.dataframe(source=source).print(metadata=True)
 # YOUR LOGIC HERE!
@@ -83,19 +83,19 @@ Here are some important configurations to be aware of (see [File Source API](../
 
 `FileSource`:
 
-- `filepath`: a filepath to recursively read through (exclude bucket name).    
+- `directory`: a directory to recursively read through (exclude container name).    
     **Note**: If using alongside `FileSink`, provide the path to the topic name folder (ex: `"path/to/topic_a/"`).    
-- `file_origin`: An `AzureOrigin` instance.
+- `origin`: An `AzureOrigin` instance.
 
 
 ### Optional:
 
 `FileSource`:
 
-- `file_format`: what format the message files are in (ex: `"json"`, `"parquet"`).    
-    **Advanced**: can optionally provide a `Format` instance (`file_compression` will then be ignored).    
+- `format`: what format the message files are in (ex: `"json"`, `"parquet"`).    
+    **Advanced**: can optionally provide a `Format` instance (`compression` will then be ignored).    
     **Default**: `"json"`
-- `file_compression`: what compression is used on the given files, if any (ex: `"gzip"`)    
+- `compression`: what compression is used on the given files, if any (ex: `"gzip"`)    
     **Default**: `None`
 - `as_replay`: Produce the messages with the original time delay between them, else as fast as possible.    
     **Note**: Time delay will only be accurate _per partition_, NOT overall.    
@@ -163,7 +163,7 @@ This will result in the following Kafka message format for `Application`:
 ### Custom Schemas (Advanced)
 
 If the original files are not formatted as expected, custom loaders can be configured 
-on some `Format` classes (ex: `JsonFormat`) which can be handed to `FileSource(file_format=<Format>)`.
+on some `Format` classes (ex: `JsonFormat`) which can be handed to `FileSource(format=<Format>)`.
 
 Formats can be imported from `quixstreams.sources.community.file.formats`.
 
@@ -182,7 +182,7 @@ The default topic will have a partition count that reflects the partition count 
 within the provided topic's folder structure.
 
 The default topic name the Application dumps to is based on the last folder name of 
-the `FileSource` `filepath` as: `source__<last folder name>`.
+the `FileSource` `directory` as: `source__<last folder name>`.
 
 
 ## Testing Locally

@@ -4,7 +4,7 @@ from os import getenv
 from pathlib import Path
 from typing import Generator, Optional, Union
 
-from .base import ExternalOrigin
+from .base import Origin
 
 try:
     from boto3 import client as boto_client
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 __all__ = ("S3Origin",)
 
 
-class S3Origin(ExternalOrigin):
+class S3Origin(Origin):
     def __init__(
         self,
         bucket: str,
@@ -58,23 +58,11 @@ class S3Origin(ExternalOrigin):
     def _get_client(self) -> S3Client:
         return boto_client("s3", **self._credentials)
 
-    def get_raw_file_stream(self, filepath: Path) -> BytesIO:
-        data = self._client.get_object(Bucket=self.root_location, Key=str(filepath))[
-            "Body"
-        ].read()
-        return BytesIO(data)
-
-    def get_folder_count(self, folder: Path) -> int:
-        resp = self._get_client().list_objects(
-            Bucket=self.root_location, Prefix=f"{folder}/", Delimiter="/"
-        )
-        return len(resp["CommonPrefixes"])
-
-    def file_collector(self, folder: Union[str, Path]) -> Generator[Path, None, None]:
+    def file_collector(self, filepath: Union[str, Path]) -> Generator[Path, None, None]:
         self._client = self._get_client()
         resp = self._client.list_objects(
             Bucket=self.root_location,
-            Prefix=str(folder),
+            Prefix=str(filepath),
             Delimiter="/",
         )
         for _folder in resp.get("CommonPrefixes", []):
@@ -82,3 +70,15 @@ class S3Origin(ExternalOrigin):
 
         for file in resp.get("Contents", []):
             yield Path(file["Key"])
+
+    def get_folder_count(self, directory: Path) -> int:
+        resp = self._get_client().list_objects(
+            Bucket=self.root_location, Prefix=f"{directory}/", Delimiter="/"
+        )
+        return len(resp["CommonPrefixes"])
+
+    def get_raw_file_stream(self, filepath: Path) -> BytesIO:
+        data = self._client.get_object(Bucket=self.root_location, Key=str(filepath))[
+            "Body"
+        ].read()
+        return BytesIO(data)

@@ -56,17 +56,17 @@ class FileSource(Source):
 
     app = Application(broker_address="localhost:9092", auto_offset_reset="earliest")
 
-    file_origin = S3Origin(
+    origin = S3Origin(
         bucket="<YOUR BUCKET>",
         aws_access_key_id="<YOUR KEY ID>",
         aws_secret_access_key="<YOUR SECRET KEY>",
         aws_region="<YOUR REGION>",
     )
     source = FileSource(
-        filepath="path/to/your/topic_folder/",
-        file_origin=file_origin,
-        file_format="json",
-        file_compression="gzip",
+        directory="path/to/your/topic_folder/",
+        origin=origin,
+        format="json",
+        compression="gzip",
     )
     sdf = app.dataframe(source=source).print(metadata=True)
     # YOUR LOGIC HERE!
@@ -78,22 +78,22 @@ class FileSource(Source):
 
     def __init__(
         self,
-        filepath: Union[str, Path],
-        file_format: Union[Format, FormatName] = "json",
-        file_origin: Origin = LocalOrigin(),
-        file_compression: Optional[CompressionName] = None,
+        directory: Union[str, Path],
+        format: Union[Format, FormatName] = "json",
+        origin: Origin = LocalOrigin(),
+        compression: Optional[CompressionName] = None,
         as_replay: bool = True,
         name: Optional[str] = None,
         shutdown_timeout: float = 10,
     ):
         """
-        :param filepath: a filepath to recursively read through; it is recommended to
+        :param directory: a directory to recursively read through; it is recommended to
             provide the path to a given topic folder (ex: `/path/to/topic_a`).
-        :param file_format: what format the message files are in (ex: json, parquet).
-            Optionally, can provide a `Format` instance if more than file_compression
-            is necessary to define (file_compression will then be ignored).
-        :param file_origin: an Origin type (defaults to reading local files).
-        :param file_compression: what compression is used on the given files, if any.
+        :param format: what format the message files are in (ex: json, parquet).
+            Optionally, can provide a `Format` instance if more than compression
+            is necessary to define (compression will then be ignored).
+        :param origin: an Origin type (defaults to reading local files).
+        :param compression: what compression is used on the given files, if any.
         :param as_replay: Produce the messages with the original time delay between them.
             Otherwise, produce the messages as fast as possible.
             NOTE: Time delay will only be accurate per partition, NOT overall.
@@ -101,14 +101,14 @@ class FileSource(Source):
         :param shutdown_timeout: Time in seconds the application waits for the source
             to gracefully shutdown
         """
-        self._filepath = Path(filepath)
-        self._origin = file_origin
-        self._formatter = _get_formatter(file_format, file_compression)
+        self._directory = Path(directory)
+        self._origin = origin
+        self._formatter = _get_formatter(format, compression)
         self._as_replay = as_replay
         self._previous_timestamp = None
         self._previous_partition = None
         super().__init__(
-            name=name or self._filepath.name, shutdown_timeout=shutdown_timeout
+            name=name or self._directory.name, shutdown_timeout=shutdown_timeout
         )
 
     def _replay_delay(self, current_timestamp: int):
@@ -152,15 +152,15 @@ class FileSource(Source):
         """
         topic = super().default_topic()
         topic.config = TopicConfig(
-            num_partitions=self._origin.get_folder_count(self._filepath) or 1,
+            num_partitions=self._origin.get_folder_count(self._directory) or 1,
             replication_factor=1,
         )
         return topic
 
     def run(self):
         while self._running:
-            logger.info(f"Reading files from topic {self._filepath.name}")
-            for file in self._origin.file_collector(self._filepath):
+            logger.info(f"Reading files from topic {self._directory.name}")
+            for file in self._origin.file_collector(self._directory):
                 logger.debug(f"Reading file {file}")
                 self._check_file_partition_number(file)
                 filestream = self._origin.get_raw_file_stream(file)

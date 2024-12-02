@@ -1,12 +1,8 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, BinaryIO, Iterable, Union
+from typing import BinaryIO, Iterable
 
-__all__ = (
-    "Origin",
-    "ExternalOrigin",
-)
+__all__ = ("Origin",)
 
 
 class Origin(ABC):
@@ -26,9 +22,9 @@ class Origin(ABC):
     """
 
     @abstractmethod
-    def get_folder_count(self, folder: Path) -> int: ...
+    def get_folder_count(self, directory: Path) -> int: ...
 
-    """Counts the number of folders at filepath to assume partition counts."""
+    """Counts the number of folders at directory to assume partition counts."""
 
     @abstractmethod
     def get_raw_file_stream(self, filepath: Path) -> BinaryIO: ...
@@ -38,11 +34,3 @@ class Origin(ABC):
     
     Result should be ready for deserialization (and/or decompression).
     """
-
-
-@dataclass
-class ExternalOrigin(Origin, ABC):
-    """An interface for interacting with an external file-based client"""
-
-    _client: Any
-    root_location: Union[str, Path]
