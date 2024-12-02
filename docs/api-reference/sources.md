@@ -141,6 +141,8 @@ This method is triggered when the topic is not provided to the source.
 
 The source must return a default topic configuration.
 
+Note: if the default topic is used, the Application will prefix its name with "source__".
+
 <a id="quixstreams.sources.base.source.Source"></a>
 
 ### Source
@@ -149,7 +151,7 @@ The source must return a default topic configuration.
 class Source(BaseSource)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L135)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L137)
 
 A base class for custom Sources that provides a basic implementation of `BaseSource`
 interface.
@@ -209,7 +211,7 @@ if __name__ == "__main__":
 def __init__(name: str, shutdown_timeout: float = 10) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L185)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L187)
 
 
 <br>
@@ -229,7 +231,7 @@ def __init__(name: str, shutdown_timeout: float = 10) -> None
 def running() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L199)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L201)
 
 Property indicating if the source is running.
 
@@ -245,7 +247,7 @@ The `stop` method will set it to `False`. Use it to stop the source gracefully.
 def cleanup(failed: bool) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L207)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L209)
 
 This method is triggered once the `run` method completes.
 
@@ -263,7 +265,7 @@ It flushes the producer when `_run` completes successfully.
 def stop() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L218)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L220)
 
 This method is triggered when the application is shutting down.
 
@@ -279,7 +281,7 @@ It sets the `running` property to `False`.
 def start() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L226)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L228)
 
 This method is triggered in the subprocess when the source is started.
 
@@ -296,7 +298,7 @@ It marks the source as running, execute it's run method and ensure cleanup happe
 def run()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L242)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L244)
 
 This method is triggered in the subprocess when the source is started.
 
@@ -316,7 +318,7 @@ def serialize(key: Optional[object] = None,
               timestamp_ms: Optional[int] = None) -> KafkaMessage
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L250)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L252)
 
 Serialize data to bytes using the producer topic serializers and return a `quixstreams.models.messages.KafkaMessage`.
 
@@ -342,7 +344,7 @@ def produce(value: Optional[Union[str, bytes]] = None,
             buffer_error_max_tries: int = 3) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L266)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L268)
 
 Produce a message to the configured source topic in Kafka.
 
@@ -356,7 +358,7 @@ Produce a message to the configured source topic in Kafka.
 def flush(timeout: Optional[float] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L291)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L293)
 
 This method flush the producer.
 
@@ -383,11 +385,13 @@ None use producer default or -1 is infinite. Default: None
 def default_topic() -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L309)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L311)
 
 Return a default topic matching the source name.
 
 The default topic will not be used if the topic has already been provided to the source.
+
+Note: if the default topic is used, the Application will prefix its name with "source__".
 
 
 <br>
@@ -403,7 +407,7 @@ The default topic will not be used if the topic has already been provided to the
 class StatefulSource(Source)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L326)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L330)
 
 A `Source` class for custom Sources that need a state.
 
@@ -463,7 +467,7 @@ if __name__ == "__main__":
 def __init__(name: str, shutdown_timeout: float = 10) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L376)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L380)
 
 
 <br>
@@ -486,7 +490,7 @@ def configure(topic: Topic,
               **kwargs) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L386)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L390)
 
 This method is triggered before the source is started.
 
@@ -503,7 +507,7 @@ It configures the source's Kafka producer, the topic it will produce to and the 
 def store_partitions_count() -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L405)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L409)
 
 Count of store partitions.
 
@@ -520,7 +524,7 @@ Used to configure the number of partition in the changelog topic.
 def assigned_store_partition() -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L414)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L418)
 
 The store partition assigned to this instance
 
@@ -535,7 +539,7 @@ The store partition assigned to this instance
 def store_name() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L421)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L425)
 
 The source store name
 
@@ -550,7 +554,7 @@ The source store name
 def state() -> State
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L428)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L432)
 
 Access the `State` of the source.
 
@@ -568,7 +572,7 @@ Important: after each `.flush()` call, a previously returned instance is invalid
 def flush(timeout: Optional[float] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L447)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L451)
 
 This method commit the state and flush the producer.
 
