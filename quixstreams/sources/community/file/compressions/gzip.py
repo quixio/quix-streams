@@ -1,4 +1,5 @@
-from pathlib import Path
+from gzip import decompress
+from typing import BinaryIO
 
 from .base import Decompressor
 
@@ -7,10 +8,7 @@ __all__ = ("GZipDecompressor",)
 
 class GZipDecompressor(Decompressor):
     def __init__(self):
-        from gzip import decompress
-
         self._decompressor = decompress
 
-    def decompress(self, filepath: Path) -> bytes:
-        with open(filepath, "rb") as f:
-            return self._decompressor(f.read())
+    def decompress(self, filestream: BinaryIO) -> bytes:
+        return self._decompressor(filestream.read())

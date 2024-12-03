@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
-from pathlib import Path
-from typing import Literal
+from typing import BinaryIO, Literal
 
 __all__ = (
     "Decompressor",
@@ -13,4 +12,4 @@ CompressionName = Literal["gz", "gzip"]
 
 class Decompressor(ABC):
     @abstractmethod
-    def decompress(self, filepath: Path) -> bytes: ...
+    def decompress(self, filestream: BinaryIO) -> bytes: ...
