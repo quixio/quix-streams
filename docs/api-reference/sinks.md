@@ -47,9 +47,8 @@ If flush() fails, the checkpoint will be aborted.
 
 ```python
 @abc.abstractmethod
-def add(value: Any, key: Any, timestamp: int,
-        headers: List[Tuple[str, HeaderValue]], topic: str, partition: int,
-        offset: int)
+def add(value: Any, key: Any, timestamp: int, headers: HeadersTuples,
+        topic: str, partition: int, offset: int)
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L33)
@@ -125,9 +124,8 @@ corresponding topic partition.
 #### BatchingSink.add
 
 ```python
-def add(value: Any, key: Any, timestamp: int,
-        headers: List[Tuple[str, HeaderValue]], topic: str, partition: int,
-        offset: int)
+def add(value: Any, key: Any, timestamp: int, headers: HeadersTuples,
+        topic: str, partition: int, offset: int)
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L93)
@@ -1320,9 +1318,8 @@ Default - `None`.
 #### PubSubSink.add
 
 ```python
-def add(value: Any, key: Any, timestamp: int,
-        headers: list[tuple[str, HeaderValue]], topic: str, partition: int,
-        offset: int) -> None
+def add(value: Any, key: Any, timestamp: int, headers: HeadersTuples,
+        topic: str, partition: int, offset: int) -> None
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/pubsub.py#L81)
@@ -1461,9 +1458,8 @@ Initialize the KinesisSink.
 #### KinesisSink.add
 
 ```python
-def add(value: Any, key: Any, timestamp: int,
-        headers: list[tuple[str, HeaderValue]], topic: str, partition: int,
-        offset: int) -> None
+def add(value: Any, key: Any, timestamp: int, headers: HeadersTuples,
+        topic: str, partition: int, offset: int) -> None
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/kinesis.py#L80)
