@@ -1,5 +1,5 @@
 import json
-from typing import Any, Callable, Iterable, Mapping, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Mapping, Optional, Union
 
 from confluent_kafka.schema_registry import SchemaRegistryClient, SchemaRegistryError
 from confluent_kafka.schema_registry.json_schema import (
@@ -10,7 +10,6 @@ from confluent_kafka.schema_registry.json_schema import (
 )
 from confluent_kafka.serialization import SerializationError as _SerializationError
 from jsonschema import Draft202012Validator, ValidationError
-from jsonschema.protocols import Validator
 
 from quixstreams.utils.json import (
     dumps as default_dumps,
@@ -26,6 +25,9 @@ from .schema_registry import (
     SchemaRegistrySerializationConfig,
 )
 
+if TYPE_CHECKING:
+    from jsonschema.validators import _Validator
+
 __all__ = ("JSONSerializer", "JSONDeserializer")
 
 
@@ -34,7 +36,7 @@ class JSONSerializer(Serializer):
         self,
         dumps: Callable[[Any], Union[str, bytes]] = default_dumps,
         schema: Optional[Mapping] = None,
-        validator: Optional[Validator] = None,
+        validator: Optional["_Validator"] = None,
         schema_registry_client_config: Optional[SchemaRegistryClientConfig] = None,
         schema_registry_serialization_config: Optional[
             SchemaRegistrySerializationConfig
@@ -121,7 +123,7 @@ class JSONDeserializer(Deserializer):
         self,
         loads: Callable[[Union[bytes, bytearray]], Any] = default_loads,
         schema: Optional[Mapping] = None,
-        validator: Optional[Validator] = None,
+        validator: Optional["_Validator"] = None,
         schema_registry_client_config: Optional[SchemaRegistryClientConfig] = None,
     ):
         """

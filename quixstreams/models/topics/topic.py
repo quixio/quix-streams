@@ -2,6 +2,8 @@ import dataclasses
 import logging
 from typing import Any, Callable, List, Optional, Union
 
+from confluent_kafka.admin import NewTopic
+
 from quixstreams.models.messagecontext import MessageContext
 from quixstreams.models.messages import KafkaMessage
 from quixstreams.models.rows import Row
@@ -48,7 +50,7 @@ class TopicConfig:
 
     num_partitions: int
     replication_factor: int
-    extra_config: dict = dataclasses.field(default_factory=dict)
+    extra_config: dict[str, str] = dataclasses.field(default_factory=dict)
 
     def as_dict(self):
         return dataclasses.asdict(self)
@@ -137,6 +139,23 @@ class Topic:
             timestamp_extractor=timestamp_extractor or self._timestamp_extractor,
         )
 
+    def as_newtopic(self) -> NewTopic:
+        """
+        Converts `Topic`s to `NewTopic`s as required for Confluent's
+        `AdminClient.create_topic()`.
+
+        :return: confluent_kafka `NewTopic`s
+        """
+        if self.config is None:
+            return NewTopic(topic=self.name)
+
+        return NewTopic(
+            topic=self.name,
+            num_partitions=self.config.num_partitions,
+            replication_factor=self.config.replication_factor,
+            config=self.config.extra_config,
+        )
+
     def row_serialize(self, row: Row, key: Any) -> KafkaMessage:
         """
         Serialize Row to a Kafka message structure
@@ -223,7 +242,7 @@ class Topic:
                     message.partition(),
                     message.offset(),
                 )
-                return
+                return None
 
         timestamp_type, timestamp_ms = message.timestamp()
         message_context = MessageContext(
@@ -234,7 +253,7 @@ class Topic:
             leader_epoch=message.leader_epoch(),
         )
 
-        if self._value_deserializer.split_values:
+        if value_deserialized is not None and self._value_deserializer.split_values:
             # The expected value from this serializer is Iterable and each item
             # should be processed as a separate message
             rows = []

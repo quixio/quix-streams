@@ -9,7 +9,7 @@ from confluent_kafka.serialization import (
 )
 from typing_extensions import Literal, TypeAlias
 
-from ..types import HeadersMapping, KafkaHeaders
+from ..types import Headers, HeadersMapping, KafkaHeaders
 
 __all__ = (
     "SerializationContext",
@@ -33,8 +33,8 @@ class SerializationContext(_SerializationContext):
     def __init__(
         self,
         topic: str,
-        field: MessageField,
-        headers: KafkaHeaders = None,
+        field: str,
+        headers: Union[KafkaHeaders, Headers] = None,
     ) -> None:
         self.topic = topic
         self.field = field

@@ -1,4 +1,4 @@
-from typing import List, Mapping, Optional, Sequence, Tuple, Union
+from typing import List, Optional, Sequence, Tuple, Union
 
 from typing_extensions import Protocol
 
@@ -6,8 +6,9 @@ MessageKey = Optional[Union[str, bytes]]
 MessageValue = Union[str, bytes]
 
 HeadersValue = Union[str, bytes]
-HeadersMapping = Mapping[str, HeadersValue]
-HeadersTuples = Sequence[Tuple[str, HeadersValue]]
+HeadersMapping = dict[str, HeadersValue]
+HeadersTuple = Tuple[str, HeadersValue]
+HeadersTuples = Sequence[HeadersTuple]
 Headers = Union[HeadersTuples, HeadersMapping]
 
 KafkaHeaders = Optional[List[Tuple[str, bytes]]]

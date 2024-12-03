@@ -7,10 +7,7 @@ from typing import Dict, List, Mapping, Optional, Union
 from confluent_kafka.admin import (
     AdminClient,
     ConfigResource,
-    KafkaException,  # type: ignore
-)
-from confluent_kafka.admin import (
-    NewTopic as ConfluentTopic,  # type: ignore
+    KafkaException,
 )
 from confluent_kafka.admin import (
     TopicMetadata as ConfluentTopicMetadata,
@@ -24,25 +21,6 @@ from .topic import Topic, TopicConfig
 logger = logging.getLogger(__name__)
 
 __all__ = ("TopicAdmin",)
-
-
-def convert_topic_list(topics: List[Topic]) -> List[ConfluentTopic]:
-    """
-    Converts `Topic`s to `ConfluentTopic`s as required for Confluent's
-    `AdminClient.create_topic()`.
-
-    :param topics: list of `Topic`s
-    :return: list of confluent_kafka `ConfluentTopic`s
-    """
-    return [
-        ConfluentTopic(
-            topic=topic.name,
-            num_partitions=topic.config.num_partitions,
-            replication_factor=topic.config.replication_factor,
-            config=topic.config.extra_config,
-        )
-        for topic in topics
-    ]
 
 
 def confluent_topic_config(topic: str) -> ConfigResource:
@@ -207,12 +185,12 @@ class TopicAdmin:
         for topic in topics_to_create:
             logger.info(
                 f'Creating a new topic "{topic.name}" '
-                f'with config: "{topic.config.as_dict()}"'
+                f'with config: "{topic.config.as_dict() if topic.config is not None else {}}"'
             )
 
         self._finalize_create(
             self.admin_client.create_topics(
-                convert_topic_list(topics_to_create),
+                [topic.as_newtopic() for topic in topics_to_create],
                 request_timeout=timeout,
             ),
             finalize_timeout=finalize_timeout,

@@ -21,7 +21,7 @@ class MessageContext:
     def __init__(
         self,
         topic: str,
-        partition: int,
+        partition: Optional[int],
         offset: int,
         size: int,
         leader_epoch: Optional[int] = None,
@@ -37,7 +37,7 @@ class MessageContext:
         return self._topic
 
     @property
-    def partition(self) -> int:
+    def partition(self) -> Optional[int]:
         return self._partition
 
     @property

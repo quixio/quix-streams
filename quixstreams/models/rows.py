@@ -19,7 +19,7 @@ class Row:
         key: Optional[Any],
         timestamp: int,
         context: MessageContext,
-        headers: KafkaHeaders = None,
+        headers: KafkaHeaders,
     ):
         self.value = value
         self.key = key
@@ -32,7 +32,7 @@ class Row:
         return self.context.topic
 
     @property
-    def partition(self) -> int:
+    def partition(self) -> Optional[int]:
         return self.context.partition
 
     @property
