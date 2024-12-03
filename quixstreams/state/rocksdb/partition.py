@@ -7,7 +7,7 @@ from rocksdict import AccessType, ColumnFamily, Rdict, WriteBatch
 from quixstreams.models import ConfluentKafkaMessageProto
 from quixstreams.state.base import PartitionTransactionCache, StorePartition
 from quixstreams.state.exceptions import ColumnFamilyDoesNotExist
-from quixstreams.state.metadata import METADATA_CF_NAME, markers
+from quixstreams.state.metadata import METADATA_CF_NAME, Marker
 from quixstreams.state.recovery import ChangelogProducer
 from quixstreams.state.serialization import (
     int_from_int64_bytes,
@@ -179,7 +179,7 @@ class RocksDBStorePartition(StorePartition):
 
     def get(
         self, key: bytes, cf_name: str = "default"
-    ) -> Union[bytes, Literal[markers.UNDEFINED]]:
+    ) -> Union[bytes, Literal[Marker.UNDEFINED]]:
         """
         Get a key from RocksDB.
 
@@ -188,10 +188,10 @@ class RocksDBStorePartition(StorePartition):
         :param cf_name: rocksdb column family name. Default - "default"
         :return: a value if the key is present in the DB. Otherwise, `default`
         """
-        result = self.get_column_family(cf_name).get(key, default=markers.UNDEFINED)
+        result = self.get_column_family(cf_name).get(key, default=Marker.UNDEFINED)
 
         # RDict accept Any type as value but we only write bytes so we should only get bytes back.
-        return cast(Union[bytes, Literal[markers.UNDEFINED]], result)
+        return cast(Union[bytes, Literal[Marker.UNDEFINED]], result)
 
     def exists(self, key: bytes, cf_name: str = "default") -> bool:
         """

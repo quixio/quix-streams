@@ -244,7 +244,7 @@ class StateStoreManager:
                 "Cannot clear stores with active partitions assigned"
             )
 
-        if self._state_dir:
+        if self._state_dir is not None:
             shutil.rmtree(self._state_dir)
 
     def on_partition_assign(

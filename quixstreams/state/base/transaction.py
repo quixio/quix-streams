@@ -12,7 +12,7 @@ from quixstreams.state.metadata import (
     CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER,
     DEFAULT_PREFIX,
     PREFIX_SEPARATOR,
-    markers,
+    Marker,
 )
 from quixstreams.state.serialization import DumpsFunc, LoadsFunc, deserialize, serialize
 from quixstreams.utils.json import dumps as json_dumps
@@ -61,7 +61,7 @@ class PartitionTransactionCache:
         key: bytes,
         prefix: bytes,
         cf_name: str = "default",
-    ) -> Union[bytes, markers]:
+    ) -> Union[bytes, Marker]:
         """
         Get a value for the key.
 
@@ -79,12 +79,12 @@ class PartitionTransactionCache:
         # Check if the key has been deleted
         if key in self._deleted[cf_name]:
             # The key is deleted and the store doesn't need to be checked
-            return markers.DELETED
+            return Marker.DELETED
 
         # Check if the key has been updated
         # If the key is not present in the cache, we need to check the store and return
         # UNDEFINED to signify that
-        return self._updated[cf_name][prefix].get(key, markers.UNDEFINED)
+        return self._updated[cf_name][prefix].get(key, Marker.UNDEFINED)
 
     def set(self, key: bytes, value: bytes, prefix: bytes, cf_name: str = "default"):
         """
@@ -303,14 +303,14 @@ class PartitionTransaction(ABC):
         cached = self._update_cache.get(
             key=key_serialized, prefix=prefix, cf_name=cf_name
         )
-        if cached is markers.DELETED:
+        if cached is Marker.DELETED:
             return default
 
-        if cached is not markers.UNDEFINED:
+        if cached is not Marker.UNDEFINED:
             return self._deserialize_value(cached)
 
         stored = self._partition.get(key_serialized, cf_name)
-        if stored is markers.UNDEFINED:
+        if stored is Marker.UNDEFINED:
             return default
 
         return self._deserialize_value(stored)
@@ -370,9 +370,9 @@ class PartitionTransaction(ABC):
         cached = self._update_cache.get(
             key=key_serialized, prefix=prefix, cf_name=cf_name
         )
-        if cached is markers.DELETED:
+        if cached is Marker.DELETED:
             return False
-        elif cached is not markers.UNDEFINED:
+        elif cached is not Marker.UNDEFINED:
             return True
         else:
             return self._partition.exists(key_serialized, cf_name=cf_name)

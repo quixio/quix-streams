@@ -7,7 +7,7 @@ from quixstreams.state.exceptions import ColumnFamilyHeaderMissing
 from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER,
-    markers,
+    Marker,
 )
 from quixstreams.state.serialization import DumpsFunc, LoadsFunc
 from quixstreams.utils.json import loads as json_loads
@@ -87,7 +87,7 @@ class StorePartition(ABC):
     @abstractmethod
     def get(
         self, key: bytes, cf_name: str = "default"
-    ) -> Union[bytes, Literal[markers.UNDEFINED]]:
+    ) -> Union[bytes, Literal[Marker.UNDEFINED]]:
         """
         Get a key from the store
 

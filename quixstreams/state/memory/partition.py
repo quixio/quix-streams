@@ -5,7 +5,7 @@ from typing import Any, Dict, Literal, Optional, Union
 from quixstreams.models import ConfluentKafkaMessageProto
 from quixstreams.state.base import PartitionTransactionCache, StorePartition
 from quixstreams.state.exceptions import ColumnFamilyDoesNotExist
-from quixstreams.state.metadata import METADATA_CF_NAME, markers
+from quixstreams.state.metadata import METADATA_CF_NAME, Marker
 from quixstreams.state.recovery import ChangelogProducer
 from quixstreams.utils.json import dumps as json_dumps
 from quixstreams.utils.json import loads as json_loads
@@ -139,7 +139,7 @@ class MemoryStorePartition(StorePartition):
     @_validate_partition_state()
     def get(
         self, key: bytes, cf_name: str = "default"
-    ) -> Union[bytes, Literal[markers.UNDEFINED]]:
+    ) -> Union[bytes, Literal[Marker.UNDEFINED]]:
         """
         Get a key from the store
 
@@ -148,7 +148,7 @@ class MemoryStorePartition(StorePartition):
         :param cf_name: rocksdb column family name. Default - "default"
         :return: a value if the key is present in the store. Otherwise, `default`
         """
-        return self._state.get(cf_name, {}).get(key, markers.UNDEFINED)
+        return self._state.get(cf_name, {}).get(key, Marker.UNDEFINED)
 
     @_validate_partition_state()
     def exists(self, key: bytes, cf_name: str = "default") -> bool:

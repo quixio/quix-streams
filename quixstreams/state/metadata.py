@@ -9,6 +9,6 @@ METADATA_CF_NAME = "__metadata__"
 DEFAULT_PREFIX = b""
 
 
-class markers(enum.Enum):
+class Marker(enum.Enum):
     UNDEFINED = 1
     DELETED = 2
