@@ -1,7 +1,11 @@
 import logging
+import queue
+import threading
 from pathlib import Path
 from time import sleep
-from typing import Optional, Union
+from typing import BinaryIO, Optional, Union
+
+from typing_extensions import Self
 
 from quixstreams.models import Topic, TopicConfig
 from quixstreams.sources import Source
@@ -14,6 +18,68 @@ from .origins.base import Origin
 __all__ = ("FileSource",)
 
 logger = logging.getLogger(__name__)
+
+
+class StopThread(Exception): ...
+
+
+class FileFetcher:
+    """
+    Serves individual files while downloading another in the background.
+    """
+
+    def __init__(self, origin: Origin, filepath: Path):
+        self._origin = origin
+        self._filepath = filepath
+        self._queue = queue.Queue(maxsize=1)
+        self._download_thread = threading.Thread(target=self._download_files)
+        self._stop_event = threading.Event()
+        self._thread_exception = StopIteration
+        self._download_thread.start()
+
+    def __iter__(self) -> Self:
+        return self
+
+    def __next__(self) -> tuple[Path, BinaryIO]:
+        # Blocking queue to account for various download times
+        file_content = self._queue.get(block=True)
+        if file_content is None:
+            self.stop()
+            raise self._thread_exception
+        return file_content
+
+    def stop(self):
+        if not self._stop_event.is_set():
+            logger.debug("Stopping download thread...")
+            self._stop_event.set()
+            self._download_thread.join(timeout=10)
+
+    def _add_file_to_queue(self, filepath: Path):
+        """
+        Add downloaded file to queue with soft blocking (to check for stop_events).
+        """
+        filestream = self._origin.get_raw_file_stream(filepath)
+        while not self._stop_event.is_set():
+            try:
+                self._queue.put((filepath, filestream), block=True, timeout=3)
+                logger.debug(f"{filepath} added to queue...")
+                return
+            except queue.Full:
+                pass
+        raise StopThread()
+
+    def _download_files(self):
+        try:
+            for file in self._origin.file_collector(self._filepath):
+                if self._stop_event.is_set():
+                    return
+                self._add_file_to_queue(file)
+        except Exception as e:
+            if not isinstance(e, StopThread):
+                logger.error("Download thread encountered an error", exc_info=e)
+                self._thread_exception = e
+        finally:
+            self._queue.put(None, block=True)
 
 
 class FileSource(Source):
@@ -111,6 +177,7 @@ class FileSource(Source):
         self._replay_speed = replay_speed
         self._previous_timestamp = None
         self._previous_partition = None
+        self._file_fetcher: Optional[FileFetcher] = None
         super().__init__(
             name=name or self._directory.name, shutdown_timeout=shutdown_timeout
         )
@@ -162,19 +229,22 @@ class FileSource(Source):
         )
         return topic
 
+    def stop(self):
+        if self._file_fetcher:
+            self._file_fetcher.stop()
+        super().stop()
+
     def run(self):
-        while self._running:
-            logger.info(f"Reading files from topic {self._directory.name}")
-            for file in self._origin.file_collector(self._directory):
-                logger.debug(f"Reading file {file}")
-                self._check_file_partition_number(file)
-                filestream = self._origin.get_raw_file_stream(file)
-                for record in self._formatter.read(filestream):
-                    if timestamp := record.get("_timestamp"):
-                        self._replay_delay(timestamp)
-                    self._produce(record)
-                self.flush()
-            return
+        self._file_fetcher = FileFetcher(self._origin, self._directory)
+        logger.info(f"Reading files from topic {self._directory.name}")
+        for file_name, content in self._file_fetcher:
+            logger.debug(f"Reading file {file_name}")
+            self._check_file_partition_number(file_name)
+            for record in self._formatter.read(content):
+                if timestamp := record.get("_timestamp"):
+                    self._replay_delay(timestamp)
+                self._produce(record)
+            self.flush()
 
 
 def _get_formatter(
