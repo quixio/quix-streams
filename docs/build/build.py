@@ -145,6 +145,7 @@ doc_map = {
             "quixstreams.sources.core.kafka.quix",
             "quixstreams.sources.community.file.file",
             "quixstreams.sources.community.file.compressions.gzip",
+            "quixstreams.sources.community.file.origins.azure",
             "quixstreams.sources.community.file.origins.local",
             "quixstreams.sources.community.file.origins.s3",
             "quixstreams.sources.community.file.formats.json",
