@@ -18,7 +18,7 @@ producing is matched as close as possible to the original. (per topic partition 
 Install Quix Streams with the following optional dependencies:
 
 ```bash
-pip install quixstreams[azure]
+pip install quixstreams[azure-file]
 ```
 
 ## How It Works
@@ -48,11 +48,11 @@ For more details around various settings, see [configuration](#configuration).
 ```python
 from quixstreams import Application
 from quixstreams.sources.community.file import FileSource
-from quixstreams.sources.community.file.origins import AzureFilesOrigin
+from quixstreams.sources.community.file.origins import AzureFileOrigin
 
 app = Application(broker_address="localhost:9092", auto_offset_reset="earliest")
 
-origin = AzureFilesOrigin(
+origin = AzureFileOrigin(
     container="<YOUR CONTAINER NAME>",
     connection_string="<YOUR CONNECTION STRING>",
 )

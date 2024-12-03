@@ -11,13 +11,13 @@ try:
 except ImportError as exc:
     raise ImportError(
         f"Package {exc.name} is missing: "
-        'run "pip install quixstreams[azure]" to use AzureFilesOrigin'
+        'run "pip install quixstreams[azure-file]" to use AzureFileOrigin'
     ) from exc
 
-__all__ = ("AzureFilesOrigin",)
+__all__ = ("AzureFileOrigin",)
 
 
-class AzureFilesOrigin(Origin):
+class AzureFileOrigin(Origin):
     def __init__(
         self,
         connection_string: str,
@@ -31,8 +31,15 @@ class AzureFilesOrigin(Origin):
         self._client = self._get_client(connection_string)
 
     def _get_client(self, auth: str) -> ContainerClient:
-        blob_client = BlobServiceClient.from_connection_string(auth)
-        return blob_client.get_container_client(self.root_location)
+        """
+        Get an Azure file container client and validate the container exists.
+
+        :param auth: Azure client authentication string.
+        :return: An Azure ContainerClient
+        """
+        storage_client = BlobServiceClient.from_connection_string(auth)
+        container_client = storage_client.get_container_client(self._container)
+        return container_client
 
     def file_collector(self, filepath: Path) -> Generator[Path, None, None]:
         data = self._client.list_blob_names(name_starts_with=str(filepath))
