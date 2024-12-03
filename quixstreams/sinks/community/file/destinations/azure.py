@@ -10,11 +10,11 @@ try:
 except ImportError as exc:
     raise ImportError(
         f"Package {exc.name} is missing: "
-        'run "pip install quixstreams[azure]" to use AzureFilesDestination'
+        'run "pip install quixstreams[azure-file]" to use AzureFileDestination'
     ) from exc
 
 
-__all__ = ("AzureFilesDestination",)
+__all__ = ("AzureFileDestination",)
 
 
 logger = logging.getLogger(__name__)
@@ -28,11 +28,12 @@ class AzureContainerAccessDeniedError(Exception):
     """Raised when the specified Azure File container access is denied."""
 
 
-class AzureFilesDestination(Destination):
-    """A destination that writes data to Amazon Azure.
+class AzureFileDestination(Destination):
+    """
+    A destination that writes data to Microsoft Azure File.
 
-    Handles writing data to Azure containers using the AWS SDK. Credentials can be
-    provided directly or via environment variables.
+    Handles writing data to Azure containers using the Azure Blob SDK. Credentials can
+    be provided directly or via environment variables.
     """
 
     def __init__(
@@ -41,7 +42,7 @@ class AzureFilesDestination(Destination):
         container: str,
     ) -> None:
         """
-        Initialize the Azure Files destination.
+        Initialize the Azure File destination.
 
         :param connection_string: Azure client authentication string.
         :param container: Azure container name.

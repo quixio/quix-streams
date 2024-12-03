@@ -123,6 +123,7 @@ doc_map = {
             "quixstreams.sinks.community.iceberg",
             "quixstreams.sinks.community.bigquery",
             "quixstreams.sinks.community.file.sink",
+            "quixstreams.sinks.community.file.destinations.azure",
             "quixstreams.sinks.community.file.destinations.base",
             "quixstreams.sinks.community.file.destinations.local",
             "quixstreams.sinks.community.file.destinations.s3",
