@@ -17,7 +17,7 @@ from .metadata import (
     LATEST_TIMESTAMP_KEY,
     LATEST_TIMESTAMPS_CF_NAME,
 )
-from .serialization import encode_window_key, encode_window_prefix, parse_window_key
+from .serialization import append_integer, encode_window_key, parse_window_key
 from .state import WindowedTransactionState
 
 if TYPE_CHECKING:
@@ -250,11 +250,11 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         :return: A sorted list of tuples in the format `((start, end), value)`.
         """
         seek_from = max(start_from_ms, 0)
-        seek_from_key = encode_window_prefix(prefix=prefix, start_ms=seek_from)
+        seek_from_key = append_integer(base_bytes=prefix, integer=seek_from)
 
         # Add +1 to make the upper bound inclusive
         seek_to = start_to_ms + 1
-        seek_to_key = encode_window_prefix(prefix=prefix, start_ms=seek_to)
+        seek_to_key = append_integer(base_bytes=prefix, integer=seek_to)
 
         # Create an iterator over the state store
         # Set iterator bounds to reduce IO by limiting the range of keys fetched

@@ -6,7 +6,7 @@ from quixstreams.state.serialization import (
     int_to_int64_bytes,
 )
 
-__all__ = ("parse_window_key", "encode_window_key", "encode_window_prefix")
+__all__ = ("parse_window_key", "encode_window_key", "append_integer")
 
 _TIMESTAMP_BYTE_LENGTH = len(int_to_int64_bytes(0))
 _PREFIX_SEPARATOR_LENGTH = len(PREFIX_SEPARATOR)
@@ -52,14 +52,14 @@ def encode_window_key(start_ms: int, end_ms: int) -> bytes:
     return _window_pack(start_ms, PREFIX_SEPARATOR, end_ms)
 
 
-def encode_window_prefix(prefix: bytes, start_ms: int) -> bytes:
+def append_integer(base_bytes: bytes, integer: int) -> bytes:
     """
-    Encode window prefix and start time to iterate over keys in RocksDB
+    Append integer to the base bytes
     Format:
-    ```<prefix>|<start>```
+    ```<base_bytes>|<integer>```
 
-    :param prefix: transaction prefix
-    :param start_ms: window start time in milliseconds
+    :param base_bytes: base bytes
+    :param integer: integer to append
     :return: bytes
     """
-    return prefix + PREFIX_SEPARATOR + int_to_int64_bytes(start_ms)
+    return base_bytes + PREFIX_SEPARATOR + int_to_int64_bytes(integer)
