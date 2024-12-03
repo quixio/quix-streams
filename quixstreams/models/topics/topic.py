@@ -48,8 +48,8 @@ class TopicConfig:
     Generally used by Topic and any topic creation procedures.
     """
 
-    num_partitions: int
-    replication_factor: int
+    num_partitions: Optional[int]
+    replication_factor: Optional[int]
     extra_config: dict[str, str] = dataclasses.field(default_factory=dict)
 
     def as_dict(self):

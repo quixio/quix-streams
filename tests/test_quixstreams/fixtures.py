@@ -378,8 +378,8 @@ def quix_mock_config_builder_factory(kafka_container):
             strip_workspace_id_prefix(workspace_id, s) if workspace_id else s
         )
 
-        cfg_builder.convert_topic_response.side_effect = (
-            lambda topic: QuixKafkaConfigsBuilder.convert_topic_response(topic)
+        cfg_builder.convert_topic_response = (
+            QuixKafkaConfigsBuilder.convert_topic_response
         )
 
         # Mock the create API call and return this response.
