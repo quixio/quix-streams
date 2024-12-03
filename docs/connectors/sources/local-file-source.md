@@ -53,7 +53,7 @@ source = FileSource(
     directory="/path/to/my/topic_folder",
     format="json",
     compression="gzip",
-    as_replay=True,
+    replay_speed=1.0,
 )
 sdf = app.dataframe(source=source).print(metadata=True)
 # YOUR LOGIC HERE!
