@@ -82,7 +82,7 @@ class FileSource(Source):
         format: Union[Format, FormatName] = "json",
         origin: Origin = LocalOrigin(),
         compression: Optional[CompressionName] = None,
-        as_replay: bool = True,
+        replay_speed: float = 1.0,
         name: Optional[str] = None,
         shutdown_timeout: float = 10,
     ):
@@ -94,17 +94,21 @@ class FileSource(Source):
             is necessary to define (compression will then be ignored).
         :param origin: an Origin type (defaults to reading local files).
         :param compression: what compression is used on the given files, if any.
-        :param as_replay: Produce the messages with the original time delay between them.
-            Otherwise, produce the messages as fast as possible.
+        :param replay_speed: Produce the messages with this speed multiplier, which
+            roughly reflects the time "delay" between the original message producing.
+            Use any float >= 0, where 0 is no delay, and 1 is the original speed.
             NOTE: Time delay will only be accurate per partition, NOT overall.
         :param name: The name of the Source application (Default: last folder name).
         :param shutdown_timeout: Time in seconds the application waits for the source
             to gracefully shutdown
         """
+        if not replay_speed >= 0:
+            raise ValueError("`replay_speed` must be a positive value")
+
         self._directory = Path(directory)
         self._origin = origin
         self._formatter = _get_formatter(format, compression)
-        self._as_replay = as_replay
+        self._replay_speed = replay_speed
         self._previous_timestamp = None
         self._previous_partition = None
         super().__init__(
@@ -118,9 +122,10 @@ class FileSource(Source):
         """
         if self._previous_timestamp is not None:
             time_diff_seconds = (current_timestamp - self._previous_timestamp) / 1000
-            if time_diff_seconds > 0.01:  # only sleep when diff is "big enough"
-                logger.debug(f"Sleeping for {time_diff_seconds} seconds...")
-                sleep(time_diff_seconds)
+            replay_diff_seconds = time_diff_seconds * self._replay_speed
+            if replay_diff_seconds > 0.01:  # only sleep when diff is "big enough"
+                logger.debug(f"Sleeping for {replay_diff_seconds} seconds...")
+                sleep(replay_diff_seconds)
         self._previous_timestamp = current_timestamp
 
     def _check_file_partition_number(self, file: Path):
@@ -165,7 +170,7 @@ class FileSource(Source):
                 self._check_file_partition_number(file)
                 filestream = self._origin.get_raw_file_stream(file)
                 for record in self._formatter.read(filestream):
-                    if self._as_replay and (timestamp := record.get("_timestamp")):
+                    if timestamp := record.get("_timestamp"):
                         self._replay_delay(timestamp)
                     self._produce(record)
                 self.flush()

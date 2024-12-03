@@ -78,9 +78,11 @@ Here are some important configurations to be aware of (see [File Source API](../
     **Default**: `"json"`
 - `compression`: what compression is used on the given files, if any (ex: `"gzip"`)    
     **Default**: `None`
-- `as_replay`: Produce the messages with the original time delay between them, else as fast as possible.    
+- `replay_speed`: Produce the messages with this speed multiplier, which roughly 
+    reflects the time "delay" between the original message producing.    
+    Use any `float` `>= 0.0`, where `0.0` is no delay, and `1.0` is the original speed.    
     **Note**: Time delay will only be accurate _per partition_, NOT overall.    
-    **Default**: `True`
+    **Default**: 1.0
 
 
 ## File hierarchy/structure
