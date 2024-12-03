@@ -25,7 +25,7 @@ from quixstreams.models.topics.utils import merge_headers
 from quixstreams.models.types import (
     ConfluentKafkaMessageProto,
     Headers,
-    MessageHeadersTuples,
+    KafkaHeaders,
 )
 
 __all__ = ("Topic", "TopicConfig", "TimestampExtractor")
@@ -33,7 +33,7 @@ __all__ = ("Topic", "TopicConfig", "TimestampExtractor")
 logger = logging.getLogger(__name__)
 
 TimestampExtractor = Callable[
-    [Any, Optional[MessageHeadersTuples], int, TimestampType],
+    [Any, KafkaHeaders, int, TimestampType],
     int,
 ]
 

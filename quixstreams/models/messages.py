@@ -12,7 +12,7 @@ class KafkaMessage:
 
     def __init__(
         self,
-        key: Optional[MessageKey],
+        key: MessageKey,
         value: Optional[MessageValue],
         headers: Optional[Headers],
         timestamp: Optional[int] = None,

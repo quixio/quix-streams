@@ -4,7 +4,7 @@ from typing import Any, Callable, List, Optional
 import pytest
 
 from quixstreams.models import (
-    MessageHeadersTuples,
+    KafkaHeaders,
     StringSerializer,
     TimestampType,
 )
@@ -273,7 +273,7 @@ class TestTopic:
         self,
         value_deserializer: Deserializer,
         value: Optional[bytes],
-        headers: Optional[MessageHeadersTuples],
+        headers: KafkaHeaders,
         timestamp_extractor: Callable,
         expected_timestamps: List[int],
         topic_manager_topic_factory,

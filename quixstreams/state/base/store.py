@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import ClassVar, Dict
+from typing import Dict, Optional
 
 from quixstreams.state.exceptions import PartitionNotAssignedError
 
@@ -20,9 +20,7 @@ class Store(ABC):
     partitions' transactions.
     """
 
-    options_type: ClassVar[object]
-
-    def __init__(self, name: str, topic: str) -> None:
+    def __init__(self, name: str, topic: Optional[str]) -> None:
         super().__init__()
 
         self._name = name
@@ -34,7 +32,7 @@ class Store(ABC):
         pass
 
     @property
-    def topic(self) -> str:
+    def topic(self) -> Optional[str]:
         """
         Topic name
         """

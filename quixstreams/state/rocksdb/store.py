@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Optional
 
 from quixstreams.state.base import Store
 from quixstreams.state.recovery import ChangelogProducer, ChangelogProducerFactory
@@ -23,15 +23,13 @@ class RocksDBStore(Store):
     partitions' transactions.
     """
 
-    options_type = RocksDBOptionsType
-
     def __init__(
         self,
         name: str,
-        topic: str,
+        topic: Optional[str],
         base_dir: str,
         changelog_producer_factory: Optional[ChangelogProducerFactory] = None,
-        options: Optional[options_type] = None,
+        options: Optional[RocksDBOptionsType] = None,
     ):
         """
         :param name: a unique store name
@@ -42,8 +40,12 @@ class RocksDBStore(Store):
         :param options: RocksDB options. If `None`, the default options will be used.
         """
         super().__init__(name, topic)
-        self._partitions_dir = Path(base_dir).absolute() / self._name / self._topic
-        self._partitions: Dict[int, RocksDBStorePartition] = {}
+
+        partitions_dir = Path(base_dir).absolute() / self._name
+        if self._topic:
+            partitions_dir = partitions_dir / self._topic
+
+        self._partitions_dir = partitions_dir
         self._changelog_producer_factory = changelog_producer_factory
         self._options = options
 

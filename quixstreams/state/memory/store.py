@@ -24,7 +24,7 @@ class MemoryStore(Store):
     def __init__(
         self,
         name: str,
-        topic: str,
+        topic: Optional[str],
         changelog_producer_factory: Optional[ChangelogProducerFactory] = None,
     ) -> None:
         """

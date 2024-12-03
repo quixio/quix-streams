@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 class TimestampsCache:
     key: bytes
     cf_name: str
-    timestamps: dict[bytes, int] = field(default_factory=dict)
+    timestamps: dict[bytes, Optional[int]] = field(default_factory=dict)
 
 
 class WindowedRocksDBPartitionTransaction(PartitionTransaction):
@@ -45,7 +45,9 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
             loads=loads,
             changelog_producer=changelog_producer,
         )
-        self._partition = cast("WindowedRocksDBStorePartition", self._partition)
+        self._partition: WindowedRocksDBStorePartition = cast(
+            "WindowedRocksDBStorePartition", self._partition
+        )
         # Cache the metadata separately to avoid serdes on each access
         # (we are 100% sure that the underlying types are immutable, while windows'
         # values are not)
@@ -62,7 +64,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
             cf_name=LATEST_DELETED_WINDOW_CF_NAME,
         )
 
-    def as_state(self, prefix: Any = DEFAULT_PREFIX) -> WindowedTransactionState:
+    def as_state(self, prefix: Any = DEFAULT_PREFIX) -> WindowedTransactionState:  # type: ignore [override]
         return WindowedTransactionState(
             transaction=self,
             prefix=(
@@ -72,7 +74,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
             ),
         )
 
-    def get_latest_timestamp(self, prefix: bytes) -> int:
+    def get_latest_timestamp(self, prefix: bytes) -> Optional[int]:
         return self._get_timestamp(
             prefix=prefix, cache=self._latest_timestamps, default=0
         )
@@ -106,10 +108,16 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
             value = [window_timestamp_ms, value]
         self.set(key=key, value=value, prefix=prefix)
         latest_timestamp_ms = self.get_latest_timestamp(prefix=prefix)
+        updated_timestamp_ms = (
+            max(latest_timestamp_ms, timestamp_ms)
+            if latest_timestamp_ms is not None
+            else timestamp_ms
+        )
+
         self._set_timestamp(
             cache=self._latest_timestamps,
             prefix=prefix,
-            timestamp_ms=max(latest_timestamp_ms, timestamp_ms),
+            timestamp_ms=updated_timestamp_ms,
         )
 
     def delete_window(self, start_ms: int, end_ms: int, prefix: bytes):
@@ -288,7 +296,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
 
     def _get_timestamp(
         self, cache: TimestampsCache, prefix: bytes, default: Any = None
-    ) -> int:
+    ) -> Optional[int]:
         cached_ts = cache.timestamps.get(prefix)
         if cached_ts is not None:
             return cached_ts
@@ -299,6 +307,9 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
             cf_name=cache.cf_name,
             default=default,
         )
+        if stored_ts is not None and not isinstance(stored_ts, int):
+            raise ValueError(f"invalid timestamp {stored_ts}")
+
         cache.timestamps[prefix] = stored_ts
         return stored_ts
 

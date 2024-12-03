@@ -165,10 +165,14 @@ class TestStateStoreManager:
 @pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
 class TestStateStoreManagerWithRecovery:
     def test_rebalance_partitions_stores_not_registered(
-        self, state_manager_factory, recovery_manager_factory
+        self,
+        state_manager_factory,
+        recovery_manager_factory,
+        producer,
     ):
         state_manager = state_manager_factory(
-            recovery_manager=recovery_manager_factory()
+            recovery_manager=recovery_manager_factory(),
+            producer=producer,
         )
         # It's ok to rebalance partitions when there are no stores registered
         state_manager.on_partition_assign(
@@ -177,11 +181,17 @@ class TestStateStoreManagerWithRecovery:
         state_manager.on_partition_revoke(topic="topic", partition=0)
 
     def test_register_store(
-        self, state_manager_factory, recovery_manager_factory, topic_manager_factory
+        self,
+        state_manager_factory,
+        recovery_manager_factory,
+        topic_manager_factory,
+        producer,
     ):
         topic_manager = topic_manager_factory()
         recovery_manager = recovery_manager_factory(topic_manager=topic_manager)
-        state_manager = state_manager_factory(recovery_manager=recovery_manager)
+        state_manager = state_manager_factory(
+            recovery_manager=recovery_manager, producer=producer
+        )
 
         # Create a topic
         topic = topic_manager.topic(name="topic1")
@@ -196,7 +206,11 @@ class TestStateStoreManagerWithRecovery:
         assert store_name in topic_manager.changelog_topics[topic.name]
 
     def test_assign_revoke_partitions_stores_registered(
-        self, state_manager_factory, recovery_manager_factory, topic_manager_factory
+        self,
+        state_manager_factory,
+        recovery_manager_factory,
+        topic_manager_factory,
+        producer,
     ):
         topic_manager = topic_manager_factory()
         consumer = MagicMock(spec_set=Consumer)
@@ -204,7 +218,9 @@ class TestStateStoreManagerWithRecovery:
         recovery_manager = recovery_manager_factory(
             topic_manager=topic_manager, consumer=consumer
         )
-        state_manager = state_manager_factory(recovery_manager=recovery_manager)
+        state_manager = state_manager_factory(
+            recovery_manager=recovery_manager, producer=producer
+        )
         topic_name = "topic1"
         partition = 0
         topic_manager.topic(name=topic_name)

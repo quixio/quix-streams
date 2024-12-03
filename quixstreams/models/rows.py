@@ -1,7 +1,7 @@
 from typing import Any, Optional
 
 from .messagecontext import MessageContext
-from .types import MessageHeadersTuples
+from .types import KafkaHeaders
 
 
 class Row:
@@ -19,7 +19,7 @@ class Row:
         key: Optional[Any],
         timestamp: int,
         context: MessageContext,
-        headers: Optional[MessageHeadersTuples] = None,
+        headers: KafkaHeaders = None,
     ):
         self.value = value
         self.key = key

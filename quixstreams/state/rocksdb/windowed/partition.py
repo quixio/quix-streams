@@ -1,7 +1,7 @@
 import logging
-from typing import Optional
+from typing import Iterator, Optional, Tuple, cast
 
-from rocksdict import RdictItems, ReadOptions  # type: ignore
+from rocksdict import ReadOptions
 
 from quixstreams.state.exceptions import ColumnFamilyDoesNotExist
 from quixstreams.state.recovery import ChangelogProducer
@@ -45,9 +45,14 @@ class WindowedRocksDBStorePartition(RocksDBStorePartition):
 
     def iter_items(
         self, from_key: bytes, read_opt: ReadOptions, cf_name: str = "default"
-    ) -> RdictItems:
+    ) -> Iterator[Tuple[bytes, bytes]]:
         cf = self.get_column_family(cf_name=cf_name)
-        return cf.items(from_key=from_key, read_opt=read_opt)
+
+        # RDict accept Any type as value but we only write bytes so we should only get bytes back.
+        return cast(
+            Iterator[Tuple[bytes, bytes]],
+            cf.items(from_key=from_key, read_opt=read_opt),
+        )
 
     def begin(self) -> "WindowedRocksDBPartitionTransaction":
         return WindowedRocksDBPartitionTransaction(

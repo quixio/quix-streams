@@ -43,6 +43,8 @@ def recovery_partition_factory():
         partition_num: int = 0,
         store_partition: Optional[StorePartition] = None,
         committed_offset: int = -1001,
+        lowwater: int = 0,
+        highwater: int = 0,
     ):
         changelog_name = changelog_name or f"changelog__{str(uuid.uuid4())}"
         if not store_partition:
@@ -52,6 +54,8 @@ def recovery_partition_factory():
             partition_num=partition_num,
             store_partition=store_partition,
             committed_offset=committed_offset,
+            lowwater=lowwater,
+            highwater=highwater,
         )
         return recovery_partition
 

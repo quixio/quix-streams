@@ -18,7 +18,7 @@ except ImportError as exc:
     ) from exc
 
 from quixstreams.exceptions import QuixException
-from quixstreams.models import HeaderValue
+from quixstreams.models import HeadersTuples
 from quixstreams.sinks import BatchingSink, SinkBatch
 
 __all__ = ("BigQuerySink", "BigQuerySinkException")
@@ -168,7 +168,7 @@ class BigQuerySink(BatchingSink):
         value: Any,
         key: Any,
         timestamp: int,
-        headers: list[tuple[str, HeaderValue]],
+        headers: HeadersTuples,
         topic: str,
         partition: int,
         offset: int,

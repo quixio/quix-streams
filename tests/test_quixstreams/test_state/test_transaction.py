@@ -16,8 +16,7 @@ from quixstreams.state.manager import SUPPORTED_STORES
 from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER,
-    DELETED,
-    UNDEFINED,
+    Marker,
 )
 from quixstreams.state.serialization import serialize
 from quixstreams.utils.json import dumps
@@ -509,14 +508,14 @@ class TestPartitionTransactionCache:
 
     def test_get_key_missing(self, cache: PartitionTransactionCache):
         value = cache.get(key=b"key", prefix=b"prefix", cf_name="cf_name")
-        assert value is UNDEFINED
+        assert value is Marker.UNDEFINED
 
     def test_set_delete_get(self, cache: PartitionTransactionCache):
         cache.set(key=b"key", value=b"value", prefix=b"prefix", cf_name="cf_name")
         cache.delete(key=b"key", prefix=b"prefix", cf_name="cf_name")
 
         value = cache.get(key=b"key", prefix=b"prefix", cf_name="cf_name")
-        assert value is DELETED
+        assert value is Marker.DELETED
 
     def test_get_column_families_empty(self, cache: PartitionTransactionCache):
         assert not cache.get_column_families()

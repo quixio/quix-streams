@@ -1,5 +1,5 @@
 import abc
-from typing import Any, Optional, Union
+from typing import Any, Union
 
 from confluent_kafka.serialization import (
     MessageField,
@@ -9,7 +9,7 @@ from confluent_kafka.serialization import (
 )
 from typing_extensions import Literal, TypeAlias
 
-from ..types import MessageHeadersMapping, MessageHeadersTuples
+from ..types import HeadersMapping, KafkaHeaders
 
 __all__ = (
     "SerializationContext",
@@ -34,7 +34,7 @@ class SerializationContext(_SerializationContext):
         self,
         topic: str,
         field: MessageField,
-        headers: Optional[MessageHeadersTuples] = None,
+        headers: KafkaHeaders = None,
     ) -> None:
         self.topic = topic
         self.field = field
@@ -65,7 +65,7 @@ class Serializer(abc.ABC):
     """
 
     @property
-    def extra_headers(self) -> MessageHeadersMapping:
+    def extra_headers(self) -> HeadersMapping:
         """
         Informs producer to set additional headers
         for the message it will be serializing

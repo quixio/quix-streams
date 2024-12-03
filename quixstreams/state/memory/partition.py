@@ -1,11 +1,11 @@
 import functools
 import logging
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Literal, Optional, Union
 
 from quixstreams.models import ConfluentKafkaMessageProto
 from quixstreams.state.base import PartitionTransactionCache, StorePartition
 from quixstreams.state.exceptions import ColumnFamilyDoesNotExist
-from quixstreams.state.metadata import METADATA_CF_NAME
+from quixstreams.state.metadata import METADATA_CF_NAME, Marker
 from quixstreams.state.recovery import ChangelogProducer
 from quixstreams.utils.json import dumps as json_dumps
 from quixstreams.utils.json import loads as json_loads
@@ -111,11 +111,14 @@ class MemoryStorePartition(StorePartition):
                 raise ColumnFamilyDoesNotExist(
                     f'Column family "{cf_name}" does not exist'
                 )
+            key = changelog_message.key()
+            if not isinstance(key, bytes):
+                raise ValueError(f"invalid changelog message key {key}")
 
             if value := changelog_message.value():
-                self._state.setdefault(cf_name, {})[changelog_message.key()] = value
+                self._state.setdefault(cf_name, {})[key] = value
             else:
-                self._state.setdefault(cf_name, {}).pop(changelog_message.key(), None)
+                self._state.setdefault(cf_name, {}).pop(key, None)
 
         self._changelog_offset = changelog_message.offset()
 
@@ -135,8 +138,8 @@ class MemoryStorePartition(StorePartition):
 
     @_validate_partition_state()
     def get(
-        self, key: bytes, default: Any = None, cf_name: str = "default"
-    ) -> Union[None, bytes, Any]:
+        self, key: bytes, cf_name: str = "default"
+    ) -> Union[bytes, Literal[Marker.UNDEFINED]]:
         """
         Get a key from the store
 
@@ -145,7 +148,7 @@ class MemoryStorePartition(StorePartition):
         :param cf_name: rocksdb column family name. Default - "default"
         :return: a value if the key is present in the store. Otherwise, `default`
         """
-        return self._state.get(cf_name, {}).get(key, default)
+        return self._state.get(cf_name, {}).get(key, Marker.UNDEFINED)
 
     @_validate_partition_state()
     def exists(self, key: bytes, cf_name: str = "default") -> bool:

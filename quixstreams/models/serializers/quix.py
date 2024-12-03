@@ -2,7 +2,7 @@ import base64
 import gzip
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Tuple, Union
 
-from quixstreams.models.types import MessageHeadersMapping
+from quixstreams.models.types import HeadersMapping
 from quixstreams.utils.json import (
     dumps as default_dumps,
 )
@@ -290,7 +290,7 @@ class QuixSerializer(JSONSerializer):
         self._as_legacy = as_legacy
 
     @property
-    def extra_headers(self) -> MessageHeadersMapping:
+    def extra_headers(self) -> HeadersMapping:
         # Legacy-formatted messages should not contain any headers
         return self._extra_headers if not self._as_legacy else {}
 
