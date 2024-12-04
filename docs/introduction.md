@@ -27,3 +27,4 @@ Check out Quix Streams tutorials for more in-depth examples:
 - [Tutorial - Word Count](tutorials/word-count/tutorial.md)
 - [Tutorial - Anomaly Detection](tutorials/anomaly-detection/tutorial.md)
 - [Tutorial - Purchase Filtering](tutorials/purchase-filtering/tutorial.md) 
+- [Tutorial - Websocket Source](tutorials/websocket-source/tutorial.md) 
