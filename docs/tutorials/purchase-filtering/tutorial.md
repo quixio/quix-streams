@@ -5,12 +5,13 @@ dataframe-like operations with dictionary/JSON data (a format frequently used).
 
 You'll learn how to:
 
-- Create a topic
+- Ingest a non-Kafka data source
 - Assign a value to a new column
 - Use `SDF.apply()` with additional operations
 - Filter with inequalities combined with and/or (`&`, `|`)
 - Get a subset/selection of columns
-- Produce resulting output to a topic
+- Create a Kafka topic 
+- Produce results to a Kafka topic
 
 
 ## Outline of the Problem
@@ -43,24 +44,28 @@ as if it were a dataframe.
 
 ## Before Getting Started
 
-- You will see links scattered throughout this tutorial.
+1. You will see links scattered throughout this tutorial.
     - Tutorial code links are marked **>>> LIKE THIS <<<** .
     - ***All other links provided are completely optional***. 
     - They are great ways to learn more about various concepts if you need it!
 
+2. This tutorial uses a Quix Streams [`Source`](../../connectors/sources/README.md) rather than a Kafka [`Topic`]() to ingest data.
+    - `Source` connectors enable reading data from a non-Kafka origin (typically to get it into Kafka). 
+    - This approach circumvents users having to run a [producer](../../producer.md) alongside the `Application`.
+    - A `Source` is easily replaced with an actual Kafka topic (just pass a `Topic` instead of a `Source`).
 
-- We use the word "column" for consistency with Pandas terminology.
-  - You can also think of it as a dictionary key.
+3. We use the word "column" for consistency with Pandas terminology.
+    - You can also think of it as a dictionary key.
 
 
 
 ## Generating Purchase Data
 
-We have a simple [**>>> Purchases Producer <<<**](producer.py) that generates a small static set of 
+Our [**>>> Purchase Filtering Application <<<**](application.py) uses a `Source` called `PurchaseGenerator` that generates a small static set of 
 "purchases", which are simply dictionaries with various info about what was purchased by 
 a customer during their visit. The data is keyed on customer ID.
 
-An outgoing Kafka message looks something like:
+The incoming Kafka data looks something like:
 
 ```python
 # ...
@@ -89,7 +94,8 @@ kafka_value: {
 ## Purchase Filtering Application
 
 
-Now let's go over our [**>>> Purchase Filtering Application <<<**](application.py) line-by-line!
+Now let's go over the `setup_and_run_application()` portion of 
+[**>>> Purchase Filtering Application <<<**](application.py) in detail!
 
 
 ### Create Application
@@ -287,15 +293,18 @@ First, have a running Kafka cluster.
 
 To conveniently follow along with this tutorial, just [run this simple one-liner](../README.md#running-kafka-locally).
 
-### 2. Install Quix Streams
-In your python environment, run `pip install quixstreams`
+### 2. Download files
+- [tutorial_app.py](tutorial_app.py)
 
-### 3. Run the Producer and Application
-Just call `python producer.py` and `python application.py` in separate windows.
+### 3. Install Quix Streams
+In your desired python environment, execute: `pip install quixstreams`
 
-### 4. Check out the results!
+### 4. Run the application
+In your desired python environment, execute: `python tutorial_app.py`.
 
-...but wait, I don't see any message processing output...Is it working???
+### 5. Check out the results!
+
+...but wait, I don't see any `Application` processing output...Is it working???
 
 One thing to keep in mind is that the Quix Streams does not log/print any message processing
 operations by default.
