@@ -84,12 +84,6 @@ class CoinbaseSource(Source):
 
 
 def main():
-    # Initialize an Application with Kafka configuration
-    app = Application(
-        broker_address="localhost:9092",  # Specify your Kafka broker address here
-        auto_offset_reset="earliest",
-    )
-
     # Configure the CoinbaseSource instance
     coinbase_source = CoinbaseSource(
         # Pick the unique name for the source instance.
@@ -101,11 +95,24 @@ def main():
         ],
     )
 
+    # Initialize an Application with Kafka configuration
+    app = Application(
+        broker_address="localhost:9092",  # Specify your Kafka broker address here
+        auto_offset_reset="earliest",
+    )
+
+    # Define a topic for producing transformed data
+    price_updates_topic = app.topic("price_updates")
+
     # Connect the CoinbaseSource to a StreamingDataFrame
     sdf = app.dataframe(source=coinbase_source)
 
     # Print the incoming messages from the source
     sdf.print()
+
+    # Select specific data columns and produce them to a topic
+    sdf = sdf[["price", "volume_24h"]]
+    sdf.to_topic(price_updates_topic)
 
     # Start the application
     app.run()
