@@ -37,7 +37,7 @@ understand what modifications to `Source` were necessary.
 > for additional details around what can be adjusted.
 
 
-### Setting up `.run()`
+### Setting up `Source.run()`
 
 A `Source` requires defining a `.run()` method, which should perform
 a data retrieval and produce loop (using `Source.serialize()` and `Source.produce()` methods) within a 
@@ -45,12 +45,9 @@ a data retrieval and produce loop (using `Source.serialize()` and `Source.produc
 
 Lets take a look at `CoinbaseSource`'s `.run()` in detail.
 
-#### Setting up the Connection
+#### Setting up the API Connection
 
-First, we set up the connection. 
-
-This doesn't have to be done during `.run()`, but now the connection is only 
-established when `Application.run()` is called.
+First, we establish the connection. 
 
 ```python
 ws_conn = connect(self._url)
@@ -75,25 +72,21 @@ This is so a shutdown from the `Application` level also gracefully exits this lo
 > `while self.running` block.
 
 Inside this block, records are retrieved, serialized (to `JSON`), and produced to an
-underlying internal topic as close to its raw form as possible. 
+underlying internal topic as close to its raw form as possible (user-level manipulations 
+occur at the `Application` level using a `StreamingDataFrame`). 
 
-> [!NOTE]
-> The internal topic can be configured to accept other data serializations by
-> overriding the `Source.default_topic()` method.
-
-User-level manipulations of the data occur later using the `Application` that utilizes 
-the `Source` (with a `StreamingDataFrame`).
-
+> [!TIP]
+> The internal topic can accept other data serializations by overriding `Source.default_topic()`.
 
 ## Using `CoinbaseSource`
 
-Now that `CoinbaseSource` exists, anyone can use it to ingest data from Coinbase.
+Now that `CoinbaseSource` exists, we can ingest raw data from Coinbase.
 
-Of course, each user will have their own product ID's and transformations to apply.
+Of course, each user will have their own desired product ID's and transformations to apply.
 
 ### Defining the Source
 
-First, set up the `CoinBaseSource` with our desired `product_ids`.
+First, set up a `CoinBaseSource` with our desired `product_ids`.
 
 Be sure to provide a unique name since it affects the internal topic name.
 
@@ -123,7 +116,7 @@ app = Application(
 )
 ```
 
-### Define Outbound Topics
+### Defining Outbound Topics
 
 Next we define any output topics.
 
