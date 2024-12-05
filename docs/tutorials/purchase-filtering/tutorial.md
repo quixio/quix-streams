@@ -34,7 +34,6 @@ We will use a [Quix Streams `Source`](../../connectors/sources/README.md) to gen
 processed by our new Purchase Filtering `Application`.
 
 
-
 ## Important Takeaways
  
 The primary lesson: learning how you can use common pandas-like 
@@ -120,10 +119,12 @@ app = Application(
 Create a [Quix Streams Application](../../configuration.md), which is our constructor for everything! 
 
 We provide it our connection settings, consumer group (ideally unique per Application), 
-and where the consumer group should start from on the (internal) Source topic.
+and where the consumer group should start from on the (internal) `Source` topic.
 
-> [!TIP] 
-> Once you are more familiar with Kafka, we recommend [learning more about auto_offset_reset](https://www.quix.io/blog/kafka-auto-offset-reset-use-cases-and-pitfalls).
+!!! TIP
+
+    Once you are more familiar with Kafka, we recommend 
+    [learning more about auto_offset_reset](https://www.quix.io/blog/kafka-auto-offset-reset-use-cases-and-pitfalls).
 
 
 
@@ -133,8 +134,9 @@ and where the consumer group should start from on the (internal) Source topic.
 
 Create one for each topic used by your `Application`.
 
-> [!NOTE]
-> Any missing topics will be automatically created for you upon running the application.
+!!! NOTE
+
+    Any missing topics will be automatically created for you upon running an `Application`.
 
 #### Our Topics
 We have one output topic, named `customers_coupon_qualified`:
@@ -155,7 +157,14 @@ Now for the fun part: building our [StreamingDataFrame](../../processing.md#intr
 
 SDF allows manipulating the message value in a dataframe-like fashion using various operations.
 
-After initializing, we continue re-assigning to the same `sdf` variable as we add operations.
+After initializing with either a `Topic` or `Source`, we continue reassigning to the 
+same `sdf` variable as we add operations.
+
+!!! NOTE
+
+    A few `StreamingDataFrame` operations are 
+    ["in-place"](../../advanced/dataframe-assignments.md#valid-in-place-operations), 
+    like `.print()`.
 
 (Also: notice that we pass our input `Topic` from the previous step to it.)
 
@@ -203,11 +212,13 @@ sdf["Membership Type"].isin(["Silver", "Gold"])
 We additionally showcase one of our built-in column operations `.isin()`, a way for SDF to perform an 
 `if x in y` check (SDF is declaratively defined, invalidating that approach).
 
-**NOTE**: some operations (like `.isin()`) are only available when manipulating a column.
+!!! INFO 
 
-  - if you're unsure what's possible, autocomplete often covers you!
+    Some operations (like `.isin()`) are only available when manipulating a column.
 
-  - _ADVANCED_: [complete list of column operations](../../api-reference/dataframe.md#streamingseries).
+    - if you're unsure what's possible, autocomplete often covers you!
+
+    - _ADVANCED_: [complete list of column operations](../../api-reference/dataframe.md#streamingseries).
 
 <br>
 
@@ -292,7 +303,9 @@ becomes
 >>> {"Email": "cool email", "Full Name": "cool name"}`
 ```
 
-NOTE: you cannot reference nested keys in this way.
+!!! WARNING
+
+    You cannot reference nested keys in this way.
 
 
 
@@ -305,8 +318,10 @@ sdf = sdf.to_topic(customers_qualified_topic)
 Finally, we produce our non-filtered results downstream via [`SDF.to_topic(T)`](../../processing.md#writing-data-to-kafka-topics), where `T`
 is our previously defined `Topic` (not the topic name!).
 
-NOTE: by default, our outgoing Kafka key is persisted from the input message. 
-[You can alter it](../../processing.md#changing-message-key-before-producing), if needed.
+!!! INFO
+
+    By default, our outgoing Kafka key is persisted from the input message. 
+    [You can alter it](../../processing.md#changing-message-key-before-producing), if needed.
 
 ### Running an Application
 
@@ -349,7 +364,11 @@ One thing to keep in mind is that the Quix Streams does not log/print any messag
 operations by default.
 
 To get visual outputs around message processing, you can either:
+
 - use [recommended way of printing/logging with SDF](../../processing.md#debugging)
- 
+
 - use `DEBUG` mode via `Application(loglevel="DEBUG")`
-  - WARNING: you should NOT run your applications in `DEBUG` mode in production.
+
+    !!! DANGER
+
+        you should NOT run your applications in `DEBUG` mode in production.

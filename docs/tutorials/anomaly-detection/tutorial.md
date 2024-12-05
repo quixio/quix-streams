@@ -30,9 +30,6 @@ We will use a [Quix Streams `Source`](../../connectors/sources/README.md) to gen
 
 These events will be processed by our new Anomaly Detector `Application`.
 
-NOTE: our example uses JSON formatting for Kafka message values.
-
-
 
 ## Alerting Approach (Windowing)
 
@@ -112,10 +109,13 @@ app = Application(
 Create a [Quix Streams Application](../../configuration.md), which is our constructor for everything! 
 
 We provide it our connection settings, consumer group (ideally unique per Application), 
-and where the consumer group should start from on the (internal) Source topic.
+and where the consumer group should start from on the (internal) `Source` topic.
 
-> [!TIP] 
-> Once you are more familiar with Kafka, we recommend [learning more about auto_offset_reset](https://www.quix.io/blog/kafka-auto-offset-reset-use-cases-and-pitfalls).
+!!! TIP
+
+    Once you are more familiar with Kafka, we recommend 
+    [learning more about auto_offset_reset](https://www.quix.io/blog/kafka-auto-offset-reset-use-cases-and-pitfalls).
+
 
 
 
@@ -125,8 +125,10 @@ and where the consumer group should start from on the (internal) Source topic.
 
 Create one for each topic used by your `Application`.
 
-> [!NOTE]
-> Any missing topics will be automatically created for you upon running the application.
+!!! NOTE
+
+    Any missing topics will be automatically created for you upon running an `Application`.
+
 
 #### Our Topics
 We have one output topic, named `price_updates`:
@@ -147,7 +149,14 @@ Now for the fun part: building our [StreamingDataFrame](../../processing.md#intr
 
 SDF allows manipulating the message value in a dataframe-like fashion using various operations.
 
-After initializing, we continue re-assigning to the same `sdf` variable as we add operations.
+After initializing with either a `Topic` or `Source`, we continue reassigning to the 
+same `sdf` variable as we add operations.
+
+!!! NOTE
+
+    A few `StreamingDataFrame` operations are 
+    ["in-place"](../../advanced/dataframe-assignments.md#valid-in-place-operations), 
+    like `.print()`.
 
 (Also: notice that we pass our input `Topic` from the previous step to it.)
 
@@ -228,7 +237,11 @@ sdf = sdf.to_topic(alerts_topic)
 However, if the value ended up >= 90....we finally finish by producing our alert to our downstream topic via [`SDF.to_topic(T)`](../../processing.md#writing-data-to-kafka-topics), where `T`
 is our previously defined `Topic` (not the topic name!).
 
-NOTE: because we use "Current" windowing, we may produce a lot of "duplicate" alerts once triggered...you could solve this in numerous ways downstream. What we care about is alerting as soon as possible!
+!!! NOTE
+
+    Because we use "Current" windowing, we may produce a lot of "duplicate" alerts once 
+    triggered...you could solve this in numerous ways downstream. What we care about is 
+    alerting as soon as possible!
 
 
 
