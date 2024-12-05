@@ -47,8 +47,8 @@ file_sink = FileSink(
     # Available formats: "json", "parquet" or an instance of Format
     format=JSONFormat(compress=True),
     destination=AzureFileDestination(
-        container="my-container",
-        connection_string="your-connection-string",
+        container="<YOUR CONTAINER NAME>",
+        connection_string="<YOUR CONNECTION STRING>",
     )
 )
 
