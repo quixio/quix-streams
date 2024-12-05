@@ -30,8 +30,8 @@ necessary information downstream.
 
 ## Our Example
 
-We will use a `Source` to generate some mock purchase data to be processed by our 
-new Purchase Filtering `Application`.
+We will use a [Quix Streams `Source`](../../connectors/sources/README.md) to generate some mock purchase data to be 
+processed by our new Purchase Filtering `Application`.
 
 
 
@@ -62,7 +62,7 @@ as if it were a dataframe.
 
 ## Generating Purchase Data
 
-Our [**>>> Purchase Filtering Application <<<**](application.py) uses a `Source` called 
+Our [**>>> Purchase Filtering Application <<<**](tutorial_app.py) uses a `Source` called 
 `PurchaseGenerator` that generates a small static set of "purchases", which are simply 
 dictionaries with various info about what was purchased by a customer during their visit. 
 
@@ -100,7 +100,7 @@ kafka_value: {
 
 
 Now let's go over the `setup_and_run_application()` portion of 
-our [**>>> Purchase Filtering Application <<<**](application.py) in detail!
+our [**>>> Purchase Filtering Application <<<**](tutorial_app.py) in detail!
 
 
 
@@ -349,7 +349,7 @@ One thing to keep in mind is that the Quix Streams does not log/print any messag
 operations by default.
 
 To get visual outputs around message processing, you can either:
-- use [recommended way of printing/logging stuff](../../processing.md#debugging)
+- use [recommended way of printing/logging with SDF](../../processing.md#debugging)
  
 - use `DEBUG` mode via `Application(loglevel="DEBUG")`
   - WARNING: you should NOT run your applications in `DEBUG` mode in production.

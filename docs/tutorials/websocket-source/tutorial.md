@@ -16,21 +16,26 @@ the data into Kafka first.
 ## Our Example
 This example showcases:
 
-1. Extending the Quix Streams `Source` class to read from the Coinbase Websocket API.
+1. Extending the [Quix Streams `Source`](../../connectors/sources/README.md) class to read from the Coinbase Websocket API.
 2. Using the new extension (`CoinbaseSource`).
 
 ## Before Getting Started
 
-- You will see links scattered throughout this tutorial.
+1. You will see links scattered throughout this tutorial.
     - Tutorial code links are marked **>>> LIKE THIS <<<** .
     - ***All other links provided are completely optional***. 
     - They are great ways to learn more about various concepts if you need it!
 
+2. This tutorial uses a [`Source`](../../connectors/sources/README.md) rather than a Kafka [`Topic`]() to ingest data.
+    - `Source` connectors enable reading data from a non-Kafka origin (typically to get it into Kafka). 
+    - This approach circumvents users having to run a [producer](../../producer.md) alongside the `Application`.
+    - A `Source` is easily replaced with an actual Kafka topic (just pass a `Topic` instead of a `Source`).
+
 
 ## Creating `CoinbaseSource`
 
-Let's take a look at [**>>> CoinbaseSource <<<**](tutorial_app.py) in detail to
-understand what modifications to `Source` were necessary.
+First Let's take a detailed look at `CoinbaseSource` in our [**>>> Coinbase Application <<<**](tutorial_app.py) 
+to understand what modifications to `Source` were necessary.
 
 > [!NOTE] 
 > Check out the [custom Source docs](../../connectors/sources/custom-sources.md) 
@@ -83,6 +88,9 @@ occur at the `Application` level using a `StreamingDataFrame`).
 Now that `CoinbaseSource` exists, we can ingest raw data from Coinbase.
 
 Of course, each user will have their own desired product ID's and transformations to apply.
+
+Now let's go over the `setup_and_run_application()` portion of 
+our [**>>> Coinbase Application <<<**](tutorial_app.py) in detail!
 
 ### Define the Source
 
