@@ -33,12 +33,12 @@ class Destination(ABC):
             Only alphanumeric characters (a-zA-Z0-9), spaces, dots, and
             underscores are allowed.
         """
-        # if _UNSAFE_CHARACTERS_REGEX.search(directory):
-        #     raise ValueError(
-        #         f"Invalid characters in directory path: {directory}. "
-        #         f"Only alphanumeric characters (a-zA-Z0-9), spaces ( ), "
-        #         "dots (.), and underscores (_) are allowed."
-        #     )
+        if _UNSAFE_CHARACTERS_REGEX.search(directory):
+            raise ValueError(
+                f"Invalid characters in directory path: {directory}. "
+                f"Only alphanumeric characters (a-zA-Z0-9), spaces ( ), "
+                "dots (.), and underscores (_) are allowed."
+            )
         self._base_directory = directory
         logger.info("Directory set to '%s'", directory)
 
