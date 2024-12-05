@@ -24,7 +24,9 @@ When this occurs, we want to send alerts as soon as possible so appropriate acti
 
 ## Our Example
 
-We will use a `Source` to generate mock temperature events for 3 machines (MACHINE_IDs '0', '1', or '2'); ID's 0 and 1 are functioning normally, 2 is malfunctioning (overheating).
+We will use a [Quix Streams `Source`](../../connectors/sources/README.md) to generate mock temperature events for 
+3 machines (MACHINE_IDs '0', '1', or '2'); ID's 0 and 1 are functioning normally, 
+2 is malfunctioning (overheating).
 
 These events will be processed by our new Anomaly Detector `Application`.
 
@@ -53,7 +55,7 @@ This approach is desirable since temperatures fluctuate quickly; it enables more
     - ***All other links provided are completely optional***. 
     - They are great ways to learn more about various concepts if you need it!
 
-2. This tutorial uses a Quix Streams [`Source`](../../connectors/sources/README.md) rather than a Kafka [`Topic`]() to ingest data.
+2. This tutorial uses a [`Source`](../../connectors/sources/README.md) rather than a Kafka [`Topic`]() to ingest data.
     - `Source` connectors enable reading data from a non-Kafka origin (typically to get it into Kafka). 
     - This approach circumvents users having to run a [producer](../../producer.md) alongside the `Application`.
     - A `Source` is easily replaced with an actual Kafka topic (just pass a `Topic` instead of a `Source`).

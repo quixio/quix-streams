@@ -4,11 +4,12 @@ We will build a simple word counter, which is a great introduction to Quix Strea
 
 You'll learn how to:
 
-- Create a topic
+- Ingest a non-Kafka data source
 - Do simple event alterations
 - Generate multiple events from a single event
 - Filter any undesired events
-- Produce events, with new Kafka keys, to a topic
+- Create a Kafka topic 
+- Produce results, with new Kafka keys, to a topic
 
 
 
@@ -26,17 +27,17 @@ the counts of each individually downstream for further processing.
 
 ## Our Example
 
-We will use a simple producer to generate text to be processed by our 
-new Word Counter application.
+We will use a [Quix Streams `Source`](../../connectors/sources/README.md) to generate text to be processed by our 
+new Word Counter `Application`.
 
-NOTE: Our example uses JSON formatting for Kafka message values.
+NOTE: Our example uses `JSON` formatting for Kafka message values.
 
 
 
 ## Event Expansion
  
 The most important concept we want to explore here is how you can "expand" a single
-event into multiple new ones.
+event/message into multiple new ones.
 
 More than that: each new event generated via expansion is processed individually
 through the remainder of your pipeline, allowing you to write ALL your operations 
@@ -46,20 +47,27 @@ NOTE: Expanding often includes adjusting outgoing Kafka keys as well, so we addi
 showcase that.
 
 
+
 ## Before Getting Started
 
-- You will see links scattered throughout this tutorial.
+1. You will see links scattered throughout this tutorial.
     - Tutorial code links are marked **>>> LIKE THIS <<<** .
     - ***All other links provided are completely optional***. 
     - They are great ways to learn more about various concepts if you need it!
 
+2. This tutorial uses a [`Source`](../../connectors/sources/README.md) rather than a Kafka [`Topic`]() to ingest data.
+    - `Source` connectors enable reading data from a non-Kafka origin (typically to get it into Kafka). 
+    - This approach circumvents users having to run a [producer](../../producer.md) alongside the `Application`.
+    - A `Source` is easily replaced with an actual Kafka topic (just pass a `Topic` instead of a `Source`).
+
+
 
 ## Generating Text Data
 
-We have a [**>>> Review Producer <<<**](producer.py) that generates a static set of "reviews", 
-which are simply strings, where the key is the product name.
+Our [**>>> Word Counter Application <<<**](tutorial_app.py) uses a `Source` called  `ReviewGenerator` 
+that generates a static set of "reviews", which are simply strings, where the key is the product name.
 
-The Kafka message looks like:
+The incoming Kafka messages look like:
 
 ```python
 # ...
@@ -71,7 +79,10 @@ The Kafka message looks like:
 
 ## Word Counter Application
 
-Now let's go over our [**>>> Word Counter Application <<<**](application.py) line-by-line!
+Now let's go over the `setup_and_run_application()` portion of 
+our [**>>> Word Counter Application <<<**](tutorial_app.py) in detail!
+
+
 
 ### Create Application
 
@@ -90,6 +101,8 @@ First, create the [Quix Streams Application](../../configuration.md), which is o
 
 NOTE: Once you are more familiar with Kafka, we recommend [learning more about auto_offset_reset](https://www.quix.io/blog/kafka-auto-offset-reset-use-cases-and-pitfalls).
 
+
+
 ### Define Topics
 
 ```python
@@ -102,6 +115,8 @@ Next we define our input/output topics, named `product_reviews` and `product_rev
 They each return [`Topic`](../../api-reference/topics.md) objects, used later on.
 
 NOTE: The topics will automatically be created for you in Kafka when you run the application should they not exist.
+
+
 
 
 ### The StreamingDataFrame (SDF)
@@ -117,6 +132,8 @@ SDF allows manipulating the message value in a dataframe-like fashion using vari
 After initializing, we continue re-assigning to the same `sdf` variable as we add operations.
 
 (Also, notice that we pass our input `Topic` from the previous step to it.)
+
+
 
 ### Tokenizing Text
 
@@ -155,6 +172,8 @@ NOTE: Two VERY important and related points around the `expand=True` argument:
 2. Our `F` returns a `list` (or a non-dict iterable of some kind), hence the "expand"!
 
 
+
+
 ### Filtering Expanded Results
 
 ```python
@@ -179,6 +198,8 @@ Remember that each word is an independent event now due to our previous expand, 
 With this filter applied, our "and" event is removed:
 
 `>>> [('bob', 1), ('likes', 2), ('bananas', 1), ('frank', 1), ('apples', 1)]`
+
+
 
 
 ### Producing Events With New Keys
@@ -209,22 +230,39 @@ In the end we would produce 5 messages in total, like so:
 
 NOTE: This is how you would see the values in the Kafka topic `product_review_word_counts`.
 
+
+
+
 ## Try it yourself!
 
 ### 1. Run Kafka
 First, have a running Kafka cluster. 
 
-To conveniently follow along with this tutorial, just [run this simple one-liner](../README.md#running-kafka-locally).
+To easily run a broker locally with Docker, just [run this simple one-liner](../README.md#running-kafka-locally).
 
-### 2. Install Quix Streams
-In your python environment, run `pip install quixstreams`
+### 2. Download files
+- [tutorial_app.py](tutorial_app.py)
 
-### 3. Run the Producer and Application
-Just call `python producer.py` and `python application.py` in separate windows.
+### 3. Install Quix Streams
+In your desired python environment, execute: `pip install quixstreams`
 
-### 4. Check out the results!
+### 4. Run the application
+In your desired python environment, execute: `python tutorial_app.py`.
 
-Look at all those counted words, beautiful!
+### 5. Check out the results!
+
+...but wait, I don't see any `Application` processing output...Is it working???
+
+One thing to keep in mind is that the Quix Streams does not log/print any message processing
+operations by default.
+
+To get visual outputs around message processing, you can either:
+- use [recommended way of printing/logging with SDF](../../processing.md#debugging)
+ 
+- use `DEBUG` mode via `Application(loglevel="DEBUG")`
+  - WARNING: you should NOT run your applications in `DEBUG` mode in production.
+
+
 
 
 ## Related topics - Data Aggregation
