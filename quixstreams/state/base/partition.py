@@ -2,7 +2,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Literal, Optional, Union
 
-from quixstreams.models import ConfluentKafkaMessageProto
+from quixstreams.models import SuccessfulConfluentKafkaMessageProto
 from quixstreams.state.exceptions import ColumnFamilyHeaderMissing
 from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
@@ -47,7 +47,7 @@ class StorePartition(ABC):
     @abstractmethod
     def _recover_from_changelog_message(
         self,
-        changelog_message: ConfluentKafkaMessageProto,
+        changelog_message: SuccessfulConfluentKafkaMessageProto,
         cf_name: str,
         processed_offset: Optional[int],
         committed_offset: int,
@@ -121,7 +121,9 @@ class StorePartition(ABC):
         )
 
     def recover_from_changelog_message(
-        self, changelog_message: ConfluentKafkaMessageProto, committed_offset: int
+        self,
+        changelog_message: SuccessfulConfluentKafkaMessageProto,
+        committed_offset: int,
     ) -> None:
         """
         Updates state from a given changelog message.

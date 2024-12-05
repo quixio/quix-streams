@@ -4,7 +4,7 @@ from typing import Dict, List, Literal, Optional, Union, cast
 
 from rocksdict import AccessType, ColumnFamily, Rdict, WriteBatch
 
-from quixstreams.models import ConfluentKafkaMessageProto
+from quixstreams.models import SuccessfulConfluentKafkaMessageProto
 from quixstreams.state.base import PartitionTransactionCache, StorePartition
 from quixstreams.state.exceptions import ColumnFamilyDoesNotExist
 from quixstreams.state.metadata import METADATA_CF_NAME, Marker
@@ -76,7 +76,7 @@ class RocksDBStorePartition(StorePartition):
 
     def _recover_from_changelog_message(
         self,
-        changelog_message: ConfluentKafkaMessageProto,
+        changelog_message: SuccessfulConfluentKafkaMessageProto,
         cf_name: str,
         processed_offset: Optional[int],
         committed_offset: int,

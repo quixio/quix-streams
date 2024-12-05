@@ -99,6 +99,9 @@ class ConfluentKafkaMessageStub:
     def leader_epoch(self, *args, **kwargs) -> Optional[int]:
         return self._leader_epoch
 
+    def error(self) -> None:
+        return None
+
     def __len__(self) -> int:
         return len(self._value)
 

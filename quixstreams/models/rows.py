@@ -32,7 +32,7 @@ class Row:
         return self.context.topic
 
     @property
-    def partition(self) -> Optional[int]:
+    def partition(self) -> int:
         return self.context.partition
 
     @property

@@ -25,9 +25,9 @@ from quixstreams.models.serializers import (
 from quixstreams.models.timestamps import TimestampType
 from quixstreams.models.topics.utils import merge_headers
 from quixstreams.models.types import (
-    ConfluentKafkaMessageProto,
     Headers,
     KafkaHeaders,
+    SuccessfulConfluentKafkaMessageProto,
 )
 
 __all__ = ("Topic", "TopicConfig", "TimestampExtractor")
@@ -197,7 +197,7 @@ class Topic:
         )
 
     def row_deserialize(
-        self, message: ConfluentKafkaMessageProto
+        self, message: SuccessfulConfluentKafkaMessageProto
     ) -> Union[Row, List[Row], None]:
         """
         Deserialize incoming Kafka message to a Row.
@@ -318,7 +318,7 @@ class Topic:
             timestamp=timestamp_ms,
         )
 
-    def deserialize(self, message: ConfluentKafkaMessageProto):
+    def deserialize(self, message: SuccessfulConfluentKafkaMessageProto):
         if (key := message.key()) is not None:
             if self._key_deserializer:
                 key_ctx = SerializationContext(

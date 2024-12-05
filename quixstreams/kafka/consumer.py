@@ -1,7 +1,7 @@
 import functools
 import logging
 import typing
-from typing import Any, Callable, List, Optional, Tuple, Union
+from typing import Any, Callable, List, Optional, Tuple, Union, cast
 
 from confluent_kafka import (
     Consumer as ConfluentConsumer,
@@ -14,8 +14,13 @@ from confluent_kafka import (
 from confluent_kafka.admin import ClusterMetadata, GroupMetadata
 
 from quixstreams.exceptions import KafkaPartitionError, PartitionAssignmentError
+from quixstreams.models.types import (
+    RawConfluentKafkaMessageProto,
+    SuccessfulConfluentKafkaMessageProto,
+)
 
 from .configuration import ConnectionConfig
+from .exceptions import KafkaConsumerException
 
 __all__ = (
     "BaseConsumer",
@@ -63,6 +68,14 @@ def _wrap_assignment_errors(func):
             raise PartitionAssignmentError("Error during partition assignment") from exc
 
     return wrapper
+
+
+def raise_for_msg_error(
+    msg: RawConfluentKafkaMessageProto,
+) -> SuccessfulConfluentKafkaMessageProto:
+    if msg.error():
+        raise KafkaConsumerException(error=msg.error())
+    return cast(SuccessfulConfluentKafkaMessageProto, msg)
 
 
 class BaseConsumer:
@@ -129,7 +142,9 @@ class BaseConsumer:
         }
         self._inner_consumer: Optional[ConfluentConsumer] = None
 
-    def poll(self, timeout: Optional[float] = None) -> Optional[Message]:
+    def poll(
+        self, timeout: Optional[float] = None
+    ) -> Optional[RawConfluentKafkaMessageProto]:
         """
         Consumes a single message, calls callbacks and returns events.
 

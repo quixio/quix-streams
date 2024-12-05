@@ -4,7 +4,8 @@ from typing import Dict, List, Optional
 from confluent_kafka import TopicPartition as ConfluentPartition
 
 from quixstreams.kafka import BaseConsumer
-from quixstreams.models import ConfluentKafkaMessageProto, Topic
+from quixstreams.kafka.consumer import raise_for_msg_error
+from quixstreams.models import SuccessfulConfluentKafkaMessageProto, Topic
 from quixstreams.models.topics import TopicConfig, TopicManager
 from quixstreams.models.types import Headers
 from quixstreams.rowproducer import RowProducer
@@ -106,7 +107,7 @@ class RecoveryPartition:
         return self._initial_offset != self.offset
 
     def recover_from_changelog_message(
-        self, changelog_message: ConfluentKafkaMessageProto
+        self, changelog_message: SuccessfulConfluentKafkaMessageProto
     ):
         """
         Recover the StorePartition using a message read from its respective changelog.
@@ -432,7 +433,7 @@ class RecoveryManager:
                     logger.debug(f"No recovery was required for {rp}")
         self._revoke_recovery_partitions(rp_revokes)
 
-    def _recovery_loop(self):
+    def _recovery_loop(self) -> None:
         """
         Perform the recovery loop, which continues updating state with changelog
         messages until recovery is "complete" (i.e. no assigned `RecoveryPartition`s).
@@ -443,6 +444,7 @@ class RecoveryManager:
             if (msg := self._consumer.poll(1)) is None:
                 self._update_recovery_status()
             else:
+                msg = raise_for_msg_error(msg)
                 rp = self._recovery_partitions[msg.partition()][msg.topic()]
                 rp.recover_from_changelog_message(changelog_message=msg)
 
