@@ -2,11 +2,12 @@
 
 You will learn how to build a simple anomaly detection system, a common use case of stateful streaming applications. This will show how to use a Quix Streams application to:
 
-- Create a topic
+- Ingest a non-Kafka data source
 - Use stateful windowed operations
 - Do simple event alterations
 - Do simple event filtering
-- Produce the result to a topic
+- Create a Kafka topic 
+- Produce results to a Kafka topic
 
 
 
@@ -23,9 +24,9 @@ When this occurs, we want to send alerts as soon as possible so appropriate acti
 
 ## Our Example
 
-We will use a producer to generate mock temperature events for 3 machines (MACHINE_IDs '0', '1', or '2'); ID's 0 and 1 are functioning normally, 2 is malfunctioning (overheating).
+We will use a `Source` to generate mock temperature events for 3 machines (MACHINE_IDs '0', '1', or '2'); ID's 0 and 1 are functioning normally, 2 is malfunctioning (overheating).
 
-These events will be processed by our new Anomaly Detector application.
+These events will be processed by our new Anomaly Detector `Application`.
 
 NOTE: our example uses JSON formatting for Kafka message values.
 
@@ -44,21 +45,30 @@ This approach is desirable since temperatures fluctuate quickly; it enables more
 - allows more time for the machine to cool back down (as part of normal operation)
 
 
+
 ## Before Getting Started
 
-- You will see links scattered throughout this tutorial.
+1. You will see links scattered throughout this tutorial.
     - Tutorial code links are marked **>>> LIKE THIS <<<** .
     - ***All other links provided are completely optional***. 
     - They are great ways to learn more about various concepts if you need it!
 
+2. This tutorial uses a Quix Streams [`Source`](../../connectors/sources/README.md) rather than a Kafka [`Topic`]() to ingest data.
+    - `Source` connectors enable reading data from a non-Kafka origin (typically to get it into Kafka). 
+    - This approach circumvents users having to run a [producer](../../producer.md) alongside the `Application`.
+    - A `Source` is easily replaced with an actual Kafka topic (just pass a `Topic` instead of a `Source`).
+
+
 
 ## Generating Temperature Data
 
-Without going into much detail, we have this [**>>> Temperature Readings Producer <<<**](producer.py) to pair up nicely with our Anomaly Detector.
+Our [**>>> Anomaly Detector Application <<<**](tutorial_app.py) uses a `Source` called 
+`PurchaseGenerator` to generate temperature events.
 
-It cycles through MACHINE_ID's 0-2 (using the ID as the Kafka key), and produces a (-1, 0, +1) temperature change for each machine a few times a second, along with the time. 
+It cycles through MACHINE_ID's 0-2 (using the ID as the Kafka key), and produces a 
+(-1, 0, +1) temperature change for each machine a few times a second, along with the time. 
 
-So the kafka messages look like:
+So the incoming messages look like:
 
 ```python
 # ...
@@ -77,13 +87,14 @@ Feel free to inspect it further, but it's just to get some data flowing. Our foc
 
 
 
-
-
 ## Anomaly Detector Application
 
-Now let's go over our [**>>> Anomaly Detector Application <<<**](application.py) line-by-line!
+Now let's go over the `setup_and_run_application()` portion of our 
+[**>>> Anomaly Detector Application <<<**](tutorial_app.py) in detail!
 
-### Create Application
+
+
+### Create an Application
 
 ```python
 import os
@@ -96,23 +107,32 @@ app = Application(
 )
 ```
 
-First, create the [Quix Streams Application](../../configuration.md), which is our constructor for everything! We provide it our connection settings, consumer group (ideally unique per Application), and where the consumer group should start from on our topic. 
+Create a [Quix Streams Application](../../configuration.md), which is our constructor for everything! 
 
-NOTE: Once you are more familiar with Kafka, we recommend [learning more about auto_offset_reset](https://www.quix.io/blog/kafka-auto-offset-reset-use-cases-and-pitfalls).
+We provide it our connection settings, consumer group (ideally unique per Application), 
+and where the consumer group should start from on the (internal) Source topic.
+
+> [!TIP] 
+> Once you are more familiar with Kafka, we recommend [learning more about auto_offset_reset](https://www.quix.io/blog/kafka-auto-offset-reset-use-cases-and-pitfalls).
 
 
-### Define Topics
+
+### Specify Topics
+
+`Application.topic()` returns [`Topic`](../../api-reference/topics.md) objects which are used by `StreamingDataFrame`.
+
+Create one for each topic used by your `Application`.
+
+> [!NOTE]
+> Any missing topics will be automatically created for you upon running the application.
+
+#### Our Topics
+We have one output topic, named `price_updates`:
 
 ```python
-temperature_readings_topic = app.topic(name="temperature_readings")
-alerts_topic = app.topic(name="alerts")
+price_updates_topic = app.topic("price_updates")
 ```
 
-Next we define our input/output topics, named `temperature_readings_topic` and `alerts_topic`, respectively. 
-
-They each return [`Topic`](../../api-reference/topics.md) objects, used later on.
-
-NOTE: the topics will automatically be created for you in Kafka when you run the application should they not exist.
 
 
 ### The StreamingDataFrame (SDF)
@@ -128,6 +148,8 @@ SDF allows manipulating the message value in a dataframe-like fashion using vari
 After initializing, we continue re-assigning to the same `sdf` variable as we add operations.
 
 (Also: notice that we pass our input `Topic` from the previous step to it.)
+
+
 
 ### Prep Data for Windowing
 
@@ -148,6 +170,7 @@ So we'll perform a generic SDF transformation using [`SDF.apply(F)`](../../proce
 our `F` is a simple `lambda`, in this case.
 
 
+
 ### Windowing
 
 ```python
@@ -163,6 +186,8 @@ Now we do a (5 second) windowing operation on our temperature value. A few very 
     - If we had instead used a static key, say "my_machines", our Anomaly Detector would have evaluated the machines together as one.
 
 - The event's windowing timestamp comes from the "Timestamp" (case-sensitive!!!) field, which SDF looks for in the message value when first receiving it. If it doesn't exist, the kafka message timestamp is used. [A custom function can also be used](../../windowing.md#extracting-timestamps-from-messages).
+
+
 
 ### Using Window Result
 
@@ -190,6 +215,8 @@ For `SDF.filter(F)`, if the (_**boolean**_-ed) return value of `F` is:
 
 In our case, this example event would then stop since `bool(None)` is `False`.
 
+
+
 ### Producing an Alert
 
 ```python
@@ -201,22 +228,44 @@ is our previously defined `Topic` (not the topic name!).
 
 NOTE: because we use "Current" windowing, we may produce a lot of "duplicate" alerts once triggered...you could solve this in numerous ways downstream. What we care about is alerting as soon as possible!
 
+
+
+
+### Running an Application
+
+Running a `Source`-based `Application` requires calling `Application.run()` within a
+`if __name__ == "__main__"` block.
+
+#### Our Application Run Block 
+
+Our entire `Application` (and all its spawned objects) resides within a 
+`setup_and_run_application()` function, executed as required:
+
+```python
+if __name__ == "__main__":
+    setup_and_run_application()
+```
+
+
+
+
 ## Try it yourself!
 
 ### 1. Run Kafka
 First, have a running Kafka cluster. 
 
-To conveniently follow along with this tutorial, just [run this simple one-liner](../README.md#running-kafka-locally).
+To easily run a broker locally with Docker, just [run this simple one-liner](../README.md#running-kafka-locally).
 
-### 2. Install Quix Streams
-In your python environment, run `pip install quixstreams`
+### 2. Download files
+- [tutorial_app.py](tutorial_app.py)
 
-### 3. Run the Producer and Application
-Just call `python producer.py` and `python application.py` in separate windows.
+### 3. Install Quix Streams
+In your desired python environment, execute: `pip install quixstreams`
 
-You'll note that the Application does not print any output beyond initialization: it will only print alerts being fired (and thus when it's producing a downstream message).
+### 4. Run the application
+In your desired python environment, execute: `python tutorial_app.py`.
 
-### 4. Check out the results!
+### 5. Check out the results!
 
 Eventually, you should see an alert will look something like: 
 

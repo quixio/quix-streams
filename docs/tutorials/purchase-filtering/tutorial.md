@@ -14,6 +14,7 @@ You'll learn how to:
 - Produce results to a Kafka topic
 
 
+
 ## Outline of the Problem
 
 Imagine we are a company who sells goods to members only: they can have a 
@@ -29,8 +30,8 @@ necessary information downstream.
 
 ## Our Example
 
-We will use a simple producer to generate some mock purchase data to be processed by our 
-new Purchase Filtering application.
+We will use a `Source` to generate some mock purchase data to be processed by our 
+new Purchase Filtering `Application`.
 
 
 
@@ -61,9 +62,11 @@ as if it were a dataframe.
 
 ## Generating Purchase Data
 
-Our [**>>> Purchase Filtering Application <<<**](application.py) uses a `Source` called `PurchaseGenerator` that generates a small static set of 
-"purchases", which are simply dictionaries with various info about what was purchased by 
-a customer during their visit. The data is keyed on customer ID.
+Our [**>>> Purchase Filtering Application <<<**](application.py) uses a `Source` called 
+`PurchaseGenerator` that generates a small static set of "purchases", which are simply 
+dictionaries with various info about what was purchased by a customer during their visit. 
+
+The data is keyed on customer ID.
 
 The incoming Kafka data looks something like:
 
@@ -91,14 +94,17 @@ kafka_value: {
 ```
 
 
+
+
 ## Purchase Filtering Application
 
 
 Now let's go over the `setup_and_run_application()` portion of 
-[**>>> Purchase Filtering Application <<<**](application.py) in detail!
+our [**>>> Purchase Filtering Application <<<**](application.py) in detail!
 
 
-### Create Application
+
+### Create an Application
 
 ```python
 import os
@@ -111,23 +117,33 @@ app = Application(
 )
 ```
 
-First, create the [Quix Streams Application](../../configuration.md), which is our constructor for everything! We provide it our connection settings, consumer group (ideally unique per Application), and where the consumer group should start from on our topic. 
+Create a [Quix Streams Application](../../configuration.md), which is our constructor for everything! 
 
-NOTE: Once you are more familiar with Kafka, we recommend [learning more about auto_offset_reset](https://www.quix.io/blog/kafka-auto-offset-reset-use-cases-and-pitfalls).
+We provide it our connection settings, consumer group (ideally unique per Application), 
+and where the consumer group should start from on the (internal) Source topic.
+
+> [!TIP] 
+> Once you are more familiar with Kafka, we recommend [learning more about auto_offset_reset](https://www.quix.io/blog/kafka-auto-offset-reset-use-cases-and-pitfalls).
 
 
-### Define Topics
+
+### Define Output Topics
+
+`Application.topic()` returns [`Topic`](../../api-reference/topics.md) objects which are used by `StreamingDataFrame`.
+
+Create one for each topic used by your `Application`.
+
+> [!NOTE]
+> Any missing topics will be automatically created for you upon running the application.
+
+#### Our Topics
+We have one output topic, named `customers_coupon_qualified`:
 
 ```python
-customer_purchases_topic = app.topic(name="customer_purchases")
 customers_qualified_topic = app.topic(name="customers_coupon_qualified")
 ```
 
-Next we define our input/output topics, named `customer_purchases` and `customers_coupon_qualified`, respectively. 
 
-They each return [`Topic`](../../api-reference/topics.md) objects, used later on.
-
-NOTE: the topics will automatically be created for you in Kafka when you run the application should they not exist.
 
 ### The StreamingDataFrame (SDF)
 
@@ -142,6 +158,8 @@ SDF allows manipulating the message value in a dataframe-like fashion using vari
 After initializing, we continue re-assigning to the same `sdf` variable as we add operations.
 
 (Also: notice that we pass our input `Topic` from the previous step to it.)
+
+
 
 ### Filtering Purchases
 
@@ -227,6 +245,7 @@ As such, SDF filtering interprets the SDF operation `&` _boolean_ result as foll
 So, any events that don't satisfy these conditions will be filtered as desired!
 
 
+
 ### Adding a New Column
 
 ```python
@@ -251,6 +270,8 @@ becomes
 >>> {"Remove Me": "value", "Email": "cool email", "Full Name": "cool name"}`
 ```
 
+
+
 ### Getting a Column Subset/Selection
 
 ```python
@@ -273,6 +294,8 @@ becomes
 
 NOTE: you cannot reference nested keys in this way.
 
+
+
 ### Producing the Result
 
 ```python
@@ -285,13 +308,29 @@ is our previously defined `Topic` (not the topic name!).
 NOTE: by default, our outgoing Kafka key is persisted from the input message. 
 [You can alter it](../../processing.md#changing-message-key-before-producing), if needed.
 
+### Running an Application
+
+Running a `Source`-based `Application` requires calling `Application.run()` within a
+`if __name__ == "__main__"` block.
+
+#### Our Application Run Block 
+
+Our entire `Application` (and all its spawned objects) resides within a 
+`setup_and_run_application()` function, executed as required:
+
+```python
+if __name__ == "__main__":
+    setup_and_run_application()
+```
+
+
 
 ## Try it yourself!
 
 ### 1. Run Kafka
 First, have a running Kafka cluster. 
 
-To conveniently follow along with this tutorial, just [run this simple one-liner](../README.md#running-kafka-locally).
+To easily run a broker locally with Docker, just [run this simple one-liner](../README.md#running-kafka-locally).
 
 ### 2. Download files
 - [tutorial_app.py](tutorial_app.py)
