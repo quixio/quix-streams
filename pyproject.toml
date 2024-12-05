@@ -37,7 +37,8 @@ all = [
     "psycopg2-binary>=2.9.9,<3",
     "boto3>=1.35.65,<2.0",
     "boto3-stubs>=1.35.65,<2.0",
-    "redis[hiredis]>=5.2.0,<6"
+    "redis[hiredis]>=5.2.0,<6",
+    "paho-mqtt>=2.1.0,<3"
 ]
 
 avro = ["fastavro>=1.8,<2.0"]
@@ -54,6 +55,7 @@ aws = ["boto3>=1.35.65,<2.0", "boto3-stubs>=1.35.65,<2.0"]
 kinesis = ["quixstreams[aws]"]
 s3 = ["quixstreams[aws]"]
 redis=["redis[hiredis]>=5.2.0,<6"]
+mqtt=["paho-mqtt>=2.1.0,<3"]
 
 [tool.setuptools.packages.find]
 include = ["quixstreams*"]
