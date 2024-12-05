@@ -1,6 +1,5 @@
 import logging
-import queue
-import threading
+from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from time import sleep
 from typing import BinaryIO, Optional, Union
@@ -20,9 +19,6 @@ __all__ = ("FileSource",)
 logger = logging.getLogger(__name__)
 
 
-class StopThread(Exception): ...
-
-
 class FileFetcher:
     """
     Serves individual files while downloading another in the background.
@@ -30,56 +26,44 @@ class FileFetcher:
 
     def __init__(self, origin: Origin, filepath: Path):
         self._origin = origin
-        self._filepath = filepath
-        self._queue = queue.Queue(maxsize=1)
-        self._download_thread = threading.Thread(target=self._download_files)
-        self._stop_event = threading.Event()
-        self._thread_exception = StopIteration
-        self._download_thread.start()
+        self._file_names = iter(self._origin.file_collector(filepath))
+        self._stopped: bool = False
+        self._executor = ThreadPoolExecutor(max_workers=1)
+        self._downloading_file_name: Optional[Path] = None
+        self._downloading_file_content: Optional[Future] = None
+        self._download_next_file()
 
     def __iter__(self) -> Self:
         return self
 
     def __next__(self) -> tuple[Path, BinaryIO]:
-        # Blocking queue to account for various download times
-        file_content = self._queue.get(block=True)
-        if file_content is None:
+        if self._stopped:
+            raise StopIteration
+
+        try:
+            file_name = self._downloading_file_name
+            file_content = self._downloading_file_content.result()
+            self._download_next_file()
+            return file_name, file_content
+        except Exception:
             self.stop()
-            raise self._thread_exception
-        return file_content
+            raise
 
     def stop(self):
-        if not self._stop_event.is_set():
-            logger.debug("Stopping download thread...")
-            self._stop_event.set()
-            self._download_thread.join(timeout=10)
+        logger.info("Stopping file download thread...")
+        self._stopped = True
+        self._executor.shutdown(wait=False)
 
-    def _add_file_to_queue(self, filepath: Path):
-        """
-        Add downloaded file to queue with soft blocking (to check for stop_events).
-        """
-        filestream = self._origin.get_raw_file_stream(filepath)
-        while not self._stop_event.is_set():
-            try:
-                self._queue.put((filepath, filestream), block=True, timeout=3)
-                logger.debug(f"{filepath} added to queue...")
-                return
-            except queue.Full:
-                pass
-        raise StopThread()
-
-    def _download_files(self):
+    def _download_next_file(self):
         try:
-            for file in self._origin.file_collector(self._filepath):
-                if self._stop_event.is_set():
-                    return
-                self._add_file_to_queue(file)
-        except Exception as e:
-            if not isinstance(e, StopThread):
-                logger.error("Download thread encountered an error", exc_info=e)
-                self._thread_exception = e
-        finally:
-            self._queue.put(None, block=True)
+            self._downloading_file_name = next(self._file_names)
+            logger.debug(f"Beginning download of {self._downloading_file_name}...")
+            self._downloading_file_content = self._executor.submit(
+                self._origin.get_raw_file_stream, self._downloading_file_name
+            )
+        except StopIteration:
+            logger.info("No further files to download.")
+            self.stop()
 
 
 class FileSource(Source):
