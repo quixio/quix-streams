@@ -84,7 +84,7 @@ Now that `CoinbaseSource` exists, we can ingest raw data from Coinbase.
 
 Of course, each user will have their own desired product ID's and transformations to apply.
 
-### Defining the Source
+### Define the Source
 
 First, set up a `CoinBaseSource` with our desired `product_ids`.
 
@@ -98,14 +98,15 @@ coinbase_source = CoinbaseSource(
 )
 ```
 
-### Defining an Application
+### Create an Application
 
-Now create the [Quix Streams Application](../../configuration.md), which is our constructor for everything! 
+Create a [Quix Streams Application](../../configuration.md), which is our constructor for everything! 
 
 We provide it our connection settings, consumer group (ideally unique per Application), 
-and where the consumer group should start from on our (internal) topic.
+and where the consumer group should start from on the (internal) Source topic.
 
-NOTE: Once you are more familiar with Kafka, we recommend [learning more about auto_offset_reset](https://www.quix.io/blog/kafka-auto-offset-reset-use-cases-and-pitfalls).
+> [!TIP] 
+> Once you are more familiar with Kafka, we recommend [learning more about auto_offset_reset](https://www.quix.io/blog/kafka-auto-offset-reset-use-cases-and-pitfalls).
 
 #### Our Application
 ```python
@@ -116,20 +117,20 @@ app = Application(
 )
 ```
 
-### Defining Outbound Topics
+### Specify Topics
 
-Next we define any output topics.
+`Application.topic()` returns [`Topic`](../../api-reference/topics.md) objects which are used by `StreamingDataFrame`.
 
-`Application.topic()` returns [`Topic`](../../api-reference/topics.md) objects which are used by `StreamingDataFrame.to_topic()`.
+Create one for each topic used by your `Application`.
 
 > [!NOTE]
-> The topics will automatically be created for you in Kafka when you run the application should they not exist.
+> Any missing topics will be automatically created for you upon running the application.
 
-#### Our Topic
-Our output topic name is `price_updates`:
+#### Our Topics
+We have one output topic, named `price_updates`:
 
 ```python
-price_updates_topic = app.topic("price_updates")
+price_updates_topic = app.topic(name="price_updates")
 ```
 
 ### The StreamingDataFrame (SDF)
@@ -215,7 +216,7 @@ called inside the block.
 ### 1. Run Kafka
 First, have a running Kafka cluster. 
 
-To conveniently follow along with this tutorial, just [run this simple one-liner](../README.md#running-kafka-locally).
+To easily run a broker locally with Docker, just [run this simple one-liner](../README.md#running-kafka-locally).
 
 ### 2. Download files
 - [requirements.txt](requirements.txt) 

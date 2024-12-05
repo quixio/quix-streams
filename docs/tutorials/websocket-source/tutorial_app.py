@@ -102,7 +102,7 @@ def main():
     )
 
     # Define a topic for producing transformed data
-    price_updates_topic = app.topic("price_updates")
+    price_updates_topic = app.topic(name="price_updates")
 
     # Connect the CoinbaseSource to a StreamingDataFrame
     sdf = app.dataframe(source=coinbase_source)

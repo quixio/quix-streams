@@ -9,11 +9,13 @@ logger = logging.getLogger(__name__)
 
 class PurchaseGenerator(Source):
     """
+    What a Source is:
     A Quix Streams Source enables Applications to read data from something other than a Kafka topic.
-
     Basically, this generates JSON data that the StreamingDataFrame consumes directly.
-
     This simplifies the example by not having to run both a producer and Application.
+
+    What it does:
+    Generates "purchase events" based on the below list of `_purchase data`.
     """
 
     _purchases_data = [
