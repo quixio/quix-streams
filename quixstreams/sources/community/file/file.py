@@ -45,9 +45,10 @@ class FileFetcher:
             file_content = self._downloading_file_content.result()
             self._download_next_file()
             return file_name, file_content
-        except Exception:
+        except Exception as e:
+            logger.error("FileFetcher encountered an error", exc_info=e)
             self.stop()
-            raise
+            raise e
 
     def stop(self):
         logger.info("Stopping file download thread...")
