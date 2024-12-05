@@ -10,7 +10,7 @@
 class BaseSink(abc.ABC)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L11)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/base/sink.py#L11)
 
 This is a base class for all sinks.
 
@@ -29,7 +29,7 @@ Note that Sinks are currently in beta, and their design may change over time.
 def flush(topic: str, partition: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L21)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/base/sink.py#L21)
 
 This method is triggered by the Checkpoint class when it commits.
 
@@ -51,7 +51,7 @@ def add(value: Any, key: Any, timestamp: int, headers: HeadersTuples,
         topic: str, partition: int, offset: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L33)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/base/sink.py#L33)
 
 This method is triggered on every new processed record being sent to this sink.
 
@@ -69,7 +69,7 @@ on flush().
 def on_paused(topic: str, partition: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L51)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/base/sink.py#L51)
 
 This method is triggered when the sink is paused due to backpressure, when
 the `SinkBackpressureError` is raised.
@@ -84,7 +84,7 @@ Here you can react to the backpressure events.
 class BatchingSink(BaseSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L60)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/base/sink.py#L60)
 
 A base class for batching sinks, that need to accumulate the data first before
 sending it to the external destinatios.
@@ -108,7 +108,7 @@ batching sink.
 def write(batch: SinkBatch)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L83)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/base/sink.py#L83)
 
 This method implements actual writing to the external destination.
 
@@ -128,7 +128,7 @@ def add(value: Any, key: Any, timestamp: int, headers: HeadersTuples,
         topic: str, partition: int, offset: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L93)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/base/sink.py#L93)
 
 Add a new record to in-memory batch.
 
@@ -142,7 +142,7 @@ Add a new record to in-memory batch.
 def flush(topic: str, partition: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L115)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/base/sink.py#L115)
 
 Flush an accumulated batch to the destination and drop it afterward.
 
@@ -156,7 +156,7 @@ Flush an accumulated batch to the destination and drop it afterward.
 def on_paused(topic: str, partition: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L135)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/base/sink.py#L135)
 
 When the destination is already backpressure, drop the accumulated batch.
 
@@ -172,7 +172,7 @@ When the destination is already backpressure, drop the accumulated batch.
 class SinkBatch()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/batch.py#L12)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/base/batch.py#L12)
 
 A batch to accumulate processed data by `BatchingSink` between the checkpoints.
 
@@ -195,7 +195,7 @@ Batches are created automatically by the implementations of `BatchingSink`.
 def iter_chunks(n: int) -> Iterable[Iterable[SinkItem]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/batch.py#L69)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/base/batch.py#L69)
 
 Iterate over batch data in chunks of length n.
 The last batch may be shorter.
@@ -212,7 +212,7 @@ The last batch may be shorter.
 class SinkBackpressureError(QuixException)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/exceptions.py#L6)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/base/exceptions.py#L6)
 
 An exception to be raised by Sinks during flush() call
 
@@ -242,7 +242,7 @@ a timeout specified in `retry_after`, and resume it when it's elapsed.
 class InfluxDB3Sink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/influxdb3.py#L23)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/core/influxdb3.py#L23)
 
 <a id="quixstreams.sinks.core.influxdb3.InfluxDB3Sink.__init__"></a>
 
@@ -267,7 +267,7 @@ def __init__(token: str,
              debug: bool = False)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/influxdb3.py#L24)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/core/influxdb3.py#L24)
 
 A connector to sink processed data to InfluxDB v3.
 
@@ -336,7 +336,7 @@ Default - `False`.
 class CSVSink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/csv.py#L9)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/core/csv.py#L9)
 
 <a id="quixstreams.sinks.core.csv.CSVSink.__init__"></a>
 
@@ -351,7 +351,7 @@ def __init__(path: str,
              value_serializer: Callable[[Any], str] = json.dumps)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/csv.py#L10)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/core/csv.py#L10)
 
 A base CSV sink that writes data from all assigned partitions to a single file.
 
@@ -385,7 +385,7 @@ Default - `json.dumps`.
 class AWSIcebergConfig(BaseIcebergConfig)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/iceberg.py#L42)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/iceberg.py#L42)
 
 <a id="quixstreams.sinks.community.iceberg.AWSIcebergConfig.__init__"></a>
 
@@ -401,7 +401,7 @@ def __init__(aws_s3_uri: str,
              aws_session_token: Optional[str] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/iceberg.py#L43)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/iceberg.py#L43)
 
 Configure IcebergSink to work with AWS Glue.
 
@@ -430,7 +430,7 @@ using AWS Glue.
 class IcebergSink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/iceberg.py#L76)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/iceberg.py#L76)
 
 IcebergSink writes batches of data to an Apache Iceberg table.
 
@@ -501,7 +501,7 @@ if __name__ == "__main__":
 def write(batch: SinkBatch)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/iceberg.py#L174)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/iceberg.py#L174)
 
 Writes a batch of data to the Iceberg table.
 
@@ -525,7 +525,7 @@ Implements retry logic to handle concurrent write conflicts.
 class BigQuerySink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/bigquery.py#L53)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/bigquery.py#L53)
 
 <a id="quixstreams.sinks.community.bigquery.BigQuerySink.__init__"></a>
 
@@ -546,7 +546,7 @@ def __init__(project_id: str,
              **kwargs)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/bigquery.py#L54)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/bigquery.py#L54)
 
 A connector to sink processed data to Google Cloud BigQuery.
 
@@ -602,7 +602,7 @@ to the client's default retrying policy.
 class FileSink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/sink.py#L11)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/file/sink.py#L11)
 
 A sink that writes data batches to files using configurable formats and
 destinations.
@@ -628,7 +628,7 @@ def __init__(directory: str = "",
              destination: Optional[Destination] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/sink.py#L25)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/file/sink.py#L25)
 
 Initialize the FileSink with the specified configuration.
 
@@ -653,7 +653,7 @@ LocalDestination if not specified.
 def write(batch: SinkBatch) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/sink.py#L46)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/file/sink.py#L46)
 
 Write a batch of data using the configured format and destination.
 
@@ -775,7 +775,7 @@ Write data to Azure.
 class Destination(ABC)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/base.py#L16)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/file/destinations/base.py#L16)
 
 Abstract base class for defining where and how data should be stored.
 
@@ -794,7 +794,7 @@ and partitions.
 def set_directory(directory: str) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/base.py#L28)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/file/destinations/base.py#L28)
 
 Configure the base directory for storing files.
 
@@ -820,7 +820,7 @@ underscores are allowed.
 def set_extension(format: Format) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/base.py#L45)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/file/destinations/base.py#L45)
 
 Set the file extension based on the format.
 
@@ -841,7 +841,7 @@ Set the file extension based on the format.
 def write(data: bytes, batch: SinkBatch) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/base.py#L54)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/file/destinations/base.py#L54)
 
 Write the serialized data to storage.
 
@@ -865,7 +865,7 @@ details.
 class LocalDestination(Destination)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/local.py#L15)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/file/destinations/local.py#L15)
 
 A destination that writes data to the local filesystem.
 
@@ -882,7 +882,7 @@ and appending to existing ones.
 def __init__(append: bool = False) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/local.py#L22)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/file/destinations/local.py#L22)
 
 Initialize the local destination.
 
@@ -903,7 +903,7 @@ ones. Defaults to False.
 def set_extension(format: Format) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/local.py#L32)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/file/destinations/local.py#L32)
 
 Set the file extension and validate append mode compatibility.
 
@@ -928,7 +928,7 @@ support appending.
 def write(data: bytes, batch: SinkBatch) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/local.py#L43)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/file/destinations/local.py#L43)
 
 Write data to a local file.
 
@@ -951,7 +951,7 @@ Write data to a local file.
 class S3BucketNotFoundError(Exception)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/s3.py#L13)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/file/destinations/s3.py#L13)
 
 Raised when the specified S3 bucket does not exist.
 
@@ -963,7 +963,7 @@ Raised when the specified S3 bucket does not exist.
 class S3BucketAccessDeniedError(Exception)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/s3.py#L17)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/file/destinations/s3.py#L17)
 
 Raised when the specified S3 bucket access is denied.
 
@@ -975,7 +975,7 @@ Raised when the specified S3 bucket access is denied.
 class S3Destination(Destination)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/s3.py#L21)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/file/destinations/s3.py#L21)
 
 A destination that writes data to Amazon S3.
 
@@ -998,7 +998,7 @@ def __init__(bucket: str,
              **kwargs) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/s3.py#L28)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/file/destinations/s3.py#L28)
 
 Initialize the S3 destination.
 
@@ -1030,7 +1030,7 @@ AWS_DEFAULT_REGION environment variable.
 def write(data: bytes, batch: SinkBatch) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/s3.py#L78)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/file/destinations/s3.py#L78)
 
 Write data to S3.
 
@@ -1053,7 +1053,7 @@ Write data to S3.
 class Format(ABC)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/base.py#L8)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/file/formats/base.py#L8)
 
 Base class for formatting batches in file sinks.
 
@@ -1074,7 +1074,7 @@ formatted and saved.
 def file_extension() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/base.py#L20)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/file/formats/base.py#L20)
 
 Returns the file extension used for output files.
 
@@ -1096,7 +1096,7 @@ The file extension as a string.
 def supports_append() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/base.py#L30)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/file/formats/base.py#L30)
 
 Indicates if the format supports appending data to an existing file.
 
@@ -1117,7 +1117,7 @@ True if appending is supported, otherwise False.
 def serialize(batch: SinkBatch) -> bytes
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/base.py#L39)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/file/formats/base.py#L39)
 
 Serializes a batch of messages into bytes.
 
@@ -1145,7 +1145,7 @@ The serialized batch as bytes.
 class JSONFormat(Format)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/json.py#L14)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/file/formats/json.py#L14)
 
 Serializes batches of messages into JSON Lines format with optional gzip
 compression.
@@ -1168,7 +1168,7 @@ def __init__(file_extension: str = ".jsonl",
              dumps: Optional[Callable[[Any], str]] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/json.py#L28)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/file/formats/json.py#L28)
 
 Initializes the JSONFormat.
 
@@ -1194,7 +1194,7 @@ strings. If provided, the `compact` option is ignored.
 def file_extension() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/json.py#L57)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/file/formats/json.py#L57)
 
 Returns the file extension used for output files.
 
@@ -1214,7 +1214,7 @@ The file extension as a string.
 def serialize(batch: SinkBatch) -> bytes
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/json.py#L65)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/file/formats/json.py#L65)
 
 Serializes a `SinkBatch` into bytes in JSON Lines format.
 
@@ -1247,7 +1247,7 @@ compressed with gzip.
 class ParquetFormat(Format)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/parquet.py#L16)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/file/formats/parquet.py#L16)
 
 Serializes batches of messages into Parquet format.
 
@@ -1268,7 +1268,7 @@ def __init__(file_extension: str = ".parquet",
              compression: Compression = "snappy") -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/parquet.py#L29)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/file/formats/parquet.py#L29)
 
 Initializes the ParquetFormat.
 
@@ -1293,7 +1293,7 @@ or "zstd". Defaults to "snappy".
 def file_extension() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/parquet.py#L47)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/file/formats/parquet.py#L47)
 
 Returns the file extension used for output files.
 
@@ -1313,7 +1313,7 @@ The file extension as a string.
 def serialize(batch: SinkBatch) -> bytes
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/parquet.py#L55)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/file/formats/parquet.py#L55)
 
 Serializes a `SinkBatch` into bytes in Parquet format.
 
@@ -1348,7 +1348,7 @@ The serialized batch as bytes in Parquet format.
 class PubSubTopicNotFoundError(Exception)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/pubsub.py#L25)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/pubsub.py#L25)
 
 Raised when the specified topic does not exist.
 
@@ -1360,7 +1360,7 @@ Raised when the specified topic does not exist.
 class PubSubSink(BaseSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/pubsub.py#L29)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/pubsub.py#L29)
 
 A sink that publishes messages to Google Cloud Pub/Sub.
 
@@ -1380,7 +1380,7 @@ def __init__(project_id: str,
              **kwargs) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/pubsub.py#L32)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/pubsub.py#L32)
 
 Initialize the PubSubSink.
 
@@ -1412,7 +1412,7 @@ def add(value: Any, key: Any, timestamp: int, headers: HeadersTuples,
         topic: str, partition: int, offset: int) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/pubsub.py#L81)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/pubsub.py#L81)
 
 Publish a message to Pub/Sub.
 
@@ -1426,7 +1426,7 @@ Publish a message to Pub/Sub.
 def flush(topic: str, partition: int) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/pubsub.py#L114)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/pubsub.py#L114)
 
 Wait for all publish operations to complete successfully.
 
@@ -1442,7 +1442,7 @@ Wait for all publish operations to complete successfully.
 class PostgreSQLSink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/postgresql.py#L48)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/postgresql.py#L48)
 
 <a id="quixstreams.sinks.community.postgresql.PostgreSQLSink.__init__"></a>
 
@@ -1461,7 +1461,7 @@ def __init__(host: str,
              **kwargs)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/postgresql.py#L49)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/postgresql.py#L49)
 
 A connector to sink topic data to PostgreSQL.
 
@@ -1491,7 +1491,7 @@ A connector to sink topic data to PostgreSQL.
 class KinesisStreamNotFoundError(Exception)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/kinesis.py#L23)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/kinesis.py#L23)
 
 Raised when the specified Kinesis stream does not exist.
 
@@ -1503,7 +1503,7 @@ Raised when the specified Kinesis stream does not exist.
 class KinesisSink(BaseSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/kinesis.py#L27)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/kinesis.py#L27)
 
 <a id="quixstreams.sinks.community.kinesis.KinesisSink.__init__"></a>
 
@@ -1523,7 +1523,7 @@ def __init__(stream_name: str,
              **kwargs) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/kinesis.py#L28)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/kinesis.py#L28)
 
 Initialize the KinesisSink.
 
@@ -1552,7 +1552,7 @@ def add(value: Any, key: Any, timestamp: int, headers: HeadersTuples,
         topic: str, partition: int, offset: int) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/kinesis.py#L80)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/kinesis.py#L80)
 
 Buffer a record for the Kinesis stream.
 
@@ -1570,7 +1570,7 @@ will be sent when the flush method is called.
 def flush(topic: str, partition: int) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/kinesis.py#L110)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/kinesis.py#L110)
 
 Flush all buffered records for a given topic-partition.
 
@@ -1591,7 +1591,7 @@ stream.
 class RedisSink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/redis.py#L21)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/redis.py#L21)
 
 <a id="quixstreams.sinks.community.redis.RedisSink.__init__"></a>
 
@@ -1611,7 +1611,7 @@ def __init__(host: str,
              **kwargs) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/redis.py#L22)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sinks/community/redis.py#L22)
 
 A connector to sink processed data to Redis.
 

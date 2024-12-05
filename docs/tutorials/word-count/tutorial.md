@@ -30,7 +30,10 @@ the counts of each individually downstream for further processing.
 We will use a [Quix Streams `Source`](../../connectors/sources/README.md) to generate text to be processed by our 
 new Word Counter `Application`.
 
-NOTE: Our example uses `JSON` formatting for Kafka message values.
+
+!!! NOTE
+
+    Our example uses `JSON` formatting for Kafka message values.
 
 
 
@@ -97,16 +100,22 @@ app = Application(
 )
 ```
 
-First, create the [Quix Streams Application](../../configuration.md), which is our constructor for everything! We provide it our connection settings, consumer group (ideally unique per Application), and where the consumer group should start from on our topic. 
+Create a [Quix Streams Application](../../configuration.md), which is our constructor for everything! 
 
-NOTE: Once you are more familiar with Kafka, we recommend [learning more about auto_offset_reset](https://www.quix.io/blog/kafka-auto-offset-reset-use-cases-and-pitfalls).
+We provide it our connection settings, consumer group (ideally unique per Application), 
+and where the consumer group should start from on the (internal) `Source` topic.
+
+
+!!! TIP
+
+    Once you are more familiar with Kafka, we recommend 
+    [learning more about auto_offset_reset](https://www.quix.io/blog/kafka-auto-offset-reset-use-cases-and-pitfalls).
 
 
 
-### Define Topics
+### Specify Topics
 
 ```python
-product_reviews_topic = app.topic(name="product_reviews")
 word_counts_topic = app.topic(name="product_review_word_counts")
 ```
 
@@ -114,7 +123,9 @@ Next we define our input/output topics, named `product_reviews` and `product_rev
 
 They each return [`Topic`](../../api-reference/topics.md) objects, used later on.
 
-NOTE: The topics will automatically be created for you in Kafka when you run the application should they not exist.
+!!! NOTE
+
+    Any missing topics will be automatically created for you upon running an `Application`.
 
 
 
@@ -125,11 +136,18 @@ NOTE: The topics will automatically be created for you in Kafka when you run the
 sdf = app.dataframe(topic=product_reviews_topic)
 ```
 
-Now for the fun part: building our [StreamingDataFrame](../../processing.md#introduction-to-streamingdataframe), often shorthanded to "SDF".  
+Now for the fun part: building our [StreamingDataFrame](../../processing.md#introduction-to-streamingdataframe), often shorthanded to "SDF".
 
 SDF allows manipulating the message value in a dataframe-like fashion using various operations.
 
-After initializing, we continue re-assigning to the same `sdf` variable as we add operations.
+After initializing with either a `Topic` or `Source`, we continue reassigning to the 
+same `sdf` variable as we add operations.
+
+!!! NOTE
+
+    A few `StreamingDataFrame` operations are 
+    ["in-place"](../../advanced/dataframe-assignments.md#valid-in-place-operations), 
+    like `.print()`.
 
 (Also, notice that we pass our input `Topic` from the previous step to it.)
 
@@ -165,11 +183,13 @@ to this:
 `>>> [('bob', 1), ('likes', 2), ('bananas', 1), ('and', 1), ('frank', 1), ('apples', 1)]`
 
 
-NOTE: Two VERY important and related points around the `expand=True` argument:
+!!! NOTE 
 
-1. It tells SDF "hey, this .apply() returns _**multiple independent**_ events!"
+    Two VERY important and related points around the `expand=True` argument:
 
-2. Our `F` returns a `list` (or a non-dict iterable of some kind), hence the "expand"!
+    1. It tells SDF "hey, this .apply() returns _**multiple independent**_ events!"
+
+    2. Our `F` returns a `list` (or a non-dict iterable of some kind), hence the "expand"!
 
 
 
@@ -214,10 +234,18 @@ via [`SDF.to_topic(T)`](../../processing.md#writing-data-to-kafka-topics), where
 Notice here the optional `key` argument, which allows you to provide a [custom key generator](../../processing.md#changing-message-key-before-producing).
 
 While it's fairly common to maintain the input event's key (SDF's default behavior), 
-there are many reasons why you might adjust it...like here (NOTE: advanced concept below)!
+there are also many reasons why you might adjust it, so we showcase an example of that 
+here!
 
-We are changing the message key to the word; this data structure enables 
-calculating _total word counts over time_ from this topic (with a new application, of course!).
+!!! QUESTION
+
+    What would be the benefit of changing the key to the counted word, in this case?
+
+    This key change would enable calculating _total word counts over time_ from this 
+    topic without additional data transformations (a more advanced operation). 
+
+    Even though we won't do that in this example, you can imagine doing so in a 
+    downstream `Application`!
 
 In the end we would produce 5 messages in total, like so:
 
@@ -228,7 +256,10 @@ In the end we would produce 5 messages in total, like so:
 # etc...
 ```
 
-NOTE: This is how you would see the values in the Kafka topic `product_review_word_counts`.
+!!! NOTE
+
+    This is a user-friendly representation of how a message key/value in the Kafka topic 
+    `product_review_word_counts` would appear.
 
 
 
@@ -257,10 +288,16 @@ One thing to keep in mind is that the Quix Streams does not log/print any messag
 operations by default.
 
 To get visual outputs around message processing, you can either:
+
 - use [recommended way of printing/logging with SDF](../../processing.md#debugging)
- 
+
 - use `DEBUG` mode via `Application(loglevel="DEBUG")`
-  - WARNING: you should NOT run your applications in `DEBUG` mode in production.
+
+
+    !!! DANGER
+
+        you should NOT run your applications in `DEBUG` mode in production.
+
 
 
 

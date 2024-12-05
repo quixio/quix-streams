@@ -72,16 +72,22 @@ Now we set up the data retrieval loop contained within a `while self.running` bl
 This is so a shutdown from the `Application` level also gracefully exits this loop; the 
 `Source` essentially stops if the `Source.run()` method is ever exited.
 
-> [!NOTE] 
-> Since no other teardown is required for websockets, nothing happens after the
-> `while self.running` block.
+!!! NOTE
+
+    Since no other teardown is required for websockets, nothing happens after the
+    `while self.running` block.
 
 Inside this block, records are retrieved, serialized (to `JSON`), and produced to an
 underlying internal topic as close to its raw form as possible (user-level manipulations 
 occur at the `Application` level using a `StreamingDataFrame`). 
 
-> [!TIP]
-> The internal topic can accept other data serializations by overriding `Source.default_topic()`.
+!!! TIP 
+
+    The internal topic can accept other data serializations by overriding 
+    `Source.default_topic()`.
+
+
+
 
 ## Using `CoinbaseSource`
 
@@ -113,8 +119,10 @@ Create a [Quix Streams Application](../../configuration.md), which is our constr
 We provide it our connection settings, consumer group (ideally unique per Application), 
 and where the consumer group should start from on the (internal) Source topic.
 
-> [!TIP] 
-> Once you are more familiar with Kafka, we recommend [learning more about auto_offset_reset](https://www.quix.io/blog/kafka-auto-offset-reset-use-cases-and-pitfalls).
+!!! TIP
+
+    Once you are more familiar with Kafka, we recommend 
+    [learning more about auto_offset_reset](https://www.quix.io/blog/kafka-auto-offset-reset-use-cases-and-pitfalls).
 
 #### Our Application
 ```python
@@ -131,8 +139,11 @@ app = Application(
 
 Create one for each topic used by your `Application`.
 
-> [!NOTE]
-> Any missing topics will be automatically created for you upon running the application.
+!!! NOTE
+
+    Any missing topics will be automatically created for you upon running an `Application`.
+
+
 
 #### Our Topics
 We have one output topic, named `price_updates`:
@@ -147,12 +158,16 @@ Now for the fun part: building our [StreamingDataFrame](../../processing.md#intr
 
 SDF allows manipulating the message value in a dataframe-like fashion using various operations.
 
-After initializing with either a `Topic` or `Source`, we continue re-assigning to the same `sdf` variable as we add operations.
+After initializing with either a `Topic` or `Source`, we continue reassigning to the 
+same `sdf` variable as we add operations.
 
-> [!NOTE]
-> A few `StreamingDataFrame` operations are 
-> ["in-place"](../../advanced/dataframe-assignments.md#valid-in-place-operations), 
-> like `.print()`.
+!!! NOTE
+
+    A few `StreamingDataFrame` operations are 
+    ["in-place"](../../advanced/dataframe-assignments.md#valid-in-place-operations), 
+    like `.print()`.
+
+
 
 #### Our SDF operations
 First, we initialize our SDF with our `coinbase_source`.
