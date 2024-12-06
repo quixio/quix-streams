@@ -10,7 +10,7 @@
 class BaseSource(ABC)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/base/source.py#L17)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L17)
 
 This is the base class for all sources.
 
@@ -83,7 +83,7 @@ if __name__ == "__main__":
 def configure(topic: Topic, producer: RowProducer, **kwargs) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/base/source.py#L88)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L88)
 
 This method is triggered before the source is started.
 
@@ -100,7 +100,7 @@ It configures the source's Kafka producer, the topic it will produce to and opti
 def start() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/base/source.py#L110)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L110)
 
 This method is triggered in the subprocess when the source is started.
 
@@ -118,7 +118,7 @@ Use it to fetch data and produce it to Kafka.
 def stop() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/base/source.py#L119)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L119)
 
 This method is triggered when the application is shutting down.
 
@@ -135,7 +135,7 @@ The source must ensure that the `run` method is completed soon.
 def default_topic() -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/base/source.py#L127)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L127)
 
 This method is triggered when the topic is not provided to the source.
 
@@ -151,7 +151,7 @@ Note: if the default topic is used, the Application will prefix its name with "s
 class Source(BaseSource)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/base/source.py#L137)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L137)
 
 A base class for custom Sources that provides a basic implementation of `BaseSource`
 interface.
@@ -211,7 +211,7 @@ if __name__ == "__main__":
 def __init__(name: str, shutdown_timeout: float = 10) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/base/source.py#L187)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L187)
 
 
 <br>
@@ -231,7 +231,7 @@ def __init__(name: str, shutdown_timeout: float = 10) -> None
 def running() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/base/source.py#L201)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L201)
 
 Property indicating if the source is running.
 
@@ -247,7 +247,7 @@ The `stop` method will set it to `False`. Use it to stop the source gracefully.
 def cleanup(failed: bool) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/base/source.py#L209)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L209)
 
 This method is triggered once the `run` method completes.
 
@@ -265,7 +265,7 @@ It flushes the producer when `_run` completes successfully.
 def stop() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/base/source.py#L220)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L220)
 
 This method is triggered when the application is shutting down.
 
@@ -281,7 +281,7 @@ It sets the `running` property to `False`.
 def start() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/base/source.py#L228)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L228)
 
 This method is triggered in the subprocess when the source is started.
 
@@ -298,7 +298,7 @@ It marks the source as running, execute it's run method and ensure cleanup happe
 def run()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/base/source.py#L244)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L244)
 
 This method is triggered in the subprocess when the source is started.
 
@@ -318,7 +318,7 @@ def serialize(key: Optional[object] = None,
               timestamp_ms: Optional[int] = None) -> KafkaMessage
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/base/source.py#L252)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L252)
 
 Serialize data to bytes using the producer topic serializers and return a `quixstreams.models.messages.KafkaMessage`.
 
@@ -344,7 +344,7 @@ def produce(value: Optional[Union[str, bytes]] = None,
             buffer_error_max_tries: int = 3) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/base/source.py#L268)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L268)
 
 Produce a message to the configured source topic in Kafka.
 
@@ -358,7 +358,7 @@ Produce a message to the configured source topic in Kafka.
 def flush(timeout: Optional[float] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/base/source.py#L293)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L293)
 
 This method flush the producer.
 
@@ -385,7 +385,7 @@ None use producer default or -1 is infinite. Default: None
 def default_topic() -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/base/source.py#L311)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L311)
 
 Return a default topic matching the source name.
 
@@ -407,7 +407,7 @@ Note: if the default topic is used, the Application will prefix its name with "s
 class StatefulSource(Source)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/base/source.py#L330)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L330)
 
 A `Source` class for custom Sources that need a state.
 
@@ -467,7 +467,7 @@ if __name__ == "__main__":
 def __init__(name: str, shutdown_timeout: float = 10) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/base/source.py#L380)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L380)
 
 
 <br>
@@ -490,7 +490,7 @@ def configure(topic: Topic,
               **kwargs) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/base/source.py#L390)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L390)
 
 This method is triggered before the source is started.
 
@@ -507,7 +507,7 @@ It configures the source's Kafka producer, the topic it will produce to and the 
 def store_partitions_count() -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/base/source.py#L409)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L409)
 
 Count of store partitions.
 
@@ -524,7 +524,7 @@ Used to configure the number of partition in the changelog topic.
 def assigned_store_partition() -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/base/source.py#L418)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L418)
 
 The store partition assigned to this instance
 
@@ -539,7 +539,7 @@ The store partition assigned to this instance
 def store_name() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/base/source.py#L425)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L425)
 
 The source store name
 
@@ -554,7 +554,7 @@ The source store name
 def state() -> State
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/base/source.py#L432)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L432)
 
 Access the `State` of the source.
 
@@ -572,7 +572,7 @@ Important: after each `.flush()` call, a previously returned instance is invalid
 def flush(timeout: Optional[float] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/base/source.py#L451)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L451)
 
 This method commit the state and flush the producer.
 
@@ -601,7 +601,7 @@ None use producer default or -1 is infinite. Default: None
 class CSVSource(Source)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/core/csv.py#L13)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/core/csv.py#L13)
 
 <a id="quixstreams.sources.core.csv.CSVSource.__init__"></a>
 
@@ -620,7 +620,7 @@ def __init__(path: Union[str, Path],
              dialect: str = "excel") -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/core/csv.py#L14)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/core/csv.py#L14)
 
 A base CSV source that reads data from a CSV file and produces rows
 
@@ -660,7 +660,7 @@ Default - `"excel"`.
 class KafkaReplicatorSource(Source)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/core/kafka/kafka.py#L25)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/core/kafka/kafka.py#L25)
 
 Source implementation that replicates a topic from a Kafka broker to your application broker.
 
@@ -711,7 +711,7 @@ def __init__(
         key_deserializer: DeserializerType = "bytes") -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/core/kafka/kafka.py#L54)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/core/kafka/kafka.py#L54)
 
 
 <br>
@@ -750,7 +750,7 @@ Default - `json`
 class QuixEnvironmentSource(KafkaReplicatorSource)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/core/kafka/quix.py#L19)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/core/kafka/quix.py#L19)
 
 Source implementation that replicates a topic from a Quix Cloud environment to your application broker.
 It can copy messages for development and testing without risking producing them back or affecting the consumer groups.
@@ -805,7 +805,7 @@ def __init__(
         key_deserializer: DeserializerType = "bytes") -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/core/kafka/quix.py#L50)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/core/kafka/quix.py#L50)
 
 
 <br>
@@ -830,7 +830,7 @@ For other parameters See `quixstreams.sources.kafka.KafkaReplicatorSource`
 class FileSource(Source)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/community/file/file.py#L19)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/file.py#L19)
 
 Ingest a set of files from a desired origin into Kafka by iterating through the
 provided folder and processing all nested files within it.
@@ -905,7 +905,7 @@ def __init__(directory: Union[str, Path],
              shutdown_timeout: float = 10)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/community/file/file.py#L79)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/file.py#L79)
 
 
 <br>
@@ -936,7 +936,7 @@ to gracefully shutdown
 def default_topic() -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/community/file/file.py#L152)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/file.py#L152)
 
 Uses the file structure to generate the desired partition count for the
 
@@ -1016,7 +1016,7 @@ names based on the azure SDK docs examples.
 class S3Origin(Origin)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/community/file/origins/s3.py#L23)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/origins/s3.py#L23)
 
 <a id="quixstreams.sources.community.file.origins.s3.S3Origin.__init__"></a>
 
@@ -1033,7 +1033,7 @@ def __init__(
     endpoint_url: Optional[str] = getenv("AWS_ENDPOINT_URL_S3"))
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/community/file/origins/s3.py#L24)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/origins/s3.py#L24)
 
 Configure IcebergSink to work with AWS Glue.
 
@@ -1064,7 +1064,7 @@ NOTE: can alternatively set the AWS_ENDPOINT_URL_S3 environment variable
 class JSONFormat(Format)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/community/file/formats/json.py#L12)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/formats/json.py#L12)
 
 <a id="quixstreams.sources.community.file.formats.json.JSONFormat.__init__"></a>
 
@@ -1077,7 +1077,7 @@ def __init__(compression: Optional[CompressionName],
              loads: Optional[Callable[[str], dict]] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/community/file/formats/json.py#L13)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/formats/json.py#L13)
 
 Read a JSON-formatted file (along with decompressing it).
 
@@ -1105,7 +1105,7 @@ with {_key: str, _value: dict, _timestamp: int}.
 class KinesisSource(StatefulSource)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/community/kinesis/kinesis.py#L18)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/kinesis/kinesis.py#L18)
 
 NOTE: Requires `pip install quixstreams[kinesis]` to work.
 
@@ -1163,7 +1163,7 @@ def __init__(
         retry_backoff_secs: float = 5.0)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/community/kinesis/kinesis.py#L57)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/kinesis/kinesis.py#L57)
 
 
 <br>
@@ -1200,7 +1200,7 @@ shard when Kinesis consumer encounters handled/expected errors.
 class PubSubSource(Source)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/community/pubsub/pubsub.py#L16)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/pubsub/pubsub.py#L16)
 
 This source enables reading from a Google Cloud Pub/Sub topic,
 dumping it to a kafka topic using desired SDF-based transformations.
@@ -1256,7 +1256,7 @@ def __init__(project_id: str,
              shutdown_timeout: float = 10.0)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/chore/example-cleanup/quixstreams/sources/community/pubsub/pubsub.py#L55)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/pubsub/pubsub.py#L55)
 
 
 <br>
