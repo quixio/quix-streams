@@ -952,6 +952,54 @@ the original default topic, with updated partition count
 
 ## quixstreams.sources.community.file.compressions.gzip
 
+<a id="quixstreams.sources.community.file.origins.azure"></a>
+
+## quixstreams.sources.community.file.origins.azure
+
+<a id="quixstreams.sources.community.file.origins.azure.AzureFileOrigin"></a>
+
+### AzureFileOrigin
+
+```python
+class AzureFileOrigin(Origin)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/origins/azure.py#L20)
+
+<a id="quixstreams.sources.community.file.origins.azure.AzureFileOrigin.__init__"></a>
+
+<br><br>
+
+#### AzureFileOrigin.\_\_init\_\_
+
+```python
+def __init__(connection_string: str, container: str)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/origins/azure.py#L21)
+
+
+<br>
+***Arguments:***
+
+- `connection_string`: Azure client authentication string.
+- `container`: Azure container name.
+
+<a id="quixstreams.sources.community.file.origins.azure.AzureFileOrigin.get_folder_count"></a>
+
+<br><br>
+
+#### AzureFileOrigin.get\_folder\_count
+
+```python
+def get_folder_count(directory: Path) -> int
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/origins/azure.py#L50)
+
+This is a simplified version of the recommended way to retrieve folder
+names based on the azure SDK docs examples.
+
 <a id="quixstreams.sources.community.file.origins.local"></a>
 
 ## quixstreams.sources.community.file.origins.local
