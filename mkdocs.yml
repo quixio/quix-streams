@@ -8,6 +8,8 @@ theme:
   features:
     - navigation.path
     - navigation.indexes
+    - content.code.copy
+    - content.code.select
 
 markdown_extensions:
   - attr_list
@@ -26,9 +28,10 @@ nav:
   - Quickstart: 'quickstart.md'
   - Tutorials:
     - 'tutorials/README.md'
-    - Word Count: 'tutorials/word-count/tutorial.md'
     - Anomaly Detection: 'tutorials/anomaly-detection/tutorial.md'
     - Purchase Filtering: 'tutorials/purchase-filtering/tutorial.md'
+    - Word Count: 'tutorials/word-count/tutorial.md'
+    - Websocket Source: 'tutorials/websocket-source/tutorial.md'
   - How to:
     - Produce Data to Kafka: producer.md
     - Process & Transform Data: processing.md

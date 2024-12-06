@@ -13,7 +13,7 @@ Besides a Kafka instance to connect to, most of them likely fit the pattern of:
 
 `python ./path/to/producer.py`
 
-`python ./path/to/application.py`
+`python ./path/to/tutorial_app.py`
 
 
 ## Running Kafka Locally
