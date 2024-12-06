@@ -361,7 +361,7 @@ if __name__ == "__main__":
 
 
 
-## Try it yourself!
+## Try it Yourself!
 
 ### 1. Run Kafka
 First, have a running Kafka cluster. 
