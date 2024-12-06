@@ -104,7 +104,6 @@ class PartitionTransactionCache:
         Delete a key.
 
         :param: key: key as bytes
-        :param: value: value as bytes
         :param: prefix: key prefix as bytes
         :param: cf_name: column family name
         """
