@@ -184,7 +184,7 @@ which means we will be consuming data from a non-Kafka origin.
 !!! TIP
 
     You can consume from a Kafka topic instead by passing a `Topic` object
-    with app.dataframe(topic=<Topic>)
+    with `app.dataframe(topic=<Topic>)`.
 
 Let's go over the SDF operations in this example in detail.
 
