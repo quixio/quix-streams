@@ -233,7 +233,7 @@ sdf["Membership Type"].isin(["Silver", "Gold"])
 We additionally showcase one of our built-in column operations `.isin()`, a way for SDF to perform an 
 `if x in y` check (SDF is declaratively defined, invalidating that approach).
 
-!!! INFO 
+!!! INFO "Column-only manipulations" 
 
     Some operations (like `.isin()`) are only available when manipulating a column.
 
@@ -339,7 +339,7 @@ sdf = sdf.to_topic(customers_qualified_topic)
 Finally, we produce our non-filtered results downstream via [`SDF.to_topic(T)`](../../processing.md#writing-data-to-kafka-topics), where `T`
 is our previously defined `Topic` (not the topic name!).
 
-!!! INFO
+!!! "Message key persistence"
 
     By default, our outgoing Kafka key is persisted from the input message. 
     [You can alter it](../../processing.md#changing-message-key-before-producing), if needed.

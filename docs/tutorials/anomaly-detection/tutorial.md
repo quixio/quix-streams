@@ -241,7 +241,7 @@ so we extract the "value" with `SDF.apply()` and [`SDF.filter(F)`](../../process
 
 In our case, this example event would then stop since `bool(None)` is `False`.
 
-!!! INFO
+!!! INFO "SDF filtering behavior"
 
     For `SDF.filter(F)`, if the (_**boolean**_-ed) return value of `F` is: 
 
