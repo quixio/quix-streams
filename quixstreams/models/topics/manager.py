@@ -207,9 +207,12 @@ class TopicManager:
 
         :return: a TopicConfig
         """
+
         topic_config = self._admin.inspect_topics([topic_name], timeout=timeout)[
             topic_name
-        ] or deepcopy(self._non_changelog_topics[topic_name].config)
+        ]
+        if topic_config is None and topic_name in self._non_changelog_topics:
+            topic_config = deepcopy(self._non_changelog_topics[topic_name].config)
 
         if topic_config is None:
             raise RuntimeError(f"No configuration can be found for topic {topic_name}")
