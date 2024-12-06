@@ -1,5 +1,4 @@
 import logging
-import os
 import time
 from collections import Counter
 from random import choice
@@ -36,10 +35,13 @@ class ReviewGenerator(Source):
 
 
 def setup_and_run_application():
+    """Group all Application-related code here for easy reading."""
+    import os
+
     from quixstreams import Application
 
     app = Application(
-        broker_address=os.environ.get("BROKER_ADDRESS", "localhost:9092"),
+        broker_address=os.getenv("BROKER_ADDRESS", "localhost:9092"),
         consumer_group="product_review_word_counter",
         auto_offset_reset="earliest",
     )

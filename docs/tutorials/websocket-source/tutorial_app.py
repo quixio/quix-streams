@@ -6,7 +6,6 @@ from dateutil.parser import isoparse
 from websockets import ConnectionClosedOK
 from websockets.sync.client import connect
 
-from quixstreams import Application
 from quixstreams.sources import Source
 
 logger = logging.getLogger(__name__)
@@ -83,7 +82,12 @@ class CoinbaseSource(Source):
             )
 
 
-def main():
+def setup_and_run_application():
+    """Group all Application-related code here for easy reading."""
+    import os
+
+    from quixstreams import Application
+
     # Configure the CoinbaseSource instance
     coinbase_source = CoinbaseSource(
         # Pick the unique name for the source instance.
@@ -97,7 +101,7 @@ def main():
 
     # Initialize an Application with Kafka configuration
     app = Application(
-        broker_address="localhost:9092",  # Specify your Kafka broker address here
+        broker_address=os.getenv("BROKER_ADDRESS", "localhost:9092"),
         auto_offset_reset="earliest",
     )
 
@@ -119,4 +123,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    setup_and_run_application()

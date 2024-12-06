@@ -72,13 +72,11 @@ class PurchaseGenerator(Source):
 
 
 def setup_and_run_application():
-    """
-    Group all Application-related code here for easy reading.
-    """
+    """Group all Application-related code here for easy reading."""
     from quixstreams import Application
 
     app = Application(
-        broker_address=os.environ.get("BROKER_ADDRESS", "localhost:9092"),
+        broker_address=os.getenv("BROKER_ADDRESS", "localhost:9092"),
         consumer_group="purchase_filtering",
         auto_offset_reset="earliest",
     )

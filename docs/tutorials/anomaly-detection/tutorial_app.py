@@ -5,7 +5,7 @@ import time
 from quixstreams.sources import Source
 
 
-class TemperatureEventGenerator(Source):
+class TemperatureGenerator(Source):
     """
     What a Source is:
     A Quix Streams Source enables Applications to read data from something other than a Kafka topic.
@@ -88,14 +88,15 @@ class TemperatureEventGenerator(Source):
 
 
 def setup_and_run_application():
+    """Group all Application-related code here for easy reading."""
     from quixstreams import Application
 
     app = Application(
-        broker_address=os.environ.get("BROKER_ADDRESS", "localhost:9092"),
+        broker_address=os.getenv("BROKER_ADDRESS", "localhost:9092"),
         consumer_group="temperature_alerter",
         auto_offset_reset="earliest",
     )
-    alerts_topic = app.topic(name="alerts")
+    alerts_topic = app.topic(name="temperature_alerts")
 
     def should_alert(window_value: int, key, timestamp, headers):
         if window_value >= 90:
@@ -103,7 +104,7 @@ def setup_and_run_application():
             return True
 
     # If reading from a Kafka topic, pass topic=<Topic> instead of a source
-    sdf = app.dataframe(source=TemperatureEventGenerator())
+    sdf = app.dataframe(source=TemperatureGenerator())
     sdf = sdf.apply(lambda data: data["Temperature_C"])
     sdf = sdf.hopping_window(duration_ms=5000, step_ms=1000).mean().current()
     sdf = sdf.apply(lambda result: round(result["value"], 2)).filter(

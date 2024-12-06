@@ -3,7 +3,11 @@
 We will build a simple Purchase Filtering app to showcase some common Quix Streams 
 dataframe-like operations with dictionary/JSON data (a format frequently used).
 
-You'll learn how to:
+
+
+## What You Will Learn
+
+This example will show how to use a Quix Streams `Application` to:
 
 - Ingest a non-Kafka data source
 - Assign a value to a new column
@@ -97,38 +101,40 @@ kafka_value: {
 
 ## Purchase Filtering Application
 
-
 Now let's go over the `setup_and_run_application()` portion of 
 our [**>>> Purchase Filtering Application <<<**](tutorial_app.py) in detail!
 
 
 
+
 ### Create an Application
-
-```python
-import os
-from quixstreams import Application
-
-app = Application(
-    broker_address=os.environ.get("BROKER_ADDRESS", "localhost:9092"),
-    consumer_group="purchase_summing",
-    auto_offset_reset="earliest"
-)
-```
 
 Create a [Quix Streams Application](../../configuration.md), which is our constructor for everything! 
 
 We provide it our connection settings, consumer group (ideally unique per Application), 
-and where the consumer group should start from on the (internal) `Source` topic.
+and where the consumer group should start from on the (internal) Source topic.
 
 !!! TIP
 
     Once you are more familiar with Kafka, we recommend 
     [learning more about auto_offset_reset](https://www.quix.io/blog/kafka-auto-offset-reset-use-cases-and-pitfalls).
 
+#### Our Application
+
+```python
+import os
+from quixstreams import Application
+
+app = Application(
+    broker_address=os.getenv("BROKER_ADDRESS", "localhost:9092"),
+    consumer_group="purchase_filtering",
+    auto_offset_reset="earliest",
+)
+```
 
 
-### Define Output Topics
+
+### Specify Topics
 
 `Application.topic()` returns [`Topic`](../../api-reference/topics.md) objects which are used by `StreamingDataFrame`.
 
@@ -137,6 +143,7 @@ Create one for each topic used by your `Application`.
 !!! NOTE
 
     Any missing topics will be automatically created for you upon running an `Application`.
+
 
 #### Our Topics
 We have one output topic, named `customers_coupon_qualified`:
@@ -147,13 +154,11 @@ customers_qualified_topic = app.topic(name="customers_coupon_qualified")
 
 
 
+
+
 ### The StreamingDataFrame (SDF)
 
-```python
-sdf = app.dataframe(topic=customer_purchases_topic)
-```
-
-Now for the fun part: building our [StreamingDataFrame](../../processing.md#introduction-to-streamingdataframe), often shorthanded to "SDF".  
+Now for the fun part: building our [StreamingDataFrame](../../processing.md#introduction-to-streamingdataframe), often shorthanded to "SDF".
 
 SDF allows manipulating the message value in a dataframe-like fashion using various operations.
 
@@ -166,7 +171,23 @@ same `sdf` variable as we add operations.
     ["in-place"](../../advanced/dataframe-assignments.md#valid-in-place-operations), 
     like `.print()`.
 
-(Also: notice that we pass our input `Topic` from the previous step to it.)
+#### Initializing our SDF
+
+```python
+sdf = app.dataframe(source=PurchaseGenerator())
+```
+
+First, we initialize our SDF with our `PurchaseGenerator` `Source`, 
+which means we will be consuming data from a non-Kafka origin.
+
+
+!!! TIP
+
+    You can consume from a Kafka topic instead by passing a `Topic` object
+    with app.dataframe(topic=<Topic>)
+
+Let's go over the SDF operations in this example in detail.
+
 
 
 
@@ -275,7 +296,7 @@ This is basically a functional equivalent of adding a key to a dictionary.
 >>> {"Remove Me": "value", "Email": "cool email"}`
 ```
 
-becomes
+becomes:
 
 ```python
 >>> {"Remove Me": "value", "Email": "cool email", "Full Name": "cool name"}`
@@ -291,13 +312,13 @@ sdf = sdf[["Email", "Full Name"]]
 We only need a couple fields to send downstream, so this is a convenient way to select
 only a specific list of columns (AKA dictionary keys) from our data.
 
-So 
+So:
 
 ```python
 >>> {"Remove Me": "value", "Email": "cool email", "Full Name": "cool name", }`
 ```
 
-becomes
+becomes:
 
 ```python
 >>> {"Email": "cool email", "Full Name": "cool name"}`
@@ -323,7 +344,7 @@ is our previously defined `Topic` (not the topic name!).
     By default, our outgoing Kafka key is persisted from the input message. 
     [You can alter it](../../processing.md#changing-message-key-before-producing), if needed.
 
-### Running an Application
+### Running the Application
 
 Running a `Source`-based `Application` requires calling `Application.run()` within a
 `if __name__ == "__main__"` block.

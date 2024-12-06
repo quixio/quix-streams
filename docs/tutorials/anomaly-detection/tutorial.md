@@ -1,6 +1,13 @@
 # Tutorial: Anomaly Detection
 
-You will learn how to build a simple anomaly detection system, a common use case of stateful streaming applications. This will show how to use a Quix Streams application to:
+We will build a simple anomaly detection system, a common use case of stateful 
+streaming applications. 
+
+
+
+## What You Will Learn
+
+This example will show how to use a Quix Streams `Application` to:
 
 - Ingest a non-Kafka data source
 - Use stateful windowed operations
@@ -95,27 +102,28 @@ Now let's go over the `setup_and_run_application()` portion of our
 
 ### Create an Application
 
-```python
-import os
-from quixstreams import Application
-
-app = Application(
-    broker_address=os.environ.get("BROKER_ADDRESS", "localhost:9092"),
-    consumer_group="temperature_alerter",
-    auto_offset_reset="earliest"
-)
-```
-
 Create a [Quix Streams Application](../../configuration.md), which is our constructor for everything! 
 
 We provide it our connection settings, consumer group (ideally unique per Application), 
-and where the consumer group should start from on the (internal) `Source` topic.
+and where the consumer group should start from on the (internal) Source topic.
 
 !!! TIP
 
     Once you are more familiar with Kafka, we recommend 
     [learning more about auto_offset_reset](https://www.quix.io/blog/kafka-auto-offset-reset-use-cases-and-pitfalls).
 
+#### Our Application
+
+```python
+import os
+from quixstreams import Application
+
+app = Application(
+    broker_address=os.getenv("BROKER_ADDRESS", "localhost:9092"),
+    consumer_group="temperature_alerter",
+    auto_offset_reset="earliest",
+)
+```
 
 
 
@@ -131,21 +139,17 @@ Create one for each topic used by your `Application`.
 
 
 #### Our Topics
-We have one output topic, named `price_updates`:
+We have one output topic, named `temperature_alerts`:
 
 ```python
-price_updates_topic = app.topic("price_updates")
+alerts_topic = app.topic("temperature_alerts")
 ```
 
 
 
 ### The StreamingDataFrame (SDF)
 
-```python
-sdf = app.dataframe(topic=temperature_readings_topic)
-```
-
-Now for the fun part: building our [StreamingDataFrame](../../processing.md#introduction-to-streamingdataframe), often shorthanded to "SDF".  
+Now for the fun part: building our [StreamingDataFrame](../../processing.md#introduction-to-streamingdataframe), often shorthanded to "SDF".
 
 SDF allows manipulating the message value in a dataframe-like fashion using various operations.
 
@@ -158,7 +162,22 @@ same `sdf` variable as we add operations.
     ["in-place"](../../advanced/dataframe-assignments.md#valid-in-place-operations), 
     like `.print()`.
 
-(Also: notice that we pass our input `Topic` from the previous step to it.)
+#### Initializing our SDF
+
+```python
+sdf = app.dataframe(source=TemperatureGenerator())
+```
+
+First, we initialize our SDF with our `TemperatureGenerator` `Source`, 
+which means we will be consuming data from a non-Kafka origin.
+
+
+!!! TIP
+
+    You can consume from a Kafka topic instead by passing a `Topic` object
+    with app.dataframe(topic=<Topic>)
+
+Let's go over the SDF operations in this example in detail.
 
 
 
@@ -216,15 +235,19 @@ Now we get a window result (mean) along with its start/end timestamp:
 
 `>>> {"value": 67.49478585, "start": 1234567890, "end": 1234567895}`
 
-We don't particularly care about the window itself in our case, just the result...so we extract the "value" with `SDF.apply()` and [`SDF.filter(F)`](../../processing.md#streamingdataframefilter), where `F` is our "should_alert" function. 
-
-For `SDF.filter(F)`, if the (_**boolean**_-ed) return value of `F` is: 
-
-- `True` -> continue processing this event
-
-- `False` -> stop ALL further processing of this event (including produces!)
+We don't particularly care about the window itself in our case, just the result...
+so we extract the "value" with `SDF.apply()` and [`SDF.filter(F)`](../../processing.md#streamingdataframefilter), where 
+`F` is our "should_alert" function. 
 
 In our case, this example event would then stop since `bool(None)` is `False`.
+
+!!! INFO
+
+    For `SDF.filter(F)`, if the (_**boolean**_-ed) return value of `F` is: 
+
+    - `True` -> continue processing this event
+
+    - `False` -> stop ALL further processing of this event (including produces!)
 
 
 
@@ -246,7 +269,7 @@ is our previously defined `Topic` (not the topic name!).
 
 
 
-### Running an Application
+### Running the Application
 
 Running a `Source`-based `Application` requires calling `Application.run()` within a
 `if __name__ == "__main__"` block.

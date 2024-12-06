@@ -143,14 +143,14 @@ Create one for each topic used by your `Application`.
 
     Any missing topics will be automatically created for you upon running an `Application`.
 
-
-
 #### Our Topics
 We have one output topic, named `price_updates`:
 
 ```python
 price_updates_topic = app.topic(name="price_updates")
 ```
+
+
 
 ### The StreamingDataFrame (SDF)
 
@@ -166,8 +166,6 @@ same `sdf` variable as we add operations.
     A few `StreamingDataFrame` operations are 
     ["in-place"](../../advanced/dataframe-assignments.md#valid-in-place-operations), 
     like `.print()`.
-
-
 
 #### Our SDF operations
 First, we initialize our SDF with our `coinbase_source`.
@@ -214,7 +212,7 @@ and then produce the following to topic `price_updates`:
 ```
 
 
-### Running an Application
+### Running the Application
 
 Running a `Source`-based `Application` requires calling `Application.run()` within a
 `if __name__ == "__main__"` block.
@@ -222,15 +220,15 @@ Running a `Source`-based `Application` requires calling `Application.run()` with
 #### Our Application Run Block 
 
 Our entire `Application` (and all its spawned objects) resides within a 
-`main()` function, executed as required:
+`setup_and_run_application()` function, executed as required:
 
 ```python
 if __name__ == "__main__":
-    main()
+    setup_and_run_application()
 ```
 
-This `main()` setup is a personal choice: the only true requirement is `app.run()` being 
-called inside the block.
+This `setup_and_run_application()` setup is a personal choice: the only true 
+requirement is `app.run()` being called inside a `if __name__ == "__main__"` block.
 
 
 
@@ -253,4 +251,4 @@ In your desired python environment, execute: `python tutorial_app.py`.
 
 ### 5. Check out the results!
 
-You should see record print outs [like the example above](#example-record).
+You should see record printouts [like the example above](#example-record).

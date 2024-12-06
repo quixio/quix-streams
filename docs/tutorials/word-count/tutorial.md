@@ -2,7 +2,10 @@
 
 We will build a simple word counter, which is a great introduction to Quix Streams and Kafka!
 
-You'll learn how to:
+
+## What You Will Learn
+
+This example will show how to use a Quix Streams `Application` to:
 
 - Ingest a non-Kafka data source
 - Do simple event alterations
@@ -87,54 +90,53 @@ our [**>>> Word Counter Application <<<**](tutorial_app.py) in detail!
 
 
 
-### Create Application
-
-```python
-import os
-from quixstreams import Application
-
-app = Application(
-    broker_address=os.environ.get("BROKER_ADDRESS", "localhost:9092"),
-    consumer_group="product_review_word_counter",
-    auto_offset_reset="earliest"
-)
-```
+### Create an Application
 
 Create a [Quix Streams Application](../../configuration.md), which is our constructor for everything! 
 
 We provide it our connection settings, consumer group (ideally unique per Application), 
-and where the consumer group should start from on the (internal) `Source` topic.
-
+and where the consumer group should start from on the (internal) Source topic.
 
 !!! TIP
 
     Once you are more familiar with Kafka, we recommend 
     [learning more about auto_offset_reset](https://www.quix.io/blog/kafka-auto-offset-reset-use-cases-and-pitfalls).
 
+#### Our Application
+
+```python
+import os
+from quixstreams import Application
+
+app = Application(
+    broker_address=os.getenv("BROKER_ADDRESS", "localhost:9092"),
+    consumer_group="product_review_word_counter",
+    auto_offset_reset="earliest"
+)
+```
 
 
 ### Specify Topics
 
-```python
-word_counts_topic = app.topic(name="product_review_word_counts")
-```
+`Application.topic()` returns [`Topic`](../../api-reference/topics.md) objects which are used by `StreamingDataFrame`.
 
-Next we define our input/output topics, named `product_reviews` and `product_review_word_counts`, respectively. 
-
-They each return [`Topic`](../../api-reference/topics.md) objects, used later on.
+Create one for each topic used by your `Application`.
 
 !!! NOTE
 
     Any missing topics will be automatically created for you upon running an `Application`.
 
 
+#### Our Topics
+We have one output topic, named `product_review_word_counts`:
+
+```python
+word_counts_topic = app.topic(name="product_review_word_counts")
+```
+
 
 
 ### The StreamingDataFrame (SDF)
-
-```python
-sdf = app.dataframe(topic=product_reviews_topic)
-```
 
 Now for the fun part: building our [StreamingDataFrame](../../processing.md#introduction-to-streamingdataframe), often shorthanded to "SDF".
 
@@ -149,7 +151,22 @@ same `sdf` variable as we add operations.
     ["in-place"](../../advanced/dataframe-assignments.md#valid-in-place-operations), 
     like `.print()`.
 
-(Also, notice that we pass our input `Topic` from the previous step to it.)
+#### Initializing our SDF
+
+```python
+sdf = app.dataframe(source=ReviewGenerator())
+```
+
+First, we initialize our SDF with our `ReviewGenerator` `Source`, 
+which means we will be consuming data from a non-Kafka origin.
+
+
+!!! TIP
+
+    You can consume from a Kafka topic instead by passing a `Topic` object
+    with app.dataframe(topic=<Topic>)
+
+Let's go over the SDF operations in this example in detail.
 
 
 
@@ -183,7 +200,7 @@ to this:
 `>>> [('bob', 1), ('likes', 2), ('bananas', 1), ('and', 1), ('frank', 1), ('apples', 1)]`
 
 
-!!! NOTE 
+!!! INFO 
 
     Two VERY important and related points around the `expand=True` argument:
 
@@ -261,6 +278,24 @@ In the end we would produce 5 messages in total, like so:
     This is a user-friendly representation of how a message key/value in the Kafka topic 
     `product_review_word_counts` would appear.
 
+
+
+
+
+### Running the Application
+
+Running a `Source`-based `Application` requires calling `Application.run()` within a
+`if __name__ == "__main__"` block.
+
+#### Our Application Run Block 
+
+Our entire `Application` (and all its spawned objects) resides within a 
+`setup_and_run_application()` function, executed as required:
+
+```python
+if __name__ == "__main__":
+    setup_and_run_application()
+```
 
 
 
