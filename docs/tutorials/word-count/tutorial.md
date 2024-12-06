@@ -200,13 +200,11 @@ to this:
 `>>> [('bob', 1), ('likes', 2), ('bananas', 1), ('and', 1), ('frank', 1), ('apples', 1)]`
 
 
-!!! INFO 
-
-    Two VERY important and related points around the `expand=True` argument:
+!!! INFO "`expand=True` argument details"
 
     1. It tells SDF "hey, this .apply() returns _**multiple independent**_ events!"
 
-    2. Our `F` returns a `list` (or a non-dict iterable of some kind), hence the "expand"!
+    2. The `F` returns a `list` (or a non-dict iterable of some kind), hence the "expand"!
 
 
 
@@ -254,9 +252,7 @@ While it's fairly common to maintain the input event's key (SDF's default behavi
 there are also many reasons why you might adjust it, so we showcase an example of that 
 here!
 
-!!! QUESTION
-
-    What would be the benefit of changing the key to the counted word, in this case?
+!!! QUESTION "Why change the key to the word being counted?"
 
     This key change would enable calculating _total word counts over time_ from this 
     topic without additional data transformations (a more advanced operation). 
