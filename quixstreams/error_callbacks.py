@@ -1,18 +1,18 @@
 import logging
 from typing import Callable, Optional
 
-from .models import ConfluentKafkaMessageProto, Row
+from .models import RawConfluentKafkaMessageProto, Row
 
 ProcessingErrorCallback = Callable[[Exception, Optional[Row], logging.Logger], bool]
 ConsumerErrorCallback = Callable[
-    [Exception, Optional[ConfluentKafkaMessageProto], logging.Logger], bool
+    [Exception, Optional[RawConfluentKafkaMessageProto], logging.Logger], bool
 ]
 ProducerErrorCallback = Callable[[Exception, Optional[Row], logging.Logger], bool]
 
 
 def default_on_consumer_error(
     exc: Exception,
-    message: Optional[ConfluentKafkaMessageProto],
+    message: Optional[RawConfluentKafkaMessageProto],
     logger: logging.Logger,
 ):
     topic, partition, offset = None, None, None

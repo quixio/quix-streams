@@ -1,5 +1,8 @@
+from typing import List
+
 from quixstreams.models.types import (
     HeadersMapping,
+    HeadersTuple,
     HeadersTuples,
     KafkaHeaders,
 )
@@ -25,12 +28,12 @@ def merge_headers(original: KafkaHeaders, other: HeadersMapping) -> HeadersTuple
 
     # Make a shallow copy of "other" to pop keys from it
     other = other.copy()
-    new_headers = []
+    new_headers: List[HeadersTuple] = []
     # Iterate over original headers and put them to a new list with values from
     # the "other" dict if the key is found
     for header, value in original:
         if header in other:
-            value = other.pop(header)
+            continue
         new_headers.append((header, value))
     # Append the new headers to the list
     new_headers.extend(other.items())

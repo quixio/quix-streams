@@ -40,7 +40,7 @@ class TopicManager:
     # Default topic params
     default_num_partitions = 1
     default_replication_factor = 1
-    default_extra_config = {}
+    default_extra_config: dict[str, str] = {}
 
     # Max topic name length for the new topics
     _max_topic_name_len = 255
@@ -207,9 +207,15 @@ class TopicManager:
 
         :return: a TopicConfig
         """
+
         topic_config = self._admin.inspect_topics([topic_name], timeout=timeout)[
             topic_name
-        ] or deepcopy(self._non_changelog_topics[topic_name].config)
+        ]
+        if topic_config is None and topic_name in self._non_changelog_topics:
+            topic_config = deepcopy(self._non_changelog_topics[topic_name].config)
+
+        if topic_config is None:
+            raise RuntimeError(f"No configuration can be found for topic {topic_name}")
 
         # Copy only certain configuration values from original topic
         if extras_imports:
@@ -475,10 +481,17 @@ class TopicManager:
 
         for source_name in self._non_changelog_topics.keys():
             source_cfg = actual_configs[source_name]
+            if source_cfg is None:
+                raise TopicNotFoundError(f"Topic {source_name} not found on the broker")
+
             # For any changelog topics, validate the amount of partitions and
             # replication factor match with the source topic
             for changelog in self.changelog_topics.get(source_name, {}).values():
                 changelog_cfg = actual_configs[changelog.name]
+                if changelog_cfg is None:
+                    raise TopicNotFoundError(
+                        f"Topic {changelog_cfg} not found on the broker"
+                    )
 
                 if changelog_cfg.num_partitions != source_cfg.num_partitions:
                     raise TopicConfigurationMismatch(

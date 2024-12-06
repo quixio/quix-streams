@@ -148,6 +148,12 @@ class AvroDeserializer(Deserializer):
             )
 
         super().__init__()
+
+        if schema is None and schema_registry_client_config is None:
+            raise TypeError(
+                "One of `schema` or `schema_registry_client_config` is required"
+            )
+
         self._schema = parse_schema(schema) if schema else None
         self._reader_schema = parse_schema(reader_schema) if reader_schema else None
         self._return_record_name = return_record_name
@@ -174,17 +180,19 @@ class AvroDeserializer(Deserializer):
                 return self._schema_registry_deserializer(value, ctx)
             except (SchemaRegistryError, _SerializationError, EOFError) as exc:
                 raise SerializationError(str(exc)) from exc
+        elif self._schema is not None:
+            try:
+                return schemaless_reader(  # type: ignore
+                    BytesIO(value),
+                    self._schema,
+                    reader_schema=self._reader_schema,
+                    return_record_name=self._return_record_name,
+                    return_record_name_override=self._return_record_name_override,
+                    return_named_type=self._return_named_type,
+                    return_named_type_override=self._return_named_type_override,
+                    handle_unicode_errors=self._handle_unicode_errors,
+                )
+            except EOFError as exc:
+                raise SerializationError(str(exc)) from exc
 
-        try:
-            return schemaless_reader(
-                BytesIO(value),
-                self._schema,
-                reader_schema=self._reader_schema,
-                return_record_name=self._return_record_name,
-                return_record_name_override=self._return_record_name_override,
-                return_named_type=self._return_named_type,
-                return_named_type_override=self._return_named_type_override,
-                handle_unicode_errors=self._handle_unicode_errors,
-            )
-        except EOFError as exc:
-            raise SerializationError(str(exc)) from exc
+        raise SerializationError("no schema found")

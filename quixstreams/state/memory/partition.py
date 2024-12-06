@@ -2,7 +2,7 @@ import functools
 import logging
 from typing import Any, Dict, Literal, Optional, Union
 
-from quixstreams.models import ConfluentKafkaMessageProto
+from quixstreams.models import RawConfluentKafkaMessageProto
 from quixstreams.state.base import PartitionTransactionCache, StorePartition
 from quixstreams.state.exceptions import ColumnFamilyDoesNotExist
 from quixstreams.state.metadata import METADATA_CF_NAME, Marker
@@ -95,7 +95,7 @@ class MemoryStorePartition(StorePartition):
 
     def _recover_from_changelog_message(
         self,
-        changelog_message: ConfluentKafkaMessageProto,
+        changelog_message: RawConfluentKafkaMessageProto,
         cf_name: str,
         processed_offset: Optional[int],
         committed_offset: int,

@@ -6,8 +6,7 @@ from confluent_kafka import KafkaError, TopicPartition
 from .error_callbacks import ConsumerErrorCallback, default_on_consumer_error
 from .exceptions import PartitionAssignmentError
 from .kafka import AutoOffsetReset, BaseConsumer, ConnectionConfig
-from .kafka.consumer import RebalancingCallback
-from .kafka.exceptions import KafkaConsumerException
+from .kafka.consumer import RebalancingCallback, raise_for_msg_error
 from .models import Row, Topic
 from .models.serializers.exceptions import IgnoreMessage
 
@@ -130,9 +129,7 @@ class RowConsumer(BaseConsumer):
 
         topic_name = msg.topic()
         try:
-            if msg.error():
-                raise KafkaConsumerException(error=msg.error())
-
+            msg = raise_for_msg_error(msg)
             topic = self._topics[topic_name]
 
             row_or_rows = topic.row_deserialize(message=msg)

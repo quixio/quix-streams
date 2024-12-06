@@ -1,4 +1,4 @@
-from typing import Dict, Iterable, Mapping, Optional, Union
+from typing import Dict, Iterable, Mapping, Optional, Type, Union
 
 from confluent_kafka.schema_registry import SchemaRegistryClient, SchemaRegistryError
 from confluent_kafka.schema_registry.protobuf import (
@@ -24,7 +24,7 @@ __all__ = ("ProtobufSerializer", "ProtobufDeserializer")
 class ProtobufSerializer(Serializer):
     def __init__(
         self,
-        msg_type: Message,
+        msg_type: Type[Message],
         deterministic: bool = False,
         ignore_unknown_fields: bool = False,
         schema_registry_client_config: Optional[SchemaRegistryClientConfig] = None,
@@ -110,7 +110,7 @@ class ProtobufSerializer(Serializer):
 class ProtobufDeserializer(Deserializer):
     def __init__(
         self,
-        msg_type: Message,
+        msg_type: Type[Message],
         use_integers_for_enums: bool = False,
         preserving_proto_field_name: bool = False,
         to_dict: bool = True,

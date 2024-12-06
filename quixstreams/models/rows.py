@@ -19,7 +19,7 @@ class Row:
         key: Optional[Any],
         timestamp: int,
         context: MessageContext,
-        headers: KafkaHeaders = None,
+        headers: KafkaHeaders,
     ):
         self.value = value
         self.key = key
