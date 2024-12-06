@@ -673,6 +673,96 @@ The method performs the following steps:
 - `SinkBackpressureError`: If the write operation fails, indicating
 that the sink needs backpressure with a 5-second retry delay.
 
+<a id="quixstreams.sinks.community.file.destinations.azure"></a>
+
+## quixstreams.sinks.community.file.destinations.azure
+
+<a id="quixstreams.sinks.community.file.destinations.azure.AzureContainerNotFoundError"></a>
+
+### AzureContainerNotFoundError
+
+```python
+class AzureContainerNotFoundError(Exception)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/azure.py#L23)
+
+Raised when the specified Azure File container does not exist.
+
+<a id="quixstreams.sinks.community.file.destinations.azure.AzureContainerAccessDeniedError"></a>
+
+### AzureContainerAccessDeniedError
+
+```python
+class AzureContainerAccessDeniedError(Exception)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/azure.py#L27)
+
+Raised when the specified Azure File container access is denied.
+
+<a id="quixstreams.sinks.community.file.destinations.azure.AzureFileDestination"></a>
+
+### AzureFileDestination
+
+```python
+class AzureFileDestination(Destination)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/azure.py#L31)
+
+A destination that writes data to Microsoft Azure File.
+
+Handles writing data to Azure containers using the Azure Blob SDK. Credentials can
+be provided directly or via environment variables.
+
+<a id="quixstreams.sinks.community.file.destinations.azure.AzureFileDestination.__init__"></a>
+
+<br><br>
+
+#### AzureFileDestination.\_\_init\_\_
+
+```python
+def __init__(connection_string: str, container: str) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/azure.py#L39)
+
+Initialize the Azure File destination.
+
+
+<br>
+***Arguments:***
+
+- `connection_string`: Azure client authentication string.
+- `container`: Azure container name.
+
+**Raises**:
+
+- `AzureContainerNotFoundError`: If the specified container doesn't exist.
+- `AzureContainerAccessDeniedError`: If access to the container is denied.
+
+<a id="quixstreams.sinks.community.file.destinations.azure.AzureFileDestination.write"></a>
+
+<br><br>
+
+#### AzureFileDestination.write
+
+```python
+def write(data: bytes, batch: SinkBatch) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/azure.py#L88)
+
+Write data to Azure.
+
+
+<br>
+***Arguments:***
+
+- `data`: The serialized data to write.
+- `batch`: The batch information containing topic and partition details.
+
 <a id="quixstreams.sinks.community.file.destinations.base"></a>
 
 ## quixstreams.sinks.community.file.destinations.base
