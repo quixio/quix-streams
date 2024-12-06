@@ -132,7 +132,7 @@ The File Source expects a folder structure like so:
 The expected file schema largely depends on the chosen 
 file format.
 
-For easiest use (especially alongside [`FileSink`](../sinks/file-sink.md)), 
+For easiest use (especially alongside [`FileSink`](../sinks/amazon-s3-sink.md)), 
 you can follow these patterns: 
 
 ### Row-based Formats (ex: JSON)
