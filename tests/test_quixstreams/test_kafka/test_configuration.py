@@ -1,10 +1,15 @@
 import os
+from typing import Tuple
 from unittest.mock import patch
 
 import pydantic
 import pytest
 
 from quixstreams.kafka.configuration import ConnectionConfig
+
+
+def example_oauth_cb(config: str) -> Tuple[str, float]:
+    return config, 1.0
 
 
 class TestConnectionConfig:
@@ -139,3 +144,14 @@ class TestConnectionConfig:
         with patch.dict(os.environ, {"SASL_PASSWORD": "cool_pw"}):
             config = ConnectionConfig(bootstrap_servers="url")
         assert config.sasl_password is None
+
+    def test_oauth_cb_with_callable(self):
+        config = ConnectionConfig(bootstrap_servers="url", oauth_cb=example_oauth_cb)
+        assert config.oauth_cb == example_oauth_cb
+
+    def test_oauth_cb_with_import_string(self):
+        config = ConnectionConfig(
+            bootstrap_servers="url",
+            oauth_cb="tests.test_quixstreams.test_kafka.test_configuration.example_oauth_cb",
+        )
+        assert config.oauth_cb == example_oauth_cb
