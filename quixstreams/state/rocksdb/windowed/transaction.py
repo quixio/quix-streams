@@ -97,15 +97,12 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         value: Any,
         timestamp_ms: int,
         prefix: bytes,
-        window_timestamp_ms: Optional[int] = None,
     ) -> None:
         if timestamp_ms < 0:
             raise ValueError("Timestamp cannot be negative")
         self._validate_duration(start_ms=start_ms, end_ms=end_ms)
 
         key = encode_window_key(start_ms, end_ms)
-        if window_timestamp_ms is not None:
-            value = [window_timestamp_ms, value]
         self.set(key=key, value=value, prefix=prefix)
         latest_timestamp_ms = self.get_latest_timestamp(prefix=prefix)
         updated_timestamp_ms = (
