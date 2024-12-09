@@ -42,7 +42,6 @@ class WindowedTransactionState(WindowedState):
         end_ms: int,
         value: Any,
         timestamp_ms: int,
-        window_timestamp_ms: Optional[int] = None,
     ) -> None:
         """
         Set a value for the window.
@@ -55,7 +54,6 @@ class WindowedTransactionState(WindowedState):
         :param end_ms: end of the window in milliseconds
         :param value: value of the window
         :param timestamp_ms: current message timestamp in milliseconds
-        :param window_timestamp_ms: arbitrary timestamp stored with the window value
         """
         return self._transaction.update_window(
             start_ms=start_ms,
@@ -63,7 +61,6 @@ class WindowedTransactionState(WindowedState):
             timestamp_ms=timestamp_ms,
             value=value,
             prefix=self._prefix,
-            window_timestamp_ms=window_timestamp_ms,
         )
 
     def get_latest_timestamp(self) -> Optional[int]:
