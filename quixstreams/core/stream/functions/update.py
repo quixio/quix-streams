@@ -20,10 +20,13 @@ class UpdateFunction(StreamFunction):
     def __init__(self, func: UpdateCallback):
         super().__init__(func)
 
+        self.func: UpdateCallback
+
     def get_executor(self, *child_executors: VoidExecutor) -> VoidExecutor:
         child_executor = self._resolve_branching(*child_executors)
+        func = self.func
 
-        def wrapper(value: Any, key: Any, timestamp: int, headers: Any, func=self.func):
+        def wrapper(value: Any, key: Any, timestamp: int, headers: Any):
             # Update a single value and forward it
             func(value)
             child_executor(value, key, timestamp, headers)
@@ -45,10 +48,13 @@ class UpdateWithMetadataFunction(StreamFunction):
     def __init__(self, func: UpdateWithMetadataCallback):
         super().__init__(func)
 
+        self.func: UpdateWithMetadataCallback
+
     def get_executor(self, *child_executors: VoidExecutor) -> VoidExecutor:
         child_executor = self._resolve_branching(*child_executors)
+        func = self.func
 
-        def wrapper(value: Any, key: Any, timestamp: int, headers: Any, func=self.func):
+        def wrapper(value: Any, key: Any, timestamp: int, headers: Any):
             # Update a single value and forward it
             func(value, key, timestamp, headers)
             child_executor(value, key, timestamp, headers)

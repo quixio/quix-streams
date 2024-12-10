@@ -12,9 +12,7 @@ from typing import (
 )
 
 from quixstreams.context import message_context
-from quixstreams.core.stream import (
-    TransformExpandedCallback,
-)
+from quixstreams.core.stream import TransformExpandedCallback, TransformFunction
 from quixstreams.processing import ProcessingContext
 from quixstreams.state import WindowedPartitionTransaction, WindowedState
 
@@ -213,7 +211,9 @@ class FixedTimeWindow:
         # to avoid adding "transform" API to it.
         # Transform callbacks can modify record key and timestamp,
         # and it's prone to misuse.
-        stream = self._dataframe.stream.add_transform(func=windowed_func, expand=True)
+        stream = self._dataframe.stream.add(
+            TransformFunction(windowed_func, expand=True)
+        )
         return self._dataframe.__dataframe_clone__(stream=stream)
 
 

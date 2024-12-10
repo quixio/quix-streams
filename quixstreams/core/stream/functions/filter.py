@@ -17,11 +17,18 @@ class FilterFunction(StreamFunction):
 
     def __init__(self, func: FilterCallback):
         super().__init__(func)
+        self.func: FilterCallback
 
     def get_executor(self, *child_executors: VoidExecutor) -> VoidExecutor:
         child_executor = self._resolve_branching(*child_executors)
+        func = self.func
 
-        def wrapper(value: Any, key: Any, timestamp: int, headers: Any, func=self.func):
+        def wrapper(
+            value: Any,
+            key: Any,
+            timestamp: int,
+            headers: Any,
+        ):
             # Filter a single value
             if func(value):
                 child_executor(value, key, timestamp, headers)
@@ -42,11 +49,18 @@ class FilterWithMetadataFunction(StreamFunction):
 
     def __init__(self, func: FilterWithMetadataCallback):
         super().__init__(func)
+        self.func: FilterWithMetadataCallback
 
     def get_executor(self, *child_executors: VoidExecutor) -> VoidExecutor:
         child_executor = self._resolve_branching(*child_executors)
+        func = self.func
 
-        def wrapper(value: Any, key: Any, timestamp: int, headers: Any, func=self.func):
+        def wrapper(
+            value: Any,
+            key: Any,
+            timestamp: int,
+            headers: Any,
+        ):
             # Filter a single value
             if func(value, key, timestamp, headers):
                 child_executor(value, key, timestamp, headers)

@@ -5,9 +5,12 @@ import pytest
 from quixstreams.core.stream import Stream
 from quixstreams.core.stream.functions import (
     ApplyFunction,
+    ApplyWithMetadataFunction,
     FilterFunction,
+    FilterWithMetadataFunction,
     TransformFunction,
     UpdateFunction,
+    UpdateWithMetadataFunction,
 )
 from quixstreams.dataframe.exceptions import InvalidOperation
 
@@ -16,13 +19,13 @@ from .utils import Sink
 
 class TestStream:
     def test_add_apply(self):
-        stream = Stream().add_apply(lambda v: v + 1)
+        stream = Stream().add(ApplyFunction(lambda v: v + 1))
         sink = Sink()
         stream.compose(sink=sink.append_record)(1, "key", 0, [])
         assert sink[0] == (2, "key", 0, [])
 
     def test_add_update(self):
-        stream = Stream().add_update(lambda v: v.append(1))
+        stream = Stream().add(UpdateFunction(lambda v: v.append(1)))
         result = Sink()
         stream.compose(sink=result.append_record)([0], "key", 0, [])
         assert result[0] == ([0, 1], "key", 0, [])
@@ -35,7 +38,7 @@ class TestStream:
         ],
     )
     def test_add_filter(self, value, key, timestamp, headers, expected):
-        stream = Stream().add_filter(lambda v: v == 0)
+        stream = Stream().add(FilterFunction(lambda v: v == 0))
         result = Sink()
         stream.compose(sink=result.append_record)(value, key, timestamp, headers)
         assert result == expected
@@ -43,10 +46,10 @@ class TestStream:
     def test_root_path(self):
         stream = (
             Stream()
-            .add_apply(lambda v: ...)
-            .add_filter(lambda v: ...)
-            .add_update(lambda v: ...)
-            .add_transform(lambda v, k, t, h: ...)
+            .add(ApplyFunction(lambda v: ...))
+            .add(FilterFunction(lambda v: ...))
+            .add(UpdateFunction(lambda v: ...))
+            .add(TransformFunction(lambda v, k, t, h: ...))
         )
         tree = stream.root_path()
         assert len(tree) == 5
@@ -58,11 +61,11 @@ class TestStream:
 
     def test_diff_success(self):
         stream = Stream()
-        stream = stream.add_apply(lambda v: v)
+        stream = stream.add(ApplyFunction(lambda v: v))
         stream2 = (
-            stream.add_apply(lambda v: v)
-            .add_update(lambda v: v)
-            .add_filter(lambda v: v)
+            stream.add(ApplyFunction(lambda v: v))
+            .add(UpdateFunction(lambda v: v))
+            .add(FilterFunction(lambda v: v))
         )
 
         diff = stream.diff(stream2)
@@ -75,23 +78,23 @@ class TestStream:
 
     def test_diff_differing_origin_fails(self):
         stream = Stream()
-        stream = stream.add_apply(lambda v: v)
+        stream = stream.add(ApplyFunction(lambda v: v))
         stream2 = (
-            stream.add_apply(lambda v: v)
-            .add_update(lambda v: v)
-            .add_filter(lambda v: v)
+            stream.add(ApplyFunction(lambda v: v))
+            .add(UpdateFunction(lambda v: v))
+            .add(FilterFunction(lambda v: v))
         )
-        stream = stream.add_apply(lambda v: v)
+        stream = stream.add(ApplyFunction(lambda v: v))
 
         with pytest.raises(InvalidOperation):
             stream.diff(stream2)
 
     def test_diff_shared_origin_with_additional_split_fails(self):
         stream = Stream()
-        stream = stream.add_apply(lambda v: v)
-        stream2 = stream.add_apply(lambda v: v)
-        stream3 = stream2.add_apply(lambda v: v)  # noqa: F841
-        stream2 = stream2.add_apply(lambda v: v)
+        stream = stream.add(ApplyFunction(lambda v: v))
+        stream2 = stream.add(ApplyFunction(lambda v: v))
+        stream3 = stream2.add(ApplyFunction(lambda v: v))  # noqa: F841
+        stream2 = stream2.add(ApplyFunction(lambda v: v))
 
         with pytest.raises(InvalidOperation):
             stream.diff(stream2)
@@ -103,7 +106,7 @@ class TestStream:
 
     def test_diff_empty_stream_full_child_fails(self):
         stream = Stream()
-        stream2 = stream.add_apply(lambda v: v)
+        stream2 = stream.add(ApplyFunction(lambda v: v))
         with pytest.raises(ValueError, match="The diff is empty"):
             stream2.diff(stream)
 
@@ -114,31 +117,33 @@ class TestStream:
             stream.diff(stream2)
 
     def test_compose_allow_filters_false(self):
-        stream = Stream().add_filter(lambda v: v)
+        stream = Stream().add(FilterFunction(lambda v: v))
         with pytest.raises(ValueError, match="Filter functions are not allowed"):
             stream.compose(allow_filters=False)
 
     def test_compose_allow_updates_false(self):
-        stream = Stream().add_update(lambda v: v)
+        stream = Stream().add(UpdateFunction(lambda v: v))
         with pytest.raises(ValueError, match="Update functions are not allowed"):
             stream.compose(allow_updates=False)
 
     def test_compose_allow_transforms_false(self):
-        stream = Stream().add_transform(lambda value, key, timestamp, headers: ...)
+        stream = Stream().add(
+            TransformFunction(lambda value, key, timestamp, headers: ...)
+        )
         with pytest.raises(ValueError, match="Transform functions are not allowed"):
             stream.compose(allow_transforms=False)
 
     def test_repr(self):
         stream = (
             Stream()
-            .add_apply(lambda v: v)
-            .add_update(lambda v: v)
-            .add_filter(lambda v: v)
+            .add(ApplyFunction(lambda v: v))
+            .add(UpdateFunction(lambda v: v))
+            .add(FilterFunction(lambda v: v))
         )
         repr(stream)
 
     def test_apply_expand(self):
-        stream = Stream().add_apply(lambda v: [v, v], expand=True)
+        stream = Stream().add(ApplyFunction(lambda v: [v, v], expand=True))
         result = Sink()
         value, key, timestamp, headers = 1, "key", 1, []
 
@@ -149,15 +154,15 @@ class TestStream:
         ]
 
     def test_apply_expand_not_iterable_returned(self):
-        stream = Stream().add_apply(lambda v: 1, expand=True)
+        stream = Stream().add(ApplyFunction(lambda v: 1, expand=True))
         with pytest.raises(TypeError):
             stream.compose()(1, "key", 0, [])
 
     def test_apply_expand_multiple(self):
         stream = (
             Stream()
-            .add_apply(lambda v: [v + 1, v + 1], expand=True)
-            .add_apply(lambda v: [v, v + 1], expand=True)
+            .add(ApplyFunction(lambda v: [v + 1, v + 1], expand=True))
+            .add(ApplyFunction(lambda v: [v, v + 1], expand=True))
         )
         result = Sink()
         value, key, timestamp, headers = 1, "key", 1, [("key", b"value")]
@@ -172,9 +177,9 @@ class TestStream:
     def test_apply_expand_filter_all_filtered(self):
         stream = (
             Stream()
-            .add_apply(lambda v: [v, v], expand=True)
-            .add_apply(lambda v: [v, v], expand=True)
-            .add_filter(lambda v: v != 1)
+            .add(ApplyFunction(lambda v: [v, v], expand=True))
+            .add(ApplyFunction(lambda v: [v, v], expand=True))
+            .add(FilterFunction(lambda v: v != 1))
         )
         result = Sink()
         stream.compose(sink=result.append_record)(1, "key", 0, [])
@@ -183,9 +188,9 @@ class TestStream:
     def test_apply_expand_filter_some_filtered(self):
         stream = (
             Stream()
-            .add_apply(lambda v: [v, v + 1], expand=True)
-            .add_filter(lambda v: v != 1)
-            .add_apply(lambda v: [v, v], expand=True)
+            .add(ApplyFunction(lambda v: [v, v + 1], expand=True))
+            .add(FilterFunction(lambda v: v != 1))
+            .add(ApplyFunction(lambda v: [v, v], expand=True))
         )
         result = Sink()
         key, timestamp, headers = "key", 1, None
@@ -195,8 +200,8 @@ class TestStream:
     def test_apply_expand_update(self):
         stream = (
             Stream()
-            .add_apply(lambda v: [{"x": v}, {"x": v + 1}], expand=True)
-            .add_update(lambda v: setitem(v, "x", v["x"] + 1))
+            .add(ApplyFunction(lambda v: [{"x": v}, {"x": v + 1}], expand=True))
+            .add(UpdateFunction(lambda v: setitem(v, "x", v["x"] + 1)))
         )
         result = Sink()
         key, timestamp, headers = "key", 123, None
@@ -209,9 +214,9 @@ class TestStream:
     def test_apply_expand_update_filter(self):
         stream = (
             Stream()
-            .add_apply(lambda v: [{"x": v}, {"x": v + 1}], expand=True)
-            .add_update(lambda v: setitem(v, "x", v["x"] + 1))
-            .add_filter(lambda v: v["x"] != 2)
+            .add(ApplyFunction(lambda v: [{"x": v}, {"x": v + 1}], expand=True))
+            .add(UpdateFunction(lambda v: setitem(v, "x", v["x"] + 1)))
+            .add(FilterFunction(lambda v: v["x"] != 2))
         )
         result = Sink()
         key, timestamp, headers = "key", 123, []
@@ -219,23 +224,26 @@ class TestStream:
         assert result == [({"x": 3}, key, timestamp, headers)]
 
     def test_compose_allow_expands_false(self):
-        stream = Stream().add_apply(lambda v: [{"x": v}, {"x": v + 1}], expand=True)
+        stream = Stream().add(
+            ApplyFunction(lambda v: [{"x": v}, {"x": v + 1}], expand=True)
+        )
         with pytest.raises(ValueError, match="Expand functions are not allowed"):
             stream.compose(allow_expands=False)
 
     def test_add_apply_with_metadata(self):
-        stream = Stream().add_apply(
-            lambda v, key, timestamp, headers: v + 1, metadata=True
+        stream = Stream().add(
+            ApplyWithMetadataFunction(lambda v, key, timestamp, headers: v + 1)
         )
         sink = Sink()
         stream.compose(sink=sink.append_record)(1, "key", 0, None)
         assert sink[0] == (2, "key", 0, None)
 
     def test_apply_record_with_metadata_expanded(self):
-        stream = Stream().add_apply(
-            lambda value_, key_, timestamp_, headers_: [value_, value_],
-            expand=True,
-            metadata=True,
+        stream = Stream().add(
+            ApplyWithMetadataFunction(
+                lambda value_, key_, timestamp_, headers_: [value_, value_],
+                expand=True,
+            )
         )
         result = Sink()
         value, key, timestamp, headers = 1, "key", 1, []
@@ -247,8 +255,10 @@ class TestStream:
         ]
 
     def test_add_update_with_metadata(self):
-        stream = Stream().add_update(
-            lambda value, key, timestamp, headers: value.append(1), metadata=True
+        stream = Stream().add(
+            UpdateWithMetadataFunction(
+                lambda value, key, timestamp, headers: value.append(1)
+            )
         )
         result = Sink()
         stream.compose(sink=result.append_record)([0], "key", 0, [])
@@ -262,15 +272,17 @@ class TestStream:
         ],
     )
     def test_add_filter_with_metadata(self, value, key, timestamp, headers, expected):
-        stream = Stream().add_filter(
-            lambda value_, key_, timestamp_, headers_: value_ == 0, metadata=True
+        stream = Stream().add(
+            FilterWithMetadataFunction(
+                lambda value_, key_, timestamp_, headers_: value_ == 0
+            )
         )
         result = Sink()
         stream.compose(sink=result.append_record)(value, key, timestamp, headers)
         assert result == expected
 
     def test_compose_returning(self):
-        stream = Stream().add_apply(lambda v: v + 1)
+        stream = Stream().add(ApplyFunction(lambda v: v + 1))
         assert stream.compose_returning()(1, "key", 0, []) == (2, "key", 0, [])
         assert stream.compose_returning()(2, "key", 0, []) == (3, "key", 0, [])
 
@@ -285,7 +297,7 @@ class TestStream:
                 raise ValueError("fail")
             return value + 1
 
-        stream = Stream().add_apply(_fail)
+        stream = Stream().add(ApplyFunction(_fail))
         assert stream.compose_returning()(2, "key", 0, None) == (3, "key", 0, None)
         with pytest.raises(ValueError):
             assert stream.compose_returning()(1, "key", 0, None) == (3, "key", 0, None)
@@ -294,30 +306,38 @@ class TestStream:
     @pytest.mark.parametrize(
         "stream, err",
         [
-            (Stream().add_update(lambda v: ...), "Update functions are not allowed"),
             (
-                Stream().add_update(lambda v, k, t, h: ..., metadata=True),
+                Stream().add(UpdateFunction(lambda v: ...)),
                 "Update functions are not allowed",
             ),
-            (Stream().add_filter(lambda v: ...), "Filter functions are not allowed"),
             (
-                Stream().add_filter(lambda v, k, t, h: ..., metadata=True),
+                Stream().add(UpdateWithMetadataFunction(lambda v, k, t, h: ...)),
+                "Update functions are not allowed",
+            ),
+            (
+                Stream().add(FilterFunction(lambda v: ...)),
                 "Filter functions are not allowed",
             ),
             (
-                Stream().add_apply(lambda v: ..., expand=True),
+                Stream().add(FilterWithMetadataFunction(lambda v, k, t, h: ...)),
+                "Filter functions are not allowed",
+            ),
+            (
+                Stream().add(ApplyFunction(lambda v: ..., expand=True)),
                 "Expand functions are not allowed",
             ),
             (
-                Stream().add_apply(lambda v, k, t, h: ..., expand=True, metadata=True),
+                Stream().add(
+                    ApplyWithMetadataFunction(lambda v, k, t, h: ..., expand=True)
+                ),
                 "Expand functions are not allowed",
             ),
             (
-                Stream().add_transform(lambda v, k, t, h: ..., expand=True),
+                Stream().add(TransformFunction(lambda v, k, t, h: ..., expand=True)),
                 "Transform functions are not allowed",
             ),
             (
-                Stream().add_transform(lambda v, k, t, h: ...),
+                Stream().add(TransformFunction(lambda v, k, t, h: ...)),
                 "Transform functions are not allowed",
             ),
         ],
@@ -327,12 +347,14 @@ class TestStream:
             stream.compose_returning()
 
     def test_transform_record(self):
-        stream = Stream().add_transform(
-            lambda value, key, timestamp, headers: (
-                value + 1,
-                key + "1",
-                timestamp + 1,
-                [("key", b"value")],
+        stream = Stream().add(
+            TransformFunction(
+                lambda value, key, timestamp, headers: (
+                    value + 1,
+                    key + "1",
+                    timestamp + 1,
+                    [("key", b"value")],
+                )
             )
         )
         result = Sink()
@@ -340,12 +362,14 @@ class TestStream:
         assert result[0] == (1, "key1", 1, [("key", b"value")])
 
     def test_transform_record_expanded(self):
-        stream = Stream().add_transform(
-            lambda value, key, timestamp, headers: [
-                (value + 1, key + "1", timestamp + 1, [("key", b"value")]),
-                (value + 2, key + "2", timestamp + 2, [("key", b"value2")]),
-            ],
-            expand=True,
+        stream = Stream().add(
+            TransformFunction(
+                lambda value, key, timestamp, headers: [
+                    (value + 1, key + "1", timestamp + 1, [("key", b"value")]),
+                    (value + 2, key + "2", timestamp + 2, [("key", b"value2")]),
+                ],
+                expand=True,
+            )
         )
         result = Sink()
         stream.compose(sink=result.append_record)(0, "key", 0, [])
@@ -366,10 +390,10 @@ class TestStreamBranching:
 
             return wrapper
 
-        stream = Stream().add_apply(add_n(1))
-        stream.add_apply(add_n(10))
-        stream.add_apply(add_n(20))
-        stream = stream.add_apply(add_n(100))
+        stream = Stream().add(ApplyFunction(add_n(1)))
+        stream.add(ApplyFunction(add_n(10)))
+        stream.add(ApplyFunction(add_n(20)))
+        stream = stream.add(ApplyFunction(add_n(100)))
         sink = Sink()
         extras = ("key", 0, [])
         stream.compose(sink=sink.append_record)(0, *extras)
@@ -390,17 +414,17 @@ class TestStreamBranching:
         expected = [([1], key, timestamp, headers), ([2], key, timestamp, headers)]
 
         stream = Stream()
-        stream.add_update(lambda value_: value_.append(1))
-        stream.add_update(lambda value_: value_.append(2))
+        stream.add(UpdateFunction(lambda value_: value_.append(1)))
+        stream.add(UpdateFunction(lambda value_: value_.append(2)))
         sink = Sink()
         stream.compose(sink=sink.append_record)(value, key, timestamp, headers)
 
         assert sink == expected
 
     def test_chained_branches(self):
-        stream = Stream().add_apply(lambda v: v + 1)
-        stream.add_apply(lambda v: v + 10).add_apply(lambda v: v + 20)
-        stream = stream.add_apply(lambda v: v + 100)
+        stream = Stream().add(ApplyFunction(lambda v: v + 1))
+        stream.add(ApplyFunction(lambda v: v + 10)).add(ApplyFunction(lambda v: v + 20))
+        stream = stream.add(ApplyFunction(lambda v: v + 100))
         sink = Sink()
         extras = ("key", 0, [])
         stream.compose(sink=sink.append_record)(0, *extras)
@@ -409,11 +433,11 @@ class TestStreamBranching:
         assert sink == expected
 
     def test_longer_branches(self):
-        stream = Stream().add_apply(lambda v: v + 1)
-        stream = stream.add_apply(lambda v: v + 2)
-        stream_2 = stream.add_apply(lambda v: v + 10)
-        stream_2.add_apply(lambda v: v + 20)
-        stream = stream.add_apply(lambda v: v + 100)
+        stream = Stream().add(ApplyFunction(lambda v: v + 1))
+        stream = stream.add(ApplyFunction(lambda v: v + 2))
+        stream_2 = stream.add(ApplyFunction(lambda v: v + 10))
+        stream_2.add(ApplyFunction(lambda v: v + 20))
+        stream = stream.add(ApplyFunction(lambda v: v + 100))
         sink = Sink()
         extras = ("key", 0, [])
         stream.compose(sink=sink.append_record)(0, *extras)
@@ -438,18 +462,24 @@ class TestStreamBranching:
         :return:
         """
 
-        stream = Stream().add_apply(lambda v: v + 120).add_apply(lambda v: v // 2)  # 60
-        stream_2 = stream.add_apply(lambda v: v // 3)  # 20
-        stream_3 = stream_2.add_apply(lambda v: v + 10).add_apply(  # noqa: F841
-            lambda v: v + 3
+        stream = (
+            Stream()
+            .add(ApplyFunction(lambda v: v + 120))
+            .add(ApplyFunction(lambda v: v // 2))
+        )  # 60
+        stream_2 = stream.add(ApplyFunction(lambda v: v // 3))  # 20
+        stream_3 = stream_2.add(ApplyFunction(lambda v: v + 10)).add(  # noqa: F841
+            ApplyFunction(lambda v: v + 3)
         )  # 33
-        stream_4 = stream_2.add_apply(lambda v: v + 24)  # 44  # noqa: F841
-        stream_2 = stream_2.add_apply(lambda v: v + 2)  # 22
-        stream = stream.add_apply(lambda v: v + 40)  # 100
-        stream_5 = stream.add_apply(lambda v: v // 2).add_apply(  # noqa: F841
-            lambda v: v + 5
+        stream_4 = stream_2.add(ApplyFunction(lambda v: v + 24))  # 44  # noqa: F841
+        stream_2 = stream_2.add(ApplyFunction(lambda v: v + 2))  # 22
+        stream = stream.add(ApplyFunction(lambda v: v + 40))  # 100
+        stream_5 = stream.add(ApplyFunction(lambda v: v // 2)).add(  # noqa: F841
+            ApplyFunction(lambda v: v + 5)
         )  # 55
-        stream = stream.add_apply(lambda v: v // 100).add_apply(lambda v: v + 10)  # 11
+        stream = stream.add(ApplyFunction(lambda v: v // 100)).add(
+            ApplyFunction(lambda v: v + 10)
+        )  # 11
         sink = Sink()
         extras = ("key", 0, [])
         stream.compose(sink=sink.append_record)(0, *extras)
@@ -464,17 +494,21 @@ class TestStreamBranching:
         assert sink == expected
 
     def test_filter(self):
-        stream = Stream().add_apply(lambda v: v + 10)
-        stream2 = stream.add_apply(lambda v: v + 5).add_filter(lambda v: v < 0)
-        stream2 = stream2.add_apply(lambda v: v + 200)
-        stream3 = (  # noqa: F841
-            stream.add_apply(lambda v: v + 7)
-            .add_filter(lambda v: v < 20)
-            .add_apply(lambda v: v + 4)
+        stream = Stream().add(ApplyFunction(lambda v: v + 10))
+        stream2 = stream.add(ApplyFunction(lambda v: v + 5)).add(
+            FilterFunction(lambda v: v < 0)
         )
-        stream = stream.add_apply(lambda v: v + 30).add_filter(lambda v: v < 50)
-        stream4 = stream.add_apply(lambda v: v + 60)  # noqa: F841
-        stream.add_apply(lambda v: v + 800)
+        stream2 = stream2.add(ApplyFunction(lambda v: v + 200))
+        stream3 = (  # noqa: F841
+            stream.add(ApplyFunction(lambda v: v + 7))
+            .add(FilterFunction(lambda v: v < 20))
+            .add(ApplyFunction(lambda v: v + 4))
+        )
+        stream = stream.add(ApplyFunction(lambda v: v + 30)).add(
+            FilterFunction(lambda v: v < 50)
+        )
+        stream4 = stream.add(ApplyFunction(lambda v: v + 60))  # noqa: F841
+        stream.add(ApplyFunction(lambda v: v + 800))
 
         sink = Sink()
         extras = ("key", 0, [])
@@ -484,13 +518,15 @@ class TestStreamBranching:
         assert sink == expected
 
     def test_update(self):
-        stream = Stream().add_apply(lambda v: v + [10])
-        stream2 = stream.add_update(lambda v: v.append(5))  # noqa: F841
-        stream = stream.add_update(lambda v: v.append(30)).add_apply(lambda v: v + [6])
-        stream3 = stream.add_update(lambda v: v.append(100))  # noqa: F841
-        stream4 = stream.add_update(lambda v: v.append(456))  # noqa: F841
-        stream = stream.add_apply(lambda v: v + [700]).add_update(
-            lambda v: v.append(222)
+        stream = Stream().add(ApplyFunction(lambda v: v + [10]))
+        stream2 = stream.add(UpdateFunction(lambda v: v.append(5)))  # noqa: F841
+        stream = stream.add(UpdateFunction(lambda v: v.append(30))).add(
+            ApplyFunction(lambda v: v + [6])
+        )
+        stream3 = stream.add(UpdateFunction(lambda v: v.append(100)))  # noqa: F841
+        stream4 = stream.add(UpdateFunction(lambda v: v.append(456)))  # noqa: F841
+        stream = stream.add(ApplyFunction(lambda v: v + [700])).add(
+            UpdateFunction(lambda v: v.append(222))
         )
 
         sink = Sink()
@@ -508,15 +544,15 @@ class TestStreamBranching:
 
     def test_expand(self):
         stream = Stream()
-        stream_2 = stream.add_apply(lambda v: [i for i in v[0]], expand=True).add_apply(  # noqa: F841
-            lambda v: v + 22
-        )
-        stream_3 = stream.add_apply(lambda v: [i for i in v[1]], expand=True).add_apply(  # noqa: F841
-            lambda v: v + 33
-        )
-        stream = stream.add_apply(lambda v: [i for i in v[2]], expand=True)
-        stream_4 = stream.add_apply(lambda v: v + 44)  # noqa: F841
-        stream = stream.add_apply(lambda v: v + 11)
+        stream_2 = stream.add(  # noqa: F841
+            ApplyFunction(lambda v: [i for i in v[0]], expand=True)
+        ).add(ApplyFunction(lambda v: v + 22))
+        stream_3 = stream.add(  # noqa: F841
+            ApplyFunction(lambda v: [i for i in v[1]], expand=True)
+        ).add(ApplyFunction(lambda v: v + 33))
+        stream = stream.add(ApplyFunction(lambda v: [i for i in v[2]], expand=True))
+        stream_4 = stream.add(ApplyFunction(lambda v: v + 44))  # noqa: F841
+        stream = stream.add(ApplyFunction(lambda v: v + 11))
         sink = Sink()
         extras = ("key", 0, [])
         stream.compose(sink=sink.append_record)([(1, 2), (3, 4), (5, 6)], *extras)
@@ -531,12 +567,18 @@ class TestStreamBranching:
 
             return wrapper
 
-        stream = Stream().add_apply(lambda v: v + 1)
-        stream_2 = stream.add_transform(transform(2))  # noqa: F841
-        stream = stream.add_transform(transform(3))
-        stream_3 = stream.add_apply(lambda v: v + 30).add_transform(transform(4))  # noqa: F841
-        stream_4 = stream.add_apply(lambda v: v + 40).add_transform(transform(5))  # noqa: F841
-        stream = stream.add_apply(lambda v: v + 100).add_transform(transform(6))
+        stream = Stream().add(ApplyFunction(lambda v: v + 1))
+        stream_2 = stream.add(TransformFunction(transform(2)))  # noqa: F841
+        stream = stream.add(TransformFunction(transform(3)))
+        stream_3 = stream.add(ApplyFunction(lambda v: v + 30)).add(  # noqa: F841
+            TransformFunction(transform(4))
+        )
+        stream_4 = stream.add(ApplyFunction(lambda v: v + 40)).add(  # noqa: F841
+            TransformFunction(transform(5))
+        )
+        stream = stream.add(ApplyFunction(lambda v: v + 100)).add(
+            TransformFunction(transform(6))
+        )
 
         sink = Sink()
         extras = ("key", 0, [])

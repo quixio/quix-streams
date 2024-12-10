@@ -3,31 +3,20 @@ import copy
 import functools
 import itertools
 from time import monotonic_ns
-from typing import Any, Callable, List, Optional, Union
+from typing import Any, Callable, Deque, List, Optional, Union
 
 from typing_extensions import Self
 
 from quixstreams.dataframe.exceptions import InvalidOperation
 
 from .functions import (
-    ApplyCallback,
-    ApplyExpandedCallback,
     ApplyFunction,
-    ApplyWithMetadataCallback,
-    ApplyWithMetadataExpandedCallback,
-    ApplyWithMetadataFunction,
-    FilterCallback,
     FilterFunction,
-    FilterWithMetadataCallback,
     FilterWithMetadataFunction,
     ReturningExecutor,
     StreamFunction,
-    TransformCallback,
-    TransformExpandedCallback,
     TransformFunction,
-    UpdateCallback,
     UpdateFunction,
-    UpdateWithMetadataCallback,
     UpdateWithMetadataFunction,
     VoidExecutor,
 )
@@ -84,7 +73,7 @@ class Stream:
 
         self.func = func if func is not None else ApplyFunction(lambda value: value)
         self.parent = parent
-        self.children = set()
+        self.children: set[Self] = set()
         self.generated = monotonic_ns()
         self.pruned = False
 
@@ -101,114 +90,7 @@ class Stream:
         )
         return f"<{self.__class__.__name__} [{len(tree_funcs)}]: {funcs_repr}>"
 
-    def add_filter(
-        self,
-        func: Union[FilterCallback, FilterWithMetadataCallback],
-        *,
-        metadata: bool = False,
-    ) -> Self:
-        """
-        Add a function to filter values from the Stream.
-
-        The return value of the function will be interpreted as `bool`.
-        If the function returns `False`-like result, the Stream will raise `Filtered`
-        exception during execution.
-
-        :param func: a function to filter values from the stream
-        :param metadata: if True, the callback will receive key and timestamp along with
-            the value.
-            Default - `False`.
-        :return: a new `Stream` derived from the current one
-        """
-        if metadata:
-            filter_func = FilterWithMetadataFunction(func)
-        else:
-            filter_func = FilterFunction(func)
-        return self._add(filter_func)
-
-    def add_apply(
-        self,
-        func: Union[
-            ApplyCallback,
-            ApplyExpandedCallback,
-            ApplyWithMetadataCallback,
-            ApplyWithMetadataExpandedCallback,
-        ],
-        *,
-        expand: bool = False,
-        metadata: bool = False,
-    ) -> Self:
-        """
-        Add an "apply" function to the Stream.
-
-        The function is supposed to return a new value, which will be passed
-        further during execution.
-
-        :param func: a function to generate a new value
-        :param expand: if True, expand the returned iterable into individual values
-            downstream. If returned value is not iterable, `TypeError` will be raised.
-            Default - `False`.
-        :param metadata: if True, the callback will receive key and timestamp along with
-            the value.
-            Default - `False`.
-        :return: a new `Stream` derived from the current one
-        """
-        if metadata:
-            apply_func = ApplyWithMetadataFunction(func, expand=expand)
-        else:
-            apply_func = ApplyFunction(func, expand=expand)
-        return self._add(apply_func)
-
-    def add_update(
-        self,
-        func: Union[UpdateCallback, UpdateWithMetadataCallback],
-        *,
-        metadata: bool = False,
-    ) -> Self:
-        """
-        Add an "update" function to the Stream, that will mutate the input value.
-
-        The return of this function will be ignored and its input
-        will be passed downstream.
-
-        :param func: a function to mutate the value
-        :param metadata: if True, the callback will receive key and timestamp along with
-            the value.
-            Default - `False`.
-        :return: a new Stream derived from the current one
-        """
-        if metadata:
-            update_func = UpdateWithMetadataFunction(func)
-        else:
-            update_func = UpdateFunction(func)
-        return self._add(update_func)
-
-    def add_transform(
-        self,
-        func: Union[TransformCallback, TransformExpandedCallback],
-        *,
-        expand: bool = False,
-    ) -> Self:
-        """
-        Add a "transform" function to the Stream, that will mutate the input value.
-
-        The callback must accept a value, a key, and a timestamp.
-        It's expected to return a new value, new key and new timestamp.
-
-        The result of the callback which will be passed downstream
-        during execution.
-
-
-        :param func: a function to mutate the value
-        :param expand: if True, expand the returned iterable into individual items
-            downstream. If returned value is not iterable, `TypeError` will be raised.
-            Default - `False`.
-        :return: a new Stream derived from the current one
-        """
-
-        return self._add(TransformFunction(func, expand=expand))
-
-    def diff(self, other: "Stream") -> Self:
+    def diff(self, other: Self) -> Optional[Self]:
         """
         Takes the difference between Streams `self` and `other` based on their last
         common parent, and returns a new, independent `Stream` that includes only
@@ -369,7 +251,7 @@ class Stream:
         # after executing the Stream.
         # The composed stream must have only the "apply" functions,
         # which always return a single.
-        buffer = collections.deque(maxlen=1)
+        buffer: Deque[tuple[Any, Any, int, Any]] = collections.deque(maxlen=1)
         composed = self.compose(
             allow_filters=False,
             allow_expands=False,
@@ -394,35 +276,51 @@ class Stream:
     def _compose(
         self,
         tree: List[Self],
-        composed: List[Callable[[Any, Any, int, Any], None]],
+        composed: Union[VoidExecutor, List[VoidExecutor]],
         allow_filters: bool,
         allow_updates: bool,
         allow_expands: bool,
         allow_transforms: bool,
-    ) -> VoidExecutor:
+    ) -> Union[VoidExecutor, List[VoidExecutor]]:
         functions = [node.func for node in tree]
 
         # Iterate over a reversed list of functions
         for func in reversed(functions):
-            # Validate that only allowed functions are passed
-            if not allow_updates and isinstance(
-                func, (UpdateFunction, UpdateWithMetadataFunction)
-            ):
-                raise ValueError("Update functions are not allowed")
-            elif not allow_filters and isinstance(
-                func, (FilterFunction, FilterWithMetadataFunction)
-            ):
-                raise ValueError("Filter functions are not allowed")
-            elif not allow_transforms and isinstance(func, TransformFunction):
-                raise ValueError("Transform functions are not allowed")
-            elif not allow_expands and func.expand:
-                raise ValueError("Expand functions are not allowed")
+            self._validate_func(
+                func,
+                allow_filters=allow_filters,
+                allow_updates=allow_updates,
+                allow_expands=allow_expands,
+                allow_transforms=allow_transforms,
+            )
 
             composed = func.get_executor(
                 *composed if isinstance(composed, list) else [composed]
             )
 
         return composed
+
+    def _validate_func(
+        self,
+        func,
+        allow_filters: bool,
+        allow_updates: bool,
+        allow_expands: bool,
+        allow_transforms: bool,
+    ) -> None:
+        # Validate that only allowed functions are passed
+        if not allow_updates and isinstance(
+            func, (UpdateFunction, UpdateWithMetadataFunction)
+        ):
+            raise ValueError("Update functions are not allowed")
+        elif not allow_filters and isinstance(
+            func, (FilterFunction, FilterWithMetadataFunction)
+        ):
+            raise ValueError("Filter functions are not allowed")
+        elif not allow_transforms and isinstance(func, TransformFunction):
+            raise ValueError("Transform functions are not allowed")
+        elif not allow_expands and func.expand:
+            raise ValueError("Expand functions are not allowed")
 
     def _diff_from_last_common_parent(self, other: Self) -> List[Self]:
         nodes_self = self.root_path()
@@ -441,6 +339,11 @@ class Stream:
         if not diff:
             raise ValueError("The diff is empty")
         return diff
+
+    def add(self, func: StreamFunction) -> Self:
+        new_node = self.__class__(func=func, parent=self)
+        self.children.add(new_node)
+        return new_node
 
     def _add(self, func: StreamFunction) -> Self:
         new_node = self.__class__(func=func, parent=self)
@@ -461,7 +364,8 @@ class Stream:
         if other.pruned:
             raise ValueError("Node has already been pruned")
         other.pruned = True
-        node = self
+
+        node: Optional[Self] = self
         while node:
             if other in node.children:
                 node.children.remove(other)

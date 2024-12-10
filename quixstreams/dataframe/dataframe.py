@@ -26,12 +26,19 @@ from quixstreams.context import (
 )
 from quixstreams.core.stream import (
     ApplyCallback,
+    ApplyFunction,
     ApplyWithMetadataCallback,
+    ApplyWithMetadataFunction,
     FilterCallback,
+    FilterFunction,
     FilterWithMetadataCallback,
+    FilterWithMetadataFunction,
     Stream,
+    TransformFunction,
     UpdateCallback,
+    UpdateFunction,
     UpdateWithMetadataCallback,
+    UpdateWithMetadataFunction,
     VoidExecutor,
 )
 from quixstreams.models import (
@@ -229,13 +236,14 @@ class StreamingDataFrame(BaseStreaming):
                 func=with_metadata_func,
                 processing_context=self._processing_context,
             )
-            stream = self.stream.add_apply(stateful_func, expand=expand, metadata=True)
-        else:
-            stream = self.stream.add_apply(
-                cast(Union[ApplyCallback, ApplyWithMetadataCallback], func),
-                expand=expand,
-                metadata=metadata,
+
+            stream = self.stream.add(
+                ApplyWithMetadataFunction(stateful_func, expand=expand)
             )
+        elif metadata:
+            stream = self.stream.add(ApplyWithMetadataFunction(func, expand=expand))
+        else:
+            stream = self.stream.add(ApplyFunction(func, expand=expand))
         return self.__dataframe_clone__(stream=stream)
 
     @overload
@@ -399,21 +407,18 @@ class StreamingDataFrame(BaseStreaming):
         if stateful:
             self._register_store()
             # Force the callback to accept metadata
-            with_metadata_func = (
-                func
-                if metadata
-                else _as_metadata_func(cast(FilterCallbackStateful, func))
-            )
+            with_metadata_func = func if metadata else _as_metadata_func(func)
             stateful_func = _as_stateful(
                 func=cast(FilterWithMetadataCallbackStateful, with_metadata_func),
                 processing_context=self._processing_context,
             )
-            stream = self.stream.add_filter(stateful_func, metadata=True)
+
+            stream = self.stream.add(FilterWithMetadataFunction(stateful_func))
+        elif metadata:
+            stream = self.stream.add(FilterWithMetadataFunction(func))
         else:
-            stream = self.stream.add_filter(
-                cast(Union[FilterCallback, FilterWithMetadataCallback], func),
-                metadata=metadata,
-            )
+            stream = self.stream.add(FilterFunction(func))
+
         return self.__dataframe_clone__(stream=stream)
 
     @overload
@@ -619,7 +624,7 @@ class StreamingDataFrame(BaseStreaming):
             new_timestamp = func(value, key, timestamp, headers)
             return value, key, new_timestamp, headers
 
-        stream = self.stream.add_transform(func=_set_timestamp_callback)
+        stream = self.stream.add(TransformFunction(_set_timestamp_callback))
         return self.__dataframe_clone__(stream=stream)
 
     def set_headers(
@@ -670,7 +675,7 @@ class StreamingDataFrame(BaseStreaming):
             new_headers = func(value, key, timestamp, headers)
             return value, key, timestamp, new_headers
 
-        stream = self.stream.add_transform(func=_set_headers_callback)
+        stream = self.stream.add(TransformFunction(_set_headers_callback))
         return self.__dataframe_clone__(stream=stream)
 
     def print(self, pretty: bool = True, metadata: bool = False) -> Self:
@@ -1136,7 +1141,10 @@ class StreamingDataFrame(BaseStreaming):
         func: Union[UpdateCallback, UpdateWithMetadataCallback],
         metadata: bool = False,
     ):
-        self._stream = self._stream.add_update(func, metadata=metadata)
+        if metadata:
+            self._stream = self._stream.add(UpdateWithMetadataFunction(func))
+        else:
+            self._stream = self._stream.add(UpdateFunction(func))
         return self
 
     def _register_store(self):
@@ -1270,6 +1278,24 @@ def _drop(value: Dict, columns: List[str], ignore_missing: bool = False):
         except KeyError:
             if not ignore_missing:
                 raise
+
+
+@overload
+def _as_metadata_func(
+    func: ApplyCallbackStateful,
+) -> ApplyWithMetadataCallbackStateful: ...
+
+
+@overload
+def _as_metadata_func(
+    func: FilterCallbackStateful,
+) -> FilterWithMetadataCallbackStateful: ...
+
+
+@overload
+def _as_metadata_func(
+    func: UpdateCallbackStateful,
+) -> UpdateWithMetadataCallbackStateful: ...
 
 
 def _as_metadata_func(

@@ -183,7 +183,7 @@ class StreamingSeries(BaseStreaming):
         :param func: a callable with one argument and one output
         :return: a new `StreamingSeries` with the new callable added
         """
-        child = self._stream.add_apply(func)
+        child = self._stream.add(ApplyFunction(func))
         return self.__class__(stream=child, sdf_id=self._sdf_id)
 
     def compose_returning(self) -> ReturningExecutor:
