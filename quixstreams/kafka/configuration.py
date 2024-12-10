@@ -1,7 +1,7 @@
-from typing import Callable, Literal, Optional, Tuple, Type
+from typing import Callable, Literal, Optional, Tuple, Type, Union
 
 import pydantic
-from pydantic import AliasChoices, Field, SecretStr
+from pydantic import AliasChoices, Field, ImportString, SecretStr
 from pydantic.functional_validators import BeforeValidator
 from pydantic_settings import (
     BaseSettings as PydanticBaseSettings,
@@ -52,11 +52,13 @@ class ConnectionConfig(BaseSettings):
     sasl_kerberos_principal: Optional[str] = None
 
     # for oauth_cb, see https://docs.confluent.io/platform/current/clients/confluent-kafka-python/html/index.html#pythonclient-configuration
-    oauth_cb: Optional[Callable[[str], Tuple[str, float]]] = pydantic.Field(
-        # Prevent the AliasGenerator from changing the field name to "oauth.cb"
-        default=None,
-        alias_priority=2,
-        serialization_alias="oauth_cb",
+    oauth_cb: Optional[Union[Callable[[str], Tuple[str, float]], ImportString]] = (
+        pydantic.Field(
+            # Prevent the AliasGenerator from changing the field name to "oauth.cb"
+            default=None,
+            alias_priority=2,
+            serialization_alias="oauth_cb",
+        )
     )
 
     sasl_oauthbearer_config: Optional[str] = None
