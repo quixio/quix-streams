@@ -166,20 +166,24 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
                 prefix=prefix,
             )
         )
-        if expired_windows:
-            # Save the start of the latest expired window to the expiration index
-            latest_window = expired_windows[-1]
-            last_expired__gt = latest_window[0][0]
+        if not expired_windows:
+            return []
 
-            self._set_timestamp(
-                cache=self._last_expired_timestamps,
-                prefix=prefix,
-                timestamp_ms=last_expired__gt,
-            )
-            # Delete expired windows from the state
-            if delete:
-                for (start, end), _ in expired_windows:
-                    self.delete_window(start, end, prefix=prefix)
+        # Save the start of the latest expired window to the expiration index
+        latest_window = expired_windows[-1]
+        last_expired__gt = latest_window[0][0]
+
+        self._set_timestamp(
+            cache=self._last_expired_timestamps,
+            prefix=prefix,
+            timestamp_ms=last_expired__gt,
+        )
+
+        # Delete expired windows from the state
+        if delete:
+            for (start, end), _ in expired_windows:
+                self.delete_window(start, end, prefix=prefix)
+
         return expired_windows
 
     def delete_windows(self, max_start_time: int, prefix: bytes) -> None:
