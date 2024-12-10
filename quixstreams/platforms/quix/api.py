@@ -32,7 +32,7 @@ class QuixPortalApiService:
 
     def __init__(
         self,
-        auth_token: Optional[str] = None,
+        auth_token: str,
         portal_api: Optional[str] = None,
         api_version: Optional[str] = None,
         default_workspace_id: Optional[str] = None,
@@ -40,12 +40,13 @@ class QuixPortalApiService:
         self._portal_api = (
             portal_api or QUIX_ENVIRONMENT.portal_api or DEFAULT_PORTAL_API_URL
         )
-        self._auth_token = auth_token or QUIX_ENVIRONMENT.sdk_token
-        if not self._auth_token:
+        if not auth_token:
             raise MissingConnectionRequirements(
                 f"A Quix Cloud auth token (SDK or PAT) is required; "
                 f"set with environment variable {QUIX_ENVIRONMENT.SDK_TOKEN}"
             )
+        self._auth_token = auth_token
+
         self._default_workspace_id = (
             default_workspace_id or QUIX_ENVIRONMENT.workspace_id
         )
@@ -133,7 +134,7 @@ class QuixPortalApiService:
             f"/workspaces/{workspace_id}/certificates", timeout=timeout
         ).content
         if not content:
-            return
+            return None
 
         with ZipFile(BytesIO(content)) as z:
             with z.open("ca.cert") as f:

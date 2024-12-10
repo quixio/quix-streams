@@ -302,6 +302,13 @@ class KafkaReplicatorSource(Source):
             target_topic_config,
         )
 
+        # should never happen
+        if (
+            source_topic_config.num_partitions is None
+            or target_topic_config.num_partitions is None
+        ):
+            return
+
         if source_topic_config.num_partitions > target_topic_config.num_partitions:
             raise ValueError("Source topic has more partitions than destination topic")
         elif source_topic_config.num_partitions < target_topic_config.num_partitions:
