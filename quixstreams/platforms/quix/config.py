@@ -400,6 +400,7 @@ class QuixKafkaConfigsBuilder:
                     # Multiple apps likely tried to create at the same time.
                     # If this fails, it raises with all previous API errors
                     return self.get_topic(topic_name=topic.name, timeout=timeout)
+            raise
 
     def wait_for_topic_ready_statuses(
         self,
