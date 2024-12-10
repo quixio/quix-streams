@@ -8,7 +8,7 @@ from quixstreams.models import (
     IgnoreMessage,
     SerializationError,
 )
-from tests.utils import Timeout
+from tests.utilities.utils import Timeout
 
 
 class TestRowConsumer:

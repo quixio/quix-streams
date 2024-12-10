@@ -11,7 +11,7 @@ from quixstreams.state.metadata import (
     PREFIX_SEPARATOR,
 )
 from quixstreams.utils.json import dumps
-from tests.utils import ConfluentKafkaMessageStub
+from tests.utilities.utils import ConfluentKafkaMessageStub
 
 
 @pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)

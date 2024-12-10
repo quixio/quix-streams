@@ -5,7 +5,7 @@ from typing import Any, List, Mapping, Union
 
 import pytest
 
-from tests.utils import ConfluentKafkaMessageStub
+from tests.utilities.utils import ConfluentKafkaMessageStub
 
 
 @pytest.fixture()

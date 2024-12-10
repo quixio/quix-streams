@@ -19,7 +19,7 @@ from quixstreams.state import StateStoreManager
 from quixstreams.state.base import PartitionTransaction
 from quixstreams.state.exceptions import StoreNotRegisteredError, StoreTransactionFailed
 from quixstreams.state.manager import SUPPORTED_STORES
-from tests.utils import DummySink
+from tests.utilities.utils import DummySink
 
 
 @pytest.fixture()

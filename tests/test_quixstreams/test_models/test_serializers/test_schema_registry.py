@@ -26,7 +26,7 @@ from quixstreams.models.serializers.protobuf import (
     ProtobufDeserializer,
     ProtobufSerializer,
 )
-from tests.conftest import SchemaRegistryContainer
+from tests.utilities.containers import SchemaRegistryContainer
 
 from .constants import AVRO_TEST_SCHEMA, DUMMY_CONTEXT, JSONSCHEMA_TEST_SCHEMA
 from .protobuf.nested_pb2 import Nested

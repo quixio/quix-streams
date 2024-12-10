@@ -13,7 +13,7 @@ from quixstreams.dataframe.exceptions import (
 )
 from quixstreams.dataframe.registry import DataframeRegistry
 from quixstreams.dataframe.windows import WindowResult
-from tests.utils import DummySink
+from tests.utilities.utils import DummySink
 
 RecordStub = namedtuple("RecordStub", ("value", "key", "timestamp"))
 

@@ -2,11 +2,22 @@ import base64
 import random
 import time
 import uuid
+from collections import namedtuple
 from datetime import datetime, timedelta, timezone
 from typing import Tuple
 
 from testcontainers.core.container import DockerContainer
 from testcontainers.core.network import Network
+
+KafkaContainer = namedtuple(
+    "KafkaContainer",
+    ["broker_address", "internal_broker_address"],
+)
+
+SchemaRegistryContainer = namedtuple(
+    "SchemaRegistryContainer",
+    ["schema_registry_address"],
+)
 
 
 class ContainerHelper:

@@ -12,7 +12,7 @@ from quixstreams.state.exceptions import (
 )
 from quixstreams.state.manager import SUPPORTED_STORES
 from quixstreams.state.rocksdb import RocksDBStore
-from tests.utils import TopicPartitionStub
+from tests.utilities.utils import TopicPartitionStub
 
 
 @pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)

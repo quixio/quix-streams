@@ -8,7 +8,7 @@ import pytest
 from confluent_kafka import TopicPartition
 from confluent_kafka.error import KafkaError
 
-from tests.utils import DEFAULT_TIMEOUT, Timeout
+from tests.utilities.utils import DEFAULT_TIMEOUT, Timeout
 
 
 def test_consumer_start_close(

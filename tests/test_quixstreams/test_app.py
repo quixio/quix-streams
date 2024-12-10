@@ -33,7 +33,7 @@ from quixstreams.sources import SourceException, multiprocessing
 from quixstreams.state import State
 from quixstreams.state.manager import SUPPORTED_STORES
 from quixstreams.state.rocksdb import RocksDBStore
-from tests.utils import DummySink, DummySource, DummyStatefulSource
+from tests.utilities.utils import DummySink, DummySource, DummyStatefulSource
 
 
 def _stop_app_on_future(app: Application, future: Future, timeout: float):
