@@ -151,7 +151,7 @@ Serializes floats to bytes
 class JSONSerializer(Serializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/json.py#L32)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/json.py#L34)
 
 <a id="quixstreams.models.serializers.json.JSONSerializer.__init__"></a>
 
@@ -163,13 +163,13 @@ class JSONSerializer(Serializer)
 def __init__(
     dumps: Callable[[Any], Union[str, bytes]] = default_dumps,
     schema: Optional[Mapping] = None,
-    validator: Optional[Validator] = None,
+    validator: Optional["_Validator"] = None,
     schema_registry_client_config: Optional[SchemaRegistryClientConfig] = None,
     schema_registry_serialization_config: Optional[
         SchemaRegistrySerializationConfig] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/json.py#L33)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/json.py#L35)
 
 Serializer that returns data in json format.
 
@@ -197,7 +197,7 @@ Default - `None`
 class JSONDeserializer(Deserializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/json.py#L119)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/json.py#L121)
 
 <a id="quixstreams.models.serializers.json.JSONDeserializer.__init__"></a>
 
@@ -209,12 +209,12 @@ class JSONDeserializer(Deserializer)
 def __init__(
     loads: Callable[[Union[bytes, bytearray]], Any] = default_loads,
     schema: Optional[Mapping] = None,
-    validator: Optional[Validator] = None,
+    validator: Optional["_Validator"] = None,
     schema_registry_client_config: Optional[SchemaRegistryClientConfig] = None
 )
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/json.py#L120)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/serializers/json.py#L122)
 
 Deserializer that parses data from JSON
 
@@ -362,7 +362,7 @@ class ProtobufSerializer(Serializer)
 
 ```python
 def __init__(
-    msg_type: Message,
+    msg_type: Type[Message],
     deterministic: bool = False,
     ignore_unknown_fields: bool = False,
     schema_registry_client_config: Optional[SchemaRegistryClientConfig] = None,
@@ -409,7 +409,7 @@ class ProtobufDeserializer(Deserializer)
 
 ```python
 def __init__(
-    msg_type: Message,
+    msg_type: Type[Message],
     use_integers_for_enums: bool = False,
     preserving_proto_field_name: bool = False,
     to_dict: bool = True,
