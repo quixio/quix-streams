@@ -1,5 +1,6 @@
 import uuid
 from typing import Optional, Union
+from unittest.mock import create_autospec
 
 import pytest
 from confluent_kafka.admin import (
@@ -160,3 +161,8 @@ def topic_manager_topic_factory(topic_manager_factory):
         return topic
 
     return factory
+
+
+@pytest.fixture()
+def topic_admin_mock():
+    return create_autospec(TopicAdmin)

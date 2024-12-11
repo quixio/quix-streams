@@ -15,27 +15,12 @@ from quixstreams.sources import (
     QuixEnvironmentSource,
     SourceException,
 )
+from tests.fixtures.utilities.containers import ExternalKafkaFixture
 
 logger = logging.getLogger("quixstreams")
 
 
-class Base:
-    NUMBER_OF_MESSAGES = 10
-
-    @pytest.fixture(scope="class")
-    def external_kafka_container(self, kafka_container_factory):
-        yield from kafka_container_factory()
-
-    @pytest.fixture(autouse=True)
-    def external_kafka(self, external_kafka_container):
-        self._external_broker_address = external_kafka_container.broker_address
-
-    @pytest.fixture()
-    def app(self, app_factory):
-        return app_factory(auto_offset_reset="earliest", request_timeout=1)
-
-
-class TestKafkaReplicatorSource(Base):
+class TestKafkaReplicatorSource(ExternalKafkaFixture):
     def create_source_topic(self, num_partitions=1):
         source_topic = Topic(
             str(uuid.uuid4()),
@@ -293,7 +278,7 @@ class TestKafkaReplicatorSource(Base):
         assert results == data[start_offset:]
 
 
-class TestQuixEnvironmentSource(Base):
+class TestQuixEnvironmentSource(ExternalKafkaFixture):
     QUIX_WORKSPACE_ID = "my_workspace_id"
 
     def source(self, config, topic):

@@ -1,5 +1,4 @@
 import logging
-import logging.config
 from typing import Any, Generator
 
 import pytest
@@ -10,20 +9,8 @@ from tests.utilities.containers import (
     KafkaContainer,
     SchemaRegistryContainer,
 )
-from tests.utilities.logging import LOGGING_CONFIG, patch_logger_class
 
 test_logger = logging.getLogger("quixstreams.tests")
-
-
-@pytest.fixture(autouse=True, scope="session")
-def configure_logging():
-    logging.config.dictConfig(LOGGING_CONFIG)
-    patch_logger_class()
-
-
-@pytest.fixture(autouse=True)
-def log_test_progress(request: pytest.FixtureRequest):
-    test_logger.debug("Starting test %s", request.node.nodeid)
 
 
 @pytest.fixture(scope="session")
@@ -73,3 +60,19 @@ def kafka_container_factory(network: Network) -> Generator[KafkaContainer, Any, 
 @pytest.fixture(scope="session")
 def kafka_container(kafka_container_factory) -> KafkaContainer:
     yield from kafka_container_factory()
+
+
+class ExternalKafkaFixture:
+    NUMBER_OF_MESSAGES = 10
+
+    @pytest.fixture(scope="class")
+    def external_kafka_container(self, kafka_container_factory):
+        yield from kafka_container_factory()
+
+    @pytest.fixture(autouse=True)
+    def external_kafka(self, external_kafka_container):
+        self._external_broker_address = external_kafka_container.broker_address
+
+    @pytest.fixture()
+    def app(self, app_factory):
+        return app_factory(auto_offset_reset="earliest", request_timeout=1)

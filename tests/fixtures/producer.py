@@ -1,4 +1,5 @@
 from typing import Optional
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -26,6 +27,13 @@ def producer_factory(kafka_container):
 @pytest.fixture()
 def producer(producer_factory) -> Producer:
     return producer_factory()
+
+
+@pytest.fixture
+def row_producer_mock(request):
+    producer = MagicMock(spec=RowProducer)
+    producer.flush.return_value = getattr(request, "param", 0)
+    return producer
 
 
 @pytest.fixture()
