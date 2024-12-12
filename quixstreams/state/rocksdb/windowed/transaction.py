@@ -238,62 +238,92 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         backwards: bool = False,
     ) -> list[tuple[tuple[int, int], Any]]:
         """
-        Get all windows that start between "start_from_ms" and "start_to_ms"
+        Get all windows within the specified time range.
+
+        This method retrieves all window entries that have a start time between
+        `start_from_ms` (exclusive) and `start_to_ms` (inclusive). The windows can be
+        retrieved in either forward or reverse chronological order.
+
+        How it works:
+        - It uses `_get_items` to fetch the raw key-value pairs within
+          the specified time range.
+        - For each window, it parses the key to extract start and end timestamps.
+        - Values are deserialized before being returned.
+        - Results are returned as tuples of ((start_time, end_time), value).
+
+        :param start_from_ms: The lower bound timestamp (exclusive) for window start times.
+        :param start_to_ms: The upper bound timestamp (inclusive) for window start times.
+        :param prefix: The key prefix used to identify and filter relevant windows.
+        :param backwards: If True, returns windows in reverse chronological order.
+        :return: A list of tuples in the format ((start_ms, end_ms), value).
+        """
+        result = []
+        for key, value in self._get_items(
+            start=start_from_ms,
+            end=start_to_ms + 1,  # add +1 to make the upper bound inclusive
+            prefix=prefix,
+            backwards=backwards,
+        ):
+            _, start, end = parse_window_key(key)
+            if start_from_ms < start <= start_to_ms:
+                value = self._deserialize_value(value)
+                result.append(((start, end), value))
+
+        return result
+
+    def _get_items(
+        self,
+        start: int,
+        end: int,
+        prefix: bytes,
+        backwards: bool = False,
+        cf_name: str = "default",
+    ) -> list[tuple[bytes, bytes]]:
+        """
+        Get all items that start between `start` and `end`
         within the specified prefix.
 
         This function also checks the update cache for any updates not yet
         committed to RocksDB.
 
-        :param start_from_ms: The minimal window start time, exclusive.
-        :param start_to_ms: The maximum window start time, inclusive.
-        :param prefix: The key prefix for filtering windows.
-        :param backwards: If True, yields windows in reverse order.
-        :return: A sorted list of tuples in the format `((start, end), value)`.
+        :param start: Start of the range, exclusive.
+        :param end: End of the range, inclusive.
+        :param prefix: The key prefix for filtering items.
+        :param backwards: If True, returns items in reverse order.
+        :param cf_name: The RocksDB column family name.
+        :return: A sorted list of key-value pairs.
         """
-        seek_from = max(start_from_ms, 0)
-        seek_from_key = append_integer(base_bytes=prefix, integer=seek_from)
-
-        # Add +1 to make the upper bound inclusive
-        seek_to = start_to_ms + 1
-        seek_to_key = append_integer(base_bytes=prefix, integer=seek_to)
+        seek_from_key = append_integer(base_bytes=prefix, integer=max(start, 0))
+        seek_to_key = append_integer(base_bytes=prefix, integer=end)
 
         # Create an iterator over the state store
         # Set iterator bounds to reduce IO by limiting the range of keys fetched
         read_opt = ReadOptions()
         read_opt.set_iterate_lower_bound(seek_from_key)
         read_opt.set_iterate_upper_bound(seek_to_key)
-        db_windows = self._partition.iter_items(
-            read_opt=read_opt, from_key=seek_from_key
+        db_items = self._partition.iter_items(
+            read_opt=read_opt, from_key=seek_from_key, cf_name=cf_name
         )
+
+        cache = self._update_cache
+        update_cache = cache.get_updates(cf_name=cf_name).get(prefix, {})
+        delete_cache = cache.get_deletes(cf_name=cf_name)
 
         # Get cached updates with matching keys
-        update_cache = self._update_cache
-        updated_windows = (
-            (k, v)
-            for k, v in update_cache.get_updates(cf_name="default")
-            .get(prefix, {})
-            .items()
-            if seek_from_key < k <= seek_to_key
+        updated_items = (
+            (key, value)
+            for key, value in update_cache.items()
+            if seek_from_key < key <= seek_to_key
         )
 
-        # Iterate over stored and cached windows and merge them to a single dict
-        deleted_windows = update_cache.get_deletes(cf_name="default")
-        merged_windows = {}
-        for key, value in itertools.chain(db_windows, updated_windows):
-            if key not in deleted_windows:
-                merged_windows[key] = value
+        # Iterate over stored and cached items and merge them to a single dict
+        merged_items = {}
+        for key, value in itertools.chain(db_items, updated_items):
+            if key not in delete_cache:
+                merged_items[key] = value
 
-        # Sort and deserialize windows merged from the cache and store
-        result = []
-        for window_key, window_value in sorted(
-            merged_windows.items(), key=lambda kv: kv[0], reverse=backwards
-        ):
-            _, start, end = parse_window_key(window_key)
-            if start_from_ms < start <= start_to_ms:
-                value = self._deserialize_value(window_value)
-                result.append(((start, end), value))
-
-        return result
+        # Sort and deserialize items merged from the cache and store
+        return sorted(merged_items.items(), key=lambda kv: kv[0], reverse=backwards)
 
     def _get_timestamp(
         self, cache: TimestampsCache, prefix: bytes, default: Any = None
