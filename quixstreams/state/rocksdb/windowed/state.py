@@ -58,8 +58,8 @@ class WindowedTransactionState(WindowedState):
         return self._transaction.update_window(
             start_ms=start_ms,
             end_ms=end_ms,
-            timestamp_ms=timestamp_ms,
             value=value,
+            timestamp_ms=timestamp_ms,
             prefix=self._prefix,
         )
 
