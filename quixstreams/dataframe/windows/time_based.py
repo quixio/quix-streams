@@ -99,7 +99,7 @@ class FixedTimeWindow:
 
             current_value = state.get_window(start, end, default=default)
             aggregated = self._aggregate_func(current_value, value)
-            state.update_window(start, end, timestamp_ms=timestamp_ms, value=aggregated)
+            state.update_window(start, end, value=aggregated, timestamp_ms=timestamp_ms)
             updated_windows.append(
                 WindowResult(start=start, end=end, value=self._merge_func(aggregated))
             )
