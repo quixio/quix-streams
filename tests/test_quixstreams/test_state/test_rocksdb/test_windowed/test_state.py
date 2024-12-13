@@ -269,7 +269,7 @@ def test_delete_windows(transaction_state):
         assert state.get_window(start_ms=2, end_ms=3)
         assert state.get_window(start_ms=3, end_ms=4)
 
-        state.delete_windows(max_start_time=2)
+        state.delete_windows(max_start_time=2, delete_values=False)
 
         assert not state.get_window(start_ms=1, end_ms=2)
         assert not state.get_window(start_ms=2, end_ms=3)

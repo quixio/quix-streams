@@ -43,6 +43,15 @@ class WindowedState(Protocol):
         """
         ...
 
+    def collect_value(self, value: Any, timestamp_ms: int) -> None:
+        """
+        Collect a value for the window.
+
+        :param value: value of the window
+        :param timestamp_ms: current message timestamp in milliseconds
+        """
+        ...
+
     def get_latest_timestamp(self) -> Optional[int]:
         """
         Get the latest observed timestamp for the current state partition.
@@ -55,7 +64,11 @@ class WindowedState(Protocol):
         ...
 
     def expire_windows(
-        self, max_start_time: int, delete: bool = True
+        self,
+        max_start_time: int,
+        delete: bool = True,
+        collect: bool = False,
+        end_inclusive: bool = False,
     ) -> list[tuple[tuple[int, int], Any]]:
         """
         Get all expired windows from RocksDB up to the specified `max_start_time` timestamp.
@@ -65,11 +78,13 @@ class WindowedState(Protocol):
 
         :param max_start_time: The timestamp up to which windows are considered expired, inclusive.
         :param delete: If True, expired windows will be deleted.
+        :param collect: If True, scattered values will be collected into single window.
+        :param end_inclusive: If True, the end of the window will be inclusive.
         :return: A sorted list of tuples in the format `((start, end), value)`.
         """
         ...
 
-    def delete_windows(self, max_start_time: int) -> None:
+    def delete_windows(self, max_start_time: int, delete_values: bool) -> None:
         """
         Delete windows from RocksDB up to the specified `max_start_time` timestamp.
 
@@ -78,6 +93,7 @@ class WindowedState(Protocol):
         unexpired windows.
 
         :param max_start_time: The timestamp up to which windows should be deleted, inclusive.
+        :param delete_values: If True, values will be deleted.
         """
         ...
 
@@ -179,6 +195,15 @@ class WindowedPartitionTransaction(Protocol):
         """
         ...
 
+    def collect_value(self, value: Any, timestamp_ms: int) -> None:
+        """
+        Collect a value for the window.
+
+        :param value: value of the window
+        :param timestamp_ms: current message timestamp in milliseconds
+        """
+        ...
+
     def get_latest_timestamp(self, prefix: bytes) -> int:
         """
         Get the latest observed timestamp for the current state prefix
@@ -192,7 +217,12 @@ class WindowedPartitionTransaction(Protocol):
         ...
 
     def expire_windows(
-        self, max_start_time: int, prefix: bytes, delete: bool = True
+        self,
+        max_start_time: int,
+        prefix: bytes,
+        delete: bool = True,
+        collect: bool = False,
+        end_inclusive: bool = False,
     ) -> list[tuple[tuple[int, int], Any]]:
         """
         Get all expired windows from RocksDB up to the specified `max_start_time` timestamp.
@@ -203,11 +233,15 @@ class WindowedPartitionTransaction(Protocol):
         :param max_start_time: The timestamp up to which windows are considered expired, inclusive.
         :param prefix: The key prefix for filtering windows.
         :param delete: If True, expired windows will be deleted.
+        :param collect: If True, scattered values will be collected into single window.
+        :param end_inclusive: If True, the end of the window will be inclusive.
         :return: A sorted list of tuples in the format `((start, end), value)`.
         """
         ...
 
-    def delete_windows(self, max_start_time: int, prefix: bytes) -> None:
+    def delete_windows(
+        self, max_start_time: int, delete_values: bool, prefix: bytes
+    ) -> None:
         """
         Delete windows from RocksDB up to the specified `max_start_time` timestamp.
 
@@ -216,6 +250,7 @@ class WindowedPartitionTransaction(Protocol):
         unexpired windows.
 
         :param max_start_time: The timestamp up to which windows should be deleted, inclusive.
+        :param delete_values: If True, values will be deleted.
         :param prefix: The key prefix used to identify and filter relevant windows.
         """
         ...
