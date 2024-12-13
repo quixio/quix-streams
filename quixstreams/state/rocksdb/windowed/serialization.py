@@ -1,5 +1,4 @@
 import struct
-from typing import Tuple
 
 from quixstreams.state.metadata import PREFIX_SEPARATOR
 from quixstreams.state.serialization import (
@@ -18,7 +17,7 @@ _window_pack = _window_packer.pack
 _window_unpack = _window_packer.unpack
 
 
-def parse_window_key(key: bytes) -> Tuple[bytes, int, int]:
+def parse_window_key(key: bytes) -> tuple[bytes, int, int]:
     """
     Parse the window key from Rocksdb into (message_key, start, end) structure.
 
