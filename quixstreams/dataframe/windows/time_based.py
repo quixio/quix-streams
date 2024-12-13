@@ -99,6 +99,10 @@ class FixedTimeWindow:
                 )
                 continue
 
+            if self._aggregate_collection:
+                state.update_window(start, end, value=None, timestamp_ms=timestamp_ms)
+                continue
+
             current_value = state.get_window(start, end, default=default)
             aggregated = self._aggregate_func(current_value, value)
             state.update_window(start, end, value=aggregated, timestamp_ms=timestamp_ms)
@@ -106,9 +110,13 @@ class FixedTimeWindow:
                 WindowResult(start=start, end=end, value=self._merge_func(aggregated))
             )
 
+        if self._aggregate_collection:
+            state.collect_value(value=value, timestamp_ms=timestamp_ms)
+
         expired_windows: list[WindowResult] = []
         for (start, end), aggregated in state.expire_windows(
-            max_start_time=max_expired_window_start
+            max_start_time=max_expired_window_start,
+            collect=self._aggregate_collection,
         ):
             expired_windows.append(
                 WindowResult(start=start, end=end, value=self._merge_func(aggregated))
@@ -181,6 +189,10 @@ class FixedTimeWindow:
         This method processes streaming data and returns results as they come,
         regardless of whether the window is closed or not.
         """
+        if self._aggregate_collection:
+            raise ValueError(
+                "`current` is not supported in combination with `collect`."
+            )
 
         def window_callback(
             value: Any, key: Any, timestamp_ms: int, _headers: Any, state: WindowedState

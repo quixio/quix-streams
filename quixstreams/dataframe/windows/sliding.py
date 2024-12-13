@@ -53,6 +53,7 @@ class SlidingWindow(FixedTimeWindow):
         grace = self._grace_ms
         aggregate = self._aggregate_func
         default = self._aggregate_default
+        collect = self._aggregate_collection
 
         # Sliding windows are inclusive on both ends, so values with
         # timestamps equal to latest_timestamp - duration - grace
@@ -208,17 +209,27 @@ class SlidingWindow(FixedTimeWindow):
                     )
                 )
 
+        if collect:
+            state.collect_value(value=value, timestamp_ms=timestamp_ms)
+
         expired_windows: list[WindowResult] = [
             WindowResult(start=start, end=end, value=self._merge_func(aggregation))
             for (start, end), (max_timestamp, aggregation) in state.expire_windows(
                 max_start_time=max_expired_window_start,
                 delete=False,
+                collect=collect,
+                end_inclusive=True,
             )
             if end == max_timestamp  # Emit only left windows
         ]
 
-        state.delete_windows(max_start_time=max_deleted_window_start)
-        return reversed(updated_windows), expired_windows
+        state.delete_windows(
+            max_start_time=max_deleted_window_start,
+            delete_values=collect,
+        )
+
+        updated_windows = [] if collect else reversed(updated_windows)
+        return updated_windows, expired_windows
 
     def _update_window(
         self,
