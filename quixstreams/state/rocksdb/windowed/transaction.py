@@ -156,12 +156,10 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
 
         # Use the latest expired timestamp to limit the iteration over
         # only those windows that have not been expired before
-        expired_windows = list(
-            self.get_windows(
-                start_from_ms=start_from,
-                start_to_ms=max_start_time,
-                prefix=prefix,
-            )
+        expired_windows = self.get_windows(
+            start_from_ms=start_from,
+            start_to_ms=max_start_time,
+            prefix=prefix,
         )
         if not expired_windows:
             return []
