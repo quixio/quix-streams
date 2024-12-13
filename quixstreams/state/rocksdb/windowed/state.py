@@ -63,6 +63,19 @@ class WindowedTransactionState(WindowedState):
             prefix=self._prefix,
         )
 
+    def collect_value(self, value: Any, timestamp_ms: int) -> None:
+        """
+        Collect a value for the window.
+
+        :param value: value of the window
+        :param timestamp_ms: current message timestamp in milliseconds
+        """
+        return self._transaction.collect_value(
+            value=value,
+            timestamp_ms=timestamp_ms,
+            prefix=self._prefix,
+        )
+
     def get_latest_timestamp(self) -> Optional[int]:
         """
         Get the latest observed timestamp for the current message key.
@@ -76,7 +89,11 @@ class WindowedTransactionState(WindowedState):
         return self._transaction.get_latest_timestamp(prefix=self._prefix)
 
     def expire_windows(
-        self, max_start_time: int, delete: bool = True
+        self,
+        max_start_time: int,
+        delete: bool = True,
+        collect: bool = False,
+        end_inclusive: bool = False,
     ) -> list[tuple[tuple[int, int], Any]]:
         """
         Get all expired windows from RocksDB up to the specified `max_start_time` timestamp.
@@ -86,10 +103,16 @@ class WindowedTransactionState(WindowedState):
 
         :param max_start_time: The timestamp up to which windows are considered expired, inclusive.
         :param delete: If True, expired windows will be deleted.
+        :param collect: If True, scattered values will be collected into single window.
+        :param end_inclusive: If True, the end of the window will be inclusive.
         :return: A sorted list of tuples in the format `((start, end), value)`.
         """
         return self._transaction.expire_windows(
-            max_start_time=max_start_time, prefix=self._prefix, delete=delete
+            max_start_time=max_start_time,
+            prefix=self._prefix,
+            delete=delete,
+            collect=collect,
+            end_inclusive=end_inclusive,
         )
 
     def get_windows(
@@ -110,7 +133,7 @@ class WindowedTransactionState(WindowedState):
             backwards=backwards,
         )
 
-    def delete_windows(self, max_start_time: int) -> None:
+    def delete_windows(self, max_start_time: int, delete_values: bool) -> None:
         """
         Delete windows from RocksDB up to the specified `max_start_time` timestamp.
 
@@ -119,7 +142,10 @@ class WindowedTransactionState(WindowedState):
         unexpired windows.
 
         :param max_start_time: The timestamp up to which windows should be deleted, inclusive.
+        :param delete_values: If True, values will be deleted.
         """
         return self._transaction.delete_windows(
-            max_start_time=max_start_time, prefix=self._prefix
+            max_start_time=max_start_time,
+            delete_values=delete_values,
+            prefix=self._prefix,
         )
