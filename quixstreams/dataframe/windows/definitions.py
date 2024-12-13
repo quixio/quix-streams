@@ -217,7 +217,7 @@ class HoppingWindowDefinition(FixedTimeWindowDefinition):
         aggregate_func: WindowAggregateFunc,
         aggregate_default: Any,
         merge_func: Optional[WindowMergeFunc] = None,
-    ) -> "FixedTimeWindow":
+    ) -> FixedTimeWindow:
         return FixedTimeWindow(
             duration_ms=self._duration_ms,
             grace_ms=self._grace_ms,
@@ -252,7 +252,7 @@ class TumblingWindowDefinition(FixedTimeWindowDefinition):
         aggregate_func: WindowAggregateFunc,
         aggregate_default: Any,
         merge_func: Optional[WindowMergeFunc] = None,
-    ) -> "FixedTimeWindow":
+    ) -> FixedTimeWindow:
         return FixedTimeWindow(
             duration_ms=self._duration_ms,
             grace_ms=self._grace_ms,
@@ -286,7 +286,7 @@ class SlidingWindowDefinition(FixedTimeWindowDefinition):
         aggregate_func: WindowAggregateFunc,
         aggregate_default: Any,
         merge_func: Optional[WindowMergeFunc] = None,
-    ) -> "FixedTimeWindow":
+    ) -> SlidingWindow:
         return SlidingWindow(
             duration_ms=self._duration_ms,
             grace_ms=self._grace_ms,
