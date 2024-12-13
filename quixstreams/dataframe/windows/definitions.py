@@ -223,10 +223,10 @@ class HoppingWindowDefinition(FixedTimeWindowDefinition):
             grace_ms=self._grace_ms,
             step_ms=self._step_ms,
             name=self._get_name(func_name=func_name),
+            dataframe=self._dataframe,
             aggregate_func=aggregate_func,
             aggregate_default=aggregate_default,
             merge_func=merge_func,
-            dataframe=self._dataframe,
         )
 
 
@@ -257,10 +257,10 @@ class TumblingWindowDefinition(FixedTimeWindowDefinition):
             duration_ms=self._duration_ms,
             grace_ms=self._grace_ms,
             name=self._get_name(func_name=func_name),
+            dataframe=self._dataframe,
             aggregate_func=aggregate_func,
             aggregate_default=aggregate_default,
             merge_func=merge_func,
-            dataframe=self._dataframe,
         )
 
 
@@ -291,8 +291,8 @@ class SlidingWindowDefinition(FixedTimeWindowDefinition):
             duration_ms=self._duration_ms,
             grace_ms=self._grace_ms,
             name=self._get_name(func_name=func_name),
+            dataframe=self._dataframe,
             aggregate_func=aggregate_func,
             aggregate_default=aggregate_default,
             merge_func=merge_func,
-            dataframe=self._dataframe,
         )
