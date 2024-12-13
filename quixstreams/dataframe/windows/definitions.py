@@ -189,6 +189,17 @@ class FixedTimeWindowDefinition(abc.ABC):
             func_name="min", aggregate_func=func, aggregate_default=None
         )
 
+    def collect(self) -> "FixedTimeWindow":
+        def func(old: Any, new: Any) -> None:
+            return None
+
+        return self._create_window(
+            func_name="collect",
+            aggregate_func=func,
+            aggregate_default=None,
+            aggregate_collection=True,
+        )
+
 
 class HoppingWindowDefinition(FixedTimeWindowDefinition):
     def __init__(
@@ -216,6 +227,7 @@ class HoppingWindowDefinition(FixedTimeWindowDefinition):
         func_name: str,
         aggregate_func: WindowAggregateFunc,
         aggregate_default: Any,
+        aggregate_collection: bool = False,
         merge_func: Optional[WindowMergeFunc] = None,
     ) -> FixedTimeWindow:
         return FixedTimeWindow(
@@ -226,6 +238,7 @@ class HoppingWindowDefinition(FixedTimeWindowDefinition):
             dataframe=self._dataframe,
             aggregate_func=aggregate_func,
             aggregate_default=aggregate_default,
+            aggregate_collection=aggregate_collection,
             merge_func=merge_func,
         )
 
@@ -251,6 +264,7 @@ class TumblingWindowDefinition(FixedTimeWindowDefinition):
         func_name: str,
         aggregate_func: WindowAggregateFunc,
         aggregate_default: Any,
+        aggregate_collection: bool = False,
         merge_func: Optional[WindowMergeFunc] = None,
     ) -> FixedTimeWindow:
         return FixedTimeWindow(
@@ -260,6 +274,7 @@ class TumblingWindowDefinition(FixedTimeWindowDefinition):
             dataframe=self._dataframe,
             aggregate_func=aggregate_func,
             aggregate_default=aggregate_default,
+            aggregate_collection=aggregate_collection,
             merge_func=merge_func,
         )
 
@@ -285,6 +300,7 @@ class SlidingWindowDefinition(FixedTimeWindowDefinition):
         func_name: str,
         aggregate_func: WindowAggregateFunc,
         aggregate_default: Any,
+        aggregate_collection: bool = False,
         merge_func: Optional[WindowMergeFunc] = None,
     ) -> SlidingWindow:
         return SlidingWindow(
@@ -294,5 +310,6 @@ class SlidingWindowDefinition(FixedTimeWindowDefinition):
             dataframe=self._dataframe,
             aggregate_func=aggregate_func,
             aggregate_default=aggregate_default,
+            aggregate_collection=aggregate_collection,
             merge_func=merge_func,
         )

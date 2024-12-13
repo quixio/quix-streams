@@ -48,6 +48,7 @@ class FixedTimeWindow:
         dataframe: "StreamingDataFrame",
         aggregate_func: WindowAggregateFunc,
         aggregate_default: Any,
+        aggregate_collection: bool = False,
         merge_func: Optional[WindowMergeFunc] = None,
         step_ms: Optional[int] = None,
     ):
@@ -59,6 +60,7 @@ class FixedTimeWindow:
         self._name = name
         self._aggregate_func = aggregate_func
         self._aggregate_default = aggregate_default
+        self._aggregate_collection = aggregate_collection
         self._merge_func = merge_func or _default_merge_func
         self._dataframe = dataframe
         self._step_ms = step_ms
