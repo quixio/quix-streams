@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any, Optional, cast
 from rocksdict import ReadOptions
 
 from quixstreams.state.base.transaction import PartitionTransaction
-from quixstreams.state.metadata import DEFAULT_PREFIX, PREFIX_SEPARATOR
+from quixstreams.state.metadata import DEFAULT_PREFIX, SEPARATOR
 from quixstreams.state.recovery import ChangelogProducer
 from quixstreams.state.serialization import DumpsFunc, LoadsFunc, serialize
 
@@ -17,7 +17,7 @@ from .metadata import (
     LATEST_TIMESTAMP_KEY,
     LATEST_TIMESTAMPS_CF_NAME,
 )
-from .serialization import append_integer, encode_window_key, parse_window_key
+from .serialization import append_integer, encode_integer_pair, parse_window_key
 from .state import WindowedTransactionState
 
 if TYPE_CHECKING:
@@ -87,7 +87,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         default: Any = None,
     ) -> Any:
         self._validate_duration(start_ms=start_ms, end_ms=end_ms)
-        key = encode_window_key(start_ms, end_ms)
+        key = encode_integer_pair(start_ms, end_ms)
         return self.get(key=key, default=default, prefix=prefix)
 
     def update_window(
@@ -102,7 +102,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
             raise ValueError("Timestamp cannot be negative")
         self._validate_duration(start_ms=start_ms, end_ms=end_ms)
 
-        key = encode_window_key(start_ms, end_ms)
+        key = encode_integer_pair(start_ms, end_ms)
         self.set(key=key, value=value, prefix=prefix)
         latest_timestamp_ms = self.get_latest_timestamp(prefix=prefix)
         updated_timestamp_ms = (
@@ -119,7 +119,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
 
     def delete_window(self, start_ms: int, end_ms: int, prefix: bytes):
         self._validate_duration(start_ms=start_ms, end_ms=end_ms)
-        key = encode_window_key(start_ms, end_ms)
+        key = encode_integer_pair(start_ms, end_ms)
         self.delete(key=key, prefix=prefix)
 
     def expire_windows(
@@ -363,4 +363,4 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
     def _serialize_key(self, key: Any, prefix: bytes) -> bytes:
         # Allow bytes keys in WindowedStore
         key_bytes = key if isinstance(key, bytes) else serialize(key, dumps=self._dumps)
-        return prefix + PREFIX_SEPARATOR + key_bytes
+        return prefix + SEPARATOR + key_bytes
