@@ -45,9 +45,9 @@ class FixedTimeWindow:
         duration_ms: int,
         grace_ms: int,
         name: str,
+        dataframe: "StreamingDataFrame",
         aggregate_func: WindowAggregateFunc,
         aggregate_default: Any,
-        dataframe: "StreamingDataFrame",
         merge_func: Optional[WindowMergeFunc] = None,
         step_ms: Optional[int] = None,
     ):
