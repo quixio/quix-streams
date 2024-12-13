@@ -4,7 +4,7 @@ from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER,
 )
-from quixstreams.state.rocksdb.windowed.serialization import encode_window_key
+from quixstreams.state.rocksdb.windowed.serialization import encode_integer_pair
 from quixstreams.utils.json import dumps
 
 
@@ -367,7 +367,7 @@ class TestWindowedRocksDBPartitionTransaction:
         # One for the window itself, and another for the latest timestamp
         assert changelog_producer_mock.produce.call_count == 2
         expected_produced_key = tx._serialize_key(
-            encode_window_key(start_ms, end_ms), prefix=prefix
+            encode_integer_pair(start_ms, end_ms), prefix=prefix
         )
         expected_produced_value = tx._serialize_value(value)
         changelog_producer_mock.produce.assert_any_call(
@@ -397,7 +397,7 @@ class TestWindowedRocksDBPartitionTransaction:
 
         assert changelog_producer_mock.produce.call_count == 1
         expected_produced_key = tx._serialize_key(
-            encode_window_key(start_ms, end_ms), prefix=prefix
+            encode_integer_pair(start_ms, end_ms), prefix=prefix
         )
         changelog_producer_mock.produce.assert_called_with(
             key=expected_produced_key,

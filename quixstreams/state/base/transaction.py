@@ -11,7 +11,7 @@ from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER,
     DEFAULT_PREFIX,
-    PREFIX_SEPARATOR,
+    SEPARATOR,
     Marker,
 )
 from quixstreams.state.serialization import DumpsFunc, LoadsFunc, deserialize, serialize
@@ -257,7 +257,7 @@ class PartitionTransaction(ABC):
 
     def _serialize_key(self, key: Any, prefix: bytes) -> bytes:
         key_bytes = serialize(key, dumps=self._dumps)
-        prefix = prefix + PREFIX_SEPARATOR if prefix else b""
+        prefix = prefix + SEPARATOR if prefix else b""
         return prefix + key_bytes
 
     def as_state(self, prefix: Any = DEFAULT_PREFIX) -> State:
