@@ -1,6 +1,6 @@
 import enum
 
-PREFIX_SEPARATOR = b"|"
+SEPARATOR = b"|"
 
 CHANGELOG_CF_MESSAGE_HEADER = "__column_family__"
 CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER = "__processed_tp_offset__"
