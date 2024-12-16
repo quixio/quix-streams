@@ -135,7 +135,7 @@ class FileSource(Source):
         compression: Optional[CompressionName] = None,
         replay_speed: float = 1.0,
         name: Optional[str] = None,
-        shutdown_timeout: float = 10,
+        shutdown_timeout: float = 30,
     ):
         """
         :param directory: a directory to recursively read through; it is recommended to
