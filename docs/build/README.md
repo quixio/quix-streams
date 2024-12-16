@@ -13,6 +13,6 @@ Generate API docs for `quixstreams` module using [Pydoc Markdown](https://niklas
 
 ## Render/View Docs:
 - Go to `docs/build`
-- `python -m pip install mkdocs, mkdocs-material, mkdocs-material-extensions`
+- `python -m pip install mkdocs mkdocs-material mkdocs-material-extensions`
 - `mkdocs serve -f ../../mkdocs.yml`
 - [navigate to `localhost:8000` in browser](`http://localhost:8000`)
