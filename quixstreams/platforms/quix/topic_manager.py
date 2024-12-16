@@ -1,4 +1,4 @@
-from typing import List, Literal
+from typing import List, Literal, Optional
 
 from quixstreams.models.topics import Topic, TopicAdmin, TopicManager
 
@@ -22,8 +22,8 @@ class QuixTopicManager(TopicManager):
 
     # Default topic params
     # Set these to None to use defaults defined in Quix Cloud
-    default_num_partitions: None = None
-    default_replication_factor: None = None
+    default_num_partitions = None
+    default_replication_factor = None
 
     # Max topic name length for the new topics
     _max_topic_name_len = 249
@@ -54,7 +54,7 @@ class QuixTopicManager(TopicManager):
             auto_create_topics=auto_create_topics,
         )
         self._quix_config_builder = quix_config_builder
-        self._topic_id_to_name = {}
+        self._topic_id_to_name: dict[str, str] = {}
 
     def _finalize_topic(self, topic: Topic) -> Topic:
         """
@@ -64,12 +64,11 @@ class QuixTopicManager(TopicManager):
         Additionally, sets the actual topic configuration since we now have it anyway.
         """
         quix_topic_info = self._quix_config_builder.get_or_create_topic(topic)
-        quix_topic = self._quix_config_builder.convert_topic_response(quix_topic_info)
-        # allows us to include the configs not included in the API response
-        quix_topic.config.extra_config = {
-            **topic.config.extra_config,
-            **quix_topic.config.extra_config,
-        }
+        quix_topic = self._quix_config_builder.convert_topic_response(
+            quix_topic_info,
+            extra_config=topic.config.extra_config if topic.config else {},
+        )
+
         topic_out = topic.__clone__(name=quix_topic.name, config=quix_topic.config)
         self._topic_id_to_name[topic_out.name] = quix_topic_info["name"]
         return super()._finalize_topic(topic_out)
@@ -86,7 +85,7 @@ class QuixTopicManager(TopicManager):
     def _internal_name(
         self,
         topic_type: Literal["changelog", "repartition"],
-        topic_name: str,
+        topic_name: Optional[str],
         suffix: str,
     ):
         """
@@ -107,6 +106,6 @@ class QuixTopicManager(TopicManager):
         """
         return super()._internal_name(
             topic_type,
-            self._topic_id_to_name[topic_name],
+            self._topic_id_to_name[topic_name] if topic_name else None,
             suffix,
         )

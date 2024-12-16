@@ -38,8 +38,8 @@ class TopicManager:
     """
 
     # Default topic params
-    default_num_partitions = 1
-    default_replication_factor = 1
+    default_num_partitions: Optional[int] = 1
+    default_replication_factor: Optional[int] = 1
     default_extra_config: dict[str, str] = {}
 
     # Max topic name length for the new topics
