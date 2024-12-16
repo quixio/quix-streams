@@ -1,20 +1,10 @@
 import csv
-from unittest.mock import MagicMock
 
-import pytest
-
-from quixstreams.rowproducer import RowProducer
 from quixstreams.sources import CSVSource
 
 
 class TestCSVSource:
-    @pytest.fixture
-    def producer(self):
-        producer = MagicMock(spec=RowProducer)
-        producer.flush.return_value = 0
-        return producer
-
-    def test_read(self, tmp_path, producer):
+    def test_read(self, tmp_path, row_producer_mock):
         path = tmp_path / "source.csv"
         with open(path, "w") as f:
             writer = csv.DictWriter(
@@ -38,12 +28,12 @@ class TestCSVSource:
             key_extractor=lambda r: r["key"],
             timestamp_extractor=lambda r: int(r["timestamp"]),
         )
-        source.configure(source.default_topic(), producer)
+        source.configure(source.default_topic(), row_producer_mock)
         source.start()
 
-        assert producer.produce.called
-        assert producer.produce.call_count == 5
-        assert producer.produce.call_args.kwargs == {
+        assert row_producer_mock.produce.called
+        assert row_producer_mock.produce.call_count == 5
+        assert row_producer_mock.produce.call_args.kwargs == {
             "buffer_error_max_tries": 3,
             "headers": None,
             "key": b"key5",
@@ -54,7 +44,7 @@ class TestCSVSource:
             "value": b'{"key":"key5","field":"value5","timestamp":"5"}',
         }
 
-    def test_read_no_extractors(self, tmp_path, producer):
+    def test_read_no_extractors(self, tmp_path, row_producer_mock):
         path = tmp_path / "source.csv"
         with open(path, "w") as f:
             writer = csv.DictWriter(
@@ -73,12 +63,12 @@ class TestCSVSource:
 
         name = "csv"
         source = CSVSource(name="csv", path=path)
-        source.configure(source.default_topic(), producer)
+        source.configure(source.default_topic(), row_producer_mock)
         source.start()
 
-        assert producer.produce.called
-        assert producer.produce.call_count == 5
-        assert producer.produce.call_args.kwargs == {
+        assert row_producer_mock.produce.called
+        assert row_producer_mock.produce.call_count == 5
+        assert row_producer_mock.produce.call_args.kwargs == {
             "buffer_error_max_tries": 3,
             "headers": None,
             "key": None,

@@ -1,4 +1,5 @@
 import uuid
+from contextlib import contextmanager
 from typing import Optional
 from unittest.mock import create_autospec
 
@@ -69,3 +70,20 @@ def windowed_rocksdb_store_factory_changelog(tmp_path, changelog_producer_mock):
         )
 
     return factory
+
+
+@pytest.fixture
+def assigned_windowed_rocksdb_store(windowed_rocksdb_store_factory):
+    store = windowed_rocksdb_store_factory()
+    store.assign_partition(0)
+    return store
+
+
+@pytest.fixture
+def windowed_rocksdb_transaction_state(assigned_windowed_rocksdb_store):
+    @contextmanager
+    def _transaction_state():
+        with assigned_windowed_rocksdb_store.start_partition_transaction(0) as tx:
+            yield tx.as_state(prefix=b"__key__")
+
+    return _transaction_state

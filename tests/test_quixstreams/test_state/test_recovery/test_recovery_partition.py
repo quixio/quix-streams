@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from quixstreams.state.rocksdb import RocksDBStorePartition
-from tests.utils import ConfluentKafkaMessageStub
+from tests.utilities.utils import ConfluentKafkaMessageStub
 
 
 class TestRecoveryPartition:

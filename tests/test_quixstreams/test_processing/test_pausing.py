@@ -4,7 +4,7 @@ from confluent_kafka import TopicPartition
 
 from quixstreams.kafka import Consumer
 from quixstreams.processing import PausingManager
-from tests.utils import TopicPartitionStub
+from tests.utilities.utils import TopicPartitionStub
 
 
 class TestPausingManager:

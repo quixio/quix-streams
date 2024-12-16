@@ -26,7 +26,7 @@ from quixstreams.models.serializers import (
     Serializer,
     SerializerIsNotProvidedError,
 )
-from tests.utils import ConfluentKafkaMessageStub
+from tests.utilities.utils import ConfluentKafkaMessageStub
 
 from ..utils import float_to_bytes, int_to_bytes
 

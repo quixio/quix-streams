@@ -1,4 +1,4 @@
-from tests.utils import DummySink
+from tests.utilities.utils import DummySink
 
 
 class TestBatchingSink:

@@ -1,20 +1,14 @@
 import uuid
-from unittest.mock import create_autospec
 
 import pytest
 
 from quixstreams.models.serializers import BytesDeserializer, BytesSerializer
-from quixstreams.models.topics import TopicAdmin, TopicConfig
+from quixstreams.models.topics import TopicConfig
 from quixstreams.models.topics.exceptions import (
     TopicConfigurationMismatch,
     TopicNameLengthExceeded,
     TopicNotFoundError,
 )
-
-
-@pytest.fixture()
-def topic_admin_mock():
-    return create_autospec(TopicAdmin)
 
 
 class TestTopicManager:

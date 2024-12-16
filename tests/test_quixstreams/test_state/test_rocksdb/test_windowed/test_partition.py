@@ -10,7 +10,7 @@ from quixstreams.state.rocksdb.windowed.metadata import (
 )
 from quixstreams.state.rocksdb.windowed.serialization import encode_window_key
 from quixstreams.utils.json import dumps
-from tests.utils import ConfluentKafkaMessageStub
+from tests.utilities.utils import ConfluentKafkaMessageStub
 
 
 class TestWindowedRocksDBPartitionTransactionChangelog:

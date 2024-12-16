@@ -14,7 +14,7 @@ from quixstreams.state.rocksdb import (
     RocksDBOptions,
     RocksDBStorePartition,
 )
-from tests.utils import ConfluentKafkaMessageStub
+from tests.utilities.utils import ConfluentKafkaMessageStub
 
 
 class TestRocksdbStorePartition:
