@@ -1,8 +1,10 @@
 import logging
+import os
 import time
 from collections import Counter
 from random import choice
 
+from quixstreams import Application
 from quixstreams.sources import Source
 
 logger = logging.getLogger(__name__)
@@ -34,25 +36,22 @@ class ReviewGenerator(Source):
         logger.info("Sent all product reviews.")
 
 
-def setup_and_run_application():
-    """Group all Application-related code here for easy reading."""
-    import os
+def tokenize_and_count(text):
+    return list(Counter(text.lower().replace(".", " ").split()).items())
 
-    from quixstreams import Application
 
+def should_skip(word_count_pair):
+    word, count = word_count_pair
+    return word not in ["i", "a", "we", "it", "is", "and", "or", "the"]
+
+
+def main():
     app = Application(
         broker_address=os.getenv("BROKER_ADDRESS", "localhost:9092"),
         consumer_group="product_review_word_counter",
         auto_offset_reset="earliest",
     )
     word_counts_topic = app.topic(name="product_review_word_counts")
-
-    def tokenize_and_count(text):
-        return list(Counter(text.lower().replace(".", " ").split()).items())
-
-    def should_skip(word_count_pair):
-        word, count = word_count_pair
-        return word not in ["i", "a", "we", "it", "is", "and", "or", "the"]
 
     # If reading from a Kafka topic, pass topic=<Topic> instead of a source
     sdf = app.dataframe(source=ReviewGenerator())
@@ -66,4 +65,4 @@ def setup_and_run_application():
 
 # This approach is necessary since we are using a Source
 if __name__ == "__main__":
-    setup_and_run_application()
+    main()

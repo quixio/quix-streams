@@ -101,7 +101,7 @@ kafka_value: {
 
 ## Purchase Filtering Application
 
-Now let's go over the `setup_and_run_application()` portion of 
+Now let's go over the `main()` portion of 
 our [**>>> Purchase Filtering Application <<<**](tutorial_app.py) in detail!
 
 
@@ -352,11 +352,11 @@ Running a `Source`-based `Application` requires calling `Application.run()` with
 #### Our Application Run Block 
 
 Our entire `Application` (and all its spawned objects) resides within a 
-`setup_and_run_application()` function, executed as required:
+`main()` function, executed as required:
 
 ```python
 if __name__ == "__main__":
-    setup_and_run_application()
+    main()
 ```
 
 

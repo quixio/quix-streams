@@ -95,7 +95,7 @@ Feel free to inspect it further, but it's just to get some data flowing. Our foc
 
 ## Anomaly Detector Application
 
-Now let's go over the `setup_and_run_application()` portion of our 
+Now let's go over the `main()` portion of our 
 [**>>> Anomaly Detector Application <<<**](tutorial_app.py) in detail!
 
 
@@ -277,11 +277,11 @@ Running a `Source`-based `Application` requires calling `Application.run()` with
 #### Our Application Run Block 
 
 Our entire `Application` (and all its spawned objects) resides within a 
-`setup_and_run_application()` function, executed as required:
+`main()` function, executed as required:
 
 ```python
 if __name__ == "__main__":
-    setup_and_run_application()
+    main()
 ```
 
 

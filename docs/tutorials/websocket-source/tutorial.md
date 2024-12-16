@@ -95,7 +95,7 @@ Now that `CoinbaseSource` exists, we can ingest raw data from Coinbase.
 
 Of course, each user will have their own desired product ID's and transformations to apply.
 
-Now let's go over the `setup_and_run_application()` portion of 
+Now let's go over the `main()` portion of 
 our [**>>> Coinbase Application <<<**](tutorial_app.py) in detail!
 
 ### Define the Source
@@ -220,14 +220,14 @@ Running a `Source`-based `Application` requires calling `Application.run()` with
 #### Our Application Run Block 
 
 Our entire `Application` (and all its spawned objects) resides within a 
-`setup_and_run_application()` function, executed as required:
+`main()` function, executed as required:
 
 ```python
 if __name__ == "__main__":
-    setup_and_run_application()
+    main()
 ```
 
-This `setup_and_run_application()` setup is a personal choice: the only true 
+This `main()` setup is a personal choice: the only true 
 requirement is `app.run()` being called inside a `if __name__ == "__main__"` block.
 
 

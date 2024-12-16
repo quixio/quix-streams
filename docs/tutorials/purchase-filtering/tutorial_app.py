@@ -2,9 +2,13 @@ import logging
 import os
 import time
 
+from quixstreams import Application
 from quixstreams.sources import Source
 
 logger = logging.getLogger(__name__)
+
+
+SALES_TAX = 1.10
 
 
 class PurchaseGenerator(Source):
@@ -71,10 +75,15 @@ class PurchaseGenerator(Source):
         logger.info("Sent all customer purchases")
 
 
-def setup_and_run_application():
-    """Group all Application-related code here for easy reading."""
-    from quixstreams import Application
+def get_full_name(customer):
+    return f'{customer["First Name"]} {customer["Last Name"]}'
 
+
+def get_purchase_totals(items):
+    return sum([i["Price"] * i["Quantity"] for i in items])
+
+
+def main():
     app = Application(
         broker_address=os.getenv("BROKER_ADDRESS", "localhost:9092"),
         consumer_group="purchase_filtering",
@@ -82,18 +91,10 @@ def setup_and_run_application():
     )
     customers_qualified_topic = app.topic(name="customers_coupon_qualified")
 
-    def get_full_name(customer):
-        return f'{customer["First Name"]} {customer["Last Name"]}'
-
-    def get_purchase_totals(items):
-        return sum([i["Price"] * i["Quantity"] for i in items])
-
-    sales_tax = 1.10
-
     # If reading from a Kafka topic, pass topic=<Topic> instead of a source
     sdf = app.dataframe(source=PurchaseGenerator())
     sdf = sdf[
-        (sdf["Purchases"].apply(get_purchase_totals) * sales_tax >= 100.00)
+        (sdf["Purchases"].apply(get_purchase_totals) * SALES_TAX >= 100.00)
         & (sdf["Membership Type"].isin(["Silver", "Gold"]))
     ]
     sdf["Full Name"] = sdf.apply(get_full_name)
@@ -106,4 +107,4 @@ def setup_and_run_application():
 
 # This approach is necessary since we are using a Source
 if __name__ == "__main__":
-    setup_and_run_application()
+    main()

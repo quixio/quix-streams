@@ -1,11 +1,13 @@
 import json
 import logging
+import os
 from typing import List
 
 from dateutil.parser import isoparse
 from websockets import ConnectionClosedOK
 from websockets.sync.client import connect
 
+from quixstreams import Application
 from quixstreams.sources import Source
 
 logger = logging.getLogger(__name__)
@@ -82,12 +84,7 @@ class CoinbaseSource(Source):
             )
 
 
-def setup_and_run_application():
-    """Group all Application-related code here for easy reading."""
-    import os
-
-    from quixstreams import Application
-
+def main():
     # Configure the CoinbaseSource instance
     coinbase_source = CoinbaseSource(
         # Pick the unique name for the source instance.
@@ -123,4 +120,4 @@ def setup_and_run_application():
 
 
 if __name__ == "__main__":
-    setup_and_run_application()
+    main()
