@@ -53,7 +53,7 @@ class FileFetcher:
     def stop(self):
         logger.info("Stopping file download thread...")
         self._stopped = True
-        self._executor.shutdown(wait=False)
+        self._executor.shutdown(wait=True, cancel_futures=True)
 
     def _download_next_file(self):
         try:
