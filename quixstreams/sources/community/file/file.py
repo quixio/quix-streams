@@ -1,7 +1,10 @@
 import logging
+from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from time import sleep
-from typing import Optional, Union
+from typing import BinaryIO, Optional, Union
+
+from typing_extensions import Self
 
 from quixstreams.models import Topic, TopicConfig
 from quixstreams.sources import Source
@@ -14,6 +17,54 @@ from .origins.base import Origin
 __all__ = ("FileSource",)
 
 logger = logging.getLogger(__name__)
+
+
+class FileFetcher:
+    """
+    Serves individual files while downloading another in the background.
+    """
+
+    def __init__(self, origin: Origin, filepath: Path):
+        self._origin = origin
+        self._file_names = iter(self._origin.file_collector(filepath))
+        self._stopped: bool = False
+        self._executor = ThreadPoolExecutor(max_workers=1)
+        self._downloading_file_name: Optional[Path] = None
+        self._downloading_file_content: Optional[Future] = None
+        self._download_next_file()
+
+    def __iter__(self) -> Self:
+        return self
+
+    def __next__(self) -> tuple[Path, BinaryIO]:
+        if self._stopped:
+            raise StopIteration
+
+        try:
+            file_name = self._downloading_file_name
+            file_content = self._downloading_file_content.result()
+            self._download_next_file()
+            return file_name, file_content
+        except Exception as e:
+            logger.error("FileFetcher encountered an error", exc_info=e)
+            self.stop()
+            raise e
+
+    def stop(self):
+        logger.info("Stopping file download thread...")
+        self._stopped = True
+        self._executor.shutdown(wait=True, cancel_futures=True)
+
+    def _download_next_file(self):
+        try:
+            self._downloading_file_name = next(self._file_names)
+            logger.debug(f"Beginning download of {self._downloading_file_name}...")
+            self._downloading_file_content = self._executor.submit(
+                self._origin.get_raw_file_stream, self._downloading_file_name
+            )
+        except StopIteration:
+            logger.info("No further files to download.")
+            self.stop()
 
 
 class FileSource(Source):
@@ -84,7 +135,7 @@ class FileSource(Source):
         compression: Optional[CompressionName] = None,
         replay_speed: float = 1.0,
         name: Optional[str] = None,
-        shutdown_timeout: float = 10,
+        shutdown_timeout: float = 30,
     ):
         """
         :param directory: a directory to recursively read through; it is recommended to
@@ -111,6 +162,7 @@ class FileSource(Source):
         self._replay_speed = replay_speed
         self._previous_timestamp = None
         self._previous_partition = None
+        self._file_fetcher: Optional[FileFetcher] = None
         super().__init__(
             name=name or self._directory.name, shutdown_timeout=shutdown_timeout
         )
@@ -162,19 +214,22 @@ class FileSource(Source):
         )
         return topic
 
+    def stop(self):
+        if self._file_fetcher:
+            self._file_fetcher.stop()
+        super().stop()
+
     def run(self):
-        while self._running:
-            logger.info(f"Reading files from topic {self._directory.name}")
-            for file in self._origin.file_collector(self._directory):
-                logger.debug(f"Reading file {file}")
-                self._check_file_partition_number(file)
-                filestream = self._origin.get_raw_file_stream(file)
-                for record in self._formatter.read(filestream):
-                    if timestamp := record.get("_timestamp"):
-                        self._replay_delay(timestamp)
-                    self._produce(record)
-                self.flush()
-            return
+        self._file_fetcher = FileFetcher(self._origin, self._directory)
+        logger.info(f"Reading files from topic {self._directory.name}")
+        for file_name, content in self._file_fetcher:
+            logger.debug(f"Reading file {file_name}")
+            self._check_file_partition_number(file_name)
+            for record in self._formatter.read(content):
+                if timestamp := record.get("_timestamp"):
+                    self._replay_delay(timestamp)
+                self._produce(record)
+            self.flush()
 
 
 def _get_formatter(
