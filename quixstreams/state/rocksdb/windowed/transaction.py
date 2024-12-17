@@ -12,6 +12,8 @@ from quixstreams.state.serialization import DumpsFunc, LoadsFunc, serialize
 from .metadata import (
     GLOBAL_COUNTER_CF_NAME,
     GLOBAL_COUNTER_KEY,
+    LATEST_DELETED_VALUE_CF_NAME,
+    LATEST_DELETED_VALUE_TIMESTAMP_KEY,
     LATEST_DELETED_WINDOW_CF_NAME,
     LATEST_DELETED_WINDOW_TIMESTAMP_KEY,
     LATEST_EXPIRED_WINDOW_CF_NAME,
@@ -69,9 +71,13 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
             key=LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY,
             cf_name=LATEST_EXPIRED_WINDOW_CF_NAME,
         )
-        self._last_deleted_timestamps: TimestampsCache = TimestampsCache(
+        self._last_deleted_window_timestamps: TimestampsCache = TimestampsCache(
             key=LATEST_DELETED_WINDOW_TIMESTAMP_KEY,
             cf_name=LATEST_DELETED_WINDOW_CF_NAME,
+        )
+        self._last_deleted_value_timestamps: TimestampsCache = TimestampsCache(
+            key=LATEST_DELETED_VALUE_TIMESTAMP_KEY,
+            cf_name=LATEST_DELETED_VALUE_CF_NAME,
         )
         self._global_counter: CounterCache = CounterCache(
             key=GLOBAL_COUNTER_KEY,
@@ -261,7 +267,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
 
         # Find the latest start timestamp of the deleted windows for the given key
         last_deleted = self._get_timestamp(
-            cache=self._last_deleted_timestamps, prefix=prefix
+            cache=self._last_deleted_window_timestamps, prefix=prefix
         )
         if last_deleted is not None:
             start_from = max(start_from, last_deleted)
@@ -280,7 +286,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         # Save the start of the latest deleted window to the deletion index
         if last_deleted__gt:
             self._set_timestamp(
-                cache=self._last_deleted_timestamps,
+                cache=self._last_deleted_window_timestamps,
                 prefix=prefix,
                 timestamp_ms=last_deleted__gt,
             )
@@ -289,8 +295,15 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
             self._delete_values(max_timestamp=max_start_time, prefix=prefix)
 
     def _delete_values(self, max_timestamp: int, prefix: bytes) -> None:
+        start = (
+            self._get_timestamp(
+                cache=self._last_deleted_value_timestamps, prefix=prefix
+            )
+            or -1
+        )
+
         for key, _ in self._get_items(
-            start=0, end=max_timestamp, prefix=prefix, cf_name=VALUES_CF_NAME
+            start=start, end=max_timestamp, prefix=prefix, cf_name=VALUES_CF_NAME
         ):
             self.delete(key=key, prefix=prefix, cf_name=VALUES_CF_NAME)
 

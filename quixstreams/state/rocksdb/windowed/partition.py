@@ -10,6 +10,7 @@ from ..partition import RocksDBStorePartition
 from ..types import RocksDBOptionsType
 from .metadata import (
     GLOBAL_COUNTER_CF_NAME,
+    LATEST_DELETED_VALUE_CF_NAME,
     LATEST_DELETED_WINDOW_CF_NAME,
     LATEST_EXPIRED_WINDOW_CF_NAME,
     LATEST_TIMESTAMPS_CF_NAME,
@@ -41,6 +42,7 @@ class WindowedRocksDBStorePartition(RocksDBStorePartition):
         super().__init__(
             path=path, options=options, changelog_producer=changelog_producer
         )
+        self._ensure_column_family(LATEST_DELETED_VALUE_CF_NAME)
         self._ensure_column_family(LATEST_EXPIRED_WINDOW_CF_NAME)
         self._ensure_column_family(LATEST_DELETED_WINDOW_CF_NAME)
         self._ensure_column_family(LATEST_TIMESTAMPS_CF_NAME)
