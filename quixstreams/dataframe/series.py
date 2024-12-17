@@ -1,7 +1,16 @@
 import contextvars
 import functools
 import operator
-from typing import Any, Callable, Container, Mapping, Optional, TypeVar, Union
+from typing import (
+    Any,
+    Callable,
+    Concatenate,
+    Container,
+    Mapping,
+    Optional,
+    TypeVar,
+    Union,
+)
 
 from typing_extensions import ParamSpec, Self
 
@@ -24,6 +33,7 @@ __all__ = ("StreamingSeries",)
 
 _T = TypeVar("_T")
 _P = ParamSpec("_P")
+_O = TypeVar("_O")
 
 
 def _getitem(d: Mapping, column_name: Union[str, int]) -> object:
@@ -49,7 +59,9 @@ def _getitem(d: Mapping, column_name: Union[str, int]) -> object:
         )
 
 
-def _validate_operation(func: Callable[_P, _T]) -> Callable[_P, _T]:
+def _validate_operation(
+    func: Callable[Concatenate["StreamingSeries", Any, _P], _T],
+) -> Callable[Concatenate["StreamingSeries", Any, _P], _T]:
     """
     Ensure `StreamingSeries` involved in operations originate from the same SDF.
     Can occur during `StreamingDataFrame` branching.
@@ -119,13 +131,17 @@ class StreamingSeries(BaseStreaming):
 
     def __init__(
         self,
+        sdf_id: int,
         name: Optional[str] = None,
         stream: Optional[Stream] = None,
-        sdf_id: Optional[int] = None,
     ):
-        if not (name or stream):
+        if stream:
+            self._stream = stream
+        elif name:
+            self._stream = Stream(func=ApplyFunction(lambda v: _getitem(v, name)))
+        else:
             raise ValueError('Either "name" or "stream" must be passed')
-        self._stream = stream or Stream(func=ApplyFunction(lambda v: _getitem(v, name)))
+
         self._sdf_id = sdf_id
 
     @classmethod
@@ -140,7 +156,7 @@ class StreamingSeries(BaseStreaming):
         """
         return cls(stream=Stream(ApplyWithMetadataFunction(func)), sdf_id=sdf_id)
 
-    def _from_apply_callback(self, func: ApplyWithMetadataCallback):
+    def _from_apply_callback(self, func: ApplyWithMetadataCallback) -> Self:
         # TODO - maybe there's a better patten for this? (_method calling classmethod)
         return self.from_apply_callback(func, self._sdf_id)
 
@@ -278,9 +294,9 @@ class StreamingSeries(BaseStreaming):
     @_validate_operation
     def _operation(
         self,
-        other: Union[Self, str, int, object],
+        other: _O,
         operator_: Callable[
-            [Union[Self, Container, Mapping, object], Union[Self, str, int, object]],
+            [Any, _O],
             Union[bool, object],
         ],
     ) -> Self:
@@ -288,20 +304,23 @@ class StreamingSeries(BaseStreaming):
         if isinstance(other, self.__class__):
             other_composed = other.compose_returning()
 
-            return self._from_apply_callback(
-                func=lambda value, key, timestamp, headers, op=operator_: op(
+            def f(value: Any, key: Any, timestamp: int, headers: Any) -> Any:
+                return operator_(
                     self_composed(value, key, timestamp, headers)[0],
                     other_composed(value, key, timestamp, headers)[0],
                 )
-            )
+
+            return self._from_apply_callback(func=f)
         else:
-            return self._from_apply_callback(
-                func=lambda value, key, timestamp, headers, op=operator_: op(
+
+            def f(value: Any, key: Any, timestamp: int, headers: Any) -> Any:
+                return operator_(
                     self_composed(value, key, timestamp, headers)[0], other
                 )
-            )
 
-    def isin(self, other: Container) -> Self:
+            return self._from_apply_callback(func=f)
+
+    def isin(self, other: Container) -> "StreamingSeries":
         """
         Check if series value is in "other".
         Same as "StreamingSeries in other".
@@ -324,11 +343,15 @@ class StreamingSeries(BaseStreaming):
         :param other: a container to check
         :return: new StreamingSeries
         """
-        return self._operation(
-            other, lambda a, b, contains=operator.contains: contains(b, a)
-        )
 
-    def contains(self, other: Union[Self, object]) -> Self:
+        contains = operator.contains
+
+        def f(a, b):
+            return contains(b, a)
+
+        return self._operation(other, f)
+
+    def contains(self, other: Union[Self, object]) -> "StreamingSeries":
         """
         Check if series value contains "other"
         Same as "other in StreamingSeries".
@@ -353,7 +376,7 @@ class StreamingSeries(BaseStreaming):
         """
         return self._operation(other, operator.contains)
 
-    def is_(self, other: Union[Self, object]) -> Self:
+    def is_(self, other: Union[Self, object]) -> "StreamingSeries":
         """
         Check if series value refers to the same object as `other`
 
@@ -376,7 +399,7 @@ class StreamingSeries(BaseStreaming):
         """
         return self._operation(other, operator.is_)
 
-    def isnot(self, other: Union[Self, object]) -> Self:
+    def isnot(self, other: Union[Self, object]) -> "StreamingSeries":
         """
         Check if series value does not refer to the same object as `other`
 
@@ -400,7 +423,7 @@ class StreamingSeries(BaseStreaming):
         """
         return self._operation(other, operator.is_not)
 
-    def isnull(self) -> Self:
+    def isnull(self) -> "StreamingSeries":
         """
         Check if series value is None.
 
@@ -423,7 +446,7 @@ class StreamingSeries(BaseStreaming):
         """
         return self._operation(None, operator.is_)
 
-    def notnull(self) -> Self:
+    def notnull(self) -> "StreamingSeries":
         """
         Check if series value is not None.
 
@@ -446,7 +469,7 @@ class StreamingSeries(BaseStreaming):
         """
         return self._operation(None, operator.is_not)
 
-    def abs(self) -> Self:
+    def abs(self) -> "StreamingSeries":
         """
         Get absolute value of the series value.
 
@@ -474,40 +497,40 @@ class StreamingSeries(BaseStreaming):
             f"use '&' or '|' for logical and/or comparisons"
         )
 
-    def __getitem__(self, item: Union[str, int]) -> Self:
+    def __getitem__(self, item: Union[str, int]) -> "StreamingSeries":
         return self._operation(item, operator.getitem)
 
-    def __mod__(self, other: Union[Self, object]) -> Self:
+    def __mod__(self, other: Union[Self, object]) -> "StreamingSeries":
         return self._operation(other, operator.mod)
 
-    def __add__(self, other: Union[Self, object]) -> Self:
+    def __add__(self, other: Union[Self, object]) -> "StreamingSeries":
         return self._operation(other, operator.add)
 
-    def __sub__(self, other: Union[Self, object]) -> Self:
+    def __sub__(self, other: Union[Self, object]) -> "StreamingSeries":
         return self._operation(other, operator.sub)
 
-    def __mul__(self, other: Union[Self, object]) -> Self:
+    def __mul__(self, other: Union[Self, object]) -> "StreamingSeries":
         return self._operation(other, operator.mul)
 
-    def __truediv__(self, other: Union[Self, object]) -> Self:
+    def __truediv__(self, other: Union[Self, object]) -> "StreamingSeries":
         return self._operation(other, operator.truediv)
 
-    def __eq__(self, other: Union[Self, object]) -> Self:
+    def __eq__(self, other: Union[Self, object]) -> "StreamingSeries":  # type: ignore[override]
         return self._operation(other, operator.eq)
 
-    def __ne__(self, other: Union[Self, object]) -> Self:
+    def __ne__(self, other: Union[Self, object]) -> "StreamingSeries":  # type: ignore[override]
         return self._operation(other, operator.ne)
 
-    def __lt__(self, other: Union[Self, object]) -> Self:
+    def __lt__(self, other: Union[Self, object]) -> "StreamingSeries":
         return self._operation(other, operator.lt)
 
-    def __le__(self, other: Union[Self, object]) -> Self:
+    def __le__(self, other: Union[Self, object]) -> "StreamingSeries":
         return self._operation(other, operator.le)
 
-    def __gt__(self, other: Union[Self, object]) -> Self:
+    def __gt__(self, other: Union[Self, object]) -> "StreamingSeries":
         return self._operation(other, operator.gt)
 
-    def __ge__(self, other: Union[Self, object]) -> Self:
+    def __ge__(self, other: Union[Self, object]) -> "StreamingSeries":
         return self._operation(other, operator.ge)
 
     @_validate_operation
