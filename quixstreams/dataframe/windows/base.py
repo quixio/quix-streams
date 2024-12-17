@@ -27,7 +27,7 @@ def get_window_ranges(
     if not step_ms:
         step_ms = duration_ms
 
-    window_ranges = deque()
+    window_ranges: Deque[Tuple[int, int]] = deque()
     current_window_start = timestamp_ms - (timestamp_ms % step_ms)
 
     while (

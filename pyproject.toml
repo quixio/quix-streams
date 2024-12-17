@@ -123,8 +123,6 @@ ignore_errors = true
 
 [[tool.mypy.overrides]]
 module = [
-    "quixstreams.dataframe.series.*",
-    "quixstreams.dataframe.windows.*",
     "quixstreams.rowproducer.*"
 ]
 ignore_errors = true
