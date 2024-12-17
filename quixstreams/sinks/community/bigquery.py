@@ -106,12 +106,9 @@ class BigQuerySink(BatchingSink):
 
         super().__init__()
         self.location = location
-        self.table_name = table_name
-
         self.project_id = project_id
-
-        self.dataset_id = dataset_id
-        self.table_id = f"{self.dataset_id}.{self.table_name}"
+        self.dataset_id = f"{self.project_id}.{dataset_id}"
+        self.table_id = f"{self.dataset_id}.{table_name}"
         self.ddl_timeout = ddl_timeout
         self.insert_timeout = insert_timeout
         self.retry = bigquery.DEFAULT_RETRY.with_timeout(timeout=retry_timeout)
@@ -128,6 +125,7 @@ class BigQuerySink(BatchingSink):
             kwargs["credentials"] = credentials
 
         self._client = bigquery.Client(**kwargs)
+        logger.info("Successfully authenticated to BigQuery.")
         if self.schema_auto_update:
             # Initialize a table in BigQuery if it doesn't exist already
             self._init_table()
