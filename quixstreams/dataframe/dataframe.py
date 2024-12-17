@@ -26,7 +26,9 @@ from quixstreams.context import (
 )
 from quixstreams.core.stream import (
     ApplyCallback,
+    ApplyExpandedCallback,
     ApplyWithMetadataCallback,
+    ApplyWithMetadataExpandedCallback,
     FilterCallback,
     FilterWithMetadataCallback,
     Stream,
@@ -141,15 +143,13 @@ class StreamingDataFrame(BaseStreaming):
         return self._topic
 
     @overload
-    def apply(self, func: ApplyCallback, *, expand: bool = ...) -> Self: ...
-
-    @overload
     def apply(
         self,
-        func: ApplyWithMetadataCallback,
+        func: Union[ApplyCallback, ApplyExpandedCallback],
         *,
-        metadata: Literal[True],
-        expand: bool = ...,
+        stateful: Literal[False] = False,
+        expand: Union[Literal[False], Literal[True]] = False,
+        metadata: Literal[False] = False,
     ) -> Self: ...
 
     @overload
@@ -158,7 +158,18 @@ class StreamingDataFrame(BaseStreaming):
         func: ApplyCallbackStateful,
         *,
         stateful: Literal[True],
-        expand: bool = ...,
+        expand: Union[Literal[False], Literal[True]] = False,
+        metadata: Literal[False] = False,
+    ) -> Self: ...
+
+    @overload
+    def apply(
+        self,
+        func: Union[ApplyWithMetadataCallback, ApplyWithMetadataExpandedCallback],
+        *,
+        stateful: Literal[False] = False,
+        expand: Union[Literal[False], Literal[True]] = False,
+        metadata: Literal[True],
     ) -> Self: ...
 
     @overload
@@ -167,16 +178,18 @@ class StreamingDataFrame(BaseStreaming):
         func: ApplyWithMetadataCallbackStateful,
         *,
         stateful: Literal[True],
+        expand: Union[Literal[False], Literal[True]] = False,
         metadata: Literal[True],
-        expand: bool = ...,
     ) -> Self: ...
 
     def apply(
         self,
         func: Union[
             ApplyCallback,
+            ApplyExpandedCallback,
             ApplyCallbackStateful,
             ApplyWithMetadataCallback,
+            ApplyWithMetadataExpandedCallback,
             ApplyWithMetadataCallbackStateful,
         ],
         *,
@@ -220,35 +233,51 @@ class StreamingDataFrame(BaseStreaming):
         if stateful:
             self._register_store()
             # Force the callback to accept metadata
-            with_metadata_func = (
-                cast(ApplyWithMetadataCallbackStateful, func)
-                if metadata
-                else _as_metadata_func(cast(ApplyCallbackStateful, func))
-            )
+            if metadata:
+                with_metadata_func = cast(ApplyWithMetadataCallbackStateful, func)
+            else:
+                with_metadata_func = _as_metadata_func(
+                    cast(ApplyCallbackStateful, func)
+                )
+
             stateful_func = _as_stateful(
                 func=with_metadata_func,
                 processing_context=self._processing_context,
             )
-            stream = self.stream.add_apply(stateful_func, expand=expand, metadata=True)
+            stream = self.stream.add_apply(stateful_func, expand=expand, metadata=True)  # type: ignore[call-overload]
         else:
             stream = self.stream.add_apply(
                 cast(Union[ApplyCallback, ApplyWithMetadataCallback], func),
                 expand=expand,
                 metadata=metadata,
-            )
+            )  # type: ignore[call-overload]
         return self.__dataframe_clone__(stream=stream)
 
     @overload
-    def update(self, func: UpdateCallback) -> Self: ...
-
-    @overload
     def update(
-        self, func: UpdateWithMetadataCallback, *, metadata: Literal[True]
+        self,
+        func: UpdateCallback,
+        *,
+        stateful: Literal[False] = False,
+        metadata: Literal[False] = False,
     ) -> Self: ...
 
     @overload
     def update(
-        self, func: UpdateCallbackStateful, *, stateful: Literal[True]
+        self,
+        func: UpdateCallbackStateful,
+        *,
+        stateful: Literal[True],
+        metadata: Literal[False] = False,
+    ) -> Self: ...
+
+    @overload
+    def update(
+        self,
+        func: UpdateWithMetadataCallback,
+        *,
+        stateful: Literal[False] = False,
+        metadata: Literal[True],
     ) -> Self: ...
 
     @overload
@@ -312,18 +341,18 @@ class StreamingDataFrame(BaseStreaming):
         if stateful:
             self._register_store()
             # Force the callback to accept metadata
-            with_metadata_func = (
-                func
-                if metadata
-                else _as_metadata_func(cast(UpdateCallbackStateful, func))
-            )
+            if metadata:
+                with_metadata_func = cast(UpdateWithMetadataCallbackStateful, func)
+            else:
+                with_metadata_func = _as_metadata_func(
+                    cast(UpdateCallbackStateful, func)
+                )
+
             stateful_func = _as_stateful(
-                func=cast(UpdateWithMetadataCallbackStateful, with_metadata_func),
+                func=with_metadata_func,
                 processing_context=self._processing_context,
             )
-            return self._add_update(
-                cast(UpdateWithMetadataCallback, stateful_func), metadata=True
-            )
+            return self._add_update(stateful_func, metadata=True)
         else:
             return self._add_update(
                 cast(Union[UpdateCallback, UpdateWithMetadataCallback], func),
@@ -331,16 +360,30 @@ class StreamingDataFrame(BaseStreaming):
             )
 
     @overload
-    def filter(self, func: FilterCallback) -> Self: ...
-
-    @overload
     def filter(
-        self, func: FilterWithMetadataCallback, *, metadata: Literal[True]
+        self,
+        func: FilterCallback,
+        *,
+        stateful: Literal[False] = False,
+        metadata: Literal[False] = False,
     ) -> Self: ...
 
     @overload
     def filter(
-        self, func: FilterCallbackStateful, *, stateful: Literal[True]
+        self,
+        func: FilterCallbackStateful,
+        *,
+        stateful: Literal[True],
+        metadata: Literal[False] = False,
+    ) -> Self: ...
+
+    @overload
+    def filter(
+        self,
+        func: FilterWithMetadataCallback,
+        *,
+        stateful: Literal[False] = False,
+        metadata: Literal[True],
     ) -> Self: ...
 
     @overload
@@ -399,18 +442,20 @@ class StreamingDataFrame(BaseStreaming):
         if stateful:
             self._register_store()
             # Force the callback to accept metadata
-            with_metadata_func = (
-                func
-                if metadata
-                else _as_metadata_func(cast(FilterCallbackStateful, func))
-            )
+            if metadata:
+                with_metadata_func = cast(FilterWithMetadataCallbackStateful, func)
+            else:
+                with_metadata_func = _as_metadata_func(
+                    cast(FilterCallbackStateful, func)
+                )
+
             stateful_func = _as_stateful(
-                func=cast(FilterWithMetadataCallbackStateful, with_metadata_func),
+                func=with_metadata_func,
                 processing_context=self._processing_context,
             )
             stream = self.stream.add_filter(stateful_func, metadata=True)
         else:
-            stream = self.stream.add_filter(
+            stream = self.stream.add_filter(  # type: ignore[call-overload]
                 cast(Union[FilterCallback, FilterWithMetadataCallback], func),
                 metadata=metadata,
             )
@@ -492,13 +537,18 @@ class StreamingDataFrame(BaseStreaming):
         """
         if not key:
             raise ValueError('Parameter "key" cannot be empty')
-        if callable(key) and not name:
+
+        operation = name
+        if not operation and isinstance(key, str):
+            operation = key
+
+        if not operation:
             raise ValueError(
                 'group_by requires "name" parameter when "key" is a function'
             )
 
         groupby_topic = self._topic_manager.repartition_topic(
-            operation=name or key,
+            operation=operation,
             topic_name=self._topic.name,
             key_serializer=key_serializer,
             value_serializer=value_serializer,
@@ -619,7 +669,7 @@ class StreamingDataFrame(BaseStreaming):
             new_timestamp = func(value, key, timestamp, headers)
             return value, key, new_timestamp, headers
 
-        stream = self.stream.add_transform(func=_set_timestamp_callback)
+        stream = self.stream.add_transform(_set_timestamp_callback, expand=False)
         return self.__dataframe_clone__(stream=stream)
 
     def set_headers(
@@ -670,7 +720,7 @@ class StreamingDataFrame(BaseStreaming):
             new_headers = func(value, key, timestamp, headers)
             return value, key, timestamp, new_headers
 
-        stream = self.stream.add_transform(func=_set_headers_callback)
+        stream = self.stream.add_transform(func=_set_headers_callback, expand=False)
         return self.__dataframe_clone__(stream=stream)
 
     def print(self, pretty: bool = True, metadata: bool = False) -> Self:
@@ -707,7 +757,9 @@ class StreamingDataFrame(BaseStreaming):
         """
         print_args = ["value", "key", "timestamp", "headers"]
         if pretty:
-            printer = functools.partial(pprint.pprint, indent=2, sort_dicts=False)
+            printer: Callable[[Any], None] = functools.partial(
+                pprint.pprint, indent=2, sort_dicts=False
+            )
         else:
             printer = print
         return self._add_update(
@@ -1136,7 +1188,7 @@ class StreamingDataFrame(BaseStreaming):
         func: Union[UpdateCallback, UpdateWithMetadataCallback],
         metadata: bool = False,
     ):
-        self._stream = self._stream.add_update(func, metadata=metadata)
+        self._stream = self._stream.add_update(func, metadata=metadata)  # type: ignore[call-overload]
         return self
 
     def _register_store(self):
@@ -1272,6 +1324,24 @@ def _drop(value: Dict, columns: List[str], ignore_missing: bool = False):
                 raise
 
 
+@overload
+def _as_metadata_func(
+    func: ApplyCallbackStateful,
+) -> ApplyWithMetadataCallbackStateful: ...
+
+
+@overload
+def _as_metadata_func(
+    func: FilterCallbackStateful,
+) -> FilterWithMetadataCallbackStateful: ...
+
+
+@overload
+def _as_metadata_func(
+    func: UpdateCallbackStateful,
+) -> UpdateWithMetadataCallbackStateful: ...
+
+
 def _as_metadata_func(
     func: Union[ApplyCallbackStateful, FilterCallbackStateful, UpdateCallbackStateful],
 ) -> Union[
@@ -1289,17 +1359,9 @@ def _as_metadata_func(
 
 
 def _as_stateful(
-    func: Union[
-        ApplyWithMetadataCallbackStateful,
-        FilterWithMetadataCallbackStateful,
-        UpdateWithMetadataCallbackStateful,
-    ],
+    func: ApplyWithMetadataCallbackStateful,
     processing_context: ProcessingContext,
-) -> Union[
-    ApplyWithMetadataCallback,
-    FilterWithMetadataCallback,
-    UpdateWithMetadataCallback,
-]:
+) -> ApplyWithMetadataCallback:
     @functools.wraps(func)
     def wrapper(value: Any, key: Any, timestamp: int, headers: Any) -> Any:
         ctx = message_context()

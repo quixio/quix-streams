@@ -50,7 +50,7 @@ def set_message_context(context: Optional[MessageContext]):
     _current_message_context.set(context)
 
 
-def message_context() -> Optional[MessageContext]:
+def message_context() -> MessageContext:
     """
     Get a MessageContext for the current message, which houses most of the message
     metadata, like:
@@ -75,6 +75,11 @@ def message_context() -> Optional[MessageContext]:
     :return: instance of `MessageContext`
     """
     try:
-        return _current_message_context.get()
+        ctx = _current_message_context.get()
     except LookupError:
         raise MessageContextNotSetError("Message context is not set")
+
+    if ctx is None:
+        raise MessageContextNotSetError("Message context is not set")
+
+    return ctx
