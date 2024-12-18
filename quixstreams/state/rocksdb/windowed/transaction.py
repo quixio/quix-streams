@@ -302,10 +302,19 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
             or -1
         )
 
+        key = None
         for key, _ in self._get_items(
             start=start, end=max_timestamp, prefix=prefix, cf_name=VALUES_CF_NAME
         ):
             self.delete(key=key, prefix=prefix, cf_name=VALUES_CF_NAME)
+
+        if key is not None:
+            _, timestamp_ms, _ = parse_window_key(key)
+            self._set_timestamp(
+                cache=self._last_deleted_value_timestamps,
+                prefix=prefix,
+                timestamp_ms=timestamp_ms,
+            )
 
     def get_windows(
         self,
