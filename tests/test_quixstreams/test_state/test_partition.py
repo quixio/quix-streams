@@ -8,7 +8,7 @@ from quixstreams.state.manager import SUPPORTED_STORES
 from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER,
-    PREFIX_SEPARATOR,
+    SEPARATOR,
 )
 from quixstreams.utils.json import dumps
 from tests.utils import ConfluentKafkaMessageStub
@@ -39,7 +39,7 @@ class TestStorePartitionChangelog:
         kafka_key = b"my_key"
         user_store_key = "count"
         changelog_msg = ConfluentKafkaMessageStub(
-            key=kafka_key + PREFIX_SEPARATOR + dumps(user_store_key),
+            key=kafka_key + SEPARATOR + dumps(user_store_key),
             value=dumps(store_value),
             headers=[(CHANGELOG_CF_MESSAGE_HEADER, b"default")],
             offset=50,
@@ -92,7 +92,7 @@ class TestStorePartitionChangelog:
         )
         committted_offset = 2
         changelog_msg = ConfluentKafkaMessageStub(
-            key=kafka_key + PREFIX_SEPARATOR + dumps(user_store_key),
+            key=kafka_key + SEPARATOR + dumps(user_store_key),
             value=dumps(10),
             headers=[
                 (CHANGELOG_CF_MESSAGE_HEADER, b"default"),
@@ -135,7 +135,7 @@ class TestStorePartitionChangelog:
             dumps(processed_offset),
         )
         changelog_msg = ConfluentKafkaMessageStub(
-            key=kafka_key + PREFIX_SEPARATOR + dumps(user_store_key),
+            key=kafka_key + SEPARATOR + dumps(user_store_key),
             value=dumps(10),
             headers=[
                 (CHANGELOG_CF_MESSAGE_HEADER, b"default"),

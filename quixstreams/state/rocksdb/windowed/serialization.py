@@ -1,24 +1,23 @@
 import struct
-from typing import Tuple
 
-from quixstreams.state.metadata import PREFIX_SEPARATOR
+from quixstreams.state.metadata import SEPARATOR
 from quixstreams.state.serialization import (
     int_to_int64_bytes,
 )
 
-__all__ = ("parse_window_key", "encode_window_key", "encode_window_prefix")
+__all__ = ("parse_window_key", "encode_integer_pair", "append_integer")
 
 _TIMESTAMP_BYTE_LENGTH = len(int_to_int64_bytes(0))
-_PREFIX_SEPARATOR_LENGTH = len(PREFIX_SEPARATOR)
-_TIMESTAMPS_SEGMENT_LEN = _TIMESTAMP_BYTE_LENGTH * 2 + _PREFIX_SEPARATOR_LENGTH
+_SEPARATOR_LENGTH = len(SEPARATOR)
+_TIMESTAMPS_SEGMENT_LEN = _TIMESTAMP_BYTE_LENGTH * 2 + _SEPARATOR_LENGTH
 
-_window_pack_format = ">q" + "c" * _PREFIX_SEPARATOR_LENGTH + "q"
+_window_pack_format = ">q" + "c" * _SEPARATOR_LENGTH + "q"
 _window_packer = struct.Struct(_window_pack_format)
 _window_pack = _window_packer.pack
 _window_unpack = _window_packer.unpack
 
 
-def parse_window_key(key: bytes) -> Tuple[bytes, int, int]:
+def parse_window_key(key: bytes) -> tuple[bytes, int, int]:
     """
     Parse the window key from Rocksdb into (message_key, start, end) structure.
 
@@ -38,28 +37,28 @@ def parse_window_key(key: bytes) -> Tuple[bytes, int, int]:
     return message_key, start_ms, end_ms
 
 
-def encode_window_key(start_ms: int, end_ms: int) -> bytes:
+def encode_integer_pair(integer_1: int, integer_2: int) -> bytes:
     """
-    Encode window start and end timestamps into bytes of the following format:
-    ```<start>|<end>```
+    Encode a pair of integers into bytes of the following format:
+    ```<integer_1>|<integer_2>```
 
-    Encoding window keys this way make them sortable in RocksDB within the same prefix.
+    Encoding integers this way make them sortable in RocksDB within the same prefix.
 
-    :param start_ms: window start in milliseconds
-    :param end_ms: window end in milliseconds
-    :return: window timestamps as bytes
+    :param integer_1: first integer
+    :param integer_2: second integer
+    :return: integers as bytes
     """
-    return _window_pack(start_ms, PREFIX_SEPARATOR, end_ms)
+    return _window_pack(integer_1, SEPARATOR, integer_2)
 
 
-def encode_window_prefix(prefix: bytes, start_ms: int) -> bytes:
+def append_integer(base_bytes: bytes, integer: int) -> bytes:
     """
-    Encode window prefix and start time to iterate over keys in RocksDB
+    Append integer to the base bytes
     Format:
-    ```<prefix>|<start>```
+    ```<base_bytes>|<integer>```
 
-    :param prefix: transaction prefix
-    :param start_ms: window start time in milliseconds
+    :param base_bytes: base bytes
+    :param integer: integer to append
     :return: bytes
     """
-    return prefix + PREFIX_SEPARATOR + int_to_int64_bytes(start_ms)
+    return base_bytes + SEPARATOR + int_to_int64_bytes(integer)

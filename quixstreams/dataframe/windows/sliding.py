@@ -53,6 +53,7 @@ class SlidingWindow(FixedTimeWindow):
         grace = self._grace_ms
         aggregate = self._aggregate_func
         default = self._aggregate_default
+        collect = self._aggregate_collection
 
         # Sliding windows are inclusive on both ends, so values with
         # timestamps equal to latest_timestamp - duration - grace
@@ -97,22 +98,22 @@ class SlidingWindow(FixedTimeWindow):
                         end=right_end,
                         value=aggregation,
                         timestamp=timestamp_ms,
-                        window_timestamp=max_timestamp,
+                        max_timestamp=max_timestamp,
                     )
                     right_exists = True
 
                 # Update existing window if it is not expired
                 if start > max_expired_window_start:
-                    window_timestamp = max(timestamp_ms, max_timestamp)
+                    max_timestamp = max(timestamp_ms, max_timestamp)
                     window = self._update_window(
                         state=state,
                         start=start,
                         end=end,
                         value=aggregate(aggregation, value),
                         timestamp=timestamp_ms,
-                        window_timestamp=window_timestamp,
+                        max_timestamp=max_timestamp,
                     )
-                    if end == window_timestamp:  # Emit only left windows
+                    if end == max_timestamp:  # Emit only left windows
                         updated_windows.append(window)
                 else:
                     self._log_expired_window(
@@ -132,7 +133,7 @@ class SlidingWindow(FixedTimeWindow):
                         end=right_start + duration,
                         value=aggregate(default, value),
                         timestamp=timestamp_ms,
-                        window_timestamp=timestamp_ms,
+                        max_timestamp=timestamp_ms,
                     )
 
                 # The left window already exists; updating it is sufficient
@@ -145,7 +146,7 @@ class SlidingWindow(FixedTimeWindow):
                             end=end,
                             value=aggregate(aggregation, value),
                             timestamp=timestamp_ms,
-                            window_timestamp=timestamp_ms,
+                            max_timestamp=timestamp_ms,
                         )
                     )
                 else:
@@ -167,7 +168,7 @@ class SlidingWindow(FixedTimeWindow):
                         end=right_start + duration,
                         value=aggregate(default, value),
                         timestamp=timestamp_ms,
-                        window_timestamp=timestamp_ms,
+                        max_timestamp=timestamp_ms,
                     )
 
                 # Create a left window with existing aggregation if it falls within the window
@@ -181,7 +182,7 @@ class SlidingWindow(FixedTimeWindow):
                         end=left_end,
                         value=aggregate(aggregation, value),
                         timestamp=timestamp_ms,
-                        window_timestamp=timestamp_ms,
+                        max_timestamp=timestamp_ms,
                     )
                 )
 
@@ -202,21 +203,31 @@ class SlidingWindow(FixedTimeWindow):
                         end=left_end,
                         value=aggregate(default, value),
                         timestamp=timestamp_ms,
-                        window_timestamp=timestamp_ms,
+                        max_timestamp=timestamp_ms,
                     )
                 )
+
+        if collect:
+            state.collect_value(value=value, timestamp_ms=timestamp_ms)
 
         expired_windows = [
             {"start": start, "end": end, "value": self._merge_func(aggregation)}
             for (start, end), (max_timestamp, aggregation) in state.expire_windows(
                 max_start_time=max_expired_window_start,
                 delete=False,
+                collect=collect,
+                end_inclusive=True,
             )
             if end == max_timestamp  # Emit only left windows
         ]
 
-        state.delete_windows(max_start_time=max_deleted_window_start)
-        return reversed(updated_windows), expired_windows
+        state.delete_windows(
+            max_start_time=max_deleted_window_start,
+            delete_values=collect,
+        )
+
+        updated_windows = [] if collect else reversed(updated_windows)
+        return updated_windows, expired_windows
 
     def _update_window(
         self,
@@ -225,13 +236,12 @@ class SlidingWindow(FixedTimeWindow):
         end: int,
         value: Any,
         timestamp: int,
-        window_timestamp: int,
+        max_timestamp: int,
     ) -> dict[str, Any]:
         state.update_window(
             start_ms=start,
             end_ms=end,
-            value=value,
+            value=[max_timestamp, value],
             timestamp_ms=timestamp,
-            window_timestamp_ms=window_timestamp,
         )
         return {"start": start, "end": end, "value": self._merge_func(value)}
