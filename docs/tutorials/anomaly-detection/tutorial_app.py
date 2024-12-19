@@ -110,7 +110,6 @@ def main():
     sdf = sdf.apply(lambda result: round(result["value"], 2)).filter(
         should_alert, metadata=True
     )
-    sdf.print()
     sdf.to_topic(alerts_topic)
 
     app.run()
