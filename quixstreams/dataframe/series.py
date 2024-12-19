@@ -1,16 +1,21 @@
 import contextvars
 import functools
 import operator
+import sys
 from typing import (
     Any,
     Callable,
-    Concatenate,
     Container,
     Mapping,
     Optional,
     TypeVar,
     Union,
 )
+
+if sys.version_info < (3, 10):
+    from typing_extensions import Concatenate
+else:
+    from typing import Concatenate
 
 from typing_extensions import ParamSpec, Self
 
