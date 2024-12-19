@@ -149,7 +149,11 @@ class Stream:
 
     @overload
     def add_apply(
-        self, func: ApplyCallback, *, expand: Literal[False], metadata: Literal[False]
+        self,
+        func: ApplyCallback,
+        *,
+        expand: Literal[False] = False,
+        metadata: Literal[False] = False,
     ):
         pass
 

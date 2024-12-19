@@ -13,15 +13,20 @@ class TestStreamingSeries:
         value = {"x": 5, "y": 20, "z": 110}
         key, timestamp, headers = "key", 0, []
         expected = ({"x": 6}, key, timestamp, headers)
-        result = StreamingSeries("x").apply(lambda v: {"x": v + 1})
+        result = StreamingSeries(sdf_id=1, name="x").apply(lambda v: {"x": v + 1})
         assert isinstance(result, StreamingSeries)
         assert result.test(value, key, timestamp, headers)[0] == expected
 
     @pytest.mark.parametrize(
         "value, series, other, expected",
         [
-            ({"x": 5, "y": 20}, StreamingSeries("x"), StreamingSeries("y"), 25),
-            ({"x": 5, "y": 20}, StreamingSeries("x"), 10, 15),
+            (
+                {"x": 5, "y": 20},
+                StreamingSeries(sdf_id=1, name="x"),
+                StreamingSeries(sdf_id=1, name="y"),
+                25,
+            ),
+            ({"x": 5, "y": 20}, StreamingSeries(sdf_id=1, name="x"), 10, 15),
         ],
     )
     def test_add(self, value, series, other, expected):
@@ -37,8 +42,13 @@ class TestStreamingSeries:
     @pytest.mark.parametrize(
         "value, series, other, expected",
         [
-            ({"x": 5, "y": 20}, StreamingSeries("y"), StreamingSeries("x"), 15),
-            ({"x": 5, "y": 20}, StreamingSeries("x"), 10, -5),
+            (
+                {"x": 5, "y": 20},
+                StreamingSeries(sdf_id=1, name="y"),
+                StreamingSeries(sdf_id=1, name="x"),
+                15,
+            ),
+            ({"x": 5, "y": 20}, StreamingSeries(sdf_id=1, name="x"), 10, -5),
         ],
     )
     def test_subtract(self, value, series, other, expected):
@@ -54,8 +64,13 @@ class TestStreamingSeries:
     @pytest.mark.parametrize(
         "value, series, other, expected",
         [
-            ({"x": 5, "y": 20}, StreamingSeries("y"), StreamingSeries("x"), 100),
-            ({"x": 5, "y": 20}, StreamingSeries("x"), 10, 50),
+            (
+                {"x": 5, "y": 20},
+                StreamingSeries(sdf_id=1, name="y"),
+                StreamingSeries(sdf_id=1, name="x"),
+                100,
+            ),
+            ({"x": 5, "y": 20}, StreamingSeries(sdf_id=1, name="x"), 10, 50),
         ],
     )
     def test_multiply(self, value, series, other, expected):
@@ -71,8 +86,13 @@ class TestStreamingSeries:
     @pytest.mark.parametrize(
         "value, series, other, expected",
         [
-            ({"x": 5, "y": 20}, StreamingSeries("x"), StreamingSeries("x"), 1),
-            ({"x": 5, "y": 20}, StreamingSeries("x"), 2, 2.5),
+            (
+                {"x": 5, "y": 20},
+                StreamingSeries(sdf_id=1, name="x"),
+                StreamingSeries(sdf_id=1, name="x"),
+                1,
+            ),
+            ({"x": 5, "y": 20}, StreamingSeries(sdf_id=1, name="x"), 2, 2.5),
         ],
     )
     def test_div(self, value, series, other, expected):
@@ -88,8 +108,13 @@ class TestStreamingSeries:
     @pytest.mark.parametrize(
         "value, series, other, expected",
         [
-            ({"x": 5, "y": 2}, StreamingSeries("x"), StreamingSeries("y"), 1),
-            ({"x": 5, "y": 20}, StreamingSeries("x"), 3, 2),
+            (
+                {"x": 5, "y": 2},
+                StreamingSeries(sdf_id=1, name="x"),
+                StreamingSeries(sdf_id=1, name="y"),
+                1,
+            ),
+            ({"x": 5, "y": 20}, StreamingSeries(sdf_id=1, name="x"), 3, 2),
         ],
     )
     def test_mod(self, value, series, other, expected):
@@ -105,10 +130,20 @@ class TestStreamingSeries:
     @pytest.mark.parametrize(
         "value, series, other, expected",
         [
-            ({"x": 5, "y": 2}, StreamingSeries("x"), StreamingSeries("x"), True),
-            ({"x": 5, "y": 2}, StreamingSeries("x"), StreamingSeries("y"), False),
-            ({"x": 5, "y": 20}, StreamingSeries("x"), 5, True),
-            ({"x": 5, "y": 20}, StreamingSeries("x"), 6, False),
+            (
+                {"x": 5, "y": 2},
+                StreamingSeries(sdf_id=1, name="x"),
+                StreamingSeries(sdf_id=1, name="x"),
+                True,
+            ),
+            (
+                {"x": 5, "y": 2},
+                StreamingSeries(sdf_id=1, name="x"),
+                StreamingSeries(sdf_id=1, name="y"),
+                False,
+            ),
+            ({"x": 5, "y": 20}, StreamingSeries(sdf_id=1, name="x"), 5, True),
+            ({"x": 5, "y": 20}, StreamingSeries(sdf_id=1, name="x"), 6, False),
         ],
     )
     def test_equal(self, value, series, other, expected):
@@ -124,10 +159,20 @@ class TestStreamingSeries:
     @pytest.mark.parametrize(
         "value, series, other, expected",
         [
-            ({"x": 5, "y": 2}, StreamingSeries("x"), StreamingSeries("x"), False),
-            ({"x": 5, "y": 2}, StreamingSeries("x"), StreamingSeries("y"), True),
-            ({"x": 5, "y": 20}, StreamingSeries("x"), 5, False),
-            ({"x": 5, "y": 20}, StreamingSeries("x"), 6, True),
+            (
+                {"x": 5, "y": 2},
+                StreamingSeries(sdf_id=1, name="x"),
+                StreamingSeries(sdf_id=1, name="x"),
+                False,
+            ),
+            (
+                {"x": 5, "y": 2},
+                StreamingSeries(sdf_id=1, name="x"),
+                StreamingSeries(sdf_id=1, name="y"),
+                True,
+            ),
+            ({"x": 5, "y": 20}, StreamingSeries(sdf_id=1, name="x"), 5, False),
+            ({"x": 5, "y": 20}, StreamingSeries(sdf_id=1, name="x"), 6, True),
         ],
     )
     def test_not_equal(self, value, series, other, expected):
@@ -143,10 +188,20 @@ class TestStreamingSeries:
     @pytest.mark.parametrize(
         "value, series, other, expected",
         [
-            ({"x": 5, "y": 20}, StreamingSeries("x"), StreamingSeries("x"), False),
-            ({"x": 5, "y": 20}, StreamingSeries("x"), StreamingSeries("y"), True),
-            ({"x": 5, "y": 20}, StreamingSeries("x"), 5, False),
-            ({"x": 5, "y": 20}, StreamingSeries("x"), 6, True),
+            (
+                {"x": 5, "y": 20},
+                StreamingSeries(sdf_id=1, name="x"),
+                StreamingSeries(sdf_id=1, name="x"),
+                False,
+            ),
+            (
+                {"x": 5, "y": 20},
+                StreamingSeries(sdf_id=1, name="x"),
+                StreamingSeries(sdf_id=1, name="y"),
+                True,
+            ),
+            ({"x": 5, "y": 20}, StreamingSeries(sdf_id=1, name="x"), 5, False),
+            ({"x": 5, "y": 20}, StreamingSeries(sdf_id=1, name="x"), 6, True),
         ],
     )
     def test_less_than(self, value, series, other, expected):
@@ -162,11 +217,21 @@ class TestStreamingSeries:
     @pytest.mark.parametrize(
         "value, series, other, expected",
         [
-            ({"x": 5, "y": 20}, StreamingSeries("x"), StreamingSeries("x"), True),
-            ({"x": 5, "y": 20}, StreamingSeries("x"), StreamingSeries("y"), True),
-            ({"x": 5, "y": 20}, StreamingSeries("x"), 4, False),
-            ({"x": 5, "y": 20}, StreamingSeries("x"), 5, True),
-            ({"x": 5, "y": 20}, StreamingSeries("x"), 6, True),
+            (
+                {"x": 5, "y": 20},
+                StreamingSeries(sdf_id=1, name="x"),
+                StreamingSeries(sdf_id=1, name="x"),
+                True,
+            ),
+            (
+                {"x": 5, "y": 20},
+                StreamingSeries(sdf_id=1, name="x"),
+                StreamingSeries(sdf_id=1, name="y"),
+                True,
+            ),
+            ({"x": 5, "y": 20}, StreamingSeries(sdf_id=1, name="x"), 4, False),
+            ({"x": 5, "y": 20}, StreamingSeries(sdf_id=1, name="x"), 5, True),
+            ({"x": 5, "y": 20}, StreamingSeries(sdf_id=1, name="x"), 6, True),
         ],
     )
     def test_less_than_equal(self, value, series, other, expected):
@@ -182,11 +247,21 @@ class TestStreamingSeries:
     @pytest.mark.parametrize(
         "value, series, other, expected",
         [
-            ({"x": 5, "y": 20}, StreamingSeries("x"), StreamingSeries("x"), False),
-            ({"x": 5, "y": 4}, StreamingSeries("x"), StreamingSeries("y"), True),
-            ({"x": 5, "y": 20}, StreamingSeries("x"), 4, True),
-            ({"x": 5, "y": 20}, StreamingSeries("x"), 5, False),
-            ({"x": 5, "y": 20}, StreamingSeries("x"), 6, False),
+            (
+                {"x": 5, "y": 20},
+                StreamingSeries(sdf_id=1, name="x"),
+                StreamingSeries(sdf_id=1, name="x"),
+                False,
+            ),
+            (
+                {"x": 5, "y": 4},
+                StreamingSeries(sdf_id=1, name="x"),
+                StreamingSeries(sdf_id=1, name="y"),
+                True,
+            ),
+            ({"x": 5, "y": 20}, StreamingSeries(sdf_id=1, name="x"), 4, True),
+            ({"x": 5, "y": 20}, StreamingSeries(sdf_id=1, name="x"), 5, False),
+            ({"x": 5, "y": 20}, StreamingSeries(sdf_id=1, name="x"), 6, False),
         ],
     )
     def test_greater_than(self, value, series, other, expected):
@@ -202,12 +277,27 @@ class TestStreamingSeries:
     @pytest.mark.parametrize(
         "value, series, other, expected",
         [
-            ({"x": 5, "y": 20}, StreamingSeries("x"), StreamingSeries("x"), True),
-            ({"x": 5, "y": 4}, StreamingSeries("x"), StreamingSeries("y"), True),
-            ({"x": 5, "y": 6}, StreamingSeries("x"), StreamingSeries("y"), False),
-            ({"x": 5, "y": 20}, StreamingSeries("x"), 4, True),
-            ({"x": 5, "y": 20}, StreamingSeries("x"), 5, True),
-            ({"x": 5, "y": 20}, StreamingSeries("x"), 6, False),
+            (
+                {"x": 5, "y": 20},
+                StreamingSeries(sdf_id=1, name="x"),
+                StreamingSeries(sdf_id=1, name="x"),
+                True,
+            ),
+            (
+                {"x": 5, "y": 4},
+                StreamingSeries(sdf_id=1, name="x"),
+                StreamingSeries(sdf_id=1, name="y"),
+                True,
+            ),
+            (
+                {"x": 5, "y": 6},
+                StreamingSeries(sdf_id=1, name="x"),
+                StreamingSeries(sdf_id=1, name="y"),
+                False,
+            ),
+            ({"x": 5, "y": 20}, StreamingSeries(sdf_id=1, name="x"), 4, True),
+            ({"x": 5, "y": 20}, StreamingSeries(sdf_id=1, name="x"), 5, True),
+            ({"x": 5, "y": 20}, StreamingSeries(sdf_id=1, name="x"), 6, False),
         ],
     )
     def test_greater_than_equal(self, value, series, other, expected):
@@ -223,16 +313,26 @@ class TestStreamingSeries:
     @pytest.mark.parametrize(
         "value, series, other, expected",
         [
-            ({"x": True, "y": False}, StreamingSeries("x"), StreamingSeries("x"), True),
             (
                 {"x": True, "y": False},
-                StreamingSeries("x"),
-                StreamingSeries("y"),
+                StreamingSeries(sdf_id=1, name="x"),
+                StreamingSeries(sdf_id=1, name="x"),
+                True,
+            ),
+            (
+                {"x": True, "y": False},
+                StreamingSeries(sdf_id=1, name="x"),
+                StreamingSeries(sdf_id=1, name="y"),
                 False,
             ),
-            ({"x": True, "y": False}, StreamingSeries("x"), True, True),
-            ({"x": True, "y": False}, StreamingSeries("x"), False, False),
-            ({"x": True, "y": False}, StreamingSeries("x"), 0, 0),
+            ({"x": True, "y": False}, StreamingSeries(sdf_id=1, name="x"), True, True),
+            (
+                {"x": True, "y": False},
+                StreamingSeries(sdf_id=1, name="x"),
+                False,
+                False,
+            ),
+            ({"x": True, "y": False}, StreamingSeries(sdf_id=1, name="x"), 0, 0),
         ],
     )
     def test_and(self, value, series, other, expected):
@@ -248,23 +348,28 @@ class TestStreamingSeries:
     @pytest.mark.parametrize(
         "value, series, other, expected",
         [
-            ({"x": True, "y": False}, StreamingSeries("x"), StreamingSeries("y"), True),
+            (
+                {"x": True, "y": False},
+                StreamingSeries(sdf_id=1, name="x"),
+                StreamingSeries(sdf_id=1, name="y"),
+                True,
+            ),
             (
                 {"x": False},
-                StreamingSeries("x"),
-                StreamingSeries("x"),
+                StreamingSeries(sdf_id=1, name="x"),
+                StreamingSeries(sdf_id=1, name="x"),
                 False,
             ),
             (
                 {
                     "x": True,
                 },
-                StreamingSeries("x"),
+                StreamingSeries(sdf_id=1, name="x"),
                 0,
                 True,
             ),
-            ({"x": False}, StreamingSeries("x"), 0, 0),
-            ({"x": False}, StreamingSeries("x"), True, True),
+            ({"x": False}, StreamingSeries(sdf_id=1, name="x"), 0, 0),
+            ({"x": False}, StreamingSeries(sdf_id=1, name="x"), True, True),
         ],
     )
     def test_or(self, value, series, other, expected):
@@ -282,9 +387,9 @@ class TestStreamingSeries:
         key, timestamp, headers = "key", 0, []
         expected = True
 
-        result = (StreamingSeries("x") <= StreamingSeries("y")) & (
-            StreamingSeries("x") <= StreamingSeries("z")
-        )
+        result = (
+            StreamingSeries(sdf_id=1, name="x") <= StreamingSeries(sdf_id=1, name="y")
+        ) & (StreamingSeries(sdf_id=1, name="x") <= StreamingSeries(sdf_id=1, name="z"))
 
         assert result.test(value, key, timestamp, headers)[0] == (
             expected,
@@ -296,8 +401,8 @@ class TestStreamingSeries:
     @pytest.mark.parametrize(
         "value, series, expected",
         [
-            ({"x": True, "y": False}, StreamingSeries("x"), False),
-            ({"x": 1, "y": False}, StreamingSeries("x"), False),
+            ({"x": True, "y": False}, StreamingSeries(sdf_id=1, name="x"), False),
+            ({"x": 1, "y": False}, StreamingSeries(sdf_id=1, name="x"), False),
         ],
     )
     def test_invert(self, value, series, expected):
@@ -314,9 +419,9 @@ class TestStreamingSeries:
     @pytest.mark.parametrize(
         "value, series, other, expected",
         [
-            ({"x": 1}, StreamingSeries("x"), [1, 2, 3], True),
-            ({"x": 1}, StreamingSeries("x"), [], False),
-            ({"x": 1}, StreamingSeries("x"), {1: 456}, True),
+            ({"x": 1}, StreamingSeries(sdf_id=1, name="x"), [1, 2, 3], True),
+            ({"x": 1}, StreamingSeries(sdf_id=1, name="x"), [], False),
+            ({"x": 1}, StreamingSeries(sdf_id=1, name="x"), {1: 456}, True),
         ],
     )
     def test_isin(self, value, series, other, expected):
@@ -331,10 +436,10 @@ class TestStreamingSeries:
     @pytest.mark.parametrize(
         "value, series, other, expected",
         [
-            ({"x": [1, 2, 3]}, StreamingSeries("x"), 1, True),
-            ({"x": [1, 2, 3]}, StreamingSeries("x"), 5, False),
-            ({"x": "abc"}, StreamingSeries("x"), "a", True),
-            ({"x": {"y": "z"}}, StreamingSeries("x"), "y", True),
+            ({"x": [1, 2, 3]}, StreamingSeries(sdf_id=1, name="x"), 1, True),
+            ({"x": [1, 2, 3]}, StreamingSeries(sdf_id=1, name="x"), 5, False),
+            ({"x": "abc"}, StreamingSeries(sdf_id=1, name="x"), "a", True),
+            ({"x": {"y": "z"}}, StreamingSeries(sdf_id=1, name="x"), "y", True),
         ],
     )
     def test_contains(self, series, value, other, expected):
@@ -349,8 +454,8 @@ class TestStreamingSeries:
     @pytest.mark.parametrize(
         "value, series, expected",
         [
-            ({"x": None}, StreamingSeries("x"), True),
-            ({"x": [1, 2, 3]}, StreamingSeries("x"), False),
+            ({"x": None}, StreamingSeries(sdf_id=1, name="x"), True),
+            ({"x": [1, 2, 3]}, StreamingSeries(sdf_id=1, name="x"), False),
         ],
     )
     def test_isnull(self, value, series, expected):
@@ -365,8 +470,8 @@ class TestStreamingSeries:
     @pytest.mark.parametrize(
         "value, series, expected",
         [
-            ({"x": None}, StreamingSeries("x"), False),
-            ({"x": [1, 2, 3]}, StreamingSeries("x"), True),
+            ({"x": None}, StreamingSeries(sdf_id=1, name="x"), False),
+            ({"x": [1, 2, 3]}, StreamingSeries(sdf_id=1, name="x"), True),
         ],
     )
     def test_notnull(self, value, series, expected):
@@ -381,9 +486,9 @@ class TestStreamingSeries:
     @pytest.mark.parametrize(
         "value, series, other, expected",
         [
-            ({"x": [1, 2, 3]}, StreamingSeries("x"), None, False),
-            ({"x": None}, StreamingSeries("x"), None, True),
-            ({"x": 1}, StreamingSeries("x"), 1, True),
+            ({"x": [1, 2, 3]}, StreamingSeries(sdf_id=1, name="x"), None, False),
+            ({"x": None}, StreamingSeries(sdf_id=1, name="x"), None, True),
+            ({"x": 1}, StreamingSeries(sdf_id=1, name="x"), 1, True),
         ],
     )
     def test_is_(self, value, series, other, expected):
@@ -398,9 +503,9 @@ class TestStreamingSeries:
     @pytest.mark.parametrize(
         "value, series, other, expected",
         [
-            ({"x": [1, 2, 3]}, StreamingSeries("x"), None, True),
-            ({"x": None}, StreamingSeries("x"), None, False),
-            ({"x": 1}, StreamingSeries("x"), 1, False),
+            ({"x": [1, 2, 3]}, StreamingSeries(sdf_id=1, name="x"), None, True),
+            ({"x": None}, StreamingSeries(sdf_id=1, name="x"), None, False),
+            ({"x": 1}, StreamingSeries(sdf_id=1, name="x"), 1, False),
         ],
     )
     def test_isnot(self, value, series, other, expected):
@@ -420,7 +525,7 @@ class TestStreamingSeries:
         ],
     )
     def test_getitem(self, value, item, expected):
-        result = StreamingSeries("x")[item]
+        result = StreamingSeries(sdf_id=1, name="x")[item]
         key, timestamp, headers = "key", 0, []
         assert result.test(value, key, timestamp, headers)[0] == (
             expected,
@@ -433,7 +538,7 @@ class TestStreamingSeries:
         value = {"x": {"y": {"z": 110}}, "k": 0}
         key, timestamp, headers = "key", 0, []
         expected = 120
-        result = StreamingSeries("x")["y"]["z"].apply(lambda v: v + 10)
+        result = StreamingSeries(sdf_id=1, name="x")["y"]["z"].apply(lambda v: v + 10)
 
         assert result.test(value, key, timestamp, headers)[0] == (
             expected,
@@ -448,7 +553,7 @@ class TestStreamingSeries:
         value,
         expected,
     ):
-        result = StreamingSeries("x").abs()
+        result = StreamingSeries(sdf_id=1, name="x").abs()
         key, timestamp, headers = "key", 0, []
 
         assert result.test({"x": value}, key, timestamp, headers)[0] == (
@@ -459,32 +564,36 @@ class TestStreamingSeries:
         )
 
     def test_abs_not_a_number_fails(self):
-        result = StreamingSeries("x").abs()
+        result = StreamingSeries(sdf_id=1, name="x").abs()
         key, timestamp = "key", 0
 
         with pytest.raises(TypeError, match="bad operand type for abs()"):
             assert result.test({"x": "string"}, key, timestamp)
 
     def test_and_is_lazy(self):
-        series = StreamingSeries("x") & StreamingSeries("y")
+        series = StreamingSeries(sdf_id=1, name="x") & StreamingSeries(
+            sdf_id=1, name="y"
+        )
         key, timestamp, headers = "key", 0, []
 
         # Ensure it doesn't fail with KeyError ("y" is not present in value)
         series.test({"x": False}, key, timestamp, headers)
 
     def test_or_is_lazy(self):
-        series = StreamingSeries("x") | StreamingSeries("y")
+        series = StreamingSeries(sdf_id=1, name="x") | StreamingSeries(
+            sdf_id=1, name="y"
+        )
         key, timestamp, headers = "key", 0, []
         # Ensure it doesn't fail with KeyError ("y" is not present in value)
         series.test({"x": True}, key, timestamp, headers)
 
     def test_cannot_use_logical_and(self):
         with pytest.raises(InvalidOperation):
-            StreamingSeries("x") and StreamingSeries("y")
+            StreamingSeries(sdf_id=1, name="x") and StreamingSeries(sdf_id=1, name="y")
 
     def test_cannot_use_logical_or(self):
         with pytest.raises(InvalidOperation):
-            StreamingSeries("x") or StreamingSeries("y")
+            StreamingSeries(sdf_id=1, name="x") or StreamingSeries(sdf_id=1, name="y")
 
     def test_sdf_column_missing(self):
         """
@@ -494,7 +603,7 @@ class TestStreamingSeries:
         key, timestamp, headers = "key", 0, []
 
         with pytest.raises(ColumnDoesNotExist):
-            StreamingSeries("x").test({"y": 2}, key, timestamp, headers)
+            StreamingSeries(sdf_id=1, name="x").test({"y": 2}, key, timestamp, headers)
 
     def test_sdf_value_invalid_type(self):
         """
@@ -503,7 +612,7 @@ class TestStreamingSeries:
         """
         key, timestamp, headers = "key", 0, []
         with pytest.raises(InvalidColumnReference):
-            StreamingSeries("x").test(2, key, timestamp, headers)
+            StreamingSeries(sdf_id=1, name="x").test(2, key, timestamp, headers)
 
     @pytest.mark.parametrize(
         "operation",
