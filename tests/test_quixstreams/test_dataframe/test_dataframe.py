@@ -1610,7 +1610,7 @@ class TestStreamingDataFrameGroupBy:
         topic = topic_manager.topic(str(uuid.uuid4()))
         sdf = dataframe_factory(topic, topic_manager=topic_manager)
 
-        with pytest.raises(TypeError):
+        with pytest.raises(ValueError):
             sdf.group_by({"um": "what is this"})
 
     def test_group_by_limit_exceeded(self, dataframe_factory, topic_manager_factory):
