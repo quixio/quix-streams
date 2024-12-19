@@ -99,8 +99,9 @@ def main():
     ]
     sdf["Full Name"] = sdf.apply(get_full_name)
     sdf = sdf[["Full Name", "Email"]]
-    # .to_topic() does not require reassignment ("in-place" operation), but does no harm
-    sdf = sdf.to_topic(customers_qualified_topic)
+
+    sdf.print()
+    sdf.to_topic(customers_qualified_topic)
 
     app.run()
 

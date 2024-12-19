@@ -57,10 +57,11 @@ def main():
     sdf = app.dataframe(source=ReviewGenerator())
     sdf = sdf.apply(tokenize_and_count, expand=True)
     sdf = sdf.filter(should_skip)
-    # .to_topic() does not require reassignment ("in-place" operation), but does no harm
-    sdf = sdf.to_topic(
-        word_counts_topic, key=lambda word_count_pair: word_count_pair[0]
-    )
+    sdf.print()
+    sdf.to_topic(word_counts_topic, key=lambda word_count_pair: word_count_pair[0])
+
+    # Start the application
+    app.run()
 
 
 # This approach is necessary since we are using a Source

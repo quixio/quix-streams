@@ -110,8 +110,8 @@ def main():
     sdf = sdf.apply(lambda result: round(result["value"], 2)).filter(
         should_alert, metadata=True
     )
-    # .to_topic() does not require reassignment ("in-place" operation), but does no harm
-    sdf = sdf.to_topic(alerts_topic)
+    sdf.print()
+    sdf.to_topic(alerts_topic)
 
     app.run()
 
