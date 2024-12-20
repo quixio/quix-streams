@@ -57,7 +57,8 @@ class SlidingWindow(FixedTimeWindow):
         # Sliding windows are inclusive on both ends, so values with
         # timestamps equal to latest_timestamp - duration - grace
         # are still eligible for processing.
-        latest_timestamp = max(timestamp_ms, state.get_latest_timestamp())
+        state_ts = state.get_latest_timestamp() or 0
+        latest_timestamp = max(timestamp_ms, state_ts)
         max_expired_window_start = latest_timestamp - duration - grace - 1
         max_deleted_window_start = max_expired_window_start - duration
 
@@ -69,7 +70,7 @@ class SlidingWindow(FixedTimeWindow):
         right_exists = False
 
         starts = set([left_start])
-        updated_windows = []
+        updated_windows: list[WindowResult] = []
         iterated_windows = state.get_windows(
             # start_from_ms is exclusive, hence -1
             start_from_ms=max(0, left_start - duration) - 1,
@@ -206,8 +207,8 @@ class SlidingWindow(FixedTimeWindow):
                     )
                 )
 
-        expired_windows = [
-            {"start": start, "end": end, "value": self._merge_func(aggregation)}
+        expired_windows: list[WindowResult] = [
+            WindowResult(start=start, end=end, value=self._merge_func(aggregation))
             for (start, end), (max_timestamp, aggregation) in state.expire_windows(
                 max_start_time=max_expired_window_start,
                 delete=False,
@@ -226,7 +227,7 @@ class SlidingWindow(FixedTimeWindow):
         value: Any,
         timestamp: int,
         window_timestamp: int,
-    ) -> dict[str, Any]:
+    ) -> WindowResult:
         state.update_window(
             start_ms=start,
             end_ms=end,
@@ -234,4 +235,4 @@ class SlidingWindow(FixedTimeWindow):
             timestamp_ms=timestamp,
             window_timestamp_ms=window_timestamp,
         )
-        return {"start": start, "end": end, "value": self._merge_func(value)}
+        return WindowResult(start=start, end=end, value=self._merge_func(value))
