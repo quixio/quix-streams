@@ -38,6 +38,9 @@ class StreamFunction(abc.ABC):
         If there's only one executor - copying is not neccessary, and the executor
         is returned as is.
         """
+        if not child_executors:
+            raise ValueError("At least one executor is required")
+
         if len(child_executors) > 1:
 
             def wrapper(

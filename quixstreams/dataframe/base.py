@@ -11,9 +11,14 @@ class BaseStreaming:
     def stream(self) -> Stream: ...
 
     @abc.abstractmethod
-    def compose(self, *args, **kwargs) -> VoidExecutor: ...
+    def compose(self, *args, **kwargs) -> dict[str, VoidExecutor]: ...
 
     @abc.abstractmethod
     def test(
-        self, value: Any, key: Any, timestamp: int, ctx: Optional[MessageContext] = None
+        self,
+        value: Any,
+        key: Any,
+        timestamp: int,
+        headers: Optional[Any] = None,
+        ctx: Optional[MessageContext] = None,
     ) -> Any: ...
