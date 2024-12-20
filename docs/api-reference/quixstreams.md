@@ -768,7 +768,7 @@ a {topic_name: composed} dict, where composed is a callable
 class StreamingDataFrame(BaseStreaming)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L68)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L71)
 
 `StreamingDataFrame` is the main object you will use for ETL work.
 
@@ -821,8 +821,10 @@ sdf = sdf.to_topic(topic_obj)
 ```python
 def apply(func: Union[
     ApplyCallback,
+    ApplyExpandedCallback,
     ApplyCallbackStateful,
     ApplyWithMetadataCallback,
+    ApplyWithMetadataExpandedCallback,
     ApplyWithMetadataCallbackStateful,
 ],
           *,
@@ -831,7 +833,7 @@ def apply(func: Union[
           metadata: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L174)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L186)
 
 Apply a function to transform the value and return a new value.
 
@@ -883,7 +885,7 @@ def update(func: Union[
            metadata: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L263)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L293)
 
 Apply a function to mutate value in-place or to perform a side effect
 
@@ -943,7 +945,7 @@ def filter(func: Union[
            metadata: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L355)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L399)
 
 Filter value using provided function.
 
@@ -989,7 +991,7 @@ def group_by(key: Union[str, Callable[[Any], Any]],
              key_serializer: Optional[SerializerType] = "json") -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L441)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L487)
 
 "Groups" messages by re-keying them via the provided group_by operation
 
@@ -1045,7 +1047,7 @@ a clone with this operation added (assign to keep its effect).
 def contains(key: str) -> StreamingSeries
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L514)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L565)
 
 Check if the key is present in the Row value.
 
@@ -1076,7 +1078,7 @@ or False otherwise.
 def to_topic(topic: Topic, key: Optional[Callable[[Any], Any]] = None) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L539)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L590)
 
 Produce current value to a topic. You can optionally specify a new key.
 
@@ -1121,7 +1123,7 @@ the updated StreamingDataFrame instance (reassignment NOT required).
 def set_timestamp(func: Callable[[Any, Any, int, Any], int]) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L584)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L635)
 
 Set a new timestamp based on the current message value and its metadata.
 
@@ -1165,7 +1167,7 @@ def set_headers(
         ]) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L625)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L676)
 
 Set new message headers based on the current message value and metadata.
 
@@ -1206,7 +1208,7 @@ a new StreamingDataFrame instance
 def print(pretty: bool = True, metadata: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L676)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L727)
 
 Print out the current message value (and optionally, the message metadata) to
 
@@ -1254,7 +1256,7 @@ def compose(
 ) -> Dict[str, VoidExecutor]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L718)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L771)
 
 Compose all functions of this StreamingDataFrame into one big closure.
 
@@ -1300,7 +1302,7 @@ def test(value: Any,
          topic: Optional[Topic] = None) -> List[Any]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L752)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L805)
 
 A shorthand to test `StreamingDataFrame` with provided value
 
@@ -1331,7 +1333,7 @@ def tumbling_window(duration_ms: Union[int, timedelta],
                     name: Optional[str] = None) -> TumblingWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L789)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L842)
 
 Create a tumbling window transformation on this StreamingDataFrame.
 
@@ -1408,7 +1410,7 @@ def hopping_window(duration_ms: Union[int, timedelta],
                    name: Optional[str] = None) -> HoppingWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L865)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L918)
 
 Create a hopping window transformation on this StreamingDataFrame.
 
@@ -1493,7 +1495,7 @@ def sliding_window(duration_ms: Union[int, timedelta],
                    name: Optional[str] = None) -> SlidingWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L957)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1010)
 
 Create a sliding window transformation on this StreamingDataFrame.
 
@@ -1573,7 +1575,7 @@ def drop(columns: Union[str, List[str]],
          errors: Literal["ignore", "raise"] = "raise") -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1038)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1091)
 
 Drop column(s) from the message value (value must support `del`, like a dict).
 
@@ -1609,7 +1611,7 @@ a new StreamingDataFrame instance
 def sink(sink: BaseSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1082)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1135)
 
 Sink the processed data to the specified destination.
 
@@ -2567,7 +2569,7 @@ the Checkpoint inits another immediately after committing.
 class Stream()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L38)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L49)
 
 <a id="quixstreams.core.stream.stream.Stream.__init__"></a>
 
@@ -2578,7 +2580,7 @@ def __init__(func: Optional[StreamFunction] = None,
              parent: Optional[Self] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L39)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L50)
 
 A base class for all streaming operations.
 
@@ -2629,7 +2631,7 @@ def add_filter(func: Union[FilterCallback, FilterWithMetadataCallback],
                metadata: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L104)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L123)
 
 Add a function to filter values from the Stream.
 
@@ -2664,7 +2666,7 @@ def add_apply(func: Union[
               metadata: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L129)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L186)
 
 Add an "apply" function to the Stream.
 
@@ -2695,7 +2697,7 @@ def add_update(func: Union[UpdateCallback, UpdateWithMetadataCallback],
                metadata: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L162)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L227)
 
 Add an "update" function to the Stream, that will mutate the input value.
 
@@ -2723,7 +2725,7 @@ def add_transform(func: Union[TransformCallback, TransformExpandedCallback],
                   expand: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L186)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L261)
 
 Add a "transform" function to the Stream, that will mutate the input value.
 
@@ -2749,10 +2751,10 @@ a new Stream derived from the current one
 #### Stream.diff
 
 ```python
-def diff(other: "Stream") -> Self
+def diff(other: Self) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L211)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L285)
 
 Takes the difference between Streams `self` and `other` based on their last
 
@@ -2785,7 +2787,7 @@ a new independent `Stream` instance whose root begins at the diff
 def root_path(allow_splits=True) -> List[Self]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L272)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L350)
 
 Return a list of all parent Streams including the node itself.
 
@@ -2805,7 +2807,7 @@ a list of `Stream` objects
 def full_tree() -> List[Self]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L293)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L371)
 
 Starts at tree root and finds every Stream in the tree (including splits).
 
@@ -2827,7 +2829,7 @@ def compose(
                             None]] = None) -> VoidExecutor
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L300)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L378)
 
 Generate an "executor" closure by mapping all relatives of this `Stream` and
 
@@ -2859,7 +2861,7 @@ the stream has transform functions in the tree. Default - True.
 def compose_returning() -> ReturningExecutor
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L357)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L435)
 
 Compose a list of functions from this `Stream` and its parents into one
 big closure that always returns the transformed record.
@@ -2900,7 +2902,7 @@ downstream.
 class UpdateWithMetadataFunction(StreamFunction)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/functions/update.py#L34)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/functions/update.py#L37)
 
 Wrap a function into an "Update" function.
 
@@ -2995,7 +2997,7 @@ value is filtered out.
 class FilterWithMetadataFunction(StreamFunction)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/functions/filter.py#L32)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/functions/filter.py#L39)
 
 Wraps a function into a "Filter" function.
 
@@ -3049,7 +3051,7 @@ Returns a wrapper to be called on a value, key, timestamp and headers.
 class ApplyFunction(StreamFunction)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/functions/apply.py#L9)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/functions/apply.py#L15)
 
 Wrap a function into "Apply" function.
 
@@ -3064,7 +3066,7 @@ and its result will always be passed downstream.
 class ApplyWithMetadataFunction(StreamFunction)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/functions/apply.py#L51)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/functions/apply.py#L72)
 
 Wrap a function into "Apply" function.
 
@@ -9328,7 +9330,7 @@ sdf = sdf.update(lambda value: alter_context(value))
 #### message\_context
 
 ```python
-def message_context() -> Optional[MessageContext]
+def message_context() -> MessageContext
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/context.py#L53)
