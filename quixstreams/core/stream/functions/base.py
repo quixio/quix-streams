@@ -39,7 +39,7 @@ class StreamFunction(abc.ABC):
         is returned as is.
         """
         if not child_executors:
-            raise TypeError("At least one executor is required")
+            raise ValueError("At least one executor is required")
 
         if len(child_executors) > 1:
 
