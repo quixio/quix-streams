@@ -8,7 +8,7 @@ import pytest
 
 from quixstreams.dataframe.windows import SlidingWindowDefinition
 
-A, B, C, D, E, F, G, H, I = "A", "B", "C", "D", "E", "F", "G", "H", "I"
+A, B, C, D = "A", "B", "C", "D"
 
 
 @dataclass
@@ -125,7 +125,7 @@ RIGHT_WINDOW_CREATED = [
 #                |---------||---------|
 #                10      20  21      31
 # ______________________________________________________________________
-# B 27                         |---------|
+# C 27                         |---------|
 #                              24       34
 #                                 C
 #                       |---------|
