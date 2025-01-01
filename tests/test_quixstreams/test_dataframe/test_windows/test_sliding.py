@@ -10,6 +10,13 @@ from quixstreams.dataframe.windows import SlidingWindowDefinition
 
 A, B, C, D = "A", "B", "C", "D"
 
+AGGREGATE_PARAMS = {
+    "reduce": {
+        "reducer": lambda agg, value: agg + [value],
+        "initializer": lambda value: [value],
+    },
+}
+
 
 @dataclass
 class Message:
@@ -666,14 +673,12 @@ def sliding_window_definition_factory(
 
 @pytest.fixture
 def window_factory(sliding_window_definition_factory):
-    def factory(duration_ms: int, grace_ms: int):
+    def factory(aggregation: str, duration_ms: int, grace_ms: int):
+        aggregate_params = AGGREGATE_PARAMS[aggregation]
         window_definition = sliding_window_definition_factory(
             duration_ms=duration_ms, grace_ms=grace_ms
         )
-        window = window_definition.reduce(
-            reducer=lambda agg, value: agg + [value],
-            initializer=lambda value: [value],
-        )
+        window = getattr(window_definition, aggregation)(**aggregate_params)
         window.register_store()
         return window
 
@@ -742,10 +747,12 @@ def state_factory(state_manager):
         pytest.param(10, 3, EXPIRATION_WITH_GRACE, id="expiration-with-grace"),
     ],
 )
-def test_sliding_window(
+def test_sliding_window_reduce(
     window_factory, state_factory, duration_ms, grace_ms, messages, mock_message_context
 ):
-    window = window_factory(duration_ms=duration_ms, grace_ms=grace_ms)
+    window = window_factory(
+        aggregation="reduce", duration_ms=duration_ms, grace_ms=grace_ms
+    )
     for message in messages:
         with state_factory(window) as state:
             updated, expired = window.process_window(
