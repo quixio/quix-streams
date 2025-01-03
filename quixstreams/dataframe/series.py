@@ -1,5 +1,4 @@
 import contextvars
-import functools
 import operator
 import sys
 from typing import (
@@ -13,9 +12,9 @@ from typing import (
 )
 
 if sys.version_info < (3, 10):
-    from typing_extensions import Concatenate
+    pass
 else:
-    from typing import Concatenate
+    pass
 
 from typing_extensions import ParamSpec, Self
 
@@ -62,26 +61,6 @@ def _getitem(d: Mapping, column_name: Union[str, int]) -> object:
             f"column referencing expects message value type 'dict', "
             f"not '{d.__class__.__name__}'"
         )
-
-
-def _validate_operation(
-    func: Callable[Concatenate["StreamingSeries", Any, _P], _T],
-) -> Callable[Concatenate["StreamingSeries", Any, _P], _T]:
-    """
-    Ensure `StreamingSeries` involved in operations originate from the same SDF.
-    Can occur during `StreamingDataFrame` branching.
-    """
-
-    @functools.wraps(func)
-    def wrapper(self: "StreamingSeries", other: Any, *args, **kwargs):
-        if isinstance(other, StreamingSeries):
-            if self.sdf_id != other.sdf_id:
-                raise InvalidOperation(
-                    "All column operations must originate from one `StreamingDataFrame`"
-                )
-        return func(self, other, *args, **kwargs)
-
-    return wrapper
 
 
 class StreamingSeries(BaseStreaming):
@@ -296,15 +275,27 @@ class StreamingSeries(BaseStreaming):
         context.run(composed, value, key, timestamp, headers)
         return result
 
-    @_validate_operation
+    def _validate_other_serie(self, other: Any) -> None:
+        """
+        Ensure `StreamingSeries` involved in operations originate from the same SDF.
+        Can occur during `StreamingDataFrame` branching.
+        """
+        if isinstance(other, StreamingSeries):
+            if self.sdf_id != other.sdf_id:
+                raise InvalidOperation(
+                    "All column operations must originate from one `StreamingDataFrame`"
+                )
+
     def _operation(
         self,
         other: _O,
         operator_: Callable[
             [Any, _O],
-            Union[bool, object],
+            Union[bool, Self],
         ],
     ) -> Self:
+        self._validate_other_serie(other)
+
         self_composed = self.compose_returning()
         if isinstance(other, self.__class__):
             other_composed = other.compose_returning()
@@ -325,7 +316,7 @@ class StreamingSeries(BaseStreaming):
 
             return self._from_apply_callback(func=f)
 
-    def isin(self, other: Container) -> "StreamingSeries":
+    def isin(self, other: Container) -> Self:
         """
         Check if series value is in "other".
         Same as "StreamingSeries in other".
@@ -356,7 +347,7 @@ class StreamingSeries(BaseStreaming):
 
         return self._operation(other, f)
 
-    def contains(self, other: Union[Self, object]) -> "StreamingSeries":
+    def contains(self, other: Union[Self, object]) -> Self:
         """
         Check if series value contains "other"
         Same as "other in StreamingSeries".
@@ -381,7 +372,7 @@ class StreamingSeries(BaseStreaming):
         """
         return self._operation(other, operator.contains)
 
-    def is_(self, other: Union[Self, object]) -> "StreamingSeries":
+    def is_(self, other: Union[Self, object]) -> Self:
         """
         Check if series value refers to the same object as `other`
 
@@ -404,7 +395,7 @@ class StreamingSeries(BaseStreaming):
         """
         return self._operation(other, operator.is_)
 
-    def isnot(self, other: Union[Self, object]) -> "StreamingSeries":
+    def isnot(self, other: Union[Self, object]) -> Self:
         """
         Check if series value does not refer to the same object as `other`
 
@@ -428,7 +419,7 @@ class StreamingSeries(BaseStreaming):
         """
         return self._operation(other, operator.is_not)
 
-    def isnull(self) -> "StreamingSeries":
+    def isnull(self) -> Self:
         """
         Check if series value is None.
 
@@ -451,7 +442,7 @@ class StreamingSeries(BaseStreaming):
         """
         return self._operation(None, operator.is_)
 
-    def notnull(self) -> "StreamingSeries":
+    def notnull(self) -> Self:
         """
         Check if series value is not None.
 
@@ -474,7 +465,7 @@ class StreamingSeries(BaseStreaming):
         """
         return self._operation(None, operator.is_not)
 
-    def abs(self) -> "StreamingSeries":
+    def abs(self) -> Self:
         """
         Get absolute value of the series value.
 
@@ -502,44 +493,43 @@ class StreamingSeries(BaseStreaming):
             f"use '&' or '|' for logical and/or comparisons"
         )
 
-    def __getitem__(self, item: Union[str, int]) -> "StreamingSeries":
+    def __getitem__(self, item: Union[str, int]) -> Self:
         return self._operation(item, operator.getitem)
 
-    def __mod__(self, other: Union[Self, object]) -> "StreamingSeries":
+    def __mod__(self, other: Union[Self, Any]) -> Self:
         return self._operation(other, operator.mod)
 
-    def __add__(self, other: Union[Self, object]) -> "StreamingSeries":
+    def __add__(self, other: Union[Self, Any]) -> Self:
         return self._operation(other, operator.add)
 
-    def __sub__(self, other: Union[Self, object]) -> "StreamingSeries":
+    def __sub__(self, other: Union[Self, Any]) -> Self:
         return self._operation(other, operator.sub)
 
-    def __mul__(self, other: Union[Self, object]) -> "StreamingSeries":
+    def __mul__(self, other: Union[Self, Any]) -> Self:
         return self._operation(other, operator.mul)
 
-    def __truediv__(self, other: Union[Self, object]) -> "StreamingSeries":
+    def __truediv__(self, other: Union[Self, Any]) -> Self:
         return self._operation(other, operator.truediv)
 
-    def __eq__(self, other: Union[Self, object]) -> "StreamingSeries":  # type: ignore[override]
+    def __eq__(self, other: Union[Self, Any]) -> Self:  # type: ignore[override]
         return self._operation(other, operator.eq)
 
-    def __ne__(self, other: Union[Self, object]) -> "StreamingSeries":  # type: ignore[override]
+    def __ne__(self, other: Union[Self, Any]) -> Self:  # type: ignore[override]
         return self._operation(other, operator.ne)
 
-    def __lt__(self, other: Union[Self, object]) -> "StreamingSeries":
+    def __lt__(self, other: Union[Self, Any]) -> Self:
         return self._operation(other, operator.lt)
 
-    def __le__(self, other: Union[Self, object]) -> "StreamingSeries":
+    def __le__(self, other: Union[Self, Any]) -> Self:
         return self._operation(other, operator.le)
 
-    def __gt__(self, other: Union[Self, object]) -> "StreamingSeries":
+    def __gt__(self, other: Union[Self, Any]) -> Self:
         return self._operation(other, operator.gt)
 
-    def __ge__(self, other: Union[Self, object]) -> "StreamingSeries":
+    def __ge__(self, other: Union[Self, Any]) -> Self:
         return self._operation(other, operator.ge)
 
-    @_validate_operation
-    def __and__(self, other: Union[Self, object]) -> Self:
+    def __and__(self, other: Union[Self, Any]) -> Self:
         """
         Do a logical "and" comparison.
 
@@ -547,6 +537,7 @@ class StreamingSeries(BaseStreaming):
             a bitwise "and" if one of the arguments is a number.
             This function always does a logical "and" instead.
         """
+        self._validate_other_serie(other)
 
         # Do the "and" check manually instead of calling `self._operation`
         # to preserve Python's lazy evaluation of `and`.
@@ -571,7 +562,6 @@ class StreamingSeries(BaseStreaming):
                 and other
             )
 
-    @_validate_operation
     def __or__(self, other: Union[Self, object]) -> Self:
         """
         Do a logical "or" comparison.
@@ -580,6 +570,7 @@ class StreamingSeries(BaseStreaming):
             a bitwise "or" if one of the arguments is a number.
             This function always does a logical "or" instead.
         """
+        self._validate_other_serie(other)
 
         # Do the "or" check manually instead of calling `self._operation`
         # to preserve Python's lazy evaluation of `or`.
