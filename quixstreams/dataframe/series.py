@@ -1,6 +1,5 @@
 import contextvars
 import operator
-import sys
 from typing import (
     Any,
     Callable,
@@ -10,11 +9,6 @@ from typing import (
     TypeVar,
     Union,
 )
-
-if sys.version_info < (3, 10):
-    pass
-else:
-    pass
 
 from typing_extensions import ParamSpec, Self
 
