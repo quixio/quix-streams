@@ -387,7 +387,11 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         :param cf_name: The RocksDB column family name.
         :return: A sorted list of key-value pairs.
         """
-        seek_from_key = append_integer(base_bytes=prefix, integer=max(start, 0))
+        start = max(start, 0)
+        if start > end:
+            return []
+
+        seek_from_key = append_integer(base_bytes=prefix, integer=start)
         seek_to_key = append_integer(base_bytes=prefix, integer=end)
 
         # Create an iterator over the state store
