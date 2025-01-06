@@ -1,5 +1,5 @@
 from collections import deque
-from typing import Any, Callable, Deque, Optional, Tuple
+from typing import Any, Callable, Deque, Optional
 
 from typing_extensions import TypedDict
 
@@ -16,7 +16,7 @@ WindowMergeFunc = Callable[[Any], Any]
 
 def get_window_ranges(
     timestamp_ms: int, duration_ms: int, step_ms: Optional[int] = None
-) -> Deque[Tuple[int, int]]:
+) -> Deque[tuple[int, int]]:
     """
     Get a list of window ranges for the given timestamp.
     :param timestamp_ms: timestamp in milliseconds
@@ -27,7 +27,7 @@ def get_window_ranges(
     if not step_ms:
         step_ms = duration_ms
 
-    window_ranges = deque()
+    window_ranges: Deque[tuple[int, int]] = deque()
     current_window_start = timestamp_ms - (timestamp_ms % step_ms)
 
     while (
