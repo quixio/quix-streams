@@ -269,7 +269,7 @@ class StreamingSeries(BaseStreaming):
         context.run(composed, value, key, timestamp, headers)
         return result
 
-    def _validate_other_serie(self, other: Any) -> None:
+    def _validate_other_series(self, other: Any) -> None:
         """
         Ensure `StreamingSeries` involved in operations originate from the same SDF.
         Can occur during `StreamingDataFrame` branching.
@@ -288,7 +288,7 @@ class StreamingSeries(BaseStreaming):
             Union[bool, Self],
         ],
     ) -> Self:
-        self._validate_other_serie(other)
+        self._validate_other_series(other)
 
         self_composed = self.compose_returning()
         if isinstance(other, self.__class__):
@@ -531,7 +531,7 @@ class StreamingSeries(BaseStreaming):
             a bitwise "and" if one of the arguments is a number.
             This function always does a logical "and" instead.
         """
-        self._validate_other_serie(other)
+        self._validate_other_series(other)
 
         # Do the "and" check manually instead of calling `self._operation`
         # to preserve Python's lazy evaluation of `and`.
@@ -564,7 +564,7 @@ class StreamingSeries(BaseStreaming):
             a bitwise "or" if one of the arguments is a number.
             This function always does a logical "or" instead.
         """
-        self._validate_other_serie(other)
+        self._validate_other_series(other)
 
         # Do the "or" check manually instead of calling `self._operation`
         # to preserve Python's lazy evaluation of `or`.
