@@ -380,8 +380,8 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         This function also checks the update cache for any updates not yet
         committed to RocksDB.
 
-        :param start: Start of the range, exclusive.
-        :param end: End of the range, inclusive.
+        :param start: Start of the range, inclusive.
+        :param end: End of the range, exclusive.
         :param prefix: The key prefix for filtering items.
         :param backwards: If True, returns items in reverse order.
         :param cf_name: The RocksDB column family name.
