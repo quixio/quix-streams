@@ -15,6 +15,7 @@ AGGREGATE_PARAMS = {
         "reducer": lambda agg, value: agg + [value],
         "initializer": lambda value: [value],
     },
+    "collect": {},
 }
 
 
@@ -42,6 +43,8 @@ class Message:
     # * Windows that are expired but still needed
     # * Right windows that were not emitted.
     present: list[dict[str, Any]] = field(default_factory=list)
+
+    expected_values_in_state: list[tuple[int, Any]] = field(default_factory=list)
 
     @property
     def expected_windows_in_state(self) -> set[tuple[int, int]]:
@@ -776,3 +779,102 @@ def test_sliding_window_reduce(
 
             all_windows_in_state = {window for window, *_ in state.get_windows(-1, 99)}
             assert all_windows_in_state == message.expected_windows_in_state
+
+
+OBSOLETE_VALUES_ARE_DELETED = [
+    Message(
+        timestamp=11,
+        value=A,
+        present=[
+            {"start": 1, "end": 11, "value": [11, None]},
+        ],
+        expected_values_in_state=[A],
+    ),
+    Message(
+        timestamp=12,
+        value=B,
+        present=[
+            {"start": 1, "end": 11, "value": [11, None]},
+            {"start": 2, "end": 12, "value": [12, None]},
+            {"start": 12, "end": 22, "value": [12, None]},
+        ],
+        expected_values_in_state=[A, B],
+    ),
+    Message(
+        timestamp=21,
+        value=C,
+        expired=[
+            {"start": 1, "end": 11, "value": [A]},
+            {"start": 2, "end": 12, "value": [A, B]},
+        ],
+        deleted=[
+            {"start": 1, "end": 11},
+        ],
+        present=[
+            {"start": 2, "end": 12, "value": [12, None]},
+            {"start": 11, "end": 21, "value": [21, None]},
+            {"start": 12, "end": 22, "value": [21, None]},
+            {"start": 13, "end": 23, "value": [21, None]},
+        ],
+        expected_values_in_state=[A, B, C],
+    ),
+    Message(
+        timestamp=90,
+        value=D,
+        expired=[
+            {"start": 11, "end": 21, "value": [A, B, C]},
+        ],
+        deleted=[
+            {"start": 2, "end": 12},
+            {"start": 11, "end": 21},
+            {"start": 12, "end": 22},
+            {"start": 13, "end": 23},
+        ],
+        present=[
+            {"start": 80, "end": 90, "value": [90, None]},
+        ],
+        expected_values_in_state=[D],
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "duration_ms, grace_ms, messages",
+    [
+        pytest.param(
+            10, 5, OBSOLETE_VALUES_ARE_DELETED, id="obsolete-values-are-deleted"
+        ),
+    ],
+)
+def test_sliding_window_collect(
+    window_factory, state_factory, duration_ms, grace_ms, messages, mock_message_context
+):
+    window = window_factory(
+        aggregation="collect", duration_ms=duration_ms, grace_ms=grace_ms
+    )
+    for message in messages:
+        with state_factory(window) as state:
+            updated, expired = window.process_window(
+                value=message.value, timestamp_ms=message.timestamp, state=state
+            )
+
+        assert list(updated) == []
+        assert list(expired) == message.expired
+
+        with state_factory(window) as state:
+            for deleted in message.deleted:
+                assert not state.get_window(
+                    start_ms=deleted["start"], end_ms=deleted["end"]
+                )
+
+            for present in message.present:
+                assert (
+                    state.get_window(start_ms=present["start"], end_ms=present["end"])
+                    == present["value"]
+                )
+
+            all_windows_in_state = {window for window, *_ in state.get_windows(-1, 99)}
+            assert all_windows_in_state == message.expected_windows_in_state
+
+            all_values_in_state = state._transaction._get_values(-1, 99, state._prefix)
+            assert all_values_in_state == message.expected_values_in_state
