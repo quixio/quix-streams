@@ -78,6 +78,7 @@ class FixedTimeWindow:
         duration_ms = self._duration_ms
         grace_ms = self._grace_ms
         default = self._aggregate_default
+        collect = self._aggregate_collection
 
         ranges = get_window_ranges(
             timestamp_ms=timestamp_ms,
@@ -99,7 +100,7 @@ class FixedTimeWindow:
                 )
                 continue
 
-            if self._aggregate_collection:
+            if collect:
                 state.update_window(start, end, value=None, timestamp_ms=timestamp_ms)
                 continue
 
@@ -110,13 +111,13 @@ class FixedTimeWindow:
                 WindowResult(start=start, end=end, value=self._merge_func(aggregated))
             )
 
-        if self._aggregate_collection:
+        if collect:
             state.collect_value(value=value, timestamp_ms=timestamp_ms)
 
         expired_windows: list[WindowResult] = []
         for (start, end), aggregated in state.expire_windows(
             max_start_time=max_expired_window_start,
-            collect=self._aggregate_collection,
+            collect=collect,
         ):
             expired_windows.append(
                 WindowResult(start=start, end=end, value=self._merge_func(aggregated))
