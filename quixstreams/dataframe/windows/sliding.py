@@ -59,7 +59,8 @@ class SlidingWindow(FixedTimeWindow):
         # are still eligible for processing.
         state_ts = state.get_latest_timestamp() or 0
         latest_timestamp = max(timestamp_ms, state_ts)
-        max_expired_window_start = latest_timestamp - duration - grace - 1
+        max_expired_window_end = latest_timestamp - grace - 1
+        max_expired_window_start = max_expired_window_end - duration
         max_deleted_window_start = max_expired_window_start - duration
 
         left_start = max(0, timestamp_ms - duration)
@@ -119,7 +120,7 @@ class SlidingWindow(FixedTimeWindow):
                     self._log_expired_window(
                         window=[start, end],
                         timestamp_ms=timestamp_ms,
-                        late_by_ms=max_expired_window_start + 1 - timestamp_ms,
+                        late_by_ms=max_expired_window_end + 1 - timestamp_ms,
                     )
 
             elif end == left_end:
@@ -153,7 +154,7 @@ class SlidingWindow(FixedTimeWindow):
                     self._log_expired_window(
                         window=[start, end],
                         timestamp_ms=timestamp_ms,
-                        late_by_ms=max_expired_window_start + 1 - timestamp_ms,
+                        late_by_ms=max_expired_window_end + 1 - timestamp_ms,
                     )
                 break
 

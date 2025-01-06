@@ -85,14 +85,15 @@ class FixedTimeWindow:
 
         state_ts = state.get_latest_timestamp() or 0
         latest_timestamp = max(timestamp_ms, state_ts)
-        max_expired_window_start = latest_timestamp - duration_ms - grace_ms
+        max_expired_window_end = latest_timestamp - grace_ms
+        max_expired_window_start = max_expired_window_end - duration_ms
         updated_windows: list[WindowResult] = []
         for start, end in ranges:
             if start <= max_expired_window_start:
                 self._log_expired_window(
                     window=[start, end],
                     timestamp_ms=timestamp_ms,
-                    late_by_ms=max_expired_window_start + 1 - timestamp_ms,
+                    late_by_ms=max_expired_window_end - timestamp_ms,
                 )
                 continue
 
