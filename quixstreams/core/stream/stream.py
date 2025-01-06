@@ -113,7 +113,7 @@ class Stream:
         return f"<{self.__class__.__name__} [{len(tree_funcs)}]: {funcs_repr}>"
 
     @overload
-    def add_filter(self, func: FilterCallback, *, metadata: Literal[False]):
+    def add_filter(self, func: FilterCallback, *, metadata: Literal[False] = False):
         pass
 
     @overload
@@ -149,7 +149,11 @@ class Stream:
 
     @overload
     def add_apply(
-        self, func: ApplyCallback, *, expand: Literal[False], metadata: Literal[False]
+        self,
+        func: ApplyCallback,
+        *,
+        expand: Literal[False] = False,
+        metadata: Literal[False] = False,
     ):
         pass
 
@@ -159,7 +163,7 @@ class Stream:
         func: ApplyExpandedCallback,
         *,
         expand: Literal[True],
-        metadata: Literal[False],
+        metadata: Literal[False] = False,
     ):
         pass
 
@@ -168,7 +172,7 @@ class Stream:
         self,
         func: ApplyWithMetadataCallback,
         *,
-        expand: Literal[False],
+        expand: Literal[False] = False,
         metadata: Literal[True],
     ):
         pass
@@ -217,7 +221,7 @@ class Stream:
         return self._add(apply_func)
 
     @overload
-    def add_update(self, func: UpdateCallback, *, metadata: Literal[False]):
+    def add_update(self, func: UpdateCallback, *, metadata: Literal[False] = False):
         pass
 
     @overload
@@ -251,7 +255,7 @@ class Stream:
         return self._add(update_func)
 
     @overload
-    def add_transform(self, func: TransformCallback, *, expand: Literal[False]):
+    def add_transform(self, func: TransformCallback, *, expand: Literal[False] = False):
         pass
 
     @overload
