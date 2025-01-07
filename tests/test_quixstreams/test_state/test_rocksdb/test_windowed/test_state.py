@@ -2,6 +2,9 @@ from contextlib import contextmanager
 
 import pytest
 
+from quixstreams.state.rocksdb.windowed.metadata import VALUES_CF_NAME
+from quixstreams.state.rocksdb.windowed.serialization import encode_integer_pair
+
 
 @pytest.fixture
 def store(windowed_rocksdb_store_factory):
@@ -28,6 +31,22 @@ def test_update_window(transaction_state, value):
 
     with transaction_state() as state:
         assert state.get_window(start_ms=0, end_ms=10) == value
+
+
+@pytest.fixture
+def get_value(transaction_state):
+    # This is a helper function that checks the value in the RocksDB
+    # and returns it. Mind that it will not check the update cache.
+
+    def _get_value(timestamp_ms: int, counter: int = 0):
+        with transaction_state() as state:
+            return state._transaction.get(
+                key=encode_integer_pair(timestamp_ms, counter),
+                prefix=state._prefix,
+                cf_name=VALUES_CF_NAME,
+            )
+
+    return _get_value
 
 
 @pytest.mark.parametrize("delete", [True, False])
@@ -274,3 +293,15 @@ def test_delete_windows(transaction_state):
         assert not state.get_window(start_ms=1, end_ms=2)
         assert not state.get_window(start_ms=2, end_ms=3)
         assert state.get_window(start_ms=3, end_ms=4)
+
+
+@pytest.mark.parametrize("value", [1, "string", None, ["list"], {"dict": "dict"}])
+def test_collect_value(transaction_state, get_value, value):
+    with transaction_state() as state:
+        state.collect_value(value=value, timestamp_ms=11)
+        state.collect_value(value=value, timestamp_ms=22)
+        state.collect_value(value=value, timestamp_ms=33)
+
+    assert get_value(timestamp_ms=11, counter=0) == value
+    assert get_value(timestamp_ms=22, counter=1) == value
+    assert get_value(timestamp_ms=33, counter=2) == value
