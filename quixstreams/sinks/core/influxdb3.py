@@ -39,13 +39,9 @@ TagsSetter = Union[Iterable[str], TagsCallable]
 
 class InfluxDB3Sink(BatchingSink):
     _TIME_PRECISIONS = {
-        "milliseconds": WritePrecision.MS,
         "ms": WritePrecision.MS,
-        "nanoseconds": WritePrecision.NS,
         "ns": WritePrecision.NS,
-        "microseconds": WritePrecision.US,
         "us": WritePrecision.US,
-        "seconds": WritePrecision.S,
         "s": WritePrecision.S,
     }
 
@@ -160,14 +156,7 @@ class InfluxDB3Sink(BatchingSink):
         self._time_key = time_key
         self._write_precision = self._TIME_PRECISIONS[time_precision]
         self._batch_size = batch_size
-        self._field_getter = self._set_field_getter(allow_missing_fields)
-
-    def _set_field_getter(
-        self, allow_missing: bool
-    ) -> Callable[[InfluxDBValueMap, str], Any]:
-        if allow_missing:
-            return lambda d, field: d.get(field, None)
-        return lambda d, field: d[field]
+        self._allow_missing_fields = allow_missing_fields
 
     def _measurement_callable(self, setter: MeasurementSetter) -> MeasurementCallable:
         if callable(setter):
@@ -214,7 +203,6 @@ class InfluxDB3Sink(BatchingSink):
         fields_keys = self._fields_keys
         tags_keys = self._tags_keys
         time_key = self._time_key
-        field_getter = self._field_getter
         for write_batch in batch.iter_chunks(n=self._batch_size):
             records = []
 
@@ -244,9 +232,10 @@ class InfluxDB3Sink(BatchingSink):
 
                 fields = (
                     {
-                        field_key: field_getter(value, field_key)
+                        field_key: value[field_key]
                         for field_key in _fields_keys
-                        if field_key not in _tags_keys
+                        if (field_key in value or not self._allow_missing_fields)
+                        and field_key not in _tags_keys
                     }
                     if _fields_keys
                     else value
