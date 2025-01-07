@@ -98,7 +98,7 @@ class FixedTimeWindow:
                 window = [start, end]
                 late_by_ms = max_expired_window_end - timestamp_ms
                 ctx = message_context()
-                on_late(
+                to_log = on_late(
                     value,
                     timestamp_ms,
                     late_by_ms,
@@ -109,11 +109,12 @@ class FixedTimeWindow:
                     ctx.partition,
                     ctx.offset,
                 )
-                self._log_expired_window(
-                    window=window,
-                    timestamp_ms=timestamp_ms,
-                    late_by_ms=late_by_ms,
-                )
+                if to_log:
+                    self._log_expired_window(
+                        window=window,
+                        timestamp_ms=timestamp_ms,
+                        late_by_ms=late_by_ms,
+                    )
                 continue
 
             current_value = state.get_window(start, end, default=default)

@@ -26,7 +26,7 @@ class WindowOnLateCallback(Protocol):
         topic: str,
         partition: int,
         offset: int,
-    ) -> None: ...
+    ) -> bool: ...
 
 
 def default_on_late_callback(
@@ -39,7 +39,8 @@ def default_on_late_callback(
     topic: str,
     partition: int,
     offset: int,
-): ...
+) -> bool:
+    return True
 
 
 def get_window_ranges(
