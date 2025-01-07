@@ -77,6 +77,39 @@ def test_expire_windows(transaction_state, delete):
         assert state.get_window(start_ms=20, end_ms=30) == 3
 
 
+@pytest.mark.parametrize("end_inclusive", [True, False])
+def test_expire_windows_with_collect(transaction_state, end_inclusive):
+    duration_ms = 10
+
+    with transaction_state() as state:
+        # Window values like None are typical for tumbling and hopping windows.
+        # Window values like [int, None] are typical for sliding windows.
+        # In a real-life scenario, various window value types would not be mixed
+        # in the same state.
+        state.update_window(start_ms=0, end_ms=10, value=None, timestamp_ms=2)
+        state.update_window(start_ms=10, end_ms=20, value=[777, None], timestamp_ms=10)
+
+        state.collect_value(value="a", timestamp_ms=0)
+        state.collect_value(value="b", timestamp_ms=10)
+        state.collect_value(value="c", timestamp_ms=20)
+
+    with transaction_state() as state:
+        state.update_window(start_ms=20, end_ms=30, value=None, timestamp_ms=20)
+        max_start_time = state.get_latest_timestamp() - duration_ms
+        expired = state.expire_windows(
+            max_start_time=max_start_time,
+            collect=True,
+            end_inclusive=end_inclusive,
+        )
+
+    window_1_value = ["a", "b"] if end_inclusive else ["a"]
+    window_2_value = ["b", "c"] if end_inclusive else ["b"]
+    assert expired == [
+        ((0, 10), window_1_value),
+        ((10, 20), [777, window_2_value]),
+    ]
+
+
 def test_same_keys_in_db_and_update_cache(transaction_state):
     duration_ms = 10
 
