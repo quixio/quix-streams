@@ -228,8 +228,10 @@ class SlidingWindow(FixedTimeWindow):
             delete_values=collect,
         )
 
-        updated_windows = [] if collect else reversed(updated_windows)
-        return updated_windows, expired_windows
+        if collect:
+            return [], expired_windows
+        else:
+            return reversed(updated_windows), expired_windows
 
     def _update_window(
         self,

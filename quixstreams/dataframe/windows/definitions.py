@@ -48,6 +48,7 @@ class FixedTimeWindowDefinition(abc.ABC):
         func_name: str,
         aggregate_func: WindowAggregateFunc,
         aggregate_default: Any,
+        aggregate_collection: bool = False,
         merge_func: Optional[WindowMergeFunc] = None,
     ) -> "FixedTimeWindow": ...
 
