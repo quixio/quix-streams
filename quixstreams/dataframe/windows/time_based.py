@@ -21,7 +21,9 @@ from quixstreams.state import WindowedPartitionTransaction, WindowedState
 from .base import (
     WindowAggregateFunc,
     WindowMergeFunc,
+    WindowOnLateCallback,
     WindowResult,
+    default_on_late_callback,
     get_window_ranges,
 )
 
@@ -49,6 +51,7 @@ class FixedTimeWindow:
         aggregate_func: WindowAggregateFunc,
         aggregate_default: Any,
         aggregate_collection: bool = False,
+        on_late: WindowOnLateCallback,
         merge_func: Optional[WindowMergeFunc] = None,
         step_ms: Optional[int] = None,
     ):
@@ -64,6 +67,7 @@ class FixedTimeWindow:
         self._merge_func = merge_func or _default_merge_func
         self._dataframe = dataframe
         self._step_ms = step_ms
+        self._on_late = on_late or default_on_late_callback
 
     @property
     def name(self) -> str:
@@ -91,12 +95,27 @@ class FixedTimeWindow:
         max_expired_window_end = latest_timestamp - grace_ms
         max_expired_window_start = max_expired_window_end - duration_ms
         updated_windows: list[WindowResult] = []
+        on_late = self._on_late
         for start, end in ranges:
             if start <= max_expired_window_start:
+                window = [start, end]
+                late_by_ms = max_expired_window_end - timestamp_ms
+                ctx = message_context()
+                on_late(
+                    value,
+                    timestamp_ms,
+                    late_by_ms,
+                    start,
+                    end,
+                    self._name,
+                    ctx.topic,
+                    ctx.partition,
+                    ctx.offset,
+                )
                 self._log_expired_window(
-                    window=[start, end],
+                    window=window,
                     timestamp_ms=timestamp_ms,
-                    late_by_ms=max_expired_window_end - timestamp_ms,
+                    late_by_ms=late_by_ms,
                 )
                 continue
 
