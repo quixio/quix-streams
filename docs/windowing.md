@@ -1,4 +1,3 @@
-
 # Windowed Aggregations
 
 
@@ -400,6 +399,7 @@ sdf = (
 Currently, windows support the following aggregation functions:
 
 - [`reduce()`](api-reference/quixstreams.md#fixedtimewindowdefinitionreduce) - to perform custom aggregations using "reducer" and "initializer" functions
+- [`collect()`](api-reference/quixstreams.md#fixedtimewindowdefinitioncollect) - to collect all values within a window into a list
 - [`min()`](api-reference/quixstreams.md#fixedtimewindowdefinitionmin) - to get a minimum value within a window
 - [`max()`](api-reference/quixstreams.md#fixedtimewindowdefinitionmax) - to get a maximum value within a window
 - [`mean()`](api-reference/quixstreams.md#fixedtimewindowdefinitionmean) - to get a mean value within a window 
@@ -408,7 +408,7 @@ Currently, windows support the following aggregation functions:
 
 We will go over each ot them in more detail below.
 
-###  Reduce()
+### Reduce()
 
 `.reduce()` allows you to perform complex aggregations using custom "reducer" and "initializer" functions:
 
@@ -502,6 +502,42 @@ sdf = (
 #   'value': {'min_temp': 1, 'max_temp': 999, 'total_events': 999, 'avg_temp': 34.32, '_sum_temp': 9999},
 # }
 
+```
+
+
+### Collect()
+Use `.collect()` to gather all events in the window into a list. This operation is optimized for collecting values and performs significantly better than using `reduce()` to build a list.
+
+!!! note
+    Performance benefit comes at a price: `.collect()` only supports `.final()` mode. Using `.current()` is not supported.
+
+**Example:**
+
+Collect all events over a 10-minute tumbling window into a list.
+
+```python
+from datetime import timedelta
+from quixstreams import Application
+
+app = Application(...)
+sdf = app.dataframe(...)
+
+sdf = (
+    # Define a tumbling window of 10 minutes
+    sdf.tumbling_window(timedelta(minutes=10))
+
+    # Collect events in the window into a list
+    .collect()
+
+    # Emit results only for closed windows
+    .final()
+)
+# Output:
+# {
+#   'start': <window start>, 
+#   'end': <window end>, 
+#   'value': [event1, event2, event3, ...] - list of all events in the window
+# }
 ```
 
 
