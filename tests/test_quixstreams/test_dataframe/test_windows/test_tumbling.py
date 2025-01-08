@@ -153,6 +153,24 @@ class TestTumblingWindow:
         assert updated[0]["value"] == 1
         assert not expired
 
+    def test_tumblingwindow_collect(
+        self, tumbling_window_definition_factory, state_manager
+    ):
+        window_def = tumbling_window_definition_factory(duration_ms=10, grace_ms=5)
+        window = window_def.collect()
+        window.register_store()
+        store = state_manager.get_store(topic="test", store_name=window.name)
+        store.assign_partition(0)
+        with store.start_partition_transaction(0) as tx:
+            state = tx.as_state(prefix=b"key")
+            window.process_window(value=1, state=state, timestamp_ms=100)
+            window.process_window(value=2, state=state, timestamp_ms=101)
+            updated, expired = window.process_window(
+                value=3, state=state, timestamp_ms=200
+            )
+        assert not updated
+        assert expired == [{"start": 100, "end": 110, "value": [1, 2]}]
+
     @pytest.mark.parametrize(
         "duration, grace, name",
         [
