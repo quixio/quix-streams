@@ -182,6 +182,28 @@ class TestHoppingWindow:
         assert updated[1]["end"] == 110
         assert not expired
 
+    def test_hoppingwindow_collect(
+        self, hopping_window_definition_factory, state_manager
+    ):
+        window_def = hopping_window_definition_factory(duration_ms=10, step_ms=5)
+        window = window_def.collect()
+        window.register_store()
+        store = state_manager.get_store(topic="test", store_name=window.name)
+        store.assign_partition(0)
+        with store.start_partition_transaction(0) as tx:
+            state = tx.as_state(prefix=b"key")
+            window.process_window(value=1, state=state, timestamp_ms=100)
+            window.process_window(value=2, state=state, timestamp_ms=101)
+            updated, expired = window.process_window(
+                value=3, state=state, timestamp_ms=110
+            )
+
+        assert not updated
+        assert expired == [
+            {"start": 95, "end": 105, "value": [1, 2]},
+            {"start": 100, "end": 110, "value": [1, 2]},
+        ]
+
     @pytest.mark.parametrize(
         "duration, grace, step, name",
         [
