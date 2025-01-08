@@ -23,20 +23,10 @@ def transaction_state(store):
     return _transaction_state
 
 
-@pytest.mark.parametrize("value", [1, [3, 1], [3, None]])
-def test_update_window(transaction_state, value):
-    with transaction_state() as state:
-        state.update_window(start_ms=0, end_ms=10, value=value, timestamp_ms=2)
-        assert state.get_window(start_ms=0, end_ms=10) == value
-
-    with transaction_state() as state:
-        assert state.get_window(start_ms=0, end_ms=10) == value
-
-
 @pytest.fixture
 def get_value(transaction_state):
-    # This is a helper function that checks the value in the RocksDB
-    # and returns it. Mind that it will not check the update cache.
+    # This helper function retrieves a value directly from RocksDB.
+    # Note: It will not check the update cache.
 
     def _get_value(timestamp_ms: int, counter: int = 0):
         with transaction_state() as state:
@@ -47,6 +37,16 @@ def get_value(transaction_state):
             )
 
     return _get_value
+
+
+@pytest.mark.parametrize("value", [1, [3, 1], [3, None]])
+def test_update_window(transaction_state, value):
+    with transaction_state() as state:
+        state.update_window(start_ms=0, end_ms=10, value=value, timestamp_ms=2)
+        assert state.get_window(start_ms=0, end_ms=10) == value
+
+    with transaction_state() as state:
+        assert state.get_window(start_ms=0, end_ms=10) == value
 
 
 @pytest.mark.parametrize("delete", [True, False])
@@ -82,10 +82,11 @@ def test_expire_windows_with_collect(transaction_state, end_inclusive):
     duration_ms = 10
 
     with transaction_state() as state:
-        # Window values like None are typical for tumbling and hopping windows.
-        # Window values like [int, None] are typical for sliding windows.
-        # In a real-life scenario, various window value types would not be mixed
-        # in the same state.
+        # Different window types store values differently:
+        # - Tumbling/hopping windows use None as placeholder values
+        # - Sliding windows use [int, None] format where int is the max timestamp
+        # Note: In production, these different value types would not be mixed
+        # within the same state.
         state.update_window(start_ms=0, end_ms=10, value=None, timestamp_ms=2)
         state.update_window(start_ms=10, end_ms=20, value=[777, None], timestamp_ms=10)
 

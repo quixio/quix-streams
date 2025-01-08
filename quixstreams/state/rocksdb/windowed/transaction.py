@@ -174,11 +174,20 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         - Finally, it updates the expiration cache with the start time of the latest
           windows found.
 
+        Collection behavior (when collect=True):
+        - For tumbling and hopping windows (created using .collect()), the window
+          value is None and is replaced with the list of collected values.
+        - For sliding windows, the window value is [max_timestamp, None] where
+          None is replaced with the list of collected values.
+        - Values are collected from a separate column family and obsolete values
+          are deleted if delete=True.
+
         :param max_start_time: The timestamp up to which windows are considered expired, inclusive.
         :param prefix: The key prefix for filtering windows.
         :param delete: If True, expired windows will be deleted.
-        :param collect: If True, scattered values will be collected into single window.
-        :param end_inclusive: If True, the end timestamp will be inclusive.
+        :param collect: If True, values will be collected into windows.
+        :param end_inclusive: If True, the end of the window will be inclusive.
+            Relevant only together with `collect=True`.
         :return: A sorted list of tuples in the format `((start, end), value)`.
         """
         start_from = -1
@@ -210,7 +219,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
             timestamp_ms=last_expired__gt,
         )
 
-        # Collect scattered values into windows
+        # Collect values into windows
         if collect:
             collected_expired_windows = []
             for (start, end), value in expired_windows:
@@ -259,8 +268,11 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         - Each window within this range is deleted from the database.
         - After deletion, it updates the deletion index with the start time of the latest window
         that was deleted to keep track of progress.
+        - Values with timestamps less than max_start_time are considered obsolete and are
+        deleted if delete_values=True, as they can no longer belong to any active window.
 
         :param max_start_time: The timestamp up to which windows should be deleted, inclusive.
+        :param delete_values: If True, obsolete values will be deleted.
         :param prefix: The key prefix used to identify and filter relevant windows.
         """
         start_from = -1
@@ -295,6 +307,18 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
             self._delete_values(max_timestamp=max_start_time, prefix=prefix)
 
     def _delete_values(self, max_timestamp: int, prefix: bytes) -> None:
+        """
+        Delete collected values with timestamps less than max_timestamp.
+
+        This method maintains a deletion index to track progress and avoid
+        re-scanning previously deleted values. It:
+        1. Retrieves the last deleted timestamp from the cache
+        2. Scans values from last deleted timestamp up to max_timestamp
+        3. Updates the deletion index with the latest deleted timestamp
+
+        :param max_timestamp: Delete values with timestamps less than this value
+        :param prefix: Key prefix for filtering values to delete
+        """
         start = (
             self._get_timestamp(
                 cache=self._last_deleted_value_timestamps, prefix=prefix
@@ -464,6 +488,15 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         return prefix + SEPARATOR + key_bytes
 
     def _get_next_count(self) -> int:
+        """
+        Get the next unique global counter value.
+
+        This method maintains a global counter in RocksDB to ensure unique
+        identifiers for values collected within the same timestamp. The counter
+        is cached to reduce database reads.
+
+        :return: Next sequential counter value
+        """
         cache = self._global_counter
         kwargs = {"key": cache.key, "prefix": b"", "cf_name": cache.cf_name}
 

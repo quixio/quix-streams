@@ -34,7 +34,7 @@ class WindowedState(Protocol):
         Set a value for the window.
 
         This method will also update the latest observed timestamp in state partition
-        using the provided `timestamp`.
+        using the provided `timestamp_ms`.
 
         :param start_ms: start of the window in milliseconds
         :param end_ms: end of the window in milliseconds
@@ -45,9 +45,13 @@ class WindowedState(Protocol):
 
     def collect_value(self, value: Any, timestamp_ms: int) -> None:
         """
-        Collect a value for the window.
+        Collect a value for collection-type window aggregations.
 
-        :param value: value of the window
+        This method is used internally by collection windows (created using
+        .collect()) to store individual values. These values are later combined
+        during window expiration.
+
+        :param value: value to be collected
         :param timestamp_ms: current message timestamp in milliseconds
         """
         ...
@@ -78,8 +82,9 @@ class WindowedState(Protocol):
 
         :param max_start_time: The timestamp up to which windows are considered expired, inclusive.
         :param delete: If True, expired windows will be deleted.
-        :param collect: If True, scattered values will be collected into single window.
+        :param collect: If True, values will be collected into windows.
         :param end_inclusive: If True, the end of the window will be inclusive.
+            Relevant only together with `collect=True`.
         :return: A sorted list of tuples in the format `((start, end), value)`.
         """
         ...
@@ -88,12 +93,13 @@ class WindowedState(Protocol):
         """
         Delete windows from RocksDB up to the specified `max_start_time` timestamp.
 
-        This method removes all window entries that have a start time less than or equal to the given
-        `max_start_time`. It ensures that expired data is cleaned up efficiently without affecting
-        unexpired windows.
+        This method removes all window entries that have a start time less than or equal
+        to the given `max_start_time`. It ensures that expired data is cleaned up
+        efficiently without affecting unexpired windows.
 
         :param max_start_time: The timestamp up to which windows should be deleted, inclusive.
-        :param delete_values: If True, values will be deleted.
+        :param delete_values: If True, values with timestamps less than max_start_time
+            will be deleted, as they can no longer belong to any active window.
         """
         ...
 
@@ -197,9 +203,13 @@ class WindowedPartitionTransaction(Protocol):
 
     def collect_value(self, value: Any, timestamp_ms: int) -> None:
         """
-        Collect a value for the window.
+        Collect a value for collection-type window aggregations.
 
-        :param value: value of the window
+        This method is used internally by collection windows (created using
+        .collect()) to store individual values. These values are later combined
+        during window expiration.
+
+        :param value: value to be collected
         :param timestamp_ms: current message timestamp in milliseconds
         """
         ...
@@ -233,8 +243,9 @@ class WindowedPartitionTransaction(Protocol):
         :param max_start_time: The timestamp up to which windows are considered expired, inclusive.
         :param prefix: The key prefix for filtering windows.
         :param delete: If True, expired windows will be deleted.
-        :param collect: If True, scattered values will be collected into single window.
+        :param collect: If True, values will be collected into windows.
         :param end_inclusive: If True, the end of the window will be inclusive.
+            Relevant only together with `collect=True`.
         :return: A sorted list of tuples in the format `((start, end), value)`.
         """
         ...
@@ -245,12 +256,13 @@ class WindowedPartitionTransaction(Protocol):
         """
         Delete windows from RocksDB up to the specified `max_start_time` timestamp.
 
-        This method removes all window entries that have a start time less than or equal to the given
-        `max_start_time`. It ensures that expired data is cleaned up efficiently without affecting
-        unexpired windows.
+        This method removes all window entries that have a start time less than or equal
+        to the given `max_start_time`. It ensures that expired data is cleaned up
+        efficiently without affecting unexpired windows.
 
         :param max_start_time: The timestamp up to which windows should be deleted, inclusive.
-        :param delete_values: If True, values will be deleted.
+        :param delete_values: If True, values with timestamps less than max_start_time
+            will be deleted, as they can no longer belong to any active window.
         :param prefix: The key prefix used to identify and filter relevant windows.
         """
         ...
