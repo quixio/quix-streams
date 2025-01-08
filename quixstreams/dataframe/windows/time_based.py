@@ -189,6 +189,10 @@ class FixedTimeWindow:
 
         This method processes streaming data and returns results as they come,
         regardless of whether the window is closed or not.
+
+        Note:
+            This method cannot be used with collection aggregations (created using
+            .collect()). Use .final() instead for collection aggregations.
         """
         if self._aggregate_collection:
             raise ValueError(

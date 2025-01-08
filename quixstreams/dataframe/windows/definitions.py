@@ -191,6 +191,25 @@ class FixedTimeWindowDefinition(abc.ABC):
         )
 
     def collect(self) -> "FixedTimeWindow":
+        """
+        Configure the window to collect all values within each window period into a
+        list, without performing any aggregation.
+
+        This method is useful when you need to gather all raw values that fall
+        within a window period for further processing or analysis.
+
+        Example Snippet:
+        ```python
+        # Collect all values in 1-second windows
+        window = df.tumbling_window(duration_ms=1000).collect()
+        # Each window will contain a list of all values that occurred
+        # within that second
+        ```
+
+        :return: an instance of `FixedTimeWindow` configured to collect all values
+            within each window period.
+        """
+
         def func(old: Any, new: Any) -> None:
             return None
 

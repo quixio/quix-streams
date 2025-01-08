@@ -781,7 +781,42 @@ def test_sliding_window_reduce(
             assert all_windows_in_state == message.expected_windows_in_state
 
 
-OBSOLETE_VALUES_ARE_DELETED = [
+#      0        10        20        30        40        50        60
+# -----|---------|---------|---------|---------|---------|---------|--->
+# Duration: 10
+# Grace: 5
+# ______________________________________________________________________
+# A 11            A
+#       |---------|
+#       1        11
+# ______________________________________________________________________
+# B 12             |---------|
+#                  12       22
+#                  B
+#        |---------|
+#        2        12
+# ______________________________________________________________________
+# C 21              |---------|
+#                   13       23
+#                           C
+#                 |---------|
+#                 11       21
+# ______________________________________________________________________
+# D 60                                                             D
+#                                                        |---------|
+#                                                        50       60
+# ______________________________________________________________________
+# Collection windows are special:
+# * Windows are saved with empty values (None) to preserve start/end times
+# * Values are collected separately and combined during expiration
+# * Message A creates window (1, 11) and stores value A
+# * Message B creates windows (2, 12) and (12, 22) and stores value B
+# * Message C creates windows (11, 21) and (13, 23) and stores value C
+#   and expires windows (1, 11) with values [A] and (2, 12) with values [A, B]
+# * Message D arrives at 60, causing expiration of a remaining
+#   window (11, 21) with values [A, B, C] and deletion of obsolete
+#   values A, B and C.
+COLLECTION_AGGREGATION = [
     Message(
         timestamp=11,
         value=A,
@@ -819,7 +854,7 @@ OBSOLETE_VALUES_ARE_DELETED = [
         expected_values_in_state=[A, B, C],
     ),
     Message(
-        timestamp=90,
+        timestamp=60,
         value=D,
         expired=[
             {"start": 11, "end": 21, "value": [A, B, C]},
@@ -831,7 +866,7 @@ OBSOLETE_VALUES_ARE_DELETED = [
             {"start": 13, "end": 23},
         ],
         present=[
-            {"start": 80, "end": 90, "value": [90, None]},
+            {"start": 50, "end": 60, "value": [60, None]},
         ],
         expected_values_in_state=[D],
     ),
@@ -841,9 +876,7 @@ OBSOLETE_VALUES_ARE_DELETED = [
 @pytest.mark.parametrize(
     "duration_ms, grace_ms, messages",
     [
-        pytest.param(
-            10, 5, OBSOLETE_VALUES_ARE_DELETED, id="obsolete-values-are-deleted"
-        ),
+        pytest.param(10, 5, COLLECTION_AGGREGATION, id="collection-aggregation"),
     ],
 )
 def test_sliding_window_collect(
@@ -858,7 +891,7 @@ def test_sliding_window_collect(
                 value=message.value, timestamp_ms=message.timestamp, state=state
             )
 
-        assert list(updated) == []
+        assert list(updated) == []  # updates are not supported for collections
         assert list(expired) == message.expired
 
         with state_factory(window) as state:

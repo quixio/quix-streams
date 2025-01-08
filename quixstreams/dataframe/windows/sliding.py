@@ -31,7 +31,7 @@ class SlidingWindow(FixedTimeWindow):
         ----|---------|---------|---------|---------|---------|---------|--->
                                     A
         left window ->    |---------||---------|    <- right window
-                            16      26  27      37
+                          16      26  27      37
 
         The algorithm scans backward through the window store:
         - Starting at: start_time = message timestamp + 1 ms (the right window's start time)
@@ -47,6 +47,12 @@ class SlidingWindow(FixedTimeWindow):
         4. If the left window does not exist, create it. Locate the existing
            aggregation and combine it with the incoming message.
         5. Locate and update all existing windows to which the new message belongs.
+
+        Note:
+            For collection aggregations (created using .collect()), the behavior is special:
+            Windows are persisted with empty values (None) only to preserve their start and
+            end times. The actual values are collected separately and combined during
+            the window expiration step.
         """
 
         duration = self._duration_ms
