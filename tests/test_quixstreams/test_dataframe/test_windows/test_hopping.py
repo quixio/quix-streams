@@ -193,15 +193,16 @@ class TestHoppingWindow:
         with store.start_partition_transaction(0) as tx:
             state = tx.as_state(prefix=b"key")
             window.process_window(value=1, state=state, timestamp_ms=100)
-            window.process_window(value=2, state=state, timestamp_ms=101)
+            window.process_window(value=2, state=state, timestamp_ms=100)
+            window.process_window(value=3, state=state, timestamp_ms=101)
             updated, expired = window.process_window(
-                value=3, state=state, timestamp_ms=110
+                value=4, state=state, timestamp_ms=110
             )
 
         assert not updated
         assert expired == [
-            {"start": 95, "end": 105, "value": [1, 2]},
-            {"start": 100, "end": 110, "value": [1, 2]},
+            {"start": 95, "end": 105, "value": [1, 2, 3]},
+            {"start": 100, "end": 110, "value": [1, 2, 3]},
         ]
 
     @pytest.mark.parametrize(
