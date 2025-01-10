@@ -164,12 +164,13 @@ class TestTumblingWindow:
         with store.start_partition_transaction(0) as tx:
             state = tx.as_state(prefix=b"key")
             window.process_window(value=1, state=state, timestamp_ms=100)
-            window.process_window(value=2, state=state, timestamp_ms=101)
+            window.process_window(value=2, state=state, timestamp_ms=100)
+            window.process_window(value=3, state=state, timestamp_ms=101)
             updated, expired = window.process_window(
-                value=3, state=state, timestamp_ms=200
+                value=4, state=state, timestamp_ms=200
             )
         assert not updated
-        assert expired == [{"start": 100, "end": 110, "value": [1, 2]}]
+        assert expired == [{"start": 100, "end": 110, "value": [1, 2, 3]}]
 
     @pytest.mark.parametrize(
         "duration, grace, name",
