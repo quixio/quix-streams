@@ -59,7 +59,6 @@ nav:
     - Serializers API: api-reference/serialization.md
     - Application API: api-reference/application.md
     - State API: api-reference/state.md
-    - Kafka Producer & Consumer API: api-reference/kafka.md
     - Sources API: api-reference/sources.md
     - Sinks API: api-reference/sinks.md
     - Kafka Producer & Consumer API: api-reference/kafka.md
