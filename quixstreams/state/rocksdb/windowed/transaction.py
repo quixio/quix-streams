@@ -149,6 +149,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
     def delete_window(self, start_ms: int, end_ms: int, prefix: bytes):
         self._validate_duration(start_ms=start_ms, end_ms=end_ms)
         key = encode_integer_pair(start_ms, end_ms)
+        key = self._serialize_key(key, prefix=prefix)
         self.delete(key=key, prefix=prefix)
 
     def expire_windows(
@@ -284,23 +285,18 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
             or -1
         )
 
-        windows = self.get_windows(
-            start_from_ms=start,
-            start_to_ms=max_start_time,
-            prefix=prefix,
-        )
+        key = None
+        for key, _ in self._get_items(
+            start=start, end=max_start_time + 1, prefix=prefix
+        ):
+            self.delete(key=key, prefix=prefix)
 
-        last_deleted__gt = None
-        for (start, end), _ in windows:
-            last_deleted__gt = start
-            self.delete_window(start, end, prefix=prefix)
-
-        # Save the start of the latest deleted window to the deletion index
-        if last_deleted__gt:
+        if key is not None:
+            _, timestamp_ms, _ = parse_window_key(key)
             self._set_timestamp(
                 cache=self._last_deleted_window_timestamps,
                 prefix=prefix,
-                timestamp_ms=last_deleted__gt,
+                timestamp_ms=timestamp_ms,
             )
 
         if delete_values:
@@ -326,20 +322,18 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
             or -1
         )
 
-        last_deleted_timestamp = None
+        key = None
         for key, _ in self._get_items(
             start=start, end=max_timestamp, prefix=prefix, cf_name=VALUES_CF_NAME
         ):
-            _, timestamp_ms, count = parse_window_key(key)
-            last_deleted_timestamp = max(last_deleted_timestamp or 0, timestamp_ms)
-            key = encode_integer_pair(timestamp_ms, count)
             self.delete(key=key, prefix=prefix, cf_name=VALUES_CF_NAME)
 
-        if last_deleted_timestamp is not None:
+        if key is not None:
+            _, timestamp_ms, _ = parse_window_key(key)
             self._set_timestamp(
                 cache=self._last_deleted_value_timestamps,
                 prefix=prefix,
-                timestamp_ms=last_deleted_timestamp,
+                timestamp_ms=timestamp_ms,
             )
 
     def get_windows(
