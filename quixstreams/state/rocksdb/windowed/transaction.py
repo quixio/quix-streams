@@ -275,17 +275,17 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         :param delete_values: If True, obsolete values will be deleted.
         :param prefix: The key prefix used to identify and filter relevant windows.
         """
-        start_from = -1
 
         # Find the latest start timestamp of the deleted windows for the given key
-        last_deleted = self._get_timestamp(
-            cache=self._last_deleted_window_timestamps, prefix=prefix
+        start = (
+            self._get_timestamp(
+                cache=self._last_deleted_window_timestamps, prefix=prefix
+            )
+            or -1
         )
-        if last_deleted is not None:
-            start_from = max(start_from, last_deleted)
 
         windows = self.get_windows(
-            start_from_ms=start_from,
+            start_from_ms=start,
             start_to_ms=max_start_time,
             prefix=prefix,
         )
