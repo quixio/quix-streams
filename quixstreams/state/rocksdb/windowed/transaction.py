@@ -146,12 +146,6 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         key = encode_integer_pair(timestamp_ms, self._get_next_count())
         self.set(key=key, value=value, prefix=prefix, cf_name=VALUES_CF_NAME)
 
-    def delete_window(self, start_ms: int, end_ms: int, prefix: bytes):
-        self._validate_duration(start_ms=start_ms, end_ms=end_ms)
-        key = encode_integer_pair(start_ms, end_ms)
-        key = self._serialize_key(key, prefix=prefix)
-        self.delete(key=key, prefix=prefix)
-
     def expire_windows(
         self,
         max_start_time: int,
@@ -245,10 +239,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
 
         # Delete expired windows from the state
         if delete:
-            for (start, end), _ in expired_windows:
-                self.delete_window(start, end, prefix=prefix)
-            if collect:
-                self._delete_values(max_timestamp=start, prefix=prefix)
+            self.delete_windows(max_start_time, delete_values=collect, prefix=prefix)
 
         return expired_windows
 
