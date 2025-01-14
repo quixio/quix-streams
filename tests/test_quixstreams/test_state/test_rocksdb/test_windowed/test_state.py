@@ -2,8 +2,11 @@ from contextlib import contextmanager
 
 import pytest
 
+from quixstreams.state.metadata import SEPARATOR
 from quixstreams.state.rocksdb.windowed.metadata import VALUES_CF_NAME
 from quixstreams.state.rocksdb.windowed.serialization import encode_integer_pair
+
+PREFIX = b"__key__"
 
 
 @pytest.fixture
@@ -18,7 +21,7 @@ def transaction_state(store):
     @contextmanager
     def _transaction_state():
         with store.start_partition_transaction(0) as tx:
-            yield tx.as_state(prefix=b"__key__")
+            yield tx.as_state(prefix=PREFIX)
 
     return _transaction_state
 
@@ -218,7 +221,9 @@ def test_get_latest_timestamp(windowed_rocksdb_store_factory):
                 dict(start_ms=2, end_ms=12, value=3, timestamp_ms=3),
             ],
             [],
-            [dict(start_ms=0, end_ms=10)],
+            [
+                PREFIX + SEPARATOR + encode_integer_pair(0, 10),
+            ],
             dict(start_from_ms=-1, start_to_ms=2),
             [((1, 11), 2), ((2, 12), 3)],
             id="ignore-deleted-windows",
@@ -282,7 +287,9 @@ def test_get_latest_timestamp(windowed_rocksdb_store_factory):
                 dict(start_ms=2, end_ms=12, value=3, timestamp_ms=3),
             ],
             [],
-            [dict(start_ms=0, end_ms=10)],
+            [
+                PREFIX + SEPARATOR + encode_integer_pair(0, 10),
+            ],
             dict(start_from_ms=-1, start_to_ms=2, backwards=True),
             [((2, 12), 3), ((1, 11), 2)],
             id="ignore-deleted-windows",
@@ -304,8 +311,8 @@ def test_get_windows(
     with transaction_state() as state:
         for window in cached_windows:
             state.update_window(**window)
-        for window in deleted_windows:
-            state._transaction.delete_window(**window, prefix=state._prefix)
+        for key in deleted_windows:
+            state._transaction.delete(key=key, prefix=state._prefix)
 
         windows = state.get_windows(**get_windows_args)
         assert list(windows) == expected_windows

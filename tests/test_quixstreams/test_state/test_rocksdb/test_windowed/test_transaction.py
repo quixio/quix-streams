@@ -29,20 +29,6 @@ class TestWindowedRocksDBPartitionTransaction:
         with store.start_partition_transaction(0) as tx:
             assert tx.get_window(start_ms=0, end_ms=10, prefix=prefix) is None
 
-    def test_delete_window(self, windowed_rocksdb_store_factory):
-        store = windowed_rocksdb_store_factory()
-        store.assign_partition(0)
-        prefix = b"__key__"
-        with store.start_partition_transaction(0) as tx:
-            tx.update_window(
-                start_ms=0, end_ms=10, value=1, timestamp_ms=1, prefix=prefix
-            )
-            assert tx.get_window(start_ms=0, end_ms=10, prefix=prefix) == 1
-            tx.delete_window(start_ms=0, end_ms=10, prefix=prefix)
-
-        with store.start_partition_transaction(0) as tx:
-            assert tx.get_window(start_ms=0, end_ms=10, prefix=prefix) is None
-
     @pytest.mark.parametrize("delete", [True, False])
     def test_expire_windows_expired(self, windowed_rocksdb_store_factory, delete):
         store = windowed_rocksdb_store_factory()
@@ -246,23 +232,6 @@ class TestWindowedRocksDBPartitionTransaction:
                     prefix=prefix,
                 )
 
-    @pytest.mark.parametrize(
-        "start_ms, end_ms",
-        [
-            (0, 0),
-            (1, 0),
-        ],
-    )
-    def test_delete_window_invalid_duration(
-        self, start_ms, end_ms, windowed_rocksdb_store_factory
-    ):
-        store = windowed_rocksdb_store_factory()
-        store.assign_partition(0)
-        prefix = b"__key__"
-        with store.start_partition_transaction(0) as tx:
-            with pytest.raises(ValueError, match="Invalid window duration"):
-                tx.delete_window(start_ms=start_ms, end_ms=end_ms, prefix=prefix)
-
     def test_expire_windows_no_expired(self, windowed_rocksdb_store_factory):
         store = windowed_rocksdb_store_factory()
         store.assign_partition(0)
@@ -391,16 +360,16 @@ class TestWindowedRocksDBPartitionTransaction:
             changelog_producer=changelog_producer_mock
         ) as store_partition:
             tx = store_partition.begin()
-            tx.delete_window(start_ms=start_ms, end_ms=end_ms, prefix=prefix)
+            serialized_key = tx._serialize_key(
+                key=encode_integer_pair(start_ms, end_ms), prefix=prefix
+            )
+            tx.delete(serialized_key, prefix=prefix)
             tx.prepare(processed_offset=processed_offset)
             assert tx.prepared
 
         assert changelog_producer_mock.produce.call_count == 1
-        expected_produced_key = tx._serialize_key(
-            encode_integer_pair(start_ms, end_ms), prefix=prefix
-        )
         changelog_producer_mock.produce.assert_called_with(
-            key=expected_produced_key,
+            key=serialized_key,
             value=None,
             headers={
                 CHANGELOG_CF_MESSAGE_HEADER: "default",
