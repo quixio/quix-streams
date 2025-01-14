@@ -1,5 +1,6 @@
 import logging
 from copy import deepcopy
+from itertools import chain
 from typing import Dict, List, Literal, Optional, Set
 
 from quixstreams.models.serializers import DeserializerType, SerializerType
@@ -81,10 +82,6 @@ class TopicManager:
         return dict_values(self._changelog_topics)
 
     @property
-    def _non_changelog_topics(self) -> Dict[str, Topic]:
-        return {**self._topics, **self._repartition_topics}
-
-    @property
     def _all_topics_list(self) -> List[Topic]:
         return (
             self._topics_list
@@ -108,6 +105,22 @@ class TopicManager:
         returns: the changelog topic dict, {topic_name: {suffix: Topic}}
         """
         return self._changelog_topics
+
+    @property
+    def changelog_topics_list(self) -> List[Topic]:
+        """
+        Returns a list of changelog topics
+
+        returns: the changelog topic dict, {topic_name: {suffix: Topic}}
+        """
+        return list(chain(*(d.values() for d in self.changelog_topics.values())))
+
+    @property
+    def non_changelog_topics(self) -> Dict[str, Topic]:
+        """
+        Returns a dict with normal and repartition topics
+        """
+        return {**self._topics, **self._repartition_topics}
 
     @property
     def all_topics(self) -> Dict[str, Topic]:
@@ -211,8 +224,8 @@ class TopicManager:
         topic_config = self._admin.inspect_topics([topic_name], timeout=timeout)[
             topic_name
         ]
-        if topic_config is None and topic_name in self._non_changelog_topics:
-            topic_config = deepcopy(self._non_changelog_topics[topic_name].config)
+        if topic_config is None and topic_name in self.non_changelog_topics:
+            topic_config = deepcopy(self.non_changelog_topics[topic_name].config)
 
         if topic_config is None:
             raise RuntimeError(f"No configuration can be found for topic {topic_name}")
@@ -479,7 +492,7 @@ class TopicManager:
         if missing := [t for t in all_topic_names if actual_configs[t] is None]:
             raise TopicNotFoundError(f"Topics {missing} not found on the broker")
 
-        for source_name in self._non_changelog_topics.keys():
+        for source_name in self.non_changelog_topics.keys():
             source_cfg = actual_configs[source_name]
             if source_cfg is None:
                 raise TopicNotFoundError(f"Topic {source_name} not found on the broker")

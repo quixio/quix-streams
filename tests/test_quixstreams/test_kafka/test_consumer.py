@@ -37,6 +37,18 @@ def test_consumer_close_inner_consumer(
     assert str(raised.value) == "Consumer closed"
 
 
+def test_consumer_assign_unassign(consumer):
+    tps = [
+        TopicPartition(topic="topic1", partition=0),
+        TopicPartition(topic="topic2", partition=0),
+    ]
+    consumer.assign(tps)
+
+    assert consumer.assignment() == tps
+    consumer.unassign()
+    assert consumer.assignment() == []
+
+
 class TestConsumerSubscribe:
     def test_consumer_subscribe_topic_exists(
         self,

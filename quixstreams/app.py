@@ -772,8 +772,9 @@ class Application:
                 self._run_sources()
 
     def _run_dataframe(self):
+        changelog_topics = self._topic_manager.changelog_topics_list
         self._consumer.subscribe(
-            self._dataframe_registry.consumer_topics,
+            topics=self._dataframe_registry.consumer_topics + changelog_topics,
             on_assign=self._on_assign,
             on_revoke=self._on_revoke,
             on_lost=self._on_lost,
@@ -900,12 +901,20 @@ class Application:
         # and fail
         self._processing_context.commit_checkpoint(force=True)
 
-        # assigning manually here (instead of allowing it handle it automatically)
-        # enables pausing them during recovery to work as expected
-        self._consumer.incremental_assign(topic_partitions)
+        # Assign partitions manually to pause the changelog topics
+        self._consumer.assign(topic_partitions)
+        # Pause changelog topic+partitions immediately after assignment
+        non_changelog_topics = self._topic_manager.non_changelog_topics
+        changelog_tps = [
+            tp for tp in topic_partitions if tp.topic not in non_changelog_topics
+        ]
+        self._consumer.pause(changelog_tps)
 
         if self._state_manager.stores:
-            for tp in topic_partitions:
+            non_changelog_tps = [
+                tp for tp in topic_partitions if tp.topic in non_changelog_topics
+            ]
+            for tp in non_changelog_tps:
                 # Get the latest committed offset for the assigned topic partition
                 tp_committed = self._consumer.committed([tp], timeout=30)[0]
                 # Assign store partitions
@@ -956,8 +965,11 @@ class Application:
         else:
             self._processing_context.commit_checkpoint(force=True)
 
-        self._consumer.incremental_unassign(topic_partitions)
-        for tp in topic_partitions:
+        non_changelog_topics = self._topic_manager.non_changelog_topics
+        non_changelog_tps = [
+            tp for tp in topic_partitions if tp.topic in non_changelog_topics
+        ]
+        for tp in non_changelog_tps:
             if self._state_manager.stores:
                 self._state_manager.on_partition_revoke(
                     topic=tp.topic, partition=tp.partition
@@ -971,7 +983,12 @@ class Application:
         Dropping lost partitions from consumer and state
         """
         logger.debug("Rebalancing: dropping lost partitions")
-        for tp in topic_partitions:
+
+        non_changelog_topics = self._topic_manager.non_changelog_topics
+        non_changelog_tps = [
+            tp for tp in topic_partitions if tp.topic in non_changelog_topics
+        ]
+        for tp in non_changelog_tps:
             if self._state_manager.stores:
                 self._state_manager.on_partition_revoke(
                     topic=tp.topic, partition=tp.partition
