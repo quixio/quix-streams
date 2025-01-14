@@ -2,6 +2,8 @@ from io import BytesIO
 from pathlib import Path
 from typing import Generator
 
+from typing_extensions import Self
+
 from .base import Origin
 
 __all__ = ("LocalOrigin",)
@@ -20,3 +22,9 @@ class LocalOrigin(Origin):
 
     def get_raw_file_stream(self, filepath: Path) -> BytesIO:
         return BytesIO(filepath.read_bytes())
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass

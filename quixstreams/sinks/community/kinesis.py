@@ -7,6 +7,7 @@ from typing import Any, Callable, Optional
 try:
     import boto3
     from botocore.exceptions import ClientError
+    from mypy_boto3_kinesis import KinesisClient
 except ImportError as exc:
     raise ImportError(
         f"Package {exc.name} is missing: "
@@ -31,8 +32,10 @@ class KinesisSink(BaseSink):
         aws_access_key_id: Optional[str] = getenv("AWS_ACCESS_KEY_ID"),
         aws_secret_access_key: Optional[str] = getenv("AWS_SECRET_ACCESS_KEY"),
         region_name: Optional[str] = getenv("AWS_REGION", getenv("AWS_DEFAULT_REGION")),
+        aws_endpoint_url: Optional[str] = getenv("AWS_ENDPOINT_URL_KINESIS"),
         value_serializer: Callable[[Any], str] = json.dumps,
         key_serializer: Callable[[Any], str] = bytes.decode,
+        client_connect_cb: Optional[Callable[[Optional[Exception]], None]] = None,
         **kwargs,
     ) -> None:
         """
@@ -47,7 +50,10 @@ class KinesisSink(BaseSink):
         :param key_serializer: Function to serialize the key to string
             (defaults to bytes.decode).
         :param kwargs: Additional keyword arguments passed to boto3.client.
+        :param client_connect_cb: An optional callback made once a client connection
+            is established. Callback expects an Exception or None as an argument.
         """
+        self._client: Optional[KinesisClient] = None
         self._stream_name = stream_name
         self._value_serializer = value_serializer
         self._key_serializer = key_serializer
@@ -55,21 +61,25 @@ class KinesisSink(BaseSink):
         self._records = defaultdict(list)  # buffer for records before sending
         self._futures = defaultdict(list)  # buffer for requests in progress
 
+        self._credentials = {
+            "endpoint_url": aws_endpoint_url,
+            "region_name": region_name,
+            "aws_access_key_id": aws_access_key_id,
+            "aws_secret_access_key": aws_secret_access_key,
+            **kwargs,
+        }
+
         # Thread pool executor for asynchronous operations. Single thread ensures
         # that records are sent in order at the expense of throughput.
         self._executor = ThreadPoolExecutor(max_workers=1)
+        super().__init__(client_connect_cb=client_connect_cb)
 
-        self._kinesis = boto3.client(
-            "kinesis",
-            aws_access_key_id=aws_access_key_id,
-            aws_secret_access_key=aws_secret_access_key,
-            region_name=region_name,
-            **kwargs,
-        )
+    def setup_client(self):
+        self._client = boto3.client("kinesis", **self._credentials)
 
         # Check if the Kinesis stream exists
         try:
-            self._kinesis.describe_stream(StreamName=self._stream_name)
+            self._client.describe_stream(StreamName=self._stream_name)
         except ClientError as e:
             if e.response["Error"]["Code"] == "ResourceNotFoundException":
                 raise KinesisStreamNotFoundError(
@@ -136,7 +146,7 @@ class KinesisSink(BaseSink):
         self, topic_partition: tuple[str, int], records: list[dict[str, str]]
     ) -> None:
         future = self._executor.submit(
-            self._kinesis.put_records,
+            self._client.put_records,
             Records=records,
             StreamName=self._stream_name,
         )

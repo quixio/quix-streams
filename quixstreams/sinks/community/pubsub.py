@@ -37,6 +37,7 @@ class PubSubSink(BaseSink):
         value_serializer: Callable[[Any], Union[bytes, str]] = json.dumps,
         key_serializer: Callable[[Any], str] = bytes.decode,
         flush_timeout: int = 5,
+        client_connect_cb: Optional[Callable[[Optional[Exception]], None]] = None,
         **kwargs,
     ) -> None:
         """
@@ -53,6 +54,8 @@ class PubSubSink(BaseSink):
             (defaults to json.dumps).
         :param key_serializer: Function to serialize the key to string
             (defaults to bytes.decode).
+        :param client_connect_cb: An optional callback made once a client connection
+            is established. Callback expects an Exception or None as an argument.
         :param kwargs: Additional keyword arguments passed to PublisherClient.
         """
 
@@ -66,15 +69,23 @@ class PubSubSink(BaseSink):
                 )
             )
 
-        self._publisher = pubsub_v1.PublisherClient(**kwargs)
-        self._topic = self._publisher.topic_path(project_id, topic_id)
+        self._client_settings = kwargs
+        self._project_id = project_id
+        self._topic_id = topic_id
         self._value_serializer = value_serializer
         self._key_serializer = key_serializer
         self._flush_timeout = flush_timeout
         self._futures: dict[TopicPartition, list[Future]] = defaultdict(list)
+        self._client: Optional[pubsub_v1.PublisherClient] = None
+        self._topic: Optional[str] = None
 
+        super().__init__(client_connect_cb=client_connect_cb)
+
+    def setup_client(self):
+        self._client = pubsub_v1.PublisherClient(**self._client_settings)
+        self._topic = self._client.topic_path(self._project_id, self._topic_id)
         try:
-            self._publisher.get_topic(request={"topic": self._topic})
+            self._client.get_topic(request={"topic": self._topic})
         except google_exceptions.NotFound:
             raise PubSubTopicNotFoundError(f"Topic `{self._topic}` does not exist.")
 
@@ -108,7 +119,7 @@ class PubSubSink(BaseSink):
             **dict(headers),
         }
 
-        future = self._publisher.publish(**kwargs)
+        future = self._client.publish(**kwargs)
         self._futures[(topic, partition)].append(future)
 
     def flush(self, topic: str, partition: int) -> None:

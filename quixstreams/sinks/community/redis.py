@@ -28,6 +28,7 @@ class RedisSink(BatchingSink):
         key_serializer: Optional[Callable[[Any, Any], Union[bytes, str]]] = None,
         password: Optional[str] = None,
         socket_timeout: float = 30.0,
+        client_connect_cb: Optional[Callable[[Optional[Exception]], None]] = None,
         **kwargs,
     ) -> None:
         """
@@ -44,21 +45,33 @@ class RedisSink(BatchingSink):
         :param password: Redis password, optional.
         :param socket_timeout: Redis socket timeout.
             Default - 30s.
+        :param client_connect_cb: An optional callback made once a client connection
+            is established. Callback expects an Exception or None as an argument.
         :param kwargs: Additional keyword arguments passed to the `redis.Redis` instance.
         """
-
-        super().__init__()
-        self._redis_uri = f"{host}:{port}/{db}"
-        self._client = redis.Redis(
-            host=host,
-            port=port,
-            db=db,
-            password=password,
-            socket_timeout=socket_timeout,
-            **kwargs,
-        )
         self._key_serializer = key_serializer
         self._value_serializer = value_serializer
+        self._redis_uri: Optional[str] = None
+        self._client: Optional[redis.Redis] = None
+        self._client_settings = {
+            "host": host,
+            "port": port,
+            "db": db,
+            "password": password,
+            "socket_timeout": socket_timeout,
+            **kwargs,
+        }
+
+        super().__init__(client_connect_cb=client_connect_cb)
+
+    def setup_client(self):
+        self._redis_uri = (
+            f"{self._client_settings['host']}:"
+            f"{self._client_settings['port']}/"
+            f"{self._client_settings['db']}"
+        )
+        self._client = redis.Redis(**self._client_settings)
+        self._client.info()
 
     def write(self, batch: SinkBatch) -> None:
         # Execute Redis updates atomically using a transaction pipeline
