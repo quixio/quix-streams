@@ -1,15 +1,15 @@
 import pytest
 
-from quixstreams.dataframe.windows import HoppingWindowDefinition
+from quixstreams.dataframe.windows import FixedTimeHoppingWindowDefinition
 
 
 @pytest.fixture()
 def hopping_window_definition_factory(state_manager, dataframe_factory):
     def factory(
         duration_ms: int, step_ms: int, grace_ms: int = 0
-    ) -> HoppingWindowDefinition:
+    ) -> FixedTimeHoppingWindowDefinition:
         sdf = dataframe_factory(state_manager=state_manager)
-        window_def = HoppingWindowDefinition(
+        window_def = FixedTimeHoppingWindowDefinition(
             duration_ms=duration_ms, step_ms=step_ms, grace_ms=grace_ms, dataframe=sdf
         )
         return window_def
@@ -36,7 +36,7 @@ class TestHoppingWindow:
         expected_name,
         dataframe_factory,
     ):
-        twd = HoppingWindowDefinition(
+        twd = FixedTimeHoppingWindowDefinition(
             duration_ms=duration,
             grace_ms=grace,
             step_ms=step,
@@ -220,7 +220,7 @@ class TestHoppingWindow:
         self, duration, grace, step, name, dataframe_factory
     ):
         with pytest.raises(ValueError):
-            HoppingWindowDefinition(
+            FixedTimeHoppingWindowDefinition(
                 duration_ms=duration,
                 grace_ms=grace,
                 step_ms=step,

@@ -55,9 +55,10 @@ from .registry import DataframeRegistry
 from .series import StreamingSeries
 from .utils import ensure_milliseconds
 from .windows import (
-    HoppingWindowDefinition,
-    SlidingWindowDefinition,
-    TumblingWindowDefinition,
+    CountTumblingWindowDefinition,
+    FixedTimeHoppingWindowDefinition,
+    FixedTimeSlidingWindowDefinition,
+    FixedTimeTumblingWindowDefinition,
 )
 
 ApplyCallbackStateful = Callable[[Any, State], Any]
@@ -844,7 +845,15 @@ class StreamingDataFrame(BaseStreaming):
         duration_ms: Union[int, timedelta],
         grace_ms: Union[int, timedelta] = 0,
         name: Optional[str] = None,
-    ) -> TumblingWindowDefinition:
+    ) -> FixedTimeTumblingWindowDefinition:
+        return self.tumbling_time_window(duration_ms, grace_ms, name)
+
+    def tumbling_time_window(
+        self,
+        duration_ms: Union[int, timedelta],
+        grace_ms: Union[int, timedelta] = 0,
+        name: Optional[str] = None,
+    ) -> FixedTimeTumblingWindowDefinition:
         """
         Create a tumbling window transformation on this StreamingDataFrame.
         Tumbling windows divide time into fixed-sized, non-overlapping windows.
@@ -911,8 +920,17 @@ class StreamingDataFrame(BaseStreaming):
         duration_ms = ensure_milliseconds(duration_ms)
         grace_ms = ensure_milliseconds(grace_ms)
 
-        return TumblingWindowDefinition(
+        return FixedTimeTumblingWindowDefinition(
             duration_ms=duration_ms, grace_ms=grace_ms, dataframe=self, name=name
+        )
+
+    def tumbling_count_window(
+        self, count: int, name: Optional[str] = None
+    ) -> CountTumblingWindowDefinition:
+        return CountTumblingWindowDefinition(
+            count=count,
+            dataframe=self,
+            name=name,
         )
 
     def hopping_window(
@@ -921,7 +939,7 @@ class StreamingDataFrame(BaseStreaming):
         step_ms: Union[int, timedelta],
         grace_ms: Union[int, timedelta] = 0,
         name: Optional[str] = None,
-    ) -> HoppingWindowDefinition:
+    ) -> FixedTimeHoppingWindowDefinition:
         """
         Create a hopping window transformation on this StreamingDataFrame.
         Hopping windows divide the data stream into overlapping windows based on time.
@@ -999,7 +1017,7 @@ class StreamingDataFrame(BaseStreaming):
         step_ms = ensure_milliseconds(step_ms)
         grace_ms = ensure_milliseconds(grace_ms)
 
-        return HoppingWindowDefinition(
+        return FixedTimeHoppingWindowDefinition(
             duration_ms=duration_ms,
             grace_ms=grace_ms,
             step_ms=step_ms,
@@ -1012,7 +1030,7 @@ class StreamingDataFrame(BaseStreaming):
         duration_ms: Union[int, timedelta],
         grace_ms: Union[int, timedelta] = 0,
         name: Optional[str] = None,
-    ) -> SlidingWindowDefinition:
+    ) -> FixedTimeSlidingWindowDefinition:
         """
         Create a sliding window transformation on this StreamingDataFrame.
         Sliding windows continuously evaluate the stream with a fixed step of 1 ms
@@ -1084,7 +1102,7 @@ class StreamingDataFrame(BaseStreaming):
         duration_ms = ensure_milliseconds(duration_ms)
         grace_ms = ensure_milliseconds(grace_ms)
 
-        return SlidingWindowDefinition(
+        return FixedTimeSlidingWindowDefinition(
             duration_ms=duration_ms, grace_ms=grace_ms, dataframe=self, name=name
         )
 

@@ -9,6 +9,41 @@ class WindowedState(Protocol):
     A windowed state to be provided into `StreamingDataFrame` window functions.
     """
 
+    def get(self, key: Any, default: Any = None) -> Optional[Any]:
+        """
+        Get the value for key if key is present in the state, else default
+
+        :param key: key
+        :param default: default value to return if the key is not found
+        :return: value or None if the key is not found and `default` is not provided
+        """
+        ...
+
+    def set(self, key: Any, value: Any):
+        """
+        Set value for the key.
+        :param key: key
+        :param value: value
+        """
+        ...
+
+    def delete(self, key: Any):
+        """
+        Delete value for the key.
+
+        This function always returns `None`, even if value is not found.
+        :param key: key
+        """
+        ...
+
+    def exists(self, key: Any) -> bool:
+        """
+        Check if the key exists in state.
+        :param key: key
+        :return: True if key exists, False otherwise
+        """
+        ...
+
     def get_window(
         self, start_ms: int, end_ms: int, default: Any = None
     ) -> Optional[Any]:
