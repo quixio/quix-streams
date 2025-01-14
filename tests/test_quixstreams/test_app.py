@@ -1689,7 +1689,9 @@ class TestApplicationRecovery:
                     expected_offset = (
                         # A number of total window updates
                         sum(expected_window_updates[p_num].values())
-                        # A number of expired windows
+                        # A number of expired windows times 2
+                        # * one for the window deletion
+                        # * one for the __expiration-index__ bump
                         + 2 * len(expected_expired_windows[p_num])
                         # A number of total timestamps
                         # (each timestamp updates the <LATEST_TIMESTAMPS_CF_NAME>)
