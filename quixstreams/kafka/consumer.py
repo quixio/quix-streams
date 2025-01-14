@@ -126,7 +126,7 @@ class BaseConsumer:
         self._consumer_config = {
             # previous Quix Streams defaults
             "enable.auto.offset.store": False,
-            # Force assignment strategy to "range" to for co-partitioning
+            # Force assignment strategy to "range" for co-partitioning
             "partition.assignment.strategy": "range",
             **(extra_config or {}),
             **broker_address.as_librdkafka_dict(),
