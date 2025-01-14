@@ -26,7 +26,8 @@ class TestRocksDBPartitionTransaction:
         with store_partition.begin() as tx:
             tx.set(key, value, cf_name="cf", prefix=prefix)
             assert tx.get(key, cf_name="cf", prefix=prefix) == value
-            tx.delete(key, cf_name="cf", prefix=prefix)
+            serialized_key = tx._serialize_key(key=key, prefix=prefix)
+            tx.delete(serialized_key, cf_name="cf", prefix=prefix)
             assert tx.get(key, cf_name="cf", prefix=prefix) is None
 
         with store_partition.begin() as tx:
