@@ -25,6 +25,21 @@ class Destination(ABC):
     _base_directory: str = ""
     _extension: str = ""
 
+    @abstractmethod
+    def connect(self):
+        """Authenticate and validate connection here"""
+        ...
+
+    @abstractmethod
+    def write(self, data: bytes, batch: SinkBatch) -> None:
+        """Write the serialized data to storage.
+
+        :param data: The serialized data to write.
+        :param batch: The batch information containing topic, partition and offset
+            details.
+        """
+        ...
+
     def set_directory(self, directory: str) -> None:
         """Configure the base directory for storing files.
 
@@ -49,16 +64,6 @@ class Destination(ABC):
         """
         self._extension = format.file_extension
         logger.info("File extension set to '%s'", self._extension)
-
-    @abstractmethod
-    def write(self, data: bytes, batch: SinkBatch) -> None:
-        """Write the serialized data to storage.
-
-        :param data: The serialized data to write.
-        :param batch: The batch information containing topic, partition and offset
-            details.
-        """
-        ...
 
     def _path(self, batch: SinkBatch) -> Path:
         """Generate the full path where the batch data should be stored.

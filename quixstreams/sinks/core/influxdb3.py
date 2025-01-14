@@ -1,7 +1,7 @@
 import logging
 import sys
 import time
-from typing import Any, Iterable, Mapping, Optional
+from typing import Any, Callable, Iterable, Mapping, Optional
 
 from quixstreams.models import HeadersTuples
 
@@ -37,6 +37,7 @@ class InfluxDB3Sink(BatchingSink):
         enable_gzip: bool = True,
         request_timeout_ms: int = 10_000,
         debug: bool = False,
+        client_connect_cb: Optional[Callable[[Optional[Exception]], None]] = None,
     ):
         """
         A connector to sink processed data to InfluxDB v3.
@@ -90,9 +91,9 @@ class InfluxDB3Sink(BatchingSink):
             Default - `10000`.
         :param debug: if True, print debug logs from InfluxDB client.
             Default - `False`.
+        :param client_connect_cb: Am optional callback made once a client connection
+            is established. Callback expects an Exception or None as an argument.
         """
-
-        super().__init__()
         fields_tags_keys_overlap = set(fields_keys) & set(tags_keys)
         if fields_tags_keys_overlap:
             overlap_str = ",".join(str(k) for k in fields_tags_keys_overlap)
@@ -100,7 +101,7 @@ class InfluxDB3Sink(BatchingSink):
                 f'Keys {overlap_str} are present in both "fields_keys" and "tags_keys"'
             )
 
-        self._client = InfluxDBClient3(
+        self._client_args = dict(
             token=token,
             host=host,
             org=organization_id,
@@ -121,6 +122,17 @@ class InfluxDB3Sink(BatchingSink):
         self._time_key = time_key
         self._write_precision = time_precision
         self._batch_size = batch_size
+        super().__init__(client_connect_cb=client_connect_cb)
+
+    def setup_client(self):
+        self._client = InfluxDBClient3(**self._client_args)
+        try:
+            # We cannot safely parameterize the table (measurement) selection, so
+            # the best we can do is confirm authentication was successful
+            self._client.query("")
+        except Exception as e:
+            if "No SQL statements were provided in the query string" not in str(e):
+                raise
 
     def add(
         self,

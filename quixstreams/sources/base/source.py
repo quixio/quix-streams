@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Optional, Union
+from typing import Any, Callable, Optional, Union
 
 from quixstreams.checkpointing.exceptions import CheckpointProducerTimeout
 from quixstreams.models.messages import KafkaMessage
@@ -81,9 +81,27 @@ class BaseSource(ABC):
     # time in seconds the application will wait for the source to stop.
     shutdown_timeout: float = 10
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        client_connect_cb: Optional[Callable[[Optional[Exception]], None]] = None,
+    ) -> None:
         self._producer: Optional[RowProducer] = None
         self._producer_topic: Optional[Topic] = None
+        self._init_client(client_connect_cb)
+
+    def _init_client(
+        self, client_connect_cb: Optional[Callable[[Optional[Exception]], None]]
+    ):
+        error = None
+        try:
+            return self.setup_client()
+        except Exception as e:
+            error = e
+        finally:
+            if client_connect_cb:
+                client_connect_cb(error)
+            elif error:
+                raise error
 
     def configure(self, topic: Topic, producer: RowProducer, **kwargs) -> None:
         """
@@ -133,8 +151,15 @@ class BaseSource(ABC):
         Note: if the default topic is used, the Application will prefix its name with "source__".
         """
 
+    @abstractmethod
+    def setup_client(self):
+        """
+        When applicable, set up the client here along with any validation to affirm a
+        valid/successful authentication/connection.
+        """
 
-class Source(BaseSource):
+
+class Source(BaseSource, ABC):
     """
     A base class for custom Sources that provides a basic implementation of `BaseSource`
     interface.
@@ -184,12 +209,21 @@ class Source(BaseSource):
     * `running`
     """
 
-    def __init__(self, name: str, shutdown_timeout: float = 10) -> None:
+    _client: Optional[Any]
+
+    def __init__(
+        self,
+        name: str,
+        shutdown_timeout: float = 10,
+        client_connect_cb: Optional[Callable[[Optional[Exception]], None]] = None,
+    ) -> None:
         """
         :param name: The source unique name. It is used to generate the topic configuration.
         :param shutdown_timeout: Time in second the application waits for the source to gracefully shutdown.
+        :param client_connect_cb: An optional callback made once a client connection is established.
+            Callback expects an Exception or None as an argument.
         """
-        super().__init__()
+        super().__init__(client_connect_cb=client_connect_cb)
 
         # used to generate a unique topic for the source.
         self.name = name
@@ -327,7 +361,7 @@ class Source(BaseSource):
         return self.name
 
 
-class StatefulSource(Source):
+class StatefulSource(Source, ABC):
     """
     A `Source` class for custom Sources that need a state.
 
@@ -377,12 +411,23 @@ class StatefulSource(Source):
     ```
     """
 
-    def __init__(self, name: str, shutdown_timeout: float = 10) -> None:
+    def __init__(
+        self,
+        name: str,
+        shutdown_timeout: float = 10,
+        client_connect_cb: Optional[Callable[[Optional[Exception]], None]] = None,
+    ) -> None:
         """
         :param name: The source unique name. It is used to generate the topic configuration.
         :param shutdown_timeout: Time in second the application waits for the source to gracefully shutdown.
+        :param client_connect_cb: An optional callback made once a client connection is established.
+            Callback expects an Exception or None as an argument.
         """
-        super().__init__(name, shutdown_timeout)
+        super().__init__(
+            name,
+            shutdown_timeout=shutdown_timeout,
+            client_connect_cb=client_connect_cb,
+        )
         self._store_partition: Optional[StorePartition] = None
         self._store_transaction: Optional[PartitionTransaction] = None
         self._store_state: Optional[State] = None
