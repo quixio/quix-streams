@@ -39,9 +39,13 @@ class FileSink(BatchingSink):
         """
         super().__init__()
         self._format = resolve_format(format)
-        self._destination = destination or LocalDestination()
-        self._destination.set_directory(directory)
-        self._destination.set_extension(self._format)
+        self._client = destination or LocalDestination()
+        self._client.set_directory(directory)
+        self._client.set_extension(self._format)
+
+    def setup_client(self) -> Destination:
+        self._client.connect()
+        return self._client
 
     def write(self, batch: SinkBatch) -> None:
         """Write a batch of data using the configured format and destination.
@@ -58,7 +62,7 @@ class FileSink(BatchingSink):
         data = self._format.serialize(batch)
 
         try:
-            self._destination.write(data, batch)
+            self._client.write(data, batch)
         except Exception as e:
             raise SinkBackpressureError(
                 retry_after=5.0,
