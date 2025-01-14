@@ -2,7 +2,7 @@ import logging
 from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from time import sleep
-from typing import BinaryIO, Optional, Union
+from typing import BinaryIO, Callable, Optional, Union
 
 from typing_extensions import Self
 
@@ -25,8 +25,8 @@ class FileFetcher:
     """
 
     def __init__(self, origin: Origin, filepath: Path):
-        self._origin = origin
-        self._file_names = iter(self._origin.file_collector(filepath))
+        self._client = origin
+        self._file_names = iter(self._client.file_collector(filepath))
         self._stopped: bool = False
         self._executor = ThreadPoolExecutor(max_workers=1)
         self._downloading_file_name: Optional[Path] = None
@@ -60,7 +60,7 @@ class FileFetcher:
             self._downloading_file_name = next(self._file_names)
             logger.debug(f"Beginning download of {self._downloading_file_name}...")
             self._downloading_file_content = self._executor.submit(
-                self._origin.get_raw_file_stream, self._downloading_file_name
+                self._client.get_raw_file_stream, self._downloading_file_name
             )
         except StopIteration:
             logger.info("No further files to download.")
@@ -136,6 +136,7 @@ class FileSource(Source):
         replay_speed: float = 1.0,
         name: Optional[str] = None,
         shutdown_timeout: float = 30,
+        client_connect_cb: Optional[Callable[[Optional[Exception]], None]] = None,
     ):
         """
         :param directory: a directory to recursively read through; it is recommended to
@@ -152,19 +153,23 @@ class FileSource(Source):
         :param name: The name of the Source application (Default: last folder name).
         :param shutdown_timeout: Time in seconds the application waits for the source
             to gracefully shutdown
+        :param client_connect_cb: An optional callback made once a client connection
+            is established. Callback expects an Exception or None as an argument.
         """
         if not replay_speed >= 0:
             raise ValueError("`replay_speed` must be a positive value")
 
         self._directory = Path(directory)
-        self._origin = origin
+        self._client = origin
         self._formatter = _get_formatter(format, compression)
         self._replay_speed = replay_speed
         self._previous_timestamp = None
         self._previous_partition = None
         self._file_fetcher: Optional[FileFetcher] = None
         super().__init__(
-            name=name or self._directory.name, shutdown_timeout=shutdown_timeout
+            name=name or self._directory.name,
+            shutdown_timeout=shutdown_timeout,
+            client_connect_cb=client_connect_cb,
         )
 
     def _replay_delay(self, current_timestamp: int):
@@ -209,7 +214,7 @@ class FileSource(Source):
         """
         topic = super().default_topic()
         topic.create_config = TopicConfig(
-            num_partitions=self._origin.get_folder_count(self._directory) or 1,
+            num_partitions=self._client.get_folder_count(self._directory) or 1,
             replication_factor=1,
         )
         return topic
@@ -219,17 +224,21 @@ class FileSource(Source):
             self._file_fetcher.stop()
         super().stop()
 
+    def setup_client(self):
+        self._client = self._client.__enter__()
+
     def run(self):
-        self._file_fetcher = FileFetcher(self._origin, self._directory)
-        logger.info(f"Reading files from topic {self._directory.name}")
-        for file_name, content in self._file_fetcher:
-            logger.debug(f"Reading file {file_name}")
-            self._check_file_partition_number(file_name)
-            for record in self._formatter.read(content):
-                if timestamp := record.get("_timestamp"):
-                    self._replay_delay(timestamp)
-                self._produce(record)
-            self.flush()
+        with self._client:  # for conveniently exiting the context
+            self._file_fetcher = FileFetcher(self._client, self._directory)
+            logger.info(f"Reading files from topic {self._directory.name}")
+            for file_name, content in self._file_fetcher:
+                logger.debug(f"Reading file {file_name}")
+                self._check_file_partition_number(file_name)
+                for record in self._formatter.read(content):
+                    if timestamp := record.get("_timestamp"):
+                        self._replay_delay(timestamp)
+                    self._produce(record)
+                self.flush()
 
 
 def _get_formatter(

@@ -108,15 +108,14 @@ class KinesisConsumer:
         self._checkpointer.commit(force=force)
 
     def __enter__(self) -> Self:
-        self._init_client()
-        self._init_shards()
+        if not self._client:
+            self._client = boto3.client("kinesis", **self._credentials)
+            self._init_shards()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        pass
-
-    def _init_client(self):
-        self._client = boto3.client("kinesis", **self._credentials)
+        if self._client:
+            self._client.close()
 
     def _list_shards(self) -> list[ShardTypeDef]:
         """List all shards in the stream."""

@@ -116,8 +116,8 @@ class PubSubSource(Source):
             headers=dict(message.attributes),
         )
 
-    def run(self):
-        with PubSubConsumer(
+    def setup_client(self):
+        self._client = PubSubConsumer(
             credentials=self._credentials,
             project_id=self._project_id,
             topic_id=self._topic_id,
@@ -127,7 +127,10 @@ class PubSubSource(Source):
             async_function=self._handle_pubsub_message,
             max_batch_size=self._commit_every,
             batch_timeout_secs=self._commit_interval,
-        ) as consumer:
+        ).__enter__()
+
+    def run(self):
+        with self._client as consumer:
             while self._running:
                 consumer.poll_and_process_batch()
                 self.flush()

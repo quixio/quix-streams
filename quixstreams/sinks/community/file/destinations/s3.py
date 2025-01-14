@@ -3,6 +3,7 @@ from os import getenv
 from typing import Optional
 
 import boto3
+from mypy_boto3_s3 import S3Client
 
 from quixstreams.sinks import SinkBatch
 from quixstreams.sinks.community.file.destinations.base import Destination
@@ -31,6 +32,7 @@ class S3Destination(Destination):
         aws_access_key_id: Optional[str] = getenv("AWS_ACCESS_KEY_ID"),
         aws_secret_access_key: Optional[str] = getenv("AWS_SECRET_ACCESS_KEY"),
         region_name: Optional[str] = getenv("AWS_REGION", getenv("AWS_DEFAULT_REGION")),
+        endpoint_url: Optional[str] = getenv("AWS_ENDPOINT_URL_S3"),
         **kwargs,
     ) -> None:
         """Initialize the S3 destination.
@@ -42,20 +44,29 @@ class S3Destination(Destination):
             AWS_SECRET_ACCESS_KEY environment variable.
         :param region_name: AWS region name. Defaults to AWS_REGION or
             AWS_DEFAULT_REGION environment variable.
+        :param endpoint_url: the endpoint URL to use; only required for connecting
+        to a locally hosted S3.
+            NOTE: can alternatively set the AWS_ENDPOINT_URL_S3 environment variable
         :param kwargs: Additional keyword arguments passed to boto3.client.
         :raises S3BucketNotFoundError: If the specified bucket doesn't exist.
         :raises S3BucketAccessDeniedError: If access to the bucket is denied.
         """
         self._bucket = bucket
-        self._s3 = boto3.client(
-            "s3",
-            aws_access_key_id=aws_access_key_id,
-            aws_secret_access_key=aws_secret_access_key,
-            region_name=region_name,
+        self._credentials = {
+            "region_name": region_name,
+            "aws_access_key_id": aws_access_key_id,
+            "aws_secret_access_key": aws_secret_access_key,
+            "endpoint_url": endpoint_url,
             **kwargs,
-        )
-        self._validate_bucket()
-        logger.debug("S3Destination initialized with bucket=%s", bucket)
+        }
+        self._client: Optional[S3Client] = None
+
+    def connect(self):
+        if not self._client:
+            # See init comment as to why we cannot set the client here.
+            # We then attempt a likely-to-succeed query on the bucket to confirm auth.
+            self._client = boto3.client("s3", **self._credentials)
+            self._validate_bucket()
 
     def _validate_bucket(self) -> None:
         """Validate that the bucket exists and is accessible.
@@ -66,8 +77,8 @@ class S3Destination(Destination):
         bucket = self._bucket
         logger.debug("Validating access to bucket: %s", bucket)
         try:
-            self._s3.head_bucket(Bucket=bucket)
-        except self._s3.exceptions.ClientError as e:
+            self._client.head_bucket(Bucket=bucket)
+        except self._client.exceptions.ClientError as e:
             error_code = e.response["Error"]["Code"]
             if error_code == "403":
                 raise S3BucketAccessDeniedError(f"S3 bucket access denied: {bucket}")
@@ -85,4 +96,4 @@ class S3Destination(Destination):
         logger.debug(
             "Writing %d bytes to S3 bucket=%s, path=%s", len(data), self._bucket, key
         )
-        self._s3.put_object(Bucket=self._bucket, Key=key, Body=data)
+        self._client.put_object(Bucket=self._bucket, Key=key, Body=data)

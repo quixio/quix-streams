@@ -1,4 +1,5 @@
 import logging
+from typing import Optional
 
 from quixstreams.sinks import SinkBatch
 from quixstreams.sinks.community.file.destinations.base import Destination
@@ -51,17 +52,17 @@ class AzureFileDestination(Destination):
         :raises AzureContainerAccessDeniedError: If access to the container is denied.
         """
         self._container = container
-        self._client = self._get_client(connection_string)
-        self._validate_container()
+        self._auth = connection_string
+        self._client: Optional[ContainerClient] = None
 
-    def _get_client(self, auth: str) -> ContainerClient:
+    def _get_client(self) -> ContainerClient:
         """
         Get an Azure file container client and validate the container exists.
 
         :param auth: Azure client authentication string.
         :return: An Azure ContainerClient
         """
-        storage_client = BlobServiceClient.from_connection_string(auth)
+        storage_client = BlobServiceClient.from_connection_string(self._auth)
         container_client = storage_client.get_container_client(self._container)
         return container_client
 
@@ -84,6 +85,11 @@ class AzureFileDestination(Destination):
             logger.error("An unexpected Azure client error occurred", exc_info=e)
             raise
         raise AzureContainerNotFoundError(f"Container not found: {self._container}")
+
+    def connect(self):
+        if not self._client:
+            self._client = self._get_client()
+            self._validate_container()
 
     def write(self, data: bytes, batch: SinkBatch) -> None:
         """

@@ -161,7 +161,9 @@ class KafkaReplicatorSource(Source):
             raise RuntimeError("source not started")
         return self._target_cluster_admin
 
-    def run(self) -> None:
+    def setup_client(self):
+        # There are several client objects to manage here, so won't return anything
+        # for self._client (or use it at all)
         logger.info(
             f'Starting the source "{self.name}" with the config: '
             f'source_broker_address="{self._broker_address}" '
@@ -208,6 +210,7 @@ class KafkaReplicatorSource(Source):
             on_revoke=self.on_revoke,
         )
 
+    def run(self) -> None:
         self.init_checkpoint()
         while self._running:
             self.producer.poll()

@@ -1,6 +1,6 @@
 import abc
 import logging
-from typing import Any, Dict, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
 from quixstreams.models import HeadersTuples
 from quixstreams.sinks.base.batch import SinkBatch
@@ -16,6 +16,28 @@ class BaseSink(abc.ABC):
 
     Note that Sinks are currently in beta, and their design may change over time.
     """
+
+    def __init__(
+        self,
+        client_connect_cb: Optional[Callable[[Optional[Exception]], None]] = None,
+    ):
+        """
+        :param client_connect_cb: Am optional callback made once a client connection
+            is established. Callback expects an Exception or None as an argument.
+        """
+        self._init_client(client_connect_cb)
+
+    def _init_client(self, client_connect_cb):
+        error = None
+        try:
+            return self.setup_client()
+        except Exception as e:
+            error = e
+        finally:
+            if client_connect_cb:
+                client_connect_cb(error)
+            elif error:
+                raise error
 
     @abc.abstractmethod
     def flush(self, topic: str, partition: int):
@@ -48,6 +70,13 @@ class BaseSink(abc.ABC):
         on flush().
         """
 
+    @abc.abstractmethod
+    def setup_client(self):
+        """
+        When applicable, set up the client here along with any validation to affirm a
+        valid/successful authentication/connection.
+        """
+
     def on_paused(self, topic: str, partition: int):
         """
         This method is triggered when the sink is paused due to backpressure, when
@@ -57,10 +86,10 @@ class BaseSink(abc.ABC):
         """
 
 
-class BatchingSink(BaseSink):
+class BatchingSink(BaseSink, abc.ABC):
     """
     A base class for batching sinks, that need to accumulate the data first before
-    sending it to the external destinatios.
+    sending it to the external destinations.
 
     Examples: databases, objects stores, and other destinations where
     writing every message is not optimal.
@@ -73,8 +102,16 @@ class BatchingSink(BaseSink):
 
     _batches: Dict[Tuple[str, int], SinkBatch]
 
-    def __init__(self):
+    def __init__(
+        self,
+        client_connect_cb: Optional[Callable[[Optional[Exception]], None]] = None,
+    ):
+        """
+        :param client_connect_cb: An optional callback made once a client connection
+            is established. Callback expects an Exception or None as an argument.
+        """
         self._batches = {}
+        super().__init__(client_connect_cb=client_connect_cb)
 
     def __repr__(self):
         return f"<BatchingSink: {self.__class__.__name__}>"

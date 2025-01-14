@@ -29,6 +29,9 @@ class LocalDestination(Destination):
         self._mode = "ab" if append else "wb"
         logger.debug("LocalDestination initialized with append=%s", append)
 
+    def connect(self):
+        return
+
     def set_extension(self, format: Format) -> None:
         """Set the file extension and validate append mode compatibility.
 

@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import BinaryIO, Iterable
 
+from typing_extensions import Self
+
 __all__ = ("Origin",)
 
 
@@ -34,3 +36,9 @@ class Origin(ABC):
     
     Result should be ready for deserialization (and/or decompression).
     """
+
+    @abstractmethod
+    def __enter__(self) -> Self: ...
+
+    @abstractmethod
+    def __exit__(self, exc_type, exc_val, exc_tb): ...
