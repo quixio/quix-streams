@@ -98,6 +98,7 @@ class BaseSource(ABC):
         finally:
             if cb := self._client_connect_cb:
                 cb(error)
+            # Only raise if no callback; callback could intentionally supress errors
             elif error:
                 raise error
 
@@ -157,7 +158,7 @@ class BaseSource(ABC):
         """
 
 
-class Source(BaseSource, ABC):
+class Source(BaseSource):
     """
     A base class for custom Sources that provides a basic implementation of `BaseSource`
     interface.
@@ -361,7 +362,7 @@ class Source(BaseSource, ABC):
         return self.name
 
 
-class StatefulSource(Source, ABC):
+class StatefulSource(Source):
     """
     A `Source` class for custom Sources that need a state.
 
