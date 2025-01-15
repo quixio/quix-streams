@@ -42,8 +42,11 @@ class FileSink(BatchingSink):
             ("json", "parquet") or a Format instance.
         :param destination: Storage destination handler. Defaults to
             LocalDestination if not specified.
-        :param client_connect_cb: An optional callback made once a client connection
-            is established. Callback expects an Exception or None as an argument.
+        :param client_connect_cb: An optional callback made after attempting client
+            authentication, primarily for additional logging.
+            It should accept a single argument, which will be populated with an
+            Exception if connecting failed (else None).
+            If used, errors must be resolved (or propagated) with the callback.
         """
         self._format = resolve_format(format)
         self._client = destination or LocalDestination()

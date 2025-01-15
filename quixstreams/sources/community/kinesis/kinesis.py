@@ -87,8 +87,11 @@ class KinesisSource(StatefulSource):
         :param commit_interval: the time between commits
         :param retry_backoff_secs: how long to back off from doing HTTP calls for a
              shard when Kinesis consumer encounters handled/expected errors.
-        :param client_connect_cb: An optional callback made once a client connection
-             is established. Callback expects an Exception or None as an argument.
+        :param client_connect_cb: An optional callback made after attempting client
+            authentication, primarily for additional logging.
+            It should accept a single argument, which will be populated with an
+            Exception if connecting failed (else None).
+            If used, errors must be resolved (or propagated) with the callback.
         """
         super().__init__(
             name=f"kinesis_{stream_name}",
