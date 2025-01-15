@@ -839,6 +839,7 @@ class TestQuixApplication:
         expected_consumer_extra_config = {
             **extra_config,
             **quix_extras,
+            "partition.assignment.strategy": "range",
         }
 
         def get_cfg_builder(quix_sdk_token):
@@ -903,6 +904,7 @@ class TestQuixApplication:
         expected_consumer_extra_config = {
             **extra_config,
             **quix_extras,
+            "partition.assignment.strategy": "range",
         }
 
         def get_cfg_builder(quix_sdk_token):
@@ -965,6 +967,7 @@ class TestQuixApplication:
         expected_consumer_extra_config = {
             **extra_config,
             **quix_extras,
+            "partition.assignment.strategy": "range",
         }
 
         def get_cfg_builder(quix_sdk_token):
