@@ -73,8 +73,11 @@ class PostgreSQLSink(BatchingSink):
         :param connection_timeout_seconds: Timeout for connection.
         :param statement_timeout_seconds: Timeout for DDL operations such as table
             creation or schema updates.
-        :param client_connect_cb: An optional callback made once a client connection
-            is established. Callback expects an Exception or None as an argument.
+        :param client_connect_cb: An optional callback made after attempting client
+            authentication, primarily for additional logging.
+            It should accept a single argument, which will be populated with an
+            Exception if connecting failed (else None).
+            If used, errors must be resolved (or propagated) with the callback.
         :param kwargs: Additional parameters for `psycopg2.connect`.
         """
         super().__init__(client_connect_cb=client_connect_cb)
