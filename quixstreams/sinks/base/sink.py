@@ -72,6 +72,10 @@ class BaseSink(abc.ABC):
         """
 
     def start(self):
+        """
+        Called as part of `Application.run()` to initialize the sink's client.
+        Allows using a callback pattern around the connection attempt.
+        """
         error = None
         try:
             self.setup_client()
@@ -80,6 +84,7 @@ class BaseSink(abc.ABC):
         finally:
             if cb := self._client_connect_cb:
                 cb(error)
+            # Only raise if no callback; callback could intentionally supress errors
             elif error:
                 raise error
 
@@ -92,7 +97,7 @@ class BaseSink(abc.ABC):
         """
 
 
-class BatchingSink(BaseSink, abc.ABC):
+class BatchingSink(BaseSink):
     """
     A base class for batching sinks, that need to accumulate the data first before
     sending it to the external destinations.
