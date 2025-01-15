@@ -897,10 +897,6 @@ class Application:
         # get the source data.
         self._source_manager.start_sources()
 
-        # First commit everything processed so far because assignment can take a while
-        # and fail
-        self._processing_context.commit_checkpoint(force=True)
-
         # Assign partitions manually to pause the changelog topics
         self._consumer.assign(topic_partitions)
         # Pause changelog topic+partitions immediately after assignment
