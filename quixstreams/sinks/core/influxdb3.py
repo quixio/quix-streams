@@ -21,9 +21,7 @@ from ..base import BatchingSink, SinkBackpressureError, SinkBatch
 logger = logging.getLogger(__name__)
 
 
-TimePrecision = Literal[
-    "ms", "ns", "us", "s"
-]
+TimePrecision = Literal["ms", "ns", "us", "s"]
 
 InfluxDBValueMap = dict[str, Union[str, int, float, bool]]
 
@@ -83,18 +81,23 @@ class InfluxDB3Sink(BatchingSink):
         :param host: InfluxDB host in format "https://<host>"
         :param organization_id: InfluxDB organization_id
         :param database: database name
-        :measurement: measurement name
-        :param fields_keys: a list of keys to be used as "fields" when writing to InfluxDB.
-            If present, it must not overlap with "tags_keys".
-            If empty, the whole record value will be used.
+        :param measurement: measurement name as a string.
+            Also accepts a single-argument callable that receives the current message
+            data as a dict and returns a string.
+        :param fields_keys: an iterable (list) of strings used as InfluxDB "fields".
+            Also accepts a single-argument callable that receives the current message
+            data as a dict and returns an iterable of strings.
+            - If present, it must not overlap with "tags_keys".
+            - If empty, the whole record value will be used.
             >***NOTE*** The fields' values can only be strings, floats, integers, or booleans.
             Default - `()`.
-        :param tags_keys: a list of keys to be used as "tags" when writing to InfluxDB.
-            If present, it must not overlap with "fields_keys".
-            These keys will be popped from the value dictionary
-            automatically because InfluxDB doesn't allow the same keys be
-            both in tags and fields.
-            If empty, no tags will be sent.
+        :param tags_keys: an iterable (list) of strings used as InfluxDB "tags".
+            Also accepts a single-argument callable that receives the current message
+            data as a dict and returns an iterable of strings.
+            - If present, it must not overlap with "fields_keys".
+            - Given keys are popped from the value dictionary since the same key
+            cannot be both a tag and field.
+            - If empty, no tags will be sent.
             >***NOTE***: InfluxDB client always converts tag values to strings.
             Default - `()`.
         :param time_key: a key to be used as "time" when writing to InfluxDB.
@@ -102,9 +105,10 @@ class InfluxDB3Sink(BatchingSink):
             When using a custom key, you may need to adjust the `time_precision` setting
             to match.
         :param time_precision: a time precision to use when writing to InfluxDB.
-            Possible values: "ms", "ns", "us", "s". 
+            Possible values: "ms", "ns", "us", "s".
             Default - `"ms"`.
-        :param allow_missing_fields: Adds missing fields as nulls, else raise KeyError
+        :param allow_missing_fields: Allow missing keys (auto-populated as nulls in
+            Influx), else raise KeyError.
             Default - `False`
         :param include_metadata_tags: if True, includes record's key, topic,
             and partition as tags.
