@@ -102,7 +102,8 @@ class InfluxDB3Sink(BatchingSink):
             When using a custom key, you may need to adjust the `time_precision` setting
             to match.
         :param time_precision: a time precision to use when writing to InfluxDB.
-            Possible values: "ms", "ns", "us", "s". Default - `"ms"`.
+            Possible values: "ms", "ns", "us", "s". 
+            Default - `"ms"`.
         :param allow_missing_fields: Adds missing fields as nulls, else raise KeyError
             Default - `False`
         :param include_metadata_tags: if True, includes record's key, topic,
