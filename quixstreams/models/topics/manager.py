@@ -4,7 +4,6 @@ from itertools import chain
 from typing import Dict, List, Literal, Optional, Set
 
 from quixstreams.models.serializers import DeserializerType, SerializerType
-from quixstreams.utils.dicts import dict_values
 
 from .admin import TopicAdmin
 from .exceptions import (
@@ -74,19 +73,11 @@ class TopicManager:
         self._auto_create_topics = auto_create_topics
 
     @property
-    def _topics_list(self) -> List[Topic]:
-        return list(self._topics.values())
-
-    @property
-    def _changelog_topics_list(self) -> List[Topic]:
-        return dict_values(self._changelog_topics)
-
-    @property
     def _all_topics_list(self) -> List[Topic]:
         return (
-            self._topics_list
+            list(self._topics.values())
             + list(self._repartition_topics.values())
-            + self._changelog_topics_list
+            + self.changelog_topics_list
         )
 
     @property
