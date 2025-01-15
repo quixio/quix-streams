@@ -108,7 +108,7 @@ class InfluxDB3Sink(BatchingSink):
             Possible values: "ms", "ns", "us", "s".
             Default - `"ms"`.
         :param allow_missing_fields: Allow missing keys (auto-populated as nulls in
-            Influx), else raise KeyError.
+            InfluxDB), else raise KeyError.
             Default - `False`
         :param include_metadata_tags: if True, includes record's key, topic,
             and partition as tags.
