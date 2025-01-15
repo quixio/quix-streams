@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 TimePrecision = Literal[
-    "milliseconds", "ms", "nanoseconds", "ns", "microseconds", "us", "seconds", "s"
+    "ms", "ns", "us", "s"
 ]
 
 InfluxDBValueMap = dict[str, Union[str, int, float, bool]]
