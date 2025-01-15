@@ -49,14 +49,14 @@ class FileSink(BatchingSink):
             If used, errors must be resolved (or propagated) with the callback.
         """
         self._format = resolve_format(format)
-        self._client = destination or LocalDestination()
-        self._client.set_directory(directory)
-        self._client.set_extension(self._format)
+        self._destination = destination or LocalDestination()
+        self._destination.set_directory(directory)
+        self._destination.set_extension(self._format)
         super().__init__(client_connect_cb=client_connect_cb)
 
     def setup_client(self) -> Destination:
-        self._client.connect()
-        return self._client
+        self._destination.connect()
+        return self._destination
 
     def write(self, batch: SinkBatch) -> None:
         """Write a batch of data using the configured format and destination.
@@ -73,7 +73,7 @@ class FileSink(BatchingSink):
         data = self._format.serialize(batch)
 
         try:
-            self._client.write(data, batch)
+            self._destination.write(data, batch)
         except Exception as e:
             raise SinkBackpressureError(
                 retry_after=5.0,

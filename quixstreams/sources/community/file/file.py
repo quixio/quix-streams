@@ -25,8 +25,8 @@ class FileFetcher:
     """
 
     def __init__(self, origin: Origin, filepath: Path):
-        self._client = origin
-        self._file_names = iter(self._client.file_collector(filepath))
+        self._origin = origin
+        self._file_names = iter(self._origin.file_collector(filepath))
         self._stopped: bool = False
         self._executor = ThreadPoolExecutor(max_workers=1)
         self._downloading_file_name: Optional[Path] = None
@@ -60,7 +60,7 @@ class FileFetcher:
             self._downloading_file_name = next(self._file_names)
             logger.debug(f"Beginning download of {self._downloading_file_name}...")
             self._downloading_file_content = self._executor.submit(
-                self._client.get_raw_file_stream, self._downloading_file_name
+                self._origin.get_raw_file_stream, self._downloading_file_name
             )
         except StopIteration:
             logger.info("No further files to download.")
@@ -169,7 +169,7 @@ class FileSource(Source):
         if not replay_speed >= 0:
             raise ValueError("`replay_speed` must be a positive value")
 
-        self._client = origin
+        self._origin = origin
         self._formatter = _get_formatter(format, compression)
         self._replay_speed = replay_speed
         self._previous_timestamp = None
@@ -218,7 +218,7 @@ class FileSource(Source):
         """
         topic = super().default_topic()
         topic.create_config = TopicConfig(
-            num_partitions=self._client.get_folder_count(self._directory) or 1,
+            num_partitions=self._origin.get_folder_count(self._directory) or 1,
             replication_factor=1,
         )
         return topic
@@ -229,11 +229,11 @@ class FileSource(Source):
         super().stop()
 
     def setup_client(self):
-        self._client = self._client.__enter__()
+        self._origin = self._origin.__enter__()
 
     def run(self):
-        with self._client:  # for conveniently exiting the context
-            self._file_fetcher = FileFetcher(self._client, self._directory)
+        with self._origin:  # for conveniently exiting the context
+            self._file_fetcher = FileFetcher(self._origin, self._directory)
             logger.info(f"Reading files from topic {self._directory.name}")
             for file_name, content in self._file_fetcher:
                 logger.debug(f"Reading file {file_name}")
