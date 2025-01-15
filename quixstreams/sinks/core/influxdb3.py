@@ -1,7 +1,7 @@
 import logging
 import sys
 import time
-from typing import Any, Callable, Iterable, Mapping, Optional
+from typing import Any, Iterable, Mapping, Optional
 
 from quixstreams.models import HeadersTuples
 
@@ -15,7 +15,7 @@ except ImportError as exc:
         "run pip install quixstreams[influxdb3] to fix it"
     ) from exc
 
-from ..base import BatchingSink, SinkBackpressureError, SinkBatch
+from ..base import BatchingSink, ClientConnectCallback, SinkBackpressureError, SinkBatch
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ class InfluxDB3Sink(BatchingSink):
         enable_gzip: bool = True,
         request_timeout_ms: int = 10_000,
         debug: bool = False,
-        client_connect_cb: Optional[Callable[[Optional[Exception]], None]] = None,
+        client_connect_cb: ClientConnectCallback = None,
     ):
         """
         A connector to sink processed data to InfluxDB v3.
@@ -91,9 +91,11 @@ class InfluxDB3Sink(BatchingSink):
             Default - `10000`.
         :param debug: if True, print debug logs from InfluxDB client.
             Default - `False`.
-        :param client_connect_cb: Am optional callback made once a client connection
+        :param client_connect_cb: An optional callback made once a client connection
             is established. Callback expects an Exception or None as an argument.
         """
+        super().__init__(client_connect_cb=client_connect_cb)
+
         fields_tags_keys_overlap = set(fields_keys) & set(tags_keys)
         if fields_tags_keys_overlap:
             overlap_str = ",".join(str(k) for k in fields_tags_keys_overlap)
@@ -115,6 +117,7 @@ class InfluxDB3Sink(BatchingSink):
                 )
             },
         )
+        self._client: Optional[InfluxDBClient3] = None
         self._measurement = measurement
         self._fields_keys = fields_keys
         self._tags_keys = tags_keys
@@ -122,7 +125,6 @@ class InfluxDB3Sink(BatchingSink):
         self._time_key = time_key
         self._write_precision = time_precision
         self._batch_size = batch_size
-        super().__init__(client_connect_cb=client_connect_cb)
 
     def setup_client(self):
         self._client = InfluxDBClient3(**self._client_args)
@@ -209,7 +211,7 @@ class InfluxDB3Sink(BatchingSink):
 
             try:
                 _start = time.monotonic()
-                self._client.write(
+                self._client.write(  # type: ignore[union-attr]
                     record=records, write_precision=self._write_precision
                 )
                 elapsed = round(time.monotonic() - _start, 2)

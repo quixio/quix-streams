@@ -1,8 +1,8 @@
 from os import getenv
-from typing import Callable, Optional
+from typing import Optional
 
 from quixstreams.models.topics import Topic
-from quixstreams.sources.base import StatefulSource
+from quixstreams.sources.base import ClientConnectCallback, StatefulSource
 
 from .consumer import (
     AutoOffsetResetType,
@@ -66,7 +66,7 @@ class KinesisSource(StatefulSource):
         max_records_per_shard: int = 1000,
         commit_interval: float = 5.0,
         retry_backoff_secs: float = 5.0,
-        client_connect_cb: Optional[Callable[[Optional[Exception]], None]] = None,
+        client_connect_cb: ClientConnectCallback = None,
     ):
         """
         :param stream_name: name of the desired Kinesis stream to consume.
@@ -90,6 +90,12 @@ class KinesisSource(StatefulSource):
         :param client_connect_cb: An optional callback made once a client connection
              is established. Callback expects an Exception or None as an argument.
         """
+        super().__init__(
+            name=f"kinesis_{stream_name}",
+            shutdown_timeout=shutdown_timeout,
+            client_connect_cb=client_connect_cb,
+        )
+
         self._stream_name = stream_name
         self._credentials: AWSCredentials = {
             "endpoint_url": aws_endpoint_url,
@@ -103,11 +109,6 @@ class KinesisSource(StatefulSource):
         self._retry_backoff_secs = retry_backoff_secs
         self._checkpointer = KinesisCheckpointer(
             stateful_source=self, commit_interval=commit_interval
-        )
-        super().__init__(
-            name=f"kinesis_{self._stream_name}",
-            shutdown_timeout=shutdown_timeout,
-            client_connect_cb=client_connect_cb,
         )
 
     def default_topic(self) -> Topic:

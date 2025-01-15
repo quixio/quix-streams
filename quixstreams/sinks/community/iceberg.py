@@ -5,9 +5,14 @@ from dataclasses import dataclass
 from datetime import datetime
 from importlib import import_module
 from io import BytesIO
-from typing import Callable, Literal, Optional, Type, get_args
+from typing import Literal, Optional, Type, get_args
 
-from quixstreams.sinks import BatchingSink, SinkBackpressureError, SinkBatch
+from quixstreams.sinks import (
+    BatchingSink,
+    ClientConnectCallback,
+    SinkBackpressureError,
+    SinkBatch,
+)
 
 try:
     import pyarrow as pa
@@ -142,8 +147,10 @@ class IcebergSink(BatchingSink):
         data_catalog_spec: DataCatalogSpec,
         schema: Optional[Schema] = None,
         partition_spec: Optional[PartitionSpec] = None,
-        client_connect_cb: Optional[Callable[[Optional[Exception]], None]] = None,
+        client_connect_cb: ClientConnectCallback = None,
     ):
+        super().__init__(client_connect_cb=client_connect_cb)
+
         self._iceberg_config = config
         self._table_name = table_name
         self._table: Optional[Table] = None
@@ -165,10 +172,9 @@ class IcebergSink(BatchingSink):
             else self._get_default_partition_spec(self._schema)
         )
 
-        super().__init__(client_connect_cb=client_connect_cb)
-
     def setup_client(self):
-        # Create the Iceberg table if it doesn't exist.
+        # Our client is an interface for a table, so for the sake of
+        # readability, the client will be called "_table"
         self._table = self.data_catalog.create_table_if_not_exists(
             identifier=self._table_name,
             schema=self._schema,
