@@ -15,7 +15,7 @@ except ImportError as exc:
         "run pip install quixstreams[influxdb3] to fix it"
     ) from exc
 
-from ..base import BatchingSink, SinkBackpressureError, SinkBatch
+from ..base import BatchingSink, ClientConnectCallback, SinkBackpressureError, SinkBatch
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +37,7 @@ class InfluxDB3Sink(BatchingSink):
         enable_gzip: bool = True,
         request_timeout_ms: int = 10_000,
         debug: bool = False,
+        client_connect_cb: ClientConnectCallback = None,
     ):
         """
         A connector to sink processed data to InfluxDB v3.
@@ -90,9 +91,14 @@ class InfluxDB3Sink(BatchingSink):
             Default - `10000`.
         :param debug: if True, print debug logs from InfluxDB client.
             Default - `False`.
+        :param client_connect_cb: An optional callback made after attempting client
+            authentication, primarily for additional logging.
+            It should accept a single argument, which will be populated with an
+            Exception if connecting failed (else None).
+            If used, errors must be resolved (or propagated) with the callback.
         """
+        super().__init__(client_connect_cb=client_connect_cb)
 
-        super().__init__()
         fields_tags_keys_overlap = set(fields_keys) & set(tags_keys)
         if fields_tags_keys_overlap:
             overlap_str = ",".join(str(k) for k in fields_tags_keys_overlap)
@@ -100,7 +106,7 @@ class InfluxDB3Sink(BatchingSink):
                 f'Keys {overlap_str} are present in both "fields_keys" and "tags_keys"'
             )
 
-        self._client = InfluxDBClient3(
+        self._client_args = dict(
             token=token,
             host=host,
             org=organization_id,
@@ -114,6 +120,7 @@ class InfluxDB3Sink(BatchingSink):
                 )
             },
         )
+        self._client: Optional[InfluxDBClient3] = None
         self._measurement = measurement
         self._fields_keys = fields_keys
         self._tags_keys = tags_keys
@@ -121,6 +128,16 @@ class InfluxDB3Sink(BatchingSink):
         self._time_key = time_key
         self._write_precision = time_precision
         self._batch_size = batch_size
+
+    def setup_client(self):
+        self._client = InfluxDBClient3(**self._client_args)
+        try:
+            # We cannot safely parameterize the table (measurement) selection, so
+            # the best we can do is confirm authentication was successful
+            self._client.query("")
+        except Exception as e:
+            if "No SQL statements were provided in the query string" not in str(e):
+                raise
 
     def add(
         self,
@@ -197,7 +214,7 @@ class InfluxDB3Sink(BatchingSink):
 
             try:
                 _start = time.monotonic()
-                self._client.write(
+                self._client.write(  # type: ignore[union-attr]
                     record=records, write_precision=self._write_precision
                 )
                 elapsed = round(time.monotonic() - _start, 2)

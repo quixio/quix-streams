@@ -2,7 +2,7 @@ from os import getenv
 from typing import Optional
 
 from quixstreams.models.topics import Topic
-from quixstreams.sources.base import StatefulSource
+from quixstreams.sources.base import ClientConnectCallback, StatefulSource
 
 from .consumer import (
     AutoOffsetResetType,
@@ -66,6 +66,7 @@ class KinesisSource(StatefulSource):
         max_records_per_shard: int = 1000,
         commit_interval: float = 5.0,
         retry_backoff_secs: float = 5.0,
+        client_connect_cb: ClientConnectCallback = None,
     ):
         """
         :param stream_name: name of the desired Kinesis stream to consume.
@@ -86,7 +87,18 @@ class KinesisSource(StatefulSource):
         :param commit_interval: the time between commits
         :param retry_backoff_secs: how long to back off from doing HTTP calls for a
              shard when Kinesis consumer encounters handled/expected errors.
+        :param client_connect_cb: An optional callback made after attempting client
+            authentication, primarily for additional logging.
+            It should accept a single argument, which will be populated with an
+            Exception if connecting failed (else None).
+            If used, errors must be resolved (or propagated) with the callback.
         """
+        super().__init__(
+            name=f"kinesis_{stream_name}",
+            shutdown_timeout=shutdown_timeout,
+            client_connect_cb=client_connect_cb,
+        )
+
         self._stream_name = stream_name
         self._credentials: AWSCredentials = {
             "endpoint_url": aws_endpoint_url,
@@ -100,9 +112,6 @@ class KinesisSource(StatefulSource):
         self._retry_backoff_secs = retry_backoff_secs
         self._checkpointer = KinesisCheckpointer(
             stateful_source=self, commit_interval=commit_interval
-        )
-        super().__init__(
-            name=f"kinesis_{self._stream_name}", shutdown_timeout=shutdown_timeout
         )
 
     def default_topic(self) -> Topic:
@@ -126,8 +135,8 @@ class KinesisSource(StatefulSource):
             timestamp=serialized_msg.timestamp,
         )
 
-    def run(self):
-        with KinesisConsumer(
+    def setup_client(self):
+        self._client = KinesisConsumer(
             stream_name=self._stream_name,
             credentials=self._credentials,
             message_processor=self._handle_kinesis_message,
@@ -135,7 +144,10 @@ class KinesisSource(StatefulSource):
             checkpointer=self._checkpointer,
             max_records_per_shard=self._max_records_per_shard,
             backoff_secs=self._retry_backoff_secs,
-        ) as consumer:
+        ).__enter__()
+
+    def run(self):
+        with self._client as consumer:
             while self._running:
                 consumer.process_shards()
                 consumer.commit()

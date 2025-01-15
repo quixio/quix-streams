@@ -3,9 +3,7 @@ import logging
 import time
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Mapping
-
-from typing_extensions import Optional
+from typing import Any, Mapping, Optional
 
 try:
     from google.cloud import bigquery
@@ -19,7 +17,7 @@ except ImportError as exc:
 
 from quixstreams.exceptions import QuixException
 from quixstreams.models import HeadersTuples
-from quixstreams.sinks import BatchingSink, SinkBatch
+from quixstreams.sinks import BatchingSink, ClientConnectCallback, SinkBatch
 
 __all__ = ("BigQuerySink", "BigQuerySinkException")
 
@@ -62,6 +60,7 @@ class BigQuerySink(BatchingSink):
         ddl_timeout: float = 10.0,
         insert_timeout: float = 10.0,
         retry_timeout: float = 30.0,
+        client_connect_cb: ClientConnectCallback = None,
         **kwargs,
     ):
         """
@@ -101,10 +100,15 @@ class BigQuerySink(BatchingSink):
         :param retry_timeout: a total timeout for each request to BigQuery API.
             During this timeout, a request can be retried according
             to the client's default retrying policy.
+        :param client_connect_cb: An optional callback made after attempting client
+            authentication, primarily for additional logging.
+            It should accept a single argument, which will be populated with an
+            Exception if connecting failed (else None).
+            If used, errors must be resolved (or propagated) with the callback.
         :param kwargs: Additional keyword arguments passed to `bigquery.Client`.
         """
+        super().__init__(client_connect_cb=client_connect_cb)
 
-        super().__init__()
         self.location = location
         self.project_id = project_id
         self.dataset_id = f"{self.project_id}.{dataset_id}"
@@ -123,12 +127,16 @@ class BigQuerySink(BatchingSink):
                 scopes=["https://www.googleapis.com/auth/bigquery"],
             )
             kwargs["credentials"] = credentials
+        self._client: Optional[bigquery.Client] = None
+        self._client_settings = kwargs
 
-        self._client = bigquery.Client(**kwargs)
-        logger.info("Successfully authenticated to BigQuery.")
-        if self.schema_auto_update:
-            # Initialize a table in BigQuery if it doesn't exist already
-            self._init_table()
+    def setup_client(self):
+        if not self._client:
+            self._client = bigquery.Client(**self._client_settings)
+            logger.info("Successfully authenticated to BigQuery.")
+            if self.schema_auto_update:
+                # Initialize a table in BigQuery if it doesn't exist already
+                self._init_table()
 
     def write(self, batch: SinkBatch):
         rows = []
