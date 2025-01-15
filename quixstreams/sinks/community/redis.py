@@ -11,7 +11,7 @@ except ImportError as exc:
         'run "pip install quixstreams[redis]" to use RedisSink'
     ) from exc
 
-from quixstreams.sinks import BatchingSink, SinkBatch
+from quixstreams.sinks import BatchingSink, ClientConnectCallback, SinkBatch
 
 __all__ = ("RedisSink",)
 
@@ -28,7 +28,7 @@ class RedisSink(BatchingSink):
         key_serializer: Optional[Callable[[Any, Any], Union[bytes, str]]] = None,
         password: Optional[str] = None,
         socket_timeout: float = 30.0,
-        client_connect_cb: Optional[Callable[[Optional[Exception]], None]] = None,
+        client_connect_cb: ClientConnectCallback = None,
         **kwargs,
     ) -> None:
         """
@@ -49,6 +49,8 @@ class RedisSink(BatchingSink):
             is established. Callback expects an Exception or None as an argument.
         :param kwargs: Additional keyword arguments passed to the `redis.Redis` instance.
         """
+        super().__init__(client_connect_cb=client_connect_cb)
+
         self._key_serializer = key_serializer
         self._value_serializer = value_serializer
         self._redis_uri: Optional[str] = None
@@ -61,8 +63,6 @@ class RedisSink(BatchingSink):
             "socket_timeout": socket_timeout,
             **kwargs,
         }
-
-        super().__init__(client_connect_cb=client_connect_cb)
 
     def setup_client(self):
         self._redis_uri = (
