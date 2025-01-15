@@ -822,6 +822,18 @@ For other parameters See `quixstreams.sources.kafka.KafkaReplicatorSource`
 
 ## quixstreams.sources.community.file.file
 
+<a id="quixstreams.sources.community.file.file.FileFetcher"></a>
+
+### FileFetcher
+
+```python
+class FileFetcher()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/file.py#L22)
+
+Serves individual files while downloading another in the background.
+
 <a id="quixstreams.sources.community.file.file.FileSource"></a>
 
 ### FileSource
@@ -830,7 +842,7 @@ For other parameters See `quixstreams.sources.kafka.KafkaReplicatorSource`
 class FileSource(Source)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/file.py#L19)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/file.py#L70)
 
 Ingest a set of files from a desired origin into Kafka by iterating through the
 provided folder and processing all nested files within it.
@@ -902,10 +914,10 @@ def __init__(directory: Union[str, Path],
              compression: Optional[CompressionName] = None,
              replay_speed: float = 1.0,
              name: Optional[str] = None,
-             shutdown_timeout: float = 10)
+             shutdown_timeout: float = 30)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/file.py#L79)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/file.py#L130)
 
 
 <br>
@@ -936,7 +948,7 @@ to gracefully shutdown
 def default_topic() -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/file.py#L152)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/file.py#L204)
 
 Uses the file structure to generate the desired partition count for the
 
