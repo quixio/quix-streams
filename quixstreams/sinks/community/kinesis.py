@@ -15,7 +15,7 @@ except ImportError as exc:
     ) from exc
 
 from quixstreams.models.types import HeadersTuples
-from quixstreams.sinks.base import BaseSink
+from quixstreams.sinks.base import BaseSink, ClientConnectCallback
 from quixstreams.sinks.base.exceptions import SinkBackpressureError
 
 __all__ = ("KinesisSink", "KinesisStreamNotFoundError")
@@ -35,7 +35,7 @@ class KinesisSink(BaseSink):
         aws_endpoint_url: Optional[str] = getenv("AWS_ENDPOINT_URL_KINESIS"),
         value_serializer: Callable[[Any], str] = json.dumps,
         key_serializer: Callable[[Any], str] = bytes.decode,
-        client_connect_cb: Optional[Callable[[Optional[Exception]], None]] = None,
+        client_connect_cb: ClientConnectCallback = None,
         **kwargs,
     ) -> None:
         """
@@ -53,6 +53,8 @@ class KinesisSink(BaseSink):
         :param client_connect_cb: An optional callback made once a client connection
             is established. Callback expects an Exception or None as an argument.
         """
+        super().__init__(client_connect_cb=client_connect_cb)
+
         self._client: Optional[KinesisClient] = None
         self._stream_name = stream_name
         self._value_serializer = value_serializer
@@ -72,7 +74,6 @@ class KinesisSink(BaseSink):
         # Thread pool executor for asynchronous operations. Single thread ensures
         # that records are sent in order at the expense of throughput.
         self._executor = ThreadPoolExecutor(max_workers=1)
-        super().__init__(client_connect_cb=client_connect_cb)
 
     def setup_client(self):
         self._client = boto3.client("kinesis", **self._credentials)

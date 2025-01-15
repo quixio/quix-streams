@@ -3,7 +3,7 @@ import logging
 from typing import Optional
 
 from quixstreams.models import Topic
-from quixstreams.sources import Source
+from quixstreams.sources import ClientConnectCallback, Source
 
 from .consumer import PubSubConsumer, PubSubMessage
 
@@ -63,6 +63,7 @@ class PubSubSource(Source):
         create_subscription: bool = False,
         enable_message_ordering: bool = False,
         shutdown_timeout: float = 10.0,
+        client_connect_cb: ClientConnectCallback = None,
     ):
         """
         :param project_id: a Google Cloud project ID.
@@ -79,7 +80,15 @@ class PubSubSource(Source):
         :param enable_message_ordering: When creating a Pub/Sub subscription, whether
             to allow message ordering. NOTE: does NOT affect existing subscriptions!
         :param shutdown_timeout: How long to wait for a graceful shutdown of the source.
+        :param client_connect_cb: An optional callback made once a client connection
+             is established. Callback expects an Exception or None as an argument.
         """
+        super().__init__(
+            name=subscription_id,
+            shutdown_timeout=shutdown_timeout,
+            client_connect_cb=client_connect_cb,
+        )
+
         self._credentials = service_account_json
         self._project_id = project_id
         self._topic_id = topic_id
@@ -88,10 +97,7 @@ class PubSubSource(Source):
         self._commit_interval = commit_interval
         self._create_subscription = create_subscription
         self._enable_message_ordering = enable_message_ordering
-        super().__init__(
-            name=subscription_id,
-            shutdown_timeout=shutdown_timeout,
-        )
+        self._client: Optional[PubSubConsumer] = None
 
     def default_topic(self) -> Topic:
         return Topic(
