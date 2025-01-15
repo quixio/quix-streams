@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)
 
 
 class FixedCountWindow(Window):
+    STATE_KEY = "data"
+
     def __init__(
         self,
         name: str,
@@ -46,27 +48,29 @@ class FixedCountWindow(Window):
         timestamp_ms: int,
         state: WindowedState,
     ) -> tuple[Iterable[WindowResult], Iterable[WindowResult]]:
-        data = state.get(key="window")
+        data = state.get(key=self.STATE_KEY)
         if data is None:
-            metadata = {"count": 0, "start": timestamp_ms}
+            metadata = {"count": 0, "start": timestamp_ms, "end": timestamp_ms}
             previous_value = self._aggregate_default
         else:
             metadata, previous_value = data
 
         aggregated = self._aggregate_func(previous_value, value)
-
         metadata["count"] += 1
+        if timestamp_ms > metadata["end"]:
+            metadata["end"] = timestamp_ms
+
         windows = [
             WindowResult(
                 start=metadata["start"],
-                end=timestamp_ms,
+                end=metadata["end"],
                 value=self._merge_func(aggregated),
             )
         ]
 
         if metadata["count"] >= self._max_count:
-            state.delete(key="window")
+            state.delete(key=self.STATE_KEY)
             return windows, windows
 
-        state.set(key="window", value=(metadata, aggregated))
+        state.set(key=self.STATE_KEY, value=(metadata, aggregated))
         return windows, []

@@ -207,8 +207,8 @@ class FixedTimeWindowDefinition(BaseWindowDefinition):
         aggregate_func: WindowAggregateFunc,
         aggregate_default: Any,
         *,
-        merge_func: Optional[WindowMergeFunc] = None,
         aggregate_collection: bool = False,
+        merge_func: Optional[WindowMergeFunc] = None,
     ) -> FixedTimeWindow: ...
 
     def collect(self) -> "FixedTimeWindow":
@@ -269,8 +269,8 @@ class FixedTimeHoppingWindowDefinition(FixedTimeWindowDefinition):
         aggregate_func: WindowAggregateFunc,
         aggregate_default: Any,
         *,
-        merge_func: Optional[WindowMergeFunc] = None,
         aggregate_collection: bool = False,
+        merge_func: Optional[WindowMergeFunc] = None,
     ) -> FixedTimeWindow:
         return FixedTimeWindow(
             duration_ms=self._duration_ms,

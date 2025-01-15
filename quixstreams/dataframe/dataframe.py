@@ -847,7 +847,7 @@ class StreamingDataFrame(BaseStreaming):
         name: Optional[str] = None,
     ) -> FixedTimeTumblingWindowDefinition:
         """
-        Create a tumbling window transformation on this StreamingDataFrame.
+        Create a time-based tumbling window transformation on this StreamingDataFrame.
         Tumbling windows divide time into fixed-sized, non-overlapping windows.
 
         They allow performing stateful aggregations like `sum`, `reduce`, etc.
@@ -861,7 +861,6 @@ class StreamingDataFrame(BaseStreaming):
         - The time windows always use the current event time.
 
 
-
         Example Snippet:
 
         ```python
@@ -870,7 +869,7 @@ class StreamingDataFrame(BaseStreaming):
 
         sdf = (
             # Define a tumbling window of 60s and grace period of 10s
-            sdf.tumbling_window(
+            sdf.tumbling_time_window(
                 duration_ms=timedelta(seconds=60), grace_ms=timedelta(seconds=10.0)
             )
 
@@ -903,7 +902,7 @@ class StreamingDataFrame(BaseStreaming):
         :param name: The unique identifier for the window. If not provided, it will be
             automatically generated based on the window's properties.
 
-        :return: `TumblingWindowDefinition` instance representing the tumbling window
+        :return: `FixedTimeTumblingWindowDefinition` instance representing the tumbling window
             configuration.
             This object can be further configured with aggregation functions
             like `sum`, `count`, etc. applied to the StreamingDataFrame.
@@ -919,6 +918,53 @@ class StreamingDataFrame(BaseStreaming):
     def tumbling_count_window(
         self, count: int, name: Optional[str] = None
     ) -> CountTumblingWindowDefinition:
+        """
+        Create a count-based tumbling window transformation on this StreamingDataFrame.
+        Tumbling windows divide messages into fixed-batch, non-overlapping windows.
+
+        They allow performing stateful aggregations like `sum`, `reduce`, etc.
+        on top of the data and emit results downstream.
+
+        Notes:
+
+        - The timestamp of the aggregation result is set to the starting message timestamp.
+        - Every window is grouped by the current Kafka message key.
+        - Messages with `None` key will be ignored.
+
+
+        Example Snippet:
+
+        ```python
+        app = Application()
+        sdf = app.dataframe(...)
+
+        sdf = (
+            # Define a tumbling window of 60s and grace period of 10s
+            sdf.tumbling_count_window(count=10)
+
+            # Specify the aggregation function
+            .sum()
+
+            # Specify how the results should be emitted downstream.
+            # "current()" will emit results as they come for each updated window,
+            # possibly producing multiple messages per key-window pair
+            # "final()" will emit windows only when they are closed and cannot
+            # receive any updates anymore.
+            .current()
+        )
+        ```
+
+        :param count: The length of each window. The number of messages to include in the window.
+
+        :param name: The unique identifier for the window. If not provided, it will be
+            automatically generated based on the window's properties.
+
+        :return: `CountTumblingWindowDefinition` instance representing the tumbling window
+            configuration.
+            This object can be further configured with aggregation functions
+            like `sum`, `count`, etc. applied to the StreamingDataFrame.
+
+        """
         return CountTumblingWindowDefinition(
             count=count,
             dataframe=self,
@@ -999,7 +1045,7 @@ class StreamingDataFrame(BaseStreaming):
         :param name: The unique identifier for the window. If not provided, it will be
             automatically generated based on the window's properties.
 
-        :return: `HoppingWindowDefinition` instance representing the hopping
+        :return: `FixedTimeHoppingWindowDefinition` instance representing the hopping
             window configuration.
             This object can be further configured with aggregation functions
             like `sum`, `count`, etc. and applied to the StreamingDataFrame.
@@ -1085,7 +1131,7 @@ class StreamingDataFrame(BaseStreaming):
         :param name: The unique identifier for the window. If not provided, it will be
             automatically generated based on the window's properties.
 
-        :return: `SlidingWindowDefinition` instance representing the sliding window
+        :return: `FixedTimeSlidingWindowDefinition` instance representing the sliding window
             configuration.
             This object can be further configured with aggregation functions
             like `sum`, `count`, etc. applied to the StreamingDataFrame.
