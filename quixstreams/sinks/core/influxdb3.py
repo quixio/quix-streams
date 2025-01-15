@@ -51,7 +51,7 @@ class InfluxDB3Sink(BatchingSink):
         host: str,
         organization_id: str,
         database: str,
-        measurement: MeasurementSetter = "default",
+        measurement: MeasurementSetter,
         fields_keys: FieldsSetter = (),
         tags_keys: TagsSetter = (),
         time_key: Optional[str] = None,
