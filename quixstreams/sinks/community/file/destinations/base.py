@@ -10,7 +10,7 @@ __all__ = ("Destination",)
 
 logger = logging.getLogger(__name__)
 
-_UNSAFE_CHARACTERS_REGEX = re.compile(r"[^a-zA-Z0-9 ._]")
+_UNSAFE_CHARACTERS_REGEX = re.compile(r"[^a-zA-Z0-9 ._/]")
 
 
 class Destination(ABC):
@@ -40,14 +40,18 @@ class Destination(ABC):
         """
         ...
 
-    def set_directory(self, directory: str) -> None:
+    def set_directory(
+        self,
+        directory: str,
+    ) -> None:
         """Configure the base directory for storing files.
 
         :param directory: The base directory path where files will be stored.
         :raises ValueError: If the directory path contains invalid characters.
-            Only alphanumeric characters (a-zA-Z0-9), spaces, dots, and
+            Only alphanumeric characters (a-zA-Z0-9), spaces, dots, slashes, and
             underscores are allowed.
         """
+        # TODO: logic around "/" for sinks that require special handling of them
         if _UNSAFE_CHARACTERS_REGEX.search(directory):
             raise ValueError(
                 f"Invalid characters in directory path: {directory}. "

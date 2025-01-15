@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Callable, Mapping, Optional
+from typing import Any, Mapping
 
 try:
     import psycopg2
@@ -15,7 +15,7 @@ except ImportError as exc:
 
 from quixstreams.exceptions import QuixException
 from quixstreams.models import HeadersTuples
-from quixstreams.sinks import BatchingSink, SinkBatch
+from quixstreams.sinks import BatchingSink, ClientConnectCallback, SinkBatch
 
 __all__ = ("PostgreSQLSink", "PostgreSQLSinkException")
 
@@ -57,7 +57,7 @@ class PostgreSQLSink(BatchingSink):
         schema_auto_update: bool = True,
         connection_timeout_seconds: int = 30,
         statement_timeout_seconds: int = 30,
-        client_connect_cb: Optional[Callable[[Optional[Exception]], None]] = None,
+        client_connect_cb: ClientConnectCallback = None,
         **kwargs,
     ):
         """
@@ -77,6 +77,8 @@ class PostgreSQLSink(BatchingSink):
             is established. Callback expects an Exception or None as an argument.
         :param kwargs: Additional parameters for `psycopg2.connect`.
         """
+        super().__init__(client_connect_cb=client_connect_cb)
+
         self.table_name = table_name
         self.schema_auto_update = schema_auto_update
         options = kwargs.pop("options", "")
@@ -93,7 +95,6 @@ class PostgreSQLSink(BatchingSink):
             **kwargs,
         }
         self._client = None
-        super().__init__(client_connect_cb=client_connect_cb)
 
     def setup_client(self):
         self._client = psycopg2.connect(**self._client_settings)

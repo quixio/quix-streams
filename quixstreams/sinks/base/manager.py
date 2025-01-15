@@ -14,6 +14,10 @@ class SinkManager:
         if sink_id not in self._sinks:
             self._sinks[id(sink)] = sink
 
+    def start_sinks(self):
+        for sink in self.sinks:
+            sink.start()
+
     @property
     def sinks(self) -> List[BaseSink]:
         return list(self._sinks.values())

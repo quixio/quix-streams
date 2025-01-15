@@ -15,7 +15,11 @@ except ImportError as exc:
     ) from exc
 
 from quixstreams.models.types import HeadersTuples
-from quixstreams.sinks.base import BaseSink, SinkBackpressureError
+from quixstreams.sinks.base import (
+    BaseSink,
+    ClientConnectCallback,
+    SinkBackpressureError,
+)
 
 __all__ = ("PubSubSink", "PubSubTopicNotFoundError")
 
@@ -37,7 +41,7 @@ class PubSubSink(BaseSink):
         value_serializer: Callable[[Any], Union[bytes, str]] = json.dumps,
         key_serializer: Callable[[Any], str] = bytes.decode,
         flush_timeout: int = 5,
-        client_connect_cb: Optional[Callable[[Optional[Exception]], None]] = None,
+        client_connect_cb: ClientConnectCallback = None,
         **kwargs,
     ) -> None:
         """
@@ -58,6 +62,7 @@ class PubSubSink(BaseSink):
             is established. Callback expects an Exception or None as an argument.
         :param kwargs: Additional keyword arguments passed to PublisherClient.
         """
+        super().__init__(client_connect_cb=client_connect_cb)
 
         # Parse the service account credentials from JSON
         if service_account_json is not None:
@@ -78,8 +83,6 @@ class PubSubSink(BaseSink):
         self._futures: dict[TopicPartition, list[Future]] = defaultdict(list)
         self._client: Optional[pubsub_v1.PublisherClient] = None
         self._topic: Optional[str] = None
-
-        super().__init__(client_connect_cb=client_connect_cb)
 
     def setup_client(self):
         self._client = pubsub_v1.PublisherClient(**self._client_settings)

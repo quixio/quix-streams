@@ -3,7 +3,7 @@ import logging
 import time
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Callable, Mapping, Optional
+from typing import Any, Mapping, Optional
 
 try:
     from google.cloud import bigquery
@@ -17,7 +17,7 @@ except ImportError as exc:
 
 from quixstreams.exceptions import QuixException
 from quixstreams.models import HeadersTuples
-from quixstreams.sinks import BatchingSink, SinkBatch
+from quixstreams.sinks import BatchingSink, ClientConnectCallback, SinkBatch
 
 __all__ = ("BigQuerySink", "BigQuerySinkException")
 
@@ -60,7 +60,7 @@ class BigQuerySink(BatchingSink):
         ddl_timeout: float = 10.0,
         insert_timeout: float = 10.0,
         retry_timeout: float = 30.0,
-        client_connect_cb: Optional[Callable[[Optional[Exception]], None]] = None,
+        client_connect_cb: ClientConnectCallback = None,
         **kwargs,
     ):
         """
@@ -104,6 +104,7 @@ class BigQuerySink(BatchingSink):
             is established. Callback expects an Exception or None as an argument.
         :param kwargs: Additional keyword arguments passed to `bigquery.Client`.
         """
+        super().__init__(client_connect_cb=client_connect_cb)
 
         self.location = location
         self.project_id = project_id
@@ -125,7 +126,6 @@ class BigQuerySink(BatchingSink):
             kwargs["credentials"] = credentials
         self._client: Optional[bigquery.Client] = None
         self._client_settings = kwargs
-        super().__init__(client_connect_cb=client_connect_cb)
 
     def setup_client(self):
         if not self._client:

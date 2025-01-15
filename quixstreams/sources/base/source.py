@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Optional, Union
+from typing import Callable, Optional, Union
 
 from quixstreams.checkpointing.exceptions import CheckpointProducerTimeout
 from quixstreams.models.messages import KafkaMessage
@@ -11,7 +11,7 @@ from quixstreams.state import PartitionTransaction, State, StorePartition
 
 logger = logging.getLogger(__name__)
 
-__all__ = ("BaseSource", "Source", "StatefulSource")
+ClientConnectCallback = Optional[Callable[[Optional[Exception]], None]]
 
 
 class BaseSource(ABC):
@@ -83,23 +83,21 @@ class BaseSource(ABC):
 
     def __init__(
         self,
-        client_connect_cb: Optional[Callable[[Optional[Exception]], None]] = None,
+        client_connect_cb: ClientConnectCallback = None,
     ) -> None:
         self._producer: Optional[RowProducer] = None
         self._producer_topic: Optional[Topic] = None
-        self._init_client(client_connect_cb)
+        self._client_connect_cb = client_connect_cb
 
-    def _init_client(
-        self, client_connect_cb: Optional[Callable[[Optional[Exception]], None]]
-    ):
+    def _init_client(self):
         error = None
         try:
             return self.setup_client()
         except Exception as e:
             error = e
         finally:
-            if client_connect_cb:
-                client_connect_cb(error)
+            if cb := self._client_connect_cb:
+                cb(error)
             elif error:
                 raise error
 
@@ -209,13 +207,11 @@ class Source(BaseSource, ABC):
     * `running`
     """
 
-    _client: Optional[Any]
-
     def __init__(
         self,
         name: str,
         shutdown_timeout: float = 10,
-        client_connect_cb: Optional[Callable[[Optional[Exception]], None]] = None,
+        client_connect_cb: ClientConnectCallback = None,
     ) -> None:
         """
         :param name: The source unique name. It is used to generate the topic configuration.
@@ -267,6 +263,7 @@ class Source(BaseSource, ABC):
         """
         self._running = True
         try:
+            self._init_client()
             self.run()
         except BaseException:
             self.cleanup(failed=True)
@@ -415,7 +412,7 @@ class StatefulSource(Source, ABC):
         self,
         name: str,
         shutdown_timeout: float = 10,
-        client_connect_cb: Optional[Callable[[Optional[Exception]], None]] = None,
+        client_connect_cb: ClientConnectCallback = None,
     ) -> None:
         """
         :param name: The source unique name. It is used to generate the topic configuration.

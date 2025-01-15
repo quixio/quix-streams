@@ -1,4 +1,11 @@
-from .base import BaseSink, BatchingSink, SinkBackpressureError, SinkBatch, SinkManager
+from .base import (
+    BaseSink,
+    BatchingSink,
+    ClientConnectCallback,
+    SinkBackpressureError,
+    SinkBatch,
+    SinkManager,
+)
 
 __all__ = [
     "BaseSink",
@@ -6,4 +13,5 @@ __all__ = [
     "SinkBackpressureError",
     "SinkBatch",
     "SinkManager",
+    "ClientConnectCallback",
 ]

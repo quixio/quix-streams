@@ -2,12 +2,12 @@ import logging
 from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from time import sleep
-from typing import BinaryIO, Callable, Optional, Union
+from typing import BinaryIO, Optional, Union
 
 from typing_extensions import Self
 
 from quixstreams.models import Topic, TopicConfig
-from quixstreams.sources import Source
+from quixstreams.sources import ClientConnectCallback, Source
 
 from .compressions import CompressionName
 from .formats import FORMATS, Format, FormatName
@@ -136,7 +136,7 @@ class FileSource(Source):
         replay_speed: float = 1.0,
         name: Optional[str] = None,
         shutdown_timeout: float = 30,
-        client_connect_cb: Optional[Callable[[Optional[Exception]], None]] = None,
+        client_connect_cb: ClientConnectCallback = None,
     ):
         """
         :param directory: a directory to recursively read through; it is recommended to
@@ -156,21 +156,22 @@ class FileSource(Source):
         :param client_connect_cb: An optional callback made once a client connection
             is established. Callback expects an Exception or None as an argument.
         """
+        self._directory = Path(directory)
+        super().__init__(
+            name=name or self._directory.name,
+            shutdown_timeout=shutdown_timeout,
+            client_connect_cb=client_connect_cb,
+        )
+
         if not replay_speed >= 0:
             raise ValueError("`replay_speed` must be a positive value")
 
-        self._directory = Path(directory)
         self._client = origin
         self._formatter = _get_formatter(format, compression)
         self._replay_speed = replay_speed
         self._previous_timestamp = None
         self._previous_partition = None
         self._file_fetcher: Optional[FileFetcher] = None
-        super().__init__(
-            name=name or self._directory.name,
-            shutdown_timeout=shutdown_timeout,
-            client_connect_cb=client_connect_cb,
-        )
 
     def _replay_delay(self, current_timestamp: int):
         """

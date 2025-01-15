@@ -8,6 +8,9 @@ from quixstreams.sinks.base.batch import SinkBatch
 logger = logging.getLogger(__name__)
 
 
+ClientConnectCallback = Optional[Callable[[Optional[Exception]], None]]
+
+
 class BaseSink(abc.ABC):
     """
     This is a base class for all sinks.
@@ -19,25 +22,13 @@ class BaseSink(abc.ABC):
 
     def __init__(
         self,
-        client_connect_cb: Optional[Callable[[Optional[Exception]], None]] = None,
+        client_connect_cb: ClientConnectCallback = None,
     ):
         """
-        :param client_connect_cb: Am optional callback made once a client connection
+        :param client_connect_cb: An optional callback made once a client connection
             is established. Callback expects an Exception or None as an argument.
         """
-        self._init_client(client_connect_cb)
-
-    def _init_client(self, client_connect_cb):
-        error = None
-        try:
-            return self.setup_client()
-        except Exception as e:
-            error = e
-        finally:
-            if client_connect_cb:
-                client_connect_cb(error)
-            elif error:
-                raise error
+        self._client_connect_cb = client_connect_cb
 
     @abc.abstractmethod
     def flush(self, topic: str, partition: int):
@@ -77,6 +68,18 @@ class BaseSink(abc.ABC):
         valid/successful authentication/connection.
         """
 
+    def start(self):
+        error = None
+        try:
+            self.setup_client()
+        except Exception as e:
+            error = e
+        finally:
+            if cb := self._client_connect_cb:
+                cb(error)
+            elif error:
+                raise error
+
     def on_paused(self, topic: str, partition: int):
         """
         This method is triggered when the sink is paused due to backpressure, when
@@ -104,14 +107,14 @@ class BatchingSink(BaseSink, abc.ABC):
 
     def __init__(
         self,
-        client_connect_cb: Optional[Callable[[Optional[Exception]], None]] = None,
+        client_connect_cb: ClientConnectCallback = None,
     ):
         """
         :param client_connect_cb: An optional callback made once a client connection
             is established. Callback expects an Exception or None as an argument.
         """
-        self._batches = {}
         super().__init__(client_connect_cb=client_connect_cb)
+        self._batches = {}
 
     def __repr__(self):
         return f"<BatchingSink: {self.__class__.__name__}>"

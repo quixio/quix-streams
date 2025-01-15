@@ -1,6 +1,11 @@
 from typing import Optional, Union
 
-from quixstreams.sinks import BatchingSink, SinkBackpressureError, SinkBatch
+from quixstreams.sinks import (
+    BatchingSink,
+    ClientConnectCallback,
+    SinkBackpressureError,
+    SinkBatch,
+)
 
 from .destinations import Destination, LocalDestination
 from .formats import Format, FormatName, resolve_format
@@ -27,6 +32,7 @@ class FileSink(BatchingSink):
         directory: str = "",
         format: Union[FormatName, Format] = "json",
         destination: Optional[Destination] = None,
+        client_connect_cb: ClientConnectCallback = None,
     ) -> None:
         """Initialize the FileSink with the specified configuration.
 
@@ -36,12 +42,14 @@ class FileSink(BatchingSink):
             ("json", "parquet") or a Format instance.
         :param destination: Storage destination handler. Defaults to
             LocalDestination if not specified.
+        :param client_connect_cb: An optional callback made once a client connection
+            is established. Callback expects an Exception or None as an argument.
         """
-        super().__init__()
         self._format = resolve_format(format)
         self._client = destination or LocalDestination()
         self._client.set_directory(directory)
         self._client.set_extension(self._format)
+        super().__init__(client_connect_cb=client_connect_cb)
 
     def setup_client(self) -> Destination:
         self._client.connect()

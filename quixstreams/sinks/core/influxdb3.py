@@ -2,7 +2,7 @@ import logging
 import sys
 import time
 import typing
-from typing import Any, Callable, Iterable, Literal, Mapping, Optional, Union
+from typing import Any, Iterable, Literal, Mapping, Optional, Union
 
 from quixstreams.models import HeadersTuples
 
@@ -16,7 +16,7 @@ except ImportError as exc:
         "run pip install quixstreams[influxdb3] to fix it"
     ) from exc
 
-from ..base import BatchingSink, SinkBackpressureError, SinkBatch
+from ..base import BatchingSink, ClientConnectCallback, SinkBackpressureError, SinkBatch
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +60,7 @@ class InfluxDB3Sink(BatchingSink):
         enable_gzip: bool = True,
         request_timeout_ms: int = 10_000,
         debug: bool = False,
-        client_connect_cb: Optional[Callable[[Optional[Exception]], None]] = None,
+        client_connect_cb: ClientConnectCallback = None,
     ):
         """
         A connector to sink processed data to InfluxDB v3.
@@ -123,11 +123,11 @@ class InfluxDB3Sink(BatchingSink):
             Default - `10000`.
         :param debug: if True, print debug logs from InfluxDB client.
             Default - `False`.
-        :param client_connect_cb: Am optional callback made once a client connection
+        :param client_connect_cb: An optional callback made once a client connection
             is established. Callback expects an Exception or None as an argument.
         """
 
-        super().__init__()
+        super().__init__(client_connect_cb=client_connect_cb)
         if time_precision not in (time_args := typing.get_args(TimePrecision)):
             raise ValueError(
                 f"Invalid 'time_precision' argument {time_precision}; "
@@ -155,7 +155,7 @@ class InfluxDB3Sink(BatchingSink):
                 )
             },
         )
-
+        self._client: Optional[InfluxDBClient3] = None
         self._measurement = self._measurement_callable(measurement)
         self._fields_keys = self._fields_callable(fields_keys)
         self._tags_keys = self._tags_callable(tags_keys)
@@ -271,7 +271,7 @@ class InfluxDB3Sink(BatchingSink):
 
             try:
                 _start = time.monotonic()
-                self._client.write(
+                self._client.write(  # type: ignore[union-attr]
                     record=records, write_precision=self._write_precision
                 )
                 elapsed = round(time.monotonic() - _start, 2)
