@@ -55,7 +55,7 @@ class InfluxDB3Sink(BatchingSink):
         fields_keys: FieldsSetter = (),
         tags_keys: TagsSetter = (),
         time_key: Optional[str] = None,
-        time_precision: TimePrecision = "milliseconds",
+        time_precision: TimePrecision = "ms",
         allow_missing_fields: bool = False,
         include_metadata_tags: bool = False,
         batch_size: int = 1000,
