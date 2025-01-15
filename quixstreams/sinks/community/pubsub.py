@@ -58,8 +58,11 @@ class PubSubSink(BaseSink):
             (defaults to json.dumps).
         :param key_serializer: Function to serialize the key to string
             (defaults to bytes.decode).
-        :param client_connect_cb: An optional callback made once a client connection
-            is established. Callback expects an Exception or None as an argument.
+        :param client_connect_cb: An optional callback made after attempting client
+            authentication, primarily for additional logging.
+            It should accept a single argument, which will be populated with an
+            Exception if connecting failed (else None).
+            If used, errors must be resolved (or propagated) with the callback.
         :param kwargs: Additional keyword arguments passed to PublisherClient.
         """
         super().__init__(client_connect_cb=client_connect_cb)

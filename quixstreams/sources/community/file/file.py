@@ -153,8 +153,11 @@ class FileSource(Source):
         :param name: The name of the Source application (Default: last folder name).
         :param shutdown_timeout: Time in seconds the application waits for the source
             to gracefully shutdown
-        :param client_connect_cb: An optional callback made once a client connection
-            is established. Callback expects an Exception or None as an argument.
+        :param client_connect_cb: An optional callback made after attempting client
+            authentication, primarily for additional logging.
+            It should accept a single argument, which will be populated with an
+            Exception if connecting failed (else None).
+            If used, errors must be resolved (or propagated) with the callback.
         """
         self._directory = Path(directory)
         super().__init__(
