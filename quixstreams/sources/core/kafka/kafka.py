@@ -340,7 +340,7 @@ class KafkaReplicatorSource(Source):
                 partition.partition,
             )
 
-        self.source_cluster_consumer.incremental_assign(source_partitions)
+        self.source_cluster_consumer.assign(source_partitions)
 
     def on_revoke(self, *_) -> None:
         if self._failed:

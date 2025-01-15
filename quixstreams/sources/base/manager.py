@@ -1,11 +1,12 @@
 import logging
 import signal
 import threading
+from itertools import chain
 from multiprocessing.context import SpawnProcess
 from pickle import PicklingError
 from typing import TYPE_CHECKING, List
 
-from confluent_kafka import OFFSET_BEGINNING
+from confluent_kafka import OFFSET_BEGINNING, TopicPartition
 
 from quixstreams.logging import LOGGER_NAME, configure_logging
 from quixstreams.models import Topic, TopicManager
@@ -147,6 +148,15 @@ class SourceProcess(process):
 
         self._topic_manager.create_all_topics()
         self._topic_manager.validate_all_topics()
+
+        # Manually assign the changelog topic-partition for recovery
+        changelog_topics = list(
+            chain(*(d.values() for d in self._topic_manager.changelog_topics.values()))
+        )
+        changelog_tp = TopicPartition(
+            topic=changelog_topics[0].name, partition=0, offset=OFFSET_BEGINNING
+        )
+        self._consumer.assign([changelog_tp])
 
         store_partitions = state_manager.on_partition_assign(
             topic=None,

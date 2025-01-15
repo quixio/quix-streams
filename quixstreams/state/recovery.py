@@ -12,7 +12,7 @@ from quixstreams.rowproducer import RowProducer
 from quixstreams.state.base import StorePartition
 from quixstreams.utils.dicts import dict_values
 
-from .exceptions import InvalidStoreChangelogOffset
+from .exceptions import ChangelogTopicPartitionNotAssigned, InvalidStoreChangelogOffset
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,9 @@ class RecoveryPartition:
         self._initial_offset: Optional[int] = None
 
     def __repr__(self):
-        return f"{self.changelog_name}[{self.partition_num}]"
+        return (
+            f'<{self.__class__.__name__} "{self.changelog_name}[{self.partition_num}]">'
+        )
 
     @property
     def changelog_name(self) -> str:
@@ -268,6 +270,7 @@ class RecoveryManager:
 
         :param topic_name: source topic name
         :param store_name: name of the store
+        :param topic_config: a TopicConfig to use, optional.
         """
         return self._topic_manager.changelog_topic(
             topic_name=topic_name,
@@ -283,17 +286,34 @@ class RecoveryManager:
         """
         logger.info("Beginning recovery check...")
         self._running = True
-        self._consumer.resume(
-            [
-                ConfluentPartition(rp.changelog_name, rp.partition_num)
-                for rp in dict_values(self._recovery_partitions)
-            ]
-        )
+        # note: technically it should be rp.offset + 1, but to remain backwards
+        # compatible with <v2.7 +1 ALOS offsetting, it remains rp.offset.
+        # This means we will always re-write the "first" recovery message.
+        # More specifically, this is only covering for a very edge case:
+        # when first upgrading from <v2.7 AND a recovery was actually needed.
+        # Once on >=v2.7, this is no longer an issue...so we could eventually
+        # remove this, potentially.
+
+        # Seek the changelog partitions to the previously saved position and resume them
+        for rp in dict_values(self._recovery_partitions):
+            tp = ConfluentPartition(
+                topic=rp.changelog_name, partition=rp.partition_num, offset=rp.offset
+            )
+            self._consumer.seek(tp)
+            self._consumer.resume([tp])
+
         self._recovery_loop()
         if self._running:
             logger.info("Recovery process complete! Resuming normal processing...")
             self._running = False
-            self._consumer.resume(self._consumer.assignment())
+
+            # When recovery is finished, resume only data partitions
+            non_changelog_tps = [
+                tp
+                for tp in self._consumer.assignment()
+                if tp.topic in self._topic_manager.non_changelog_topics
+            ]
+            self._consumer.resume(non_changelog_tps)
         else:
             logger.debug("Recovery process interrupted; stopping.")
 
@@ -348,21 +368,24 @@ class RecoveryManager:
             store_partitions=store_partitions,
             committed_offset=committed_offset,
         )
+
+        assigned_tps = set(
+            (tp.topic, tp.partition) for tp in self._consumer.assignment()
+        )
+
         for rp in recovery_partitions:
             changelog_name, partition = rp.changelog_name, rp.partition_num
+            # Validate that the changelog topic-partition is assigned to consumer before
+            # adding a recovery check
+            if (changelog_name, partition) not in assigned_tps:
+                raise ChangelogTopicPartitionNotAssigned(
+                    f'Changelog topic partition "{changelog_name}[{partition}]" '
+                    f"must be assigned to recover from it"
+                )
+
             if rp.needs_recovery_check:
                 logger.debug(f"Adding a recovery check for {rp}")
                 self._recovery_partitions.setdefault(partition, {})[changelog_name] = rp
-                # note: technically it should be rp.offset + 1, but to remain backwards
-                # compatible with <v2.7 +1 ALOS offsetting, it remains rp.offset.
-                # This means we will always re-write the "first" recovery message.
-                # More specifically, this is only covering for a very edge case:
-                # when first upgrading from <v2.7 AND a recovery was actually needed.
-                # Once on >=v2.7, this is no longer an issue...so we could eventually
-                # remove this, potentially.
-                self._consumer.incremental_assign(
-                    [ConfluentPartition(changelog_name, partition, rp.offset)]
-                )
             elif rp.has_invalid_offset:
                 raise InvalidStoreChangelogOffset(
                     "The offset in the state store is greater than or equal to its "
@@ -387,13 +410,15 @@ class RecoveryManager:
 
     def _revoke_recovery_partitions(self, recovery_partitions: List[RecoveryPartition]):
         """
-        Revokes all provided RecoveryPartition.
-        Also cleans up any remnant empty dictionary references.
+        Pauses all provided RecoveryPartitions and cleans up any remaining
+        empty dictionary references.
+
+        The actual unassignment is done by Consumer.
 
         :param recovery_partitions: a list of `RecoveryPartition`
         """
         partition_nums = {rp.partition_num for rp in recovery_partitions}
-        self._consumer.incremental_unassign(
+        self._consumer.pause(
             [
                 ConfluentPartition(rp.changelog_name, rp.partition_num)
                 for rp in recovery_partitions
