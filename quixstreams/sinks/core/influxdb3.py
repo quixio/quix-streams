@@ -107,8 +107,7 @@ class InfluxDB3Sink(BatchingSink):
         :param time_precision: a time precision to use when writing to InfluxDB.
             Possible values: "ms", "ns", "us", "s".
             Default - `"ms"`.
-        :param allow_missing_fields: Allow missing keys (auto-populated as nulls in
-            InfluxDB), else raise KeyError.
+        :param allow_missing_fields: if `True`, skip the missing fields keys, else raise `KeyError`.
             Default - `False`
         :param include_metadata_tags: if True, includes record's key, topic,
             and partition as tags.
