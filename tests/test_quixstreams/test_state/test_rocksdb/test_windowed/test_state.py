@@ -90,9 +90,9 @@ def test_expire_windows_with_collect(transaction_state, end_inclusive):
         state.update_window(start_ms=0, end_ms=10, value=None, timestamp_ms=2)
         state.update_window(start_ms=10, end_ms=20, value=[777, None], timestamp_ms=10)
 
-        state.collect_value(value="a", timestamp_ms=0)
-        state.collect_value(value="b", timestamp_ms=10)
-        state.collect_value(value="c", timestamp_ms=20)
+        state.add_to_collection(value="a", timestamp_ms=0)
+        state.add_to_collection(value="b", timestamp_ms=10)
+        state.add_to_collection(value="c", timestamp_ms=20)
 
     with transaction_state() as state:
         state.update_window(start_ms=20, end_ms=30, value=None, timestamp_ms=20)
@@ -332,8 +332,8 @@ def test_delete_windows(transaction_state):
 def test_delete_windows_with_values(transaction_state, get_value):
     with transaction_state() as state:
         state.update_window(start_ms=2, end_ms=3, value=1, timestamp_ms=2)
-        state.collect_value(value="a", timestamp_ms=1)
-        state.collect_value(value="b", timestamp_ms=2)
+        state.add_to_collection(value="a", timestamp_ms=1)
+        state.add_to_collection(value="b", timestamp_ms=2)
 
     with transaction_state() as state:
         assert state.get_window(start_ms=2, end_ms=3)
@@ -349,11 +349,11 @@ def test_delete_windows_with_values(transaction_state, get_value):
 
 
 @pytest.mark.parametrize("value", [1, "string", None, ["list"], {"dict": "dict"}])
-def test_collect_value(transaction_state, get_value, value):
+def test_add_to_collection(transaction_state, get_value, value):
     with transaction_state() as state:
-        state.collect_value(value=value, timestamp_ms=11)
-        state.collect_value(value=value, timestamp_ms=22)
-        state.collect_value(value=value, timestamp_ms=33)
+        state.add_to_collection(value=value, timestamp_ms=11)
+        state.add_to_collection(value=value, timestamp_ms=22)
+        state.add_to_collection(value=value, timestamp_ms=33)
 
     assert get_value(timestamp_ms=11, counter=0) == value
     assert get_value(timestamp_ms=22, counter=1) == value

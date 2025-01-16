@@ -137,7 +137,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
             timestamp_ms=updated_timestamp_ms,
         )
 
-    def collect_value(
+    def add_to_collection(
         self,
         timestamp_ms: int,
         value: Any,

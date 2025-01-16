@@ -62,7 +62,7 @@ class WindowedTransactionState(WindowedState):
             prefix=self._prefix,
         )
 
-    def collect_value(self, value: Any, timestamp_ms: int) -> None:
+    def add_to_collection(self, value: Any, timestamp_ms: int) -> None:
         """
         Collect a value for collection-type window aggregations.
 
@@ -73,7 +73,7 @@ class WindowedTransactionState(WindowedState):
         :param value: value to be collected
         :param timestamp_ms: current message timestamp in milliseconds
         """
-        return self._transaction.collect_value(
+        return self._transaction.add_to_collection(
             value=value,
             timestamp_ms=timestamp_ms,
             prefix=self._prefix,

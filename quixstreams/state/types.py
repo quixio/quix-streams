@@ -43,7 +43,7 @@ class WindowedState(Protocol):
         """
         ...
 
-    def collect_value(self, value: Any, timestamp_ms: int) -> None:
+    def add_to_collection(self, value: Any, timestamp_ms: int) -> None:
         """
         Collect a value for collection-type window aggregations.
 
@@ -201,7 +201,7 @@ class WindowedPartitionTransaction(Protocol):
         """
         ...
 
-    def collect_value(self, value: Any, timestamp_ms: int) -> None:
+    def add_to_collection(self, value: Any, timestamp_ms: int) -> None:
         """
         Collect a value for collection-type window aggregations.
 
