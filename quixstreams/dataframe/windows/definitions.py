@@ -365,6 +365,9 @@ class CountWindowDefinition(BaseWindowDefinition):
     ) -> None:
         super().__init__(name, dataframe)
 
+        if count < 2:
+            raise ValueError("Window count must be greater than 1")
+
         self._count = count
 
 

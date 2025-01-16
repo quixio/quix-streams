@@ -1,6 +1,9 @@
 import pytest
 
-from quixstreams.dataframe.windows import FixedTimeTumblingWindowDefinition
+from quixstreams.dataframe.windows import (
+    CountTumblingWindowDefinition,
+    FixedTimeTumblingWindowDefinition,
+)
 
 
 @pytest.fixture()
@@ -17,7 +20,7 @@ def tumbling_window_definition_factory(state_manager, dataframe_factory):
     return factory
 
 
-class TestTumblingWindow:
+class TestFixedTimeTumblingWindow:
     @pytest.mark.parametrize(
         "duration, grace, provided_name, func_name, expected_name",
         [
@@ -226,5 +229,169 @@ class TestTumblingWindow:
 
             assert len(expired) == 1
             assert expired[0]["value"] == 1
+            assert expired[0]["start"] == 100
+            assert expired[0]["end"] == 110
+
+
+@pytest.fixture()
+def count_tumbling_window_definition_factory(state_manager, dataframe_factory):
+    def factory(count: int) -> CountTumblingWindowDefinition:
+        sdf = dataframe_factory(state_manager=state_manager)
+        window_def = CountTumblingWindowDefinition(dataframe=sdf, count=count)
+        return window_def
+
+    return factory
+
+
+class TestCountTumblingWindow:
+    @pytest.mark.parametrize(
+        "count, name",
+        [
+            (-10, "test"),
+            (0, "test"),
+            (1, "test"),
+        ],
+    )
+    def test_init_invalid(self, count, name, dataframe_factory):
+        with pytest.raises(ValueError):
+            CountTumblingWindowDefinition(
+                count=count,
+                name=name,
+                dataframe=dataframe_factory(),
+            )
+
+    def test_count(self, count_tumbling_window_definition_factory, state_manager):
+        window_def = count_tumbling_window_definition_factory(count=10)
+        window = window_def.count()
+        window.register_store()
+        store = state_manager.get_store(topic="test", store_name=window.name)
+        store.assign_partition(0)
+        with store.start_partition_transaction(0) as tx:
+            state = tx.as_state(prefix=b"key")
+            window.process_window(value=0, state=state, timestamp_ms=100)
+            updated, expired = window.process_window(
+                value=0, state=state, timestamp_ms=100
+            )
+        assert len(updated) == 1
+        assert updated[0]["value"] == 2
+        assert not expired
+
+    def test_sum(self, count_tumbling_window_definition_factory, state_manager):
+        window_def = count_tumbling_window_definition_factory(count=10)
+        window = window_def.sum()
+        window.register_store()
+        store = state_manager.get_store(topic="test", store_name=window.name)
+        store.assign_partition(0)
+        with store.start_partition_transaction(0) as tx:
+            state = tx.as_state(prefix=b"key")
+            window.process_window(value=2, state=state, timestamp_ms=100)
+            updated, expired = window.process_window(
+                value=1, state=state, timestamp_ms=100
+            )
+        assert len(updated) == 1
+        assert updated[0]["value"] == 3
+        assert not expired
+
+    def test_mean(self, count_tumbling_window_definition_factory, state_manager):
+        window_def = count_tumbling_window_definition_factory(count=10)
+        window = window_def.mean()
+        window.register_store()
+        store = state_manager.get_store(topic="test", store_name=window.name)
+        store.assign_partition(0)
+        with store.start_partition_transaction(0) as tx:
+            state = tx.as_state(prefix=b"key")
+            window.process_window(value=2, state=state, timestamp_ms=100)
+            updated, expired = window.process_window(
+                value=1, state=state, timestamp_ms=100
+            )
+        assert len(updated) == 1
+        assert updated[0]["value"] == 1.5
+        assert not expired
+
+    def test_reduce(self, count_tumbling_window_definition_factory, state_manager):
+        window_def = count_tumbling_window_definition_factory(count=10)
+        window = window_def.reduce(
+            reducer=lambda agg, current: agg + [current],
+            initializer=lambda value: [value],
+        )
+        window.register_store()
+        store = state_manager.get_store(topic="test", store_name=window.name)
+        store.assign_partition(0)
+        with store.start_partition_transaction(0) as tx:
+            state = tx.as_state(prefix=b"key")
+            window.process_window(value=2, state=state, timestamp_ms=100)
+            updated, expired = window.process_window(
+                value=1, state=state, timestamp_ms=100
+            )
+        assert len(updated) == 1
+        assert updated[0]["value"] == [2, 1]
+        assert not expired
+
+    def test_max(self, count_tumbling_window_definition_factory, state_manager):
+        window_def = count_tumbling_window_definition_factory(count=10)
+        window = window_def.max()
+        window.register_store()
+        store = state_manager.get_store(topic="test", store_name=window.name)
+        store.assign_partition(0)
+        with store.start_partition_transaction(0) as tx:
+            state = tx.as_state(prefix=b"key")
+            window.process_window(value=2, state=state, timestamp_ms=100)
+            updated, expired = window.process_window(
+                value=1, state=state, timestamp_ms=100
+            )
+        assert len(updated) == 1
+        assert updated[0]["value"] == 2
+        assert not expired
+
+    def test_min(self, count_tumbling_window_definition_factory, state_manager):
+        window_def = count_tumbling_window_definition_factory(count=10)
+        window = window_def.min()
+        window.register_store()
+        store = state_manager.get_store(topic="test", store_name=window.name)
+        store.assign_partition(0)
+        with store.start_partition_transaction(0) as tx:
+            state = tx.as_state(prefix=b"key")
+            window.process_window(value=2, state=state, timestamp_ms=100)
+            updated, expired = window.process_window(
+                value=1, state=state, timestamp_ms=100
+            )
+        assert len(updated) == 1
+        assert updated[0]["value"] == 1
+        assert not expired
+
+    def test_window_expired(
+        self,
+        count_tumbling_window_definition_factory,
+        state_manager,
+    ):
+        window_def = count_tumbling_window_definition_factory(count=2)
+        window = window_def.sum()
+        window.register_store()
+        store = state_manager.get_store(topic="test", store_name=window.name)
+        store.assign_partition(0)
+        with store.start_partition_transaction(0) as tx:
+            state = tx.as_state(prefix=b"key")
+            # Add first item to the window
+            updated, expired = window.process_window(
+                value=1, state=state, timestamp_ms=100
+            )
+            assert len(updated) == 1
+            assert updated[0]["value"] == 1
+            assert updated[0]["start"] == 100
+            assert updated[0]["end"] == 100
+            assert not expired
+
+            # Now add second item to the window
+            # The window is now expired and should be returned
+            updated, expired = window.process_window(
+                value=2, state=state, timestamp_ms=110
+            )
+            assert len(updated) == 1
+            assert updated[0]["value"] == 3
+            assert updated[0]["start"] == 100
+            assert updated[0]["end"] == 110
+
+            assert len(expired) == 1
+            assert expired[0]["value"] == 3
             assert expired[0]["start"] == 100
             assert expired[0]["end"] == 110
