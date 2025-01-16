@@ -59,6 +59,7 @@ from .windows import (
     SlidingWindowDefinition,
     TumblingWindowDefinition,
 )
+from .windows.base import WindowOnLateCallback
 
 ApplyCallbackStateful = Callable[[Any, State], Any]
 ApplyWithMetadataCallbackStateful = Callable[[Any, Any, int, Any, State], Any]
@@ -844,6 +845,7 @@ class StreamingDataFrame(BaseStreaming):
         duration_ms: Union[int, timedelta],
         grace_ms: Union[int, timedelta] = 0,
         name: Optional[str] = None,
+        on_late: Optional[WindowOnLateCallback] = None,
     ) -> TumblingWindowDefinition:
         """
         Create a tumbling window transformation on this StreamingDataFrame.
@@ -912,7 +914,11 @@ class StreamingDataFrame(BaseStreaming):
         grace_ms = ensure_milliseconds(grace_ms)
 
         return TumblingWindowDefinition(
-            duration_ms=duration_ms, grace_ms=grace_ms, dataframe=self, name=name
+            duration_ms=duration_ms,
+            grace_ms=grace_ms,
+            dataframe=self,
+            name=name,
+            on_late=on_late,
         )
 
     def hopping_window(
@@ -921,6 +927,7 @@ class StreamingDataFrame(BaseStreaming):
         step_ms: Union[int, timedelta],
         grace_ms: Union[int, timedelta] = 0,
         name: Optional[str] = None,
+        on_late: Optional[WindowOnLateCallback] = None,
     ) -> HoppingWindowDefinition:
         """
         Create a hopping window transformation on this StreamingDataFrame.
@@ -1005,6 +1012,7 @@ class StreamingDataFrame(BaseStreaming):
             step_ms=step_ms,
             dataframe=self,
             name=name,
+            on_late=on_late,
         )
 
     def sliding_window(
