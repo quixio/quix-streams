@@ -846,14 +846,6 @@ class StreamingDataFrame(BaseStreaming):
         grace_ms: Union[int, timedelta] = 0,
         name: Optional[str] = None,
     ) -> FixedTimeTumblingWindowDefinition:
-        return self.tumbling_time_window(duration_ms, grace_ms, name)
-
-    def tumbling_time_window(
-        self,
-        duration_ms: Union[int, timedelta],
-        grace_ms: Union[int, timedelta] = 0,
-        name: Optional[str] = None,
-    ) -> FixedTimeTumblingWindowDefinition:
         """
         Create a tumbling window transformation on this StreamingDataFrame.
         Tumbling windows divide time into fixed-sized, non-overlapping windows.
