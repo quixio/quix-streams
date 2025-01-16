@@ -50,7 +50,7 @@ class FixedTimeWindowDefinition(abc.ABC):
         aggregate_default: Any,
         aggregate_collection: bool = False,
         merge_func: Optional[WindowMergeFunc] = None,
-    ) -> "FixedTimeWindow": ...
+    ) -> FixedTimeWindow: ...
 
     @property
     def duration_ms(self) -> int:
@@ -64,7 +64,7 @@ class FixedTimeWindowDefinition(abc.ABC):
     def step_ms(self) -> Optional[int]:
         return self._step_ms
 
-    def sum(self) -> "FixedTimeWindow":
+    def sum(self) -> FixedTimeWindow:
         """
         Configure the window to aggregate data by summing up values within
         each window period.
@@ -79,7 +79,7 @@ class FixedTimeWindowDefinition(abc.ABC):
             func_name="sum", aggregate_func=func, aggregate_default=0
         )
 
-    def count(self) -> "FixedTimeWindow":
+    def count(self) -> FixedTimeWindow:
         """
         Configure the window to aggregate data by counting the number of values
         within each window period.
@@ -94,7 +94,7 @@ class FixedTimeWindowDefinition(abc.ABC):
             func_name="count", aggregate_func=func, aggregate_default=0
         )
 
-    def mean(self) -> "FixedTimeWindow":
+    def mean(self) -> FixedTimeWindow:
         """
         Configure the window to aggregate data by calculating the mean of the values
         within each window period.
@@ -116,7 +116,7 @@ class FixedTimeWindowDefinition(abc.ABC):
 
     def reduce(
         self, reducer: Callable[[Any, Any], Any], initializer: Callable[[Any], Any]
-    ) -> "FixedTimeWindow":
+    ) -> FixedTimeWindow:
         """
         Configure the window to perform a custom aggregation using `reducer`
         and `initializer` functions.
@@ -160,7 +160,7 @@ class FixedTimeWindowDefinition(abc.ABC):
             func_name="reduce", aggregate_func=func, aggregate_default=None
         )
 
-    def max(self) -> "FixedTimeWindow":
+    def max(self) -> FixedTimeWindow:
         """
         Configure a window to aggregate the maximum value within each window period.
 
@@ -175,7 +175,7 @@ class FixedTimeWindowDefinition(abc.ABC):
             func_name="max", aggregate_func=func, aggregate_default=None
         )
 
-    def min(self) -> "FixedTimeWindow":
+    def min(self) -> FixedTimeWindow:
         """
         Configure a window to aggregate the minimum value within each window period.
 
@@ -190,7 +190,7 @@ class FixedTimeWindowDefinition(abc.ABC):
             func_name="min", aggregate_func=func, aggregate_default=None
         )
 
-    def collect(self) -> "FixedTimeWindow":
+    def collect(self) -> FixedTimeWindow:
         """
         Configure the window to collect all values within each window period into a
         list, without performing any aggregation.
