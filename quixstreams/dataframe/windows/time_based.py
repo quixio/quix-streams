@@ -101,6 +101,9 @@ class FixedTimeWindow:
                 continue
 
             if collect:
+                # When collecting values, we only mark the window existence with None
+                # since actual values are stored separately and combined into an array
+                # during window expiration.
                 state.update_window(start, end, value=None, timestamp_ms=timestamp_ms)
                 continue
 
