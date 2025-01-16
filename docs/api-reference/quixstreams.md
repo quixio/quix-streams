@@ -3231,7 +3231,7 @@ Remove partition from the list of paused TPs if it's revoked
 class InfluxDB3Sink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/influxdb3.py#L23)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/influxdb3.py#L38)
 
 <a id="quixstreams.sinks.core.influxdb3.InfluxDB3Sink.__init__"></a>
 
@@ -3242,11 +3242,12 @@ def __init__(token: str,
              host: str,
              organization_id: str,
              database: str,
-             measurement: str,
-             fields_keys: Iterable[str] = (),
-             tags_keys: Iterable[str] = (),
+             measurement: MeasurementSetter,
+             fields_keys: FieldsSetter = (),
+             tags_keys: TagsSetter = (),
              time_key: Optional[str] = None,
-             time_precision: WritePrecision = WritePrecision.MS,
+             time_precision: TimePrecision = "ms",
+             allow_missing_fields: bool = False,
              include_metadata_tags: bool = False,
              batch_size: int = 1000,
              enable_gzip: bool = True,
@@ -3254,7 +3255,7 @@ def __init__(token: str,
              debug: bool = False)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/influxdb3.py#L24)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/influxdb3.py#L46)
 
 A connector to sink processed data to InfluxDB v3.
 
@@ -3277,17 +3278,23 @@ from the backpressured topic partition until the "retry_after" timeout elapses.
 - `host`: InfluxDB host in format "https://<host>"
 - `organization_id`: InfluxDB organization_id
 - `database`: database name
-- `fields_keys`: a list of keys to be used as "fields" when writing to InfluxDB.
-If present, it must not overlap with "tags_keys".
-If empty, the whole record value will be used.
+- `measurement`: measurement name as a string.
+Also accepts a single-argument callable that receives the current message
+data as a dict and returns a string.
+- `fields_keys`: an iterable (list) of strings used as InfluxDB "fields".
+Also accepts a single-argument callable that receives the current message
+data as a dict and returns an iterable of strings.
+- If present, it must not overlap with "tags_keys".
+- If empty, the whole record value will be used.
 >***NOTE*** The fields' values can only be strings, floats, integers, or booleans.
 Default - `()`.
-- `tags_keys`: a list of keys to be used as "tags" when writing to InfluxDB.
-If present, it must not overlap with "fields_keys".
-These keys will be popped from the value dictionary
-automatically because InfluxDB doesn't allow the same keys be
-both in tags and fields.
-If empty, no tags will be sent.
+- `tags_keys`: an iterable (list) of strings used as InfluxDB "tags".
+Also accepts a single-argument callable that receives the current message
+data as a dict and returns an iterable of strings.
+- If present, it must not overlap with "fields_keys".
+- Given keys are popped from the value dictionary since the same key
+cannot be both a tag and field.
+- If empty, no tags will be sent.
 >***NOTE***: InfluxDB client always converts tag values to strings.
 Default - `()`.
 - `time_key`: a key to be used as "time" when writing to InfluxDB.
@@ -3295,6 +3302,10 @@ By default, the record timestamp will be used with "ms" time precision.
 When using a custom key, you may need to adjust the `time_precision` setting
 to match.
 - `time_precision`: a time precision to use when writing to InfluxDB.
+Possible values: "ms", "ns", "us", "s".
+Default - `"ms"`.
+- `allow_missing_fields`: if `True`, skip the missing fields keys, else raise `KeyError`.
+Default - `False`
 - `include_metadata_tags`: if True, includes record's key, topic,
 and partition as tags.
 Default - `False`.
