@@ -1,7 +1,6 @@
 import collections
 import copy
 from graphlib import TopologicalSorter
-from time import monotonic_ns
 from typing import (
     Any,
     Callable,
@@ -9,7 +8,6 @@ from typing import (
     List,
     Literal,
     Optional,
-    Set,
     Union,
     cast,
     overload,
@@ -94,8 +92,7 @@ class Stream:
 
         self.func = func if func is not None else ApplyFunction(lambda value: value)
         self.parents = parents or []
-        self.children: Set[Self] = set()
-        self.generated = monotonic_ns()
+        self.children: list[Self] = []
         self.pruned = False
 
     def __repr__(self) -> str:
@@ -302,91 +299,70 @@ class Stream:
             if the diff is empty, or pruning failed.
         :return: a new independent `Stream` instance whose root begins at the diff
         """
-        # TODO: Adjust diffs for multi-parent Streams
-        #     # TODO: Technically, we allow only direct ancestors to be "diffed". So we don't need the "root_path" here.
-        #     # TODO: Instead of going from the root, go through the children starting from "self" and accumulate the nodes
-        #     #  until we find "other".
-        #     #  If we hit a node with multiple children - fail (it may have undesired side effects like executing too much)
-        #     #  If we hit a node that's merged - fail too (? , that's less clear.
-        #     #  Technically, merged node shouldn't do any harm, but I don't think it should be allow either)
-        #
-        #     # TODO: I don't think we should allow using the merged SDFs as filters too
-        #     #  (merged_sdf['x'] = merged_sdf.apply(...) is valid, merged_sdf['x'] = merged_sdf.merge(...).apply(...) is not)
-
         # Traverse the children of "self" and look for the "other" Stream among then
         diff = []
-        other_found = False
-        for child in self._get_all_children():
+        self_found = False
+
+        for stream in other.root_path():
+            if stream is self:
+                self_found = True
+                break
             # Assigning or filtering using branched SDFs
             # may lead to an undefined behavior
-            if child.is_branched():
-                raise InvalidOperation(
-                    "Cannot assign or filter using SDF with more "
-                    "than one child in the topology"
-                )
-            elif child.is_merged():
+            if stream.is_branched():
+                raise InvalidOperation("Cannot assign or filter using a branched SDF")
+            elif stream.is_merged():
                 # Assigning or filtering using merged SDFs may lead
                 # to an undefined behavior too
                 raise InvalidOperation(
                     "Cannot assign or filter using the SDF merged with another SDF"
                 )
-            diff.append(child)
-            if child is other:
-                other_found = True
-                break
 
-        if not other_found:
-            # Other is not found among the "self" children
+            diff.append(stream)
+
+        if not diff:
+            # The case of "sdf['x'] = sdf" or "sdf = sdf[sdf]"
+            raise InvalidOperation("Cannot assign or filter using the same SDF")
+
+        # Reverse the diff to be in "parent->children" order
+        diff.reverse()
+        diff_head = diff[0]
+
+        if diff_head.pruned:
+            raise InvalidOperation(
+                "Cannot use a filtering or column-setter SDF more than once"
+            )
+        elif not self_found:
+            # "self" is not found among the parents of "other"
             raise InvalidOperation(
                 "filtering or column-setter SDF must originate from target SDF; "
                 "ex: `sdf[sdf.apply()]`, NOT `sdf[other_sdf.apply()]` "
                 "OR `sdf['x'] = sdf.apply()`, NOT `sdf['x'] = other_sdf.apply()`"
             )
-        if not diff:
-            # The case of "sdf['x'] = sdf" or "sdf = sdf[sdf]"
-            raise InvalidOperation("Cannot assign or filter using the same SDF")
-
-        # The following operations enforce direct splitting.
-        # Enforcing direct splits relates to using one SDF to filter another.
-        # Specifically there are various unintuitive cases, especially when using a
-        # "split" SDF, where results will likely not be as expected, so we would
-        # rather raise an exception instead.
-        # See TestStreamingDataFrameSplitting test cases for examples.
-
-        # the easiest check that catches most issues: the "inner" (filtering) sdf
-        # should use same ref as the one being filtered; i.e. sdf[sdf.apply()].
-        if diff[0].pruned:
-            raise InvalidOperation(
-                "Cannot use a filtering or column-setter SDF more than once"
-            )
 
         # Cut off the diffed nodes from the rest of the tree
-        parents = []
-        # TODO: clean up children too? or mark all of them as "pruned" so it can be merged to anything else
-        for node in diff:
-            # Copy the node and all nodes related to it on making a diff
-            # to ensure the diff is fully extracted from the tree
-            # and not connected to other nodes.
-            node = copy.deepcopy(node)
-            node.parents = parents
-            node.children = copy.deepcopy(node.children)
-            parents = [copy.deepcopy(node)]
+        # by removing the diff head node the current node's children
+        diff_head.pruned = True
+        self.children.remove(diff_head)
+        diff_head.parents = []
 
-        self._prune(diff[0])
-
-        return diff[-1]
+        # Copy the diff head and all nodes related to it
+        # to ensure the diff is fully extracted from the tree
+        # and not connected to other nodes.
+        diff_head = copy.deepcopy(diff_head)
+        parents = [diff_head]
+        for stream in diff[1:]:
+            stream = copy.deepcopy(stream)
+            stream.parents = parents
+            stream.children = copy.deepcopy(stream.children)
+            parents = [stream]
+        return diff_head
 
     def full_tree(self) -> List[Self]:
         """
         Find every related Stream in the tree across all children and parents and return
         them in a topologically sorted order.
         """
-        # Get the root of the Stream (can also be the same node as self)
-        # TODO: Problem: how to understand the root node?
-        #  Currently, it will return all roots connected to this one.
-        #  When we compose the whole SDF, it's ok because we know roots.
-        #  But when we compose_returning, there must be only one single root
-
         # Sort the tree in the topological order using graphlib.TopologicalSorter
         # Topological sorting resolves all dependencies in the graph, and child nodes
         # always come after all the parents
@@ -402,9 +378,9 @@ class Stream:
                 continue
             sorter.add(node, *node.parents)
             visited.add(node)
-            for parent in sorted(node.parents, key=lambda n: n.generated):
+            for parent in node.parents:
                 to_traverse.append(parent)
-            for child in sorted(node.children, key=lambda n: n.generated):
+            for child in node.children:
                 to_traverse.append(child)
         # Sort the nodes in the topological order
         nodes = list(sorter.static_order())
@@ -518,42 +494,23 @@ class Stream:
     def is_branched(self) -> bool:
         return len(self.children) > 1
 
-    def _add(self, func: StreamFunction) -> Self:
-        new_node = self.__class__(func=func, parents=[self])
-        self.children.add(new_node)
-        return new_node
-
-    def _default_sink(self, value: Any, key: Any, timestamp: int, headers: Any): ...
-
-    def _prune(self, other: Self):
+    def root_path(self) -> List[Self]:
         """
-        Removes a stream node by looking for where the "other" node is a child within
-        the current and removing it.
-
-        Note this means "other" must share a direct split point with this Stream.
-        :param other: another Stream
-        :return:
+        Start from self and collect all parents until reaching the root nodes
         """
-        if other.pruned:
-            raise ValueError("Node has already been pruned")
-        # TODO: Maybe we don't need to mark them as "pruned" since we deepcopy every node?
-        #  The other validations should be enough to catch the wrong use.
-        other.pruned = True
-        node: Optional[Self] = self
-        while node:
-            if other in node.children:
-                node.children.remove(other)
-                return
-            node = node.parent
-        raise ValueError("Node to prune is missing")
-
-    def _get_all_children(self) -> List[Self]:
-        children = []
+        nodes = [self]
         to_traverse: Deque = collections.deque()
         to_traverse.append(self)
         while to_traverse:
             node = to_traverse.popleft()
-            for child in sorted(node.children, key=lambda n: n.generated):
-                children.append(child)
-                to_traverse.append(child)
-        return children
+            for parent in node.parents:
+                nodes.append(parent)
+                to_traverse.append(parent)
+        return nodes
+
+    def _add(self, func: StreamFunction) -> Self:
+        new_node = self.__class__(func=func, parents=[self])
+        self.children.append(new_node)
+        return new_node
+
+    def _default_sink(self, value: Any, key: Any, timestamp: int, headers: Any): ...

@@ -423,9 +423,9 @@ class TestStreamingDataFrame:
         Dropping an empty list is ignored entirely.
         """
         sdf = dataframe_factory()
-        pre_drop_stream = sdf.stream.root_path()
+        pre_drop_stream = sdf.stream.full_tree()
         sdf = sdf.drop([])
-        post_drop_stream = sdf.stream.root_path()
+        post_drop_stream = sdf.stream.full_tree()
         assert pre_drop_stream == post_drop_stream
 
     def test_drop_missing_columns_errors_raise(self, dataframe_factory):
@@ -1944,7 +1944,7 @@ class TestStreamingDataFrameBranching:
 
         with pytest.raises(
             InvalidOperation,
-            match="filtering or column-setter SDF must originate from target SDF;",
+            match="Cannot assign or filter using a branched SDF",
         ):
             sdf[sdf_filter].apply(add_n(100))
 
@@ -1966,7 +1966,7 @@ class TestStreamingDataFrameBranching:
 
         with pytest.raises(
             InvalidOperation,
-            match="filtering or column-setter SDF must originate from target SDF;",
+            match="Cannot assign or filter using a branched SDF",
         ):
             sdf[sdf_filter].apply(add_n(100))
 
@@ -2043,7 +2043,7 @@ class TestStreamingDataFrameBranching:
 
         with pytest.raises(
             InvalidOperation,
-            match="filtering or column-setter SDF must originate from target SDF;",
+            match="Cannot assign or filter using a branched SDF",
         ):
             sdf["n_new"] = new_val
 
@@ -2061,7 +2061,7 @@ class TestStreamingDataFrameBranching:
 
         with pytest.raises(
             InvalidOperation,
-            match="filtering or column-setter SDF must originate from target SDF;",
+            match="Cannot assign or filter using a branched SDF",
         ):
             sdf["n_new"] = new_val
 
