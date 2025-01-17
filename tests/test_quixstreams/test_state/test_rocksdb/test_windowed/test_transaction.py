@@ -29,8 +29,7 @@ class TestWindowedRocksDBPartitionTransaction:
         with store.start_partition_transaction(0) as tx:
             assert tx.get_window(start_ms=0, end_ms=10, prefix=prefix) is None
 
-    @pytest.mark.parametrize("delete", [True, False])
-    def test_expire_windows_expired(self, windowed_rocksdb_store_factory, delete):
+    def test_expire_windows_expired(self, windowed_rocksdb_store_factory):
         store = windowed_rocksdb_store_factory()
         store.assign_partition(0)
         prefix = b"__key__"
@@ -49,14 +48,10 @@ class TestWindowedRocksDBPartitionTransaction:
                 start_ms=20, end_ms=30, value=3, timestamp_ms=20, prefix=prefix
             )
             max_start_time = tx.get_latest_timestamp(prefix=prefix) - duration_ms
-            expired = tx.expire_windows(
-                max_start_time=max_start_time, prefix=prefix, delete=delete
-            )
+            expired = tx.expire_windows(max_start_time=max_start_time, prefix=prefix)
             # "expire_windows" must update the expiration index so that the same
             # windows are not expired twice
-            assert not tx.expire_windows(
-                max_start_time=max_start_time, prefix=prefix, delete=delete
-            )
+            assert not tx.expire_windows(max_start_time=max_start_time, prefix=prefix)
 
         assert len(expired) == 2
         assert expired == [
@@ -65,20 +60,11 @@ class TestWindowedRocksDBPartitionTransaction:
         ]
 
         with store.start_partition_transaction(0) as tx:
-            assert (
-                tx.get_window(start_ms=0, end_ms=10, prefix=prefix) == None
-                if delete
-                else 1
-            )
-            assert (
-                tx.get_window(start_ms=10, end_ms=20, prefix=prefix) == None
-                if delete
-                else 2
-            )
+            assert tx.get_window(start_ms=0, end_ms=10, prefix=prefix) == 1
+            assert tx.get_window(start_ms=10, end_ms=20, prefix=prefix) == 2
             assert tx.get_window(start_ms=20, end_ms=30, prefix=prefix) == 3
 
-    @pytest.mark.parametrize("delete", [True, False])
-    def test_expire_windows_cached(self, windowed_rocksdb_store_factory, delete):
+    def test_expire_windows_cached(self, windowed_rocksdb_store_factory):
         """
         Check that windows expire correctly even if they're not committed to the DB
         yet.
@@ -99,29 +85,17 @@ class TestWindowedRocksDBPartitionTransaction:
                 start_ms=20, end_ms=30, value=3, timestamp_ms=20, prefix=prefix
             )
             max_start_time = tx.get_latest_timestamp(prefix=prefix) - duration_ms
-            expired = tx.expire_windows(
-                max_start_time=max_start_time, prefix=prefix, delete=delete
-            )
+            expired = tx.expire_windows(max_start_time=max_start_time, prefix=prefix)
             # "expire_windows" must update the expiration index so that the same
             # windows are not expired twice
-            assert not tx.expire_windows(
-                max_start_time=max_start_time, prefix=prefix, delete=delete
-            )
+            assert not tx.expire_windows(max_start_time=max_start_time, prefix=prefix)
             assert len(expired) == 2
             assert expired == [
                 ((0, 10), 1),
                 ((10, 20), 2),
             ]
-            assert (
-                tx.get_window(start_ms=0, end_ms=10, prefix=prefix) == None
-                if delete
-                else 1
-            )
-            assert (
-                tx.get_window(start_ms=10, end_ms=20, prefix=prefix) == None
-                if delete
-                else 2
-            )
+            assert tx.get_window(start_ms=0, end_ms=10, prefix=prefix) == 1
+            assert tx.get_window(start_ms=10, end_ms=20, prefix=prefix) == 2
             assert tx.get_window(start_ms=20, end_ms=30, prefix=prefix) == 3
 
     def test_expire_windows_empty(self, windowed_rocksdb_store_factory):

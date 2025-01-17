@@ -222,7 +222,6 @@ class SlidingWindow(FixedTimeWindow):
             WindowResult(start=start, end=end, value=self._merge_func(aggregation))
             for (start, end), (max_timestamp, aggregation) in state.expire_windows(
                 max_start_time=max_expired_window_start,
-                delete=False,
                 collect=collect,
                 end_inclusive=True,
             )

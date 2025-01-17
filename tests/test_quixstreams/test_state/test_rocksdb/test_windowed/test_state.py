@@ -52,8 +52,7 @@ def test_update_window(transaction_state, value):
         assert state.get_window(start_ms=0, end_ms=10) == value
 
 
-@pytest.mark.parametrize("delete", [True, False])
-def test_expire_windows(transaction_state, delete):
+def test_expire_windows(transaction_state):
     duration_ms = 10
 
     with transaction_state() as state:
@@ -63,10 +62,10 @@ def test_expire_windows(transaction_state, delete):
     with transaction_state() as state:
         state.update_window(start_ms=20, end_ms=30, value=3, timestamp_ms=20)
         max_start_time = state.get_latest_timestamp() - duration_ms
-        expired = state.expire_windows(max_start_time=max_start_time, delete=delete)
+        expired = state.expire_windows(max_start_time=max_start_time)
         # "expire_windows" must update the expiration index so that the same
         # windows are not expired twice
-        assert not state.expire_windows(max_start_time=max_start_time, delete=delete)
+        assert not state.expire_windows(max_start_time=max_start_time)
 
     assert len(expired) == 2
     assert expired == [
@@ -75,8 +74,8 @@ def test_expire_windows(transaction_state, delete):
     ]
 
     with transaction_state() as state:
-        assert state.get_window(start_ms=0, end_ms=10) == None if delete else 1
-        assert state.get_window(start_ms=10, end_ms=20) == None if delete else 2
+        assert state.get_window(start_ms=0, end_ms=10) == 1
+        assert state.get_window(start_ms=10, end_ms=20) == 2
         assert state.get_window(start_ms=20, end_ms=30) == 3
 
 

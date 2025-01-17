@@ -125,6 +125,11 @@ class FixedTimeWindow:
             expired_windows.append(
                 WindowResult(start=start, end=end, value=self._merge_func(aggregated))
             )
+
+        state.delete_windows(
+            max_start_time=max_expired_window_start,
+            delete_values=collect,
+        )
         return updated_windows, expired_windows
 
     def _log_expired_window(self, window, timestamp_ms, late_by_ms) -> None:

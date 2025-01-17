@@ -94,7 +94,6 @@ class WindowedTransactionState(WindowedState):
     def expire_windows(
         self,
         max_start_time: int,
-        delete: bool = True,
         collect: bool = False,
         end_inclusive: bool = False,
     ) -> list[tuple[tuple[int, int], Any]]:
@@ -105,7 +104,6 @@ class WindowedTransactionState(WindowedState):
         so consecutive calls may yield different results for the same "latest timestamp".
 
         :param max_start_time: The timestamp up to which windows are considered expired, inclusive.
-        :param delete: If True, expired windows will be deleted.
         :param collect: If True, values will be collected into windows.
         :param end_inclusive: If True, the end of the window will be inclusive.
             Relevant only together with `collect=True`.
@@ -114,7 +112,6 @@ class WindowedTransactionState(WindowedState):
         return self._transaction.expire_windows(
             max_start_time=max_start_time,
             prefix=self._prefix,
-            delete=delete,
             collect=collect,
             end_inclusive=end_inclusive,
         )

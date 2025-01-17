@@ -150,7 +150,6 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         self,
         max_start_time: int,
         prefix: bytes,
-        delete: bool = True,
         collect: bool = False,
         end_inclusive: bool = False,
     ) -> list[tuple[tuple[int, int], Any]]:
@@ -179,7 +178,6 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
 
         :param max_start_time: The timestamp up to which windows are considered expired, inclusive.
         :param prefix: The key prefix for filtering windows.
-        :param delete: If True, expired windows will be deleted.
         :param collect: If True, values will be collected into windows.
         :param end_inclusive: If True, the end of the window will be inclusive.
             Relevant only together with `collect=True`.
@@ -214,34 +212,30 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
             timestamp_ms=last_expired__gt,
         )
 
+        if not collect:
+            return expired_windows
+
         # Collect values into windows
-        if collect:
-            collected_expired_windows = []
-            for (start, end), value in expired_windows:
-                collection = self._get_values(
-                    start=start,
-                    # Sliding windows are inclusive on both ends
-                    # (including timestamps of messages equal to `end`).
-                    # Since RocksDB range queries are exclusive on the
-                    # `end` boundary, we add +1 to include it.
-                    end=end + 1 if end_inclusive else end,
-                    prefix=prefix,
-                )
-                if value is None:
-                    value = collection
-                else:
-                    # Sliding windows are timestamped:
-                    # value is [max_timestamp, value] where max_timestamp
-                    # is the timestamp of the latest message in the window
-                    value[1] = collection
-                collected_expired_windows.append(((start, end), value))
-            expired_windows = collected_expired_windows
-
-        # Delete expired windows from the state
-        if delete:
-            self.delete_windows(max_start_time, delete_values=collect, prefix=prefix)
-
-        return expired_windows
+        collected_expired_windows = []
+        for (start, end), value in expired_windows:
+            collection = self._get_values(
+                start=start,
+                # Sliding windows are inclusive on both ends
+                # (including timestamps of messages equal to `end`).
+                # Since RocksDB range queries are exclusive on the
+                # `end` boundary, we add +1 to include it.
+                end=end + 1 if end_inclusive else end,
+                prefix=prefix,
+            )
+            if value is None:
+                value = collection
+            else:
+                # Sliding windows are timestamped:
+                # value is [max_timestamp, value] where max_timestamp
+                # is the timestamp of the latest message in the window
+                value[1] = collection
+            collected_expired_windows.append(((start, end), value))
+        return collected_expired_windows
 
     def delete_windows(
         self, max_start_time: int, delete_values: bool, prefix: bytes
