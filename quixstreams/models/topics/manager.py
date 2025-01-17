@@ -248,7 +248,8 @@ class TopicManager:
         return TopicConfig(
             num_partitions=num_partitions or self.default_num_partitions,
             replication_factor=replication_factor or self.default_replication_factor,
-            extra_config=extra_config or self.default_extra_config,
+            # copy the default extra_config to ensure we don't mutate the default
+            extra_config=extra_config or self.default_extra_config.copy(),
         )
 
     def topic(
@@ -404,7 +405,8 @@ class TopicManager:
                 config = self.topic_config(
                     num_partitions=source_topic_config.num_partitions,
                     replication_factor=source_topic_config.replication_factor,
-                    extra_config=source_topic_config.extra_config,
+                    # copy the extra_config to ensure we don't mutate the source topic extra config
+                    extra_config=source_topic_config.extra_config.copy(),
                 )
 
         # always override some default configuration
