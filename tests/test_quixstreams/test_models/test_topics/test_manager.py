@@ -107,6 +107,8 @@ class TestTopicManager:
             assert isinstance(getattr(changelog, attr), BytesDeserializer)
         assert changelog.config.num_partitions == topic.config.num_partitions
         assert changelog.config.replication_factor == topic.config.replication_factor
+
+        assert topic.config.extra_config.get("cleanup.policy") != "compact"
         assert changelog.config.extra_config["cleanup.policy"] == "compact"
 
     def test_changelog_topic_settings_import(self, topic_manager_factory):
