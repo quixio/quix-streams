@@ -45,9 +45,10 @@ class FixedTimeWindow:
         duration_ms: int,
         grace_ms: int,
         name: str,
+        dataframe: "StreamingDataFrame",
         aggregate_func: WindowAggregateFunc,
         aggregate_default: Any,
-        dataframe: "StreamingDataFrame",
+        aggregate_collection: bool = False,
         merge_func: Optional[WindowMergeFunc] = None,
         step_ms: Optional[int] = None,
     ):
@@ -59,6 +60,7 @@ class FixedTimeWindow:
         self._name = name
         self._aggregate_func = aggregate_func
         self._aggregate_default = aggregate_default
+        self._aggregate_collection = aggregate_collection
         self._merge_func = merge_func or _default_merge_func
         self._dataframe = dataframe
         self._step_ms = step_ms
@@ -76,6 +78,7 @@ class FixedTimeWindow:
         duration_ms = self._duration_ms
         grace_ms = self._grace_ms
         default = self._aggregate_default
+        collect = self._aggregate_collection
 
         ranges = get_window_ranges(
             timestamp_ms=timestamp_ms,
@@ -97,16 +100,27 @@ class FixedTimeWindow:
                 )
                 continue
 
+            if collect:
+                # When collecting values, we only mark the window existence with None
+                # since actual values are stored separately and combined into an array
+                # during window expiration.
+                state.update_window(start, end, value=None, timestamp_ms=timestamp_ms)
+                continue
+
             current_value = state.get_window(start, end, default=default)
             aggregated = self._aggregate_func(current_value, value)
-            state.update_window(start, end, timestamp_ms=timestamp_ms, value=aggregated)
+            state.update_window(start, end, value=aggregated, timestamp_ms=timestamp_ms)
             updated_windows.append(
                 WindowResult(start=start, end=end, value=self._merge_func(aggregated))
             )
 
+        if collect:
+            state.add_to_collection(value=value, timestamp_ms=timestamp_ms)
+
         expired_windows: list[WindowResult] = []
         for (start, end), aggregated in state.expire_windows(
-            max_start_time=max_expired_window_start
+            max_start_time=max_expired_window_start,
+            collect=collect,
         ):
             expired_windows.append(
                 WindowResult(start=start, end=end, value=self._merge_func(aggregated))
@@ -178,7 +192,15 @@ class FixedTimeWindow:
 
         This method processes streaming data and returns results as they come,
         regardless of whether the window is closed or not.
+
+        Note:
+            This method cannot be used with collection aggregations (created using
+            .collect()). Use .final() instead for collection aggregations.
         """
+        if self._aggregate_collection:
+            raise ValueError(
+                "`current` is not supported in combination with `collect`."
+            )
 
         def window_callback(
             value: Any, key: Any, timestamp_ms: int, _headers: Any, state: WindowedState

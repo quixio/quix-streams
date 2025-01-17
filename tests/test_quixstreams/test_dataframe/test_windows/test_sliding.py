@@ -8,7 +8,15 @@ import pytest
 
 from quixstreams.dataframe.windows import SlidingWindowDefinition
 
-A, B, C, D, E, F, G, H, I = "A", "B", "C", "D", "E", "F", "G", "H", "I"
+A, B, C, D = "A", "B", "C", "D"
+
+AGGREGATE_PARAMS = {
+    "reduce": {
+        "reducer": lambda agg, value: agg + [value],
+        "initializer": lambda value: [value],
+    },
+    "collect": {},
+}
 
 
 @dataclass
@@ -35,6 +43,8 @@ class Message:
     # * Windows that are expired but still needed
     # * Right windows that were not emitted.
     present: list[dict[str, Any]] = field(default_factory=list)
+
+    expected_values_in_state: list[tuple[int, Any]] = field(default_factory=list)
 
     @property
     def expected_windows_in_state(self) -> set[tuple[int, int]]:
@@ -125,7 +135,7 @@ RIGHT_WINDOW_CREATED = [
 #                |---------||---------|
 #                10      20  21      31
 # ______________________________________________________________________
-# B 27                         |---------|
+# C 27                         |---------|
 #                              24       34
 #                                 C
 #                       |---------|
@@ -666,14 +676,12 @@ def sliding_window_definition_factory(
 
 @pytest.fixture
 def window_factory(sliding_window_definition_factory):
-    def factory(duration_ms: int, grace_ms: int):
+    def factory(aggregation: str, duration_ms: int, grace_ms: int):
+        aggregate_params = AGGREGATE_PARAMS[aggregation]
         window_definition = sliding_window_definition_factory(
             duration_ms=duration_ms, grace_ms=grace_ms
         )
-        window = window_definition.reduce(
-            reducer=lambda agg, value: agg + [value],
-            initializer=lambda value: [value],
-        )
+        window = getattr(window_definition, aggregation)(**aggregate_params)
         window.register_store()
         return window
 
@@ -742,10 +750,12 @@ def state_factory(state_manager):
         pytest.param(10, 3, EXPIRATION_WITH_GRACE, id="expiration-with-grace"),
     ],
 )
-def test_sliding_window(
+def test_sliding_window_reduce(
     window_factory, state_factory, duration_ms, grace_ms, messages, mock_message_context
 ):
-    window = window_factory(duration_ms=duration_ms, grace_ms=grace_ms)
+    window = window_factory(
+        aggregation="reduce", duration_ms=duration_ms, grace_ms=grace_ms
+    )
     for message in messages:
         with state_factory(window) as state:
             updated, expired = window.process_window(
@@ -769,3 +779,135 @@ def test_sliding_window(
 
             all_windows_in_state = {window for window, *_ in state.get_windows(-1, 99)}
             assert all_windows_in_state == message.expected_windows_in_state
+
+
+#      0        10        20        30        40        50        60
+# -----|---------|---------|---------|---------|---------|---------|--->
+# Duration: 10
+# Grace: 5
+# ______________________________________________________________________
+# A 11            A
+#       |---------|
+#       1        11
+# ______________________________________________________________________
+# B 12             |---------|
+#                  12       22
+#                  B
+#        |---------|
+#        2        12
+# ______________________________________________________________________
+# C 21              |---------|
+#                   13       23
+#                           C
+#                 |---------|
+#                 11       21
+# ______________________________________________________________________
+# D 60                                                             D
+#                                                        |---------|
+#                                                        50       60
+# ______________________________________________________________________
+# Collection windows are special:
+# * Windows are saved with empty values (None) to preserve start/end times
+# * Values are collected separately and combined during expiration
+# * Message A creates window (1, 11) and stores value A
+# * Message B creates windows (2, 12) and (12, 22) and stores value B
+# * Message C creates windows (11, 21) and (13, 23) and stores value C
+#   and expires windows (1, 11) with values [A] and (2, 12) with values [A, B]
+# * Message D arrives at 60, causing expiration of a remaining
+#   window (11, 21) with values [A, B, C] and deletion of obsolete
+#   values A, B and C.
+COLLECTION_AGGREGATION = [
+    Message(
+        timestamp=11,
+        value=A,
+        present=[
+            {"start": 1, "end": 11, "value": [11, None]},
+        ],
+        expected_values_in_state=[A],
+    ),
+    Message(
+        timestamp=12,
+        value=B,
+        present=[
+            {"start": 1, "end": 11, "value": [11, None]},
+            {"start": 2, "end": 12, "value": [12, None]},
+            {"start": 12, "end": 22, "value": [12, None]},
+        ],
+        expected_values_in_state=[A, B],
+    ),
+    Message(
+        timestamp=21,
+        value=C,
+        expired=[
+            {"start": 1, "end": 11, "value": [A]},
+            {"start": 2, "end": 12, "value": [A, B]},
+        ],
+        deleted=[
+            {"start": 1, "end": 11},
+        ],
+        present=[
+            {"start": 2, "end": 12, "value": [12, None]},
+            {"start": 11, "end": 21, "value": [21, None]},
+            {"start": 12, "end": 22, "value": [21, None]},
+            {"start": 13, "end": 23, "value": [21, None]},
+        ],
+        expected_values_in_state=[A, B, C],
+    ),
+    Message(
+        timestamp=60,
+        value=D,
+        expired=[
+            {"start": 11, "end": 21, "value": [A, B, C]},
+        ],
+        deleted=[
+            {"start": 2, "end": 12},
+            {"start": 11, "end": 21},
+            {"start": 12, "end": 22},
+            {"start": 13, "end": 23},
+        ],
+        present=[
+            {"start": 50, "end": 60, "value": [60, None]},
+        ],
+        expected_values_in_state=[D],
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "duration_ms, grace_ms, messages",
+    [
+        pytest.param(10, 5, COLLECTION_AGGREGATION, id="collection-aggregation"),
+    ],
+)
+def test_sliding_window_collect(
+    window_factory, state_factory, duration_ms, grace_ms, messages, mock_message_context
+):
+    window = window_factory(
+        aggregation="collect", duration_ms=duration_ms, grace_ms=grace_ms
+    )
+    for message in messages:
+        with state_factory(window) as state:
+            updated, expired = window.process_window(
+                value=message.value, timestamp_ms=message.timestamp, state=state
+            )
+
+        assert list(updated) == []  # updates are not supported for collections
+        assert list(expired) == message.expired
+
+        with state_factory(window) as state:
+            for deleted in message.deleted:
+                assert not state.get_window(
+                    start_ms=deleted["start"], end_ms=deleted["end"]
+                )
+
+            for present in message.present:
+                assert (
+                    state.get_window(start_ms=present["start"], end_ms=present["end"])
+                    == present["value"]
+                )
+
+            all_windows_in_state = {window for window, *_ in state.get_windows(-1, 99)}
+            assert all_windows_in_state == message.expected_windows_in_state
+
+            all_values_in_state = state._transaction._get_values(-1, 99, state._prefix)
+            assert all_values_in_state == message.expected_values_in_state
