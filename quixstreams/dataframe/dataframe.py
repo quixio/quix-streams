@@ -869,7 +869,7 @@ class StreamingDataFrame(BaseStreaming):
 
         sdf = (
             # Define a tumbling window of 60s and grace period of 10s
-            sdf.tumbling_time_window(
+            sdf.tumbling_window(
                 duration_ms=timedelta(seconds=60), grace_ms=timedelta(seconds=10.0)
             )
 
