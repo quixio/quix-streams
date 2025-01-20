@@ -939,7 +939,7 @@ class StreamingDataFrame(BaseStreaming):
         sdf = app.dataframe(...)
 
         sdf = (
-            # Define a tumbling window of 60s and grace period of 10s
+            # Define a tumbling window of 10 messages
             sdf.tumbling_count_window(count=10)
 
             # Specify the aggregation function
