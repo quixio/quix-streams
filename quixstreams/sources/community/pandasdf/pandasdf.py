@@ -22,8 +22,7 @@ class PandasDataFrameSource(Source):
         keep_meta_as_values: bool = True,
     ) -> None:
         """
-        A base pandas.DataFrame source that reads data from a pandas.DataFrame object and produces rows
-        to the Kafka topic in JSON format.
+        A source that reads data from a pandas.DataFrame and produces rows to a Kafka topic in JSON format.
 
         :df: the pandas.DataFrame object to read data from.
         :param key_column: an optional argument to specify dataframe column that contains the messages keys.
@@ -34,8 +33,7 @@ class PandasDataFrameSource(Source):
             he values in dataframe[timestamp_column] must be time in milliseconds as `int`.
             If empty, the current epoch will be used.
             Default - `None`
-        :param name: a unique name for the Source.
-            It is used as a part of the default topic name.
+        :param name: a unique name for the Source, used as a part of the default topic name.
         :param delay: an optional delay after producing each row for stream simulation.
             Default - `0`.
         :param shutdown_timeout: Time in second the application waits for the source to gracefully shut down.
@@ -52,56 +50,67 @@ class PandasDataFrameSource(Source):
 
         super().__init__(name=name, shutdown_timeout=shutdown_timeout)
 
-    def get_key_column(self, key_column:str):
-        # Check that column exists
+    def get_key_column(self, key_column:str) -> Optional[str]:
+        """
+        Validates the key column.
+
+        :param key_column: The column to use as the message key.
+        :return: The column name if valid; otherwise, None.
+        """
         if key_column not in self.df.columns:
-            logger.warning(f'Key column provided "{key_column}" does not exist in df dataframe.')
+            logger.warning(f'Key column "{key_column}" does not exist in the DataFrame.')
             return None
-        # Check if df column dtype is str
-        is_str_dtype = pd.api.types.is_string_dtype(self.df[key_column])
-        if not is_str_dtype:
-            logger.warning(f'Key column provided "{key_column}" dtype is not a str. It will not be used as Key.')
+
+        if not pd.api.types.is_string_dtype(self.df[key_column]):
+            logger.warning(f'Key column "{key_column}" is not of string dtype. It will not be used as a key.')
             return None
+
         return key_column
 
+
     def get_timestamp_column(self, timestamp_column):
-        # Check that column exists
+        """
+        Validates the timestamp column.
+
+        :param timestamp_column: The column to use as the message timestamp.
+        :return: The column name if valid; otherwise, None.
+        """
         if timestamp_column not in self.df.columns:
-            logger.warning(f'Timestamp column provided "{timestamp_column}" does not exist in df dataframe.')
+            logger.warning(f'Timestamp column "{timestamp_column}" does not exist in the DataFrame.')
             return None
-        # Check if df column dtype is integer
-        is_integer_dtype = pd.api.types.is_integer_dtype(self.df[timestamp_column])
-        if not is_integer_dtype:
-            logger.warning(f'Timestamp column provided "{timestamp_column}" dtype is not an integer. It will not be used as timestamp.')
+
+        if not pd.api.types.is_integer_dtype(self.df[timestamp_column]):
+            logger.warning(f'Timestamp column "{timestamp_column}" is not of integer dtype. It will not be used as a timestamp.')
             return None
-        # Check if column integers are milliseconds
-        is_milliseconds = (self.df[timestamp_column].min() >= 10**12) and (self.df[timestamp_column].max() < 10 ** 13)
+
+        is_milliseconds = (self.df[timestamp_column].min() >= 10 ** 12) and (self.df[timestamp_column].max() < 10 ** 13)
         if not is_milliseconds:
-            logger.warning(f'Timestamp column provided "{timestamp_column}" is not in milliseconds. It will not be used as timestamp.')
+            logger.warning(f'Timestamp column "{timestamp_column}" values are not in milliseconds. It will not be used as a timestamp.')
             return None
+
         return timestamp_column
 
     def run(self):
-        logger.info(f"Producing the data from the pandas.DataFrame ({len(self.df)} rows).")
+        """
+        Produces data from the DataFrame row by row.
+        """
+        logger.info(f"Producing data from DataFrame ({len(self.df)} rows).")
 
         # Iterate row by row over the dataframe
         for i, row in self.df.iterrows():
-
             if self.running:
                 row_dict = row.to_dict()
 
-                # Extract message key from the row
+                # Extract message key
                 message_key = row_dict[self.key_col] if self.key_col else None
 
-                # Extract timestamp from the row
+                # Extract timestamp
                 message_timestamp = row_dict[self.timestamp_col] if self.timestamp_col else None
 
-                # Message values
+                # Remove metadata from values if necessary
                 if not self.keep_meta_as_values:
-                    if self.key_col:
-                        row_dict.pop(self.key_col, None)
-                    if self.timestamp_col:
-                        row_dict.pop(self.timestamp_col, None)
+                    row_dict.pop(self.key_col, None)
+                    row_dict.pop(self.timestamp_col, None)
 
                 # Serialize data before sending to Kafka
                 msg = self.serialize(key=message_key, value=row_dict, timestamp_ms=message_timestamp)
