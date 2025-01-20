@@ -302,6 +302,13 @@ class KafkaReplicatorSource(Source):
             target_topic_config,
         )
 
+        # should never happen
+        if (
+            source_topic_config.num_partitions is None
+            or target_topic_config.num_partitions is None
+        ):
+            return
+
         if source_topic_config.num_partitions > target_topic_config.num_partitions:
             raise ValueError("Source topic has more partitions than destination topic")
         elif source_topic_config.num_partitions < target_topic_config.num_partitions:
@@ -333,7 +340,7 @@ class KafkaReplicatorSource(Source):
                 partition.partition,
             )
 
-        self.source_cluster_consumer.incremental_assign(source_partitions)
+        self.source_cluster_consumer.assign(source_partitions)
 
     def on_revoke(self, *_) -> None:
         if self._failed:

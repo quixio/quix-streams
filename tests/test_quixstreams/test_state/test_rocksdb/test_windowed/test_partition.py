@@ -2,13 +2,13 @@ import pytest
 
 from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
-    PREFIX_SEPARATOR,
+    SEPARATOR,
 )
 from quixstreams.state.rocksdb.windowed.metadata import (
     LATEST_EXPIRED_WINDOW_CF_NAME,
     LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY,
 )
-from quixstreams.state.rocksdb.windowed.serialization import encode_window_key
+from quixstreams.state.rocksdb.windowed.serialization import encode_integer_pair
 from quixstreams.utils.json import dumps
 from tests.utils import ConfluentKafkaMessageStub
 
@@ -30,8 +30,8 @@ class TestWindowedRocksDBPartitionTransactionChangelog:
         window = dict(start_ms=0, end_ms=10, value=store_value, timestamp_ms=2)
         changelog_msg = ConfluentKafkaMessageStub(
             key=kafka_key
-            + PREFIX_SEPARATOR
-            + encode_window_key(window["start_ms"], window["end_ms"]),
+            + SEPARATOR
+            + encode_integer_pair(window["start_ms"], window["end_ms"]),
             value=dumps(store_value),
             headers=[(CHANGELOG_CF_MESSAGE_HEADER, b"default")],
             offset=50,
@@ -60,7 +60,7 @@ class TestWindowedRocksDBPartitionTransactionChangelog:
         kafka_key = b"my_key"
         store_value = 10
         changelog_msg = ConfluentKafkaMessageStub(
-            key=kafka_key + PREFIX_SEPARATOR + LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY,
+            key=kafka_key + SEPARATOR + LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY,
             value=dumps(store_value),
             headers=[
                 (CHANGELOG_CF_MESSAGE_HEADER, LATEST_EXPIRED_WINDOW_CF_NAME.encode())

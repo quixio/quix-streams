@@ -58,6 +58,9 @@ MessageProcessedCallback = Callable[[str, int, int], None]
 # Enforce idempotent producing for the internal RowProducer
 _default_producer_extra_config = {"enable.idempotence": True}
 
+# Force assignment strategy to be "range" for co-partitioning in internal Consumers
+consumer_extra_config_overrides = {"partition.assignment.strategy": "range"}
+
 _default_max_poll_interval_ms = 300000
 
 
@@ -301,7 +304,10 @@ class Application:
         self._on_message_processed = on_message_processed
         self._on_processing_error = on_processing_error or default_on_processing_error
 
-        self._consumer = self._get_rowconsumer(on_error=on_consumer_error)
+        self._consumer = self._get_rowconsumer(
+            on_error=on_consumer_error,
+            extra_config_overrides=consumer_extra_config_overrides,
+        )
         self._producer = self._get_rowproducer(on_error=on_producer_error)
         self._running = False
         self._failed = False
@@ -593,20 +599,27 @@ class Application:
         )
 
     def _get_rowconsumer(
-        self, on_error: Optional[ConsumerErrorCallback] = None
+        self,
+        on_error: Optional[ConsumerErrorCallback] = None,
+        extra_config_overrides: Optional[dict] = None,
     ) -> RowConsumer:
         """
         Create a RowConsumer using the application config
 
         Used to create the application consumer as well as the sources consumers
         """
-
+        extra_config_overrides = extra_config_overrides or {}
+        # Override the existing "extra_config" with new values
+        extra_config = {
+            **self._config.consumer_extra_config,
+            **extra_config_overrides,
+        }
         return RowConsumer(
             broker_address=self._config.broker_address,
             consumer_group=self._config.consumer_group,
             auto_offset_reset=self._config.auto_offset_reset,
             auto_commit_enable=False,  # Disable auto commit and manage commits manually
-            extra_config=self._config.consumer_extra_config,
+            extra_config=extra_config,
             on_error=on_error,
         )
 
@@ -692,7 +705,9 @@ class Application:
             source,
             topic,
             self._get_rowproducer(transactional=False),
-            self._get_rowconsumer(),
+            self._get_rowconsumer(
+                extra_config_overrides=consumer_extra_config_overrides
+            ),
             self._get_topic_manager(),
         )
         return topic
@@ -772,8 +787,9 @@ class Application:
                 self._run_sources()
 
     def _run_dataframe(self):
+        changelog_topics = self._topic_manager.changelog_topics_list
         self._consumer.subscribe(
-            self._dataframe_registry.consumer_topics,
+            topics=self._dataframe_registry.consumer_topics + changelog_topics,
             on_assign=self._on_assign,
             on_revoke=self._on_revoke,
             on_lost=self._on_lost,
@@ -896,16 +912,20 @@ class Application:
         # get the source data.
         self._source_manager.start_sources()
 
-        # First commit everything processed so far because assignment can take a while
-        # and fail
-        self._processing_context.commit_checkpoint(force=True)
-
-        # assigning manually here (instead of allowing it handle it automatically)
-        # enables pausing them during recovery to work as expected
-        self._consumer.incremental_assign(topic_partitions)
+        # Assign partitions manually to pause the changelog topics
+        self._consumer.assign(topic_partitions)
+        # Pause changelog topic+partitions immediately after assignment
+        non_changelog_topics = self._topic_manager.non_changelog_topics
+        changelog_tps = [
+            tp for tp in topic_partitions if tp.topic not in non_changelog_topics
+        ]
+        self._consumer.pause(changelog_tps)
 
         if self._state_manager.stores:
-            for tp in topic_partitions:
+            non_changelog_tps = [
+                tp for tp in topic_partitions if tp.topic in non_changelog_topics
+            ]
+            for tp in non_changelog_tps:
                 # Get the latest committed offset for the assigned topic partition
                 tp_committed = self._consumer.committed([tp], timeout=30)[0]
                 # Assign store partitions
@@ -956,8 +976,11 @@ class Application:
         else:
             self._processing_context.commit_checkpoint(force=True)
 
-        self._consumer.incremental_unassign(topic_partitions)
-        for tp in topic_partitions:
+        non_changelog_topics = self._topic_manager.non_changelog_topics
+        non_changelog_tps = [
+            tp for tp in topic_partitions if tp.topic in non_changelog_topics
+        ]
+        for tp in non_changelog_tps:
             if self._state_manager.stores:
                 self._state_manager.on_partition_revoke(
                     topic=tp.topic, partition=tp.partition
@@ -971,7 +994,12 @@ class Application:
         Dropping lost partitions from consumer and state
         """
         logger.debug("Rebalancing: dropping lost partitions")
-        for tp in topic_partitions:
+
+        non_changelog_topics = self._topic_manager.non_changelog_topics
+        non_changelog_tps = [
+            tp for tp in topic_partitions if tp.topic in non_changelog_topics
+        ]
+        for tp in non_changelog_tps:
             if self._state_manager.stores:
                 self._state_manager.on_partition_revoke(
                     topic=tp.topic, partition=tp.partition

@@ -107,6 +107,8 @@ class TestTopicManager:
             assert isinstance(getattr(changelog, attr), BytesDeserializer)
         assert changelog.config.num_partitions == topic.config.num_partitions
         assert changelog.config.replication_factor == topic.config.replication_factor
+
+        assert topic.config.extra_config.get("cleanup.policy") != "compact"
         assert changelog.config.extra_config["cleanup.policy"] == "compact"
 
     def test_changelog_topic_settings_import(self, topic_manager_factory):
@@ -351,3 +353,27 @@ class TestTopicManager:
             changelog.name
             == f"changelog__{group}--repartition.{topic.name}.{operation}--{store}"
         )
+
+    def test_non_changelog_topics(self, topic_manager_factory):
+        group = "my_consumer_group"
+        topic_manager = topic_manager_factory(consumer_group=group)
+        data_topic = topic_manager.topic(
+            name="my_topic",
+            config=topic_manager.topic_config(num_partitions=5),
+        )
+
+        operation = "my_op"
+        repartition_topic = topic_manager.repartition_topic(
+            operation=operation,
+            topic_name=data_topic.name,
+            key_serializer="bytes",
+            value_serializer="bytes",
+        )
+
+        changelog_topic = topic_manager.changelog_topic(
+            topic_name=data_topic.name, store_name="default"
+        )
+
+        assert data_topic.name in topic_manager.non_changelog_topics
+        assert repartition_topic.name in topic_manager.non_changelog_topics
+        assert changelog_topic.name not in topic_manager.non_changelog_topics

@@ -1,7 +1,8 @@
 import logging
 import sys
 import time
-from typing import Any, Iterable, Mapping, Optional
+import typing
+from typing import Any, Callable, Iterable, Literal, Mapping, Optional, Union
 
 from quixstreams.models import HeadersTuples
 
@@ -20,18 +21,40 @@ from ..base import BatchingSink, SinkBackpressureError, SinkBatch
 logger = logging.getLogger(__name__)
 
 
+TimePrecision = Literal["ms", "ns", "us", "s"]
+
+InfluxDBValueMap = dict[str, Union[str, int, float, bool]]
+
+FieldsCallable = Callable[[InfluxDBValueMap], Iterable[str]]
+MeasurementCallable = Callable[[InfluxDBValueMap], str]
+TagsCallable = Callable[[InfluxDBValueMap], Iterable[str]]
+
+
+FieldsSetter = Union[Iterable[str], FieldsCallable]
+MeasurementSetter = Union[str, MeasurementCallable]
+TagsSetter = Union[Iterable[str], TagsCallable]
+
+
 class InfluxDB3Sink(BatchingSink):
+    _TIME_PRECISIONS = {
+        "ms": WritePrecision.MS,
+        "ns": WritePrecision.NS,
+        "us": WritePrecision.US,
+        "s": WritePrecision.S,
+    }
+
     def __init__(
         self,
         token: str,
         host: str,
         organization_id: str,
         database: str,
-        measurement: str,
-        fields_keys: Iterable[str] = (),
-        tags_keys: Iterable[str] = (),
+        measurement: MeasurementSetter,
+        fields_keys: FieldsSetter = (),
+        tags_keys: TagsSetter = (),
         time_key: Optional[str] = None,
-        time_precision: WritePrecision = WritePrecision.MS,  # type: ignore
+        time_precision: TimePrecision = "ms",
+        allow_missing_fields: bool = False,
         include_metadata_tags: bool = False,
         batch_size: int = 1000,
         enable_gzip: bool = True,
@@ -58,18 +81,23 @@ class InfluxDB3Sink(BatchingSink):
         :param host: InfluxDB host in format "https://<host>"
         :param organization_id: InfluxDB organization_id
         :param database: database name
-        :measurement: measurement name
-        :param fields_keys: a list of keys to be used as "fields" when writing to InfluxDB.
-            If present, it must not overlap with "tags_keys".
-            If empty, the whole record value will be used.
+        :param measurement: measurement name as a string.
+            Also accepts a single-argument callable that receives the current message
+            data as a dict and returns a string.
+        :param fields_keys: an iterable (list) of strings used as InfluxDB "fields".
+            Also accepts a single-argument callable that receives the current message
+            data as a dict and returns an iterable of strings.
+            - If present, it must not overlap with "tags_keys".
+            - If empty, the whole record value will be used.
             >***NOTE*** The fields' values can only be strings, floats, integers, or booleans.
             Default - `()`.
-        :param tags_keys: a list of keys to be used as "tags" when writing to InfluxDB.
-            If present, it must not overlap with "fields_keys".
-            These keys will be popped from the value dictionary
-            automatically because InfluxDB doesn't allow the same keys be
-            both in tags and fields.
-            If empty, no tags will be sent.
+        :param tags_keys: an iterable (list) of strings used as InfluxDB "tags".
+            Also accepts a single-argument callable that receives the current message
+            data as a dict and returns an iterable of strings.
+            - If present, it must not overlap with "fields_keys".
+            - Given keys are popped from the value dictionary since the same key
+            cannot be both a tag and field.
+            - If empty, no tags will be sent.
             >***NOTE***: InfluxDB client always converts tag values to strings.
             Default - `()`.
         :param time_key: a key to be used as "time" when writing to InfluxDB.
@@ -77,6 +105,10 @@ class InfluxDB3Sink(BatchingSink):
             When using a custom key, you may need to adjust the `time_precision` setting
             to match.
         :param time_precision: a time precision to use when writing to InfluxDB.
+            Possible values: "ms", "ns", "us", "s".
+            Default - `"ms"`.
+        :param allow_missing_fields: if `True`, skip the missing fields keys, else raise `KeyError`.
+            Default - `False`
         :param include_metadata_tags: if True, includes record's key, topic,
             and partition as tags.
             Default - `False`.
@@ -93,12 +125,18 @@ class InfluxDB3Sink(BatchingSink):
         """
 
         super().__init__()
-        fields_tags_keys_overlap = set(fields_keys) & set(tags_keys)
-        if fields_tags_keys_overlap:
-            overlap_str = ",".join(str(k) for k in fields_tags_keys_overlap)
+        if time_precision not in (time_args := typing.get_args(TimePrecision)):
             raise ValueError(
-                f'Keys {overlap_str} are present in both "fields_keys" and "tags_keys"'
+                f"Invalid 'time_precision' argument {time_precision}; "
+                f"valid options: {time_args}"
             )
+        if not callable(fields_keys) and not callable(tags_keys):
+            fields_tags_keys_overlap = set(fields_keys) & set(tags_keys)
+            if fields_tags_keys_overlap:
+                overlap_str = ",".join(str(k) for k in fields_tags_keys_overlap)
+                raise ValueError(
+                    f'Keys {overlap_str} are present in both "fields_keys" and "tags_keys"'
+                )
 
         self._client = InfluxDBClient3(
             token=token,
@@ -114,13 +152,30 @@ class InfluxDB3Sink(BatchingSink):
                 )
             },
         )
-        self._measurement = measurement
-        self._fields_keys = fields_keys
-        self._tags_keys = tags_keys
+
+        self._measurement = self._measurement_callable(measurement)
+        self._fields_keys = self._fields_callable(fields_keys)
+        self._tags_keys = self._tags_callable(tags_keys)
         self._include_metadata_tags = include_metadata_tags
         self._time_key = time_key
-        self._write_precision = time_precision
+        self._write_precision = self._TIME_PRECISIONS[time_precision]
         self._batch_size = batch_size
+        self._allow_missing_fields = allow_missing_fields
+
+    def _measurement_callable(self, setter: MeasurementSetter) -> MeasurementCallable:
+        if callable(setter):
+            return setter
+        return lambda value: setter
+
+    def _fields_callable(self, setter: FieldsSetter) -> FieldsCallable:
+        if callable(setter):
+            return setter
+        return lambda value: setter
+
+    def _tags_callable(self, setter: TagsSetter) -> TagsCallable:
+        if callable(setter):
+            return setter
+        return lambda value: setter
 
     def add(
         self,
@@ -160,15 +215,19 @@ class InfluxDB3Sink(BatchingSink):
 
             for item in write_batch:
                 value = item.value
+                # Evaluate these before we alter the value
+                _measurement = measurement(value)
+                _tags_keys = tags_keys(value)
+                _fields_keys = fields_keys(value)
+
                 tags = {}
-                if tags_keys:
-                    for tag_key in tags_keys:
-                        # TODO: InfluxDB client always converts tags values to strings
-                        #  by doing str().
-                        #  We may add some extra validation here in the future to prevent
-                        #  unwanted conversion.
-                        tag = value.pop(tag_key)
-                        tags[tag_key] = tag
+                for tag_key in _tags_keys:
+                    # TODO: InfluxDB client always converts tags values to strings
+                    #  by doing str().
+                    #  We may add some extra validation here in the future to prevent
+                    #  unwanted conversion.
+                    tag = value.pop(tag_key)
+                    tags[tag_key] = tag
 
                 if self._include_metadata_tags:
                     tags["__key"] = item.key
@@ -178,15 +237,16 @@ class InfluxDB3Sink(BatchingSink):
                 fields = (
                     {
                         field_key: value[field_key]
-                        for field_key in fields_keys
-                        if field_key not in tags_keys
+                        for field_key in _fields_keys
+                        if (field_key in value or not self._allow_missing_fields)
+                        and field_key not in _tags_keys
                     }
-                    if fields_keys
+                    if _fields_keys
                     else value
                 )
                 ts = value[time_key] if time_key is not None else item.timestamp
                 record = {
-                    "measurement": measurement,
+                    "measurement": _measurement,
                     "tags": tags,
                     "fields": fields,
                     "time": ts,

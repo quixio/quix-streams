@@ -1,7 +1,14 @@
 import contextvars
-import functools
 import operator
-from typing import Any, Callable, Container, Mapping, Optional, TypeVar, Union
+from typing import (
+    Any,
+    Callable,
+    Container,
+    Mapping,
+    Optional,
+    TypeVar,
+    Union,
+)
 
 from typing_extensions import ParamSpec, Self
 
@@ -24,6 +31,7 @@ __all__ = ("StreamingSeries",)
 
 _T = TypeVar("_T")
 _P = ParamSpec("_P")
+_O = TypeVar("_O")
 
 
 def _getitem(d: Mapping, column_name: Union[str, int]) -> object:
@@ -47,24 +55,6 @@ def _getitem(d: Mapping, column_name: Union[str, int]) -> object:
             f"column referencing expects message value type 'dict', "
             f"not '{d.__class__.__name__}'"
         )
-
-
-def _validate_operation(func: Callable[_P, _T]) -> Callable[_P, _T]:
-    """
-    Ensure `StreamingSeries` involved in operations originate from the same SDF.
-    Can occur during `StreamingDataFrame` branching.
-    """
-
-    @functools.wraps(func)
-    def wrapper(self: "StreamingSeries", other: Any, *args, **kwargs):
-        if isinstance(other, StreamingSeries):
-            if self.sdf_id != other.sdf_id:
-                raise InvalidOperation(
-                    "All column operations must originate from one `StreamingDataFrame`"
-                )
-        return func(self, other, *args, **kwargs)
-
-    return wrapper
 
 
 class StreamingSeries(BaseStreaming):
@@ -119,13 +109,17 @@ class StreamingSeries(BaseStreaming):
 
     def __init__(
         self,
+        sdf_id: int,
         name: Optional[str] = None,
         stream: Optional[Stream] = None,
-        sdf_id: Optional[int] = None,
     ):
-        if not (name or stream):
+        if stream:
+            self._stream = stream
+        elif name:
+            self._stream = Stream(func=ApplyFunction(lambda v: _getitem(v, name)))
+        else:
             raise ValueError('Either "name" or "stream" must be passed')
-        self._stream = stream or Stream(func=ApplyFunction(lambda v: _getitem(v, name)))
+
         self._sdf_id = sdf_id
 
     @classmethod
@@ -140,7 +134,7 @@ class StreamingSeries(BaseStreaming):
         """
         return cls(stream=Stream(ApplyWithMetadataFunction(func)), sdf_id=sdf_id)
 
-    def _from_apply_callback(self, func: ApplyWithMetadataCallback):
+    def _from_apply_callback(self, func: ApplyWithMetadataCallback) -> Self:
         # TODO - maybe there's a better patten for this? (_method calling classmethod)
         return self.from_apply_callback(func, self._sdf_id)
 
@@ -275,31 +269,46 @@ class StreamingSeries(BaseStreaming):
         context.run(composed, value, key, timestamp, headers)
         return result
 
-    @_validate_operation
+    def _validate_other_series(self, other: Any) -> None:
+        """
+        Ensure `StreamingSeries` involved in operations originate from the same SDF.
+        Can occur during `StreamingDataFrame` branching.
+        """
+        if isinstance(other, StreamingSeries):
+            if self.sdf_id != other.sdf_id:
+                raise InvalidOperation(
+                    "All column operations must originate from one `StreamingDataFrame`"
+                )
+
     def _operation(
         self,
-        other: Union[Self, str, int, object],
+        other: _O,
         operator_: Callable[
-            [Union[Self, Container, Mapping, object], Union[Self, str, int, object]],
-            Union[bool, object],
+            [Any, _O],
+            Union[bool, Self],
         ],
     ) -> Self:
+        self._validate_other_series(other)
+
         self_composed = self.compose_returning()
         if isinstance(other, self.__class__):
             other_composed = other.compose_returning()
 
-            return self._from_apply_callback(
-                func=lambda value, key, timestamp, headers, op=operator_: op(
+            def f(value: Any, key: Any, timestamp: int, headers: Any) -> Any:
+                return operator_(
                     self_composed(value, key, timestamp, headers)[0],
                     other_composed(value, key, timestamp, headers)[0],
                 )
-            )
+
+            return self._from_apply_callback(func=f)
         else:
-            return self._from_apply_callback(
-                func=lambda value, key, timestamp, headers, op=operator_: op(
+
+            def f(value: Any, key: Any, timestamp: int, headers: Any) -> Any:
+                return operator_(
                     self_composed(value, key, timestamp, headers)[0], other
                 )
-            )
+
+            return self._from_apply_callback(func=f)
 
     def isin(self, other: Container) -> Self:
         """
@@ -324,9 +333,13 @@ class StreamingSeries(BaseStreaming):
         :param other: a container to check
         :return: new StreamingSeries
         """
-        return self._operation(
-            other, lambda a, b, contains=operator.contains: contains(b, a)
-        )
+
+        contains = operator.contains
+
+        def f(a, b):
+            return contains(b, a)
+
+        return self._operation(other, f)
 
     def contains(self, other: Union[Self, object]) -> Self:
         """
@@ -477,41 +490,40 @@ class StreamingSeries(BaseStreaming):
     def __getitem__(self, item: Union[str, int]) -> Self:
         return self._operation(item, operator.getitem)
 
-    def __mod__(self, other: Union[Self, object]) -> Self:
+    def __mod__(self, other: Union[Self, Any]) -> Self:
         return self._operation(other, operator.mod)
 
-    def __add__(self, other: Union[Self, object]) -> Self:
+    def __add__(self, other: Union[Self, Any]) -> Self:
         return self._operation(other, operator.add)
 
-    def __sub__(self, other: Union[Self, object]) -> Self:
+    def __sub__(self, other: Union[Self, Any]) -> Self:
         return self._operation(other, operator.sub)
 
-    def __mul__(self, other: Union[Self, object]) -> Self:
+    def __mul__(self, other: Union[Self, Any]) -> Self:
         return self._operation(other, operator.mul)
 
-    def __truediv__(self, other: Union[Self, object]) -> Self:
+    def __truediv__(self, other: Union[Self, Any]) -> Self:
         return self._operation(other, operator.truediv)
 
-    def __eq__(self, other: Union[Self, object]) -> Self:
+    def __eq__(self, other: Union[Self, Any]) -> Self:  # type: ignore[override]
         return self._operation(other, operator.eq)
 
-    def __ne__(self, other: Union[Self, object]) -> Self:
+    def __ne__(self, other: Union[Self, Any]) -> Self:  # type: ignore[override]
         return self._operation(other, operator.ne)
 
-    def __lt__(self, other: Union[Self, object]) -> Self:
+    def __lt__(self, other: Union[Self, Any]) -> Self:
         return self._operation(other, operator.lt)
 
-    def __le__(self, other: Union[Self, object]) -> Self:
+    def __le__(self, other: Union[Self, Any]) -> Self:
         return self._operation(other, operator.le)
 
-    def __gt__(self, other: Union[Self, object]) -> Self:
+    def __gt__(self, other: Union[Self, Any]) -> Self:
         return self._operation(other, operator.gt)
 
-    def __ge__(self, other: Union[Self, object]) -> Self:
+    def __ge__(self, other: Union[Self, Any]) -> Self:
         return self._operation(other, operator.ge)
 
-    @_validate_operation
-    def __and__(self, other: Union[Self, object]) -> Self:
+    def __and__(self, other: Union[Self, Any]) -> Self:
         """
         Do a logical "and" comparison.
 
@@ -519,6 +531,7 @@ class StreamingSeries(BaseStreaming):
             a bitwise "and" if one of the arguments is a number.
             This function always does a logical "and" instead.
         """
+        self._validate_other_series(other)
 
         # Do the "and" check manually instead of calling `self._operation`
         # to preserve Python's lazy evaluation of `and`.
@@ -543,7 +556,6 @@ class StreamingSeries(BaseStreaming):
                 and other
             )
 
-    @_validate_operation
     def __or__(self, other: Union[Self, object]) -> Self:
         """
         Do a logical "or" comparison.
@@ -552,6 +564,7 @@ class StreamingSeries(BaseStreaming):
             a bitwise "or" if one of the arguments is a number.
             This function always does a logical "or" instead.
         """
+        self._validate_other_series(other)
 
         # Do the "or" check manually instead of calling `self._operation`
         # to preserve Python's lazy evaluation of `or`.

@@ -3,6 +3,7 @@ import uuid
 from unittest.mock import MagicMock
 
 import pytest
+from confluent_kafka import TopicPartition
 
 from quixstreams.kafka import Consumer
 from quixstreams.state.exceptions import (
@@ -215,6 +216,7 @@ class TestStateStoreManagerWithRecovery:
         topic_manager = topic_manager_factory()
         consumer = MagicMock(spec_set=Consumer)
         consumer.get_watermark_offsets.return_value = (0, 10)
+
         recovery_manager = recovery_manager_factory(
             topic_manager=topic_manager, consumer=consumer
         )
@@ -228,6 +230,11 @@ class TestStateStoreManagerWithRecovery:
 
         # Register a store
         state_manager.register_store(topic_name, store_name=store_name)
+
+        # Mock the Consumer assignment with changelog topic-partition
+        changelog_topic = topic_manager.changelog_topics[topic_name][store_name]
+        changelog_tp = TopicPartition(topic=changelog_topic.name, partition=0)
+        consumer.assignment.return_value = [changelog_tp]
 
         # Assign a topic partition
         state_manager.on_partition_assign(

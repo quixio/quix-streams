@@ -21,7 +21,7 @@ class DataframeRegistry:
     `SDF`s are registered by storing their topic and current Stream.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._registry: Dict[str, Stream] = {}
         self._topics: List[Topic] = []
         # {repartition_topic_name: source_topic_name}

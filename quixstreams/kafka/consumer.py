@@ -126,7 +126,7 @@ class BaseConsumer:
         self._consumer_config = {
             # previous Quix Streams defaults
             "enable.auto.offset.store": False,
-            "partition.assignment.strategy": "cooperative-sticky",
+            "partition.assignment.strategy": "range",
             **(extra_config or {}),
             **broker_address.as_librdkafka_dict(),
             **{
@@ -527,6 +527,16 @@ class BaseConsumer:
         """
         return self._consumer.incremental_assign(partitions)
 
+    def assign(self, partitions: List[TopicPartition]):
+        """
+        Set the consumer partition assignment to the provided list of `TopicPartition` and start consuming.
+
+        :param List[TopicPartition] partitions: List of topic+partitions and optionally initial offsets to start consuming from.
+        :raises: KafkaException
+        :raises: RuntimeError if called on a closed consumer
+        """
+        return self._consumer.assign(partitions)
+
     def incremental_unassign(self, partitions: List[TopicPartition]):
         """
         Revoke partitions.
@@ -536,6 +546,15 @@ class BaseConsumer:
         :param List[TopicPartition] partitions: a list of topic partitions
         """
         return self._consumer.incremental_unassign(partitions)
+
+    def unassign(self):
+        """
+        Removes the current partition assignment and stops consuming.
+
+        :raises KafkaException:
+        :raises RuntimeError: if called on a closed consumer
+        """
+        return self._consumer.unassign()
 
     def close(self):
         """

@@ -42,28 +42,41 @@ class WindowedTransactionState(WindowedState):
         end_ms: int,
         value: Any,
         timestamp_ms: int,
-        window_timestamp_ms: Optional[int] = None,
     ) -> None:
         """
         Set a value for the window.
 
         This method will also update the latest observed timestamp in state partition
-        using the provided `timestamp`.
-
+        using the provided `timestamp_ms`.
 
         :param start_ms: start of the window in milliseconds
         :param end_ms: end of the window in milliseconds
         :param value: value of the window
         :param timestamp_ms: current message timestamp in milliseconds
-        :param window_timestamp_ms: arbitrary timestamp stored with the window value
         """
         return self._transaction.update_window(
             start_ms=start_ms,
             end_ms=end_ms,
-            timestamp_ms=timestamp_ms,
             value=value,
+            timestamp_ms=timestamp_ms,
             prefix=self._prefix,
-            window_timestamp_ms=window_timestamp_ms,
+        )
+
+    def add_to_collection(self, value: Any, timestamp_ms: int) -> None:
+        """
+        Collect a value for collection-type window aggregations.
+
+        This method is used internally by collection windows (created using
+        .collect()) to store individual values. These values are later combined
+        during window expiration.
+
+        :param value: value to be collected
+        :param timestamp_ms: current message timestamp in milliseconds
+        """
+        return self._transaction.add_to_collection(
+            value=value,
+            timestamp_ms=timestamp_ms,
+            prefix=self._prefix,
         )
 
     def get_latest_timestamp(self) -> Optional[int]:
@@ -79,7 +92,11 @@ class WindowedTransactionState(WindowedState):
         return self._transaction.get_latest_timestamp(prefix=self._prefix)
 
     def expire_windows(
-        self, max_start_time: int, delete: bool = True
+        self,
+        max_start_time: int,
+        delete: bool = True,
+        collect: bool = False,
+        end_inclusive: bool = False,
     ) -> list[tuple[tuple[int, int], Any]]:
         """
         Get all expired windows from RocksDB up to the specified `max_start_time` timestamp.
@@ -89,10 +106,17 @@ class WindowedTransactionState(WindowedState):
 
         :param max_start_time: The timestamp up to which windows are considered expired, inclusive.
         :param delete: If True, expired windows will be deleted.
+        :param collect: If True, values will be collected into windows.
+        :param end_inclusive: If True, the end of the window will be inclusive.
+            Relevant only together with `collect=True`.
         :return: A sorted list of tuples in the format `((start, end), value)`.
         """
         return self._transaction.expire_windows(
-            max_start_time=max_start_time, prefix=self._prefix, delete=delete
+            max_start_time=max_start_time,
+            prefix=self._prefix,
+            delete=delete,
+            collect=collect,
+            end_inclusive=end_inclusive,
         )
 
     def get_windows(
@@ -113,16 +137,20 @@ class WindowedTransactionState(WindowedState):
             backwards=backwards,
         )
 
-    def delete_windows(self, max_start_time: int) -> None:
+    def delete_windows(self, max_start_time: int, delete_values: bool) -> None:
         """
         Delete windows from RocksDB up to the specified `max_start_time` timestamp.
 
-        This method removes all window entries that have a start time less than or equal to the given
-        `max_start_time`. It ensures that expired data is cleaned up efficiently without affecting
-        unexpired windows.
+        This method removes all window entries that have a start time less than or equal
+        to the given `max_start_time`. It ensures that expired data is cleaned up
+        efficiently without affecting unexpired windows.
 
         :param max_start_time: The timestamp up to which windows should be deleted, inclusive.
+        :param delete_values: If True, values with timestamps less than max_start_time
+            will be deleted, as they can no longer belong to any active window.
         """
         return self._transaction.delete_windows(
-            max_start_time=max_start_time, prefix=self._prefix
+            max_start_time=max_start_time,
+            delete_values=delete_values,
+            prefix=self._prefix,
         )

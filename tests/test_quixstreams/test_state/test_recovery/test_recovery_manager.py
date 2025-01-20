@@ -1,12 +1,16 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+from confluent_kafka import TopicPartition
 from confluent_kafka import TopicPartition as ConfluentPartition
 
 from quixstreams.kafka import Consumer
 from quixstreams.models import TopicConfig, TopicManager
 from quixstreams.state.base import StorePartition
-from quixstreams.state.exceptions import InvalidStoreChangelogOffset
+from quixstreams.state.exceptions import (
+    ChangelogTopicPartitionNotAssigned,
+    InvalidStoreChangelogOffset,
+)
 from quixstreams.state.manager import SUPPORTED_STORES
 from quixstreams.state.metadata import CHANGELOG_CF_MESSAGE_HEADER
 from tests.utils import ConfluentKafkaMessageStub
@@ -43,12 +47,17 @@ class TestRecoveryManager:
         # Register a source topic and a changelog topic with one partition
         topic_manager = topic_manager_factory()
         topic_manager.topic(topic_name)
-        topic_manager.changelog_topic(topic_name=topic_name, store_name=store_name)
+        changelog_topic = topic_manager.changelog_topic(
+            topic_name=topic_name, store_name=store_name
+        )
 
         # Mock Consumer
         consumer = MagicMock(spec_set=Consumer)
         consumer.get_watermark_offsets.return_value = (lowwater, highwater)
-        consumer.assignment.return_value = "assignments"
+        # Mock the Consumer assignment with changelog topic-partition
+        changelog_topic = topic_manager.changelog_topics[topic_name][store_name]
+        changelog_tp = TopicPartition(topic=changelog_topic.name, partition=0)
+        consumer.assignment.return_value = [changelog_tp]
 
         # Mock StorePartition
         changelog_offset = 22
@@ -86,7 +95,6 @@ class TestRecoveryManager:
         store_name = "default"
         changelog_offset = 5
         lowwater, highwater = 0, 10
-        assignment = [0, 1]
 
         # Register a source topic and a changelog topic with 2 partitions
         topic_manager = topic_manager_factory()
@@ -99,6 +107,11 @@ class TestRecoveryManager:
 
         # Create a RecoveryManager
         consumer = MagicMock(spec_set=Consumer)
+        # Mock the Consumer assignment with changelog topic-partition
+        assignment = [
+            TopicPartition(topic=changelog_topic.name, partition=0),
+            TopicPartition(topic=changelog_topic.name, partition=1),
+        ]
         consumer.assignment.return_value = assignment
         recovery_manager = recovery_manager_factory(
             consumer=consumer, topic_manager=topic_manager
@@ -146,6 +159,54 @@ class TestRecoveryManager:
             )
         ]
 
+    def test_assign_partition_changelog_tp_is_missing(
+        self,
+        recovery_manager_factory,
+        recovery_partition_factory,
+        topic_manager_factory,
+    ):
+        """
+        Test that `RecoveryManager.assign_partition()` fails if the changelog topic
+        partition is not assigned to Consumer
+        """
+        topic_name = "topic_name"
+        store_name = "default"
+        changelog_offset = 5
+        lowwater, highwater = 0, 10
+
+        # Register a source topic and a changelog topic with 2 partitions
+        topic_manager = topic_manager_factory()
+        topic_manager.topic(
+            topic_name, config=TopicConfig(num_partitions=2, replication_factor=1)
+        )
+        changelog_topic = topic_manager.changelog_topic(
+            topic_name=topic_name, store_name=store_name
+        )
+
+        # Create a RecoveryManager
+        consumer = MagicMock(spec_set=Consumer)
+        recovery_manager = recovery_manager_factory(
+            consumer=consumer, topic_manager=topic_manager
+        )
+
+        # Assign first partition that needs recovery
+        store_partition = MagicMock(spec_set=StorePartition)
+        consumer.get_watermark_offsets.return_value = (lowwater, highwater)
+        store_partition.get_changelog_offset.return_value = changelog_offset
+        # Mock the Consumer assignment with only one changelog topic-partition
+        assignment = [
+            TopicPartition(topic=changelog_topic.name, partition=0),
+        ]
+        consumer.assignment.return_value = assignment
+        # Assign another recovery partitio
+        with pytest.raises(ChangelogTopicPartitionNotAssigned):
+            recovery_manager.assign_partition(
+                topic=topic_name,
+                partition=1,
+                committed_offset=-1001,
+                store_partitions={store_name: store_partition},
+            )
+
     def test_revoke_partition(self, recovery_manager_factory, topic_manager_factory):
         """
         Revoke a topic partition's respective recovery partitions.
@@ -154,7 +215,6 @@ class TestRecoveryManager:
         store_name = "default"
         changelog_offset = 5
         lowwater, highwater = 0, 10
-        assignment = [0, 1]
 
         # Register a source topic and a changelog topic with two partitions
         topic_manager = topic_manager_factory()
@@ -168,6 +228,11 @@ class TestRecoveryManager:
 
         # Create a RecoveryManager
         consumer = MagicMock(spec_set=Consumer)
+        # Mock the Consumer assignment with changelog topic-partition
+        assignment = [
+            TopicPartition(topic=changelog_topic.name, partition=0),
+            TopicPartition(topic=changelog_topic.name, partition=1),
+        ]
         consumer.assignment.return_value = assignment
         recovery_manager = recovery_manager_factory(
             consumer=consumer, topic_manager=topic_manager
@@ -195,14 +260,14 @@ class TestRecoveryManager:
         recovery_manager.revoke_partition(0)
         assert len(recovery_manager.partitions) == 1
         # Check that consumer unassigned the changelog topic partition as well
-        assert consumer.incremental_unassign.call_args.args[0] == [
+        assert consumer.pause.call_args.args[0] == [
             ConfluentPartition(topic=changelog_topic.name, partition=0)
         ]
 
         # Revoke second partition
         recovery_manager.revoke_partition(1)
         # Check that consumer unassigned the changelog topic partition as well
-        assert consumer.incremental_unassign.call_args.args[0] == [
+        assert consumer.pause.call_args.args[0] == [
             ConfluentPartition(topic=changelog_topic.name, partition=1)
         ]
         # Check that no partitions are assigned
@@ -239,7 +304,7 @@ class TestRecoveryManagerRecover:
         producer,
     ):
         """
-        Check that RecoveryManager.assign_partition() assigns proper changelog topic
+        Check that RecoveryManager.assign_partition() resumes proper changelog topic
         partition and pauses the consumer.
         """
 
@@ -265,49 +330,44 @@ class TestRecoveryManagerRecover:
         topic_manager.topic(topic_name)
         # Mock the topic watermarks
         consumer.get_watermark_offsets.side_effect = [(lowwater, highwater)]
-        # Mock the current assignment with some values
-        assignment = [1, 2, 3]
-        consumer.assignment.return_value = assignment
 
         # Create Store and assign a StorePartition (which also sets up changelog topics)
         store_partitions = {}
         state_manager.register_store(topic_name=topic_name, store_name=store_name)
         store = state_manager.get_store(topic=topic_name, store_name=store_name)
+
+        # Mock the Consumer assignment with changelog topic-partition
+        changelog_topic = topic_manager.changelog_topics[topic_name][store_name]
+        changelog_tp = TopicPartition(topic=changelog_topic.name, partition=0)
+        consumer.assignment.return_value = [changelog_tp]
+
         partition = store.assign_partition(partition_num)
         store_partitions[store_name] = partition
 
         # Assign a RecoveryPartition
+        recovery_manager.assign_partition(
+            topic=topic_name,
+            partition=partition_num,
+            store_partitions=store_partitions,
+            committed_offset=-1001,
+        )
+
+        # Check that RecoveryPartition is assigned to RecoveryManager
+        assert len(recovery_manager.partitions[partition_num]) == 1
+        recovery_partition = list(recovery_manager.partitions[partition_num].values())[
+            0
+        ]
+        changelog_topic_name = topic_manager.changelog_topics[topic_name][
+            store_name
+        ].name
+        assert recovery_partition.changelog_name == changelog_topic_name
+        assert recovery_partition.partition_num == partition_num
         with patch.object(
             partition,
             "get_changelog_offset",
             return_value=stored_changelog_offset,
         ):
-            recovery_manager.assign_partition(
-                topic=topic_name,
-                partition=partition_num,
-                store_partitions=store_partitions,
-                committed_offset=-1001,
-            )
-
-        # Check the changelog topic partition is assigned to the consumer
-        assert consumer.incremental_assign.call_count == 1
-        assigned_changelog_partitions = consumer.incremental_assign.call_args[0][0]
-        assert len(assigned_changelog_partitions) == 1
-
-        # Check the changelog topic partition properties
-        changelog_partition = assigned_changelog_partitions[0]
-        changelog_topic_name = topic_manager.changelog_topics[topic_name][
-            store_name
-        ].name
-        assert changelog_partition.topic == changelog_topic_name
-        assert changelog_partition.partition == partition_num
-        assert changelog_partition.offset == stored_changelog_offset
-
-        # Check that RecoveryPartition is assigned to RecoveryManager
-        assert len(recovery_manager.partitions[partition_num]) == 1
-
-        # Check that consumer paused all assigned partitions
-        consumer.pause.assert_called_with(assignment)
+            assert recovery_partition.offset == stored_changelog_offset
 
     def test_do_recovery(
         self, recovery_manager_factory, topic_manager_factory, store_partition
@@ -324,15 +384,18 @@ class TestRecoveryManagerRecover:
         topic_name = "topic_name"
         store_name = "default"
         lowwater, highwater = 0, 10
-        assignment = [0, 1]
 
         # Register a source topic and a changelog topic with one partition
         topic_manager = topic_manager_factory()
-        topic_manager.topic(topic_name)
+        data_topic = topic_manager.topic(topic_name)
         changelog_topic = topic_manager.changelog_topic(
             topic_name=topic_name,
             store_name=store_name,
         )
+
+        data_tp = TopicPartition(topic=data_topic.name, partition=0)
+        changelog_tp = TopicPartition(topic=changelog_topic.name, partition=0)
+        assignment = [data_tp, changelog_tp]
 
         changelog_message = ConfluentKafkaMessageStub(
             topic=changelog_topic.name,
@@ -375,8 +438,8 @@ class TestRecoveryManagerRecover:
         assert consumer_resume_calls[0].args[0] == [
             ConfluentPartition(topic=changelog_topic.name, partition=0)
         ]
-        # Check that consumer resumed all assigned partitions after recovery is done
-        assert consumer_resume_calls[1].args[0] == assignment
+        # Check that consumer resumed all non-changelog partitions after recovery is done
+        assert consumer_resume_calls[1].args[0] == [data_tp]
 
         # Check that RecoveryPartitions are unassigned
         assert not recovery_manager.partitions

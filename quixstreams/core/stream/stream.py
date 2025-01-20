@@ -3,7 +3,18 @@ import copy
 import functools
 import itertools
 from time import monotonic_ns
-from typing import Any, Callable, List, Optional, Union
+from typing import (
+    Any,
+    Callable,
+    Deque,
+    List,
+    Literal,
+    Optional,
+    Set,
+    Union,
+    cast,
+    overload,
+)
 
 from typing_extensions import Self
 
@@ -84,7 +95,7 @@ class Stream:
 
         self.func = func if func is not None else ApplyFunction(lambda value: value)
         self.parent = parent
-        self.children = set()
+        self.children: Set[Self] = set()
         self.generated = monotonic_ns()
         self.pruned = False
 
@@ -100,6 +111,14 @@ class Stream:
             (f"<{f.__class__.__name__}: {f.func.__qualname__}>" for f in tree_funcs)
         )
         return f"<{self.__class__.__name__} [{len(tree_funcs)}]: {funcs_repr}>"
+
+    @overload
+    def add_filter(self, func: FilterCallback, *, metadata: Literal[False] = False):
+        pass
+
+    @overload
+    def add_filter(self, func: FilterWithMetadataCallback, *, metadata: Literal[True]):
+        pass
 
     def add_filter(
         self,
@@ -121,10 +140,52 @@ class Stream:
         :return: a new `Stream` derived from the current one
         """
         if metadata:
-            filter_func = FilterWithMetadataFunction(func)
+            filter_func: StreamFunction = FilterWithMetadataFunction(
+                cast(FilterWithMetadataCallback, func)
+            )
         else:
-            filter_func = FilterFunction(func)
+            filter_func = FilterFunction(cast(FilterCallback, func))
         return self._add(filter_func)
+
+    @overload
+    def add_apply(
+        self,
+        func: ApplyCallback,
+        *,
+        expand: Literal[False] = False,
+        metadata: Literal[False] = False,
+    ):
+        pass
+
+    @overload
+    def add_apply(
+        self,
+        func: ApplyExpandedCallback,
+        *,
+        expand: Literal[True],
+        metadata: Literal[False] = False,
+    ):
+        pass
+
+    @overload
+    def add_apply(
+        self,
+        func: ApplyWithMetadataCallback,
+        *,
+        expand: Literal[False] = False,
+        metadata: Literal[True],
+    ):
+        pass
+
+    @overload
+    def add_apply(
+        self,
+        func: ApplyWithMetadataExpandedCallback,
+        *,
+        expand: Literal[True],
+        metadata: Literal[True],
+    ):
+        pass
 
     def add_apply(
         self,
@@ -154,10 +215,18 @@ class Stream:
         :return: a new `Stream` derived from the current one
         """
         if metadata:
-            apply_func = ApplyWithMetadataFunction(func, expand=expand)
+            apply_func: StreamFunction = ApplyWithMetadataFunction(func, expand=expand)  # type: ignore[call-overload]
         else:
-            apply_func = ApplyFunction(func, expand=expand)
+            apply_func = ApplyFunction(func, expand=expand)  # type: ignore[call-overload]
         return self._add(apply_func)
+
+    @overload
+    def add_update(self, func: UpdateCallback, *, metadata: Literal[False] = False):
+        pass
+
+    @overload
+    def add_update(self, func: UpdateWithMetadataCallback, *, metadata: Literal[True]):
+        pass
 
     def add_update(
         self,
@@ -178,10 +247,20 @@ class Stream:
         :return: a new Stream derived from the current one
         """
         if metadata:
-            update_func = UpdateWithMetadataFunction(func)
+            update_func: StreamFunction = UpdateWithMetadataFunction(
+                cast(UpdateWithMetadataCallback, func)
+            )
         else:
-            update_func = UpdateFunction(func)
+            update_func = UpdateFunction(cast(UpdateCallback, func))
         return self._add(update_func)
+
+    @overload
+    def add_transform(self, func: TransformCallback, *, expand: Literal[False] = False):
+        pass
+
+    @overload
+    def add_transform(self, func: TransformExpandedCallback, *, expand: Literal[True]):
+        pass
 
     def add_transform(
         self,
@@ -205,10 +284,9 @@ class Stream:
             Default - `False`.
         :return: a new Stream derived from the current one
         """
+        return self._add(TransformFunction(func, expand=expand))  # type: ignore[call-overload]
 
-        return self._add(TransformFunction(func, expand=expand))
-
-    def diff(self, other: "Stream") -> Self:
+    def diff(self, other: Self) -> Self:
         """
         Takes the difference between Streams `self` and `other` based on their last
         common parent, and returns a new, independent `Stream` that includes only
@@ -267,6 +345,10 @@ class Stream:
             node.parent = parent
             parent = node
         self._prune(diff[0])
+
+        if parent is None:
+            raise InvalidOperation("No common parent found")
+
         return parent
 
     def root_path(self, allow_splits=True) -> List[Self]:
@@ -369,7 +451,7 @@ class Stream:
         # after executing the Stream.
         # The composed stream must have only the "apply" functions,
         # which always return a single.
-        buffer = collections.deque(maxlen=1)
+        buffer: Deque[tuple[Any, Any, int, Any]] = collections.deque(maxlen=1)
         composed = self.compose(
             allow_filters=False,
             allow_expands=False,
@@ -394,12 +476,12 @@ class Stream:
     def _compose(
         self,
         tree: List[Self],
-        composed: List[Callable[[Any, Any, int, Any], None]],
+        composed: Union[VoidExecutor, List[VoidExecutor]],
         allow_filters: bool,
         allow_updates: bool,
         allow_expands: bool,
         allow_transforms: bool,
-    ) -> VoidExecutor:
+    ) -> Union[VoidExecutor, List[VoidExecutor]]:
         functions = [node.func for node in tree]
 
         # Iterate over a reversed list of functions
@@ -461,7 +543,7 @@ class Stream:
         if other.pruned:
             raise ValueError("Node has already been pruned")
         other.pruned = True
-        node = self
+        node: Optional[Self] = self
         while node:
             if other in node.children:
                 node.children.remove(other)

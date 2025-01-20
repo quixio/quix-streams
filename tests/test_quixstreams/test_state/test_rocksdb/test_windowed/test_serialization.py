@@ -1,9 +1,9 @@
 import pytest
 
-from quixstreams.state.metadata import PREFIX_SEPARATOR
+from quixstreams.state.metadata import SEPARATOR
 from quixstreams.state.rocksdb.windowed.serialization import (
-    encode_window_key,
-    encode_window_prefix,
+    append_integer,
+    encode_integer_pair,
     parse_window_key,
 )
 
@@ -17,8 +17,8 @@ from quixstreams.state.rocksdb.windowed.serialization import (
         (2, -2),
     ],
 )
-def test_encode_window_key(start, end):
-    key = encode_window_key(start_ms=start, end_ms=end)
+def test_encode_integer_pair(start, end):
+    key = encode_integer_pair(start, end)
     assert isinstance(key, bytes)
 
     prefix, decoded_start, decoded_end = parse_window_key(key)
@@ -26,13 +26,11 @@ def test_encode_window_key(start, end):
     assert decoded_end == end
 
 
-@pytest.mark.parametrize("prefix", [b"", b"prefix"])
-def test_encode_window_prefix(
-    prefix: bytes,
+@pytest.mark.parametrize("base_bytes", [b"", b"base_bytes"])
+def test_append_integer(
+    base_bytes: bytes,
 ):
     start, end = 0, 10
-    window_key = (
-        prefix + PREFIX_SEPARATOR + encode_window_key(start_ms=start, end_ms=end)
-    )
-    window_prefix = encode_window_prefix(prefix=prefix, start_ms=start)
-    assert window_key.startswith(window_prefix)
+    window_key = base_bytes + SEPARATOR + encode_integer_pair(start, end)
+    window_base_bytes = append_integer(base_bytes=base_bytes, integer=start)
+    assert window_key.startswith(window_base_bytes)

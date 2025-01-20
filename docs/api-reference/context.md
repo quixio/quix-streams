@@ -52,7 +52,7 @@ sdf = sdf.update(lambda value: alter_context(value))
 #### message\_context
 
 ```python
-def message_context() -> Optional[MessageContext]
+def message_context() -> MessageContext
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/context.py#L53)

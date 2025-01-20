@@ -3,14 +3,20 @@
 We will build a simple Purchase Filtering app to showcase some common Quix Streams 
 dataframe-like operations with dictionary/JSON data (a format frequently used).
 
-You'll learn how to:
 
-- Create a topic
+
+## What You Will Learn
+
+This example will show how to use a Quix Streams `Application` to:
+
+- Ingest a non-Kafka data source
 - Assign a value to a new column
 - Use `SDF.apply()` with additional operations
 - Filter with inequalities combined with and/or (`&`, `|`)
 - Get a subset/selection of columns
-- Produce resulting output to a topic
+- Create a Kafka topic 
+- Produce results to a Kafka topic
+
 
 
 ## Outline of the Problem
@@ -28,9 +34,8 @@ necessary information downstream.
 
 ## Our Example
 
-We will use a simple producer to generate some mock purchase data to be processed by our 
-new Purchase Filtering application.
-
+We will use a [Quix Streams `Source`](../../connectors/sources/README.md) to generate some mock purchase data to be 
+processed by our new Purchase Filtering `Application`.
 
 
 ## Important Takeaways
@@ -43,24 +48,30 @@ as if it were a dataframe.
 
 ## Before Getting Started
 
-- You will see links scattered throughout this tutorial.
+1. You will see links scattered throughout this tutorial.
     - Tutorial code links are marked **>>> LIKE THIS <<<** .
     - ***All other links provided are completely optional***. 
     - They are great ways to learn more about various concepts if you need it!
 
+2. This tutorial uses a Quix Streams [`Source`](../../connectors/sources/README.md) rather than a Kafka [`Topic`]() to ingest data.
+    - `Source` connectors enable reading data from a non-Kafka origin (typically to get it into Kafka). 
+    - This approach circumvents users having to run a [producer](../../producer.md) alongside the `Application`.
+    - A `Source` is easily replaced with an actual Kafka topic (just pass a `Topic` instead of a `Source`).
 
-- We use the word "column" for consistency with Pandas terminology.
-  - You can also think of it as a dictionary key.
+3. We use the word "column" for consistency with Pandas terminology.
+    - You can also think of it as a dictionary key.
 
 
 
 ## Generating Purchase Data
 
-We have a simple [**>>> Purchases Producer <<<**](producer.py) that generates a small static set of 
-"purchases", which are simply dictionaries with various info about what was purchased by 
-a customer during their visit. The data is keyed on customer ID.
+Our [**>>> Purchase Filtering Application <<<**](tutorial_app.py) uses a `Source` called 
+`PurchaseGenerator` that generates a small static set of "purchases", which are simply 
+dictionaries with various info about what was purchased by a customer during their visit. 
 
-An outgoing Kafka message looks something like:
+The data is keyed on customer ID.
+
+The incoming Kafka data looks something like:
 
 ```python
 # ...
@@ -86,56 +97,99 @@ kafka_value: {
 ```
 
 
+
+
 ## Purchase Filtering Application
 
+Now let's go over the `main()` portion of 
+our [**>>> Purchase Filtering Application <<<**](tutorial_app.py) in detail!
 
-Now let's go over our [**>>> Purchase Filtering Application <<<**](application.py) line-by-line!
 
 
-### Create Application
+
+### Create an Application
+
+Create a [Quix Streams Application](../../configuration.md), which is our constructor for everything! 
+
+We provide it our connection settings, consumer group (ideally unique per Application), 
+and where the consumer group should start from on the (internal) Source topic.
+
+!!! TIP
+
+    Once you are more familiar with Kafka, we recommend 
+    [learning more about auto_offset_reset](https://www.quix.io/blog/kafka-auto-offset-reset-use-cases-and-pitfalls).
+
+#### Our Application
 
 ```python
 import os
 from quixstreams import Application
 
 app = Application(
-    broker_address=os.environ.get("BROKER_ADDRESS", "localhost:9092"),
-    consumer_group="purchase_summing",
-    auto_offset_reset="earliest"
+    broker_address=os.getenv("BROKER_ADDRESS", "localhost:9092"),
+    consumer_group="purchase_filtering",
+    auto_offset_reset="earliest",
 )
 ```
 
-First, create the [Quix Streams Application](../../configuration.md), which is our constructor for everything! We provide it our connection settings, consumer group (ideally unique per Application), and where the consumer group should start from on our topic. 
-
-NOTE: Once you are more familiar with Kafka, we recommend [learning more about auto_offset_reset](https://www.quix.io/blog/kafka-auto-offset-reset-use-cases-and-pitfalls).
 
 
-### Define Topics
+### Specify Topics
+
+`Application.topic()` returns [`Topic`](../../api-reference/topics.md) objects which are used by `StreamingDataFrame`.
+
+Create one for each topic used by your `Application`.
+
+!!! NOTE
+
+    Any missing topics will be automatically created for you upon running an `Application`.
+
+
+#### Our Topics
+We have one output topic, named `customers_coupon_qualified`:
 
 ```python
-customer_purchases_topic = app.topic(name="customer_purchases")
 customers_qualified_topic = app.topic(name="customers_coupon_qualified")
 ```
 
-Next we define our input/output topics, named `customer_purchases` and `customers_coupon_qualified`, respectively. 
 
-They each return [`Topic`](../../api-reference/topics.md) objects, used later on.
 
-NOTE: the topics will automatically be created for you in Kafka when you run the application should they not exist.
+
 
 ### The StreamingDataFrame (SDF)
 
-```python
-sdf = app.dataframe(topic=customer_purchases_topic)
-```
-
-Now for the fun part: building our [StreamingDataFrame](../../processing.md#introduction-to-streamingdataframe), often shorthanded to "SDF".  
+Now for the fun part: building our [StreamingDataFrame](../../processing.md#introduction-to-streamingdataframe), often shorthanded to "SDF".
 
 SDF allows manipulating the message value in a dataframe-like fashion using various operations.
 
-After initializing, we continue re-assigning to the same `sdf` variable as we add operations.
+After initializing with either a `Topic` or `Source`, we continue reassigning to the 
+same `sdf` variable as we add operations.
 
-(Also: notice that we pass our input `Topic` from the previous step to it.)
+!!! NOTE
+
+    A few `StreamingDataFrame` operations are 
+    ["in-place"](../../advanced/dataframe-assignments.md#valid-in-place-operations), 
+    like `.print()`.
+
+#### Initializing our SDF
+
+```python
+sdf = app.dataframe(source=PurchaseGenerator())
+```
+
+First, we initialize our SDF with our `PurchaseGenerator` `Source`, 
+which means we will be consuming data from a non-Kafka origin.
+
+
+!!! TIP
+
+    You can consume from a Kafka topic instead by passing a `Topic` object
+    with `app.dataframe(topic=<Topic>)`.
+
+Let's go over the SDF operations in this example in detail.
+
+
+
 
 ### Filtering Purchases
 
@@ -179,11 +233,13 @@ sdf["Membership Type"].isin(["Silver", "Gold"])
 We additionally showcase one of our built-in column operations `.isin()`, a way for SDF to perform an 
 `if x in y` check (SDF is declaratively defined, invalidating that approach).
 
-**NOTE**: some operations (like `.isin()`) are only available when manipulating a column.
+!!! INFO "Column-only manipulations" 
 
-  - if you're unsure what's possible, autocomplete often covers you!
+    Some operations (like `.isin()`) are only available when manipulating a column.
 
-  - _ADVANCED_: [complete list of column operations](../../api-reference/dataframe.md#streamingseries).
+    - if you're unsure what's possible, autocomplete often covers you!
+
+    - _ADVANCED_: [complete list of column operations](../../api-reference/dataframe.md#streamingseries).
 
 <br>
 
@@ -221,6 +277,7 @@ As such, SDF filtering interprets the SDF operation `&` _boolean_ result as foll
 So, any events that don't satisfy these conditions will be filtered as desired!
 
 
+
 ### Adding a New Column
 
 ```python
@@ -239,11 +296,13 @@ This is basically a functional equivalent of adding a key to a dictionary.
 >>> {"Remove Me": "value", "Email": "cool email"}`
 ```
 
-becomes
+becomes:
 
 ```python
 >>> {"Remove Me": "value", "Email": "cool email", "Full Name": "cool name"}`
 ```
+
+
 
 ### Getting a Column Subset/Selection
 
@@ -253,19 +312,23 @@ sdf = sdf[["Email", "Full Name"]]
 We only need a couple fields to send downstream, so this is a convenient way to select
 only a specific list of columns (AKA dictionary keys) from our data.
 
-So 
+So:
 
 ```python
 >>> {"Remove Me": "value", "Email": "cool email", "Full Name": "cool name", }`
 ```
 
-becomes
+becomes:
 
 ```python
 >>> {"Email": "cool email", "Full Name": "cool name"}`
 ```
 
-NOTE: you cannot reference nested keys in this way.
+!!! WARNING
+
+    You cannot reference nested keys in this way.
+
+
 
 ### Producing the Result
 
@@ -276,32 +339,57 @@ sdf = sdf.to_topic(customers_qualified_topic)
 Finally, we produce our non-filtered results downstream via [`SDF.to_topic(T)`](../../processing.md#writing-data-to-kafka-topics), where `T`
 is our previously defined `Topic` (not the topic name!).
 
-NOTE: by default, our outgoing Kafka key is persisted from the input message. 
-[You can alter it](../../processing.md#changing-message-key-before-producing), if needed.
+!!! "Message key persistence"
+
+    By default, our outgoing Kafka key is persisted from the input message. 
+    [You can alter it](../../processing.md#changing-message-key-before-producing), if needed.
+
+### Running the Application
+
+Running a `Source`-based `Application` requires calling `Application.run()` within a
+`if __name__ == "__main__"` block.
+
+#### Our Application Run Block 
+
+Our entire `Application` (and all its spawned objects) resides within a 
+`main()` function, executed as required:
+
+```python
+if __name__ == "__main__":
+    main()
+```
 
 
-## Try it yourself!
+
+## Try it Yourself!
 
 ### 1. Run Kafka
 First, have a running Kafka cluster. 
 
-To conveniently follow along with this tutorial, just [run this simple one-liner](../README.md#running-kafka-locally).
+To easily run a broker locally with Docker, just [run this simple one-liner](../README.md#running-kafka-locally).
 
-### 2. Install Quix Streams
-In your python environment, run `pip install quixstreams`
+### 2. Download files
+- [tutorial_app.py](tutorial_app.py)
 
-### 3. Run the Producer and Application
-Just call `python producer.py` and `python application.py` in separate windows.
+### 3. Install Quix Streams
+In your desired python environment, execute: `pip install quixstreams`
 
-### 4. Check out the results!
+### 4. Run the application
+In your desired python environment, execute: `python tutorial_app.py`.
 
-...but wait, I don't see any message processing output...Is it working???
+### 5. Check out the results!
+
+...but wait, I don't see any `Application` processing output...Is it working???
 
 One thing to keep in mind is that the Quix Streams does not log/print any message processing
 operations by default.
 
 To get visual outputs around message processing, you can either:
-- use [recommended way of printing/logging stuff](../../processing.md#debugging)
- 
+
+- use [recommended way of printing/logging with SDF](../../processing.md#debugging)
+
 - use `DEBUG` mode via `Application(loglevel="DEBUG")`
-  - WARNING: you should NOT run your applications in `DEBUG` mode in production.
+
+    !!! DANGER
+
+        you should NOT run your applications in `DEBUG` mode in production.
