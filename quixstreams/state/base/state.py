@@ -36,7 +36,7 @@ class State(ABC):
         ...
 
     @abstractmethod
-    def delete(self, key: bytes):
+    def delete(self, key: Any):
         """
         Delete value for the key.
 
@@ -88,7 +88,7 @@ class TransactionState(State):
         """
         return self._transaction.set(key=key, value=value, prefix=self._prefix)
 
-    def delete(self, key: bytes):
+    def delete(self, key: Any):
         """
         Delete value for the key.
 

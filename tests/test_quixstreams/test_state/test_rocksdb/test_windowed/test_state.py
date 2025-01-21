@@ -2,7 +2,6 @@ from contextlib import contextmanager
 
 import pytest
 
-from quixstreams.state.metadata import SEPARATOR
 from quixstreams.state.rocksdb.windowed.metadata import VALUES_CF_NAME
 from quixstreams.state.rocksdb.windowed.serialization import encode_integer_pair
 
@@ -215,20 +214,6 @@ def test_get_latest_timestamp(windowed_rocksdb_store_factory):
         ),
         pytest.param(
             [
-                dict(start_ms=0, end_ms=10, value=1, timestamp_ms=1),
-                dict(start_ms=1, end_ms=11, value=2, timestamp_ms=2),
-                dict(start_ms=2, end_ms=12, value=3, timestamp_ms=3),
-            ],
-            [],
-            [
-                PREFIX + SEPARATOR + encode_integer_pair(0, 10),
-            ],
-            dict(start_from_ms=-1, start_to_ms=2),
-            [((1, 11), 2), ((2, 12), 3)],
-            id="ignore-deleted-windows",
-        ),
-        pytest.param(
-            [
                 dict(start_ms=2, end_ms=12, value=3, timestamp_ms=3),
                 dict(start_ms=0, end_ms=10, value=1, timestamp_ms=1),
                 dict(start_ms=1, end_ms=11, value=2, timestamp_ms=2),
@@ -286,12 +271,22 @@ def test_get_latest_timestamp(windowed_rocksdb_store_factory):
                 dict(start_ms=2, end_ms=12, value=3, timestamp_ms=3),
             ],
             [],
+            [encode_integer_pair(0, 10)],
+            dict(start_from_ms=-1, start_to_ms=2),
+            [((1, 11), 2), ((2, 12), 3)],
+            id="ignore-deleted-windows",
+        ),
+        pytest.param(
             [
-                PREFIX + SEPARATOR + encode_integer_pair(0, 10),
+                dict(start_ms=0, end_ms=10, value=1, timestamp_ms=1),
+                dict(start_ms=1, end_ms=11, value=2, timestamp_ms=2),
+                dict(start_ms=2, end_ms=12, value=3, timestamp_ms=3),
             ],
+            [],
+            [encode_integer_pair(0, 10)],
             dict(start_from_ms=-1, start_to_ms=2, backwards=True),
             [((2, 12), 3), ((1, 11), 2)],
-            id="ignore-deleted-windows",
+            id="ignore-deleted-windows-backwards",
         ),
     ],
 )

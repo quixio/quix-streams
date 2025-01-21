@@ -264,7 +264,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         for key, _ in self._get_items(
             start=start, end=max_start_time + 1, prefix=prefix
         ):
-            self.delete(key=key, prefix=prefix)
+            self._delete_bytes(key=key, prefix=prefix)
 
         if key is not None:
             _, timestamp_ms, _ = parse_window_key(key)
@@ -301,7 +301,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         for key, _ in self._get_items(
             start=start, end=max_timestamp, prefix=prefix, cf_name=VALUES_CF_NAME
         ):
-            self.delete(key=key, prefix=prefix, cf_name=VALUES_CF_NAME)
+            self._delete_bytes(key=key, prefix=prefix, cf_name=VALUES_CF_NAME)
 
         if key is not None:
             _, timestamp_ms, _ = parse_window_key(key)

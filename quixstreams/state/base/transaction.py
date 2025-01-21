@@ -99,7 +99,7 @@ class PartitionTransactionCache:
         self._deleted[cf_name].discard(key)
         self._empty = False
 
-    def delete(self, key: bytes, prefix: bytes, cf_name: str = "default"):
+    def delete(self, key: Any, prefix: bytes, cf_name: str = "default"):
         """
         Delete a key.
 
@@ -338,7 +338,7 @@ class PartitionTransaction(ABC):
             raise
 
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
-    def delete(self, key: bytes, prefix: bytes, cf_name: str = "default"):
+    def delete(self, key: Any, prefix: bytes, cf_name: str = "default"):
         """
         Delete value for the key.
 
@@ -346,6 +346,18 @@ class PartitionTransaction(ABC):
         :param key: key
         :param prefix: a key prefix
         :param cf_name: column family name
+        """
+        try:
+            bytes_key = self._serialize_key(key, prefix=prefix)
+        except Exception:
+            self._status = PartitionTransactionStatus.FAILED
+            raise
+        else:
+            self._delete_bytes(key=bytes_key, prefix=prefix, cf_name=cf_name)
+
+    def _delete_bytes(self, key: bytes, prefix: bytes, cf_name: str = "default"):
+        """
+        Delete value for the bytes key.
         """
         try:
             self._update_cache.delete(key=key, prefix=prefix, cf_name=cf_name)

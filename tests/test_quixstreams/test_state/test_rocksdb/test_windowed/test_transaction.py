@@ -334,16 +334,14 @@ class TestWindowedRocksDBPartitionTransaction:
             changelog_producer=changelog_producer_mock
         ) as store_partition:
             tx = store_partition.begin()
-            serialized_key = tx._serialize_key(
-                key=encode_integer_pair(start_ms, end_ms), prefix=prefix
-            )
-            tx.delete(serialized_key, prefix=prefix)
+            key = encode_integer_pair(start_ms, end_ms)
+            tx.delete(key, prefix=prefix)
             tx.prepare(processed_offset=processed_offset)
             assert tx.prepared
 
         assert changelog_producer_mock.produce.call_count == 1
         changelog_producer_mock.produce.assert_called_with(
-            key=serialized_key,
+            key=tx._serialize_key(key=key, prefix=prefix),
             value=None,
             headers={
                 CHANGELOG_CF_MESSAGE_HEADER: "default",
