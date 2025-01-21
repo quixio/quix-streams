@@ -19,7 +19,6 @@ from quixstreams.core.stream.functions import (
     ApplyWithMetadataCallback,
     ApplyWithMetadataFunction,
     ReturningExecutor,
-    VoidExecutor,
 )
 from quixstreams.core.stream.stream import Stream
 from quixstreams.models.messagecontext import MessageContext

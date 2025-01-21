@@ -769,8 +769,8 @@ class StreamingDataFrame:
 
     def compose(
         self,
-        sink: Optional[Callable[[Any, Any, int, Any], None]] = None,
-    ) -> Dict[str, VoidExecutor]:
+        sink: Optional[VoidExecutor] = None,
+    ) -> dict[str, VoidExecutor]:
         """
 
         Compose all functions of this StreamingDataFrame into one big closure.
