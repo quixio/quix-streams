@@ -18,10 +18,11 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class WindowMetadata(TypedDict):
+class CountWindowData(TypedDict):
     count: int
     start: int
     end: int
+    value: Any
 
 
 class FixedCountWindow(Window):
@@ -63,29 +64,31 @@ class FixedCountWindow(Window):
     ) -> tuple[Iterable[WindowResult], Iterable[WindowResult]]:
         data = state.get(key=self.STATE_KEY)
         if data is None:
-            metadata = WindowMetadata(count=0, start=timestamp_ms, end=timestamp_ms)
-            previous_value = self._aggregate_default
-        else:
-            metadata, previous_value = data
+            data = CountWindowData(
+                count=0,
+                start=timestamp_ms,
+                end=timestamp_ms,
+                value=self._aggregate_default,
+            )
 
-        metadata["count"] += 1
-        if timestamp_ms > metadata["end"]:
-            metadata["end"] = timestamp_ms
+        data["count"] += 1
+        if timestamp_ms > data["end"]:
+            data["end"] = timestamp_ms
 
-        aggregated = self._aggregate_func(previous_value, value)
+        data["value"] = self._aggregate_func(data["value"], value)
         updated_windows = [
             WindowResult(
-                start=metadata["start"],
-                end=metadata["end"],
-                value=self._merge_func(aggregated),
+                start=data["start"],
+                end=data["end"],
+                value=self._merge_func(data["value"]),
             )
         ]
 
-        if metadata["count"] >= self._max_count:
+        if data["count"] >= self._max_count:
             state.delete(key=self.STATE_KEY)
             return updated_windows, updated_windows
 
-        state.set(key=self.STATE_KEY, value=(metadata, aggregated))
+        state.set(key=self.STATE_KEY, value=data)
         return updated_windows, []
 
     def _process_window_collection(
@@ -96,26 +99,24 @@ class FixedCountWindow(Window):
     ) -> tuple[Iterable[WindowResult], Iterable[WindowResult]]:
         data = state.get(key=self.STATE_KEY)
         if data is None:
-            metadata = WindowMetadata(count=0, start=timestamp_ms, end=timestamp_ms)
-            collection = []
-        else:
-            metadata, collection = data
+            data = CountWindowData(
+                count=0, start=timestamp_ms, end=timestamp_ms, value=[]
+            )
 
-        metadata["count"] += 1
-        if timestamp_ms > metadata["end"]:
-            metadata["end"] = timestamp_ms
+        data["count"] += 1
+        if timestamp_ms > data["end"]:
+            data["end"] = timestamp_ms
 
-        collection.append(value)
-
-        if metadata["count"] >= self._max_count:
+        data["value"].append(value)
+        if data["count"] >= self._max_count:
             state.delete(key=self.STATE_KEY)
             return [], [
                 WindowResult(
-                    start=metadata["start"],
-                    end=metadata["end"],
-                    value=self._merge_func(collection),
+                    start=data["start"],
+                    end=data["end"],
+                    value=self._merge_func(data["value"]),
                 )
             ]
 
-        state.set(key=self.STATE_KEY, value=(metadata, collection))
+        state.set(key=self.STATE_KEY, value=data)
         return [], []
