@@ -49,7 +49,6 @@ from quixstreams.processing import ProcessingContext
 from quixstreams.sinks import BaseSink
 from quixstreams.state.base import State
 
-from .base import BaseStreaming
 from .exceptions import InvalidOperation
 from .registry import DataframeRegistry
 from .series import StreamingSeries
@@ -68,7 +67,7 @@ FilterCallbackStateful = Callable[[Any, State], bool]
 FilterWithMetadataCallbackStateful = Callable[[Any, Any, int, Any, State], bool]
 
 
-class StreamingDataFrame(BaseStreaming):
+class StreamingDataFrame:
     """
     `StreamingDataFrame` is the main object you will use for ETL work.
 
