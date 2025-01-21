@@ -29,7 +29,7 @@ class BaseWindowDefinition(abc.ABC):
         func_name: str,
         aggregate_func: WindowAggregateFunc,
         aggregate_default: Any,
-        *,
+        aggregate_collection: bool = False,
         merge_func: Optional[WindowMergeFunc] = None,
     ) -> Window: ...
 
@@ -159,6 +159,36 @@ class BaseWindowDefinition(abc.ABC):
             func_name="min", aggregate_func=func, aggregate_default=None
         )
 
+    def collect(self) -> "Window":
+        """
+        Configure the window to collect all values within each window period into a
+        list, without performing any aggregation.
+
+        This method is useful when you need to gather all raw values that fall
+        within a window period for further processing or analysis.
+
+        Example Snippet:
+        ```python
+        # Collect all values in 1-second windows
+        window = df.tumbling_window(duration_ms=1000).collect()
+        # Each window will contain a list of all values that occurred
+        # within that second
+        ```
+
+        :return: an instance of `FixedTimeWindow` configured to collect all values
+            within each window period.
+        """
+
+        def func(old: Any, new: Any) -> None:
+            return None
+
+        return self._create_window(
+            func_name="collect",
+            aggregate_func=func,
+            aggregate_default=None,
+            aggregate_collection=True,
+        )
+
 
 class FixedTimeWindowDefinition(BaseWindowDefinition):
     def __init__(
@@ -200,47 +230,6 @@ class FixedTimeWindowDefinition(BaseWindowDefinition):
     def step_ms(self) -> Optional[int]:
         return self._step_ms
 
-    @abstractmethod
-    def _create_window(
-        self,
-        func_name: str,
-        aggregate_func: WindowAggregateFunc,
-        aggregate_default: Any,
-        *,
-        aggregate_collection: bool = False,
-        merge_func: Optional[WindowMergeFunc] = None,
-    ) -> FixedTimeWindow: ...
-
-    def collect(self) -> "FixedTimeWindow":
-        """
-        Configure the window to collect all values within each window period into a
-        list, without performing any aggregation.
-
-        This method is useful when you need to gather all raw values that fall
-        within a window period for further processing or analysis.
-
-        Example Snippet:
-        ```python
-        # Collect all values in 1-second windows
-        window = df.tumbling_window(duration_ms=1000).collect()
-        # Each window will contain a list of all values that occurred
-        # within that second
-        ```
-
-        :return: an instance of `FixedTimeWindow` configured to collect all values
-            within each window period.
-        """
-
-        def func(old: Any, new: Any) -> None:
-            return None
-
-        return self._create_window(
-            func_name="collect",
-            aggregate_func=func,
-            aggregate_default=None,
-            aggregate_collection=True,
-        )
-
 
 class FixedTimeHoppingWindowDefinition(FixedTimeWindowDefinition):
     def __init__(
@@ -268,7 +257,6 @@ class FixedTimeHoppingWindowDefinition(FixedTimeWindowDefinition):
         func_name: str,
         aggregate_func: WindowAggregateFunc,
         aggregate_default: Any,
-        *,
         aggregate_collection: bool = False,
         merge_func: Optional[WindowMergeFunc] = None,
     ) -> FixedTimeWindow:
@@ -306,7 +294,6 @@ class FixedTimeTumblingWindowDefinition(FixedTimeWindowDefinition):
         func_name: str,
         aggregate_func: WindowAggregateFunc,
         aggregate_default: Any,
-        *,
         aggregate_collection: bool = False,
         merge_func: Optional[WindowMergeFunc] = None,
     ) -> FixedTimeWindow:
@@ -343,7 +330,6 @@ class FixedTimeSlidingWindowDefinition(FixedTimeWindowDefinition):
         func_name: str,
         aggregate_func: WindowAggregateFunc,
         aggregate_default: Any,
-        *,
         aggregate_collection: bool = False,
         merge_func: Optional[WindowMergeFunc] = None,
     ) -> SlidingWindow:
@@ -377,7 +363,7 @@ class CountTumblingWindowDefinition(CountWindowDefinition):
         func_name: str,
         aggregate_func: WindowAggregateFunc,
         aggregate_default: Any,
-        *,
+        aggregate_collection: bool = False,
         merge_func: Optional[WindowMergeFunc] = None,
     ) -> Window:
         return FixedCountWindow(
@@ -385,6 +371,7 @@ class CountTumblingWindowDefinition(CountWindowDefinition):
             count=self._count,
             aggregate_func=aggregate_func,
             aggregate_default=aggregate_default,
+            aggregate_collection=aggregate_collection,
             merge_func=merge_func,
             dataframe=self._dataframe,
         )

@@ -395,3 +395,19 @@ class TestCountTumblingWindow:
             assert expired[0]["value"] == 3
             assert expired[0]["start"] == 100
             assert expired[0]["end"] == 110
+
+    def test_collect(self, count_tumbling_window_definition_factory, state_manager):
+        window_def = count_tumbling_window_definition_factory(count=3)
+        window = window_def.collect()
+        window.register_store()
+        store = state_manager.get_store(topic="test", store_name=window.name)
+        store.assign_partition(0)
+        with store.start_partition_transaction(0) as tx:
+            state = tx.as_state(prefix=b"key")
+            window.process_window(value=1, state=state, timestamp_ms=100)
+            window.process_window(value=2, state=state, timestamp_ms=100)
+            updated, expired = window.process_window(
+                value=3, state=state, timestamp_ms=101
+            )
+        assert not updated
+        assert expired == [{"start": 100, "end": 101, "value": [1, 2, 3]}]
