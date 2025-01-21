@@ -204,7 +204,8 @@ class FixedTimeWindow:
         """
         if self._aggregate_collection:
             raise ValueError(
-                "`current` is not supported in combination with `collect`."
+                "`current` is not supported in combination with `collect`. "
+                "If you need current window values, use `reduce` instead of `collect`."
             )
 
         def window_callback(
