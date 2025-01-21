@@ -3,7 +3,6 @@ import copy
 from graphlib import TopologicalSorter
 from typing import (
     Any,
-    Callable,
     Deque,
     List,
     Literal,
@@ -41,6 +40,11 @@ from .functions import (
 )
 
 __all__ = ("Stream",)
+
+from quixstreams.exceptions import QuixException
+
+
+class InvalidTopology(QuixException): ...
 
 
 class Stream:
@@ -392,7 +396,7 @@ class Stream:
         allow_expands=True,
         allow_updates=True,
         allow_transforms=True,
-        sink: Optional[Callable[[Any, Any, int, Any], None]] = None,
+        sink: Optional[VoidExecutor] = None,
     ) -> dict[Self, VoidExecutor]:
         """
         Generate an "executor" closure by mapping all relatives of this `Stream` and
@@ -416,7 +420,7 @@ class Stream:
 
         """
         sink = sink or self._default_sink
-        executors: dict[Stream, VoidExecutor] = {}
+        executors: dict[Self, VoidExecutor] = {}
 
         for stream in reversed(self.full_tree()):
             func = stream.func
@@ -462,7 +466,7 @@ class Stream:
         # which always return a single.
 
         buffer: Deque[tuple[Any, Any, int, Any]] = collections.deque(maxlen=1)
-        composed_roots = self.compose(
+        executor = self.compose_single(
             allow_filters=False,
             allow_expands=False,
             allow_updates=False,
@@ -471,22 +475,52 @@ class Stream:
                 (value, key, timestamp, headers)
             ),
         )
-        if len(composed_roots) > 1:
-            raise ValueError(
-                f"Invalid number of root streams: expected 1, got {len(composed_roots)}"
-            )
-        _, composed = composed_roots.popitem()
 
         def wrapper(value: Any, key: Any, timestamp: int, headers: Any) -> Any:
             try:
                 # Execute the stream and return the result from the queue
-                composed(value, key, timestamp, headers)
+                executor(value, key, timestamp, headers)
                 return buffer.popleft()
             finally:
                 # Always clean the queue after the Stream is executed
                 buffer.clear()
 
         return wrapper
+
+    def compose_single(
+        self,
+        allow_filters=True,
+        allow_expands=True,
+        allow_updates=True,
+        allow_transforms=True,
+        sink: Optional[VoidExecutor] = None,
+    ) -> VoidExecutor:
+        """
+        A helper function to compose a Stream with a single root.
+        If there's more than one root in the topology,
+        it will fail with the `InvalidTopology` error.
+
+
+        :param allow_filters: If False, this function will fail with `ValueError` if
+            the stream has filter functions in the tree. Default - True.
+        :param allow_updates: If False, this function will fail with `ValueError` if
+            the stream has update functions in the tree. Default - True.
+        :param allow_expands: If False, this function will fail with `ValueError` if
+            the stream has functions with "expand=True" in the tree. Default - True.
+        :param allow_transforms: If False, this function will fail with `ValueError` if
+            the stream has transform functions in the tree. Default - True.
+        :param sink: callable to accumulate the results of the execution, optional.
+        """
+        composed = self.compose(
+            allow_filters=allow_filters,
+            allow_expands=allow_expands,
+            allow_updates=allow_updates,
+            allow_transforms=allow_transforms,
+            sink=sink,
+        )
+        if len(composed) > 1:
+            raise InvalidTopology(f"Expected a single root Stream, got {len(composed)}")
+        return list(composed.values())[0]
 
     def is_merged(self) -> bool:
         return len(self.parents) > 1
@@ -513,4 +547,6 @@ class Stream:
         self.children.append(new_node)
         return new_node
 
-    def _default_sink(self, value: Any, key: Any, timestamp: int, headers: Any): ...
+    def _default_sink(
+        self, value: Any, key: Any, timestamp: int, headers: Any
+    ) -> None: ...
