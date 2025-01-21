@@ -194,50 +194,6 @@ class StreamingSeries:
         """
         return self._stream.compose_returning()
 
-    def compose(
-        self,
-        sink: Optional[Callable[[Any, Any, int, Any], None]] = None,
-    ) -> VoidExecutor:
-        """
-        Compose all functions of this StreamingSeries into one big closure.
-
-        Generally not required by users; the `quixstreams.app.Application` class will
-        do this automatically.
-
-
-        Example Snippet:
-
-        ```python
-        from quixstreams import Application
-
-        app = Application(...)
-
-        sdf = app.dataframe()
-        sdf = sdf["column_a"].apply(apply_func)
-        sdf = sdf["column_b"].contains(filter_func)
-        sdf = sdf.compose()
-
-        result_0 = sdf({"my": "record"})
-        result_1 = sdf({"other": "record"})
-        ```
-
-        :param sink: callable to accumulate the results of the execution.
-
-        :raises ValueError: if disallowed functions are present in the tree of
-            underlying `Stream`.
-
-        :return: a callable accepting value, key and timestamp and
-            returning None
-        """
-
-        return self._stream.compose(
-            allow_filters=False,
-            allow_updates=False,
-            allow_transforms=False,
-            allow_expands=False,
-            sink=sink,
-        )
-
     def test(
         self,
         value: Any,
@@ -259,14 +215,8 @@ class StreamingSeries:
         """
         context = contextvars.copy_context()
         context.run(set_message_context, ctx)
-        result = []
-        composed = self.compose(
-            sink=lambda value_, key_, timestamp_, headers_: result.append(
-                (value_, key_, timestamp_, headers_)
-            )
-        )
-        context.run(composed, value, key, timestamp, headers)
-        return result
+        executor = self.compose_returning()
+        return context.run(executor, value, key, timestamp, headers)
 
     def _validate_other_series(self, other: Any) -> None:
         """

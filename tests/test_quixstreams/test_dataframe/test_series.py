@@ -15,7 +15,7 @@ class TestStreamingSeries:
         expected = ({"x": 6}, key, timestamp, headers)
         result = StreamingSeries(sdf_id=1, name="x").apply(lambda v: {"x": v + 1})
         assert isinstance(result, StreamingSeries)
-        assert result.test(value, key, timestamp, headers)[0] == expected
+        assert result.test(value, key, timestamp, headers) == expected
 
     @pytest.mark.parametrize(
         "value, series, other, expected",
@@ -32,7 +32,7 @@ class TestStreamingSeries:
     def test_add(self, value, series, other, expected):
         result = series + other
         key, timestamp, headers = "key", 0, []
-        assert result.test(value, key, timestamp, headers)[0] == (
+        assert result.test(value, key, timestamp, headers) == (
             expected,
             key,
             timestamp,
@@ -54,7 +54,7 @@ class TestStreamingSeries:
     def test_subtract(self, value, series, other, expected):
         result = series - other
         key, timestamp, headers = "key", 0, None
-        assert result.test(value, key, timestamp, headers)[0] == (
+        assert result.test(value, key, timestamp, headers) == (
             expected,
             key,
             timestamp,
@@ -76,7 +76,7 @@ class TestStreamingSeries:
     def test_multiply(self, value, series, other, expected):
         result = series * other
         key, timestamp, headers = "key", 0, None
-        assert result.test(value, key, timestamp, headers)[0] == (
+        assert result.test(value, key, timestamp, headers) == (
             expected,
             key,
             timestamp,
@@ -98,7 +98,7 @@ class TestStreamingSeries:
     def test_div(self, value, series, other, expected):
         result = series / other
         key, timestamp, headers = "key", 0, []
-        assert result.test(value, key, timestamp, headers)[0] == (
+        assert result.test(value, key, timestamp, headers) == (
             expected,
             key,
             timestamp,
@@ -120,7 +120,7 @@ class TestStreamingSeries:
     def test_mod(self, value, series, other, expected):
         result = series % other
         key, timestamp, headers = "key", 0, None
-        assert result.test(value, key, timestamp, headers)[0] == (
+        assert result.test(value, key, timestamp, headers) == (
             expected,
             key,
             timestamp,
@@ -149,7 +149,7 @@ class TestStreamingSeries:
     def test_equal(self, value, series, other, expected):
         result = series == other
         key, timestamp, headers = "key", 0, []
-        assert result.test(value, key, timestamp, headers)[0] == (
+        assert result.test(value, key, timestamp, headers) == (
             expected,
             key,
             timestamp,
@@ -178,7 +178,7 @@ class TestStreamingSeries:
     def test_not_equal(self, value, series, other, expected):
         result = series != other
         key, timestamp, headers = "key", 0, 1
-        assert result.test(value, key, timestamp, headers)[0] == (
+        assert result.test(value, key, timestamp, headers) == (
             expected,
             key,
             timestamp,
@@ -207,7 +207,7 @@ class TestStreamingSeries:
     def test_less_than(self, value, series, other, expected):
         result = series < other
         key, timestamp, headers = "key", 0, []
-        assert result.test(value, key, timestamp, headers)[0] == (
+        assert result.test(value, key, timestamp, headers) == (
             expected,
             key,
             timestamp,
@@ -237,7 +237,7 @@ class TestStreamingSeries:
     def test_less_than_equal(self, value, series, other, expected):
         result = series <= other
         key, timestamp, headers = "key", 0, None
-        assert result.test(value, key, timestamp, headers)[0] == (
+        assert result.test(value, key, timestamp, headers) == (
             expected,
             key,
             timestamp,
@@ -267,7 +267,7 @@ class TestStreamingSeries:
     def test_greater_than(self, value, series, other, expected):
         result = series > other
         key, timestamp, headers = "key", 0, None
-        assert result.test(value, key, timestamp, headers)[0] == (
+        assert result.test(value, key, timestamp, headers) == (
             expected,
             key,
             timestamp,
@@ -303,7 +303,7 @@ class TestStreamingSeries:
     def test_greater_than_equal(self, value, series, other, expected):
         result = series >= other
         key, timestamp, headers = "key", 0, []
-        assert result.test(value, key, timestamp, headers)[0] == (
+        assert result.test(value, key, timestamp, headers) == (
             expected,
             key,
             timestamp,
@@ -338,7 +338,7 @@ class TestStreamingSeries:
     def test_and(self, value, series, other, expected):
         result = series & other
         key, timestamp, headers = "key", 0, []
-        assert result.test(value, key, timestamp, headers)[0] == (
+        assert result.test(value, key, timestamp, headers) == (
             expected,
             key,
             timestamp,
@@ -375,7 +375,7 @@ class TestStreamingSeries:
     def test_or(self, value, series, other, expected):
         result = series | other
         key, timestamp, headers = "key", 0, []
-        assert result.test(value, key, timestamp, headers)[0] == (
+        assert result.test(value, key, timestamp, headers) == (
             expected,
             key,
             timestamp,
@@ -391,7 +391,7 @@ class TestStreamingSeries:
             StreamingSeries(sdf_id=1, name="x") <= StreamingSeries(sdf_id=1, name="y")
         ) & (StreamingSeries(sdf_id=1, name="x") <= StreamingSeries(sdf_id=1, name="z"))
 
-        assert result.test(value, key, timestamp, headers)[0] == (
+        assert result.test(value, key, timestamp, headers) == (
             expected,
             key,
             timestamp,
@@ -409,7 +409,7 @@ class TestStreamingSeries:
         result = ~series
         key, timestamp, headers = "key", 0, []
 
-        assert result.test(value, key, timestamp, headers)[0] == (
+        assert result.test(value, key, timestamp, headers) == (
             expected,
             key,
             timestamp,
@@ -426,7 +426,7 @@ class TestStreamingSeries:
     )
     def test_isin(self, value, series, other, expected):
         key, timestamp, headers = "key", 0, []
-        assert series.isin(other).test(value, key, timestamp, headers)[0] == (
+        assert series.isin(other).test(value, key, timestamp, headers) == (
             expected,
             key,
             timestamp,
@@ -444,7 +444,7 @@ class TestStreamingSeries:
     )
     def test_contains(self, series, value, other, expected):
         key, timestamp, headers = "key", 0, []
-        assert series.contains(other).test(value, key, timestamp, headers)[0] == (
+        assert series.contains(other).test(value, key, timestamp, headers) == (
             expected,
             key,
             timestamp,
@@ -460,7 +460,7 @@ class TestStreamingSeries:
     )
     def test_isnull(self, value, series, expected):
         key, timestamp, headers = "key", 0, []
-        assert series.isnull().test(value, key, timestamp, headers)[0] == (
+        assert series.isnull().test(value, key, timestamp, headers) == (
             expected,
             key,
             timestamp,
@@ -476,7 +476,7 @@ class TestStreamingSeries:
     )
     def test_notnull(self, value, series, expected):
         key, timestamp, headers = "key", 0, []
-        assert series.notnull().test(value, key, timestamp, headers)[0] == (
+        assert series.notnull().test(value, key, timestamp, headers) == (
             expected,
             key,
             timestamp,
@@ -493,7 +493,7 @@ class TestStreamingSeries:
     )
     def test_is_(self, value, series, other, expected):
         key, timestamp, headers = "key", 0, []
-        assert series.is_(other).test(value, key, timestamp, headers)[0] == (
+        assert series.is_(other).test(value, key, timestamp, headers) == (
             expected,
             key,
             timestamp,
@@ -510,7 +510,7 @@ class TestStreamingSeries:
     )
     def test_isnot(self, value, series, other, expected):
         key, timestamp, headers = "key", 0, []
-        assert series.isnot(other).test(value, key, timestamp, headers)[0] == (
+        assert series.isnot(other).test(value, key, timestamp, headers) == (
             expected,
             key,
             timestamp,
@@ -527,7 +527,7 @@ class TestStreamingSeries:
     def test_getitem(self, value, item, expected):
         result = StreamingSeries(sdf_id=1, name="x")[item]
         key, timestamp, headers = "key", 0, []
-        assert result.test(value, key, timestamp, headers)[0] == (
+        assert result.test(value, key, timestamp, headers) == (
             expected,
             key,
             timestamp,
@@ -540,7 +540,7 @@ class TestStreamingSeries:
         expected = 120
         result = StreamingSeries(sdf_id=1, name="x")["y"]["z"].apply(lambda v: v + 10)
 
-        assert result.test(value, key, timestamp, headers)[0] == (
+        assert result.test(value, key, timestamp, headers) == (
             expected,
             key,
             timestamp,
@@ -556,7 +556,7 @@ class TestStreamingSeries:
         result = StreamingSeries(sdf_id=1, name="x").abs()
         key, timestamp, headers = "key", 0, []
 
-        assert result.test({"x": value}, key, timestamp, headers)[0] == (
+        assert result.test({"x": value}, key, timestamp, headers) == (
             expected,
             key,
             timestamp,
