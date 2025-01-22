@@ -767,6 +767,55 @@ class StreamingDataFrame:
             metadata=metadata,
         )
 
+    def inspect(self, number: int = 10, maxlen: int = 30) -> Self:
+        """
+        Creates an interactive debugging session that displays each value
+        in a formatted Textual table.
+
+        Controls:
+        - Press 'c' to continue to next value
+        - Press 'q' to quit completely (exits Python)
+        """
+        assert maxlen >= number  # noqa
+
+        import sys
+        from collections import deque
+
+        from textual.app import App
+        from textual.containers import Container
+        from textual.widgets import DataTable, Footer
+
+        class Inspector(App):
+            def __init__(self, messages: deque):
+                super().__init__()
+                self.messages = messages
+                self.table = DataTable()
+
+            def compose(self):
+                yield Container(self.table)
+                yield Footer()
+
+            def on_mount(self):
+                self.table.add_columns("Key", "Timestamp", "Value", "Headers")
+                for value, key, timestamp, headers in self.messages:
+                    self.table.add_row(key, timestamp, value, headers)
+
+            def on_key(self, event):
+                if event.key == "c":
+                    self.exit()
+                elif event.key == "q":
+                    sys.exit(0)
+
+        messages: deque = deque(maxlen=maxlen)
+
+        def _inspect(value, key, timestamp, headers):
+            messages.append((value, key, timestamp, headers))
+            if len(messages) >= number:
+                app = Inspector(messages)
+                app.run()
+
+        return self._add_update(_inspect, metadata=True)
+
     def compose(
         self,
         sink: Optional[VoidExecutor] = None,
