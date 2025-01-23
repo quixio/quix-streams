@@ -2,13 +2,14 @@
 
 
 ## What Are Windows?
-In stream processing, windows are used to divide endless streams of events into finite time-based intervals.
+In stream processing, windows are used to divide endless streams of events into finite time-based or count-based intervals.
 
 With windows, you can calculate such aggregations as:
 
 - Total of website visitors for every hour
 - The average speed of a vehicle over the last 10 minutes
 - Maximum temperature of a sensor observed over 30 second ranges
+- Give an user a reward after 10 succesful actions 
 
 
 ## Types of Time in Streaming
@@ -138,7 +139,7 @@ The results of the windowed aggregations will have headers set to `None`.
 You may set messages headers by using the `StreamingDataFrame.set_headers()` API, as 
 described in [the "Updating Kafka Headers" section](./processing.md#updating-kafka-headers).
 
-## Tumbling Windows
+## Time-based Tumbling Windows
 Tumbling windows slice time into non-overlapping intervals of a fixed size. 
 
 For example, a tumbling window of 1 hour will generate the following intervals:
@@ -217,8 +218,69 @@ sdf = (
 
 ```
 
+## Count-based Tumbling Windows
 
-## Hopping Windows
+Count-based Tumbling Windows slice incoming events into batch of a fixed size.
+
+For example, a tumbling window configured with a count of 10 will batch and aggregate message 1 to 10, then 11 to 20, 21 to 31 and so on. 
+
+In a tumbing window each message is only assigned to a **single** interval.
+
+**Example**
+
+Imagine you receive events whenever a user gain experience in a game. Everytime a user gain experience 3 times they are granted a bonus equal to the minimum experience gained.
+
+Input:
+
+(Here the `"offset"` column illustrates Kafka message offset)
+```json
+{"experience": 100, "timestamp": 121, "offset": 1}
+{"experience": 50, "timestamp": 165, "offset": 2}
+{"experience": 200, "timestamp": 583, "offset": 3}
+```
+
+Expected output:
+
+```json
+{"bonus": 50, "window_start_ms": 121, "window_end_ms": 583}
+```
+
+Here is how to do it using tumbling windows: 
+
+```python
+from datetime import timedelta
+from quixstreams import Application
+
+app = Application(...)
+sdf = app.dataframe(...)
+
+
+sdf = (
+    # Extract "experience" value from the message
+    sdf.apply(lambda value: value["experience"])
+
+    # Define a count-based tumbling window of 3 events
+    .tumbling_count_window(count=3)
+
+    # Specify the "mean" aggregate function
+    .min()
+
+    # Emit updates once the window is closed
+    .final()
+
+    # Unwrap the aggregated result to match the expected output format
+    .apply(
+        lambda result: {
+            "bonus": result["value"],
+            "window_start_ms": result["start"],
+            "window_end_ms": result["end"],
+        }
+    )
+)
+
+```
+
+## Time-based Hopping Windows
 Hopping windows slice time into overlapping intervals of a fixed size and with a fixed step.
 
 For example, a hopping window of 1 hour with a step of 10 minutes will generate the following intervals:
@@ -306,7 +368,7 @@ sdf = (
 ```
 
 
-## Sliding Windows
+## Time-based Sliding Windows
 Sliding windows are overlapping time-based windows that advance with each incoming message, rather than at fixed time intervals like hopping windows. They have a fixed 1 ms resolution and perform better and are less resource-intensive than hopping windows with a 1 ms step. Sliding windows do not produce redundant windows; every interval has a distinct aggregation.
 
 Sliding windows provide optimal performance for tasks requiring high-precision real-time monitoring. However, if the task is not time-critical or the data stream is extremely dense, tumbling or hopping windows may perform better.
