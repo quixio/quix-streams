@@ -26,7 +26,8 @@ class CountWindowData(TypedDict):
 
 
 class FixedCountWindow(Window):
-    STATE_KEY = "data"
+    STATE_KEY = "metadata"
+    VALUE_KEY = "value"
 
     def __init__(
         self,
@@ -100,23 +101,30 @@ class FixedCountWindow(Window):
         data = state.get(key=self.STATE_KEY)
         if data is None:
             data = CountWindowData(
-                count=0, start=timestamp_ms, end=timestamp_ms, value=[]
+                count=0, start=timestamp_ms, end=timestamp_ms, value=None
             )
 
         data["count"] += 1
-        if timestamp_ms > data["end"]:
+        if timestamp_ms < data["start"]:
+            data["start"] = timestamp_ms
+        elif timestamp_ms > data["end"]:
             data["end"] = timestamp_ms
 
-        data["value"].append(value)
-        if data["count"] >= self._max_count:
-            state.delete(key=self.STATE_KEY)
-            return [], [
-                WindowResult(
-                    start=data["start"],
-                    end=data["end"],
-                    value=self._merge_func(data["value"]),
-                )
-            ]
+        if data["count"] < self._max_count:
+            state.add_to_collection(data["count"], value)
+            state.set(key=self.STATE_KEY, value=data)
+            return [], []
 
-        state.set(key=self.STATE_KEY, value=data)
-        return [], []
+        # window is full, closing ...
+        state.delete(key=self.STATE_KEY)
+
+        values = state.get_from_collection(start=1, end=10)
+        values.append(value)
+
+        result = WindowResult(
+            start=data["start"],
+            end=data["end"],
+            value=self._merge_func(values),
+        )
+        state.delete_from_collection(start=1, end=10)
+        return [], [result]

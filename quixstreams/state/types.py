@@ -91,6 +91,30 @@ class WindowedState(Protocol):
         """
         ...
 
+    def get_from_collection(self, start: int, end: int) -> list[Any]:
+        """
+        Return all values from a collection-type window aggregation.
+
+        :param start: starting timestamp of values to fetch (inclusive)
+        :param end: end timestamp of values to fetch (exclusive)
+        """
+        ...
+
+    def delete_from_collection(self, end: int, *, start: Optional[int] = None) -> None:
+        """
+        Delete collected values with timestamps less than max_timestamp.
+
+        This method maintains a deletion index to track progress and avoid
+        re-scanning previously deleted values. It:
+        1. Retrieves the last deleted timestamp from the cache
+        2. Scans values from last deleted timestamp up to max_timestamp
+        3. Updates the deletion index with the latest deleted timestamp
+
+        :param max_timestamp: Delete values with timestamps less than this value
+        :param prefix: Key prefix for filtering values to delete
+        """
+        ...
+
     def get_latest_timestamp(self) -> Optional[int]:
         """
         Get the latest observed timestamp for the current state partition.
@@ -246,6 +270,30 @@ class WindowedPartitionTransaction(Protocol):
 
         :param value: value to be collected
         :param timestamp_ms: current message timestamp in milliseconds
+        """
+        ...
+
+    def get_from_collection(self, start: int, end: int) -> list[Any]:
+        """
+        Return all values from a collection-type window aggregation.
+
+        :param start: starting timestamp of values to fetch (inclusive)
+        :param end: end timestamp of values to fetch (exclusive)
+        """
+        ...
+
+    def delete_from_collection(self, end: int, *, start: Optional[int] = None) -> None:
+        """
+        Delete collected values with timestamps less than max_timestamp.
+
+        This method maintains a deletion index to track progress and avoid
+        re-scanning previously deleted values. It:
+        1. Retrieves the last deleted timestamp from the cache
+        2. Scans values from last deleted timestamp up to max_timestamp
+        3. Updates the deletion index with the latest deleted timestamp
+
+        :param max_timestamp: Delete values with timestamps less than this value
+        :param prefix: Key prefix for filtering values to delete
         """
         ...
 

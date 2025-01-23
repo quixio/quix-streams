@@ -979,7 +979,7 @@ class StreamingDataFrame(BaseStreaming):
         name: Optional[str] = None,
     ) -> FixedTimeHoppingWindowDefinition:
         """
-        Create a hopping window transformation on this StreamingDataFrame.
+        Create a time-based hopping window transformation on this StreamingDataFrame.
         Hopping windows divide the data stream into overlapping windows based on time.
         The overlap is controlled by the `step_ms` parameter.
 
@@ -1070,7 +1070,7 @@ class StreamingDataFrame(BaseStreaming):
         name: Optional[str] = None,
     ) -> FixedTimeSlidingWindowDefinition:
         """
-        Create a sliding window transformation on this StreamingDataFrame.
+        Create a time-based sliding window transformation on this StreamingDataFrame.
         Sliding windows continuously evaluate the stream with a fixed step of 1 ms
         allowing for overlapping, but not redundant windows of a fixed size.
 

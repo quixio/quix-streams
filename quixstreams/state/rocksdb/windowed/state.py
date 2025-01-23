@@ -80,6 +80,22 @@ class WindowedTransactionState(TransactionState, WindowedState):
             prefix=self._prefix,
         )
 
+    def get_from_collection(self, start: int, end: int) -> list[Any]:
+        """
+        Return all values from a collection-type window aggregation.
+
+        :param start: starting timestamp of values to fetch
+        :param end: end timestamp of values to fetch
+        """
+        return self._transaction.get_from_collection(
+            start=start, end=end, prefix=self._prefix
+        )
+
+    def delete_from_collection(self, end: int, *, start: Optional[int] = None) -> None:
+        return self._transaction.delete_from_collection(
+            start=start, end=end, prefix=self._prefix
+        )
+
     def get_latest_timestamp(self) -> Optional[int]:
         """
         Get the latest observed timestamp for the current message key.
