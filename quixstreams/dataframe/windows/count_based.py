@@ -73,7 +73,9 @@ class FixedCountWindow(Window):
             )
 
         data["count"] += 1
-        if timestamp_ms > data["end"]:
+        if timestamp_ms < data["start"]:
+            data["start"] = timestamp_ms
+        elif timestamp_ms > data["end"]:
             data["end"] = timestamp_ms
 
         data["value"] = self._aggregate_func(data["value"], value)
@@ -85,12 +87,13 @@ class FixedCountWindow(Window):
             )
         ]
 
-        if data["count"] >= self._max_count:
-            state.delete(key=self.STATE_KEY)
-            return updated_windows, updated_windows
+        if data["count"] < self._max_count:
+            state.set(key=self.STATE_KEY, value=data)
+            return updated_windows, []
 
-        state.set(key=self.STATE_KEY, value=data)
-        return updated_windows, []
+        # window is full, closing ...
+        state.delete(key=self.STATE_KEY)
+        return updated_windows, updated_windows
 
     def _process_window_collection(
         self,
