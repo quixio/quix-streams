@@ -16,6 +16,7 @@ from typing_extensions import Self
 
 from quixstreams.dataframe.exceptions import InvalidOperation
 
+from .exceptions import InvalidTopology
 from .functions import (
     ApplyCallback,
     ApplyExpandedCallback,
@@ -40,11 +41,6 @@ from .functions import (
 )
 
 __all__ = ("Stream",)
-
-from quixstreams.exceptions import QuixException
-
-
-class InvalidTopology(QuixException): ...
 
 
 class Stream:
