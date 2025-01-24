@@ -341,7 +341,7 @@ class Stream:
             )
 
         # Cut off the diffed nodes from the rest of the tree
-        # by removing the diff head node the current node's children
+        # by removing the diff head node from the current node's children
         diff_head.pruned = True
         self.children.remove(diff_head)
         diff_head.parents = []
