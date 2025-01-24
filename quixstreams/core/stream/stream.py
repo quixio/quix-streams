@@ -1,5 +1,6 @@
 import collections
 import copy
+from collections import deque
 from graphlib import TopologicalSorter
 from typing import (
     Any,
@@ -300,7 +301,7 @@ class Stream:
         :return: a new independent `Stream` instance whose root begins at the diff
         """
         # Traverse the children of "self" and look for the "other" Stream among then
-        diff = []
+        diff: Deque[Self] = deque()
         self_found = False
 
         for stream in other.root_path():
@@ -318,21 +319,20 @@ class Stream:
                     "Cannot assign or filter using the SDF merged with another SDF"
                 )
 
-            diff.append(stream)
+            diff.appendleft(stream)
 
         if not diff:
             # The case of "sdf['x'] = sdf" or "sdf = sdf[sdf]"
             raise InvalidOperation("Cannot assign or filter using the same SDF")
 
         # Reverse the diff to be in "parent->children" order
-        diff.reverse()
-        diff_head = diff[0]
+        diff_head, *diff_rest = diff
 
         if diff_head.pruned:
             raise InvalidOperation(
                 "Cannot use a filtering or column-setter SDF more than once"
             )
-        elif not self_found:
+        if not self_found:
             # "self" is not found among the parents of "other"
             raise InvalidOperation(
                 "filtering or column-setter SDF must originate from target SDF; "
@@ -351,7 +351,7 @@ class Stream:
         # and not connected to other nodes.
         diff_head = copy.deepcopy(diff_head)
         parents = [diff_head]
-        for stream in diff[1:]:
+        for stream in diff_rest:
             stream = copy.deepcopy(stream)
             stream.parents = parents
             stream.children = copy.deepcopy(stream.children)
@@ -378,10 +378,8 @@ class Stream:
                 continue
             sorter.add(node, *node.parents)
             visited.add(node)
-            for parent in node.parents:
-                to_traverse.append(parent)
-            for child in node.children:
-                to_traverse.append(child)
+            to_traverse += node.parents + node.children
+
         # Sort the nodes in the topological order
         nodes = list(sorter.static_order())
         return nodes
@@ -458,8 +456,8 @@ class Stream:
         """
         # Sink results of the Stream to a single-item queue, and read from this queue
         # after executing the Stream.
-        # The composed stream must have only the "apply" functions,
-        # which always return a single.
+        # The composed stream must consist of the "apply" functions
+        # that always return a single result.
 
         buffer: Deque[tuple[Any, Any, int, Any]] = collections.deque(maxlen=1)
         executor = self.compose_single(
@@ -529,8 +527,7 @@ class Stream:
         Start from self and collect all parents until reaching the root nodes
         """
         nodes = [self]
-        to_traverse: Deque = collections.deque()
-        to_traverse.append(self)
+        to_traverse: Deque = collections.deque([self])
         while to_traverse:
             node = to_traverse.popleft()
             for parent in node.parents:
