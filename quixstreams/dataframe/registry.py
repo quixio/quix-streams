@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 from quixstreams.core.stream import Stream, VoidExecutor
 from quixstreams.models import Topic
@@ -73,13 +73,19 @@ class DataframeRegistry:
         self._repartition_origins[new_sdf.topic.name] = source_topic
 
     def compose_all(
-        self, sink: Optional[Callable[[Any, Any, int, Any], None]] = None
+        self, sink: Optional[VoidExecutor] = None
     ) -> Dict[str, VoidExecutor]:
         """
         Composes all the Streams and returns them in a dict, where key is its topic.
         :param sink: callable to accumulate the results of the execution, optional.
         :return: a {topic_name: composed} dict, where composed is a callable
         """
-        return {
-            topic: stream.compose(sink=sink) for topic, stream in self._registry.items()
-        }
+        executors = {}
+        # Go over the registered topics with root Streams and compose them
+        for topic, root_stream in self._registry.items():
+            # If a root stream is connected to other roots, ".compose()" will
+            # return them all.
+            # Use the registered root Stream to filter them out.
+            root_executors = root_stream.compose(sink=sink)
+            executors[topic] = root_executors[root_stream]
+        return executors
