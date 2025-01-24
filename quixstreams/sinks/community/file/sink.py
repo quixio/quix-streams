@@ -51,18 +51,18 @@ class FileSink(BatchingSink):
             Callback should accept the raised Exception as an argument.
             Callback must resolve (or propagate/re-raise) the Exception.
         """
-        self._format = resolve_format(format)
-        self._destination = destination or LocalDestination()
-        self._destination.set_directory(directory)
-        self._destination.set_extension(self._format)
         super().__init__(
             client_connect_success_cb=client_connect_success_cb,
             client_connect_failure_cb=client_connect_failure_cb,
         )
 
-    def setup_client(self) -> Destination:
+        self._format = resolve_format(format)
+        self._destination = destination or LocalDestination()
+        self._destination.set_directory(directory)
+        self._destination.set_extension(self._format)
+
+    def setup_client(self):
         self._destination.connect()
-        return self._destination
 
     def write(self, batch: SinkBatch) -> None:
         """Write a batch of data using the configured format and destination.
