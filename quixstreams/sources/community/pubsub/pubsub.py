@@ -3,7 +3,11 @@ import logging
 from typing import Optional
 
 from quixstreams.models import Topic
-from quixstreams.sources import ClientConnectCallback, Source
+from quixstreams.sources import (
+    ClientConnectFailureCallback,
+    ClientConnectSuccessCallback,
+    Source,
+)
 
 from .consumer import PubSubConsumer, PubSubMessage
 
@@ -63,7 +67,8 @@ class PubSubSource(Source):
         create_subscription: bool = False,
         enable_message_ordering: bool = False,
         shutdown_timeout: float = 10.0,
-        client_connect_cb: ClientConnectCallback = None,
+        client_connect_success_cb: Optional[ClientConnectSuccessCallback] = None,
+        client_connect_failure_cb: Optional[ClientConnectFailureCallback] = None,
     ):
         """
         :param project_id: a Google Cloud project ID.
@@ -80,16 +85,18 @@ class PubSubSource(Source):
         :param enable_message_ordering: When creating a Pub/Sub subscription, whether
             to allow message ordering. NOTE: does NOT affect existing subscriptions!
         :param shutdown_timeout: How long to wait for a graceful shutdown of the source.
-        :param client_connect_cb: An optional callback made after attempting client
-            authentication, primarily for additional logging.
-            It should accept a single argument, which will be populated with an
-            Exception if connecting failed (else None).
-            If used, errors must be resolved (or propagated) with the callback.
+        :param client_connect_success_cb: An optional callback made after successful
+            client authentication, primarily for additional logging.
+        :param client_connect_failure_cb: An optional callback made after failed
+            client authentication (which should raise an Exception).
+            Callback should accept the raised Exception as an argument.
+            Callback must resolve (or propagate/re-raise) the Exception.
         """
         super().__init__(
             name=subscription_id,
             shutdown_timeout=shutdown_timeout,
-            client_connect_cb=client_connect_cb,
+            client_connect_success_cb=client_connect_success_cb,
+            client_connect_failure_cb=client_connect_failure_cb,
         )
 
         self._credentials = service_account_json

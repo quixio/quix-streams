@@ -8,7 +8,16 @@ from quixstreams.sinks.base.batch import SinkBatch
 logger = logging.getLogger(__name__)
 
 
-ClientConnectCallback = Optional[Callable[[Optional[Exception]], None]]
+ClientConnectSuccessCallback = Callable[[], None]
+ClientConnectFailureCallback = Callable[[Optional[Exception]], None]
+
+
+def _default_client_connect_success_cb():
+    logger.info("CONNECTED!")
+
+
+def _default_client_connect_failure_cb(exception: Exception):
+    logger.error(f"ERROR: Failed while connecting to client: {exception}")
 
 
 class BaseSink(abc.ABC):
@@ -22,16 +31,23 @@ class BaseSink(abc.ABC):
 
     def __init__(
         self,
-        client_connect_cb: ClientConnectCallback = None,
+        client_connect_success_cb: Optional[ClientConnectSuccessCallback] = None,
+        client_connect_failure_cb: Optional[ClientConnectFailureCallback] = None,
     ):
         """
-        :param client_connect_cb: An optional callback made after attempting client
-            authentication, primarily for additional logging.
-            It should accept a single argument, which will be populated with an
-            Exception if connecting failed (else None).
-            If used, errors must be resolved (or propagated) with the callback.
+        :param client_connect_success_cb: An optional callback made after successful
+            client authentication, primarily for additional logging.
+        :param client_connect_failure_cb: An optional callback made after failed
+            client authentication (which should raise an Exception).
+            Callback should accept the raised Exception as an argument.
+            Callback must resolve (or propagate/re-raise) the Exception.
         """
-        self._client_connect_cb = client_connect_cb
+        self._client_connect_success_cb = (
+            client_connect_success_cb or _default_client_connect_success_cb
+        )
+        self._client_connect_failure_cb = (
+            client_connect_failure_cb or _default_client_connect_failure_cb
+        )
 
     @abc.abstractmethod
     def flush(self, topic: str, partition: int):
@@ -76,17 +92,11 @@ class BaseSink(abc.ABC):
         Called as part of `Application.run()` to initialize the sink's client.
         Allows using a callback pattern around the connection attempt.
         """
-        error = None
         try:
             self.setup_client()
+            self._client_connect_success_cb()
         except Exception as e:
-            error = e
-        finally:
-            if cb := self._client_connect_cb:
-                cb(error)
-            # Only raise if no callback; callback could intentionally supress errors
-            elif error:
-                raise error
+            self._client_connect_failure_cb(e)
 
     def on_paused(self, topic: str, partition: int):
         """
@@ -115,16 +125,21 @@ class BatchingSink(BaseSink):
 
     def __init__(
         self,
-        client_connect_cb: ClientConnectCallback = None,
+        client_connect_success_cb: Optional[ClientConnectSuccessCallback] = None,
+        client_connect_failure_cb: Optional[ClientConnectFailureCallback] = None,
     ):
         """
-        :param client_connect_cb: An optional callback made after attempting client
-            authentication, primarily for additional logging.
-            It should accept a single argument, which will be populated with an
-            Exception if connecting failed (else None).
-            If used, errors must be resolved (or propagated) with the callback.
+        :param client_connect_success_cb: An optional callback made after successful
+            client authentication, primarily for additional logging.
+        :param client_connect_failure_cb: An optional callback made after failed
+            client authentication (which should raise an Exception).
+            Callback should accept the raised Exception as an argument.
+            Callback must resolve (or propagate/re-raise) the Exception.
         """
-        super().__init__(client_connect_cb=client_connect_cb)
+        super().__init__(
+            client_connect_success_cb=client_connect_success_cb,
+            client_connect_failure_cb=client_connect_failure_cb,
+        )
         self._batches = {}
 
     def __repr__(self):

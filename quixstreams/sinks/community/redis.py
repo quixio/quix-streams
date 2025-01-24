@@ -11,7 +11,12 @@ except ImportError as exc:
         'run "pip install quixstreams[redis]" to use RedisSink'
     ) from exc
 
-from quixstreams.sinks import BatchingSink, ClientConnectCallback, SinkBatch
+from quixstreams.sinks import (
+    BatchingSink,
+    ClientConnectFailureCallback,
+    ClientConnectSuccessCallback,
+    SinkBatch,
+)
 
 __all__ = ("RedisSink",)
 
@@ -28,7 +33,8 @@ class RedisSink(BatchingSink):
         key_serializer: Optional[Callable[[Any, Any], Union[bytes, str]]] = None,
         password: Optional[str] = None,
         socket_timeout: float = 30.0,
-        client_connect_cb: ClientConnectCallback = None,
+        client_connect_success_cb: Optional[ClientConnectSuccessCallback] = None,
+        client_connect_failure_cb: Optional[ClientConnectFailureCallback] = None,
         **kwargs,
     ) -> None:
         """
@@ -45,14 +51,18 @@ class RedisSink(BatchingSink):
         :param password: Redis password, optional.
         :param socket_timeout: Redis socket timeout.
             Default - 30s.
-        :param client_connect_cb: An optional callback made after attempting client
-            authentication, primarily for additional logging.
-            It should accept a single argument, which will be populated with an
-            Exception if connecting failed (else None).
-            If used, errors must be resolved (or propagated) with the callback.
+        :param client_connect_success_cb: An optional callback made after successful
+            client authentication, primarily for additional logging.
+        :param client_connect_failure_cb: An optional callback made after failed
+            client authentication (which should raise an Exception).
+            Callback should accept the raised Exception as an argument.
+            Callback must resolve (or propagate/re-raise) the Exception.
         :param kwargs: Additional keyword arguments passed to the `redis.Redis` instance.
         """
-        super().__init__(client_connect_cb=client_connect_cb)
+        super().__init__(
+            client_connect_success_cb=client_connect_success_cb,
+            client_connect_failure_cb=client_connect_failure_cb,
+        )
 
         self._key_serializer = key_serializer
         self._value_serializer = value_serializer

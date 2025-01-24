@@ -9,7 +9,8 @@ from typing import Literal, Optional, Type, get_args
 
 from quixstreams.sinks import (
     BatchingSink,
-    ClientConnectCallback,
+    ClientConnectFailureCallback,
+    ClientConnectSuccessCallback,
     SinkBackpressureError,
     SinkBatch,
 )
@@ -103,8 +104,12 @@ class IcebergSink(BatchingSink):
     :param schema: The Iceberg table schema. If None, a default schema is used.
     :param partition_spec: The partition specification for the table.
         If None, a default is used.
-    :param client_connect_cb: An optional callback made once a client connection
-        is established. Callback expects an Exception or None as an argument.
+    :param client_connect_success_cb: An optional callback made after successful
+        client authentication, primarily for additional logging.
+    :param client_connect_failure_cb: An optional callback made after failed
+        client authentication (which should raise an Exception).
+        Callback should accept the raised Exception as an argument.
+        Callback must resolve (or propagate/re-raise) the Exception.
 
     Example setup using an AWS-hosted Iceberg with AWS Glue:
 
@@ -147,9 +152,13 @@ class IcebergSink(BatchingSink):
         data_catalog_spec: DataCatalogSpec,
         schema: Optional[Schema] = None,
         partition_spec: Optional[PartitionSpec] = None,
-        client_connect_cb: ClientConnectCallback = None,
+        client_connect_success_cb: Optional[ClientConnectSuccessCallback] = None,
+        client_connect_failure_cb: Optional[ClientConnectFailureCallback] = None,
     ):
-        super().__init__(client_connect_cb=client_connect_cb)
+        super().__init__(
+            client_connect_success_cb=client_connect_success_cb,
+            client_connect_failure_cb=client_connect_failure_cb,
+        )
 
         self._iceberg_config = config
         self._table_name = table_name

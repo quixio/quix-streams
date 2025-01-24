@@ -7,7 +7,11 @@ from typing import BinaryIO, Optional, Union
 from typing_extensions import Self
 
 from quixstreams.models import Topic, TopicConfig
-from quixstreams.sources import ClientConnectCallback, Source
+from quixstreams.sources import (
+    ClientConnectFailureCallback,
+    ClientConnectSuccessCallback,
+    Source,
+)
 
 from .compressions import CompressionName
 from .formats import FORMATS, Format, FormatName
@@ -136,7 +140,8 @@ class FileSource(Source):
         replay_speed: float = 1.0,
         name: Optional[str] = None,
         shutdown_timeout: float = 30,
-        client_connect_cb: ClientConnectCallback = None,
+        client_connect_success_cb: Optional[ClientConnectSuccessCallback] = None,
+        client_connect_failure_cb: Optional[ClientConnectFailureCallback] = None,
     ):
         """
         :param directory: a directory to recursively read through; it is recommended to
@@ -153,17 +158,19 @@ class FileSource(Source):
         :param name: The name of the Source application (Default: last folder name).
         :param shutdown_timeout: Time in seconds the application waits for the source
             to gracefully shutdown
-        :param client_connect_cb: An optional callback made after attempting client
-            authentication, primarily for additional logging.
-            It should accept a single argument, which will be populated with an
-            Exception if connecting failed (else None).
-            If used, errors must be resolved (or propagated) with the callback.
+        :param client_connect_success_cb: An optional callback made after successful
+            client authentication, primarily for additional logging.
+        :param client_connect_failure_cb: An optional callback made after failed
+            client authentication (which should raise an Exception).
+            Callback should accept the raised Exception as an argument.
+            Callback must resolve (or propagate/re-raise) the Exception.
         """
         self._directory = Path(directory)
         super().__init__(
             name=name or self._directory.name,
             shutdown_timeout=shutdown_timeout,
-            client_connect_cb=client_connect_cb,
+            client_connect_success_cb=client_connect_success_cb,
+            client_connect_failure_cb=client_connect_failure_cb,
         )
 
         if not replay_speed >= 0:

@@ -2,7 +2,11 @@ from os import getenv
 from typing import Optional
 
 from quixstreams.models.topics import Topic
-from quixstreams.sources.base import ClientConnectCallback, StatefulSource
+from quixstreams.sources.base import (
+    ClientConnectFailureCallback,
+    ClientConnectSuccessCallback,
+    StatefulSource,
+)
 
 from .consumer import (
     AutoOffsetResetType,
@@ -66,7 +70,8 @@ class KinesisSource(StatefulSource):
         max_records_per_shard: int = 1000,
         commit_interval: float = 5.0,
         retry_backoff_secs: float = 5.0,
-        client_connect_cb: ClientConnectCallback = None,
+        client_connect_success_cb: Optional[ClientConnectSuccessCallback] = None,
+        client_connect_failure_cb: Optional[ClientConnectFailureCallback] = None,
     ):
         """
         :param stream_name: name of the desired Kinesis stream to consume.
@@ -87,16 +92,18 @@ class KinesisSource(StatefulSource):
         :param commit_interval: the time between commits
         :param retry_backoff_secs: how long to back off from doing HTTP calls for a
              shard when Kinesis consumer encounters handled/expected errors.
-        :param client_connect_cb: An optional callback made after attempting client
-            authentication, primarily for additional logging.
-            It should accept a single argument, which will be populated with an
-            Exception if connecting failed (else None).
-            If used, errors must be resolved (or propagated) with the callback.
+        :param client_connect_success_cb: An optional callback made after successful
+            client authentication, primarily for additional logging.
+        :param client_connect_failure_cb: An optional callback made after failed
+            client authentication (which should raise an Exception).
+            Callback should accept the raised Exception as an argument.
+            Callback must resolve (or propagate/re-raise) the Exception.
         """
         super().__init__(
             name=f"kinesis_{stream_name}",
             shutdown_timeout=shutdown_timeout,
-            client_connect_cb=client_connect_cb,
+            client_connect_success_cb=client_connect_success_cb,
+            client_connect_failure_cb=client_connect_failure_cb,
         )
 
         self._stream_name = stream_name

@@ -1,7 +1,13 @@
 from .exceptions import SourceException
 from .manager import SourceManager
 from .multiprocessing import multiprocessing
-from .source import BaseSource, ClientConnectCallback, Source, StatefulSource
+from .source import (
+    BaseSource,
+    ClientConnectFailureCallback,
+    ClientConnectSuccessCallback,
+    Source,
+    StatefulSource,
+)
 
 __all__ = (
     "Source",
@@ -10,5 +16,6 @@ __all__ = (
     "SourceManager",
     "SourceException",
     "StatefulSource",
-    "ClientConnectCallback",
+    "ClientConnectSuccessCallback",
+    "ClientConnectFailureCallback",
 )

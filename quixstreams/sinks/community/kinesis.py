@@ -15,7 +15,11 @@ except ImportError as exc:
     ) from exc
 
 from quixstreams.models.types import HeadersTuples
-from quixstreams.sinks.base import BaseSink, ClientConnectCallback
+from quixstreams.sinks.base import (
+    BaseSink,
+    ClientConnectFailureCallback,
+    ClientConnectSuccessCallback,
+)
 from quixstreams.sinks.base.exceptions import SinkBackpressureError
 
 __all__ = ("KinesisSink", "KinesisStreamNotFoundError")
@@ -35,7 +39,8 @@ class KinesisSink(BaseSink):
         aws_endpoint_url: Optional[str] = getenv("AWS_ENDPOINT_URL_KINESIS"),
         value_serializer: Callable[[Any], str] = json.dumps,
         key_serializer: Callable[[Any], str] = bytes.decode,
-        client_connect_cb: ClientConnectCallback = None,
+        client_connect_success_cb: Optional[ClientConnectSuccessCallback] = None,
+        client_connect_failure_cb: Optional[ClientConnectFailureCallback] = None,
         **kwargs,
     ) -> None:
         """
@@ -50,13 +55,17 @@ class KinesisSink(BaseSink):
         :param key_serializer: Function to serialize the key to string
             (defaults to bytes.decode).
         :param kwargs: Additional keyword arguments passed to boto3.client.
-        :param client_connect_cb: An optional callback made after attempting client
-            authentication, primarily for additional logging.
-            It should accept a single argument, which will be populated with an
-            Exception if connecting failed (else None).
-            If used, errors must be resolved (or propagated) with the callback.
+        :param client_connect_success_cb: An optional callback made after successful
+            client authentication, primarily for additional logging.
+        :param client_connect_failure_cb: An optional callback made after failed
+            client authentication (which should raise an Exception).
+            Callback should accept the raised Exception as an argument.
+            Callback must resolve (or propagate/re-raise) the Exception.
         """
-        super().__init__(client_connect_cb=client_connect_cb)
+        super().__init__(
+            client_connect_success_cb=client_connect_success_cb,
+            client_connect_failure_cb=client_connect_failure_cb,
+        )
 
         self._client: Optional[KinesisClient] = None
         self._stream_name = stream_name
