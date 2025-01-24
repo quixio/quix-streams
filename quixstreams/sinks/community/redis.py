@@ -66,7 +66,6 @@ class RedisSink(BatchingSink):
 
         self._key_serializer = key_serializer
         self._value_serializer = value_serializer
-        self._redis_uri: Optional[str] = None
         self._client: Optional[redis.Redis] = None
         self._client_settings = {
             "host": host,
@@ -76,13 +75,13 @@ class RedisSink(BatchingSink):
             "socket_timeout": socket_timeout,
             **kwargs,
         }
-
-    def setup_client(self):
         self._redis_uri = (
             f"{self._client_settings['host']}:"
             f"{self._client_settings['port']}/"
             f"{self._client_settings['db']}"
         )
+
+    def setup_client(self):
         self._client = redis.Redis(**self._client_settings)
         self._client.info()
 

@@ -195,7 +195,6 @@ class IcebergSink(BatchingSink):
             f"Loaded Iceberg table '{self._table_name}' at "
             f"'{self._iceberg_config.location}'."
         )
-        return
 
     def write(self, batch: SinkBatch):
         """
