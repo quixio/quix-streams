@@ -9,7 +9,11 @@ from quixstreams.kafka import AutoOffsetReset, ConnectionConfig, Consumer
 from quixstreams.kafka.exceptions import KafkaConsumerException
 from quixstreams.models.serializers import DeserializerType
 from quixstreams.models.topics import Topic, TopicAdmin, TopicConfig
-from quixstreams.sources import ClientConnectCallback, Source
+from quixstreams.sources import (
+    ClientConnectFailureCallback,
+    ClientConnectSuccessCallback,
+    Source,
+)
 
 from .checkpoint import Checkpoint
 
@@ -62,7 +66,8 @@ class KafkaReplicatorSource(Source):
         on_consumer_error: ConsumerErrorCallback = default_on_consumer_error,
         value_deserializer: DeserializerType = "json",
         key_deserializer: DeserializerType = "bytes",
-        client_connect_cb: ClientConnectCallback = None,
+        client_connect_success_cb: Optional[ClientConnectSuccessCallback] = None,
+        client_connect_failure_cb: Optional[ClientConnectFailureCallback] = None,
     ) -> None:
         """
         :param name: The source unique name.
@@ -85,16 +90,18 @@ class KafkaReplicatorSource(Source):
             Default - `json`
         :param key_deserializer: The default topic key deserializer, used by StreamingDataframe connected to the source.
             Default - `json`
-        :param client_connect_cb: An optional callback made after attempting client
-            authentication, primarily for additional logging.
-            It should accept a single argument, which will be populated with an
-            Exception if connecting failed (else None).
-            If used, errors must be resolved (or propagated) with the callback.
+        :param client_connect_success_cb: An optional callback made after successful
+            client authentication, primarily for additional logging.
+        :param client_connect_failure_cb: An optional callback made after failed
+            client authentication (which should raise an Exception).
+            Callback should accept the raised Exception as an argument.
+            Callback must resolve (or propagate/re-raise) the Exception.
         """
         super().__init__(
             name=name,
             shutdown_timeout=shutdown_timeout,
-            client_connect_cb=client_connect_cb,
+            client_connect_success_cb=client_connect_success_cb,
+            client_connect_failure_cb=client_connect_failure_cb,
         )
 
         if consumer_extra_config is None:

@@ -1,6 +1,7 @@
 from .base import (
     BaseSource,
-    ClientConnectCallback,
+    ClientConnectFailureCallback,
+    ClientConnectSuccessCallback,
     Source,
     SourceException,
     SourceManager,
@@ -12,7 +13,8 @@ from .core.kafka import KafkaReplicatorSource, QuixEnvironmentSource
 
 __all__ = [
     "BaseSource",
-    "ClientConnectCallback",
+    "ClientConnectSuccessCallback",
+    "ClientConnectFailureCallback",
     "CSVSource",
     "KafkaReplicatorSource",
     "multiprocessing",

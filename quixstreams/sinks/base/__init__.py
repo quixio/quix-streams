@@ -1,7 +1,12 @@
 from .batch import SinkBatch
 from .exceptions import SinkBackpressureError
 from .manager import SinkManager
-from .sink import BaseSink, BatchingSink, ClientConnectCallback
+from .sink import (
+    BaseSink,
+    BatchingSink,
+    ClientConnectFailureCallback,
+    ClientConnectSuccessCallback,
+)
 
 __all__ = (
     "SinkBatch",
@@ -9,5 +14,6 @@ __all__ = (
     "SinkManager",
     "BatchingSink",
     "BaseSink",
-    "ClientConnectCallback",
+    "ClientConnectSuccessCallback",
+    "ClientConnectFailureCallback",
 )
