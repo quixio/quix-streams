@@ -17,7 +17,12 @@ except ImportError as exc:
 
 from quixstreams.exceptions import QuixException
 from quixstreams.models import HeadersTuples
-from quixstreams.sinks import BatchingSink, ClientConnectCallback, SinkBatch
+from quixstreams.sinks import (
+    BatchingSink,
+    ClientConnectFailureCallback,
+    ClientConnectSuccessCallback,
+    SinkBatch,
+)
 
 __all__ = ("BigQuerySink", "BigQuerySinkException")
 
@@ -60,7 +65,8 @@ class BigQuerySink(BatchingSink):
         ddl_timeout: float = 10.0,
         insert_timeout: float = 10.0,
         retry_timeout: float = 30.0,
-        client_connect_cb: ClientConnectCallback = None,
+        client_connect_success_cb: Optional[ClientConnectSuccessCallback] = None,
+        client_connect_failure_cb: Optional[ClientConnectFailureCallback] = None,
         **kwargs,
     ):
         """
@@ -100,14 +106,18 @@ class BigQuerySink(BatchingSink):
         :param retry_timeout: a total timeout for each request to BigQuery API.
             During this timeout, a request can be retried according
             to the client's default retrying policy.
-        :param client_connect_cb: An optional callback made after attempting client
-            authentication, primarily for additional logging.
-            It should accept a single argument, which will be populated with an
-            Exception if connecting failed (else None).
-            If used, errors must be resolved (or propagated) with the callback.
+        :param client_connect_success_cb: An optional callback made after successful
+            client authentication, primarily for additional logging.
+        :param client_connect_failure_cb: An optional callback made after failed
+            client authentication (which should raise an Exception).
+            Callback should accept the raised Exception as an argument.
+            Callback must resolve (or propagate/re-raise) the Exception.
         :param kwargs: Additional keyword arguments passed to `bigquery.Client`.
         """
-        super().__init__(client_connect_cb=client_connect_cb)
+        super().__init__(
+            client_connect_success_cb=client_connect_success_cb,
+            client_connect_failure_cb=client_connect_failure_cb,
+        )
 
         self.location = location
         self.project_id = project_id

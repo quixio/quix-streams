@@ -17,7 +17,8 @@ except ImportError as exc:
 from quixstreams.models.types import HeadersTuples
 from quixstreams.sinks.base import (
     BaseSink,
-    ClientConnectCallback,
+    ClientConnectFailureCallback,
+    ClientConnectSuccessCallback,
     SinkBackpressureError,
 )
 
@@ -41,7 +42,8 @@ class PubSubSink(BaseSink):
         value_serializer: Callable[[Any], Union[bytes, str]] = json.dumps,
         key_serializer: Callable[[Any], str] = bytes.decode,
         flush_timeout: int = 5,
-        client_connect_cb: ClientConnectCallback = None,
+        client_connect_success_cb: Optional[ClientConnectSuccessCallback] = None,
+        client_connect_failure_cb: Optional[ClientConnectFailureCallback] = None,
         **kwargs,
     ) -> None:
         """
@@ -58,14 +60,18 @@ class PubSubSink(BaseSink):
             (defaults to json.dumps).
         :param key_serializer: Function to serialize the key to string
             (defaults to bytes.decode).
-        :param client_connect_cb: An optional callback made after attempting client
-            authentication, primarily for additional logging.
-            It should accept a single argument, which will be populated with an
-            Exception if connecting failed (else None).
-            If used, errors must be resolved (or propagated) with the callback.
+        :param client_connect_success_cb: An optional callback made after successful
+            client authentication, primarily for additional logging.
+        :param client_connect_failure_cb: An optional callback made after failed
+            client authentication (which should raise an Exception).
+            Callback should accept the raised Exception as an argument.
+            Callback must resolve (or propagate/re-raise) the Exception.
         :param kwargs: Additional keyword arguments passed to PublisherClient.
         """
-        super().__init__(client_connect_cb=client_connect_cb)
+        super().__init__(
+            client_connect_success_cb=client_connect_success_cb,
+            client_connect_failure_cb=client_connect_failure_cb,
+        )
 
         # Parse the service account credentials from JSON
         if service_account_json is not None:
