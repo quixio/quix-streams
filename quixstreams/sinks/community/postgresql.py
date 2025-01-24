@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Mapping
+from typing import Any, Mapping, Optional
 
 try:
     import psycopg2
@@ -15,7 +15,12 @@ except ImportError as exc:
 
 from quixstreams.exceptions import QuixException
 from quixstreams.models import HeadersTuples
-from quixstreams.sinks import BatchingSink, ClientConnectCallback, SinkBatch
+from quixstreams.sinks import (
+    BatchingSink,
+    ClientConnectFailureCallback,
+    ClientConnectSuccessCallback,
+    SinkBatch,
+)
 
 __all__ = ("PostgreSQLSink", "PostgreSQLSinkException")
 
@@ -57,7 +62,8 @@ class PostgreSQLSink(BatchingSink):
         schema_auto_update: bool = True,
         connection_timeout_seconds: int = 30,
         statement_timeout_seconds: int = 30,
-        client_connect_cb: ClientConnectCallback = None,
+        client_connect_success_cb: Optional[ClientConnectSuccessCallback] = None,
+        client_connect_failure_cb: Optional[ClientConnectFailureCallback] = None,
         **kwargs,
     ):
         """
@@ -73,14 +79,18 @@ class PostgreSQLSink(BatchingSink):
         :param connection_timeout_seconds: Timeout for connection.
         :param statement_timeout_seconds: Timeout for DDL operations such as table
             creation or schema updates.
-        :param client_connect_cb: An optional callback made after attempting client
-            authentication, primarily for additional logging.
-            It should accept a single argument, which will be populated with an
-            Exception if connecting failed (else None).
-            If used, errors must be resolved (or propagated) with the callback.
+        :param client_connect_success_cb: An optional callback made after successful
+            client authentication, primarily for additional logging.
+        :param client_connect_failure_cb: An optional callback made after failed
+            client authentication (which should raise an Exception).
+            Callback should accept the raised Exception as an argument.
+            Callback must resolve (or propagate/re-raise) the Exception.
         :param kwargs: Additional parameters for `psycopg2.connect`.
         """
-        super().__init__(client_connect_cb=client_connect_cb)
+        super().__init__(
+            client_connect_success_cb=client_connect_success_cb,
+            client_connect_failure_cb=client_connect_failure_cb,
+        )
 
         self.table_name = table_name
         self.schema_auto_update = schema_auto_update

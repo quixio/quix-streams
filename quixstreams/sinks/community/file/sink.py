@@ -2,7 +2,8 @@ from typing import Optional, Union
 
 from quixstreams.sinks import (
     BatchingSink,
-    ClientConnectCallback,
+    ClientConnectFailureCallback,
+    ClientConnectSuccessCallback,
     SinkBackpressureError,
     SinkBatch,
 )
@@ -32,7 +33,8 @@ class FileSink(BatchingSink):
         directory: str = "",
         format: Union[FormatName, Format] = "json",
         destination: Optional[Destination] = None,
-        client_connect_cb: ClientConnectCallback = None,
+        client_connect_success_cb: Optional[ClientConnectSuccessCallback] = None,
+        client_connect_failure_cb: Optional[ClientConnectFailureCallback] = None,
     ) -> None:
         """Initialize the FileSink with the specified configuration.
 
@@ -42,17 +44,21 @@ class FileSink(BatchingSink):
             ("json", "parquet") or a Format instance.
         :param destination: Storage destination handler. Defaults to
             LocalDestination if not specified.
-        :param client_connect_cb: An optional callback made after attempting client
-            authentication, primarily for additional logging.
-            It should accept a single argument, which will be populated with an
-            Exception if connecting failed (else None).
-            If used, errors must be resolved (or propagated) with the callback.
+        :param client_connect_success_cb: An optional callback made after successful
+            client authentication, primarily for additional logging.
+        :param client_connect_failure_cb: An optional callback made after failed
+            client authentication (which should raise an Exception).
+            Callback should accept the raised Exception as an argument.
+            Callback must resolve (or propagate/re-raise) the Exception.
         """
         self._format = resolve_format(format)
         self._destination = destination or LocalDestination()
         self._destination.set_directory(directory)
         self._destination.set_extension(self._format)
-        super().__init__(client_connect_cb=client_connect_cb)
+        super().__init__(
+            client_connect_success_cb=client_connect_success_cb,
+            client_connect_failure_cb=client_connect_failure_cb,
+        )
 
     def setup_client(self) -> Destination:
         self._destination.connect()

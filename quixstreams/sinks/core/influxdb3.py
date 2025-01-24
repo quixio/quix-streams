@@ -16,7 +16,13 @@ except ImportError as exc:
         "run pip install quixstreams[influxdb3] to fix it"
     ) from exc
 
-from ..base import BatchingSink, ClientConnectCallback, SinkBackpressureError, SinkBatch
+from ..base import (
+    BatchingSink,
+    ClientConnectFailureCallback,
+    ClientConnectSuccessCallback,
+    SinkBackpressureError,
+    SinkBatch,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +66,8 @@ class InfluxDB3Sink(BatchingSink):
         enable_gzip: bool = True,
         request_timeout_ms: int = 10_000,
         debug: bool = False,
-        client_connect_cb: ClientConnectCallback = None,
+        client_connect_success_cb: Optional[ClientConnectSuccessCallback] = None,
+        client_connect_failure_cb: Optional[ClientConnectFailureCallback] = None,
     ):
         """
         A connector to sink processed data to InfluxDB v3.
@@ -123,14 +130,19 @@ class InfluxDB3Sink(BatchingSink):
             Default - `10000`.
         :param debug: if True, print debug logs from InfluxDB client.
             Default - `False`.
-        :param client_connect_cb: An optional callback made after attempting client
-            authentication, primarily for additional logging.
-            It should accept a single argument, which will be populated with an
-            Exception if connecting failed (else None).
-            If used, errors must be resolved (or propagated) with the callback.
+        :param client_connect_success_cb: An optional callback made after successful
+            client authentication, primarily for additional logging.
+        :param client_connect_failure_cb: An optional callback made after failed
+            client authentication (which should raise an Exception).
+            Callback should accept the raised Exception as an argument.
+            Callback must resolve (or propagate/re-raise) the Exception.
         """
 
-        super().__init__(client_connect_cb=client_connect_cb)
+        super().__init__(
+            client_connect_success_cb=client_connect_success_cb,
+            client_connect_failure_cb=client_connect_failure_cb,
+        )
+
         if time_precision not in (time_args := typing.get_args(TimePrecision)):
             raise ValueError(
                 f"Invalid 'time_precision' argument {time_precision}; "
