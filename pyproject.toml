@@ -39,6 +39,8 @@ all = [
     "boto3-stubs>=1.35.65,<2.0",
     "redis[hiredis]>=5.2.0,<6",
     "azure-storage-blob>=12.24.0,<12.25",
+    "pandas>=2,<3",
+    "polars>=1,<2",
 ]
 
 avro = ["fastavro>=1.8,<2.0"]
@@ -57,6 +59,8 @@ kinesis = ["quixstreams[aws]"]
 s3 = ["quixstreams[aws]"]
 redis = ["redis[hiredis]>=5.2.0,<6"]
 azure-file = ["quixstreams[azure]"]
+pandas = ["pandas>=2,<3"]
+polars = ["polars>=1,<2"]
 
 [tool.setuptools.packages.find]
 include = ["quixstreams*"]
