@@ -1,3 +1,2 @@
 pre-commit>=3.4,<4.1
-textual-dev
 -r requirements-mypy.txt
