@@ -125,7 +125,7 @@ class Neo4jSink(BatchingSink):
         # Records must be a list of dicts to work in the batch Neo4j query.
         records = [
             {
-                "__key": str(r.key),
+                "__key": r.key.decode() if isinstance(r.key, bytes) else r.key,
                 "__value": r.value,
                 "__header": r.headers or {},
                 "__timestamp": r.timestamp,
