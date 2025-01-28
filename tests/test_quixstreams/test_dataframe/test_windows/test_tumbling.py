@@ -409,5 +409,11 @@ class TestCountTumblingWindow:
             updated, expired = window.process_window(
                 value=3, state=state, timestamp_ms=101
             )
+
         assert not updated
         assert expired == [{"start": 100, "end": 101, "value": [1, 2, 3]}]
+
+        with store.start_partition_transaction(0) as tx:
+            state = tx.as_state(prefix=b"key")
+            remaining_items = state.get_from_collection(start=0, end=1000)
+            assert remaining_items == []

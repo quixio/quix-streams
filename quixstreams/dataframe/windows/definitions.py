@@ -383,3 +383,61 @@ class CountTumblingWindowDefinition(CountWindowDefinition):
             else "tumbling_count_window"
         )
         return f"{prefix}_{func_name}"
+
+
+class CountHoppingWindowDefinition(CountWindowDefinition):
+    def __init__(
+        self,
+        count: int,
+        dataframe: "StreamingDataFrame",
+        step: int = 1,
+        name: Optional[str] = None,
+    ):
+        super().__init__(count=count, dataframe=dataframe, name=name)
+
+        if step < 1:
+            raise ValueError("Window step must be greater or equal to 1")
+
+        self._step = step
+
+    def _create_window(
+        self,
+        func_name: str,
+        aggregate_func: WindowAggregateFunc,
+        aggregate_default: Any,
+        aggregate_collection: bool = False,
+        merge_func: Optional[WindowMergeFunc] = None,
+    ) -> Window:
+        return FixedCountWindow(
+            name=self._get_name(func_name=func_name),
+            count=self._count,
+            aggregate_func=aggregate_func,
+            aggregate_default=aggregate_default,
+            aggregate_collection=aggregate_collection,
+            merge_func=merge_func,
+            dataframe=self._dataframe,
+            step=self._step,
+        )
+
+    def _get_name(self, func_name: str) -> str:
+        prefix = (
+            f"{self._name}_hopping_count_window"
+            if self._name
+            else "hopping_count_window"
+        )
+        return f"{prefix}_{func_name}"
+
+
+class CountSlidingWindowDefinition(CountHoppingWindowDefinition):
+    def __init__(
+        self, count: int, dataframe: "StreamingDataFrame", name: Optional[str] = None
+    ):
+        super().__init__(count=count, dataframe=dataframe, step=1, name=name)
+
+    def _get_name(self, func_name: str) -> str:
+        prefix = (
+            f"{self._name}_sliding_count_window"
+            if self._name
+            else "sliding_count_window"
+        )
+        return f"{prefix}_{func_name}"

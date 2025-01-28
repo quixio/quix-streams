@@ -59,7 +59,7 @@ def test_expire_windows(transaction_state, delete):
 
     with transaction_state() as state:
         state.update_window(start_ms=20, end_ms=30, value=3, timestamp_ms=20)
-        max_start_time = state.get_latest_timestamp() - duration_ms
+        max_start_time = state.get_latest_id() - duration_ms
         expired = state.expire_windows(max_start_time=max_start_time, delete=delete)
         # "expire_windows" must update the expiration index so that the same
         # windows are not expired twice
@@ -90,13 +90,13 @@ def test_expire_windows_with_collect(transaction_state, end_inclusive):
         state.update_window(start_ms=0, end_ms=10, value=None, timestamp_ms=2)
         state.update_window(start_ms=10, end_ms=20, value=[777, None], timestamp_ms=10)
 
-        state.add_to_collection(value="a", timestamp_ms=0)
-        state.add_to_collection(value="b", timestamp_ms=10)
-        state.add_to_collection(value="c", timestamp_ms=20)
+        state.add_to_collection(value="a", id=0)
+        state.add_to_collection(value="b", id=10)
+        state.add_to_collection(value="c", id=20)
 
     with transaction_state() as state:
         state.update_window(start_ms=20, end_ms=30, value=None, timestamp_ms=20)
-        max_start_time = state.get_latest_timestamp() - duration_ms
+        max_start_time = state.get_latest_id() - duration_ms
         expired = state.expire_windows(
             max_start_time=max_start_time,
             collect=True,
@@ -122,14 +122,14 @@ def test_same_keys_in_db_and_update_cache(transaction_state):
         state.update_window(start_ms=0, end_ms=10, value=3, timestamp_ms=8)
 
         state.update_window(start_ms=10, end_ms=20, value=2, timestamp_ms=10)
-        max_start_time = state.get_latest_timestamp() - duration_ms
+        max_start_time = state.get_latest_id() - duration_ms
         expired = state.expire_windows(max_start_time=max_start_time)
 
         # Value from the cache takes precedence over the value in the db
         assert expired == [((0, 10), 3)]
 
 
-def test_get_latest_timestamp(windowed_rocksdb_store_factory):
+def test_get_latest_id(windowed_rocksdb_store_factory):
     store = windowed_rocksdb_store_factory()
     partition = store.assign_partition(0)
     timestamp = 123
@@ -141,7 +141,7 @@ def test_get_latest_timestamp(windowed_rocksdb_store_factory):
 
     partition = store.assign_partition(0)
     with partition.begin() as tx:
-        assert tx.get_latest_timestamp(prefix=prefix) == timestamp
+        assert tx.get_latest_id(prefix=prefix) == timestamp
 
 
 @pytest.mark.parametrize(
@@ -332,8 +332,8 @@ def test_delete_windows(transaction_state):
 def test_delete_windows_with_values(transaction_state, get_value):
     with transaction_state() as state:
         state.update_window(start_ms=2, end_ms=3, value=1, timestamp_ms=2)
-        state.add_to_collection(value="a", timestamp_ms=1)
-        state.add_to_collection(value="b", timestamp_ms=2)
+        state.add_to_collection(value="a", id=1)
+        state.add_to_collection(value="b", id=2)
 
     with transaction_state() as state:
         assert state.get_window(start_ms=2, end_ms=3)
@@ -351,9 +351,9 @@ def test_delete_windows_with_values(transaction_state, get_value):
 @pytest.mark.parametrize("value", [1, "string", None, ["list"], {"dict": "dict"}])
 def test_add_to_collection(transaction_state, get_value, value):
     with transaction_state() as state:
-        state.add_to_collection(value=value, timestamp_ms=11)
-        state.add_to_collection(value=value, timestamp_ms=22)
-        state.add_to_collection(value=value, timestamp_ms=33)
+        state.add_to_collection(value=value, id=11)
+        state.add_to_collection(value=value, id=22)
+        state.add_to_collection(value=value, id=33)
 
     assert get_value(timestamp_ms=11, counter=0) == value
     assert get_value(timestamp_ms=22, counter=1) == value

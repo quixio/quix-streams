@@ -64,7 +64,7 @@ class FixedTimeWindow(Window):
             step_ms=self._step_ms,
         )
 
-        state_ts = state.get_latest_timestamp() or 0
+        state_ts = state.get_latest_id() or 0
         latest_timestamp = max(timestamp_ms, state_ts)
         max_expired_window_end = latest_timestamp - grace_ms
         max_expired_window_start = max_expired_window_end - duration_ms
@@ -93,7 +93,7 @@ class FixedTimeWindow(Window):
             )
 
         if collect:
-            state.add_to_collection(value=value, timestamp_ms=timestamp_ms)
+            state.add_to_collection(value=value, id=timestamp_ms)
 
         expired_windows: list[WindowResult] = []
         for (start, end), aggregated in state.expire_windows(

@@ -25,9 +25,12 @@ class CountWindowData(TypedDict):
     value: Any
 
 
+class CountWindowsData(TypedDict):
+    windows: list[CountWindowData]
+
+
 class FixedCountWindow(Window):
     STATE_KEY = "metadata"
-    VALUE_KEY = "value"
 
     def __init__(
         self,
@@ -38,6 +41,7 @@ class FixedCountWindow(Window):
         aggregate_collection: bool,
         dataframe: "StreamingDataFrame",
         merge_func: Optional[WindowMergeFunc] = None,
+        step: Optional[int] = None,
     ):
         super().__init__(name, dataframe)
 
@@ -46,6 +50,7 @@ class FixedCountWindow(Window):
         self._aggregate_default = [] if aggregate_collection else aggregate_default
         self._aggregate_collection = aggregate_collection
         self._merge_func = merge_func or default_merge_func
+        self._step = step
 
     def process_window(
         self,
@@ -53,81 +58,72 @@ class FixedCountWindow(Window):
         timestamp_ms: int,
         state: WindowedState,
     ) -> tuple[Iterable[WindowResult], Iterable[WindowResult]]:
+        data = state.get(key=self.STATE_KEY)
+        if data is None:
+            data = CountWindowsData(windows=[])
+
+        msg_id = None
         if self._aggregate_collection:
-            return self._process_window_collection(value, timestamp_ms, state)
-        return self._process_window(value, timestamp_ms, state)
+            msg_id = state.add_to_collection(id=None, value=value)
 
-    def _process_window(
-        self,
-        value: Any,
-        timestamp_ms: int,
-        state: WindowedState,
-    ) -> tuple[Iterable[WindowResult], Iterable[WindowResult]]:
-        data = state.get(key=self.STATE_KEY)
-        if data is None:
-            data = CountWindowData(
-                count=0,
-                start=timestamp_ms,
-                end=timestamp_ms,
-                value=self._aggregate_default,
+        if len(data["windows"]) == 0 or (
+            self._step is not None and data["windows"][0]["count"] % self._step == 0
+        ):
+            data["windows"].append(
+                CountWindowData(
+                    count=0,
+                    start=timestamp_ms,
+                    end=timestamp_ms,
+                    value=msg_id
+                    if self._aggregate_collection
+                    else self._aggregate_default,
+                )
             )
 
-        data["count"] += 1
-        if timestamp_ms < data["start"]:
-            data["start"] = timestamp_ms
-        elif timestamp_ms > data["end"]:
-            data["end"] = timestamp_ms
+        updated_windows, expired_windows, to_remove = [], [], []
+        for index, window in enumerate(data["windows"]):
+            window["count"] += 1
+            if timestamp_ms < window["start"]:
+                window["start"] = timestamp_ms
+            elif timestamp_ms > window["end"]:
+                window["end"] = timestamp_ms
 
-        data["value"] = self._aggregate_func(data["value"], value)
-        updated_windows = [
-            WindowResult(
-                start=data["start"],
-                end=data["end"],
-                value=self._merge_func(data["value"]),
-            )
-        ]
+            if self._aggregate_collection:
+                if window["count"] >= self._max_count:
+                    values = state.get_from_collection(
+                        start=window["value"],
+                        end=window["value"] + self._max_count,
+                    )
 
-        if data["count"] < self._max_count:
-            state.set(key=self.STATE_KEY, value=data)
-            return updated_windows, []
+                    expired_windows.append(
+                        WindowResult(
+                            start=window["start"],
+                            end=window["end"],
+                            value=self._merge_func(values),
+                        )
+                    )
+                    to_remove.append(index)
+                    state.delete_from_collection(
+                        end=window["value"] + self._step
+                        if self._step is not None
+                        else self._max_count,
+                    )
+            else:
+                window["value"] = self._aggregate_func(window["value"], value)
 
-        # window is full, closing ...
-        state.delete(key=self.STATE_KEY)
-        return updated_windows, updated_windows
+                result = WindowResult(
+                    start=window["start"],
+                    end=window["end"],
+                    value=self._merge_func(window["value"]),
+                )
+                updated_windows.append(result)
 
-    def _process_window_collection(
-        self,
-        value: Any,
-        timestamp_ms: int,
-        state: WindowedState,
-    ) -> tuple[Iterable[WindowResult], Iterable[WindowResult]]:
-        data = state.get(key=self.STATE_KEY)
-        if data is None:
-            data = CountWindowData(
-                count=0, start=timestamp_ms, end=timestamp_ms, value=None
-            )
+                if window["count"] >= self._max_count:
+                    expired_windows.append(result)
+                    to_remove.append(index)
 
-        data["count"] += 1
-        if timestamp_ms < data["start"]:
-            data["start"] = timestamp_ms
-        elif timestamp_ms > data["end"]:
-            data["end"] = timestamp_ms
+        for i in to_remove:
+            del data["windows"][i]
 
-        if data["count"] < self._max_count:
-            state.add_to_collection(data["count"], value)
-            state.set(key=self.STATE_KEY, value=data)
-            return [], []
-
-        # window is full, closing ...
-        state.delete(key=self.STATE_KEY)
-
-        values = state.get_from_collection(start=1, end=10)
-        values.append(value)
-
-        result = WindowResult(
-            start=data["start"],
-            end=data["end"],
-            value=self._merge_func(values),
-        )
-        state.delete_from_collection(start=1, end=10)
-        return [], [result]
+        state.set(key=self.STATE_KEY, value=data)
+        return updated_windows, expired_windows

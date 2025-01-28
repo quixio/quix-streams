@@ -78,7 +78,7 @@ class WindowedState(Protocol):
         """
         ...
 
-    def add_to_collection(self, value: Any, timestamp_ms: int) -> None:
+    def add_to_collection(self, value: Any, id: Optional[int]) -> int:
         """
         Collect a value for collection-type window aggregations.
 
@@ -87,7 +87,9 @@ class WindowedState(Protocol):
         during window expiration.
 
         :param value: value to be collected
-        :param timestamp_ms: current message timestamp in milliseconds
+        :param id: current message ID, for example timestamp in milliseconds, does not have to be unique.
+
+        :return: the message ID, auto-generated if not provided
         """
         ...
 
@@ -95,34 +97,34 @@ class WindowedState(Protocol):
         """
         Return all values from a collection-type window aggregation.
 
-        :param start: starting timestamp of values to fetch (inclusive)
-        :param end: end timestamp of values to fetch (exclusive)
+        :param start: starting id of values to fetch (inclusive)
+        :param end: end id of values to fetch (exclusive)
         """
         ...
 
-    def delete_from_collection(self, end: int, *, start: Optional[int] = None) -> None:
+    def delete_from_collection(self, end: int) -> None:
         """
-        Delete collected values with timestamps less than max_timestamp.
+        Delete collected values with id less than end.
 
         This method maintains a deletion index to track progress and avoid
         re-scanning previously deleted values. It:
-        1. Retrieves the last deleted timestamp from the cache
-        2. Scans values from last deleted timestamp up to max_timestamp
-        3. Updates the deletion index with the latest deleted timestamp
+        1. Retrieves the last deleted id from the cache
+        2. Scans values from last deleted id up to end
+        3. Updates the deletion index with the latest deleted id
 
-        :param max_timestamp: Delete values with timestamps less than this value
-        :param prefix: Key prefix for filtering values to delete
+        :param end: Delete values with id less than this value
         """
         ...
 
-    def get_latest_timestamp(self) -> Optional[int]:
+    def get_latest_id(self) -> Optional[int]:
         """
-        Get the latest observed timestamp for the current state partition.
+        Get the latest observed message ID for the current state prefix
+        (same as message key).
 
-        Use this timestamp to determine if the arriving event is late and should be
+        Use this ID to determine if the arriving event is late and should be
         discarded from the processing.
 
-        :return: latest observed event timestamp in milliseconds
+        :return: latest observed event ID
         """
         ...
 
@@ -260,7 +262,7 @@ class WindowedPartitionTransaction(Protocol):
         """
         ...
 
-    def add_to_collection(self, value: Any, timestamp_ms: int) -> None:
+    def add_to_collection(self, value: Any, id: Optional[int]) -> int:
         """
         Collect a value for collection-type window aggregations.
 
@@ -269,7 +271,9 @@ class WindowedPartitionTransaction(Protocol):
         during window expiration.
 
         :param value: value to be collected
-        :param timestamp_ms: current message timestamp in milliseconds
+        :param id: current message ID (for example, timestamp in milliseconds)
+
+        :return: the message ID, auto-generated if not provided
         """
         ...
 
@@ -277,35 +281,34 @@ class WindowedPartitionTransaction(Protocol):
         """
         Return all values from a collection-type window aggregation.
 
-        :param start: starting timestamp of values to fetch (inclusive)
-        :param end: end timestamp of values to fetch (exclusive)
+        :param start: starting id of values to fetch (inclusive)
+        :param end: end id of values to fetch (exclusive)
         """
         ...
 
-    def delete_from_collection(self, end: int, *, start: Optional[int] = None) -> None:
+    def delete_from_collection(self, end: int) -> None:
         """
-        Delete collected values with timestamps less than max_timestamp.
+        Delete collected values with id less than end.
 
         This method maintains a deletion index to track progress and avoid
         re-scanning previously deleted values. It:
-        1. Retrieves the last deleted timestamp from the cache
-        2. Scans values from last deleted timestamp up to max_timestamp
-        3. Updates the deletion index with the latest deleted timestamp
+        1. Retrieves the last deleted id from the cache
+        2. Scans values from last deleted id up to end
+        3. Updates the deletion index with the latest deleted id
 
-        :param max_timestamp: Delete values with timestamps less than this value
-        :param prefix: Key prefix for filtering values to delete
+        :param end: Delete values with id less than this value
         """
         ...
 
-    def get_latest_timestamp(self, prefix: bytes) -> int:
+    def get_latest_id(self, prefix: bytes) -> int:
         """
-        Get the latest observed timestamp for the current state prefix
+        Get the latest observed message ID for the current state prefix
         (same as message key).
 
-        Use this timestamp to determine if the arriving event is late and should be
+        Use this ID to determine if the arriving event is late and should be
         discarded from the processing.
 
-        :return: latest observed event timestamp in milliseconds
+        :return: latest observed event ID
         """
         ...
 
