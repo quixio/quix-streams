@@ -55,6 +55,7 @@ from .registry import DataframeRegistry
 from .series import StreamingSeries
 from .utils import ensure_milliseconds
 from .windows import (
+    CountSlidingWindowDefinition,
     CountTumblingWindowDefinition,
     FixedTimeHoppingWindowDefinition,
     FixedTimeSlidingWindowDefinition,
@@ -1142,6 +1143,16 @@ class StreamingDataFrame(BaseStreaming):
 
         return FixedTimeSlidingWindowDefinition(
             duration_ms=duration_ms, grace_ms=grace_ms, dataframe=self, name=name
+        )
+
+    def sliding_count_window(
+        self, count: int, step: int = 1, name: Optional[str] = None
+    ) -> CountSlidingWindowDefinition:
+        return CountSlidingWindowDefinition(
+            count=count,
+            dataframe=self,
+            name=name,
+            step=step,
         )
 
     def drop(

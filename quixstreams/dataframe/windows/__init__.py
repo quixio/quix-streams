@@ -1,5 +1,6 @@
 from .base import WindowResult
 from .definitions import (
+    CountSlidingWindowDefinition,
     CountTumblingWindowDefinition,
     FixedTimeHoppingWindowDefinition,
     FixedTimeSlidingWindowDefinition,
@@ -11,5 +12,6 @@ __all__ = [
     "FixedTimeSlidingWindowDefinition",
     "FixedTimeTumblingWindowDefinition",
     "CountTumblingWindowDefinition",
+    "CountSlidingWindowDefinition",
     "WindowResult",
 ]
