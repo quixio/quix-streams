@@ -47,7 +47,7 @@ class FixedCountWindow(Window):
 
         self._max_count = count
         self._aggregate_func = aggregate_func
-        self._aggregate_default = [] if aggregate_collection else aggregate_default
+        self._aggregate_default = aggregate_default
         self._aggregate_collection = aggregate_collection
         self._merge_func = merge_func or default_merge_func
         self._step = step
