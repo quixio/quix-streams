@@ -724,22 +724,22 @@ sdf = app.dataframe(...)
 
 
 def on_late(
-    value: Any,
-    key: Any,
-    timestamp_ms: int,
-    late_by_ms: int,
-    start: int,
-    end: int,
-    store_name: str,
-    topic: str,
-    partition: int,
-    offset: int,
+    value: Any,         # Record value
+    key: Any,           # Record key
+    timestamp_ms: int,  # Record timestamp
+    late_by_ms: int,    # How late the record is in milliseconds
+    start: int,         # Start of the target window
+    end: int,           # End of the target window
+    name: str,          # Name of the window state store
+    topic: str,         # Topic name
+    partition: int,     # Topic partition
+    offset: int,        # Message offset
 ) -> bool:
     """
     Define a callback to react on late records coming into windowed aggregations.
     Return `False` to suppress the default logging behavior.
     """
-    print(f"Late message arrived to the window {(start, end)}")
+    print(f"Late message is detected at the window {(start, end)}")
     return False
 
 # Define a 1-hour tumbling window and provide the "on_late" callback to it
