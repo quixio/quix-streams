@@ -3,6 +3,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from quixstreams.app import Application
 from quixstreams.dataframe.dataframe import StreamingDataFrame
 from quixstreams.dataframe.registry import DataframeRegistry
 from quixstreams.models.topics import Topic, TopicManager
@@ -48,6 +49,7 @@ def dataframe_factory(topic_manager_topic_factory, topic_manager_factory):
             topic_manager=topic_manager,
             registry=registry,
             processing_context=processing_ctx,
+            app=MagicMock(spec_set=Application),
         )
         registry.register_root(sdf)
         return sdf

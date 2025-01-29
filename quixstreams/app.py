@@ -76,9 +76,12 @@ class TopicManagerFactory(Protocol):
 
 
 class ExitManager:
-    def __init__(self, number: Optional[int] = None, timeout: Optional[int] = None):
+    def __init__(self):
+        self.should_exit = lambda: False
+
+    def configure(self, number: Optional[int] = None, timeout: Optional[int] = None):
         """
-        Initialize the exit manager with either a message count limit, timeout, or both.
+        Configure the exit manager with either a message count limit, timeout, or both.
 
         The `should_exit` function will be called for every message processed, so it needs
         to be highly optimized. To ensure optimal performance, the logic for determining
@@ -346,16 +349,21 @@ class Application:
 
         self._on_message_processed = on_message_processed
         self._on_processing_error = on_processing_error or default_on_processing_error
+        self._on_consumer_error = on_consumer_error
+        self._on_producer_error = on_producer_error
+        self._topic_manager = topic_manager or self._get_topic_manager()
+        self._dataframe_registry = DataframeRegistry()
+        self.exit_manager = ExitManager()
+        self.reset()
 
+    def reset(self):
         self._consumer = self._get_rowconsumer(
-            on_error=on_consumer_error,
+            on_error=self._on_consumer_error,
             extra_config_overrides=consumer_extra_config_overrides,
         )
-        self._producer = self._get_rowproducer(on_error=on_producer_error)
+        self._producer = self._get_rowproducer(on_error=self._on_producer_error)
         self._running = False
         self._failed = False
-
-        self._topic_manager = topic_manager or self._get_topic_manager()
 
         producer = None
         recovery_manager = None
@@ -387,8 +395,6 @@ class Application:
             sink_manager=self._sink_manager,
             pausing_manager=self._pausing_manager,
         )
-        self._dataframe_registry = DataframeRegistry()
-        self._exit_manager = ExitManager()
 
     @property
     def config(self) -> "ApplicationConfig":
@@ -562,6 +568,7 @@ class Application:
             topic_manager=self._topic_manager,
             processing_context=self._processing_context,
             registry=self._dataframe_registry,
+            app=self,
         )
         self._dataframe_registry.register_root(sdf)
 
@@ -593,7 +600,7 @@ class Application:
     def running(self):
         if not self._running:
             return False
-        elif self._exit_manager.should_exit():
+        elif self.exit_manager.should_exit():
             self.stop()
             return False
         return True
@@ -764,12 +771,7 @@ class Application:
         )
         return topic
 
-    def run(
-        self,
-        dataframe: Optional[StreamingDataFrame] = None,
-        number: Optional[int] = None,
-        timeout: Optional[int] = None,
-    ):
+    def run(self, dataframe: Optional[StreamingDataFrame] = None):
         """
         Start processing data from Kafka using provided `StreamingDataFrame`
 
@@ -800,7 +802,6 @@ class Application:
                 "the argument should be removed.",
                 FutureWarning,
             )
-        self._exit_manager = ExitManager(number, timeout)
         self._run()
 
     def _exception_handler(self, exc_type, exc_val, exc_tb):
