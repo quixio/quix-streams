@@ -148,8 +148,8 @@ class FixedTimeWindow:
         to_log = True
         # Trigger the "on_late" callback if provided.
         # Log the lateness warning if the callback returns True
-        if on_late := self._on_late:
-            to_log = on_late(
+        if self._on_late:
+            to_log = self._on_late(
                 value,
                 key,
                 timestamp_ms,
