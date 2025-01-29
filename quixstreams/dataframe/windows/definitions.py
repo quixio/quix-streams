@@ -6,7 +6,6 @@ from .base import (
     WindowAggregateFunc,
     WindowMergeFunc,
     WindowOnLateCallback,
-    default_on_late_callback,
 )
 from .sliding import SlidingWindow
 from .time_based import FixedTimeWindow
@@ -47,7 +46,7 @@ class FixedTimeWindowDefinition(abc.ABC):
         self._dataframe = dataframe
         self._name = name
         self._step_ms = step_ms
-        self._on_late = on_late or default_on_late_callback
+        self._on_late = on_late
 
     @abstractmethod
     def _create_window(
@@ -322,9 +321,14 @@ class SlidingWindowDefinition(FixedTimeWindowDefinition):
         grace_ms: int,
         dataframe: "StreamingDataFrame",
         name: Optional[str] = None,
+        on_late: Optional[WindowOnLateCallback] = None,
     ):
         super().__init__(
-            duration_ms=duration_ms, grace_ms=grace_ms, dataframe=dataframe, name=name
+            duration_ms=duration_ms,
+            grace_ms=grace_ms,
+            dataframe=dataframe,
+            name=name,
+            on_late=on_late,
         )
 
     def _get_name(self, func_name: str) -> str:

@@ -10,6 +10,7 @@ class SlidingWindow(FixedTimeWindow):
     def process_window(
         self,
         value: Any,
+        key: Any,
         timestamp_ms: int,
         state: WindowedState,
     ) -> tuple[Iterable[WindowResult], Iterable[WindowResult]]:
@@ -74,8 +75,11 @@ class SlidingWindow(FixedTimeWindow):
         left_end = timestamp_ms
 
         if timestamp_ms <= max_expired_window_start:
-            self._log_expired_window(
-                window=[left_start, left_end],
+            self._on_expired_window(
+                value=value,
+                key=key,
+                start=left_start,
+                end=left_end,
                 timestamp_ms=timestamp_ms,
                 late_by_ms=max_expired_window_end + 1 - timestamp_ms,
             )
@@ -132,8 +136,11 @@ class SlidingWindow(FixedTimeWindow):
                     if end == max_timestamp:  # Emit only left windows
                         updated_windows.append(window)
                 else:
-                    self._log_expired_window(
-                        window=[start, end],
+                    self._on_expired_window(
+                        value=value,
+                        key=key,
+                        start=start,
+                        end=end,
                         timestamp_ms=timestamp_ms,
                         late_by_ms=max_expired_window_end + 1 - timestamp_ms,
                     )
@@ -166,8 +173,11 @@ class SlidingWindow(FixedTimeWindow):
                         )
                     )
                 else:
-                    self._log_expired_window(
-                        window=[start, end],
+                    self._on_expired_window(
+                        value=value,
+                        key=key,
+                        start=start,
+                        end=end,
                         timestamp_ms=timestamp_ms,
                         late_by_ms=max_expired_window_end + 1 - timestamp_ms,
                     )

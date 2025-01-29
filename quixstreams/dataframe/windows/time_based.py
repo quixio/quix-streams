@@ -23,7 +23,6 @@ from .base import (
     WindowMergeFunc,
     WindowOnLateCallback,
     WindowResult,
-    default_on_late_callback,
     get_window_ranges,
 )
 
@@ -51,9 +50,9 @@ class FixedTimeWindow:
         aggregate_func: WindowAggregateFunc,
         aggregate_default: Any,
         aggregate_collection: bool = False,
-        on_late: WindowOnLateCallback,
         merge_func: Optional[WindowMergeFunc] = None,
         step_ms: Optional[int] = None,
+        on_late: Optional[WindowOnLateCallback] = None,
     ):
         if not name:
             raise ValueError("Window name must not be empty")
@@ -67,7 +66,7 @@ class FixedTimeWindow:
         self._merge_func = merge_func or _default_merge_func
         self._dataframe = dataframe
         self._step_ms = step_ms
-        self._on_late = on_late or default_on_late_callback
+        self._on_late = on_late
 
     @property
     def name(self) -> str:
@@ -76,6 +75,7 @@ class FixedTimeWindow:
     def process_window(
         self,
         value: Any,
+        key: Any,
         timestamp_ms: int,
         state: WindowedState,
     ) -> tuple[Iterable[WindowResult], Iterable[WindowResult]]:
@@ -95,29 +95,17 @@ class FixedTimeWindow:
         max_expired_window_end = latest_timestamp - grace_ms
         max_expired_window_start = max_expired_window_end - duration_ms
         updated_windows: list[WindowResult] = []
-        on_late = self._on_late
         for start, end in ranges:
             if start <= max_expired_window_start:
-                window = [start, end]
                 late_by_ms = max_expired_window_end - timestamp_ms
-                ctx = message_context()
-                to_log = on_late(
-                    value,
-                    timestamp_ms,
-                    late_by_ms,
-                    start,
-                    end,
-                    self._name,
-                    ctx.topic,
-                    ctx.partition,
-                    ctx.offset,
+                self._on_expired_window(
+                    value=value,
+                    key=key,
+                    start=start,
+                    end=end,
+                    timestamp_ms=timestamp_ms,
+                    late_by_ms=late_by_ms,
                 )
-                if to_log:
-                    self._log_expired_window(
-                        window=window,
-                        timestamp_ms=timestamp_ms,
-                        late_by_ms=late_by_ms,
-                    )
                 continue
 
             if collect:
@@ -147,16 +135,42 @@ class FixedTimeWindow:
             )
         return updated_windows, expired_windows
 
-    def _log_expired_window(self, window, timestamp_ms, late_by_ms) -> None:
+    def _on_expired_window(
+        self,
+        value: Any,
+        key: Any,
+        start: int,
+        end: int,
+        timestamp_ms: int,
+        late_by_ms: int,
+    ) -> None:
         ctx = message_context()
-        logger.warning(
-            "Skipping window processing for expired window "
-            f"timestamp_ms={timestamp_ms} "
-            f"window={window} "
-            f"late_by_ms={late_by_ms} "
-            f"partition={ctx.topic}[{ctx.partition}] "
-            f"offset={ctx.offset}"
-        )
+        to_log = True
+        # Trigger the "on_late" callback if provided.
+        # Log the lateness warning if the callback returns True
+        if on_late := self._on_late:
+            to_log = on_late(
+                value,
+                key,
+                timestamp_ms,
+                late_by_ms,
+                start,
+                end,
+                self._name,
+                ctx.topic,
+                ctx.partition,
+                ctx.offset,
+            )
+        if to_log:
+            logger.warning(
+                "Skipping window processing for the expired window "
+                f"timestamp_ms={timestamp_ms} "
+                f"window={(start, end)} "
+                f"late_by_ms={late_by_ms} "
+                f"store_name={self._name} "
+                f"partition={ctx.topic}[{ctx.partition}] "
+                f"offset={ctx.offset}"
+            )
 
     def final(self) -> "StreamingDataFrame":
         """
@@ -186,7 +200,7 @@ class FixedTimeWindow:
             value: Any, key: Any, timestamp_ms: int, _headers: Any, state: WindowedState
         ) -> List[Tuple[WindowResult, Any, int, Any]]:
             _, expired_windows = self.process_window(
-                value=value, timestamp_ms=timestamp_ms, state=state
+                value=value, key=key, timestamp_ms=timestamp_ms, state=state
             )
             # Use window start timestamp as a new record timestamp
             return [(window, key, window["start"], None) for window in expired_windows]
@@ -226,7 +240,7 @@ class FixedTimeWindow:
             value: Any, key: Any, timestamp_ms: int, _headers: Any, state: WindowedState
         ) -> List[Tuple[WindowResult, Any, int, Any]]:
             updated_windows, _ = self.process_window(
-                value=value, timestamp_ms=timestamp_ms, state=state
+                value=value, key=key, timestamp_ms=timestamp_ms, state=state
             )
             return [(window, key, window["start"], None) for window in updated_windows]
 

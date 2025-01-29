@@ -903,6 +903,12 @@ class StreamingDataFrame:
         :param name: The unique identifier for the window. If not provided, it will be
             automatically generated based on the window's properties.
 
+        :param on_late: an optional callback to react on late records in windows and
+            to configure the logging of such events.
+            If the callback returns `True`, the message about a late record will be logged
+            (default behavior).
+            Otherwise, no message will be logged.
+
         :return: `TumblingWindowDefinition` instance representing the tumbling window
             configuration.
             This object can be further configured with aggregation functions
@@ -995,6 +1001,12 @@ class StreamingDataFrame:
         :param name: The unique identifier for the window. If not provided, it will be
             automatically generated based on the window's properties.
 
+        :param on_late: an optional callback to react on late records in windows and
+            to configure the logging of such events.
+            If the callback returns `True`, the message about a late record will be logged
+            (default behavior).
+            Otherwise, no message will be logged.
+
         :return: `HoppingWindowDefinition` instance representing the hopping
             window configuration.
             This object can be further configured with aggregation functions
@@ -1019,6 +1031,7 @@ class StreamingDataFrame:
         duration_ms: Union[int, timedelta],
         grace_ms: Union[int, timedelta] = 0,
         name: Optional[str] = None,
+        on_late: Optional[WindowOnLateCallback] = None,
     ) -> SlidingWindowDefinition:
         """
         Create a sliding window transformation on this StreamingDataFrame.
@@ -1082,6 +1095,12 @@ class StreamingDataFrame:
         :param name: The unique identifier for the window. If not provided, it will be
             automatically generated based on the window's properties.
 
+        :param on_late: an optional callback to react on late records in windows and
+            to configure the logging of such events.
+            If the callback returns `True`, the message about a late record will be logged
+            (default behavior).
+            Otherwise, no message will be logged.
+
         :return: `SlidingWindowDefinition` instance representing the sliding window
             configuration.
             This object can be further configured with aggregation functions
@@ -1092,7 +1111,11 @@ class StreamingDataFrame:
         grace_ms = ensure_milliseconds(grace_ms)
 
         return SlidingWindowDefinition(
-            duration_ms=duration_ms, grace_ms=grace_ms, dataframe=self, name=name
+            duration_ms=duration_ms,
+            grace_ms=grace_ms,
+            dataframe=self,
+            name=name,
+            on_late=on_late,
         )
 
     def drop(

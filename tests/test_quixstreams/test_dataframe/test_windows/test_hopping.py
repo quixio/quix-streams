@@ -55,10 +55,11 @@ class TestHoppingWindow:
         store = state_manager.get_store(topic="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
-            state = tx.as_state(prefix=b"key")
-            window.process_window(value=2, state=state, timestamp_ms=100)
+            key = b"key"
+            state = tx.as_state(prefix=key)
+            window.process_window(value=2, key=key, state=state, timestamp_ms=100)
             updated, expired = window.process_window(
-                value=1, state=state, timestamp_ms=100
+                value=1, key=key, state=state, timestamp_ms=100
             )
         assert len(updated) == 2
         assert updated[0]["value"] == 2
@@ -77,10 +78,11 @@ class TestHoppingWindow:
         store = state_manager.get_store(topic="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
-            state = tx.as_state(prefix=b"key")
-            window.process_window(value=2, state=state, timestamp_ms=100)
+            key = b"key"
+            state = tx.as_state(prefix=key)
+            window.process_window(value=2, key=key, state=state, timestamp_ms=100)
             updated, expired = window.process_window(
-                value=1, state=state, timestamp_ms=100
+                value=1, key=key, state=state, timestamp_ms=100
             )
         assert len(updated) == 2
         assert updated[0]["value"] == 3
@@ -99,10 +101,11 @@ class TestHoppingWindow:
         store = state_manager.get_store(topic="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
-            state = tx.as_state(prefix=b"key")
-            window.process_window(value=2, state=state, timestamp_ms=100)
+            key = b"key"
+            state = tx.as_state(prefix=key)
+            window.process_window(value=2, key=key, state=state, timestamp_ms=100)
             updated, expired = window.process_window(
-                value=1, state=state, timestamp_ms=100
+                value=1, key=key, state=state, timestamp_ms=100
             )
         assert len(updated) == 2
         assert updated[0]["value"] == 1.5
@@ -126,9 +129,10 @@ class TestHoppingWindow:
         store = state_manager.get_store(topic="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
-            state = tx.as_state(prefix=b"key")
+            key = b"key"
+            state = tx.as_state(prefix=key)
             updated, expired = window.process_window(
-                value=1, state=state, timestamp_ms=100
+                value=1, key=key, state=state, timestamp_ms=100
             )
         assert len(updated) == 2
         assert updated[0]["value"] == [1]
@@ -147,9 +151,10 @@ class TestHoppingWindow:
         store = state_manager.get_store(topic="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
-            state = tx.as_state(prefix=b"key")
+            key = b"key"
+            state = tx.as_state(prefix=key)
             updated, expired = window.process_window(
-                value=1, state=state, timestamp_ms=100
+                value=1, key=key, state=state, timestamp_ms=100
             )
         assert len(updated) == 2
         assert updated[0]["value"] == 1
@@ -168,9 +173,10 @@ class TestHoppingWindow:
         store = state_manager.get_store(topic="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
-            state = tx.as_state(prefix=b"key")
+            key = b"key"
+            state = tx.as_state(prefix=key)
             updated, expired = window.process_window(
-                value=1, state=state, timestamp_ms=100
+                value=1, key=key, state=state, timestamp_ms=100
             )
         assert len(updated) == 2
         assert updated[0]["value"] == 1
@@ -191,12 +197,13 @@ class TestHoppingWindow:
         store = state_manager.get_store(topic="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
-            state = tx.as_state(prefix=b"key")
-            window.process_window(value=1, state=state, timestamp_ms=100)
-            window.process_window(value=2, state=state, timestamp_ms=100)
-            window.process_window(value=3, state=state, timestamp_ms=101)
+            key = b"key"
+            state = tx.as_state(prefix=key)
+            window.process_window(value=1, key=key, state=state, timestamp_ms=100)
+            window.process_window(value=2, key=key, state=state, timestamp_ms=100)
+            window.process_window(value=3, key=key, state=state, timestamp_ms=101)
             updated, expired = window.process_window(
-                value=4, state=state, timestamp_ms=110
+                value=4, key=key, state=state, timestamp_ms=110
             )
 
         assert not updated
@@ -240,11 +247,12 @@ class TestHoppingWindow:
         window.register_store()
         store = state_manager.get_store(topic="test", store_name=window.name)
         store.assign_partition(0)
+        key = b"key"
         with store.start_partition_transaction(0) as tx:
-            state = tx.as_state(prefix=b"key")
+            state = tx.as_state(prefix=key)
             # Add item to the windows [95, 105) and [100, 110)
             updated, expired = window.process_window(
-                value=1, state=state, timestamp_ms=100
+                value=1, key=key, state=state, timestamp_ms=100
             )
             assert len(updated) == 2
             assert updated[0]["value"] == 1
@@ -259,7 +267,9 @@ class TestHoppingWindow:
             # Now add item to the windows [105, 115) and [110, 120)
             # The windows [95, 105) and [100, 110) are now expired
             # and should be returned
-            _, expired = window.process_window(value=2, state=state, timestamp_ms=110)
+            _, expired = window.process_window(
+                value=2, key=key, state=state, timestamp_ms=110
+            )
             assert len(expired) == 2
             assert expired[0]["value"] == 1
             assert expired[0]["start"] == 95
