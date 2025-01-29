@@ -788,15 +788,18 @@ class StreamingDataFrame:
         self._app.exit_manager.configure(number, timeout)
         self._collection = []
 
-        if self._collection_active:
-            return self
+        if not self._collection_active:
 
-        def _collect(value):
-            nonlocal self
-            self._collection.append(value)
+            def _collect(value):
+                nonlocal self
+                self._collection.append(value)
 
-        self._collection_active = True
-        return self._add_update(_collect, metadata=False)
+            self._collection_active = True
+            self = self._add_update(_collect, metadata=False)
+
+        self._app.run()
+        self._app.reset()
+        return self
 
     def to_pandas(self):
         try:
@@ -806,9 +809,6 @@ class StreamingDataFrame:
                 "Pandas is not installed. "
                 "Run `pip install quixstreams[pandas]` to install it."
             )
-
-        self._app.run()
-        self._app.reset()
         return pd.DataFrame(self._collection)
 
     def to_polars(self):
@@ -819,9 +819,6 @@ class StreamingDataFrame:
                 "Polars is not installed. "
                 "Run `pip install quixstreams[polars]` to install it."
             )
-
-        self._app.run()
-        self._app.reset()
         return pl.DataFrame(self._collection)
 
     def compose(
