@@ -6,7 +6,7 @@ from unittest import mock
 
 import pytest
 
-from quixstreams.dataframe.windows import SlidingWindowDefinition
+from quixstreams.dataframe.windows import FixedTimeSlidingWindowDefinition
 
 A, B, C, D = "A", "B", "C", "D"
 
@@ -742,10 +742,10 @@ def mock_message_context():
 def sliding_window_definition_factory(
     state_manager, dataframe_factory, topic_manager_topic_factory
 ):
-    def factory(duration_ms: int, grace_ms: int) -> SlidingWindowDefinition:
+    def factory(duration_ms: int, grace_ms: int) -> FixedTimeSlidingWindowDefinition:
         topic = topic_manager_topic_factory("topic")
         sdf = dataframe_factory(topic=topic, state_manager=state_manager)
-        return SlidingWindowDefinition(
+        return FixedTimeSlidingWindowDefinition(
             duration_ms=duration_ms, grace_ms=grace_ms, dataframe=sdf
         )
 

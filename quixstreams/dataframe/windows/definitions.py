@@ -3,6 +3,7 @@ from abc import abstractmethod
 from typing import TYPE_CHECKING, Any, Callable, Optional, Tuple
 
 from .base import (
+    Window,
     WindowAggregateFunc,
     WindowMergeFunc,
     WindowOnLateCallback,
@@ -19,34 +20,18 @@ def _mean_merge_func(state_value: Tuple[float, int]):
     return sum_ / count_
 
 
-class FixedTimeWindowDefinition(abc.ABC):
+class BaseWindowDefinition(abc.ABC):
     def __init__(
         self,
-        duration_ms: int,
-        grace_ms: int,
+        name: Optional[str],
         dataframe: "StreamingDataFrame",
-        name: Optional[str] = None,
-        step_ms: Optional[int] = None,
         on_late: Optional[WindowOnLateCallback] = None,
-    ):
-        if not isinstance(duration_ms, int):
-            raise TypeError("Window size must be an integer")
-        if duration_ms < 1:
-            raise ValueError("Window size cannot be smaller than 1ms")
-        if grace_ms < 0:
-            raise ValueError("Window grace cannot be smaller than 0ms")
+    ) -> None:
+        super().__init__()
 
-        if step_ms is not None and (step_ms <= 0 or step_ms >= duration_ms):
-            raise ValueError(
-                f"Window step size must be smaller than duration and bigger than 0ms, "
-                f"got {step_ms}ms"
-            )
-        self._duration_ms = duration_ms
-        self._grace_ms = grace_ms
-        self._dataframe = dataframe
         self._name = name
-        self._step_ms = step_ms
         self._on_late = on_late
+        self._dataframe = dataframe
 
     @abstractmethod
     def _create_window(
@@ -56,21 +41,9 @@ class FixedTimeWindowDefinition(abc.ABC):
         aggregate_default: Any,
         aggregate_collection: bool = False,
         merge_func: Optional[WindowMergeFunc] = None,
-    ) -> FixedTimeWindow: ...
+    ) -> Window: ...
 
-    @property
-    def duration_ms(self) -> int:
-        return self._duration_ms
-
-    @property
-    def grace_ms(self) -> int:
-        return self._grace_ms
-
-    @property
-    def step_ms(self) -> Optional[int]:
-        return self._step_ms
-
-    def sum(self) -> FixedTimeWindow:
+    def sum(self) -> "Window":
         """
         Configure the window to aggregate data by summing up values within
         each window period.
@@ -85,7 +58,7 @@ class FixedTimeWindowDefinition(abc.ABC):
             func_name="sum", aggregate_func=func, aggregate_default=0
         )
 
-    def count(self) -> FixedTimeWindow:
+    def count(self) -> "Window":
         """
         Configure the window to aggregate data by counting the number of values
         within each window period.
@@ -100,7 +73,7 @@ class FixedTimeWindowDefinition(abc.ABC):
             func_name="count", aggregate_func=func, aggregate_default=0
         )
 
-    def mean(self) -> FixedTimeWindow:
+    def mean(self) -> "Window":
         """
         Configure the window to aggregate data by calculating the mean of the values
         within each window period.
@@ -122,7 +95,7 @@ class FixedTimeWindowDefinition(abc.ABC):
 
     def reduce(
         self, reducer: Callable[[Any, Any], Any], initializer: Callable[[Any], Any]
-    ) -> FixedTimeWindow:
+    ) -> "Window":
         """
         Configure the window to perform a custom aggregation using `reducer`
         and `initializer` functions.
@@ -166,7 +139,7 @@ class FixedTimeWindowDefinition(abc.ABC):
             func_name="reduce", aggregate_func=func, aggregate_default=None
         )
 
-    def max(self) -> FixedTimeWindow:
+    def max(self) -> "Window":
         """
         Configure a window to aggregate the maximum value within each window period.
 
@@ -181,7 +154,7 @@ class FixedTimeWindowDefinition(abc.ABC):
             func_name="max", aggregate_func=func, aggregate_default=None
         )
 
-    def min(self) -> FixedTimeWindow:
+    def min(self) -> "Window":
         """
         Configure a window to aggregate the minimum value within each window period.
 
@@ -196,7 +169,7 @@ class FixedTimeWindowDefinition(abc.ABC):
             func_name="min", aggregate_func=func, aggregate_default=None
         )
 
-    def collect(self) -> FixedTimeWindow:
+    def collect(self) -> "Window":
         """
         Configure the window to collect all values within each window period into a
         list, without performing any aggregation.
@@ -227,7 +200,49 @@ class FixedTimeWindowDefinition(abc.ABC):
         )
 
 
-class HoppingWindowDefinition(FixedTimeWindowDefinition):
+class FixedTimeWindowDefinition(BaseWindowDefinition):
+    def __init__(
+        self,
+        duration_ms: int,
+        grace_ms: int,
+        dataframe: "StreamingDataFrame",
+        name: Optional[str] = None,
+        step_ms: Optional[int] = None,
+        on_late: Optional[WindowOnLateCallback] = None,
+    ):
+        if not isinstance(duration_ms, int):
+            raise TypeError("Window size must be an integer")
+        if duration_ms < 1:
+            raise ValueError("Window size cannot be smaller than 1ms")
+        if grace_ms < 0:
+            raise ValueError("Window grace cannot be smaller than 0ms")
+
+        if step_ms is not None and (step_ms <= 0 or step_ms >= duration_ms):
+            raise ValueError(
+                f"Window step size must be smaller than duration and bigger than 0ms, "
+                f"got {step_ms}ms"
+            )
+
+        super().__init__(name, dataframe, on_late)
+
+        self._duration_ms = duration_ms
+        self._grace_ms = grace_ms
+        self._step_ms = step_ms
+
+    @property
+    def duration_ms(self) -> int:
+        return self._duration_ms
+
+    @property
+    def grace_ms(self) -> int:
+        return self._grace_ms
+
+    @property
+    def step_ms(self) -> Optional[int]:
+        return self._step_ms
+
+
+class FixedTimeHoppingWindowDefinition(FixedTimeWindowDefinition):
     def __init__(
         self,
         duration_ms: int,
@@ -272,7 +287,7 @@ class HoppingWindowDefinition(FixedTimeWindowDefinition):
         )
 
 
-class TumblingWindowDefinition(FixedTimeWindowDefinition):
+class FixedTimeTumblingWindowDefinition(FixedTimeWindowDefinition):
     def __init__(
         self,
         duration_ms: int,
@@ -314,7 +329,7 @@ class TumblingWindowDefinition(FixedTimeWindowDefinition):
         )
 
 
-class SlidingWindowDefinition(FixedTimeWindowDefinition):
+class FixedTimeSlidingWindowDefinition(FixedTimeWindowDefinition):
     def __init__(
         self,
         duration_ms: int,
