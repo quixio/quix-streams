@@ -73,7 +73,7 @@ class SlidingWindow(FixedTimeWindow):
         left_start = max(0, timestamp_ms - duration)
         left_end = timestamp_ms
 
-        if timestamp_ms < max_expired_window_start:
+        if timestamp_ms <= max_expired_window_start:
             self._log_expired_window(
                 window=[left_start, left_end],
                 timestamp_ms=timestamp_ms,

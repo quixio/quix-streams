@@ -692,6 +692,45 @@ LATE_MESSAGE = [
     ),
 ]
 
+#      0        10        20        30        40        50        60
+# -----|---------|---------|---------|---------|---------|---------|--->
+# Duration: 10
+# Grace: 0
+# ______________________________________________________________________
+# A 1   A
+#      ||
+#     0  1
+# ______________________________________________________________________
+# B 20                     |---------|
+#                          20       30
+#               ^ 9  expiration watermark = 20 - 10 - 0 - 1
+# ______________________________________________________________________
+# C 9           C
+#               ^ 9  expiration watermark = 20 - 10 - 0 - 1
+# ______________________________________________________________________
+# Message C is equal to expiration watermark, so it is not processed.
+LATE_MESSAGE_EQUAL_TO_EXPIRATION_WATERMARK = [
+    Message(
+        timestamp=1,
+        value=A,
+        updated=[{"start": 0, "end": 1, "value": [A]}],  # left A
+    ),
+    Message(
+        timestamp=20,
+        value=B,
+        updated=[{"start": 10, "end": 20, "value": [B]}],  # left B
+        expired=[{"start": 0, "end": 1, "value": [A]}],  # left A
+    ),
+    Message(
+        timestamp=9,
+        value=C,
+        present=[
+            {"start": 0, "end": 1, "value": [1, [A]]},
+            {"start": 10, "end": 20, "value": [20, [B]]},
+        ],
+    ),
+]
+
 
 @pytest.fixture
 def mock_message_context():
@@ -788,6 +827,12 @@ def state_factory(state_manager):
         pytest.param(10, 0, EXPIRATION_WITHOUT_GRACE, id="expiration-without-grace"),
         pytest.param(10, 3, EXPIRATION_WITH_GRACE, id="expiration-with-grace"),
         pytest.param(10, 0, LATE_MESSAGE, id="late-message"),
+        pytest.param(
+            10,
+            0,
+            LATE_MESSAGE_EQUAL_TO_EXPIRATION_WATERMARK,
+            id="late-message-equal-to-expiration-watermark",
+        ),
     ],
 )
 def test_sliding_window_reduce(
