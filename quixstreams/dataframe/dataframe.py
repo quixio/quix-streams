@@ -54,9 +54,12 @@ from .registry import DataframeRegistry
 from .series import StreamingSeries
 from .utils import ensure_milliseconds
 from .windows import (
-    HoppingWindowDefinition,
-    SlidingWindowDefinition,
-    TumblingWindowDefinition,
+    CountHoppingWindowDefinition,
+    CountSlidingWindowDefinition,
+    CountTumblingWindowDefinition,
+    FixedTimeHoppingWindowDefinition,
+    FixedTimeSlidingWindowDefinition,
+    FixedTimeTumblingWindowDefinition,
 )
 
 ApplyCallbackStateful = Callable[[Any, State], Any]
@@ -843,9 +846,9 @@ class StreamingDataFrame:
         duration_ms: Union[int, timedelta],
         grace_ms: Union[int, timedelta] = 0,
         name: Optional[str] = None,
-    ) -> TumblingWindowDefinition:
+    ) -> FixedTimeTumblingWindowDefinition:
         """
-        Create a tumbling window transformation on this StreamingDataFrame.
+        Create a time-based tumbling window transformation on this StreamingDataFrame.
         Tumbling windows divide time into fixed-sized, non-overlapping windows.
 
         They allow performing stateful aggregations like `sum`, `reduce`, etc.
@@ -857,7 +860,6 @@ class StreamingDataFrame:
         - Every window is grouped by the current Kafka message key.
         - Messages with `None` key will be ignored.
         - The time windows always use the current event time.
-
 
 
         Example Snippet:
@@ -901,7 +903,7 @@ class StreamingDataFrame:
         :param name: The unique identifier for the window. If not provided, it will be
             automatically generated based on the window's properties.
 
-        :return: `TumblingWindowDefinition` instance representing the tumbling window
+        :return: `FixedTimeTumblingWindowDefinition` instance representing the tumbling window
             configuration.
             This object can be further configured with aggregation functions
             like `sum`, `count`, etc. applied to the StreamingDataFrame.
@@ -910,8 +912,65 @@ class StreamingDataFrame:
         duration_ms = ensure_milliseconds(duration_ms)
         grace_ms = ensure_milliseconds(grace_ms)
 
-        return TumblingWindowDefinition(
+        return FixedTimeTumblingWindowDefinition(
             duration_ms=duration_ms, grace_ms=grace_ms, dataframe=self, name=name
+        )
+
+    def tumbling_count_window(
+        self, count: int, name: Optional[str] = None
+    ) -> CountTumblingWindowDefinition:
+        """
+        Create a count-based tumbling window transformation on this StreamingDataFrame.
+        Tumbling windows divide messages into fixed-batch, non-overlapping windows.
+
+        They allow performing stateful aggregations like `sum`, `reduce`, etc.
+        on top of the data and emit results downstream.
+
+        Notes:
+
+        - The start timestamp of the aggregation result is set to the earliest timestamp.
+        - The end timestamp of the aggregation result is set to the latest timestamp.
+        - Every window is grouped by the current Kafka message key.
+        - Messages with `None` key will be ignored.
+
+
+        Example Snippet:
+
+        ```python
+        app = Application()
+        sdf = app.dataframe(...)
+
+        sdf = (
+            # Define a tumbling window of 10 messages
+            sdf.tumbling_count_window(count=10)
+
+            # Specify the aggregation function
+            .sum()
+
+            # Specify how the results should be emitted downstream.
+            # "current()" will emit results as they come for each updated window,
+            # possibly producing multiple messages per key-window pair
+            # "final()" will emit windows only when they are closed and cannot
+            # receive any updates anymore.
+            .current()
+        )
+        ```
+
+        :param count: The length of each window. The number of messages to include in the window.
+
+        :param name: The unique identifier for the window. If not provided, it will be
+            automatically generated based on the window's properties.
+
+        :return: `CountTumblingWindowDefinition` instance representing the tumbling window
+            configuration.
+            This object can be further configured with aggregation functions
+            like `sum`, `count`, etc. applied to the StreamingDataFrame.
+
+        """
+        return CountTumblingWindowDefinition(
+            count=count,
+            dataframe=self,
+            name=name,
         )
 
     def hopping_window(
@@ -920,9 +979,9 @@ class StreamingDataFrame:
         step_ms: Union[int, timedelta],
         grace_ms: Union[int, timedelta] = 0,
         name: Optional[str] = None,
-    ) -> HoppingWindowDefinition:
+    ) -> FixedTimeHoppingWindowDefinition:
         """
-        Create a hopping window transformation on this StreamingDataFrame.
+        Create a time-based hopping window transformation on this StreamingDataFrame.
         Hopping windows divide the data stream into overlapping windows based on time.
         The overlap is controlled by the `step_ms` parameter.
 
@@ -988,7 +1047,7 @@ class StreamingDataFrame:
         :param name: The unique identifier for the window. If not provided, it will be
             automatically generated based on the window's properties.
 
-        :return: `HoppingWindowDefinition` instance representing the hopping
+        :return: `FixedTimeHoppingWindowDefinition` instance representing the hopping
             window configuration.
             This object can be further configured with aggregation functions
             like `sum`, `count`, etc. and applied to the StreamingDataFrame.
@@ -998,11 +1057,75 @@ class StreamingDataFrame:
         step_ms = ensure_milliseconds(step_ms)
         grace_ms = ensure_milliseconds(grace_ms)
 
-        return HoppingWindowDefinition(
+        return FixedTimeHoppingWindowDefinition(
             duration_ms=duration_ms,
             grace_ms=grace_ms,
             step_ms=step_ms,
             dataframe=self,
+            name=name,
+        )
+
+    def hopping_count_window(
+        self, count: int, step: int, name: Optional[str] = None
+    ) -> CountHoppingWindowDefinition:
+        """
+        Create a count-based hopping window transformation on this StreamingDataFrame.
+        Hopping windows divide the data stream into overlapping windows.
+        The overlap is controlled by the `step` parameter.
+
+        They allow performing stateful aggregations like `sum`, `reduce`, etc.
+        on top of the data and emit results downstream.
+
+        Notes:
+
+        - The start timestamp of the aggregation result is set to the earliest timestamp.
+        - The end timestamp of the aggregation result is set to the latest timestamp.
+        - Every window is grouped by the current Kafka message key.
+        - Messages with `None` key will be ignored.
+
+
+        Example Snippet:
+
+        ```python
+        app = Application()
+        sdf = app.dataframe(...)
+
+        sdf = (
+            # Define a hopping window of 10 messages with a step of 5 messages
+            sdf.hopping_count_window(
+                count=10,
+                step=5,
+            )
+
+            # Specify the aggregation function
+            .sum()
+
+            # Specify how the results should be emitted downstream.
+            # "current()" will emit results as they come for each updated window,
+            # possibly producing multiple messages per key-window pair
+            # "final()" will emit windows only when they are closed and cannot
+            # receive any updates anymore.
+            .current()
+        )
+        ```
+
+        :param count: The length of each window. The number of messages to include in the window.
+
+        :param step: The step size for the window. It determines the number of messages between windows.
+            A  sliding windows is the same as a hopping window with a step of 1 message.
+
+        :param name: The unique identifier for the window. If not provided, it will be
+            automatically generated based on the window's properties.
+
+        :return: `CountHoppingWindowDefinition` instance representing the hopping
+            window configuration.
+            This object can be further configured with aggregation functions
+            like `sum`, `count`, etc. and applied to the StreamingDataFrame.
+        """
+        return CountHoppingWindowDefinition(
+            count=count,
+            dataframe=self,
+            step=step,
             name=name,
         )
 
@@ -1011,9 +1134,9 @@ class StreamingDataFrame:
         duration_ms: Union[int, timedelta],
         grace_ms: Union[int, timedelta] = 0,
         name: Optional[str] = None,
-    ) -> SlidingWindowDefinition:
+    ) -> FixedTimeSlidingWindowDefinition:
         """
-        Create a sliding window transformation on this StreamingDataFrame.
+        Create a time-based sliding window transformation on this StreamingDataFrame.
         Sliding windows continuously evaluate the stream with a fixed step of 1 ms
         allowing for overlapping, but not redundant windows of a fixed size.
 
@@ -1074,7 +1197,7 @@ class StreamingDataFrame:
         :param name: The unique identifier for the window. If not provided, it will be
             automatically generated based on the window's properties.
 
-        :return: `SlidingWindowDefinition` instance representing the sliding window
+        :return: `FixedTimeSlidingWindowDefinition` instance representing the sliding window
             configuration.
             This object can be further configured with aggregation functions
             like `sum`, `count`, etc. applied to the StreamingDataFrame.
@@ -1083,8 +1206,67 @@ class StreamingDataFrame:
         duration_ms = ensure_milliseconds(duration_ms)
         grace_ms = ensure_milliseconds(grace_ms)
 
-        return SlidingWindowDefinition(
+        return FixedTimeSlidingWindowDefinition(
             duration_ms=duration_ms, grace_ms=grace_ms, dataframe=self, name=name
+        )
+
+    def sliding_count_window(
+        self, count: int, name: Optional[str] = None
+    ) -> CountHoppingWindowDefinition:
+        """
+        Create a count-based sliding window transformation on this StreamingDataFrame.
+        Sliding windows continuously evaluate the stream with a fixed step of 1 message
+        allowing for overlapping, but not redundant windows of a fixed size.
+
+        Sliding windows are similar to hopping windows with step set to 1.
+
+        They allow performing stateful aggregations like `sum`, `reduce`, etc.
+        on top of the data and emit results downstream.
+
+        Notes:
+
+        - The start timestamp of the aggregation result is set to the earliest timestamp.
+        - The end timestamp of the aggregation result is set to the latest timestamp.
+        - Every window is grouped by the current Kafka message key.
+        - Messages with `None` key will be ignored.
+        - Every window contains a distinct aggregation.
+
+        Example Snippet:
+
+        ```python
+        app = Application()
+        sdf = app.dataframe(...)
+
+        sdf = (
+            # Define a sliding window of 10 messages
+            sdf.sliding_count_window(count=10)
+
+            # Specify the aggregation function
+            .sum()
+
+            # Specify how the results should be emitted downstream.
+            # "current()" will emit results as they come for each updated window,
+            # possibly producing multiple messages per key-window pair
+            # "final()" will emit windows only when they are closed and cannot
+            # receive any updates anymore.
+            .current()
+        )
+        ```
+
+        :param count: The length of each window. The number of messages to include in the window.
+
+        :param name: The unique identifier for the window. If not provided, it will be
+            automatically generated based on the window's properties.
+
+        :return: `CountSlidingWindowDefinition` instance representing the sliding window
+            configuration.
+            This object can be further configured with aggregation functions
+            like `sum`, `count`, etc. applied to the StreamingDataFrame.
+        """
+        return CountSlidingWindowDefinition(
+            count=count,
+            dataframe=self,
+            name=name,
         )
 
     def drop(
