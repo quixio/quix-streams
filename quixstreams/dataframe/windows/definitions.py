@@ -2,7 +2,11 @@ import abc
 from abc import abstractmethod
 from typing import TYPE_CHECKING, Any, Callable, Optional, Tuple
 
-from .base import WindowAggregateFunc, WindowMergeFunc
+from .base import (
+    WindowAggregateFunc,
+    WindowMergeFunc,
+    WindowOnLateCallback,
+)
 from .sliding import SlidingWindow
 from .time_based import FixedTimeWindow
 
@@ -23,6 +27,7 @@ class FixedTimeWindowDefinition(abc.ABC):
         dataframe: "StreamingDataFrame",
         name: Optional[str] = None,
         step_ms: Optional[int] = None,
+        on_late: Optional[WindowOnLateCallback] = None,
     ):
         if not isinstance(duration_ms, int):
             raise TypeError("Window size must be an integer")
@@ -41,6 +46,7 @@ class FixedTimeWindowDefinition(abc.ABC):
         self._dataframe = dataframe
         self._name = name
         self._step_ms = step_ms
+        self._on_late = on_late
 
     @abstractmethod
     def _create_window(
@@ -229,6 +235,7 @@ class HoppingWindowDefinition(FixedTimeWindowDefinition):
         step_ms: int,
         dataframe: "StreamingDataFrame",
         name: Optional[str] = None,
+        on_late: Optional[WindowOnLateCallback] = None,
     ):
         super().__init__(
             duration_ms=duration_ms,
@@ -236,6 +243,7 @@ class HoppingWindowDefinition(FixedTimeWindowDefinition):
             dataframe=dataframe,
             name=name,
             step_ms=step_ms,
+            on_late=on_late,
         )
 
     def _get_name(self, func_name: str) -> str:
@@ -260,6 +268,7 @@ class HoppingWindowDefinition(FixedTimeWindowDefinition):
             aggregate_default=aggregate_default,
             aggregate_collection=aggregate_collection,
             merge_func=merge_func,
+            on_late=self._on_late,
         )
 
 
@@ -270,9 +279,14 @@ class TumblingWindowDefinition(FixedTimeWindowDefinition):
         grace_ms: int,
         dataframe: "StreamingDataFrame",
         name: Optional[str] = None,
+        on_late: Optional[WindowOnLateCallback] = None,
     ):
         super().__init__(
-            duration_ms=duration_ms, grace_ms=grace_ms, dataframe=dataframe, name=name
+            duration_ms=duration_ms,
+            grace_ms=grace_ms,
+            dataframe=dataframe,
+            name=name,
+            on_late=on_late,
         )
 
     def _get_name(self, func_name: str) -> str:
@@ -296,6 +310,7 @@ class TumblingWindowDefinition(FixedTimeWindowDefinition):
             aggregate_default=aggregate_default,
             aggregate_collection=aggregate_collection,
             merge_func=merge_func,
+            on_late=self._on_late,
         )
 
 
@@ -306,9 +321,14 @@ class SlidingWindowDefinition(FixedTimeWindowDefinition):
         grace_ms: int,
         dataframe: "StreamingDataFrame",
         name: Optional[str] = None,
+        on_late: Optional[WindowOnLateCallback] = None,
     ):
         super().__init__(
-            duration_ms=duration_ms, grace_ms=grace_ms, dataframe=dataframe, name=name
+            duration_ms=duration_ms,
+            grace_ms=grace_ms,
+            dataframe=dataframe,
+            name=name,
+            on_late=on_late,
         )
 
     def _get_name(self, func_name: str) -> str:
@@ -332,4 +352,5 @@ class SlidingWindowDefinition(FixedTimeWindowDefinition):
             aggregate_default=aggregate_default,
             aggregate_collection=aggregate_collection,
             merge_func=merge_func,
+            on_late=self._on_late,
         )

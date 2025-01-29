@@ -696,7 +696,63 @@ sdf.tumbling_window(timedelta(hours=1), grace_ms=timedelta(seconds=10))
 
 The appropriate value for a grace period varies depending on the use case.
 
- 
+
+### Reacting on late events 
+!!! info New in v3.8.0
+
+To react on late records coming into time windows, you can pass the `on_late` callbacks to `.tumbling_window()`, `.hopping_window()` and `.sliding_window()` methods.
+
+You can use this callback to customize the logging of such messages or to send them to some dead-letter queue, for example.
+
+**How it works**:
+
+- If the `on_late` callback is not provided (default), the application will simply log the late events.
+- The same will happen when the callback returns `True`.
+- When the callback returns `False`, no logs will be produced. 
+
+
+**Example**:
+
+```python
+from typing import Any
+
+from datetime import timedelta
+from quixstreams import Application
+
+app = Application(...)
+sdf = app.dataframe(...)
+
+
+def on_late(
+    value: Any,
+    key: Any,
+    timestamp_ms: int,
+    late_by_ms: int,
+    start: int,
+    end: int,
+    store_name: str,
+    topic: str,
+    partition: int,
+    offset: int,
+) -> bool:
+    """
+    Define a callback to react on late records coming into windowed aggregations.
+    Return `False` to suppress the default logging behavior.
+    """
+    print(f"Late message arrived to the window {(start, end)}")
+    return False
+
+# Define a 1-hour tumbling window and provide the "on_late" callback to it
+sdf.tumbling_window(timedelta(hours=1), on_late=on_late)
+
+
+# Start the application
+if __name__ == '__main__':
+    app.run()
+
+```
+
+
 
 ## Emitting results
 

@@ -51,10 +51,11 @@ class TestTumblingWindow:
         store = state_manager.get_store(topic="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
-            state = tx.as_state(prefix=b"key")
-            window.process_window(value=0, state=state, timestamp_ms=100)
+            key = b"key"
+            state = tx.as_state(prefix=key)
+            window.process_window(value=0, key=key, state=state, timestamp_ms=100)
             updated, expired = window.process_window(
-                value=0, state=state, timestamp_ms=100
+                value=0, key=key, state=state, timestamp_ms=100
             )
         assert len(updated) == 1
         assert updated[0]["value"] == 2
@@ -69,10 +70,11 @@ class TestTumblingWindow:
         store = state_manager.get_store(topic="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
-            state = tx.as_state(prefix=b"key")
-            window.process_window(value=2, state=state, timestamp_ms=100)
+            key = b"key"
+            state = tx.as_state(prefix=key)
+            window.process_window(value=2, key=key, state=state, timestamp_ms=100)
             updated, expired = window.process_window(
-                value=1, state=state, timestamp_ms=100
+                value=1, key=key, state=state, timestamp_ms=100
             )
         assert len(updated) == 1
         assert updated[0]["value"] == 3
@@ -87,10 +89,11 @@ class TestTumblingWindow:
         store = state_manager.get_store(topic="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
-            state = tx.as_state(prefix=b"key")
-            window.process_window(value=2, state=state, timestamp_ms=100)
+            key = b"key"
+            state = tx.as_state(prefix=key)
+            window.process_window(value=2, key=key, state=state, timestamp_ms=100)
             updated, expired = window.process_window(
-                value=1, state=state, timestamp_ms=100
+                value=1, key=key, state=state, timestamp_ms=100
             )
         assert len(updated) == 1
         assert updated[0]["value"] == 1.5
@@ -108,10 +111,11 @@ class TestTumblingWindow:
         store = state_manager.get_store(topic="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
-            state = tx.as_state(prefix=b"key")
-            window.process_window(value=2, state=state, timestamp_ms=100)
+            key = b"key"
+            state = tx.as_state(prefix=key)
+            window.process_window(value=2, key=key, state=state, timestamp_ms=100)
             updated, expired = window.process_window(
-                value=1, state=state, timestamp_ms=100
+                value=1, key=key, state=state, timestamp_ms=100
             )
         assert len(updated) == 1
         assert updated[0]["value"] == [2, 1]
@@ -126,10 +130,11 @@ class TestTumblingWindow:
         store = state_manager.get_store(topic="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
-            state = tx.as_state(prefix=b"key")
-            window.process_window(value=2, state=state, timestamp_ms=100)
+            key = b"key"
+            state = tx.as_state(prefix=key)
+            window.process_window(value=2, key=key, state=state, timestamp_ms=100)
             updated, expired = window.process_window(
-                value=1, state=state, timestamp_ms=100
+                value=1, key=key, state=state, timestamp_ms=100
             )
         assert len(updated) == 1
         assert updated[0]["value"] == 2
@@ -144,10 +149,11 @@ class TestTumblingWindow:
         store = state_manager.get_store(topic="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
-            state = tx.as_state(prefix=b"key")
-            window.process_window(value=2, state=state, timestamp_ms=100)
+            key = b"key"
+            state = tx.as_state(prefix=key)
+            window.process_window(value=2, key=key, state=state, timestamp_ms=100)
             updated, expired = window.process_window(
-                value=1, state=state, timestamp_ms=100
+                value=1, key=key, state=state, timestamp_ms=100
             )
         assert len(updated) == 1
         assert updated[0]["value"] == 1
@@ -162,12 +168,13 @@ class TestTumblingWindow:
         store = state_manager.get_store(topic="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
-            state = tx.as_state(prefix=b"key")
-            window.process_window(value=1, state=state, timestamp_ms=100)
-            window.process_window(value=2, state=state, timestamp_ms=100)
-            window.process_window(value=3, state=state, timestamp_ms=101)
+            key = b"key"
+            state = tx.as_state(prefix=key)
+            window.process_window(value=1, key=key, state=state, timestamp_ms=100)
+            window.process_window(value=2, key=key, state=state, timestamp_ms=100)
+            window.process_window(value=3, key=key, state=state, timestamp_ms=101)
             updated, expired = window.process_window(
-                value=4, state=state, timestamp_ms=200
+                value=4, key=key, state=state, timestamp_ms=200
             )
         assert not updated
         assert expired == [{"start": 100, "end": 110, "value": [1, 2, 3]}]
@@ -201,10 +208,11 @@ class TestTumblingWindow:
         store = state_manager.get_store(topic="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
-            state = tx.as_state(prefix=b"key")
+            key = b"key"
+            state = tx.as_state(prefix=key)
             # Add item to the window [100, 110)
             updated, expired = window.process_window(
-                value=1, state=state, timestamp_ms=100
+                value=1, key=key, state=state, timestamp_ms=100
             )
             assert len(updated) == 1
             assert updated[0]["value"] == 1
@@ -215,7 +223,7 @@ class TestTumblingWindow:
             # Now add item to the window [110, 120)
             # The window [100, 110) is now expired and should be returned
             updated, expired = window.process_window(
-                value=2, state=state, timestamp_ms=110
+                value=2, key=key, state=state, timestamp_ms=110
             )
             assert len(updated) == 1
             assert updated[0]["value"] == 2
