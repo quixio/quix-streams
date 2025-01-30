@@ -6,6 +6,7 @@ import operator
 import pprint
 from datetime import timedelta
 from typing import (
+    TYPE_CHECKING,
     Any,
     Callable,
     Dict,
@@ -59,6 +60,9 @@ from .windows import (
     TumblingWindowDefinition,
 )
 from .windows.base import WindowOnLateCallback
+
+if TYPE_CHECKING:
+    from quixstreams.app import Application
 
 ApplyCallbackStateful = Callable[[Any, State], Any]
 ApplyWithMetadataCallbackStateful = Callable[[Any, Any, int, Any, State], Any]
@@ -121,6 +125,7 @@ class StreamingDataFrame:
         topic_manager: TopicManager,
         registry: DataframeRegistry,
         processing_context: ProcessingContext,
+        app: Application,
         stream: Optional[Stream] = None,
     ):
         self._stream: Stream = stream or Stream()
@@ -130,6 +135,9 @@ class StreamingDataFrame:
         self._processing_context = processing_context
         self._producer = processing_context.producer
         self._locked = False
+        self._app = app
+        self._collection: list[Any] = []
+        self._collection_active = False
 
     @property
     def processing_context(self) -> ProcessingContext:
@@ -768,6 +776,52 @@ class StreamingDataFrame:
             metadata=metadata,
         )
 
+    def collect(
+        self,
+        number: Optional[int] = None,
+        timeout: Optional[int] = None,
+    ):
+        if number is None and timeout is None:
+            raise ValueError(
+                "Either number or timeout must be provided. "
+                "Otherwise Application will run forever."
+            )
+        self._app.exit_manager.configure(number, timeout)
+        self._collection = []
+
+        if not self._collection_active:
+
+            def _collect(value):
+                nonlocal self
+                self._collection.append(value)
+
+            self._collection_active = True
+            self = self._add_update(_collect, metadata=False)
+
+        self._app.run()
+        self._app.reset()
+        return self
+
+    def to_pandas(self):
+        try:
+            import pandas as pd
+        except ImportError:
+            raise ImportError(
+                "Pandas is not installed. "
+                "Run `pip install quixstreams[pandas]` to install it."
+            )
+        return pd.DataFrame(self._collection)
+
+    def to_polars(self):
+        try:
+            import polars as pl
+        except ImportError:
+            raise ImportError(
+                "Polars is not installed. "
+                "Run `pip install quixstreams[polars]` to install it."
+            )
+        return pl.DataFrame(self._collection)
+
     def compose(
         self,
         sink: Optional[VoidExecutor] = None,
@@ -1261,6 +1315,7 @@ class StreamingDataFrame:
             processing_context=self._processing_context,
             topic_manager=self._topic_manager,
             registry=self._registry,
+            app=self._app,
         )
         return clone
 

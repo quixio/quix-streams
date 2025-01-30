@@ -75,6 +75,52 @@ class TopicManagerFactory(Protocol):
     ) -> TopicManager: ...
 
 
+class ExitManager:
+    def __init__(self):
+        self.should_exit = lambda: False
+
+    def configure(self, number: Optional[int] = None, timeout: Optional[int] = None):
+        """
+        Configure the exit manager with either a message count limit, timeout, or both.
+
+        The `should_exit` function will be called for every message processed, so it needs
+        to be highly optimized. To ensure optimal performance, the logic for determining
+        which checks to perform is handled in `__init__` rather than in `should_exit` itself.
+
+        Args:
+            number: Maximum number of messages to process before exiting
+            timeout: Maximum time in seconds to run before exiting
+        """
+        if number is not None and timeout is not None:
+            self._number = number
+            self._timeout = timeout
+            self._counter = 0
+            self._start = time.monotonic()
+            self.should_exit = self._check_number_and_timeout
+        elif number is not None:
+            self._number = number
+            self._counter = 0
+            self.should_exit = self._check_number
+        elif timeout is not None:
+            self._timeout = timeout
+            self._start = time.monotonic()
+            self.should_exit = self._check_timeout
+        else:
+            self.should_exit = lambda: False
+
+    def _check_number(self):
+        if self._counter >= self._number:
+            return True
+        self._counter += 1
+        return False
+
+    def _check_timeout(self):
+        return (time.monotonic() - self._start) > self._timeout
+
+    def _check_number_and_timeout(self):
+        return self._check_number() or self._check_timeout()
+
+
 class Application:
     """
     The main Application class.
@@ -303,16 +349,21 @@ class Application:
 
         self._on_message_processed = on_message_processed
         self._on_processing_error = on_processing_error or default_on_processing_error
+        self._on_consumer_error = on_consumer_error
+        self._on_producer_error = on_producer_error
+        self._topic_manager = topic_manager or self._get_topic_manager()
+        self._dataframe_registry = DataframeRegistry()
+        self.exit_manager = ExitManager()
+        self.reset()
 
+    def reset(self):
         self._consumer = self._get_rowconsumer(
-            on_error=on_consumer_error,
+            on_error=self._on_consumer_error,
             extra_config_overrides=consumer_extra_config_overrides,
         )
-        self._producer = self._get_rowproducer(on_error=on_producer_error)
+        self._producer = self._get_rowproducer(on_error=self._on_producer_error)
         self._running = False
         self._failed = False
-
-        self._topic_manager = topic_manager or self._get_topic_manager()
 
         producer = None
         recovery_manager = None
@@ -344,7 +395,6 @@ class Application:
             sink_manager=self._sink_manager,
             pausing_manager=self._pausing_manager,
         )
-        self._dataframe_registry = DataframeRegistry()
 
     @property
     def config(self) -> "ApplicationConfig":
@@ -518,6 +568,7 @@ class Application:
             topic_manager=self._topic_manager,
             processing_context=self._processing_context,
             registry=self._dataframe_registry,
+            app=self,
         )
         self._dataframe_registry.register_root(sdf)
 
@@ -545,6 +596,14 @@ class Application:
 
         if self._state_manager.using_changelogs:
             self._state_manager.stop_recovery()
+
+    def running(self):
+        if not self._running:
+            return False
+        elif self.exit_manager.should_exit():
+            self.stop()
+            return False
+        return True
 
     def _get_rowproducer(
         self,
@@ -803,7 +862,7 @@ class Application:
 
         dataframes_composed = self._dataframe_registry.compose_all()
 
-        while self._running:
+        while self.running():
             if self._state_manager.recovery_required:
                 self._state_manager.do_recovery()
             else:
@@ -818,7 +877,7 @@ class Application:
     def _run_sources(self):
         self._running = True
         self._source_manager.start_sources()
-        while self._running:
+        while self.running():
             self._source_manager.raise_for_error()
 
             if not self._source_manager.is_alive():
