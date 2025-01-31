@@ -54,10 +54,8 @@ _UPDATE_MAP = {
 }
 
 
-class BadMongoDBSinkConfiguration(Exception): ...
-
-
 def _default_id_setter(record: SinkItem):
+    # TODO: Maybe we just leave the key as-is instead of converting to a string?
     key = record.key
     if isinstance(key, bytes):
         key = key.decode()
@@ -163,6 +161,9 @@ class MongoDBSink(BatchingSink):
                 )
             )
         try:
+            # We don't need to worry about manually batching our writes, the MongoDB
+            # client does it for us automatically (chunks every 10k records).
+            # It will block until all writes are successful.
             self._collection.bulk_write(records)
             logger.info(
                 f"MongoDB: successfully submitted {len(records)} update requests to "
