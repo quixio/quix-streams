@@ -41,9 +41,11 @@ How data is dumped with `MongoDBSink` primarily depends on two parameters:
 
 ### Default: kafka `key` == MongoDB `_id`
 
-The default `document_matcher` assumes the message `key` corresponds to an equivalently named document `_id`.
+The default `document_matcher` assumes the message `key` corresponds to an equivalently 
+named document `_id`, so it attempts to match on that for updating.
 
-If no such `_id` exists (and `MongoDBSink` has `upsert=True`), it will be created.
+If no such `_id` exists (and `MongoDBSink` has `upsert=True`), the document will instead 
+be created with that `_id`.
 
 Also by default, only the fields present in the Kafka message will be updated 
  in the document (`update_method="UpdateOne"`). 
@@ -57,8 +59,8 @@ the message.
 A custom `_id` can be used by simply providing your own 
 `document_matcher` to `MongoDBSink` (which should include `{"_id": <YOUR_VALUE>}`).
 
-If no match is found (and assuming `upsert=True`), the object will be created with that
-`_id`.
+If no match is found (and assuming `upsert=True`), the document will instead be created
+with that `_id`.
 
 If no `document_matcher` or `_id` specification is specified (and `upsert=True`), `MongoDB` will 
 create a new document where `_id` will be assigned an `ObjectID` (default MongoDB behavior).
@@ -67,7 +69,7 @@ create a new document where `_id` will be assigned an `ObjectID` (default MongoD
 ### Alternate behavior: pattern-based updates
 
 The `document_matcher` can alternatively be used to match more than one document at a time; it 
-simply has to return any valid a MongoDB "query filter" (what is used by MongoDB's `.find()`).
+simply has to return any valid MongoDB "query filter" (what is used by MongoDB's `.find()`).
 
 This approach enables updating multiple documents from one message.
 
@@ -127,8 +129,12 @@ mongodb_sink = MongoDBSink(
     url="mongodb://localhost:27017",
     db="my_mongodb",
     collection="clothing",
-    document_matcher=lambda item: {"product_category": item.value["product_category"]},  
-    update_method="UpdateMany",  # update every document that document_matcher finds
+    
+    # find all other documents with "Shirts" product category
+    document_matcher=lambda item: {"product_category": item.value["product_category"]},
+    
+    # update every document that document_matcher finds
+    update_method="UpdateMany",
 )
 ```
 
