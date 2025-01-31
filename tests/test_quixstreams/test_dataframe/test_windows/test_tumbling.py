@@ -1,15 +1,13 @@
 import pytest
 
-from quixstreams.dataframe.windows import FixedTimeTumblingWindowDefinition
+from quixstreams.dataframe.windows import TimeTumblingWindowDefinition
 
 
 @pytest.fixture()
 def tumbling_window_definition_factory(state_manager, dataframe_factory):
-    def factory(
-        duration_ms: int, grace_ms: int = 0
-    ) -> FixedTimeTumblingWindowDefinition:
+    def factory(duration_ms: int, grace_ms: int = 0) -> TimeTumblingWindowDefinition:
         sdf = dataframe_factory(state_manager=state_manager)
-        window_def = FixedTimeTumblingWindowDefinition(
+        window_def = TimeTumblingWindowDefinition(
             duration_ms=duration_ms, grace_ms=grace_ms, dataframe=sdf
         )
         return window_def
@@ -35,7 +33,7 @@ class TestTumblingWindow:
         expected_name,
         dataframe_factory,
     ):
-        twd = FixedTimeTumblingWindowDefinition(
+        twd = TimeTumblingWindowDefinition(
             duration_ms=duration,
             grace_ms=grace,
             dataframe=dataframe_factory(),
@@ -192,7 +190,7 @@ class TestTumblingWindow:
         self, duration, grace, name, dataframe_factory
     ):
         with pytest.raises(ValueError):
-            FixedTimeTumblingWindowDefinition(
+            TimeTumblingWindowDefinition(
                 duration_ms=duration,
                 grace_ms=grace,
                 name=name,

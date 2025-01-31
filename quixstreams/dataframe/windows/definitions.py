@@ -20,7 +20,7 @@ def _mean_merge_func(state_value: Tuple[float, int]):
     return sum_ / count_
 
 
-class BaseWindowDefinition(abc.ABC):
+class WindowDefinition(abc.ABC):
     def __init__(
         self,
         name: Optional[str],
@@ -200,7 +200,7 @@ class BaseWindowDefinition(abc.ABC):
         )
 
 
-class FixedTimeWindowDefinition(BaseWindowDefinition):
+class TimeWindowDefinition(WindowDefinition):
     def __init__(
         self,
         duration_ms: int,
@@ -242,7 +242,7 @@ class FixedTimeWindowDefinition(BaseWindowDefinition):
         return self._step_ms
 
 
-class FixedTimeHoppingWindowDefinition(FixedTimeWindowDefinition):
+class TimeHoppingWindowDefinition(TimeWindowDefinition):
     def __init__(
         self,
         duration_ms: int,
@@ -287,7 +287,7 @@ class FixedTimeHoppingWindowDefinition(FixedTimeWindowDefinition):
         )
 
 
-class FixedTimeTumblingWindowDefinition(FixedTimeWindowDefinition):
+class TimeTumblingWindowDefinition(TimeWindowDefinition):
     def __init__(
         self,
         duration_ms: int,
@@ -329,7 +329,7 @@ class FixedTimeTumblingWindowDefinition(FixedTimeWindowDefinition):
         )
 
 
-class FixedTimeSlidingWindowDefinition(FixedTimeWindowDefinition):
+class TimeSlidingWindowDefinition(TimeWindowDefinition):
     def __init__(
         self,
         duration_ms: int,

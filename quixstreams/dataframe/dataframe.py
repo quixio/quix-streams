@@ -54,9 +54,9 @@ from .registry import DataframeRegistry
 from .series import StreamingSeries
 from .utils import ensure_milliseconds
 from .windows import (
-    FixedTimeHoppingWindowDefinition,
-    FixedTimeSlidingWindowDefinition,
-    FixedTimeTumblingWindowDefinition,
+    TimeHoppingWindowDefinition,
+    TimeSlidingWindowDefinition,
+    TimeTumblingWindowDefinition,
 )
 from .windows.base import WindowOnLateCallback
 
@@ -845,7 +845,7 @@ class StreamingDataFrame:
         grace_ms: Union[int, timedelta] = 0,
         name: Optional[str] = None,
         on_late: Optional[WindowOnLateCallback] = None,
-    ) -> FixedTimeTumblingWindowDefinition:
+    ) -> TimeTumblingWindowDefinition:
         """
         Create a tumbling window transformation on this StreamingDataFrame.
         Tumbling windows divide time into fixed-sized, non-overlapping windows.
@@ -918,7 +918,7 @@ class StreamingDataFrame:
         duration_ms = ensure_milliseconds(duration_ms)
         grace_ms = ensure_milliseconds(grace_ms)
 
-        return FixedTimeTumblingWindowDefinition(
+        return TimeTumblingWindowDefinition(
             duration_ms=duration_ms,
             grace_ms=grace_ms,
             dataframe=self,
@@ -933,7 +933,7 @@ class StreamingDataFrame:
         grace_ms: Union[int, timedelta] = 0,
         name: Optional[str] = None,
         on_late: Optional[WindowOnLateCallback] = None,
-    ) -> FixedTimeHoppingWindowDefinition:
+    ) -> TimeHoppingWindowDefinition:
         """
         Create a hopping window transformation on this StreamingDataFrame.
         Hopping windows divide the data stream into overlapping windows based on time.
@@ -1017,7 +1017,7 @@ class StreamingDataFrame:
         step_ms = ensure_milliseconds(step_ms)
         grace_ms = ensure_milliseconds(grace_ms)
 
-        return FixedTimeHoppingWindowDefinition(
+        return TimeHoppingWindowDefinition(
             duration_ms=duration_ms,
             grace_ms=grace_ms,
             step_ms=step_ms,
@@ -1032,7 +1032,7 @@ class StreamingDataFrame:
         grace_ms: Union[int, timedelta] = 0,
         name: Optional[str] = None,
         on_late: Optional[WindowOnLateCallback] = None,
-    ) -> FixedTimeSlidingWindowDefinition:
+    ) -> TimeSlidingWindowDefinition:
         """
         Create a sliding window transformation on this StreamingDataFrame.
         Sliding windows continuously evaluate the stream with a fixed step of 1 ms
@@ -1110,7 +1110,7 @@ class StreamingDataFrame:
         duration_ms = ensure_milliseconds(duration_ms)
         grace_ms = ensure_milliseconds(grace_ms)
 
-        return FixedTimeSlidingWindowDefinition(
+        return TimeSlidingWindowDefinition(
             duration_ms=duration_ms,
             grace_ms=grace_ms,
             dataframe=self,
