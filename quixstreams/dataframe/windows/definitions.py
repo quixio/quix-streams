@@ -242,7 +242,7 @@ class TimeWindowDefinition(WindowDefinition):
         return self._step_ms
 
 
-class TimeHoppingWindowDefinition(TimeWindowDefinition):
+class HoppingTimeWindowDefinition(TimeWindowDefinition):
     def __init__(
         self,
         duration_ms: int,
@@ -287,7 +287,7 @@ class TimeHoppingWindowDefinition(TimeWindowDefinition):
         )
 
 
-class TimeTumblingWindowDefinition(TimeWindowDefinition):
+class TumblingTimeWindowDefinition(TimeWindowDefinition):
     def __init__(
         self,
         duration_ms: int,
@@ -329,7 +329,7 @@ class TimeTumblingWindowDefinition(TimeWindowDefinition):
         )
 
 
-class TimeSlidingWindowDefinition(TimeWindowDefinition):
+class SlidingTimeWindowDefinition(TimeWindowDefinition):
     def __init__(
         self,
         duration_ms: int,
