@@ -1330,7 +1330,7 @@ def tumbling_window(
     grace_ms: Union[int, timedelta] = 0,
     name: Optional[str] = None,
     on_late: Optional[WindowOnLateCallback] = None
-) -> TumblingWindowDefinition
+) -> TumblingTimeWindowDefinition
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L842)
@@ -1399,7 +1399,7 @@ Otherwise, no message will be logged.
 
 **Returns**:
 
-`TumblingWindowDefinition` instance representing the tumbling window
+`TumblingTimeWindowDefinition` instance representing the tumbling window
 configuration.
 This object can be further configured with aggregation functions
 like `sum`, `count`, etc. applied to the StreamingDataFrame.
@@ -1410,12 +1410,12 @@ like `sum`, `count`, etc. applied to the StreamingDataFrame.
 
 ```python
 def hopping_window(
-        duration_ms: Union[int, timedelta],
-        step_ms: Union[int, timedelta],
-        grace_ms: Union[int, timedelta] = 0,
-        name: Optional[str] = None,
-        on_late: Optional[WindowOnLateCallback] = None
-) -> HoppingWindowDefinition
+    duration_ms: Union[int, timedelta],
+    step_ms: Union[int, timedelta],
+    grace_ms: Union[int, timedelta] = 0,
+    name: Optional[str] = None,
+    on_late: Optional[WindowOnLateCallback] = None
+) -> HoppingTimeWindowDefinition
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L929)
@@ -1493,7 +1493,7 @@ Otherwise, no message will be logged.
 
 **Returns**:
 
-`HoppingWindowDefinition` instance representing the hopping
+`HoppingTimeWindowDefinition` instance representing the hopping
 window configuration.
 This object can be further configured with aggregation functions
 like `sum`, `count`, etc. and applied to the StreamingDataFrame.
@@ -1504,11 +1504,11 @@ like `sum`, `count`, etc. and applied to the StreamingDataFrame.
 
 ```python
 def sliding_window(
-        duration_ms: Union[int, timedelta],
-        grace_ms: Union[int, timedelta] = 0,
-        name: Optional[str] = None,
-        on_late: Optional[WindowOnLateCallback] = None
-) -> SlidingWindowDefinition
+    duration_ms: Union[int, timedelta],
+    grace_ms: Union[int, timedelta] = 0,
+    name: Optional[str] = None,
+    on_late: Optional[WindowOnLateCallback] = None
+) -> SlidingTimeWindowDefinition
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1029)
@@ -1582,7 +1582,7 @@ Otherwise, no message will be logged.
 
 **Returns**:
 
-`SlidingWindowDefinition` instance representing the sliding window
+`SlidingTimeWindowDefinition` instance representing the sliding window
 configuration.
 This object can be further configured with aggregation functions
 like `sum`, `count`, etc. applied to the StreamingDataFrame.
@@ -2175,25 +2175,25 @@ aggregation and combine it with the incoming message.
 
 ## quixstreams.dataframe.windows.definitions
 
-<a id="quixstreams.dataframe.windows.definitions.FixedTimeWindowDefinition"></a>
+<a id="quixstreams.dataframe.windows.definitions.WindowDefinition"></a>
 
-### FixedTimeWindowDefinition
-
-```python
-class FixedTimeWindowDefinition(abc.ABC)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L22)
-
-<a id="quixstreams.dataframe.windows.definitions.FixedTimeWindowDefinition.sum"></a>
-
-#### FixedTimeWindowDefinition.sum
+### WindowDefinition
 
 ```python
-def sum() -> FixedTimeWindow
+class WindowDefinition(abc.ABC)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L73)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L23)
+
+<a id="quixstreams.dataframe.windows.definitions.WindowDefinition.sum"></a>
+
+#### WindowDefinition.sum
+
+```python
+def sum() -> "Window"
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L46)
 
 Configure the window to aggregate data by summing up values within
 
@@ -2203,15 +2203,15 @@ each window period.
 
 an instance of `FixedTimeWindow` configured to perform sum aggregation.
 
-<a id="quixstreams.dataframe.windows.definitions.FixedTimeWindowDefinition.count"></a>
+<a id="quixstreams.dataframe.windows.definitions.WindowDefinition.count"></a>
 
-#### FixedTimeWindowDefinition.count
+#### WindowDefinition.count
 
 ```python
-def count() -> FixedTimeWindow
+def count() -> "Window"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L88)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L61)
 
 Configure the window to aggregate data by counting the number of values
 
@@ -2221,15 +2221,15 @@ within each window period.
 
 an instance of `FixedTimeWindow` configured to perform record count.
 
-<a id="quixstreams.dataframe.windows.definitions.FixedTimeWindowDefinition.mean"></a>
+<a id="quixstreams.dataframe.windows.definitions.WindowDefinition.mean"></a>
 
-#### FixedTimeWindowDefinition.mean
+#### WindowDefinition.mean
 
 ```python
-def mean() -> FixedTimeWindow
+def mean() -> "Window"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L103)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L76)
 
 Configure the window to aggregate data by calculating the mean of the values
 
@@ -2240,16 +2240,16 @@ within each window period.
 an instance of `FixedTimeWindow` configured to calculate the mean
 of the values.
 
-<a id="quixstreams.dataframe.windows.definitions.FixedTimeWindowDefinition.reduce"></a>
+<a id="quixstreams.dataframe.windows.definitions.WindowDefinition.reduce"></a>
 
-#### FixedTimeWindowDefinition.reduce
+#### WindowDefinition.reduce
 
 ```python
 def reduce(reducer: Callable[[Any, Any], Any],
-           initializer: Callable[[Any], Any]) -> FixedTimeWindow
+           initializer: Callable[[Any], Any]) -> "Window"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L123)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L96)
 
 Configure the window to perform a custom aggregation using `reducer`
 
@@ -2290,15 +2290,15 @@ This function is used to initialize the aggregation within a window.
 
 A window configured to perform custom reduce aggregation on the data.
 
-<a id="quixstreams.dataframe.windows.definitions.FixedTimeWindowDefinition.max"></a>
+<a id="quixstreams.dataframe.windows.definitions.WindowDefinition.max"></a>
 
-#### FixedTimeWindowDefinition.max
+#### WindowDefinition.max
 
 ```python
-def max() -> FixedTimeWindow
+def max() -> "Window"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L169)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L142)
 
 Configure a window to aggregate the maximum value within each window period.
 
@@ -2307,15 +2307,15 @@ Configure a window to aggregate the maximum value within each window period.
 an instance of `FixedTimeWindow` configured to calculate the maximum
 value within each window period.
 
-<a id="quixstreams.dataframe.windows.definitions.FixedTimeWindowDefinition.min"></a>
+<a id="quixstreams.dataframe.windows.definitions.WindowDefinition.min"></a>
 
-#### FixedTimeWindowDefinition.min
+#### WindowDefinition.min
 
 ```python
-def min() -> FixedTimeWindow
+def min() -> "Window"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L184)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L157)
 
 Configure a window to aggregate the minimum value within each window period.
 
@@ -2324,15 +2324,15 @@ Configure a window to aggregate the minimum value within each window period.
 an instance of `FixedTimeWindow` configured to calculate the maximum
 value within each window period.
 
-<a id="quixstreams.dataframe.windows.definitions.FixedTimeWindowDefinition.collect"></a>
+<a id="quixstreams.dataframe.windows.definitions.WindowDefinition.collect"></a>
 
-#### FixedTimeWindowDefinition.collect
+#### WindowDefinition.collect
 
 ```python
-def collect() -> FixedTimeWindow
+def collect() -> "Window"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L199)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L172)
 
 Configure the window to collect all values within each window period into a
 
@@ -2362,25 +2362,29 @@ within each window period.
 
 ## quixstreams.dataframe.windows.time\_based
 
-<a id="quixstreams.dataframe.windows.time_based.FixedTimeWindow"></a>
+<a id="quixstreams.dataframe.windows.base"></a>
 
-### FixedTimeWindow
+## quixstreams.dataframe.windows.base
+
+<a id="quixstreams.dataframe.windows.base.Window"></a>
+
+### Window
 
 ```python
-class FixedTimeWindow()
+class Window(abc.ABC)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/time_based.py#L43)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/base.py#L35)
 
-<a id="quixstreams.dataframe.windows.time_based.FixedTimeWindow.final"></a>
+<a id="quixstreams.dataframe.windows.base.Window.final"></a>
 
-#### FixedTimeWindow.final
+#### Window.final
 
 ```python
 def final() -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/time_based.py#L175)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/base.py#L85)
 
 Apply the window aggregation and return results only when the windows are
 closed.
@@ -2403,24 +2407,20 @@ The closed windows cannot receive updates anymore and are considered final.
 If some message keys appear irregularly in the stream, the latest windows
 can remain unprocessed until the message the same key is received.
 
-<a id="quixstreams.dataframe.windows.time_based.FixedTimeWindow.current"></a>
+<a id="quixstreams.dataframe.windows.base.Window.current"></a>
 
-#### FixedTimeWindow.current
+#### Window.current
 
 ```python
 def current() -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/time_based.py#L213)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/base.py#L123)
 
 Apply the window transformation to the StreamingDataFrame to return results
 for each updated window.
 
 The format of returned windows:
-
-This method processes streaming data and returns results as they come,
-regardless of whether the window is closed or not.
-
 ```python
 {
     "start": <window start time in milliseconds>,
@@ -2429,14 +2429,8 @@ regardless of whether the window is closed or not.
 }
 ```
 
-**Notes**:
-
-  This method cannot be used with collection aggregations (created using
-  .collect()). Use .final() instead for collection aggregations.
-
-<a id="quixstreams.dataframe.windows.base"></a>
-
-## quixstreams.dataframe.windows.base
+This method processes streaming data and returns results as they come,
+regardless of whether the window is closed or not.
 
 <a id="quixstreams.dataframe.windows.base.get_window_ranges"></a>
 
@@ -2448,7 +2442,7 @@ def get_window_ranges(timestamp_ms: int,
                       step_ms: Optional[int] = None) -> Deque[tuple[int, int]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/base.py#L33)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/base.py#L206)
 
 Get a list of window ranges for the given timestamp.
 
