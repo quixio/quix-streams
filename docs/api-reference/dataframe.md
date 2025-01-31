@@ -663,7 +663,7 @@ def tumbling_window(
     grace_ms: Union[int, timedelta] = 0,
     name: Optional[str] = None,
     on_late: Optional[WindowOnLateCallback] = None
-) -> TumblingWindowDefinition
+) -> TumblingTimeWindowDefinition
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L842)
@@ -739,7 +739,7 @@ sdf = (
 <br>
 ***Returns:***
   
-  `TumblingWindowDefinition` instance representing the tumbling window
+  `TumblingTimeWindowDefinition` instance representing the tumbling window
   configuration.
   This object can be further configured with aggregation functions
   like `sum`, `count`, etc. applied to the StreamingDataFrame.
@@ -752,12 +752,12 @@ sdf = (
 
 ```python
 def hopping_window(
-        duration_ms: Union[int, timedelta],
-        step_ms: Union[int, timedelta],
-        grace_ms: Union[int, timedelta] = 0,
-        name: Optional[str] = None,
-        on_late: Optional[WindowOnLateCallback] = None
-) -> HoppingWindowDefinition
+    duration_ms: Union[int, timedelta],
+    step_ms: Union[int, timedelta],
+    grace_ms: Union[int, timedelta] = 0,
+    name: Optional[str] = None,
+    on_late: Optional[WindowOnLateCallback] = None
+) -> HoppingTimeWindowDefinition
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L929)
@@ -842,7 +842,7 @@ sdf = (
 <br>
 ***Returns:***
   
-  `HoppingWindowDefinition` instance representing the hopping
+  `HoppingTimeWindowDefinition` instance representing the hopping
   window configuration.
   This object can be further configured with aggregation functions
   like `sum`, `count`, etc. and applied to the StreamingDataFrame.
@@ -855,11 +855,11 @@ sdf = (
 
 ```python
 def sliding_window(
-        duration_ms: Union[int, timedelta],
-        grace_ms: Union[int, timedelta] = 0,
-        name: Optional[str] = None,
-        on_late: Optional[WindowOnLateCallback] = None
-) -> SlidingWindowDefinition
+    duration_ms: Union[int, timedelta],
+    grace_ms: Union[int, timedelta] = 0,
+    name: Optional[str] = None,
+    on_late: Optional[WindowOnLateCallback] = None
+) -> SlidingTimeWindowDefinition
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1029)
@@ -940,7 +940,7 @@ sdf = (
 <br>
 ***Returns:***
   
-  `SlidingWindowDefinition` instance representing the sliding window
+  `SlidingTimeWindowDefinition` instance representing the sliding window
   configuration.
   This object can be further configured with aggregation functions
   like `sum`, `count`, etc. applied to the StreamingDataFrame.
