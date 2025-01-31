@@ -65,7 +65,7 @@ class SlidingWindow(FixedTimeWindow):
         # Sliding windows are inclusive on both ends, so values with
         # timestamps equal to latest_timestamp - duration - grace
         # are still eligible for processing.
-        state_ts = state.get_latest_timestamp() or 0
+        state_ts = state.get_latest_id() or 0
         latest_timestamp = max(timestamp_ms, state_ts)
         max_expired_window_end = latest_timestamp - grace - 1
         max_expired_window_start = max_expired_window_end - duration
@@ -234,7 +234,7 @@ class SlidingWindow(FixedTimeWindow):
                 )
 
         if collect:
-            state.add_to_collection(value=value, timestamp_ms=timestamp_ms)
+            state.add_to_collection(value=value, id=timestamp_ms)
 
         expired_windows: list[WindowResult] = [
             WindowResult(start=start, end=end, value=self._merge_func(aggregation))

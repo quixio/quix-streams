@@ -1,12 +1,13 @@
 from typing import TYPE_CHECKING, Any, Optional
 
+from quixstreams.state.base import TransactionState
 from quixstreams.state.types import WindowedState
 
 if TYPE_CHECKING:
     from .transaction import WindowedRocksDBPartitionTransaction
 
 
-class WindowedTransactionState(WindowedState):
+class WindowedTransactionState(TransactionState, WindowedState):
     __slots__ = ("_transaction", "_prefix")
 
     def __init__(
@@ -17,8 +18,8 @@ class WindowedTransactionState(WindowedState):
 
         :param transaction: instance of `WindowedRocksDBPartitionTransaction`
         """
-        self._transaction = transaction
-        self._prefix = prefix
+        super().__init__(prefix=prefix, transaction=transaction)
+        self._transaction: WindowedRocksDBPartitionTransaction = transaction
 
     def get_window(
         self, start_ms: int, end_ms: int, default: Any = None
@@ -62,7 +63,7 @@ class WindowedTransactionState(WindowedState):
             prefix=self._prefix,
         )
 
-    def add_to_collection(self, value: Any, timestamp_ms: int) -> None:
+    def add_to_collection(self, value: Any, id: Optional[int]) -> int:
         """
         Collect a value for collection-type window aggregations.
 
@@ -75,21 +76,46 @@ class WindowedTransactionState(WindowedState):
         """
         return self._transaction.add_to_collection(
             value=value,
-            timestamp_ms=timestamp_ms,
+            id=id,
             prefix=self._prefix,
         )
 
-    def get_latest_timestamp(self) -> Optional[int]:
+    def get_from_collection(self, start: int, end: int) -> list[Any]:
         """
-        Get the latest observed timestamp for the current message key.
+        Return all values from a collection-type window aggregation.
 
-        Use this timestamp to determine if the arriving event is late and should be
+        :param start: starting timestamp of values to fetch
+        :param end: end timestamp of values to fetch
+        """
+        return self._transaction.get_from_collection(
+            start=start, end=end, prefix=self._prefix
+        )
+
+    def delete_from_collection(self, end: int) -> None:
+        """
+        Delete collected values with id less than end.
+
+        This method maintains a deletion index to track progress and avoid
+        re-scanning previously deleted values. It:
+        1. Retrieves the last deleted id from the cache
+        2. Scans values from last deleted id up to end
+        3. Updates the deletion index with the latest deleted id
+
+        :param end: Delete values with id less than this value
+        """
+        return self._transaction.delete_from_collection(end=end, prefix=self._prefix)
+
+    def get_latest_id(self) -> Optional[int]:
+        """
+        Get the latest observed message ID for the current state prefix
+        (same as message key).
+
+        Use this ID to determine if the arriving event is late and should be
         discarded from the processing.
 
-        :return: latest observed event timestamp in milliseconds
+        :return: latest observed event ID
         """
-
-        return self._transaction.get_latest_timestamp(prefix=self._prefix)
+        return self._transaction.get_latest_id(prefix=self._prefix)
 
     def expire_windows(
         self,
