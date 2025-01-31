@@ -172,4 +172,7 @@ class MongoDBSink(BatchingSink):
             )
         except (NetworkTimeout, ExecutionTimeout, WriteConcernError):
             logger.error("MongoDB: Encountered a server-side error; retrying batch.")
-            raise SinkBackpressureError
+            # TODO: confirm when SinkBackpressureError should be used?
+            raise SinkBackpressureError(
+                retry_after=10, topic=batch.topic, partition=batch.partition
+            )
