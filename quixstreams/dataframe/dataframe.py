@@ -54,9 +54,9 @@ from .registry import DataframeRegistry
 from .series import StreamingSeries
 from .utils import ensure_milliseconds
 from .windows import (
-    HoppingWindowDefinition,
-    SlidingWindowDefinition,
-    TumblingWindowDefinition,
+    HoppingTimeWindowDefinition,
+    SlidingTimeWindowDefinition,
+    TumblingTimeWindowDefinition,
 )
 from .windows.base import WindowOnLateCallback
 
@@ -845,7 +845,7 @@ class StreamingDataFrame:
         grace_ms: Union[int, timedelta] = 0,
         name: Optional[str] = None,
         on_late: Optional[WindowOnLateCallback] = None,
-    ) -> TumblingWindowDefinition:
+    ) -> TumblingTimeWindowDefinition:
         """
         Create a tumbling window transformation on this StreamingDataFrame.
         Tumbling windows divide time into fixed-sized, non-overlapping windows.
@@ -909,7 +909,7 @@ class StreamingDataFrame:
             (default behavior).
             Otherwise, no message will be logged.
 
-        :return: `TumblingWindowDefinition` instance representing the tumbling window
+        :return: `TumblingTimeWindowDefinition` instance representing the tumbling window
             configuration.
             This object can be further configured with aggregation functions
             like `sum`, `count`, etc. applied to the StreamingDataFrame.
@@ -918,7 +918,7 @@ class StreamingDataFrame:
         duration_ms = ensure_milliseconds(duration_ms)
         grace_ms = ensure_milliseconds(grace_ms)
 
-        return TumblingWindowDefinition(
+        return TumblingTimeWindowDefinition(
             duration_ms=duration_ms,
             grace_ms=grace_ms,
             dataframe=self,
@@ -933,7 +933,7 @@ class StreamingDataFrame:
         grace_ms: Union[int, timedelta] = 0,
         name: Optional[str] = None,
         on_late: Optional[WindowOnLateCallback] = None,
-    ) -> HoppingWindowDefinition:
+    ) -> HoppingTimeWindowDefinition:
         """
         Create a hopping window transformation on this StreamingDataFrame.
         Hopping windows divide the data stream into overlapping windows based on time.
@@ -1007,7 +1007,7 @@ class StreamingDataFrame:
             (default behavior).
             Otherwise, no message will be logged.
 
-        :return: `HoppingWindowDefinition` instance representing the hopping
+        :return: `HoppingTimeWindowDefinition` instance representing the hopping
             window configuration.
             This object can be further configured with aggregation functions
             like `sum`, `count`, etc. and applied to the StreamingDataFrame.
@@ -1017,7 +1017,7 @@ class StreamingDataFrame:
         step_ms = ensure_milliseconds(step_ms)
         grace_ms = ensure_milliseconds(grace_ms)
 
-        return HoppingWindowDefinition(
+        return HoppingTimeWindowDefinition(
             duration_ms=duration_ms,
             grace_ms=grace_ms,
             step_ms=step_ms,
@@ -1032,7 +1032,7 @@ class StreamingDataFrame:
         grace_ms: Union[int, timedelta] = 0,
         name: Optional[str] = None,
         on_late: Optional[WindowOnLateCallback] = None,
-    ) -> SlidingWindowDefinition:
+    ) -> SlidingTimeWindowDefinition:
         """
         Create a sliding window transformation on this StreamingDataFrame.
         Sliding windows continuously evaluate the stream with a fixed step of 1 ms
@@ -1101,7 +1101,7 @@ class StreamingDataFrame:
             (default behavior).
             Otherwise, no message will be logged.
 
-        :return: `SlidingWindowDefinition` instance representing the sliding window
+        :return: `SlidingTimeWindowDefinition` instance representing the sliding window
             configuration.
             This object can be further configured with aggregation functions
             like `sum`, `count`, etc. applied to the StreamingDataFrame.
@@ -1110,7 +1110,7 @@ class StreamingDataFrame:
         duration_ms = ensure_milliseconds(duration_ms)
         grace_ms = ensure_milliseconds(grace_ms)
 
-        return SlidingWindowDefinition(
+        return SlidingTimeWindowDefinition(
             duration_ms=duration_ms,
             grace_ms=grace_ms,
             dataframe=self,
