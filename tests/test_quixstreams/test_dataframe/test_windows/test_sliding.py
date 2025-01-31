@@ -1002,5 +1002,7 @@ def test_sliding_window_collect(
             all_windows_in_state = {window for window, *_ in state.get_windows(-1, 99)}
             assert all_windows_in_state == message.expected_windows_in_state
 
-            all_values_in_state = state._transaction._get_values(-1, 99, state._prefix)
+            all_values_in_state = state._transaction.get_from_collection(
+                -1, 99, state._prefix
+            )
             assert all_values_in_state == message.expected_values_in_state
