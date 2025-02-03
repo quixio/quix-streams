@@ -84,8 +84,8 @@ class WindowedTransactionState(TransactionState, WindowedState):
         """
         Return all values from a collection-type window aggregation.
 
-        :param start: starting timestamp of values to fetch
-        :param end: end timestamp of values to fetch
+        :param start: starting id of values to fetch (inclusive)
+        :param end: end id of values to fetch (exclusive)
         """
         return self._transaction.get_from_collection(
             start=start, end=end, prefix=self._prefix
@@ -107,8 +107,7 @@ class WindowedTransactionState(TransactionState, WindowedState):
 
     def get_latest_id(self) -> Optional[int]:
         """
-        Get the latest observed message ID for the current state prefix
-        (same as message key).
+        Get the latest observed message ID for the current message key.
 
         Use this ID to determine if the arriving event is late and should be
         discarded from the processing.
