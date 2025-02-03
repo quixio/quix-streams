@@ -1,4 +1,6 @@
 import logging
+import sys
+import time
 
 try:
     import neo4j
@@ -29,6 +31,7 @@ class Neo4jSink(BatchingSink):
         username: str,
         password: str,
         cypher_query: str,
+        batch_size: int = 10000,
         **kwargs,
     ) -> None:
         """
@@ -43,6 +46,11 @@ class Neo4jSink(BatchingSink):
             - Uses "dot traversal" for (nested) dict key access; ex: "col_x.col_y.col_z"
             - Message value is bound to the alias "event"; ex: "event.field_a".
             - Message key, value, header and timestamp are bound to "__{attr}"; ex: "__key".
+        :param chunk_size: Adjust the size of a Neo4j transactional chunk.
+            - This does NOT affect how many records can be written/flushed at once.
+            - A chunk will only successfully write once ALL chunks have succeeded.
+            - Larger chunks are generally more efficient, but can encounter size issues.
+            - This is only necessary to adjust when messages are especially large.
         :param kwargs: Additional keyword arguments passed to the
             `neo4j.GraphDatabase.driver` instance.
 
@@ -92,10 +100,10 @@ class Neo4jSink(BatchingSink):
             auth=(username, password),
             **kwargs,
         )
+        self._batch_size = batch_size
         self._query = self._make_cypher_query(cypher_query)
-        print(f"final cypher query:\n{self._query}")
 
-    def _make_cypher_query(self, user_query: str):
+    def _make_cypher_query(self, user_query: str) -> str:
         """
         There are a few things going on here:
 
@@ -118,34 +126,69 @@ class Neo4jSink(BatchingSink):
             f"{user_query}"
         )
 
+    def _transaction(self, tx: neo4j.ManagedTransaction, sink_batch: SinkBatch):
+        """
+        Encapsulating all tx.run() calls in a function means they are all part of
+        the same transaction.
+        """
+        _start = time.monotonic()
+        min_timestamp = sys.maxsize
+        max_timestamp = -1
+        for batch in sink_batch.iter_chunks(self._batch_size):
+            # Records must be a list of dicts to work in the batch Neo4j query.
+            records = []
+            for r in batch:
+                ts = r.timestamp
+                record = {
+                    "__key": r.key.decode() if isinstance(r.key, bytes) else r.key,
+                    "__value": r.value,
+                    "__header": r.headers or {},
+                    "__timestamp": ts,
+                }
+                records.append(record)
+                min_timestamp = min(ts, min_timestamp)
+                max_timestamp = max(ts, max_timestamp)
+            tx.run(self._query, records=records)
+        logger.info(
+            f"Sent data to Neo4j; "
+            f"messages_processed={sink_batch.size} "
+            f"min_timestamp={min_timestamp} "
+            f"max_timestamp={max_timestamp} "
+            f"time_elapsed={round(time.monotonic() - _start, 2)}s"
+        )
+
     def write(self, sink_batch: SinkBatch):
         """
         Cypher query to create a Person node and relate it to a City node.
         """
-        # Records must be a list of dicts to work in the batch Neo4j query.
-        records = [
-            {
-                "__key": r.key.decode() if isinstance(r.key, bytes) else r.key,
-                "__value": r.value,
-                "__header": r.headers or {},
-                "__timestamp": r.timestamp,
-            }
-            for r in sink_batch
-        ]
+        attempts_remaining = 3
         with self._client.session() as session:
-            try:
-                session.write_transaction(
-                    lambda tx: tx.run(self._query, records=records)
-                )
-            except (
-                SessionExpired,
-                ServiceUnavailable,
-                DatabaseUnavailable,
-                TransactionError,
-            ) as e:
-                logger.error(
-                    f"Failed to commit Neo4j transaction; error: {e}"
-                    "\nBacking off and retrying with a new Neo4j transaction"
-                )
-                raise SinkBackpressureError
-        logger.info("WRITE SUCCESS!")
+            while attempts_remaining:
+                try:
+                    session.execute_write(self._transaction, sink_batch)
+                    return
+                except (
+                    SessionExpired,
+                    ServiceUnavailable,
+                    DatabaseUnavailable,
+                    TransactionError,
+                ) as e:
+                    logger.error(f"Failed to commit Neo4j transaction; error: {e}")
+                attempts_remaining -= 1
+                if attempts_remaining:
+                    backoff = 5
+                    logger.error(
+                        f"Sleeping for {backoff} seconds and re-attempting. "
+                        f"Attempts remaining: {attempts_remaining}"
+                    )
+                    time.sleep(backoff)
+            backoff = 30
+            logger.error(
+                "Consecutive Neo4j network-based write failures occurred; "
+                f"performing a longer backoff of {backoff} seconds..."
+            )
+            raise SinkBackpressureError(
+                retry_after=backoff,
+                topic=sink_batch.topic,
+                partition=sink_batch.partition,
+            )
