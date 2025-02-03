@@ -116,7 +116,7 @@ class WindowedState(Protocol):
         """
         ...
 
-    def get_latest_id(self) -> Optional[int]:
+    def get_highest_id(self) -> Optional[int]:
         """
         Get the latest observed message ID for the current state prefix
         (same as message key).
@@ -300,7 +300,7 @@ class WindowedPartitionTransaction(Protocol):
         """
         ...
 
-    def get_latest_id(self, prefix: bytes) -> int:
+    def get_highest_id(self, prefix: bytes) -> int:
         """
         Get the latest observed message ID for the current state prefix
         (same as message key).

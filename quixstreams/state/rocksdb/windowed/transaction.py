@@ -98,8 +98,8 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
             ),
         )
 
-    def get_latest_id(self, prefix: bytes) -> Optional[int]:
-        return self._get_latest_id(
+    def get_highest_id(self, prefix: bytes) -> Optional[int]:
+        return self._get_highest_id(
             prefix=prefix, cache=self._latest_timestamps, default=0
         )
 
@@ -128,14 +128,14 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
 
         key = encode_integer_pair(start_ms, end_ms)
         self.set(key=key, value=value, prefix=prefix)
-        latest_timestamp_ms = self.get_latest_id(prefix=prefix)
+        latest_timestamp_ms = self.get_highest_id(prefix=prefix)
         updated_timestamp_ms = (
             max(latest_timestamp_ms, timestamp_ms)
             if latest_timestamp_ms is not None
             else timestamp_ms
         )
 
-        self._set_latest_id(
+        self._set_highest_id(
             cache=self._latest_timestamps,
             prefix=prefix,
             id=updated_timestamp_ms,
@@ -164,7 +164,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
 
     def delete_from_collection(self, end: int, prefix: bytes) -> None:
         start = (
-            self._get_latest_id(
+            self._get_highest_id(
                 cache=self._last_deleted_value_timestamps, prefix=prefix
             )
             or -1
@@ -180,7 +180,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
             self.delete(key=key, prefix=prefix, cf_name=VALUES_CF_NAME)
 
         if last_deleted_id is not None:
-            self._set_latest_id(
+            self._set_highest_id(
                 cache=self._last_deleted_value_timestamps,
                 prefix=prefix,
                 id=last_deleted_id,
@@ -233,7 +233,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         start_from = -1
 
         # Find the latest start timestamp of the expired windows for the given key
-        last_expired = self._get_latest_id(
+        last_expired = self._get_highest_id(
             cache=self._last_expired_timestamps, prefix=prefix
         )
         if last_expired is not None:
@@ -253,7 +253,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         latest_window = expired_windows[-1]
         last_expired__gt = latest_window[0][0]
 
-        self._set_latest_id(
+        self._set_highest_id(
             cache=self._last_expired_timestamps,
             prefix=prefix,
             id=last_expired__gt,
@@ -319,7 +319,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         start_from = -1
 
         # Find the latest start timestamp of the deleted windows for the given key
-        last_deleted = self._get_latest_id(
+        last_deleted = self._get_highest_id(
             cache=self._last_deleted_window_timestamps, prefix=prefix
         )
         if last_deleted is not None:
@@ -338,7 +338,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
 
         # Save the start of the latest deleted window to the deletion index
         if last_deleted__gt:
-            self._set_latest_id(
+            self._set_highest_id(
                 cache=self._last_deleted_window_timestamps,
                 prefix=prefix,
                 id=last_deleted__gt,
@@ -446,7 +446,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         # Sort and deserialize items merged from the cache and store
         return sorted(merged_items.items(), key=lambda kv: kv[0], reverse=backwards)
 
-    def _get_latest_id(
+    def _get_highest_id(
         self, cache: TimestampsCache, prefix: bytes, default: Any = None
     ) -> Optional[int]:
         cached_ts = cache.timestamps.get(prefix)
@@ -465,7 +465,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         cache.timestamps[prefix] = stored_ts
         return stored_ts
 
-    def _set_latest_id(self, cache: TimestampsCache, prefix: bytes, id: int):
+    def _set_highest_id(self, cache: TimestampsCache, prefix: bytes, id: int):
         cache.timestamps[prefix] = id
         self.set(
             key=cache.key,
