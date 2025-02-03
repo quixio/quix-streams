@@ -287,7 +287,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         if delete:
             for (start, end), _ in expired_windows:
                 self.delete_window(start, end, prefix=prefix)
-            if collect and start is not None:
+            if collect:
                 self.delete_from_collection(end=start, prefix=prefix)
 
         return expired_windows
