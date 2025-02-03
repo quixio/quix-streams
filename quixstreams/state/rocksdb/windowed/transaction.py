@@ -259,7 +259,6 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
             id=last_expired__gt,
         )
 
-        start = None
         # Collect values into windows
         if collect:
             collected_expired_windows = []
