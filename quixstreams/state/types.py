@@ -9,6 +9,41 @@ class WindowedState(Protocol):
     A windowed state to be provided into `StreamingDataFrame` window functions.
     """
 
+    def get(self, key: Any, default: Any = None) -> Optional[Any]:
+        """
+        Get the value for key if key is present in the state, else default
+
+        :param key: key
+        :param default: default value to return if the key is not found
+        :return: value or None if the key is not found and `default` is not provided
+        """
+        ...
+
+    def set(self, key: Any, value: Any):
+        """
+        Set value for the key.
+        :param key: key
+        :param value: value
+        """
+        ...
+
+    def delete(self, key: Any):
+        """
+        Delete value for the key.
+
+        This function always returns `None`, even if value is not found.
+        :param key: key
+        """
+        ...
+
+    def exists(self, key: Any) -> bool:
+        """
+        Check if the key exists in state.
+        :param key: key
+        :return: True if key exists, False otherwise
+        """
+        ...
+
     def get_window(
         self, start_ms: int, end_ms: int, default: Any = None
     ) -> Optional[Any]:
@@ -43,7 +78,7 @@ class WindowedState(Protocol):
         """
         ...
 
-    def add_to_collection(self, value: Any, timestamp_ms: int) -> None:
+    def add_to_collection(self, value: Any, id: Optional[int]) -> int:
         """
         Collect a value for collection-type window aggregations.
 
@@ -52,7 +87,32 @@ class WindowedState(Protocol):
         during window expiration.
 
         :param value: value to be collected
-        :param timestamp_ms: current message timestamp in milliseconds
+        :param id: current message ID, for example timestamp in milliseconds, does not have to be unique.
+
+        :return: the message ID, auto-generated if not provided
+        """
+        ...
+
+    def get_from_collection(self, start: int, end: int) -> list[Any]:
+        """
+        Return all values from a collection-type window aggregation.
+
+        :param start: starting id of values to fetch (inclusive)
+        :param end: end id of values to fetch (exclusive)
+        """
+        ...
+
+    def delete_from_collection(self, end: int) -> None:
+        """
+        Delete collected values with id less than end.
+
+        This method maintains a deletion index to track progress and avoid
+        re-scanning previously deleted values. It:
+        1. Retrieves the last deleted id from the cache
+        2. Scans values from last deleted id up to end
+        3. Updates the deletion index with the latest deleted id
+
+        :param end: Delete values with id less than this value
         """
         ...
 
@@ -201,7 +261,7 @@ class WindowedPartitionTransaction(Protocol):
         """
         ...
 
-    def add_to_collection(self, value: Any, timestamp_ms: int) -> None:
+    def add_to_collection(self, value: Any, id: Optional[int]) -> int:
         """
         Collect a value for collection-type window aggregations.
 
@@ -210,7 +270,32 @@ class WindowedPartitionTransaction(Protocol):
         during window expiration.
 
         :param value: value to be collected
-        :param timestamp_ms: current message timestamp in milliseconds
+        :param id: current message ID (for example, timestamp in milliseconds)
+
+        :return: the message ID, auto-generated if not provided
+        """
+        ...
+
+    def get_from_collection(self, start: int, end: int) -> list[Any]:
+        """
+        Return all values from a collection-type window aggregation.
+
+        :param start: starting id of values to fetch (inclusive)
+        :param end: end id of values to fetch (exclusive)
+        """
+        ...
+
+    def delete_from_collection(self, end: int) -> None:
+        """
+        Delete collected values with id less than end.
+
+        This method maintains a deletion index to track progress and avoid
+        re-scanning previously deleted values. It:
+        1. Retrieves the last deleted id from the cache
+        2. Scans values from last deleted id up to end
+        3. Updates the deletion index with the latest deleted id
+
+        :param end: Delete values with id less than this value
         """
         ...
 

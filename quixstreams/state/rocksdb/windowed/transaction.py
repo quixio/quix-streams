@@ -7,7 +7,11 @@ from rocksdict import ReadOptions
 from quixstreams.state.base.transaction import PartitionTransaction
 from quixstreams.state.metadata import DEFAULT_PREFIX, SEPARATOR
 from quixstreams.state.recovery import ChangelogProducer
-from quixstreams.state.serialization import DumpsFunc, LoadsFunc, serialize
+from quixstreams.state.serialization import (
+    DumpsFunc,
+    LoadsFunc,
+    serialize,
+)
 
 from .metadata import (
     GLOBAL_COUNTER_CF_NAME,
@@ -139,12 +143,48 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
 
     def add_to_collection(
         self,
-        timestamp_ms: int,
+        id: Optional[int],
         value: Any,
         prefix: bytes,
-    ) -> None:
-        key = encode_integer_pair(timestamp_ms, self._get_next_count())
+    ) -> int:
+        counter = self._get_next_count()
+        if id:
+            key = encode_integer_pair(id, counter)
+        else:
+            key = encode_integer_pair(counter, counter)
+
         self.set(key=key, value=value, prefix=prefix, cf_name=VALUES_CF_NAME)
+        return counter
+
+    def get_from_collection(self, start: int, end: int, prefix: bytes) -> list[Any]:
+        items = self._get_items(
+            start=start, end=end, prefix=prefix, cf_name=VALUES_CF_NAME
+        )
+        return [self._deserialize_value(value) for _, value in items]
+
+    def delete_from_collection(self, end: int, prefix: bytes) -> None:
+        start = (
+            self._get_timestamp(
+                cache=self._last_deleted_value_timestamps, prefix=prefix
+            )
+            or -1
+        )
+
+        last_deleted_id = None
+        for key, _ in self._get_items(
+            start=start, end=end, prefix=prefix, cf_name=VALUES_CF_NAME
+        ):
+            _, id, count = parse_window_key(key)
+            last_deleted_id = max(last_deleted_id or 0, id)
+            key = encode_integer_pair(id, count)
+            self.delete(key=key, prefix=prefix, cf_name=VALUES_CF_NAME)
+
+        if last_deleted_id is not None:
+            self._set_timestamp(
+                cache=self._last_deleted_value_timestamps,
+                prefix=prefix,
+                timestamp_ms=last_deleted_id,
+            )
 
     def delete_window(self, start_ms: int, end_ms: int, prefix: bytes):
         self._validate_duration(start_ms=start_ms, end_ms=end_ms)
@@ -223,7 +263,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         if collect:
             collected_expired_windows = []
             for (start, end), value in expired_windows:
-                collection = self._get_values(
+                collection = self.get_from_collection(
                     start=start,
                     # Sliding windows are inclusive on both ends
                     # (including timestamps of messages equal to `end`).
@@ -247,7 +287,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
             for (start, end), _ in expired_windows:
                 self.delete_window(start, end, prefix=prefix)
             if collect:
-                self._delete_values(max_timestamp=start, prefix=prefix)
+                self.delete_from_collection(end=start, prefix=prefix)
 
         return expired_windows
 
@@ -304,43 +344,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
             )
 
         if delete_values:
-            self._delete_values(max_timestamp=max_start_time, prefix=prefix)
-
-    def _delete_values(self, max_timestamp: int, prefix: bytes) -> None:
-        """
-        Delete collected values with timestamps less than max_timestamp.
-
-        This method maintains a deletion index to track progress and avoid
-        re-scanning previously deleted values. It:
-        1. Retrieves the last deleted timestamp from the cache
-        2. Scans values from last deleted timestamp up to max_timestamp
-        3. Updates the deletion index with the latest deleted timestamp
-
-        :param max_timestamp: Delete values with timestamps less than this value
-        :param prefix: Key prefix for filtering values to delete
-        """
-        start = (
-            self._get_timestamp(
-                cache=self._last_deleted_value_timestamps, prefix=prefix
-            )
-            or -1
-        )
-
-        last_deleted_timestamp = None
-        for key, _ in self._get_items(
-            start=start, end=max_timestamp, prefix=prefix, cf_name=VALUES_CF_NAME
-        ):
-            _, timestamp_ms, count = parse_window_key(key)
-            last_deleted_timestamp = max(last_deleted_timestamp or 0, timestamp_ms)
-            key = encode_integer_pair(timestamp_ms, count)
-            self.delete(key=key, prefix=prefix, cf_name=VALUES_CF_NAME)
-
-        if last_deleted_timestamp is not None:
-            self._set_timestamp(
-                cache=self._last_deleted_value_timestamps,
-                prefix=prefix,
-                timestamp_ms=last_deleted_timestamp,
-            )
+            self.delete_from_collection(end=max_start_time, prefix=prefix)
 
     def get_windows(
         self,
@@ -382,12 +386,6 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
                 result.append(((start, end), value))
 
         return result
-
-    def _get_values(self, start: int, end: int, prefix: bytes) -> list[Any]:
-        items = self._get_items(
-            start=start, end=end, prefix=prefix, cf_name=VALUES_CF_NAME
-        )
-        return [self._deserialize_value(value) for _, value in items]
 
     def _get_items(
         self,

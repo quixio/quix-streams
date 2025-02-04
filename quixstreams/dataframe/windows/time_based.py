@@ -101,7 +101,7 @@ class FixedTimeWindow(Window):
             )
 
         if collect:
-            state.add_to_collection(value=value, timestamp_ms=timestamp_ms)
+            state.add_to_collection(value=value, id=timestamp_ms)
 
         expired_windows: list[WindowResult] = []
         for (start, end), aggregated in state.expire_windows(
