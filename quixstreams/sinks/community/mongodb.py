@@ -30,7 +30,6 @@ __all__ = ("MongoDBSink",)
 
 logger = logging.getLogger(__name__)
 
-
 MongoValue = Union[
     str,
     int,
@@ -47,14 +46,16 @@ MongoValue = Union[
     bson.Code,
     uuid.UUID,
 ]
+MongoQueryFilter = dict[str, MongoValue]
+
 
 _UPDATE_MAP = {
     "UpdateOne": UpdateOne,
     "ReplaceOne": ReplaceOne,
     "UpdateMany": UpdateMany,
 }
-
-MongoQueryFilter = dict[str, MongoValue]
+_ATTEMPT_BACKOFF = 5
+_SINK_BACKOFF = 30
 
 
 def _default_document_matcher(record: SinkItem) -> MongoQueryFilter:
@@ -176,6 +177,16 @@ class MongoDBSink(BatchingSink):
                 # client does it for us automatically (chunks every 10k records).
                 # It will block until all writes are successful.
                 self._collection.bulk_write(records)
+            except (NetworkTimeout, ExecutionTimeout, WriteConcernError) as e:
+                logger.error(f"MongoDB: Encountered a network or server error: {e}")
+                attempts_remaining -= 1
+                if attempts_remaining:
+                    logger.error(
+                        f"Sleeping for {_ATTEMPT_BACKOFF} seconds and re-attempting. "
+                        f"Attempts remaining: {attempts_remaining}"
+                    )
+                    time.sleep(_ATTEMPT_BACKOFF)
+            else:
                 logger.info(
                     "Sent update requests to MongoDB; "
                     f"messages_processed={batch.size} "
@@ -187,23 +198,12 @@ class MongoDBSink(BatchingSink):
                     f"time_elapsed={round(time.monotonic() - start, 2)}s"
                 )
                 return
-            except (NetworkTimeout, ExecutionTimeout, WriteConcernError) as e:
-                logger.error(f"MongoDB: Encountered a network or server error: {e}")
-            attempts_remaining -= 1
-            if attempts_remaining:
-                backoff = 5
-                logger.error(
-                    f"Sleeping for {backoff} seconds and re-attempting. "
-                    f"Attempts remaining: {attempts_remaining}"
-                )
-                time.sleep(backoff)
-        backoff = 30
         logger.error(
             "Consecutive MongoDB write attempts failed; "
-            f"performing a longer backoff of {backoff} seconds..."
+            f"performing a longer backoff of {_SINK_BACKOFF} seconds..."
         )
         raise SinkBackpressureError(
-            retry_after=backoff,
+            retry_after=_SINK_BACKOFF,
             topic=batch.topic,
             partition=batch.partition,
         )

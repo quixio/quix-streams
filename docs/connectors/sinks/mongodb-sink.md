@@ -29,7 +29,7 @@ Regardless of approach, the following is always true:
 
 - The Kafka message `value` fields are dumped as whatever objects they are.
 - The sink ensures that the order of messages is preserved within each partition. 
-    - This means that messages are sent to MongoDB in the same order they are received from Kafka for each specific partition.
+- This means that messages are sent to MongoDB in the same order they are received from Kafka for each specific partition.
 
 
 ## Export Behavior
