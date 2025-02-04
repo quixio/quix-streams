@@ -80,6 +80,11 @@ if __name__ == "__main__":
     - Uses "dot traversal" for (nested) dict key access; ex: `col_x.col_y.col_z`
     - Message value is bound to the alias "event"; ex: `event.field_a`.
     - Message key, value, header and timestamp are bound to `__{attr}`; ex: `__key`.
+- `chunk_size`: Adjust the size of a Neo4j transactional chunk.
+    - This does NOT affect how many records can be written/flushed at once.
+    - The chunks are committed only if ALL of them succeed.
+    - Larger chunks are generally more efficient, but can encounter size issues.
+    - This is only necessary to adjust when messages are especially large.
 - Additional keyword arguments are passed to the `neo4j.GraphDatabase.driver`
 
 ## Error Handling and Delivery Guarantees
