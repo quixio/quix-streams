@@ -222,7 +222,15 @@ sdf = (
 
 Count-based Tumbling Windows slice incoming events into batch of a fixed size.
 
-For example, a tumbling window configured with a count of 10 will batch and aggregate message 1 to 10, then 11 to 20, 21 to 31 and so on. 
+For example, a tumbling window configured with a count of 4 will batch and aggregate message 1 to 4, then 5 to 8, 9 to 12 and so on. 
+
+```
+Count       Tumbing Windows
+[0, 3]  : ....
+[4, 7]  :     ....
+[8, 11] :         ....
+[12, 15] :            ....
+```
 
 In a tumbing window each message is only assigned to a **single** interval.
 
@@ -262,7 +270,7 @@ sdf = (
     # Define a count-based tumbling window of 3 events
     .tumbling_count_window(count=3)
 
-    # Specify the "mean" aggregate function
+    # Specify the "min" aggregate function
     .min()
 
     # Emit updates once the window is closed
@@ -369,6 +377,19 @@ sdf = (
 
 ## Count-based Hopping Windows
 
+Count-based Hopping Windows slice incoming messages into overlapping batch of a fixed size with a fixed step.
+
+For example, a hopping windows of 6 messages with a step of 2 messages will generate the following windows:
+
+```
+Count       Hopping Windows
+[0, 5]  : ......
+[2, 7]  :   ......
+[4, 9]  :     ......
+[6, 11] :       ......
+```
+
+In hopping windows each messages can be assigned to multiple windows because the windows overlap.
 
 ## Time-based Sliding Windows
 Sliding windows are overlapping time-based windows that advance with each incoming message, rather than at fixed time intervals like hopping windows. They have a fixed 1 ms resolution and perform better and are less resource-intensive than hopping windows with a 1 ms step. Sliding windows do not produce redundant windows; every interval has a distinct aggregation.
@@ -459,6 +480,78 @@ sdf = (
 
 ## Count-based Sliding Windows
 
+Sliding windows are overlapping windows that advance with each incoming message. They are equal to count-based hopping windows with a step of 1.
+
+For example a sliding window of 4 messagew will generate the followiwng windows:
+
+```
+Count       Sliding Windows
+[0, 3]  : ....
+[1, 4]  :  ....
+[2, 5]  :   ....
+[3, 6]  :    ....
+```
+
+In sliding windows each message is assigned to multiple windows because the windows overlap.
+
+**Example**
+
+Imagine you receive events whenever a user gain experience in a game. You want to show users the mean experience gained of their last 4 actions.
+
+Input:
+
+(Here the `"offset"` column illustrates Kafka message offset)
+```json
+{"experience": 100, "timestamp": 121, "offset": 1}
+{"experience": 50, "timestamp": 165, "offset": 2}
+{"experience": 200, "timestamp": 583, "offset": 3}
+{"experience": 30, "timestamp": 723, "offset": 4}
+{"experience": 150, "timestamp": 1009, "offset": 5}
+{"experience": 60, "timestamp": 1242, "offset": 6}
+```
+
+Expected output:
+
+```json
+{"mean": 95, "window_start_ms": 121, "window_end_ms": 723}
+{"mean": 107.5, "window_start_ms": 165, "window_end_ms": 1009}
+{"mean": 110, "window_start_ms": 583, "window_end_ms": 1242}
+```
+
+Here is how to do it using tumbling windows: 
+
+```python
+from datetime import timedelta
+from quixstreams import Application
+
+app = Application(...)
+sdf = app.dataframe(...)
+
+
+sdf = (
+    # Extract "experience" value from the message
+    sdf.apply(lambda value: value["experience"])
+
+    # Define a count-based tumbling window of 3 events
+    .sliding_count_window(count=4)
+
+    # Specify the "mean" aggregate function
+    .mean()
+
+    # Emit updates once the window is closed
+    .final()
+
+    # Unwrap the aggregated result to match the expected output format
+    .apply(
+        lambda result: {
+            "mean": result["value"],
+            "window_start_ms": result["start"],
+            "window_end_ms": result["end"],
+        }
+    )
+)
+
+```
 
 ## Supported Aggregations
 
@@ -762,7 +855,63 @@ sdf.tumbling_window(timedelta(hours=1), grace_ms=timedelta(seconds=10))
 
 The appropriate value for a grace period varies depending on the use case.
 
- 
+
+### Reacting on late events 
+!!! info New in v3.8.0
+
+To react on late records coming into time windows, you can pass the `on_late` callbacks to `.tumbling_window()`, `.hopping_window()` and `.sliding_window()` methods.
+
+You can use this callback to customize the logging of such messages or to send them to some dead-letter queue, for example.
+
+**How it works**:
+
+- If the `on_late` callback is not provided (default), the application will simply log the late events.
+- The same will happen when the callback returns `True`.
+- When the callback returns `False`, no logs will be produced. 
+
+
+**Example**:
+
+```python
+from typing import Any
+
+from datetime import timedelta
+from quixstreams import Application
+
+app = Application(...)
+sdf = app.dataframe(...)
+
+
+def on_late(
+    value: Any,         # Record value
+    key: Any,           # Record key
+    timestamp_ms: int,  # Record timestamp
+    late_by_ms: int,    # How late the record is in milliseconds
+    start: int,         # Start of the target window
+    end: int,           # End of the target window
+    name: str,          # Name of the window state store
+    topic: str,         # Topic name
+    partition: int,     # Topic partition
+    offset: int,        # Message offset
+) -> bool:
+    """
+    Define a callback to react on late records coming into windowed aggregations.
+    Return `False` to suppress the default logging behavior.
+    """
+    print(f"Late message is detected at the window {(start, end)}")
+    return False
+
+# Define a 1-hour tumbling window and provide the "on_late" callback to it
+sdf.tumbling_window(timedelta(hours=1), on_late=on_late)
+
+
+# Start the application
+if __name__ == '__main__':
+    app.run()
+
+```
+
+
 
 ## Emitting results
 
