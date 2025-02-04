@@ -17,7 +17,6 @@ try:
         NetworkTimeout,
         WriteConcernError,
     )
-
 except ImportError as exc:
     raise ImportError(
         f"Package {exc.name} is missing: "
