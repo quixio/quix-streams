@@ -314,7 +314,7 @@ class TestWindowedRocksDBPartitionTransaction:
         assert expired[1] == ((10, 20), 1)
         assert expired[2] == ((20, 30), 1)
 
-    def test_get_highest_id_update(self, windowed_rocksdb_store_factory):
+    def test_get_latest_timestamp_update(self, windowed_rocksdb_store_factory):
         store = windowed_rocksdb_store_factory()
         partition = store.assign_partition(0)
         timestamp = 123
@@ -325,7 +325,9 @@ class TestWindowedRocksDBPartitionTransaction:
         with partition.begin() as tx:
             assert tx.get_latest_timestamp(prefix=prefix) == timestamp
 
-    def test_get_highest_id_cannot_go_backwards(self, windowed_rocksdb_store_factory):
+    def test_get_latest_timestamp_cannot_go_backwards(
+        self, windowed_rocksdb_store_factory
+    ):
         store = windowed_rocksdb_store_factory()
         partition = store.assign_partition(0)
         timestamp = 9

@@ -112,8 +112,9 @@ class WindowedTransactionState(TransactionState, WindowedState):
         Use this timestamp to determine if the arriving event is late and should be
         discarded from the processing.
 
-        :return: latest observed timestamp
+        :return: latest observed event timestamp in milliseconds
         """
+
         return self._transaction.get_latest_timestamp(prefix=self._prefix)
 
     def expire_windows(
