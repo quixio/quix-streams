@@ -158,9 +158,6 @@ class Neo4jSink(BatchingSink):
         )
 
     def write(self, batch: SinkBatch):
-        """
-        Cypher query to create a Person node and relate it to a City node.
-        """
         attempts_remaining = 3
         with self._client.session() as session:
             while attempts_remaining:

@@ -21,12 +21,12 @@ pip install quixstreams[neo4j]
 
 ## How It Works
 
-`Neo4jSink` is a streaming sink that publishes messages to Neo4j in batches with a
+`Neo4jSink` is a batching sink that publishes messages to Neo4j in batches with a
 transaction and `UNWIND`.
 
 It takes a single-record cypher query (provided by the user), prepends the sanctioned 
 aliases (`event` and `__{param}`) and `UNWIND`-ing, and uses that as the query to 
-publish messages to Neo4j.
+publish messages in batches to Neo4j.
 
 
 ## How To Use
