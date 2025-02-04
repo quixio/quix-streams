@@ -59,7 +59,7 @@ def test_expire_windows(transaction_state, delete):
 
     with transaction_state() as state:
         state.update_window(start_ms=20, end_ms=30, value=3, timestamp_ms=20)
-        max_start_time = state.get_highest_id() - duration_ms
+        max_start_time = state.get_latest_timestamp() - duration_ms
         expired = state.expire_windows(max_start_time=max_start_time, delete=delete)
         # "expire_windows" must update the expiration index so that the same
         # windows are not expired twice
@@ -96,7 +96,7 @@ def test_expire_windows_with_collect(transaction_state, end_inclusive):
 
     with transaction_state() as state:
         state.update_window(start_ms=20, end_ms=30, value=None, timestamp_ms=20)
-        max_start_time = state.get_highest_id() - duration_ms
+        max_start_time = state.get_latest_timestamp() - duration_ms
         expired = state.expire_windows(
             max_start_time=max_start_time,
             collect=True,
@@ -122,14 +122,14 @@ def test_same_keys_in_db_and_update_cache(transaction_state):
         state.update_window(start_ms=0, end_ms=10, value=3, timestamp_ms=8)
 
         state.update_window(start_ms=10, end_ms=20, value=2, timestamp_ms=10)
-        max_start_time = state.get_highest_id() - duration_ms
+        max_start_time = state.get_latest_timestamp() - duration_ms
         expired = state.expire_windows(max_start_time=max_start_time)
 
         # Value from the cache takes precedence over the value in the db
         assert expired == [((0, 10), 3)]
 
 
-def test_get_highest_id(windowed_rocksdb_store_factory):
+def test_get_latest_timestamp(windowed_rocksdb_store_factory):
     store = windowed_rocksdb_store_factory()
     partition = store.assign_partition(0)
     timestamp = 123
@@ -141,7 +141,7 @@ def test_get_highest_id(windowed_rocksdb_store_factory):
 
     partition = store.assign_partition(0)
     with partition.begin() as tx:
-        assert tx.get_highest_id(prefix=prefix) == timestamp
+        assert tx.get_latest_timestamp(prefix=prefix) == timestamp
 
 
 @pytest.mark.parametrize(

@@ -116,7 +116,7 @@ class WindowedState(Protocol):
         """
         ...
 
-    def get_highest_id(self) -> Optional[int]:
+    def get_latest_timestamp(self) -> Optional[int]:
         """
         Get the latest observed message ID for the current state prefix
         (same as message key).
@@ -300,15 +300,14 @@ class WindowedPartitionTransaction(Protocol):
         """
         ...
 
-    def get_highest_id(self, prefix: bytes) -> int:
+    def get_latest_timestamp(self, prefix: bytes) -> int:
         """
-        Get the latest observed message ID for the current state prefix
-        (same as message key).
+        Get the latest observed timestamp for the current message key.
 
-        Use this ID to determine if the arriving event is late and should be
+        Use this timestamp to determine if the arriving event is late and should be
         discarded from the processing.
 
-        :return: latest observed event ID
+        :return: latest observed timestamp
         """
         ...
 

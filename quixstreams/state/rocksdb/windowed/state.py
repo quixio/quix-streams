@@ -105,16 +105,16 @@ class WindowedTransactionState(TransactionState, WindowedState):
         """
         return self._transaction.delete_from_collection(end=end, prefix=self._prefix)
 
-    def get_highest_id(self) -> Optional[int]:
+    def get_latest_timestamp(self) -> Optional[int]:
         """
-        Get the highest observed message ID for the current message key.
+        Get the latest observed timestamp for the current message key.
 
-        Use this ID to determine if the arriving event is late and should be
+        Use this timestamp to determine if the arriving event is late and should be
         discarded from the processing.
 
-        :return: latest observed event ID
+        :return: latest observed timestamp
         """
-        return self._transaction.get_highest_id(prefix=self._prefix)
+        return self._transaction.get_latest_timestamp(prefix=self._prefix)
 
     def expire_windows(
         self,

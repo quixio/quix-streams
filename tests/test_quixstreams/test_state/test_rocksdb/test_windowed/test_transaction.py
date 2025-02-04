@@ -62,7 +62,7 @@ class TestWindowedRocksDBPartitionTransaction:
             tx.update_window(
                 start_ms=20, end_ms=30, value=3, timestamp_ms=20, prefix=prefix
             )
-            max_start_time = tx.get_highest_id(prefix=prefix) - duration_ms
+            max_start_time = tx.get_latest_timestamp(prefix=prefix) - duration_ms
             expired = tx.expire_windows(
                 max_start_time=max_start_time, prefix=prefix, delete=delete
             )
@@ -112,7 +112,7 @@ class TestWindowedRocksDBPartitionTransaction:
             tx.update_window(
                 start_ms=20, end_ms=30, value=3, timestamp_ms=20, prefix=prefix
             )
-            max_start_time = tx.get_highest_id(prefix=prefix) - duration_ms
+            max_start_time = tx.get_latest_timestamp(prefix=prefix) - duration_ms
             expired = tx.expire_windows(
                 max_start_time=max_start_time, prefix=prefix, delete=delete
             )
@@ -156,7 +156,7 @@ class TestWindowedRocksDBPartitionTransaction:
             tx.update_window(
                 start_ms=3, end_ms=13, value=1, timestamp_ms=3, prefix=prefix
             )
-            max_start_time = tx.get_highest_id(prefix=prefix) - duration_ms
+            max_start_time = tx.get_latest_timestamp(prefix=prefix) - duration_ms
             assert not tx.expire_windows(max_start_time=max_start_time, prefix=prefix)
 
     def test_expire_windows_with_grace_expired(self, windowed_rocksdb_store_factory):
@@ -175,7 +175,9 @@ class TestWindowedRocksDBPartitionTransaction:
             tx.update_window(
                 start_ms=15, end_ms=25, value=1, timestamp_ms=15, prefix=prefix
             )
-            max_start_time = tx.get_highest_id(prefix=prefix) - duration_ms - grace_ms
+            max_start_time = (
+                tx.get_latest_timestamp(prefix=prefix) - duration_ms - grace_ms
+            )
             expired = tx.expire_windows(max_start_time=max_start_time, prefix=prefix)
 
         assert len(expired) == 1
@@ -197,7 +199,9 @@ class TestWindowedRocksDBPartitionTransaction:
             tx.update_window(
                 start_ms=13, end_ms=23, value=1, timestamp_ms=13, prefix=prefix
             )
-            max_start_time = tx.get_highest_id(prefix=prefix) - duration_ms - grace_ms
+            max_start_time = (
+                tx.get_latest_timestamp(prefix=prefix) - duration_ms - grace_ms
+            )
             expired = tx.expire_windows(max_start_time=max_start_time, prefix=prefix)
 
         assert not expired
@@ -276,7 +280,7 @@ class TestWindowedRocksDBPartitionTransaction:
             )
             # "expire_windows" must update the expiration index so that the same
             # windows are not expired twice
-            max_start_time = tx.get_highest_id(prefix=prefix) - duration_ms
+            max_start_time = tx.get_latest_timestamp(prefix=prefix) - duration_ms
             assert not tx.expire_windows(max_start_time=max_start_time, prefix=prefix)
 
     def test_expire_windows_multiple_windows(self, windowed_rocksdb_store_factory):
@@ -302,7 +306,7 @@ class TestWindowedRocksDBPartitionTransaction:
             )
             # "expire_windows" must update the expiration index so that the same
             # windows are not expired twice
-            max_start_time = tx.get_highest_id(prefix=prefix) - duration_ms
+            max_start_time = tx.get_latest_timestamp(prefix=prefix) - duration_ms
             expired = tx.expire_windows(max_start_time=max_start_time, prefix=prefix)
 
         assert len(expired) == 3
@@ -319,7 +323,7 @@ class TestWindowedRocksDBPartitionTransaction:
             tx.update_window(0, 10, value=1, timestamp_ms=timestamp, prefix=prefix)
 
         with partition.begin() as tx:
-            assert tx.get_highest_id(prefix=prefix) == timestamp
+            assert tx.get_latest_timestamp(prefix=prefix) == timestamp
 
     def test_get_highest_id_cannot_go_backwards(self, windowed_rocksdb_store_factory):
         store = windowed_rocksdb_store_factory()
@@ -329,10 +333,10 @@ class TestWindowedRocksDBPartitionTransaction:
         with partition.begin() as tx:
             tx.update_window(0, 10, value=1, timestamp_ms=timestamp, prefix=prefix)
             tx.update_window(0, 10, value=1, timestamp_ms=timestamp - 1, prefix=prefix)
-            assert tx.get_highest_id(prefix=prefix) == timestamp
+            assert tx.get_latest_timestamp(prefix=prefix) == timestamp
 
         with partition.begin() as tx:
-            assert tx.get_highest_id(prefix=prefix) == timestamp
+            assert tx.get_latest_timestamp(prefix=prefix) == timestamp
 
     def test_update_window_and_prepare(
         self, windowed_rocksdb_partition_factory, changelog_producer_mock

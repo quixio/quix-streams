@@ -68,7 +68,7 @@ class FixedTimeWindow(Window):
             step_ms=self._step_ms,
         )
 
-        state_ts = state.get_highest_id() or 0
+        state_ts = state.get_latest_timestamp() or 0
         latest_timestamp = max(timestamp_ms, state_ts)
         max_expired_window_end = latest_timestamp - grace_ms
         max_expired_window_start = max_expired_window_end - duration_ms
