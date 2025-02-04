@@ -6,7 +6,7 @@
 
     To learn more about differences between Core and Community connectors, see the [Community and Core Connectors](../community-and-core.md) page.
 
-This sink writes data to an MongoDB Database, with a few ways to dump data.
+This sink writes data to a MongoDB Database, with a few ways to dump data.
 
 By default, it assumes 1:1 relationship with MongoDB's `_id` field and Kafka keys, but 
 other update patterns are possible.
