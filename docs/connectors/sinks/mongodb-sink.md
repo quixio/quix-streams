@@ -8,8 +8,6 @@
 
 This sink writes data to a MongoDB Database, with a few ways to dump data.
 
-By default, it assumes 1:1 relationship with MongoDB's `_id` field and Kafka keys, but 
-other update patterns are possible.
 
 ## How To Install
 
