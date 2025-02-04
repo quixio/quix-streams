@@ -76,7 +76,7 @@ from quixstreams.sinks.community.mongodb import MongoDBSink
 from quixstreams.sinks.base.item import SinkItem
 
 def match_on_last_name(batch_item: SinkItem):
-    return {"_id": SinkItem.value["name"]["last"]}
+    return {"_id": batch_item.value["name"]["last"]}
 
 sink = MongoDBSink(
     ..., # other required stuff
