@@ -236,28 +236,35 @@ In a tumbing window each message is only assigned to a **single** interval.
 
 **Example**
 
-Imagine you receive events whenever a user gain experience in a game. Everytime a user gain experience 3 times they are granted a bonus equal to the minimum experience gained.
+Imagine you have to run a slow and resources intensive operation, like running a machine-learning model, on some data. To optimise your data analysis pipeline you want to batch data before running the inference. In this example we batch data from 3 messages before running the slow operation.
 
 Input:
 
 (Here the `"offset"` column illustrates Kafka message offset)
 ```json
-{"experience": 100, "timestamp": 121, "offset": 1}
-{"experience": 50, "timestamp": 165, "offset": 2}
-{"experience": 200, "timestamp": 583, "offset": 3}
+{"data": 100, "timestamp": 121, "offset": 1}
+{"data": 50, "timestamp": 165, "offset": 2}
+{"data": 200, "timestamp": 583, "offset": 3}
 ```
 
 Expected output:
 
 ```json
-{"bonus": 50, "window_start_ms": 121, "window_end_ms": 583}
+{"data": [100, 50, 200], "window_start_ms": 121, "window_end_ms": 583}
 ```
 
 Here is how to do it using tumbling windows: 
 
 ```python
+import time
+
 from datetime import timedelta
 from quixstreams import Application
+
+def slow_operation(value):
+    # simulate slow operation
+    time.sleep(1)
+    return value
 
 app = Application(...)
 sdf = app.dataframe(...)
@@ -265,13 +272,13 @@ sdf = app.dataframe(...)
 
 sdf = (
     # Extract "experience" value from the message
-    sdf.apply(lambda value: value["experience"])
+    sdf.apply(lambda value: value["data"])
 
     # Define a count-based tumbling window of 3 events
     .tumbling_count_window(count=3)
 
-    # Specify the "min" aggregate function
-    .min()
+    # Specify the "collect" aggregate function
+    .collect()
 
     # Emit updates once the window is closed
     .final()
@@ -279,12 +286,14 @@ sdf = (
     # Unwrap the aggregated result to match the expected output format
     .apply(
         lambda result: {
-            "bonus": result["value"],
+            "data": result["value"],
             "window_start_ms": result["start"],
             "window_end_ms": result["end"],
         }
     )
 )
+
+sdf.apply(slow_operation)
 
 ```
 
