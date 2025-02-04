@@ -74,7 +74,7 @@ create a new document where `_id` will be assigned an `ObjectID` (default MongoD
 ### Alternate behavior: pattern-based updates
 
 The `document_matcher` can alternatively be used to match more than one document at a time; it 
-simply has to return any valid MongoDB "filter query" (what is used by MongoDB's `.find()`).
+simply has to return any valid MongoDB "query filter" (what is used by MongoDB's `.find()`).
 
 This approach enables updating multiple documents from one message.
 
