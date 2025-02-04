@@ -99,9 +99,9 @@ class MongoDBSink(BatchingSink):
         :param add_message_metadata: add key, timestamp, and headers as `__{field}`
         :param add_topic_metadata: add topic, partition, and offset as `__{field}`
         :param value_selector: An optional callable that allows final editing of the
-            outgoing document state (right before submitting it).
-            This is mostly necessary in special cases, like when a field is required
-            for the `document_matcher` but not desired in the final output.
+            outgoing document (right before submitting it).
+            This is mostly used in cases where a field is required
+            for the `document_matcher` but not desired in the end document.
             NOTE: metadata is added before this step, so don't accidentally
             exclude it here!
         """
@@ -122,7 +122,7 @@ class MongoDBSink(BatchingSink):
     def _add_metadata(self, topic: str, partition: int, record: SinkItem) -> MongoValue:
         value = record.value
         if self._add_message_metadata:
-            # tuples are one of the few unsupported common types, so let's convert them
+            # tuples are one of the few unsupported common types, so we convert them
             # so users don't need to manage it.
             value["__key"] = (
                 str(record.key) if isinstance(record.key, tuple) else record.key
@@ -141,7 +141,7 @@ class MongoDBSink(BatchingSink):
         network call, and the transaction has size limits...so `bulk_write` is used
         instead, with the downside that duplicate writes may occur if errors arise.
         """
-        _start = time.monotonic()
+        start = time.monotonic()
         min_timestamp = sys.maxsize
         max_timestamp = -1
         doc_match = self._document_matcher
@@ -169,23 +169,42 @@ class MongoDBSink(BatchingSink):
             )
             min_timestamp = min(ts, min_timestamp)
             max_timestamp = max(ts, max_timestamp)
-        try:
-            # We don't need to worry about manually batching our writes, the MongoDB
-            # client does it for us automatically (chunks every 10k records).
-            # It will block until all writes are successful.
-            self._collection.bulk_write(records)
-            logger.info(
-                f"Sent update requests to MongoDB; "
-                f"messages_processed={batch.size} "
-                f"host_address={self._client.address[0]} "
-                f"database={self._db_name} "
-                f"collection={self._collection_name} "
-                f"min_timestamp={min_timestamp} "
-                f"max_timestamp={max_timestamp} "
-                f"time_elapsed={round(time.monotonic() - _start, 2)}s"
-            )
-        except (NetworkTimeout, ExecutionTimeout, WriteConcernError):
-            logger.error("MongoDB: Encountered a server-side error; retrying batch.")
-            raise SinkBackpressureError(
-                retry_after=10, topic=batch.topic, partition=batch.partition
-            )
+
+        attempts_remaining = 3
+        while attempts_remaining:
+            try:
+                # We don't need to worry about manually batching our writes, the MongoDB
+                # client does it for us automatically (chunks every 10k records).
+                # It will block until all writes are successful.
+                self._collection.bulk_write(records)
+                logger.info(
+                    "Sent update requests to MongoDB; "
+                    f"messages_processed={batch.size} "
+                    f"host_address={self._client.address[0]} "
+                    f"database={self._db_name} "
+                    f"collection={self._collection_name} "
+                    f"min_timestamp={min_timestamp} "
+                    f"max_timestamp={max_timestamp} "
+                    f"time_elapsed={round(time.monotonic() - start, 2)}s"
+                )
+                return
+            except (NetworkTimeout, ExecutionTimeout, WriteConcernError) as e:
+                logger.error(f"MongoDB: Encountered a network or server error: {e}")
+            attempts_remaining -= 1
+            if attempts_remaining:
+                backoff = 5
+                logger.error(
+                    f"Sleeping for {backoff} seconds and re-attempting. "
+                    f"Attempts remaining: {attempts_remaining}"
+                )
+                time.sleep(backoff)
+        backoff = 30
+        logger.error(
+            "Consecutive MongoDB write attempts failed; "
+            f"performing a longer backoff of {backoff} seconds..."
+        )
+        raise SinkBackpressureError(
+            retry_after=backoff,
+            topic=batch.topic,
+            partition=batch.partition,
+        )
