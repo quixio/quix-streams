@@ -100,8 +100,8 @@ class MongoDBSink(BatchingSink):
         :param add_topic_metadata: add topic, partition, and offset as `__{field}`
         :param value_selector: An optional callable that allows final editing of the
             outgoing document (right before submitting it).
-            This is mostly used in cases where a field is required
-            for the `document_matcher` but not desired in the end document.
+            Largely used when a field is necessary for `document_matcher`,
+            but not otherwise.
             NOTE: metadata is added before this step, so don't accidentally
             exclude it here!
         """

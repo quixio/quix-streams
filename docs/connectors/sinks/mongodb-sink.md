@@ -39,6 +39,8 @@ Regardless of approach, the following is always true:
 How data is dumped with `MongoDBSink` primarily depends on two parameters:
 `update_method` and `document_matcher`.
 
+
+
 ### Default: kafka `key` == MongoDB `_id`
 
 The default `document_matcher` assumes the message `key` corresponds to an equivalently 
@@ -54,6 +56,8 @@ However, you can do full document replacement/set by
 setting `update_method="ReplaceOne"`, which will drop any fields that are not present in
 the message.
 
+
+
 ### Using A Custom `_id`
 
 A custom `_id` can be used by simply providing your own 
@@ -64,6 +68,7 @@ with that `_id`.
 
 If no `document_matcher` or `_id` specification is specified (and `upsert=True`), `MongoDB` will 
 create a new document where `_id` will be assigned an `ObjectID` (default MongoDB behavior).
+
 
 
 ### Alternate behavior: pattern-based updates
@@ -78,6 +83,37 @@ only the first encountered match will be updated.
 
 If no match is made, it will instead create a new document with a random `_id` 
 (assuming `upsert=True`) with the provided updates.
+
+
+
+### Include Message Metadata
+
+You can include `topic` (topic, partition, offset) and `message` 
+(key, headers, timestamp) metadata using the flags 
+`add_topic_metadata=True` and `add_message_metadata=True` for `MongoDBSink`. 
+
+They will be included as
+`__{field}` in the document.
+
+#### Example document with `add_message_metadata=True`:
+```python
+{
+    "field_x": "value_a",
+    "field_y": "value_b",
+    "__key": b"my_key",
+    "__headers": {},
+    "__timestamp": 1234567890,
+}
+
+```
+
+### Final Outgoing Value Editing
+
+In case other callables need access to fields you would otherwise exclude in the
+document, you can optionally provide a callable to `value_selector` that receives the
+current document as an argument, and returns the desired finalized outgoing document.
+
+> **Note**: any of the `add_*_metadata` flags will have already added their data.
 
 ## How To Use
 
@@ -160,6 +196,10 @@ mongodb_sink = MongoDBSink(
     **Default**: False
 - `include_topic_metadata`: include topic, partition, and offset as `__{field}`    
     **Default**: False
+- `value_selector`: An optional callable that allows final editing of the
+     outgoing document (right before submitting it).    
+    Largely used when a field is necessary for `document_matcher`, but not otherwise.    
+    **NOTE**: metadata is added before this step, so don't accidentally exclude it here!
 - Additional keyword arguments are passed to the `MongoClient`.
 
 ## Error Handling and Delivery Guarantees
@@ -168,7 +208,7 @@ The sink provides **at-least-once** delivery guarantees, which means:
 
 - Messages are published in batches for better performance
 - During checkpointing, the sink waits for all pending publishes to complete
-- If any messages fail to publish, a `SinkBackpressureError` is raised
+- If any messages fail to publish after several retries, a `SinkBackpressureError` is raised
 - When `SinkBackpressureError` occurs:
     - The application will retry the entire batch from the last successful offset
     - Some messages that were successfully published in the failed batch may be published again
