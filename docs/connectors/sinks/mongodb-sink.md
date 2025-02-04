@@ -70,6 +70,20 @@ If no `document_matcher` or `_id` specification is specified (and `upsert=True`)
 create a new document where `_id` will be assigned an `ObjectID` (default MongoDB behavior).
 
 
+#### Example
+```python
+from quixstreams.sinks.community.mongodb import MongoDBSink
+from quixstreams.sinks.base.item import SinkItem
+
+def match_on_last_name(batch_item: SinkItem):
+    return {"_id": SinkItem.value["name"]["last"]}
+
+sink = MongoDBSink(
+    ..., # other required stuff
+    document_matcher=match_on_last_name,
+)
+```
+
 
 ### Alternate behavior: pattern-based updates
 
@@ -84,6 +98,8 @@ only the first encountered match will be updated.
 If no match is made, it will instead create a new document with a random `_id` 
 (assuming `upsert=True`) with the provided updates.
 
+
+You can see an example with [UpdateMany pattern matching](#an-updatemany-example) below.
 
 
 ### Include Message Metadata
@@ -114,6 +130,20 @@ document, you can optionally provide a callable to `value_selector` that receive
 current document as an argument, and returns the desired finalized outgoing document.
 
 > **Note**: any of the `add_*_metadata` flags will have already added their data.
+
+
+#### Example
+```python
+from quixstreams.sinks.community.mongodb import MongoDBSink
+
+def edit_doc(my_doc: dict):
+    return {k: v for k,v in my_doc.items() if k not in ["age", "zip_code"]}
+
+sink = MongoDBSink(
+    ..., # other required stuff
+    value_selector=edit_doc,
+)
+```
 
 ## How To Use
 
