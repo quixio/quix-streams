@@ -78,7 +78,7 @@ class CountWindow(Window):
             )
         elif self._step is not None and data["windows"][0]["count"] % self._step == 0:
             if self._aggregate_collection:
-                starting_value = data["windows"][-1]["value"] + (
+                msg_id = starting_value = data["windows"][-1]["value"] + (
                     self._step or self._max_count
                 )
             else:
