@@ -4,6 +4,8 @@ import contextvars
 import functools
 import operator
 import pprint
+import time
+from collections import deque
 from datetime import timedelta
 from typing import (
     Any,
@@ -767,6 +769,84 @@ class StreamingDataFrame:
             lambda *args: printer({print_args[i]: args[i] for i in range(len(args))}),
             metadata=metadata,
         )
+
+    def print_live_table(
+        self,
+        number: int = 10,
+        title: Optional[str] = None,
+        slowdown: float = 0.1,
+    ):
+        """
+        [EXPERIMENTAL] Print a live-updating table of the most recent records.
+
+        This feature is experimental and subject to change in future releases.
+
+        Creates a live table view that updates as new records arrive, showing the most
+        recent N records in a formatted table. The table includes message metadata
+        (_key, _timestamp) along with the record values.
+
+        Note: This works best in terminal environments. For Jupyter notebooks,
+        consider using `print()` instead.
+
+        Requires:
+            rich: Install with `pip install rich`
+
+        Example Snippet:
+        ```python
+        sdf = app.dataframe(topic)
+        # Show last 5 records, update at most every 0.5 seconds
+        sdf.print_live_table(number=5, slowdown=0.5, title="Live Records")
+        ```
+
+        This will produce a live-updating table like this:
+
+                                    Live Records
+        ┏━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━┳━━━━━┳━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━┓
+        ┃ _key       ┃ _timestamp ┃ active ┃ id  ┃ name    ┃ score ┃ status   ┃
+        ┡━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━╇━━━━━╇━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━┩
+        │ b'53fe8e4' │ 1738685136 │ True   │ 876 │ Charlie │ 27.74 │ pending  │
+        │ b'91bde51' │ 1738685137 │ True   │ 11  │         │       │ approved │
+        │ b'6617dfe' │ 1738685138 │        │     │ David   │       │          │
+        │ b'f47ac93' │ 1738685139 │        │ 133 │         │       │          │
+        │ b'038e524' │ 1738685140 │ False  │     │         │       │          │
+        └────────────┴────────────┴────────┴─────┴─────────┴───────┴──────────┘
+
+        :param number: Maximum number of records to display in the table. Default: 10
+        :param title: Optional title for the table
+        :param slowdown: Time in seconds to wait between updates. Default: 0.1
+                        Increase this value if the table updates too quickly.
+        """
+        try:
+            from rich.console import Console
+            from rich.table import Table
+        except ImportError:
+            raise ImportError(
+                "Please install `rich` to use `print_table`: pip install rich"
+            )
+
+        console = Console()
+        rows: deque[dict[str, Any]] = deque(maxlen=number)
+
+        def _print_table(value, key, timestamp, headers):
+            nonlocal rows
+            value["_key"] = key
+            value["_timestamp"] = timestamp
+            rows.append(value)
+
+            table = Table(title=title)
+            columns = sorted(set().union(*rows))
+
+            for column in columns:
+                table.add_column(column)
+
+            for row in rows:
+                table.add_row(*[str(row.get(column, ""))[:10] for column in columns])
+
+            console.clear()
+            console.print(table)
+            time.sleep(slowdown)
+
+        return self._add_update(_print_table, metadata=True)
 
     def compose(
         self,
