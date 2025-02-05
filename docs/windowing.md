@@ -236,7 +236,7 @@ In a tumbing window each message is only assigned to a **single** interval.
 
 **Example**
 
-Imagine you have to run a slow and resources intensive operation, like running a machine-learning model, on some data. To optimise your data analysis pipeline you want to batch data before running the inference. In this example we batch data from 3 messages before running the slow operation.
+Imagine you have to interact with an external HTTP API. To optimise your data analysis pipeline you want to batch data before sending in to the external API. In this example we batch data from 3 messages before sending the request.
 
 Input:
 
@@ -247,7 +247,7 @@ Input:
 {"data": 200, "timestamp": 583, "offset": 3}
 ```
 
-Expected output:
+Expected window output:
 
 ```json
 {"data": [100, 50, 200], "window_start_ms": 121, "window_end_ms": 583}
@@ -257,14 +257,15 @@ Here is how to do it using tumbling windows:
 
 ```python
 import time
+import json
+import urllib.request
 
 from datetime import timedelta
 from quixstreams import Application
 
-def slow_operation(value):
-    # simulate slow operation
-    time.sleep(1)
-    return value
+def external_api(value):
+    with urllib.request.urlopen("https://example.com", data=json.dumps(value["data"])) as rep:
+        return response.read()
 
 app = Application(...)
 sdf = app.dataframe(...)
@@ -293,7 +294,8 @@ sdf = (
     )
 )
 
-sdf.apply(slow_operation)
+# Send a request to the external API
+# sdf.apply(external_api)
 
 ```
 
@@ -505,29 +507,31 @@ In sliding windows each message is assigned to multiple windows because the wind
 
 **Example**
 
-Imagine you receive events whenever a user gain experience in a game. You want to show users the mean experience gained of their last 4 actions.
+Imagine you receive information about customer purchase in a store and you want to know the average amount of the last 3 purchases.
 
 Input:
 
 (Here the `"offset"` column illustrates Kafka message offset)
 ```json
-{"experience": 100, "timestamp": 121, "offset": 1}
-{"experience": 50, "timestamp": 165, "offset": 2}
-{"experience": 200, "timestamp": 583, "offset": 3}
-{"experience": 30, "timestamp": 723, "offset": 4}
-{"experience": 150, "timestamp": 1009, "offset": 5}
-{"experience": 60, "timestamp": 1242, "offset": 6}
+{"amount": 100, "timestamp": 121, "offset": 1}
+{"amount": 60, "timestamp": 165, "offset": 2}
+{"amount": 200, "timestamp": 583, "offset": 3}
+{"amount": 40, "timestamp": 723, "offset": 4}
+{"amount": 120, "timestamp": 1009, "offset": 5}
+{"amount": 80, "timestamp": 1242, "offset": 6}
 ```
 
-Expected output:
+Expected window output:
 
 ```json
-{"mean": 95, "window_start_ms": 121, "window_end_ms": 723}
-{"mean": 107.5, "window_start_ms": 165, "window_end_ms": 1009}
-{"mean": 110, "window_start_ms": 583, "window_end_ms": 1242}
+{"average": 120, "window_start_ms": 121, "window_end_ms": 583}
+{"average": 100, "window_start_ms": 165, "window_end_ms": 723}
+{"average": 120, "window_start_ms": 583, "window_end_ms": 1009}
+{"average": 80, "window_start_ms": 723, "window_end_ms": 1242}
+
 ```
 
-Here is how to do it using tumbling windows: 
+Here is how to do it using sliding windows: 
 
 ```python
 from datetime import timedelta
@@ -539,10 +543,10 @@ sdf = app.dataframe(...)
 
 sdf = (
     # Extract "experience" value from the message
-    sdf.apply(lambda value: value["experience"])
+    sdf.apply(lambda value: value["data"])
 
-    # Define a count-based tumbling window of 3 events
-    .sliding_count_window(count=4)
+    # Define a count-based sliding window of 3 events
+    .sliding_count_window(count=3)
 
     # Specify the "mean" aggregate function
     .mean()
@@ -553,7 +557,7 @@ sdf = (
     # Unwrap the aggregated result to match the expected output format
     .apply(
         lambda result: {
-            "mean": result["value"],
+            "average": result["value"],
             "window_start_ms": result["start"],
             "window_end_ms": result["end"],
         }
