@@ -71,21 +71,28 @@ class CountWindow(Window):
                     count=0,
                     start=timestamp_ms,
                     end=timestamp_ms,
-                    value=msg_id if self._aggregate_collection else value,
+                    value=msg_id
+                    if self._aggregate_collection
+                    else self._aggregate_default,
                 )
             )
         elif self._step is not None and data["windows"][0]["count"] % self._step == 0:
-            msg_id = data["windows"][-1]["value"] + (self._step or self._max_count)
+            if self._aggregate_collection:
+                starting_value = data["windows"][-1]["value"] + (
+                    self._step or self._max_count
+                )
+            else:
+                starting_value = self._aggregate_default
 
             data["windows"].append(
                 CountWindowData(
                     count=0,
                     start=timestamp_ms,
                     end=timestamp_ms,
-                    value=msg_id if self._aggregate_collection else value,
+                    value=starting_value,
                 )
             )
-        else:
+        elif self._aggregate_collection:
             msg_id = data["windows"][0]["value"] + data["windows"][0]["count"]
 
         if self._aggregate_collection:
