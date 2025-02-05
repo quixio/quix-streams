@@ -64,22 +64,32 @@ class CountWindow(Window):
             data = CountWindowsData(windows=[])
 
         msg_id = None
-        if self._aggregate_collection:
-            msg_id = state.add_to_collection(id=None, value=value)
-
-        if len(data["windows"]) == 0 or (
-            self._step is not None and data["windows"][0]["count"] % self._step == 0
-        ):
+        if len(data["windows"]) == 0:
+            msg_id = 0
             data["windows"].append(
                 CountWindowData(
                     count=0,
                     start=timestamp_ms,
                     end=timestamp_ms,
-                    value=msg_id
-                    if self._aggregate_collection
-                    else self._aggregate_default,
+                    value=msg_id if self._aggregate_collection else value,
                 )
             )
+        elif self._step is not None and data["windows"][0]["count"] % self._step == 0:
+            msg_id = data["windows"][-1]["value"] + (self._step or self._max_count)
+
+            data["windows"].append(
+                CountWindowData(
+                    count=0,
+                    start=timestamp_ms,
+                    end=timestamp_ms,
+                    value=msg_id if self._aggregate_collection else value,
+                )
+            )
+        else:
+            msg_id = data["windows"][0]["value"] + data["windows"][0]["count"]
+
+        if self._aggregate_collection:
+            state.add_to_collection(id=msg_id, value=value)
 
         updated_windows, expired_windows, to_remove = [], [], []
         for index, window in enumerate(data["windows"]):
@@ -108,6 +118,7 @@ class CountWindow(Window):
                         end=window["value"] + self._step
                         if self._step is not None
                         else self._max_count,
+                        start=0 if self._step is None else None,
                     )
             else:
                 window["value"] = self._aggregate_func(window["value"], value)

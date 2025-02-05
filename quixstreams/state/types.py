@@ -102,7 +102,7 @@ class WindowedState(Protocol):
         """
         ...
 
-    def delete_from_collection(self, end: int) -> None:
+    def delete_from_collection(self, end: int, *, start: Optional[int] = None) -> None:
         """
         Delete collected values with id less than end.
 
