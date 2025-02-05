@@ -236,7 +236,7 @@ In a tumbing window each message is only assigned to a **single** interval.
 
 **Example**
 
-Imagine you have to interact with an external HTTP API. To optimise your data analysis pipeline you want to batch data before sending in to the external API. In this example we batch data from 3 messages before sending the request.
+Imagine you have to interact with an external HTTP API. To optimize your data analysis pipeline, you want to batch data before sending it to the external API. In this example, we batch data from 3 messages before sending the request.
 
 Input:
 
