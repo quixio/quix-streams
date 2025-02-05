@@ -3,10 +3,10 @@ from typing import Any, Iterable
 from quixstreams.state import WindowedState
 
 from .base import WindowResult
-from .time_based import FixedTimeWindow
+from .time_based import TimeWindow
 
 
-class SlidingWindow(FixedTimeWindow):
+class SlidingWindow(TimeWindow):
     def process_window(
         self,
         value: Any,

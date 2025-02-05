@@ -2,13 +2,14 @@
 
 
 ## What Are Windows?
-In stream processing, windows are used to divide endless streams of events into finite time-based intervals.
+In stream processing, windows are used to divide endless streams of events into finite time-based or count-based intervals.
 
 With windows, you can calculate such aggregations as:
 
 - Total of website visitors for every hour
 - The average speed of a vehicle over the last 10 minutes
 - Maximum temperature of a sensor observed over 30 second ranges
+- Give an user a reward after 10 succesful actions 
 
 
 ## Types of Time in Streaming
@@ -138,7 +139,7 @@ The results of the windowed aggregations will have headers set to `None`.
 You may set messages headers by using the `StreamingDataFrame.set_headers()` API, as 
 described in [the "Updating Kafka Headers" section](./processing.md#updating-kafka-headers).
 
-## Tumbling Windows
+## Time-based Tumbling Windows
 Tumbling windows slice time into non-overlapping intervals of a fixed size. 
 
 For example, a tumbling window of 1 hour will generate the following intervals:
@@ -217,8 +218,88 @@ sdf = (
 
 ```
 
+## Count-based Tumbling Windows
 
-## Hopping Windows
+Count-based Tumbling Windows slice incoming events into batch of a fixed size.
+
+For example, a tumbling window configured with a count of 4 will batch and aggregate message 1 to 4, then 5 to 8, 9 to 12 and so on. 
+
+```
+Count       Tumbing Windows
+[0, 3]  : ....
+[4, 7]  :     ....
+[8, 11] :         ....
+[12, 15] :            ....
+```
+
+In a tumbing window each message is only assigned to a **single** interval.
+
+**Example**
+
+Imagine you have to interact with an external HTTP API. To optimize your data analysis pipeline, you want to batch data before sending it to the external API. In this example, we batch data from 3 messages before sending the request.
+
+Input:
+
+(Here the `"offset"` column illustrates Kafka message offset)
+```json
+{"data": 100, "timestamp": 121, "offset": 1}
+{"data": 50, "timestamp": 165, "offset": 2}
+{"data": 200, "timestamp": 583, "offset": 3}
+```
+
+Expected window output:
+
+```json
+{"data": [100, 50, 200], "window_start_ms": 121, "window_end_ms": 583}
+```
+
+Here is how to do it using tumbling windows: 
+
+```python
+import time
+import json
+import urllib.request
+
+from datetime import timedelta
+from quixstreams import Application
+
+def external_api(value):
+    with urllib.request.urlopen("https://example.com", data=json.dumps(value["data"])) as rep:
+        return response.read()
+
+app = Application(...)
+sdf = app.dataframe(...)
+
+
+sdf = (
+    # Extract "experience" value from the message
+    sdf.apply(lambda value: value["data"])
+
+    # Define a count-based tumbling window of 3 events
+    .tumbling_count_window(count=3)
+
+    # Specify the "collect" aggregate function
+    .collect()
+
+    # Emit updates once the window is closed
+    .final()
+
+    # Unwrap the aggregated result to match the expected output format
+    .apply(
+        lambda result: {
+            "data": result["value"],
+            "window_start_ms": result["start"],
+            "window_end_ms": result["end"],
+        }
+    )
+)
+
+# Send a request to the external API
+# sdf.apply(external_api)
+
+```
+
+## Time-based Hopping Windows
 Hopping windows slice time into overlapping intervals of a fixed size and with a fixed step.
 
 For example, a hopping window of 1 hour with a step of 10 minutes will generate the following intervals:
@@ -305,8 +386,23 @@ sdf = (
 
 ```
 
+## Count-based Hopping Windows
 
-## Sliding Windows
+Count-based Hopping Windows slice incoming messages into overlapping batch of a fixed size with a fixed step.
+
+For example, a hopping windows of 6 messages with a step of 2 messages will generate the following windows:
+
+```
+Count       Hopping Windows
+[0, 5]  : ......
+[2, 7]  :   ......
+[4, 9]  :     ......
+[6, 11] :       ......
+```
+
+In hopping windows each messages can be assigned to multiple windows because the windows overlap.
+
+## Time-based Sliding Windows
 Sliding windows are overlapping time-based windows that advance with each incoming message, rather than at fixed time intervals like hopping windows. They have a fixed 1 ms resolution and perform better and are less resource-intensive than hopping windows with a 1 ms step. Sliding windows do not produce redundant windows; every interval has a distinct aggregation.
 
 Sliding windows provide optimal performance for tasks requiring high-precision real-time monitoring. However, if the task is not time-critical or the data stream is extremely dense, tumbling or hopping windows may perform better.
@@ -393,6 +489,82 @@ sdf = (
 
 ```
 
+## Count-based Sliding Windows
+
+Sliding windows are overlapping windows that advance with each incoming message. They are equal to count-based hopping windows with a step of 1.
+
+For example a sliding window of 4 messagew will generate the followiwng windows:
+
+```
+Count       Sliding Windows
+[0, 3]  : ....
+[1, 4]  :  ....
+[2, 5]  :   ....
+[3, 6]  :    ....
+```
+
+In sliding windows each message is assigned to multiple windows because the windows overlap.
+
+**Example**
+
+Imagine you receive information about customer purchase in a store and you want to know the average amount of the last 3 purchases.
+
+Input:
+
+(Here the `"offset"` column illustrates Kafka message offset)
+```json
+{"amount": 100, "timestamp": 121, "offset": 1}
+{"amount": 60, "timestamp": 165, "offset": 2}
+{"amount": 200, "timestamp": 583, "offset": 3}
+{"amount": 40, "timestamp": 723, "offset": 4}
+{"amount": 120, "timestamp": 1009, "offset": 5}
+{"amount": 80, "timestamp": 1242, "offset": 6}
+```
+
+Expected window output:
+
+```json
+{"average": 120, "window_start_ms": 121, "window_end_ms": 583}
+{"average": 100, "window_start_ms": 165, "window_end_ms": 723}
+{"average": 120, "window_start_ms": 583, "window_end_ms": 1009}
+{"average": 80, "window_start_ms": 723, "window_end_ms": 1242}
+
+```
+
+Here is how to do it using sliding windows: 
+
+```python
+from datetime import timedelta
+from quixstreams import Application
+
+app = Application(...)
+sdf = app.dataframe(...)
+
+
+sdf = (
+    # Extract "experience" value from the message
+    sdf.apply(lambda value: value["data"])
+
+    # Define a count-based sliding window of 3 events
+    .sliding_count_window(count=3)
+
+    # Specify the "mean" aggregate function
+    .mean()
+
+    # Emit updates once the window is closed
+    .final()
+
+    # Unwrap the aggregated result to match the expected output format
+    .apply(
+        lambda result: {
+            "average": result["value"],
+            "window_start_ms": result["start"],
+            "window_end_ms": result["end"],
+        }
+    )
+)
+
+```
 
 ## Supported Aggregations
 

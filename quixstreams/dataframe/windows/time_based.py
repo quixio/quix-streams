@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class FixedTimeWindow(Window):
+class TimeWindow(Window):
     def __init__(
         self,
         duration_ms: int,
