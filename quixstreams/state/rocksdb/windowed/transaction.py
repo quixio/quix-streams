@@ -148,10 +148,10 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         prefix: bytes,
     ) -> int:
         counter = self._get_next_count()
-        if id:
-            key = encode_integer_pair(id, counter)
-        else:
+        if id is None:
             key = encode_integer_pair(counter, counter)
+        else:
+            key = encode_integer_pair(id, counter)
 
         self.set(key=key, value=value, prefix=prefix, cf_name=VALUES_CF_NAME)
         return counter
@@ -162,13 +162,16 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         )
         return [self._deserialize_value(value) for _, value in items]
 
-    def delete_from_collection(self, end: int, prefix: bytes) -> None:
-        start = (
-            self._get_timestamp(
-                cache=self._last_deleted_value_timestamps, prefix=prefix
+    def delete_from_collection(
+        self, end: int, prefix: bytes, *, start: Optional[int] = None
+    ) -> None:
+        if start is None:
+            start = (
+                self._get_timestamp(
+                    cache=self._last_deleted_value_timestamps, prefix=prefix
+                )
+                or -1
             )
-            or -1
-        )
 
         last_deleted_id = None
         for key, _ in self._get_items(

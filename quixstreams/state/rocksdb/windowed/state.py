@@ -91,7 +91,7 @@ class WindowedTransactionState(TransactionState, WindowedState):
             start=start, end=end, prefix=self._prefix
         )
 
-    def delete_from_collection(self, end: int) -> None:
+    def delete_from_collection(self, end: int, *, start: Optional[int] = None) -> None:
         """
         Delete collected values with id less than end.
 
@@ -103,7 +103,9 @@ class WindowedTransactionState(TransactionState, WindowedState):
 
         :param end: Delete values with id less than this value
         """
-        return self._transaction.delete_from_collection(end=end, prefix=self._prefix)
+        return self._transaction.delete_from_collection(
+            end=end, start=start, prefix=self._prefix
+        )
 
     def get_latest_timestamp(self) -> Optional[int]:
         """
