@@ -775,3 +775,180 @@ class TestCountHoppingWindow:
             state = tx.as_state(prefix=b"key")
             remaining_items = state.get_from_collection(start=0, end=1000)
             assert remaining_items == [9, 10, 11]
+
+    def test_multiple_keys_sum(
+        self, count_hopping_window_definition_factory, state_manager
+    ):
+        window_def = count_hopping_window_definition_factory(count=3, step=1)
+        window = window_def.sum()
+        window.register_store()
+        store = state_manager.get_store(topic="test", store_name=window.name)
+        store.assign_partition(0)
+
+        with store.start_partition_transaction(0) as tx:
+            stateKey1 = tx.as_state(prefix=b"key1")
+            stateKey2 = tx.as_state(prefix=b"key2")
+
+            updated, expired = window.process_window(
+                key="key1", value=1, state=stateKey1, timestamp_ms=100
+            )
+            assert len(expired) == 0
+            assert len(updated) == 1
+            assert updated[0]["value"] == 1
+            updated, expired = window.process_window(
+                key="key2", value=5, state=stateKey2, timestamp_ms=100
+            )
+            assert len(expired) == 0
+            assert len(updated) == 1
+            assert updated[0]["value"] == 5
+
+            updated, expired = window.process_window(
+                key="key1", value=2, state=stateKey1, timestamp_ms=110
+            )
+            assert len(expired) == 0
+            assert len(updated) == 2
+            assert updated[0]["value"] == 3
+            assert updated[1]["value"] == 2
+
+            updated, expired = window.process_window(
+                key="key2", value=4, state=stateKey2, timestamp_ms=110
+            )
+            assert len(expired) == 0
+            assert len(updated) == 2
+            assert updated[0]["value"] == 9
+            assert updated[1]["value"] == 4
+
+            updated, expired = window.process_window(
+                key="key1", value=3, state=stateKey1, timestamp_ms=120
+            )
+            assert expired[0]["value"] == 6
+            assert len(updated) == 3
+            assert updated[0]["value"] == 6
+            assert updated[1]["value"] == 5
+            assert updated[2]["value"] == 3
+
+            updated, expired = window.process_window(
+                key="key1", value=4, state=stateKey1, timestamp_ms=130
+            )
+            assert expired[0]["value"] == 9
+            assert len(updated) == 3
+            assert updated[0]["value"] == 9
+            assert updated[1]["value"] == 7
+            assert updated[2]["value"] == 4
+
+            updated, expired = window.process_window(
+                key="key2", value=3, state=stateKey2, timestamp_ms=120
+            )
+            assert expired[0]["value"] == 12
+            assert len(updated) == 3
+            assert updated[0]["value"] == 12
+            assert updated[1]["value"] == 7
+            assert updated[2]["value"] == 3
+
+            updated, expired = window.process_window(
+                key="key2", value=2, state=stateKey2, timestamp_ms=130
+            )
+            assert expired[0]["value"] == 9
+            assert len(updated) == 3
+            assert updated[0]["value"] == 9
+            assert updated[1]["value"] == 5
+            assert updated[2]["value"] == 2
+
+            updated, expired = window.process_window(
+                key="key1", value=5, state=stateKey1, timestamp_ms=140
+            )
+            assert expired[0]["value"] == 12
+            assert len(updated) == 3
+            assert updated[0]["value"] == 12
+            assert updated[1]["value"] == 9
+            assert updated[2]["value"] == 5
+
+            updated, expired = window.process_window(
+                key="key2", value=1, state=stateKey2, timestamp_ms=140
+            )
+            assert expired[0]["value"] == 6
+            assert len(updated) == 3
+            assert updated[0]["value"] == 6
+            assert updated[1]["value"] == 3
+            assert updated[2]["value"] == 1
+
+    def test_multiple_keys_collect(
+        self, count_hopping_window_definition_factory, state_manager
+    ):
+        window_def = count_hopping_window_definition_factory(count=3, step=1)
+        window = window_def.collect()
+        window.register_store()
+        store = state_manager.get_store(topic="test", store_name=window.name)
+        store.assign_partition(0)
+
+        with store.start_partition_transaction(0) as tx:
+            stateKey1 = tx.as_state(prefix=b"key1")
+            stateKey2 = tx.as_state(prefix=b"key2")
+
+            updated, expired = window.process_window(
+                key="key1", value=1, state=stateKey1, timestamp_ms=100
+            )
+            assert len(expired) == 0
+            assert len(updated) == 0
+            updated, expired = window.process_window(
+                key="key2", value=5, state=stateKey2, timestamp_ms=100
+            )
+            assert len(expired) == 0
+            assert len(updated) == 0
+
+            updated, expired = window.process_window(
+                key="key1", value=2, state=stateKey1, timestamp_ms=110
+            )
+            assert len(expired) == 0
+            assert len(updated) == 0
+            updated, expired = window.process_window(
+                key="key2", value=4, state=stateKey2, timestamp_ms=110
+            )
+            assert len(expired) == 0
+            assert len(updated) == 0
+
+            updated, expired = window.process_window(
+                key="key1", value=3, state=stateKey1, timestamp_ms=120
+            )
+            assert expired[0]["value"] == [1, 2, 3]
+            assert len(updated) == 0
+
+            updated, expired = window.process_window(
+                key="key1", value=4, state=stateKey1, timestamp_ms=130
+            )
+            assert expired[0]["value"] == [2, 3, 4]
+            assert len(updated) == 0
+
+            updated, expired = window.process_window(
+                key="key2", value=3, state=stateKey2, timestamp_ms=120
+            )
+            assert expired[0]["value"] == [5, 4, 3]
+            assert len(updated) == 0
+
+            updated, expired = window.process_window(
+                key="key2", value=2, state=stateKey2, timestamp_ms=130
+            )
+            assert expired[0]["value"] == [4, 3, 2]
+            assert len(updated) == 0
+            updated, expired = window.process_window(
+                key="key1", value=5, state=stateKey1, timestamp_ms=140
+            )
+            assert expired[0]["value"] == [3, 4, 5]
+            assert len(updated) == 0
+
+            updated, expired = window.process_window(
+                key="key2", value=1, state=stateKey2, timestamp_ms=140
+            )
+            assert expired[0]["value"] == [3, 2, 1]
+            assert len(updated) == 0
+
+            updated, expired = window.process_window(
+                key="key2", value=0, state=stateKey2, timestamp_ms=130
+            )
+            assert expired[0]["value"] == [2, 1, 0]
+            assert len(updated) == 0
+            updated, expired = window.process_window(
+                key="key1", value=6, state=stateKey1, timestamp_ms=140
+            )
+            assert expired[0]["value"] == [4, 5, 6]
+            assert len(updated) == 0
