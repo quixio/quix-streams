@@ -9,7 +9,11 @@ from quixstreams.kafka import AutoOffsetReset, ConnectionConfig, Consumer
 from quixstreams.kafka.exceptions import KafkaConsumerException
 from quixstreams.models.serializers import DeserializerType
 from quixstreams.models.topics import Topic, TopicAdmin, TopicConfig
-from quixstreams.sources import Source
+from quixstreams.sources import (
+    ClientConnectFailureCallback,
+    ClientConnectSuccessCallback,
+    Source,
+)
 
 from .checkpoint import Checkpoint
 
@@ -18,8 +22,6 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
-
-__all__ = ["KafkaReplicatorSource"]
 
 
 class KafkaReplicatorSource(Source):
@@ -64,6 +66,8 @@ class KafkaReplicatorSource(Source):
         on_consumer_error: ConsumerErrorCallback = default_on_consumer_error,
         value_deserializer: DeserializerType = "json",
         key_deserializer: DeserializerType = "bytes",
+        client_connect_success_cb: Optional[ClientConnectSuccessCallback] = None,
+        client_connect_failure_cb: Optional[ClientConnectFailureCallback] = None,
     ) -> None:
         """
         :param name: The source unique name.
@@ -86,8 +90,19 @@ class KafkaReplicatorSource(Source):
             Default - `json`
         :param key_deserializer: The default topic key deserializer, used by StreamingDataframe connected to the source.
             Default - `json`
+        :param client_connect_success_cb: An optional callback made after successful
+            client authentication, primarily for additional logging.
+        :param client_connect_failure_cb: An optional callback made after failed
+            client authentication (which should raise an Exception).
+            Callback should accept the raised Exception as an argument.
+            Callback must resolve (or propagate/re-raise) the Exception.
         """
-        super().__init__(name, shutdown_timeout)
+        super().__init__(
+            name=name,
+            shutdown_timeout=shutdown_timeout,
+            client_connect_success_cb=client_connect_success_cb,
+            client_connect_failure_cb=client_connect_failure_cb,
+        )
 
         if consumer_extra_config is None:
             consumer_extra_config = {}
@@ -161,7 +176,7 @@ class KafkaReplicatorSource(Source):
             raise RuntimeError("source not started")
         return self._target_cluster_admin
 
-    def run(self) -> None:
+    def setup_client(self):
         logger.info(
             f'Starting the source "{self.name}" with the config: '
             f'source_broker_address="{self._broker_address}" '
@@ -208,6 +223,7 @@ class KafkaReplicatorSource(Source):
             on_revoke=self.on_revoke,
         )
 
+    def run(self) -> None:
         self.init_checkpoint()
         while self._running:
             self.producer.poll()

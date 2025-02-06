@@ -43,7 +43,7 @@ class S3Origin(Origin):
         to a locally hosted S3.
             NOTE: can alternatively set the AWS_ENDPOINT_URL_S3 environment variable
         """
-        self.root_location = bucket
+        self._bucket = bucket
         self._credentials = {
             "region_name": region_name,
             "aws_access_key_id": aws_access_key_id,
@@ -61,7 +61,7 @@ class S3Origin(Origin):
     def file_collector(self, filepath: Union[str, Path]) -> Generator[Path, None, None]:
         self._client = self._get_client()
         resp = self._client.list_objects(
-            Bucket=self.root_location,
+            Bucket=self._bucket,
             Prefix=str(filepath),
             Delimiter="/",
         )
@@ -73,12 +73,28 @@ class S3Origin(Origin):
 
     def get_folder_count(self, directory: Path) -> int:
         resp = self._get_client().list_objects(
-            Bucket=self.root_location, Prefix=f"{directory}/", Delimiter="/"
+            Bucket=self._bucket, Prefix=f"{directory}/", Delimiter="/"
         )
         return len(resp["CommonPrefixes"])
 
     def get_raw_file_stream(self, filepath: Path) -> BytesIO:
-        data = self._client.get_object(Bucket=self.root_location, Key=str(filepath))[
+        data = self._client.get_object(Bucket=self._bucket, Key=str(filepath))[
             "Body"
         ].read()
         return BytesIO(data)
+
+    def __enter__(self):
+        if not self._client:
+            # See init comment as to why we cannot set the client here.
+            # We then attempt a likely-to-succeed query on the bucket to confirm auth.
+            self._get_client().get_bucket_policy(Bucket=self._bucket)
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self._client:
+            try:
+                self._client.close()
+            except Exception as e:
+                logger.info(f"Source client session exited non-gracefully: {e}")
+                pass
+        self._client = None

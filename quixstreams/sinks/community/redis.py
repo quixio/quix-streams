@@ -11,7 +11,12 @@ except ImportError as exc:
         'run "pip install quixstreams[redis]" to use RedisSink'
     ) from exc
 
-from quixstreams.sinks import BatchingSink, SinkBatch
+from quixstreams.sinks import (
+    BatchingSink,
+    ClientConnectFailureCallback,
+    ClientConnectSuccessCallback,
+    SinkBatch,
+)
 
 __all__ = ("RedisSink",)
 
@@ -28,6 +33,8 @@ class RedisSink(BatchingSink):
         key_serializer: Optional[Callable[[Any, Any], Union[bytes, str]]] = None,
         password: Optional[str] = None,
         socket_timeout: float = 30.0,
+        client_connect_success_cb: Optional[ClientConnectSuccessCallback] = None,
+        client_connect_failure_cb: Optional[ClientConnectFailureCallback] = None,
         **kwargs,
     ) -> None:
         """
@@ -44,21 +51,39 @@ class RedisSink(BatchingSink):
         :param password: Redis password, optional.
         :param socket_timeout: Redis socket timeout.
             Default - 30s.
+        :param client_connect_success_cb: An optional callback made after successful
+            client authentication, primarily for additional logging.
+        :param client_connect_failure_cb: An optional callback made after failed
+            client authentication (which should raise an Exception).
+            Callback should accept the raised Exception as an argument.
+            Callback must resolve (or propagate/re-raise) the Exception.
         :param kwargs: Additional keyword arguments passed to the `redis.Redis` instance.
         """
-
-        super().__init__()
-        self._redis_uri = f"{host}:{port}/{db}"
-        self._client = redis.Redis(
-            host=host,
-            port=port,
-            db=db,
-            password=password,
-            socket_timeout=socket_timeout,
-            **kwargs,
+        super().__init__(
+            client_connect_success_cb=client_connect_success_cb,
+            client_connect_failure_cb=client_connect_failure_cb,
         )
+
         self._key_serializer = key_serializer
         self._value_serializer = value_serializer
+        self._client: Optional[redis.Redis] = None
+        self._client_settings = {
+            "host": host,
+            "port": port,
+            "db": db,
+            "password": password,
+            "socket_timeout": socket_timeout,
+            **kwargs,
+        }
+        self._redis_uri = (
+            f"{self._client_settings['host']}:"
+            f"{self._client_settings['port']}/"
+            f"{self._client_settings['db']}"
+        )
+
+    def setup_client(self):
+        self._client = redis.Redis(**self._client_settings)
+        self._client.info()
 
     def write(self, batch: SinkBatch) -> None:
         # Execute Redis updates atomically using a transaction pipeline
