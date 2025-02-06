@@ -166,7 +166,8 @@ class Neo4jSink(BatchingSink):
         with self._client.session() as session:
             while attempts_remaining:
                 try:
-                    return session.execute_write(self._transaction, batch)
+                    session.execute_write(self._transaction, batch)
+                    return
                 except (
                     SessionExpired,
                     ServiceUnavailable,
