@@ -4,8 +4,8 @@ import contextvars
 import functools
 import operator
 import pprint
+import sys
 import time
-from collections import deque
 from datetime import timedelta
 from typing import (
     Any,
@@ -50,6 +50,7 @@ from quixstreams.models.serializers import DeserializerType, SerializerType
 from quixstreams.processing import ProcessingContext
 from quixstreams.sinks import BaseSink
 from quixstreams.state.base import State
+from quixstreams.utils.printing import Table, clear_console
 
 from .exceptions import InvalidOperation
 from .registry import DataframeRegistry
@@ -773,11 +774,12 @@ class StreamingDataFrame:
             metadata=metadata,
         )
 
-    def print_live_table(
+    def print_table(
         self,
-        number: int = 10,
+        size: int = 10,
         title: Optional[str] = None,
-        slowdown: float = 0.1,
+        metadata: bool = True,
+        slowdown: float = 0.5,
     ):
         """
         [EXPERIMENTAL] Print a live-updating table of the most recent records.
@@ -819,37 +821,38 @@ class StreamingDataFrame:
         :param slowdown: Time in seconds to wait between updates. Default: 0.1
                         Increase this value if the table updates too quickly.
         """
-        try:
-            from rich.console import Console
-            from rich.table import Table
-        except ImportError:
-            raise ImportError(
-                "Please install `rich` to use `print_table`: pip install rich"
-            )
+        interactive = sys.stdout.isatty()
 
-        console = Console()
-        rows: deque[dict[str, Any]] = deque(maxlen=number)
+        def _collect(table, value, *_metadata):
+            if _metadata:
+                value["_key"], value["_timestamp"], _ = _metadata
+            table.append(value)
 
-        def _print_table(value, key, timestamp, headers):
-            nonlocal rows
-            value["_key"] = key
-            value["_timestamp"] = timestamp
-            rows.append(value)
+        table = Table(size=size, title=title)
+        self.processing_context.tables.append(table)
+        _collect = functools.partial(_collect, table)
+        self._add_update(_collect, metadata=metadata)
 
-            table = Table(title=title)
-            columns = sorted(set().union(*rows))
+        if len(self.processing_context.tables) == 1:
+            return self
 
-            for column in columns:
-                table.add_column(column)
+        if interactive:
 
-            for row in rows:
-                table.add_row(*[str(row.get(column, ""))[:10] for column in columns])
+            def _print_tables(*_):
+                clear_console()
+                for table in self.processing_context.tables:
+                    table.print()
+                time.sleep(slowdown)
+        else:
 
-            console.clear()
-            console.print(table)
-            time.sleep(slowdown)
+            def _print_tables(*_):
+                for table in self.processing_context.tables:
+                    if table.is_full():
+                        table.print()
+                        table.clear()
+                time.sleep(slowdown)
 
-        return self._add_update(_print_table, metadata=True)
+        return self._add_update(_print_tables)
 
     def compose(
         self,
