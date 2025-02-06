@@ -1,8 +1,7 @@
 import logging
 import sys
 import time
-import typing
-from typing import Any, Iterable, Literal, Mapping, Optional, Union
+from typing import Any, Callable, Iterable, Literal, Mapping, Optional, Union, get_args
 
 from quixstreams.models import HeadersTuples
 
@@ -143,7 +142,7 @@ class InfluxDB3Sink(BatchingSink):
             client_connect_failure_cb=client_connect_failure_cb,
         )
 
-        if time_precision not in (time_args := typing.get_args(TimePrecision)):
+        if time_precision not in (time_args := get_args(TimePrecision)):
             raise ValueError(
                 f"Invalid 'time_precision' argument {time_precision}; "
                 f"valid options: {time_args}"
@@ -194,7 +193,6 @@ class InfluxDB3Sink(BatchingSink):
         if callable(setter):
             return setter
         return lambda value: setter
-        super().__init__(client_connect_cb=client_connect_cb)
 
     def setup_client(self):
         self._client = InfluxDBClient3(**self._client_args)
