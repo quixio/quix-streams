@@ -15,7 +15,7 @@ from confluent_kafka.admin import (
 
 from quixstreams.kafka import ConnectionConfig
 
-from .exceptions import CreateTopicFailure, CreateTopicTimeout
+from .exceptions import CreateTopicFailure, CreateTopicTimeout, TopicPermissionError
 from .topic import Topic, TopicConfig
 
 logger = logging.getLogger(__name__)
@@ -102,10 +102,24 @@ class TopicAdmin:
                 [confluent_topic_config(topic) for topic in existing_topics],
                 request_timeout=timeout,
             )
-        configs = {
-            config_resource.name: {c.name: c.value for c in config.result().values()}
-            for config_resource, config in futures_dict.items()
-        }
+        configs = {}
+        auth_failures = []
+        for config_resource, config in futures_dict.items():
+            try:
+                configs[config_resource.name] = {
+                    c.name: c.value for c in config.result().values()
+                }
+            except KafkaException as e:
+                if e.args[0].name() == "TOPIC_AUTHORIZATION_FAILED":
+                    auth_failures.append(config_resource.name)
+                else:
+                    raise
+        if auth_failures:
+            raise TopicPermissionError(
+                "Unauthorized topic metadata access, likely due to ACL permissioning; "
+                f"ACL must allow topic operation `DescribeConfigs` for: {auth_failures}"
+            )
+
         return {
             topic: (
                 TopicConfig(
@@ -145,11 +159,17 @@ class TopicAdmin:
                         # Topic was maybe created by another instance
                         if e.args[0].name() == "TOPIC_ALREADY_EXISTS":
                             logger.info(f'Topic "{topic_name}" already exists')
+                        if e.args[0].name() == "TOPIC_AUTHORIZATION_FAILED":
+                            exceptions[topic_name] = (
+                                "Unauthorized, likely due to ACL permissioning; "
+                                "ACL must allow topic operation 'Create' "
+                                f"for '{topic_name}'"
+                            )
                         else:
                             exceptions[topic_name] = e.args[0].str()
                     # Not sure how these get raised, but they are supposedly possible
                     except (TypeError, ValueError) as e:
-                        exceptions[topic_name] = e
+                        exceptions[topic_name] = str(e)
                     del futures[topic_name]
         if exceptions:
             raise CreateTopicFailure(f"Failed to create topics: {exceptions}")
