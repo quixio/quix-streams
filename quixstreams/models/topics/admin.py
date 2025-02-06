@@ -156,10 +156,11 @@ class TopicAdmin:
                         future.result()
                         logger.info(f'Topic "{topic_name}" has been created')
                     except KafkaException as e:
+                        error_name = e.args[0].name()
                         # Topic was maybe created by another instance
-                        if e.args[0].name() == "TOPIC_ALREADY_EXISTS":
+                        if error_name == "TOPIC_ALREADY_EXISTS":
                             logger.info(f'Topic "{topic_name}" already exists')
-                        elif e.args[0].name() == "TOPIC_AUTHORIZATION_FAILED":
+                        elif error_name == "TOPIC_AUTHORIZATION_FAILED":
                             exceptions[topic_name] = (
                                 "Unauthorized, likely due to ACL permissioning; "
                                 "ACL must allow topic operation 'Create' "
