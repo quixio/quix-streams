@@ -117,7 +117,7 @@ class TopicAdmin:
         if auth_failures:
             raise TopicPermissionError(
                 "Unauthorized topic metadata access, likely due to ACL permissioning; "
-                f"ACL must allow topic operation `DescribeConfigs` for: {auth_failures}"
+                f"ACL must allow topic operation 'DescribeConfigs' for: {auth_failures}"
             )
 
         return {
