@@ -159,7 +159,7 @@ class TopicAdmin:
                         # Topic was maybe created by another instance
                         if e.args[0].name() == "TOPIC_ALREADY_EXISTS":
                             logger.info(f'Topic "{topic_name}" already exists')
-                        if e.args[0].name() == "TOPIC_AUTHORIZATION_FAILED":
+                        elif e.args[0].name() == "TOPIC_AUTHORIZATION_FAILED":
                             exceptions[topic_name] = (
                                 "Unauthorized, likely due to ACL permissioning; "
                                 "ACL must allow topic operation 'Create' "
