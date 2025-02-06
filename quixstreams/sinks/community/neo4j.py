@@ -23,6 +23,10 @@ __all__ = ("Neo4jSink",)
 logger = logging.getLogger(__name__)
 
 
+_ATTEMPT_BACKOFF = 5
+_SINK_BACKOFF = 30
+
+
 class Neo4jSink(BatchingSink):
     def __init__(
         self,
@@ -126,7 +130,7 @@ class Neo4jSink(BatchingSink):
             f"{user_query}"
         )
 
-    def _transaction(self, tx: neo4j.ManagedTransaction, sink_batch: SinkBatch):
+    def _transaction(self, tx: neo4j.ManagedTransaction, batch: SinkBatch):
         """
         Encapsulating all tx.run() calls in a function means they are all part of
         the same transaction.
@@ -134,10 +138,10 @@ class Neo4jSink(BatchingSink):
         _start = time.monotonic()
         min_timestamp = sys.maxsize
         max_timestamp = -1
-        for batch in sink_batch.iter_chunks(self._chunk_size):
+        for chunk in batch.iter_chunks(self._chunk_size):
             # Records must be a list of dicts to work in the batch Neo4j query.
             records = []
-            for r in batch:
+            for r in chunk:
                 ts = r.timestamp
                 record = {
                     "__key": r.key.decode() if isinstance(r.key, bytes) else r.key,
@@ -151,7 +155,7 @@ class Neo4jSink(BatchingSink):
             tx.run(self._query, records=records)
         logger.info(
             f"Sent data to Neo4j; "
-            f"messages_processed={sink_batch.size} "
+            f"messages_processed={batch.size} "
             f"min_timestamp={min_timestamp} "
             f"max_timestamp={max_timestamp} "
             f"time_elapsed={round(time.monotonic() - _start, 2)}s"
@@ -162,8 +166,7 @@ class Neo4jSink(BatchingSink):
         with self._client.session() as session:
             while attempts_remaining:
                 try:
-                    session.execute_write(self._transaction, batch)
-                    return
+                    return session.execute_write(self._transaction, batch)
                 except (
                     SessionExpired,
                     ServiceUnavailable,
@@ -171,21 +174,19 @@ class Neo4jSink(BatchingSink):
                     TransactionError,
                 ) as e:
                     logger.error(f"Failed to commit Neo4j transaction; error: {e}")
-                attempts_remaining -= 1
-                if attempts_remaining:
-                    backoff = 5
-                    logger.error(
-                        f"Sleeping for {backoff} seconds and re-attempting. "
-                        f"Attempts remaining: {attempts_remaining}"
-                    )
-                    time.sleep(backoff)
-            backoff = 30
+                    attempts_remaining -= 1
+                    if attempts_remaining:
+                        logger.error(
+                            f"Sleeping for {_ATTEMPT_BACKOFF} seconds and re-attempting. "
+                            f"Attempts remaining: {attempts_remaining}"
+                        )
+                        time.sleep(_ATTEMPT_BACKOFF)
             logger.error(
                 "Consecutive Neo4j write attempts failed; "
-                f"performing a longer backoff of {backoff} seconds..."
+                f"performing a longer backoff of {_SINK_BACKOFF} seconds..."
             )
             raise SinkBackpressureError(
-                retry_after=backoff,
+                retry_after=_SINK_BACKOFF,
                 topic=batch.topic,
                 partition=batch.partition,
             )
