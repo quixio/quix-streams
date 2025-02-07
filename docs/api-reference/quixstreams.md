@@ -4365,6 +4365,85 @@ details.
 
 ## quixstreams.sinks.community.file
 
+<a id="quixstreams.sinks.community.mongodb"></a>
+
+## quixstreams.sinks.community.mongodb
+
+<a id="quixstreams.sinks.community.mongodb.MongoDBSink"></a>
+
+### MongoDBSink
+
+```python
+class MongoDBSink(BatchingSink)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/mongodb.py#L65)
+
+<a id="quixstreams.sinks.community.mongodb.MongoDBSink.__init__"></a>
+
+#### MongoDBSink.\_\_init\_\_
+
+```python
+def __init__(
+    url: str,
+    db: str,
+    collection: str,
+    document_matcher: Callable[[SinkItem],
+                               MongoQueryFilter] = _default_document_matcher,
+    update_method: Literal["UpdateOne", "UpdateMany",
+                           "ReplaceOne"] = "UpdateOne",
+    upsert: bool = True,
+    add_message_metadata: bool = False,
+    add_topic_metadata: bool = False,
+    value_selector: Optional[Callable[[MongoValue],
+                                      MongoValue]] = None) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/mongodb.py#L66)
+
+A connector to sink processed data to MongoDB in batches.
+
+**Arguments**:
+
+- `url`: MongoDB url; most commonly `mongodb://username:password@host:port`
+- `db`: MongoDB database name
+- `collection`: MongoDB collection name
+- `document_matcher`: How documents are selected to update.
+A callable that accepts a `BatchItem` and returns a MongoDB "query filter".
+If no match, will insert if `upsert=True`, where `_id` will be either the
+included value if specified, else a random `ObjectId`.
+- Default: matches on `_id`, with `_id` assumed to be the kafka key.
+- `upsert`: Create documents if no matches with `document_matcher`.
+- `update_method`: How documents found with `document_matcher` are updated.
+'Update*' options will only update fields included in the kafka message.
+'Replace*' option fully replaces the document with the contents of kafka message.
+"UpdateOne": Updates the first matching document (usually based on `_id`).
+"UpdateMany": Updates ALL matching documents (usually NOT based on `_id`).
+"ReplaceOne": Replaces the first matching document (usually based on `_id`).
+Default: "UpdateOne".
+- `add_message_metadata`: add key, timestamp, and headers as `__{field}`
+- `add_topic_metadata`: add topic, partition, and offset as `__{field}`
+- `value_selector`: An optional callable that allows final editing of the
+outgoing document (right before submitting it).
+Largely used when a field is necessary for `document_matcher`,
+but not otherwise.
+NOTE: metadata is added before this step, so don't accidentally
+exclude it here!
+
+<a id="quixstreams.sinks.community.mongodb.MongoDBSink.write"></a>
+
+#### MongoDBSink.write
+
+```python
+def write(batch: SinkBatch) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/mongodb.py#L138)
+
+Note: Transactions could be an option here, but then each record requires a
+network call, and the transaction has size limits...so `bulk_write` is used
+instead, with the downside that duplicate writes may occur if errors arise.
+
 <a id="quixstreams.sinks.community.bigquery"></a>
 
 ## quixstreams.sinks.community.bigquery
@@ -4529,6 +4608,95 @@ This method sends any outstanding records that have not yet been sent
 because the batch size was less than 500. It waits for all futures to
 complete, ensuring that all records are successfully sent to the Kinesis
 stream.
+
+<a id="quixstreams.sinks.community.neo4j"></a>
+
+## quixstreams.sinks.community.neo4j
+
+<a id="quixstreams.sinks.community.neo4j.Neo4jSink"></a>
+
+### Neo4jSink
+
+```python
+class Neo4jSink(BatchingSink)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/neo4j.py#L30)
+
+<a id="quixstreams.sinks.community.neo4j.Neo4jSink.__init__"></a>
+
+#### Neo4jSink.\_\_init\_\_
+
+```python
+def __init__(host: str,
+             port: int,
+             username: str,
+             password: str,
+             cypher_query: str,
+             chunk_size: int = 10000,
+             **kwargs) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/neo4j.py#L31)
+
+A connector to sink processed data to Neo4j.
+
+**Arguments**:
+
+- `host`: The Neo4j database hostname.
+- `port`: The Neo4j database port.
+- `username`: The Neo4j database username.
+- `password`: The Neo4j database password.
+- `cypher_query`: A Cypher Query to execute on each record.
+Behavior attempts to match other Neo4j connectors:
+- Uses "dot traversal" for (nested) dict key access; ex: "col_x.col_y.col_z"
+- Message value is bound to the alias "event"; ex: "event.field_a".
+- Message key, value, header and timestamp are bound to "__{attr}"; ex: "__key".
+- `chunk_size`: Adjust the size of a Neo4j transactional chunk.
+- This does NOT affect how many records can be written/flushed at once.
+- The chunks are committed only if ALL of them succeed.
+- Larger chunks are generally more efficient, but can encounter size issues.
+- This is only necessary to adjust when messages are especially large.
+- `kwargs`: Additional keyword arguments passed to the
+`neo4j.GraphDatabase.driver` instance.
+
+Example Usage:
+
+```
+from quixstreams import Application
+from quixstreams.sinks.community.neo4j import Neo4jSink
+
+app = Application(broker_address="localhost:9092")
+topic = app.topic("topic-name")
+
+# records structured as:
+# {"name": {"first": "John", "last": "Doe"}, "age": 28, "city": "Los Angeles"}
+
+# This assumes the given City nodes exist.
+# Notice the use of "event" to reference the message value.
+# Could also do things like __key, or __value.name.first.
+cypher_query = '''
+MERGE (p:Person {first_name: event.name.first, last_name: event.name.last})
+SET p.age = event.age
+MERGE (c:City {name: event.city})
+MERGE (p)-[:LIVES_IN]->(c)
+'''
+
+# Configure the sink
+neo4j_sink = Neo4jSink(
+    host="localhost",
+    port=7687,
+    username="neo4j",
+    password="local_password",
+    cypher_query=cypher_query,
+)
+
+sdf = app.dataframe(topic=topic)
+sdf.sink(neo4j_sink)
+
+if __name__ == "__main__":
+    app.run()
+```
 
 <a id="quixstreams.sinks.community"></a>
 
