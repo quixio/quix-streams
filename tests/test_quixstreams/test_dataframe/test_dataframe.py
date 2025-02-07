@@ -1,7 +1,9 @@
+import logging
 import operator
 import uuid
 from collections import namedtuple
 from datetime import timedelta
+from typing import Any
 
 import pytest
 
@@ -423,9 +425,9 @@ class TestStreamingDataFrame:
         Dropping an empty list is ignored entirely.
         """
         sdf = dataframe_factory()
-        pre_drop_stream = sdf.stream.root_path()
+        pre_drop_stream = sdf.stream.full_tree()
         sdf = sdf.drop([])
-        post_drop_stream = sdf.stream.root_path()
+        post_drop_stream = sdf.stream.full_tree()
         assert pre_drop_stream == post_drop_stream
 
     def test_drop_missing_columns_errors_raise(self, dataframe_factory):
@@ -909,12 +911,15 @@ class TestStreamingDataFrameTumblingWindow:
             ),
         ]
 
+    @pytest.mark.parametrize("should_log", [True, False])
     def test_tumbling_window_current_out_of_order_late(
         self,
+        should_log,
         dataframe_factory,
         state_manager,
         message_context_factory,
         topic_manager_topic_factory,
+        caplog,
     ):
         """
         Test that window with "latest" doesn't output the result if incoming timestamp
@@ -925,7 +930,30 @@ class TestStreamingDataFrameTumblingWindow:
         )
 
         sdf = dataframe_factory(topic, state_manager=state_manager)
-        sdf = sdf.tumbling_window(duration_ms=10, grace_ms=0).sum().current()
+
+        on_late_called = False
+
+        def on_late(
+            value: Any,
+            key: Any,
+            timestamp_ms: int,
+            late_by_ms: int,
+            start: int,
+            end: int,
+            store_name: str,
+            topic: str,
+            partition: int,
+            offset: int,
+        ) -> bool:
+            nonlocal on_late_called
+            on_late_called = True
+            return should_log
+
+        sdf = (
+            sdf.tumbling_window(duration_ms=10, grace_ms=0, on_late=on_late)
+            .sum()
+            .current()
+        )
 
         state_manager.on_partition_assign(
             topic=topic.name, partition=0, committed_offset=-1001
@@ -942,12 +970,23 @@ class TestStreamingDataFrameTumblingWindow:
         headers = [("key", b"value")]
 
         results = []
-        for value, key, timestamp in records:
-            ctx = message_context_factory(topic=topic.name)
-            result = sdf.test(
-                value=value, key=key, timestamp=timestamp, headers=headers, ctx=ctx
-            )
-            results += result
+        with caplog.at_level(logging.WARNING, logger="quixstreams"):
+            for value, key, timestamp in records:
+                ctx = message_context_factory(topic=topic.name)
+                result = sdf.test(
+                    value=value, key=key, timestamp=timestamp, headers=headers, ctx=ctx
+                )
+                results += result
+
+        assert on_late_called
+        warning_logs = [
+            r
+            for r in caplog.records
+            if r.levelname == "WARNING"
+            and "Skipping window processing for the expired window" in r.message
+        ]
+
+        assert warning_logs if should_log else not warning_logs
 
         assert len(results) == 2
         assert results == [
@@ -1341,6 +1380,138 @@ class TestStreamingDataFrameHoppingWindow:
         assert results == [
             (WindowResult(value=1, start=0, end=10), records[0].key, 0, None),
             (WindowResult(value=3, start=0, end=10), records[2].key, 0, None),
+        ]
+
+
+class TestStreamingDataFrameSlidingWindow:
+    def test_sliding_window_current(
+        self,
+        dataframe_factory,
+        state_manager,
+        message_context_factory,
+        topic_manager_topic_factory,
+    ):
+        topic = topic_manager_topic_factory(name="test")
+
+        sdf = dataframe_factory(topic, state_manager=state_manager)
+        sdf = (
+            sdf.sliding_window(
+                duration_ms=timedelta(seconds=10), grace_ms=timedelta(seconds=1)
+            )
+            .sum()
+            .current()
+        )
+
+        state_manager.on_partition_assign(
+            topic=topic.name, partition=0, committed_offset=-1001
+        )
+
+        records = [
+            RecordStub(1, "key", 1000),
+            RecordStub(2, "key", 9000),
+            RecordStub(3, "key", 20010),
+        ]
+        headers = [("key", b"value")]
+
+        results = []
+        for value, key, timestamp in records:
+            ctx = message_context_factory(topic=topic.name)
+            results += sdf.test(
+                value=value, key=key, timestamp=timestamp, headers=headers, ctx=ctx
+            )
+        assert len(results) == 3
+        assert results == [
+            (WindowResult(value=1, start=0, end=1000), records[0].key, 0, None),
+            (WindowResult(value=3, start=0, end=9000), records[1].key, 0, None),
+            (
+                WindowResult(value=3, start=10010, end=20010),
+                records[2].key,
+                10010,
+                None,
+            ),
+        ]
+
+    @pytest.mark.parametrize("should_log", [True, False])
+    def test_sliding_window_out_of_order_late(
+        self,
+        should_log,
+        dataframe_factory,
+        state_manager,
+        message_context_factory,
+        topic_manager_topic_factory,
+        caplog,
+    ):
+        """
+        Test that late timestamps trigger the `on_late` callback and log the warning
+        if the callback returns True.
+        """
+        topic = topic_manager_topic_factory(
+            name="test",
+        )
+
+        sdf = dataframe_factory(topic, state_manager=state_manager)
+
+        on_late_called = False
+
+        def on_late(
+            value: Any,
+            key: Any,
+            timestamp_ms: int,
+            late_by_ms: int,
+            start: int,
+            end: int,
+            store_name: str,
+            topic: str,
+            partition: int,
+            offset: int,
+        ) -> bool:
+            nonlocal on_late_called
+            on_late_called = True
+            return should_log
+
+        sdf = (
+            sdf.sliding_window(duration_ms=10, grace_ms=0, on_late=on_late)
+            .sum()
+            .current()
+        )
+
+        state_manager.on_partition_assign(
+            topic=topic.name, partition=0, committed_offset=-1001
+        )
+        records = [
+            # Create window [0, 1]
+            RecordStub(1, "test", 1),
+            # Create window [10,20]
+            RecordStub(2, "test", 20),
+            # Late message - it belongs to window [0,5] but this window
+            # is already closed. This message should be skipped from processing
+            RecordStub(3, "test", 5),
+        ]
+        headers = [("key", b"value")]
+
+        results = []
+        with caplog.at_level(logging.WARNING, logger="quixstreams"):
+            for value, key, timestamp in records:
+                ctx = message_context_factory(topic=topic.name)
+                result = sdf.test(
+                    value=value, key=key, timestamp=timestamp, headers=headers, ctx=ctx
+                )
+                results += result
+
+        assert on_late_called
+        warning_logs = [
+            r
+            for r in caplog.records
+            if r.levelname == "WARNING"
+            and "Skipping window processing for the expired window" in r.message
+        ]
+
+        assert warning_logs if should_log else not warning_logs
+
+        assert len(results) == 2
+        assert results == [
+            (WindowResult(value=1, start=0, end=1), records[0].key, 0, None),
+            (WindowResult(value=2, start=10, end=20), records[1].key, 10, None),
         ]
 
 
@@ -1944,7 +2115,7 @@ class TestStreamingDataFrameBranching:
 
         with pytest.raises(
             InvalidOperation,
-            match="filtering or column-setter SDF must originate from target SDF;",
+            match="Cannot assign or filter using a branched SDF",
         ):
             sdf[sdf_filter].apply(add_n(100))
 
@@ -1966,7 +2137,7 @@ class TestStreamingDataFrameBranching:
 
         with pytest.raises(
             InvalidOperation,
-            match="filtering or column-setter SDF must originate from target SDF;",
+            match="Cannot assign or filter using a branched SDF",
         ):
             sdf[sdf_filter].apply(add_n(100))
 
@@ -2043,7 +2214,7 @@ class TestStreamingDataFrameBranching:
 
         with pytest.raises(
             InvalidOperation,
-            match="filtering or column-setter SDF must originate from target SDF;",
+            match="Cannot assign or filter using a branched SDF",
         ):
             sdf["n_new"] = new_val
 
@@ -2061,7 +2232,7 @@ class TestStreamingDataFrameBranching:
 
         with pytest.raises(
             InvalidOperation,
-            match="filtering or column-setter SDF must originate from target SDF;",
+            match="Cannot assign or filter using a branched SDF",
         ):
             sdf["n_new"] = new_val
 

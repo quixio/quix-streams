@@ -6,7 +6,7 @@ from unittest import mock
 
 import pytest
 
-from quixstreams.dataframe.windows import SlidingWindowDefinition
+from quixstreams.dataframe.windows import SlidingTimeWindowDefinition
 
 A, B, C, D = "A", "B", "C", "D"
 
@@ -653,6 +653,84 @@ EXPIRATION_WITH_GRACE = [
     ),
 ]
 
+#      0        10        20        30        40        50        60
+# -----|---------|---------|---------|---------|---------|---------|--->
+# Duration: 10
+# Grace: 0
+# ______________________________________________________________________
+# A 1   A
+#      ||
+#     0  1
+# ______________________________________________________________________
+# B 20                     |---------|
+#                          20       30
+#               ^ 9  expiration watermark = 20 - 10 - 0 - 1
+# ______________________________________________________________________
+# C 5       C
+#               ^ 9  expiration watermark = 20 - 10 - 0 - 1
+# ______________________________________________________________________
+# Message C arrives before expiration watermark, so it is not processed.
+LATE_MESSAGE = [
+    Message(
+        timestamp=1,
+        value=A,
+        updated=[{"start": 0, "end": 1, "value": [A]}],  # left A
+    ),
+    Message(
+        timestamp=20,
+        value=B,
+        updated=[{"start": 10, "end": 20, "value": [B]}],  # left B
+        expired=[{"start": 0, "end": 1, "value": [A]}],  # left A
+    ),
+    Message(
+        timestamp=5,
+        value=C,
+        present=[
+            {"start": 0, "end": 1, "value": [1, [A]]},
+            {"start": 10, "end": 20, "value": [20, [B]]},
+        ],
+    ),
+]
+
+#      0        10        20        30        40        50        60
+# -----|---------|---------|---------|---------|---------|---------|--->
+# Duration: 10
+# Grace: 0
+# ______________________________________________________________________
+# A 1   A
+#      ||
+#     0  1
+# ______________________________________________________________________
+# B 20                     |---------|
+#                          20       30
+#               ^ 9  expiration watermark = 20 - 10 - 0 - 1
+# ______________________________________________________________________
+# C 9           C
+#               ^ 9  expiration watermark = 20 - 10 - 0 - 1
+# ______________________________________________________________________
+# Message C is equal to expiration watermark, so it is not processed.
+LATE_MESSAGE_EQUAL_TO_EXPIRATION_WATERMARK = [
+    Message(
+        timestamp=1,
+        value=A,
+        updated=[{"start": 0, "end": 1, "value": [A]}],  # left A
+    ),
+    Message(
+        timestamp=20,
+        value=B,
+        updated=[{"start": 10, "end": 20, "value": [B]}],  # left B
+        expired=[{"start": 0, "end": 1, "value": [A]}],  # left A
+    ),
+    Message(
+        timestamp=9,
+        value=C,
+        present=[
+            {"start": 0, "end": 1, "value": [1, [A]]},
+            {"start": 10, "end": 20, "value": [20, [B]]},
+        ],
+    ),
+]
+
 
 @pytest.fixture
 def mock_message_context():
@@ -664,10 +742,10 @@ def mock_message_context():
 def sliding_window_definition_factory(
     state_manager, dataframe_factory, topic_manager_topic_factory
 ):
-    def factory(duration_ms: int, grace_ms: int) -> SlidingWindowDefinition:
+    def factory(duration_ms: int, grace_ms: int) -> SlidingTimeWindowDefinition:
         topic = topic_manager_topic_factory("topic")
         sdf = dataframe_factory(topic=topic, state_manager=state_manager)
-        return SlidingWindowDefinition(
+        return SlidingTimeWindowDefinition(
             duration_ms=duration_ms, grace_ms=grace_ms, dataframe=sdf
         )
 
@@ -693,13 +771,13 @@ def state_factory(state_manager):
     store = None
 
     @contextmanager
-    def factory(window):
+    def factory(window, key: Any = b"key"):
         nonlocal store
         if store is None:
             store = state_manager.get_store(topic="topic", store_name=window.name)
             store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
-            yield tx.as_state(prefix=b"key")
+            yield tx.as_state(prefix=key)
 
     return factory
 
@@ -748,6 +826,13 @@ def state_factory(state_manager):
         pytest.param(10, 15, DEFAULT_AGGREGATION_USED, id="default-aggregation-used"),
         pytest.param(10, 0, EXPIRATION_WITHOUT_GRACE, id="expiration-without-grace"),
         pytest.param(10, 3, EXPIRATION_WITH_GRACE, id="expiration-with-grace"),
+        pytest.param(10, 0, LATE_MESSAGE, id="late-message"),
+        pytest.param(
+            10,
+            0,
+            LATE_MESSAGE_EQUAL_TO_EXPIRATION_WATERMARK,
+            id="late-message-equal-to-expiration-watermark",
+        ),
     ],
 )
 def test_sliding_window_reduce(
@@ -756,10 +841,14 @@ def test_sliding_window_reduce(
     window = window_factory(
         aggregation="reduce", duration_ms=duration_ms, grace_ms=grace_ms
     )
+    key = b"key"
     for message in messages:
-        with state_factory(window) as state:
+        with state_factory(window, key=key) as state:
             updated, expired = window.process_window(
-                value=message.value, timestamp_ms=message.timestamp, state=state
+                value=message.value,
+                key=key,
+                timestamp_ms=message.timestamp,
+                state=state,
             )
 
         assert list(updated) == message.updated
@@ -882,19 +971,23 @@ COLLECTION_AGGREGATION = [
 def test_sliding_window_collect(
     window_factory, state_factory, duration_ms, grace_ms, messages, mock_message_context
 ):
+    key = b"key"
     window = window_factory(
         aggregation="collect", duration_ms=duration_ms, grace_ms=grace_ms
     )
     for message in messages:
-        with state_factory(window) as state:
+        with state_factory(window, key=key) as state:
             updated, expired = window.process_window(
-                value=message.value, timestamp_ms=message.timestamp, state=state
+                value=message.value,
+                key=key,
+                timestamp_ms=message.timestamp,
+                state=state,
             )
 
         assert list(updated) == []  # updates are not supported for collections
         assert list(expired) == message.expired
 
-        with state_factory(window) as state:
+        with state_factory(window, key=key) as state:
             for deleted in message.deleted:
                 assert not state.get_window(
                     start_ms=deleted["start"], end_ms=deleted["end"]
@@ -909,5 +1002,7 @@ def test_sliding_window_collect(
             all_windows_in_state = {window for window, *_ in state.get_windows(-1, 99)}
             assert all_windows_in_state == message.expected_windows_in_state
 
-            all_values_in_state = state._transaction._get_values(-1, 99, state._prefix)
+            all_values_in_state = state._transaction.get_from_collection(
+                -1, 99, state._prefix
+            )
             assert all_values_in_state == message.expected_values_in_state

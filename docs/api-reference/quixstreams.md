@@ -740,8 +740,7 @@ Register a "groupby" SDF, which is one generated with `SDF.group_by()`.
 
 ```python
 def compose_all(
-    sink: Optional[Callable[[Any, Any, int, Any], None]] = None
-) -> Dict[str, VoidExecutor]
+        sink: Optional[VoidExecutor] = None) -> Dict[str, VoidExecutor]
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/registry.py#L75)
@@ -765,10 +764,10 @@ a {topic_name: composed} dict, where composed is a callable
 ### StreamingDataFrame
 
 ```python
-class StreamingDataFrame(BaseStreaming)
+class StreamingDataFrame()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L71)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L74)
 
 `StreamingDataFrame` is the main object you will use for ETL work.
 
@@ -833,7 +832,7 @@ def apply(func: Union[
           metadata: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L186)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L189)
 
 Apply a function to transform the value and return a new value.
 
@@ -885,7 +884,7 @@ def update(func: Union[
            metadata: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L293)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L296)
 
 Apply a function to mutate value in-place or to perform a side effect
 
@@ -945,7 +944,7 @@ def filter(func: Union[
            metadata: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L399)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L402)
 
 Filter value using provided function.
 
@@ -991,7 +990,7 @@ def group_by(key: Union[str, Callable[[Any], Any]],
              key_serializer: Optional[SerializerType] = "json") -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L487)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L490)
 
 "Groups" messages by re-keying them via the provided group_by operation
 
@@ -1047,7 +1046,7 @@ a clone with this operation added (assign to keep its effect).
 def contains(key: str) -> StreamingSeries
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L565)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L568)
 
 Check if the key is present in the Row value.
 
@@ -1078,7 +1077,7 @@ or False otherwise.
 def to_topic(topic: Topic, key: Optional[Callable[[Any], Any]] = None) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L590)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L593)
 
 Produce current value to a topic. You can optionally specify a new key.
 
@@ -1123,7 +1122,7 @@ the updated StreamingDataFrame instance (reassignment NOT required).
 def set_timestamp(func: Callable[[Any, Any, int, Any], int]) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L635)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L638)
 
 Set a new timestamp based on the current message value and its metadata.
 
@@ -1167,7 +1166,7 @@ def set_headers(
         ]) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L676)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L679)
 
 Set new message headers based on the current message value and metadata.
 
@@ -1208,7 +1207,7 @@ a new StreamingDataFrame instance
 def print(pretty: bool = True, metadata: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L727)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L730)
 
 Print out the current message value (and optionally, the message metadata) to
 
@@ -1251,12 +1250,10 @@ the updated StreamingDataFrame instance (reassignment NOT required).
 #### StreamingDataFrame.compose
 
 ```python
-def compose(
-    sink: Optional[Callable[[Any, Any, int, Any], None]] = None
-) -> Dict[str, VoidExecutor]
+def compose(sink: Optional[VoidExecutor] = None) -> dict[str, VoidExecutor]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L771)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L774)
 
 Compose all functions of this StreamingDataFrame into one big closure.
 
@@ -1302,7 +1299,7 @@ def test(value: Any,
          topic: Optional[Topic] = None) -> List[Any]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L805)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L808)
 
 A shorthand to test `StreamingDataFrame` with provided value
 
@@ -1328,14 +1325,17 @@ result of `StreamingDataFrame`
 #### StreamingDataFrame.tumbling\_window
 
 ```python
-def tumbling_window(duration_ms: Union[int, timedelta],
-                    grace_ms: Union[int, timedelta] = 0,
-                    name: Optional[str] = None) -> TumblingWindowDefinition
+def tumbling_window(
+    duration_ms: Union[int, timedelta],
+    grace_ms: Union[int, timedelta] = 0,
+    name: Optional[str] = None,
+    on_late: Optional[WindowOnLateCallback] = None
+) -> TumblingTimeWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L842)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L845)
 
-Create a tumbling window transformation on this StreamingDataFrame.
+Create a time-based tumbling window transformation on this StreamingDataFrame.
 
 Tumbling windows divide time into fixed-sized, non-overlapping windows.
 
@@ -1391,10 +1391,68 @@ or as a `timedelta` object.
 value.
 - `name`: The unique identifier for the window. If not provided, it will be
 automatically generated based on the window's properties.
+- `on_late`: an optional callback to react on late records in windows and
+to configure the logging of such events.
+If the callback returns `True`, the message about a late record will be logged
+(default behavior).
+Otherwise, no message will be logged.
 
 **Returns**:
 
-`TumblingWindowDefinition` instance representing the tumbling window
+`TumblingTimeWindowDefinition` instance representing the tumbling window
+configuration.
+This object can be further configured with aggregation functions
+like `sum`, `count`, etc. applied to the StreamingDataFrame.
+
+<a id="quixstreams.dataframe.dataframe.StreamingDataFrame.tumbling_count_window"></a>
+
+#### StreamingDataFrame.tumbling\_count\_window
+
+```python
+def tumbling_count_window(
+        count: int,
+        name: Optional[str] = None) -> TumblingCountWindowDefinition
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L932)
+
+Create a count-based tumbling window transformation on this StreamingDataFrame.
+
+Tumbling windows divide messages into fixed-batch, non-overlapping windows.
+They allow performing stateful aggregations like `sum`, `reduce`, etc.
+on top of the data and emit results downstream.
+Notes:
+- The start timestamp of the aggregation result is set to the earliest timestamp.
+- The end timestamp of the aggregation result is set to the latest timestamp.
+- Every window is grouped by the current Kafka message key.
+- Messages with `None` key will be ignored.
+Example Snippet:
+```python
+app = Application()
+sdf = app.dataframe(...)
+sdf = (
+    # Define a tumbling window of 10 messages
+    sdf.tumbling_count_window(count=10)
+    # Specify the aggregation function
+    .sum()
+    # Specify how the results should be emitted downstream.
+    # "current()" will emit results as they come for each updated window,
+    # possibly producing multiple messages per key-window pair
+    # "final()" will emit windows only when they are closed and cannot
+    # receive any updates anymore.
+    .current()
+)
+```
+
+**Arguments**:
+
+- `count`: The length of each window. The number of messages to include in the window.
+- `name`: The unique identifier for the window. If not provided, it will be
+automatically generated based on the window's properties.
+
+**Returns**:
+
+`TumblingCountWindowDefinition` instance representing the tumbling window
 configuration.
 This object can be further configured with aggregation functions
 like `sum`, `count`, etc. applied to the StreamingDataFrame.
@@ -1404,15 +1462,18 @@ like `sum`, `count`, etc. applied to the StreamingDataFrame.
 #### StreamingDataFrame.hopping\_window
 
 ```python
-def hopping_window(duration_ms: Union[int, timedelta],
-                   step_ms: Union[int, timedelta],
-                   grace_ms: Union[int, timedelta] = 0,
-                   name: Optional[str] = None) -> HoppingWindowDefinition
+def hopping_window(
+    duration_ms: Union[int, timedelta],
+    step_ms: Union[int, timedelta],
+    grace_ms: Union[int, timedelta] = 0,
+    name: Optional[str] = None,
+    on_late: Optional[WindowOnLateCallback] = None
+) -> HoppingTimeWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L918)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L976)
 
-Create a hopping window transformation on this StreamingDataFrame.
+Create a time-based hopping window transformation on this StreamingDataFrame.
 
 Hopping windows divide the data stream into overlapping windows based on time.
 The overlap is controlled by the `step_ms` parameter.
@@ -1477,10 +1538,75 @@ or a `timedelta` object.
 value.
 - `name`: The unique identifier for the window. If not provided, it will be
 automatically generated based on the window's properties.
+- `on_late`: an optional callback to react on late records in windows and
+to configure the logging of such events.
+If the callback returns `True`, the message about a late record will be logged
+(default behavior).
+Otherwise, no message will be logged.
 
 **Returns**:
 
-`HoppingWindowDefinition` instance representing the hopping
+`HoppingTimeWindowDefinition` instance representing the hopping
+window configuration.
+This object can be further configured with aggregation functions
+like `sum`, `count`, etc. and applied to the StreamingDataFrame.
+
+<a id="quixstreams.dataframe.dataframe.StreamingDataFrame.hopping_count_window"></a>
+
+#### StreamingDataFrame.hopping\_count\_window
+
+```python
+def hopping_count_window(
+        count: int,
+        step: int,
+        name: Optional[str] = None) -> HoppingCountWindowDefinition
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1076)
+
+Create a count-based hopping window transformation on this StreamingDataFrame.
+
+Hopping windows divide the data stream into overlapping windows.
+The overlap is controlled by the `step` parameter.
+They allow performing stateful aggregations like `sum`, `reduce`, etc.
+on top of the data and emit results downstream.
+Notes:
+- The start timestamp of the aggregation result is set to the earliest timestamp.
+- The end timestamp of the aggregation result is set to the latest timestamp.
+- Every window is grouped by the current Kafka message key.
+- Messages with `None` key will be ignored.
+Example Snippet:
+```python
+app = Application()
+sdf = app.dataframe(...)
+sdf = (
+    # Define a hopping window of 10 messages with a step of 5 messages
+    sdf.hopping_count_window(
+        count=10,
+        step=5,
+    )
+    # Specify the aggregation function
+    .sum()
+    # Specify how the results should be emitted downstream.
+    # "current()" will emit results as they come for each updated window,
+    # possibly producing multiple messages per key-window pair
+    # "final()" will emit windows only when they are closed and cannot
+    # receive any updates anymore.
+    .current()
+)
+```
+
+**Arguments**:
+
+- `count`: The length of each window. The number of messages to include in the window.
+- `step`: The step size for the window. It determines the number of messages between windows.
+A  sliding windows is the same as a hopping window with a step of 1 message.
+- `name`: The unique identifier for the window. If not provided, it will be
+automatically generated based on the window's properties.
+
+**Returns**:
+
+`HoppingCountWindowDefinition` instance representing the hopping
 window configuration.
 This object can be further configured with aggregation functions
 like `sum`, `count`, etc. and applied to the StreamingDataFrame.
@@ -1490,14 +1616,17 @@ like `sum`, `count`, etc. and applied to the StreamingDataFrame.
 #### StreamingDataFrame.sliding\_window
 
 ```python
-def sliding_window(duration_ms: Union[int, timedelta],
-                   grace_ms: Union[int, timedelta] = 0,
-                   name: Optional[str] = None) -> SlidingWindowDefinition
+def sliding_window(
+    duration_ms: Union[int, timedelta],
+    grace_ms: Union[int, timedelta] = 0,
+    name: Optional[str] = None,
+    on_late: Optional[WindowOnLateCallback] = None
+) -> SlidingTimeWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1010)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1127)
 
-Create a sliding window transformation on this StreamingDataFrame.
+Create a time-based sliding window transformation on this StreamingDataFrame.
 
 Sliding windows continuously evaluate the stream with a fixed step of 1 ms
 allowing for overlapping, but not redundant windows of a fixed size.
@@ -1558,10 +1687,71 @@ or as a `timedelta` object.
 value.
 - `name`: The unique identifier for the window. If not provided, it will be
 automatically generated based on the window's properties.
+- `on_late`: an optional callback to react on late records in windows and
+to configure the logging of such events.
+If the callback returns `True`, the message about a late record will be logged
+(default behavior).
+Otherwise, no message will be logged.
 
 **Returns**:
 
-`SlidingWindowDefinition` instance representing the sliding window
+`SlidingTimeWindowDefinition` instance representing the sliding window
+configuration.
+This object can be further configured with aggregation functions
+like `sum`, `count`, etc. applied to the StreamingDataFrame.
+
+<a id="quixstreams.dataframe.dataframe.StreamingDataFrame.sliding_count_window"></a>
+
+#### StreamingDataFrame.sliding\_count\_window
+
+```python
+def sliding_count_window(
+        count: int,
+        name: Optional[str] = None) -> SlidingCountWindowDefinition
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1219)
+
+Create a count-based sliding window transformation on this StreamingDataFrame.
+
+Sliding windows continuously evaluate the stream with a fixed step of 1 message
+allowing for overlapping, but not redundant windows of a fixed size.
+Sliding windows are similar to hopping windows with step set to 1.
+They allow performing stateful aggregations like `sum`, `reduce`, etc.
+on top of the data and emit results downstream.
+Notes:
+- The start timestamp of the aggregation result is set to the earliest timestamp.
+- The end timestamp of the aggregation result is set to the latest timestamp.
+- Every window is grouped by the current Kafka message key.
+- Messages with `None` key will be ignored.
+- Every window contains a distinct aggregation.
+Example Snippet:
+```python
+app = Application()
+sdf = app.dataframe(...)
+sdf = (
+    # Define a sliding window of 10 messages
+    sdf.sliding_count_window(count=10)
+    # Specify the aggregation function
+    .sum()
+    # Specify how the results should be emitted downstream.
+    # "current()" will emit results as they come for each updated window,
+    # possibly producing multiple messages per key-window pair
+    # "final()" will emit windows only when they are closed and cannot
+    # receive any updates anymore.
+    .current()
+)
+```
+
+**Arguments**:
+
+- `count`: The length of each window. The number of messages to include in the window.
+- `name`: The unique identifier for the window. If not provided, it will be
+automatically generated based on the window's properties.
+
+**Returns**:
+
+`SlidingCountWindowDefinition` instance representing the sliding window
 configuration.
 This object can be further configured with aggregation functions
 like `sum`, `count`, etc. applied to the StreamingDataFrame.
@@ -1575,7 +1765,7 @@ def drop(columns: Union[str, List[str]],
          errors: Literal["ignore", "raise"] = "raise") -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1091)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1266)
 
 Drop column(s) from the message value (value must support `del`, like a dict).
 
@@ -1611,7 +1801,7 @@ a new StreamingDataFrame instance
 def sink(sink: BaseSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1135)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1310)
 
 Sink the processed data to the specified destination.
 
@@ -1638,10 +1828,10 @@ operations, but branches can still be generated from its originating SDF.
 ### StreamingSeries
 
 ```python
-class StreamingSeries(BaseStreaming)
+class StreamingSeries()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L60)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L58)
 
 `StreamingSeries` are typically generated by `StreamingDataframes` when getting
 elements from, or performing certain operations on, a `StreamingDataframe`,
@@ -1700,7 +1890,7 @@ def from_apply_callback(cls, func: ApplyWithMetadataCallback,
                         sdf_id: int) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L126)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L124)
 
 Create a StreamingSeries from a function.
 
@@ -1723,7 +1913,7 @@ instance of `StreamingSeries`
 def apply(func: ApplyCallback) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L149)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L147)
 
 Add a callable to the execution list for this series.
 
@@ -1767,7 +1957,7 @@ a new `StreamingSeries` with the new callable added
 def compose_returning() -> ReturningExecutor
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L183)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L181)
 
 Compose a list of functions from this StreamingSeries and its parents into one
 
@@ -1784,54 +1974,6 @@ into a returning function.
 a callable accepting value, key and timestamp and
 returning a tuple "(value, key, timestamp)
 
-<a id="quixstreams.dataframe.series.StreamingSeries.compose"></a>
-
-#### StreamingSeries.compose
-
-```python
-def compose(
-    sink: Optional[Callable[[Any, Any, int, Any],
-                            None]] = None) -> VoidExecutor
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L198)
-
-Compose all functions of this StreamingSeries into one big closure.
-
-Generally not required by users; the `quixstreams.app.Application` class will
-do this automatically.
-
-
-Example Snippet:
-
-```python
-from quixstreams import Application
-
-app = Application(...)
-
-sdf = app.dataframe()
-sdf = sdf["column_a"].apply(apply_func)
-sdf = sdf["column_b"].contains(filter_func)
-sdf = sdf.compose()
-
-result_0 = sdf({"my": "record"})
-result_1 = sdf({"other": "record"})
-```
-
-**Arguments**:
-
-- `sink`: callable to accumulate the results of the execution.
-
-**Raises**:
-
-- `ValueError`: if disallowed functions are present in the tree of
-underlying `Stream`.
-
-**Returns**:
-
-a callable accepting value, key and timestamp and
-returning None
-
 <a id="quixstreams.dataframe.series.StreamingSeries.test"></a>
 
 #### StreamingSeries.test
@@ -1844,7 +1986,7 @@ def test(value: Any,
          ctx: Optional[MessageContext] = None) -> Any
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L242)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L196)
 
 A shorthand to test `StreamingSeries` with provided value
 
@@ -1870,7 +2012,7 @@ result of `StreamingSeries`
 def isin(other: Container) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L313)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L261)
 
 Check if series value is in "other".
 
@@ -1907,7 +2049,7 @@ new StreamingSeries
 def contains(other: Union[Self, object]) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L344)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L292)
 
 Check if series value contains "other"
 
@@ -1944,7 +2086,7 @@ new StreamingSeries
 def is_(other: Union[Self, object]) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L369)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L317)
 
 Check if series value refers to the same object as `other`
 
@@ -1978,7 +2120,7 @@ new StreamingSeries
 def isnot(other: Union[Self, object]) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L392)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L340)
 
 Check if series value does not refer to the same object as `other`
 
@@ -2013,7 +2155,7 @@ new StreamingSeries
 def isnull() -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L416)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L364)
 
 Check if series value is None.
 
@@ -2044,7 +2186,7 @@ new StreamingSeries
 def notnull() -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L439)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L387)
 
 Check if series value is not None.
 
@@ -2075,7 +2217,7 @@ new StreamingSeries
 def abs() -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L462)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L410)
 
 Get absolute value of the series value.
 
@@ -2140,7 +2282,7 @@ timedelta value in milliseconds as `int`
 ### SlidingWindow
 
 ```python
-class SlidingWindow(FixedTimeWindow)
+class SlidingWindow(TimeWindow)
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/sliding.py#L9)
@@ -2151,7 +2293,7 @@ class SlidingWindow(FixedTimeWindow)
 
 ```python
 def process_window(
-    value: Any, timestamp_ms: int, state: WindowedState
+    value: Any, key: Any, timestamp_ms: int, state: WindowedState
 ) -> tuple[Iterable[WindowResult], Iterable[WindowResult]]
 ```
 
@@ -2202,25 +2344,25 @@ aggregation and combine it with the incoming message.
 
 ## quixstreams.dataframe.windows.definitions
 
-<a id="quixstreams.dataframe.windows.definitions.FixedTimeWindowDefinition"></a>
+<a id="quixstreams.dataframe.windows.definitions.WindowDefinition"></a>
 
-### FixedTimeWindowDefinition
-
-```python
-class FixedTimeWindowDefinition(abc.ABC)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L18)
-
-<a id="quixstreams.dataframe.windows.definitions.FixedTimeWindowDefinition.sum"></a>
-
-#### FixedTimeWindowDefinition.sum
+### WindowDefinition
 
 ```python
-def sum() -> FixedTimeWindow
+class WindowDefinition(abc.ABC)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L67)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L24)
+
+<a id="quixstreams.dataframe.windows.definitions.WindowDefinition.sum"></a>
+
+#### WindowDefinition.sum
+
+```python
+def sum() -> "Window"
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L47)
 
 Configure the window to aggregate data by summing up values within
 
@@ -2230,15 +2372,15 @@ each window period.
 
 an instance of `FixedTimeWindow` configured to perform sum aggregation.
 
-<a id="quixstreams.dataframe.windows.definitions.FixedTimeWindowDefinition.count"></a>
+<a id="quixstreams.dataframe.windows.definitions.WindowDefinition.count"></a>
 
-#### FixedTimeWindowDefinition.count
+#### WindowDefinition.count
 
 ```python
-def count() -> FixedTimeWindow
+def count() -> "Window"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L82)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L62)
 
 Configure the window to aggregate data by counting the number of values
 
@@ -2248,15 +2390,15 @@ within each window period.
 
 an instance of `FixedTimeWindow` configured to perform record count.
 
-<a id="quixstreams.dataframe.windows.definitions.FixedTimeWindowDefinition.mean"></a>
+<a id="quixstreams.dataframe.windows.definitions.WindowDefinition.mean"></a>
 
-#### FixedTimeWindowDefinition.mean
+#### WindowDefinition.mean
 
 ```python
-def mean() -> FixedTimeWindow
+def mean() -> "Window"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L97)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L77)
 
 Configure the window to aggregate data by calculating the mean of the values
 
@@ -2267,16 +2409,16 @@ within each window period.
 an instance of `FixedTimeWindow` configured to calculate the mean
 of the values.
 
-<a id="quixstreams.dataframe.windows.definitions.FixedTimeWindowDefinition.reduce"></a>
+<a id="quixstreams.dataframe.windows.definitions.WindowDefinition.reduce"></a>
 
-#### FixedTimeWindowDefinition.reduce
+#### WindowDefinition.reduce
 
 ```python
 def reduce(reducer: Callable[[Any, Any], Any],
-           initializer: Callable[[Any], Any]) -> FixedTimeWindow
+           initializer: Callable[[Any], Any]) -> "Window"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L117)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L97)
 
 Configure the window to perform a custom aggregation using `reducer`
 
@@ -2317,15 +2459,15 @@ This function is used to initialize the aggregation within a window.
 
 A window configured to perform custom reduce aggregation on the data.
 
-<a id="quixstreams.dataframe.windows.definitions.FixedTimeWindowDefinition.max"></a>
+<a id="quixstreams.dataframe.windows.definitions.WindowDefinition.max"></a>
 
-#### FixedTimeWindowDefinition.max
+#### WindowDefinition.max
 
 ```python
-def max() -> FixedTimeWindow
+def max() -> "Window"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L163)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L143)
 
 Configure a window to aggregate the maximum value within each window period.
 
@@ -2334,15 +2476,15 @@ Configure a window to aggregate the maximum value within each window period.
 an instance of `FixedTimeWindow` configured to calculate the maximum
 value within each window period.
 
-<a id="quixstreams.dataframe.windows.definitions.FixedTimeWindowDefinition.min"></a>
+<a id="quixstreams.dataframe.windows.definitions.WindowDefinition.min"></a>
 
-#### FixedTimeWindowDefinition.min
+#### WindowDefinition.min
 
 ```python
-def min() -> FixedTimeWindow
+def min() -> "Window"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L178)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L158)
 
 Configure a window to aggregate the minimum value within each window period.
 
@@ -2351,15 +2493,15 @@ Configure a window to aggregate the minimum value within each window period.
 an instance of `FixedTimeWindow` configured to calculate the maximum
 value within each window period.
 
-<a id="quixstreams.dataframe.windows.definitions.FixedTimeWindowDefinition.collect"></a>
+<a id="quixstreams.dataframe.windows.definitions.WindowDefinition.collect"></a>
 
-#### FixedTimeWindowDefinition.collect
+#### WindowDefinition.collect
 
 ```python
-def collect() -> FixedTimeWindow
+def collect() -> "Window"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L193)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L173)
 
 Configure the window to collect all values within each window period into a
 
@@ -2389,25 +2531,74 @@ within each window period.
 
 ## quixstreams.dataframe.windows.time\_based
 
-<a id="quixstreams.dataframe.windows.time_based.FixedTimeWindow"></a>
+<a id="quixstreams.dataframe.windows.count_based"></a>
 
-### FixedTimeWindow
+## quixstreams.dataframe.windows.count\_based
+
+<a id="quixstreams.dataframe.windows.count_based.CountWindow"></a>
+
+### CountWindow
 
 ```python
-class FixedTimeWindow()
+class CountWindow(Window)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/time_based.py#L42)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/count_based.py#L32)
 
-<a id="quixstreams.dataframe.windows.time_based.FixedTimeWindow.final"></a>
+<a id="quixstreams.dataframe.windows.count_based.CountWindow.process_window"></a>
 
-#### FixedTimeWindow.final
+#### CountWindow.process\_window
+
+```python
+def process_window(
+    value: Any, key: Any, timestamp_ms: int, state: WindowedState
+) -> tuple[Iterable[WindowResult], Iterable[WindowResult]]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/count_based.py#L55)
+
+Count based windows are different from time based windows as we don't
+have a clear indicator on when a window starts, it depends on the
+previous window. On the other hand there is a clear marker on when it
+must end, we can close the window as soon as the window is full.
+
+As count windows can't rely on ordered timestamps, collection need
+another way to generate ordered ids. We can use a per-key counter for
+that, each incoming message will increment the key counter. Collection
+window then only need to know at what id they start, how many messages
+to get on completion and how many messages can be safely deleted.
+
+We can further optimise this by removing the global counter and relying
+on the previous window state to compute a message id. For example, if
+an active window starts at msg id 32 and has a count of 3 it means the
+next free msg id is 35 (32 + 3).
+
+For tumbling windows there is no window overlap so we can't rely on that
+optimisation. Instead the msg id reset to 0 on every new window.
+
+<a id="quixstreams.dataframe.windows.base"></a>
+
+## quixstreams.dataframe.windows.base
+
+<a id="quixstreams.dataframe.windows.base.Window"></a>
+
+### Window
+
+```python
+class Window(abc.ABC)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/base.py#L35)
+
+<a id="quixstreams.dataframe.windows.base.Window.final"></a>
+
+#### Window.final
 
 ```python
 def final() -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/time_based.py#L141)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/base.py#L85)
 
 Apply the window aggregation and return results only when the windows are
 closed.
@@ -2430,24 +2621,20 @@ The closed windows cannot receive updates anymore and are considered final.
 If some message keys appear irregularly in the stream, the latest windows
 can remain unprocessed until the message the same key is received.
 
-<a id="quixstreams.dataframe.windows.time_based.FixedTimeWindow.current"></a>
+<a id="quixstreams.dataframe.windows.base.Window.current"></a>
 
-#### FixedTimeWindow.current
+#### Window.current
 
 ```python
 def current() -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/time_based.py#L179)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/base.py#L123)
 
 Apply the window transformation to the StreamingDataFrame to return results
 for each updated window.
 
 The format of returned windows:
-
-This method processes streaming data and returns results as they come,
-regardless of whether the window is closed or not.
-
 ```python
 {
     "start": <window start time in milliseconds>,
@@ -2456,14 +2643,8 @@ regardless of whether the window is closed or not.
 }
 ```
 
-**Notes**:
-
-  This method cannot be used with collection aggregations (created using
-  .collect()). Use .final() instead for collection aggregations.
-
-<a id="quixstreams.dataframe.windows.base"></a>
-
-## quixstreams.dataframe.windows.base
+This method processes streaming data and returns results as they come,
+regardless of whether the window is closed or not.
 
 <a id="quixstreams.dataframe.windows.base.get_window_ranges"></a>
 
@@ -2475,7 +2656,7 @@ def get_window_ranges(timestamp_ms: int,
                       step_ms: Optional[int] = None) -> Deque[tuple[int, int]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/base.py#L17)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/base.py#L206)
 
 Get a list of window ranges for the given timestamp.
 
@@ -2488,10 +2669,6 @@ Get a list of window ranges for the given timestamp.
 **Returns**:
 
 a list of (<start>, <end>) tuples
-
-<a id="quixstreams.dataframe.base"></a>
-
-## quixstreams.dataframe.base
 
 <a id="quixstreams.rowproducer"></a>
 
@@ -2612,7 +2789,7 @@ the Checkpoint inits another immediately after committing.
 class Stream()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L49)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L47)
 
 <a id="quixstreams.core.stream.stream.Stream.__init__"></a>
 
@@ -2620,15 +2797,15 @@ class Stream()
 
 ```python
 def __init__(func: Optional[StreamFunction] = None,
-             parent: Optional[Self] = None)
+             parents: Optional[List[Self]] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L50)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L48)
 
 A base class for all streaming operations.
 
 `Stream` is an abstraction of a function pipeline.
-Each Stream has a function and a parent (None by default).
+Each Stream has a function and an optional list of parents (None by default).
 When adding new function to the stream, it creates a new `Stream` object and
 sets "parent" to the previous `Stream` to maintain an order of execution.
 
@@ -2662,7 +2839,7 @@ and its parents.
 It is expected to be wrapped into one of "Apply", "Filter", "Update" or
 "Trasform" from `quixstreams.core.stream.functions` package.
 Default - "ApplyFunction(lambda value: value)".
-- `parent`: a parent `Stream`
+- `parents`: an optional list of parent `Stream`s
 
 <a id="quixstreams.core.stream.stream.Stream.add_filter"></a>
 
@@ -2674,7 +2851,7 @@ def add_filter(func: Union[FilterCallback, FilterWithMetadataCallback],
                metadata: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L123)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L121)
 
 Add a function to filter values from the Stream.
 
@@ -2709,7 +2886,7 @@ def add_apply(func: Union[
               metadata: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L190)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L188)
 
 Add an "apply" function to the Stream.
 
@@ -2740,7 +2917,7 @@ def add_update(func: Union[UpdateCallback, UpdateWithMetadataCallback],
                metadata: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L231)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L229)
 
 Add an "update" function to the Stream, that will mutate the input value.
 
@@ -2768,7 +2945,7 @@ def add_transform(func: Union[TransformCallback, TransformExpandedCallback],
                   expand: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L265)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L263)
 
 Add a "transform" function to the Stream, that will mutate the input value.
 
@@ -2797,7 +2974,7 @@ a new Stream derived from the current one
 def diff(other: Self) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L289)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L287)
 
 Takes the difference between Streams `self` and `other` based on their last
 
@@ -2822,26 +2999,6 @@ if the diff is empty, or pruning failed.
 
 a new independent `Stream` instance whose root begins at the diff
 
-<a id="quixstreams.core.stream.stream.Stream.root_path"></a>
-
-#### Stream.root\_path
-
-```python
-def root_path(allow_splits=True) -> List[Self]
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L354)
-
-Return a list of all parent Streams including the node itself.
-
-Can optionally stop at a first encountered split with allow_splits=False
-
-The tree is ordered from parent to child (current node comes last).
-
-**Returns**:
-
-a list of `Stream` objects
-
 <a id="quixstreams.core.stream.stream.Stream.full_tree"></a>
 
 #### Stream.full\_tree
@@ -2850,29 +3007,24 @@ a list of `Stream` objects
 def full_tree() -> List[Self]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L375)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L361)
 
-Starts at tree root and finds every Stream in the tree (including splits).
-
-**Returns**:
-
-The collection of all Streams interconnected to this one
+Find every related Stream in the tree across all children and parents and return
+them in a topologically sorted order.
 
 <a id="quixstreams.core.stream.stream.Stream.compose"></a>
 
 #### Stream.compose
 
 ```python
-def compose(
-    allow_filters=True,
-    allow_expands=True,
-    allow_updates=True,
-    allow_transforms=True,
-    sink: Optional[Callable[[Any, Any, int, Any],
-                            None]] = None) -> VoidExecutor
+def compose(allow_filters=True,
+            allow_expands=True,
+            allow_updates=True,
+            allow_transforms=True,
+            sink: Optional[VoidExecutor] = None) -> dict[Self, VoidExecutor]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L382)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L387)
 
 Generate an "executor" closure by mapping all relatives of this `Stream` and
 
@@ -2904,7 +3056,7 @@ the stream has transform functions in the tree. Default - True.
 def compose_returning() -> ReturningExecutor
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L439)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L446)
 
 Compose a list of functions from this `Stream` and its parents into one
 big closure that always returns the transformed record.
@@ -2914,6 +3066,49 @@ the result of the transformations.
 
 Stream may only contain simple "apply" functions to be able to compose itself
 into a returning function.
+
+<a id="quixstreams.core.stream.stream.Stream.compose_single"></a>
+
+#### Stream.compose\_single
+
+```python
+def compose_single(allow_filters=True,
+                   allow_expands=True,
+                   allow_updates=True,
+                   allow_transforms=True,
+                   sink: Optional[VoidExecutor] = None) -> VoidExecutor
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L484)
+
+A helper function to compose a Stream with a single root.
+
+If there's more than one root in the topology,
+it will fail with the `InvalidTopology` error.
+
+**Arguments**:
+
+- `allow_filters`: If False, this function will fail with `ValueError` if
+the stream has filter functions in the tree. Default - True.
+- `allow_updates`: If False, this function will fail with `ValueError` if
+the stream has update functions in the tree. Default - True.
+- `allow_expands`: If False, this function will fail with `ValueError` if
+the stream has functions with "expand=True" in the tree. Default - True.
+- `allow_transforms`: If False, this function will fail with `ValueError` if
+the stream has transform functions in the tree. Default - True.
+- `sink`: callable to accumulate the results of the execution, optional.
+
+<a id="quixstreams.core.stream.stream.Stream.root_path"></a>
+
+#### Stream.root\_path
+
+```python
+def root_path() -> List[Self]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/stream.py#L525)
+
+Start from self and collect all parents until reaching the root nodes
 
 <a id="quixstreams.core.stream.functions.update"></a>
 
@@ -3116,6 +3311,10 @@ Wrap a function into "Apply" function.
 The provided function is expected to accept value, and timestamp and return
 a new value based on input,
 and its result will always be passed downstream.
+
+<a id="quixstreams.core.stream.exceptions"></a>
+
+## quixstreams.core.stream.exceptions
 
 <a id="quixstreams.core"></a>
 
@@ -6529,7 +6728,7 @@ stores the expiration index to delete expired windows.
 class WindowedRocksDBPartitionTransaction(PartitionTransaction)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L46)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L50)
 
 <a id="quixstreams.state.rocksdb.windowed.transaction.WindowedRocksDBPartitionTransaction.expire_windows"></a>
 
@@ -6544,7 +6743,7 @@ def expire_windows(
         end_inclusive: bool = False) -> list[tuple[tuple[int, int], Any]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L154)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L197)
 
 Get all expired windows from RocksDB up to the specified `max_start_time` timestamp.
 
@@ -6590,7 +6789,7 @@ def delete_windows(max_start_time: int, delete_values: bool,
                    prefix: bytes) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L254)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L297)
 
 Delete windows from RocksDB up to the specified `max_start_time` timestamp.
 
@@ -6625,7 +6824,7 @@ def get_windows(start_from_ms: int,
                 backwards: bool = False) -> list[tuple[tuple[int, int], Any]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L345)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L352)
 
 Get all windows within the specified time range.
 
@@ -6740,10 +6939,10 @@ bytes
 ### WindowedTransactionState
 
 ```python
-class WindowedTransactionState(WindowedState)
+class WindowedTransactionState(TransactionState, WindowedState)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/state.py#L9)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/state.py#L10)
 
 <a id="quixstreams.state.rocksdb.windowed.state.WindowedTransactionState.__init__"></a>
 
@@ -6754,7 +6953,7 @@ def __init__(transaction: "WindowedRocksDBPartitionTransaction",
              prefix: bytes)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/state.py#L12)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/state.py#L13)
 
 A windowed state to be provided into `StreamingDataFrame` window functions.
 
@@ -6772,7 +6971,7 @@ def get_window(start_ms: int,
                default: Any = None) -> Optional[Any]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/state.py#L23)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/state.py#L24)
 
 Get the value of the window defined by `start` and `end` timestamps
 
@@ -6797,7 +6996,7 @@ def update_window(start_ms: int, end_ms: int, value: Any,
                   timestamp_ms: int) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/state.py#L39)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/state.py#L40)
 
 Set a value for the window.
 
@@ -6816,10 +7015,10 @@ using the provided `timestamp_ms`.
 #### WindowedTransactionState.add\_to\_collection
 
 ```python
-def add_to_collection(value: Any, timestamp_ms: int) -> None
+def add_to_collection(value: Any, id: Optional[int]) -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/state.py#L65)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/state.py#L66)
 
 Collect a value for collection-type window aggregations.
 
@@ -6832,6 +7031,45 @@ during window expiration.
 - `value`: value to be collected
 - `timestamp_ms`: current message timestamp in milliseconds
 
+<a id="quixstreams.state.rocksdb.windowed.state.WindowedTransactionState.get_from_collection"></a>
+
+#### WindowedTransactionState.get\_from\_collection
+
+```python
+def get_from_collection(start: int, end: int) -> list[Any]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/state.py#L83)
+
+Return all values from a collection-type window aggregation.
+
+**Arguments**:
+
+- `start`: starting id of values to fetch (inclusive)
+- `end`: end id of values to fetch (exclusive)
+
+<a id="quixstreams.state.rocksdb.windowed.state.WindowedTransactionState.delete_from_collection"></a>
+
+#### WindowedTransactionState.delete\_from\_collection
+
+```python
+def delete_from_collection(end: int, *, start: Optional[int] = None) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/state.py#L94)
+
+Delete collected values with id less than end.
+
+This method maintains a deletion index to track progress and avoid
+re-scanning previously deleted values. It:
+1. Retrieves the last deleted id from the cache
+2. Scans values from last deleted id up to end
+3. Updates the deletion index with the latest deleted id
+
+**Arguments**:
+
+- `end`: Delete values with id less than this value
+
 <a id="quixstreams.state.rocksdb.windowed.state.WindowedTransactionState.get_latest_timestamp"></a>
 
 #### WindowedTransactionState.get\_latest\_timestamp
@@ -6840,7 +7078,7 @@ during window expiration.
 def get_latest_timestamp() -> Optional[int]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/state.py#L82)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/state.py#L110)
 
 Get the latest observed timestamp for the current message key.
 
@@ -6863,7 +7101,7 @@ def expire_windows(
         end_inclusive: bool = False) -> list[tuple[tuple[int, int], Any]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/state.py#L94)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/state.py#L122)
 
 Get all expired windows from RocksDB up to the specified `max_start_time` timestamp.
 
@@ -6892,7 +7130,7 @@ def get_windows(start_from_ms: int,
                 backwards: bool = False) -> list[tuple[tuple[int, int], Any]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/state.py#L122)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/state.py#L150)
 
 Get all windows that start between "start_from_ms" and "start_to_ms".
 
@@ -6914,7 +7152,7 @@ A sorted list of tuples in the format `((start, end), value)`.
 def delete_windows(max_start_time: int, delete_values: bool) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/state.py#L140)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/state.py#L168)
 
 Delete windows from RocksDB up to the specified `max_start_time` timestamp.
 
@@ -7772,6 +8010,82 @@ class WindowedState(Protocol)
 
 A windowed state to be provided into `StreamingDataFrame` window functions.
 
+<a id="quixstreams.state.types.WindowedState.get"></a>
+
+#### WindowedState.get
+
+```python
+def get(key: Any, default: Any = None) -> Optional[Any]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L12)
+
+Get the value for key if key is present in the state, else default
+
+**Arguments**:
+
+- `key`: key
+- `default`: default value to return if the key is not found
+
+**Returns**:
+
+value or None if the key is not found and `default` is not provided
+
+<a id="quixstreams.state.types.WindowedState.set"></a>
+
+#### WindowedState.set
+
+```python
+def set(key: Any, value: Any)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L22)
+
+Set value for the key.
+
+**Arguments**:
+
+- `key`: key
+- `value`: value
+
+<a id="quixstreams.state.types.WindowedState.delete"></a>
+
+#### WindowedState.delete
+
+```python
+def delete(key: Any)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L30)
+
+Delete value for the key.
+
+This function always returns `None`, even if value is not found.
+
+**Arguments**:
+
+- `key`: key
+
+<a id="quixstreams.state.types.WindowedState.exists"></a>
+
+#### WindowedState.exists
+
+```python
+def exists(key: Any) -> bool
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L39)
+
+Check if the key exists in state.
+
+**Arguments**:
+
+- `key`: key
+
+**Returns**:
+
+True if key exists, False otherwise
+
 <a id="quixstreams.state.types.WindowedState.get_window"></a>
 
 #### WindowedState.get\_window
@@ -7782,7 +8096,7 @@ def get_window(start_ms: int,
                default: Any = None) -> Optional[Any]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L12)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L47)
 
 Get the value of the window defined by `start` and `end` timestamps
 
@@ -7806,7 +8120,7 @@ value or None if the key is not found and `default` is not provided
 def update_window(start_ms: int, end_ms: int, value: Any, timestamp_ms: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L26)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L61)
 
 Set a value for the window.
 
@@ -7825,10 +8139,10 @@ using the provided `timestamp_ms`.
 #### WindowedState.add\_to\_collection
 
 ```python
-def add_to_collection(value: Any, timestamp_ms: int) -> None
+def add_to_collection(value: Any, id: Optional[int]) -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L46)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L81)
 
 Collect a value for collection-type window aggregations.
 
@@ -7839,7 +8153,50 @@ during window expiration.
 **Arguments**:
 
 - `value`: value to be collected
-- `timestamp_ms`: current message timestamp in milliseconds
+- `id`: current message ID, for example timestamp in milliseconds, does not have to be unique.
+
+**Returns**:
+
+the message ID, auto-generated if not provided
+
+<a id="quixstreams.state.types.WindowedState.get_from_collection"></a>
+
+#### WindowedState.get\_from\_collection
+
+```python
+def get_from_collection(start: int, end: int) -> list[Any]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L96)
+
+Return all values from a collection-type window aggregation.
+
+**Arguments**:
+
+- `start`: starting id of values to fetch (inclusive)
+- `end`: end id of values to fetch (exclusive)
+
+<a id="quixstreams.state.types.WindowedState.delete_from_collection"></a>
+
+#### WindowedState.delete\_from\_collection
+
+```python
+def delete_from_collection(end: int, *, start: Optional[int] = None) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L105)
+
+Delete collected values with id less than end.
+
+This method maintains a deletion index to track progress and avoid
+re-scanning previously deleted values. It:
+1. Retrieves the last deleted id from the cache
+2. Scans values from last deleted id up to end
+3. Updates the deletion index with the latest deleted id
+
+**Arguments**:
+
+- `end`: Delete values with id less than this value
 
 <a id="quixstreams.state.types.WindowedState.get_latest_timestamp"></a>
 
@@ -7849,7 +8206,7 @@ during window expiration.
 def get_latest_timestamp() -> Optional[int]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L59)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L119)
 
 Get the latest observed timestamp for the current state partition.
 
@@ -7872,7 +8229,7 @@ def expire_windows(
         end_inclusive: bool = False) -> list[tuple[tuple[int, int], Any]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L70)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L130)
 
 Get all expired windows from RocksDB up to the specified `max_start_time` timestamp.
 
@@ -7899,7 +8256,7 @@ A sorted list of tuples in the format `((start, end), value)`.
 def delete_windows(max_start_time: int, delete_values: bool) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L92)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L152)
 
 Delete windows from RocksDB up to the specified `max_start_time` timestamp.
 
@@ -7923,7 +8280,7 @@ def get_windows(start_from_ms: int,
                 backwards: bool = False) -> list[tuple[tuple[int, int], Any]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L106)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L166)
 
 Get all windows that start between "start_from_ms" and "start_to_ms".
 
@@ -7945,7 +8302,7 @@ A sorted list of tuples in the format `((start, end), value)`.
 class WindowedPartitionTransaction(Protocol)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L120)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L180)
 
 <a id="quixstreams.state.types.WindowedPartitionTransaction.failed"></a>
 
@@ -7956,7 +8313,7 @@ class WindowedPartitionTransaction(Protocol)
 def failed() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L122)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L182)
 
 Return `True` if transaction failed to update data at some point.
 
@@ -7975,7 +8332,7 @@ bool
 def completed() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L132)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L192)
 
 Return `True` if transaction is successfully completed.
 
@@ -7994,7 +8351,7 @@ bool
 def prepared() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L142)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L202)
 
 Return `True` if transaction is prepared completed.
 
@@ -8012,7 +8369,7 @@ bool
 def prepare(processed_offset: Optional[int])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L151)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L211)
 
 Produce changelog messages to the changelog topic for all changes accumulated
 
@@ -8040,7 +8397,7 @@ def get_window(start_ms: int,
                default: Any = None) -> Optional[Any]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L168)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L228)
 
 Get the value of the window defined by `start` and `end` timestamps
 
@@ -8066,7 +8423,7 @@ def update_window(start_ms: int, end_ms: int, value: Any, timestamp_ms: int,
                   prefix: bytes)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L187)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L247)
 
 Set a value for the window.
 
@@ -8086,10 +8443,10 @@ using the provided `timestamp`.
 #### WindowedPartitionTransaction.add\_to\_collection
 
 ```python
-def add_to_collection(value: Any, timestamp_ms: int) -> None
+def add_to_collection(value: Any, id: Optional[int]) -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L204)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L264)
 
 Collect a value for collection-type window aggregations.
 
@@ -8100,7 +8457,50 @@ during window expiration.
 **Arguments**:
 
 - `value`: value to be collected
-- `timestamp_ms`: current message timestamp in milliseconds
+- `id`: current message ID (for example, timestamp in milliseconds)
+
+**Returns**:
+
+the message ID, auto-generated if not provided
+
+<a id="quixstreams.state.types.WindowedPartitionTransaction.get_from_collection"></a>
+
+#### WindowedPartitionTransaction.get\_from\_collection
+
+```python
+def get_from_collection(start: int, end: int) -> list[Any]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L279)
+
+Return all values from a collection-type window aggregation.
+
+**Arguments**:
+
+- `start`: starting id of values to fetch (inclusive)
+- `end`: end id of values to fetch (exclusive)
+
+<a id="quixstreams.state.types.WindowedPartitionTransaction.delete_from_collection"></a>
+
+#### WindowedPartitionTransaction.delete\_from\_collection
+
+```python
+def delete_from_collection(end: int) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L288)
+
+Delete collected values with id less than end.
+
+This method maintains a deletion index to track progress and avoid
+re-scanning previously deleted values. It:
+1. Retrieves the last deleted id from the cache
+2. Scans values from last deleted id up to end
+3. Updates the deletion index with the latest deleted id
+
+**Arguments**:
+
+- `end`: Delete values with id less than this value
 
 <a id="quixstreams.state.types.WindowedPartitionTransaction.get_latest_timestamp"></a>
 
@@ -8110,7 +8510,7 @@ during window expiration.
 def get_latest_timestamp(prefix: bytes) -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L217)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L302)
 
 Get the latest observed timestamp for the current state prefix
 
@@ -8136,7 +8536,7 @@ def expire_windows(
         end_inclusive: bool = False) -> list[tuple[tuple[int, int], Any]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L229)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L314)
 
 Get all expired windows from RocksDB up to the specified `max_start_time` timestamp.
 
@@ -8165,7 +8565,7 @@ def delete_windows(max_start_time: int, delete_values: bool,
                    prefix: bytes) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L253)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L338)
 
 Delete windows from RocksDB up to the specified `max_start_time` timestamp.
 
@@ -8191,7 +8591,7 @@ def get_windows(start_from_ms: int,
                 backwards: bool = False) -> list[tuple[tuple[int, int], Any]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L270)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L355)
 
 Get all windows that start between "start_from_ms" and "start_to_ms"
 
@@ -8217,7 +8617,7 @@ def flush(processed_offset: Optional[int] = None,
           changelog_offset: Optional[int] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L289)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L374)
 
 Flush the recent updates to the storage.
 
@@ -8236,7 +8636,7 @@ optional.
 def changelog_topic_partition() -> Optional[Tuple[str, int]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L303)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L388)
 
 Return the changelog topic-partition for the StorePartition of this transaction.
 
@@ -8254,7 +8654,7 @@ Returns `None` if changelog_producer is not provided.
 class PartitionRecoveryTransaction(Protocol)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L317)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L402)
 
 A class for managing recovery for a StorePartition from a changelog message
 
@@ -8266,7 +8666,7 @@ A class for managing recovery for a StorePartition from a changelog message
 def flush()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L324)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L409)
 
 Flush the recovery update to the storage.
 

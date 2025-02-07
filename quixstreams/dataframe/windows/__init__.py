@@ -1,13 +1,19 @@
 from .base import WindowResult
 from .definitions import (
-    HoppingWindowDefinition,
-    SlidingWindowDefinition,
-    TumblingWindowDefinition,
+    HoppingCountWindowDefinition,
+    HoppingTimeWindowDefinition,
+    SlidingCountWindowDefinition,
+    SlidingTimeWindowDefinition,
+    TumblingCountWindowDefinition,
+    TumblingTimeWindowDefinition,
 )
 
 __all__ = [
-    "HoppingWindowDefinition",
-    "SlidingWindowDefinition",
-    "TumblingWindowDefinition",
+    "TumblingCountWindowDefinition",
+    "HoppingCountWindowDefinition",
+    "SlidingCountWindowDefinition",
+    "HoppingTimeWindowDefinition",
+    "SlidingTimeWindowDefinition",
+    "TumblingTimeWindowDefinition",
     "WindowResult",
 ]

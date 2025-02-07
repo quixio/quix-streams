@@ -3,13 +3,14 @@ from typing import Any, Iterable
 from quixstreams.state import WindowedState
 
 from .base import WindowResult
-from .time_based import FixedTimeWindow
+from .time_based import TimeWindow
 
 
-class SlidingWindow(FixedTimeWindow):
+class SlidingWindow(TimeWindow):
     def process_window(
         self,
         value: Any,
+        key: Any,
         timestamp_ms: int,
         state: WindowedState,
     ) -> tuple[Iterable[WindowResult], Iterable[WindowResult]]:
@@ -73,6 +74,17 @@ class SlidingWindow(FixedTimeWindow):
         left_start = max(0, timestamp_ms - duration)
         left_end = timestamp_ms
 
+        if timestamp_ms <= max_expired_window_start:
+            self._on_expired_window(
+                value=value,
+                key=key,
+                start=left_start,
+                end=left_end,
+                timestamp_ms=timestamp_ms,
+                late_by_ms=max_expired_window_end + 1 - timestamp_ms,
+            )
+            return [], []
+
         right_start = timestamp_ms + 1
         right_end = right_start + duration
         right_exists = False
@@ -124,8 +136,11 @@ class SlidingWindow(FixedTimeWindow):
                     if end == max_timestamp:  # Emit only left windows
                         updated_windows.append(window)
                 else:
-                    self._log_expired_window(
-                        window=[start, end],
+                    self._on_expired_window(
+                        value=value,
+                        key=key,
+                        start=start,
+                        end=end,
                         timestamp_ms=timestamp_ms,
                         late_by_ms=max_expired_window_end + 1 - timestamp_ms,
                     )
@@ -158,8 +173,11 @@ class SlidingWindow(FixedTimeWindow):
                         )
                     )
                 else:
-                    self._log_expired_window(
-                        window=[start, end],
+                    self._on_expired_window(
+                        value=value,
+                        key=key,
+                        start=start,
+                        end=end,
                         timestamp_ms=timestamp_ms,
                         late_by_ms=max_expired_window_end + 1 - timestamp_ms,
                     )
@@ -216,7 +234,7 @@ class SlidingWindow(FixedTimeWindow):
                 )
 
         if collect:
-            state.add_to_collection(value=value, timestamp_ms=timestamp_ms)
+            state.add_to_collection(value=value, id=timestamp_ms)
 
         expired_windows: list[WindowResult] = [
             WindowResult(start=start, end=end, value=self._merge_func(aggregation))

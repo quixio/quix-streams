@@ -135,6 +135,7 @@ doc_map = {
             "quixstreams.sinks.community.kinesis",
             "quixstreams.sinks.community.redis",
             "quixstreams.sinks.community.neo4j",
+            "quixstreams.sinks.community.mongodb",
         ]
     },
     # Order: base, core, community

@@ -18,13 +18,13 @@ class TestStream:
     def test_add_apply(self):
         stream = Stream().add_apply(lambda v: v + 1)
         sink = Sink()
-        stream.compose(sink=sink.append_record)(1, "key", 0, [])
+        stream.compose_single(sink=sink.append_record)(1, "key", 0, [])
         assert sink[0] == (2, "key", 0, [])
 
     def test_add_update(self):
         stream = Stream().add_update(lambda v: v.append(1))
         result = Sink()
-        stream.compose(sink=result.append_record)([0], "key", 0, [])
+        stream.compose_single(sink=result.append_record)([0], "key", 0, [])
         assert result[0] == ([0, 1], "key", 0, [])
 
     @pytest.mark.parametrize(
@@ -37,7 +37,7 @@ class TestStream:
     def test_add_filter(self, value, key, timestamp, headers, expected):
         stream = Stream().add_filter(lambda v: v == 0)
         result = Sink()
-        stream.compose(sink=result.append_record)(value, key, timestamp, headers)
+        stream.compose_single(sink=result.append_record)(value, key, timestamp, headers)
         assert result == expected
 
     def test_root_path(self):
@@ -50,11 +50,11 @@ class TestStream:
         )
         tree = stream.root_path()
         assert len(tree) == 5
-        assert isinstance(tree[0].func, ApplyFunction)
-        assert isinstance(tree[1].func, ApplyFunction)
+        assert isinstance(tree[0].func, TransformFunction)
+        assert isinstance(tree[1].func, UpdateFunction)
         assert isinstance(tree[2].func, FilterFunction)
-        assert isinstance(tree[3].func, UpdateFunction)
-        assert isinstance(tree[4].func, TransformFunction)
+        assert isinstance(tree[3].func, ApplyFunction)
+        assert isinstance(tree[4].func, ApplyFunction)
 
     def test_diff_success(self):
         stream = Stream()
@@ -67,7 +67,7 @@ class TestStream:
 
         diff = stream.diff(stream2)
 
-        diff_tree = diff.root_path()
+        diff_tree = diff.full_tree()
         assert len(diff_tree) == 3
         assert isinstance(diff_tree[0].func, ApplyFunction)
         assert isinstance(diff_tree[1].func, UpdateFunction)
@@ -98,19 +98,27 @@ class TestStream:
 
     def test_diff_empty_same_stream_fails(self):
         stream = Stream()
-        with pytest.raises(ValueError, match="The diff is empty"):
+        with pytest.raises(
+            InvalidOperation, match="Cannot assign or filter using the same SDF"
+        ):
             stream.diff(stream)
 
     def test_diff_empty_stream_full_child_fails(self):
         stream = Stream()
         stream2 = stream.add_apply(lambda v: v)
-        with pytest.raises(ValueError, match="The diff is empty"):
+        with pytest.raises(
+            InvalidOperation,
+            match="filtering or column-setter SDF must originate from target SDF",
+        ):
             stream2.diff(stream)
 
     def test_diff_no_common_parent_fails(self):
         stream = Stream()
         stream2 = Stream()
-        with pytest.raises(ValueError, match="Common parent not found"):
+        with pytest.raises(
+            InvalidOperation,
+            match="filtering or column-setter SDF must originate from target SDF",
+        ):
             stream.diff(stream2)
 
     def test_compose_allow_filters_false(self):
@@ -142,7 +150,7 @@ class TestStream:
         result = Sink()
         value, key, timestamp, headers = 1, "key", 1, []
 
-        stream.compose(sink=result.append_record)(value, key, timestamp, headers)
+        stream.compose_single(sink=result.append_record)(value, key, timestamp, headers)
         assert result == [
             (value, key, timestamp, headers),
             (value, key, timestamp, headers),
@@ -151,7 +159,7 @@ class TestStream:
     def test_apply_expand_not_iterable_returned(self):
         stream = Stream().add_apply(lambda v: 1, expand=True)
         with pytest.raises(TypeError):
-            stream.compose()(1, "key", 0, [])
+            stream.compose_single()(1, "key", 0, [])
 
     def test_apply_expand_multiple(self):
         stream = (
@@ -161,7 +169,7 @@ class TestStream:
         )
         result = Sink()
         value, key, timestamp, headers = 1, "key", 1, [("key", b"value")]
-        stream.compose(sink=result.append_record)(value, key, timestamp, headers)
+        stream.compose_single(sink=result.append_record)(value, key, timestamp, headers)
         assert result == [
             (value + 1, key, timestamp, headers),
             (value + 2, key, timestamp, headers),
@@ -177,7 +185,7 @@ class TestStream:
             .add_filter(lambda v: v != 1)
         )
         result = Sink()
-        stream.compose(sink=result.append_record)(1, "key", 0, [])
+        stream.compose_single(sink=result.append_record)(1, "key", 0, [])
         assert result == []
 
     def test_apply_expand_filter_some_filtered(self):
@@ -189,7 +197,7 @@ class TestStream:
         )
         result = Sink()
         key, timestamp, headers = "key", 1, None
-        stream.compose(sink=result.append_record)(1, key, timestamp, headers)
+        stream.compose_single(sink=result.append_record)(1, key, timestamp, headers)
         assert result == [(2, key, timestamp, headers), (2, key, timestamp, headers)]
 
     def test_apply_expand_update(self):
@@ -200,7 +208,7 @@ class TestStream:
         )
         result = Sink()
         key, timestamp, headers = "key", 123, None
-        stream.compose(sink=result.append_record)(1, key, timestamp, headers)
+        stream.compose_single(sink=result.append_record)(1, key, timestamp, headers)
         assert result == [
             ({"x": 2}, key, timestamp, headers),
             ({"x": 3}, key, timestamp, headers),
@@ -215,7 +223,7 @@ class TestStream:
         )
         result = Sink()
         key, timestamp, headers = "key", 123, []
-        stream.compose(sink=result.append_record)(1, key, timestamp, headers)
+        stream.compose_single(sink=result.append_record)(1, key, timestamp, headers)
         assert result == [({"x": 3}, key, timestamp, headers)]
 
     def test_compose_allow_expands_false(self):
@@ -228,7 +236,7 @@ class TestStream:
             lambda v, key, timestamp, headers: v + 1, metadata=True
         )
         sink = Sink()
-        stream.compose(sink=sink.append_record)(1, "key", 0, None)
+        stream.compose_single(sink=sink.append_record)(1, "key", 0, None)
         assert sink[0] == (2, "key", 0, None)
 
     def test_apply_record_with_metadata_expanded(self):
@@ -240,7 +248,7 @@ class TestStream:
         result = Sink()
         value, key, timestamp, headers = 1, "key", 1, []
 
-        stream.compose(sink=result.append_record)(value, key, timestamp, headers)
+        stream.compose_single(sink=result.append_record)(value, key, timestamp, headers)
         assert result == [
             (value, key, timestamp, headers),
             (value, key, timestamp, headers),
@@ -251,7 +259,7 @@ class TestStream:
             lambda value, key, timestamp, headers: value.append(1), metadata=True
         )
         result = Sink()
-        stream.compose(sink=result.append_record)([0], "key", 0, [])
+        stream.compose_single(sink=result.append_record)([0], "key", 0, [])
         assert result[0] == ([0, 1], "key", 0, [])
 
     @pytest.mark.parametrize(
@@ -266,7 +274,7 @@ class TestStream:
             lambda value_, key_, timestamp_, headers_: value_ == 0, metadata=True
         )
         result = Sink()
-        stream.compose(sink=result.append_record)(value, key, timestamp, headers)
+        stream.compose_single(sink=result.append_record)(value, key, timestamp, headers)
         assert result == expected
 
     def test_compose_returning(self):
@@ -336,7 +344,7 @@ class TestStream:
             )
         )
         result = Sink()
-        stream.compose(sink=result.append_record)(0, "key", 0, [])
+        stream.compose_single(sink=result.append_record)(0, "key", 0, [])
         assert result[0] == (1, "key1", 1, [("key", b"value")])
 
     def test_transform_record_expanded(self):
@@ -348,7 +356,7 @@ class TestStream:
             expand=True,
         )
         result = Sink()
-        stream.compose(sink=result.append_record)(0, "key", 0, [])
+        stream.compose_single(sink=result.append_record)(0, "key", 0, [])
         assert result == [
             (1, "key1", 1, [("key", b"value")]),
             (2, "key2", 2, [("key", b"value2")]),
@@ -372,7 +380,7 @@ class TestStreamBranching:
         stream = stream.add_apply(add_n(100))
         sink = Sink()
         extras = ("key", 0, [])
-        stream.compose(sink=sink.append_record)(0, *extras)
+        stream.compose_single(sink=sink.append_record)(0, *extras)
         expected = [(11, *extras), (21, *extras), (101, *extras)]
 
         # each operation is only called once (no redundant processing)
@@ -393,7 +401,7 @@ class TestStreamBranching:
         stream.add_update(lambda value_: value_.append(1))
         stream.add_update(lambda value_: value_.append(2))
         sink = Sink()
-        stream.compose(sink=sink.append_record)(value, key, timestamp, headers)
+        stream.compose_single(sink=sink.append_record)(value, key, timestamp, headers)
 
         assert sink == expected
 
@@ -403,7 +411,7 @@ class TestStreamBranching:
         stream = stream.add_apply(lambda v: v + 100)
         sink = Sink()
         extras = ("key", 0, [])
-        stream.compose(sink=sink.append_record)(0, *extras)
+        stream.compose_single(sink=sink.append_record)(0, *extras)
         expected = [(31, *extras), (101, *extras)]
 
         assert sink == expected
@@ -416,7 +424,7 @@ class TestStreamBranching:
         stream = stream.add_apply(lambda v: v + 100)
         sink = Sink()
         extras = ("key", 0, [])
-        stream.compose(sink=sink.append_record)(0, *extras)
+        stream.compose_single(sink=sink.append_record)(0, *extras)
         expected = [(33, *extras), (103, *extras)]
 
         assert sink == expected
@@ -452,7 +460,7 @@ class TestStreamBranching:
         stream = stream.add_apply(lambda v: v // 100).add_apply(lambda v: v + 10)  # 11
         sink = Sink()
         extras = ("key", 0, [])
-        stream.compose(sink=sink.append_record)(0, *extras)
+        stream.compose_single(sink=sink.append_record)(0, *extras)
         expected = [
             (33, *extras),
             (44, *extras),
@@ -478,7 +486,7 @@ class TestStreamBranching:
 
         sink = Sink()
         extras = ("key", 0, [])
-        stream.compose(sink=sink.append_record)(0, *extras)
+        stream.compose_single(sink=sink.append_record)(0, *extras)
         expected = [(21, *extras), (100, *extras), (840, *extras)]
 
         assert sink == expected
@@ -495,7 +503,7 @@ class TestStreamBranching:
 
         sink = Sink()
         extras = ("key", 0, [])
-        stream.compose(sink=sink.append_record)([], *extras)
+        stream.compose_single(sink=sink.append_record)([], *extras)
         expected = [
             ([10, 5], *extras),
             ([10, 30, 6, 100], *extras),
@@ -519,7 +527,9 @@ class TestStreamBranching:
         stream = stream.add_apply(lambda v: v + 11)
         sink = Sink()
         extras = ("key", 0, [])
-        stream.compose(sink=sink.append_record)([(1, 2), (3, 4), (5, 6)], *extras)
+        stream.compose_single(sink=sink.append_record)(
+            [(1, 2), (3, 4), (5, 6)], *extras
+        )
         expected = [(n, *extras) for n in [23, 24, 36, 37, 49, 16, 50, 17]]
 
         assert sink == expected
@@ -540,7 +550,7 @@ class TestStreamBranching:
 
         sink = Sink()
         extras = ("key", 0, [])
-        stream.compose(sink=sink.append_record)(0, *extras)
+        stream.compose_single(sink=sink.append_record)(0, *extras)
         expected = [
             (1, "key_2", 2, []),
             (31, "key_3_4", 7, []),
