@@ -780,6 +780,7 @@ class StreamingDataFrame:
         title: Optional[str] = None,
         metadata: bool = True,
         slowdown: float = 0.5,
+        timeout: int = 5,
     ):
         """
         [EXPERIMENTAL] Print a live-updating table of the most recent records.
@@ -822,6 +823,7 @@ class StreamingDataFrame:
                         Increase this value if the table updates too quickly.
         """
         interactive = sys.stdout.isatty()
+        start = time.monotonic()
 
         def _collect(table, value, *_metadata):
             if _metadata:
@@ -847,10 +849,14 @@ class StreamingDataFrame:
         else:
 
             def _print_tables(*_):
+                nonlocal start
+                time_to_print = time.monotonic() - start > timeout
                 for table in self.processing_context.tables:
-                    if table.is_full():
+                    if table.is_full() or time_to_print:
                         table.print()
                         table.clear()
+                if time_to_print:
+                    start = time.monotonic()
                 time.sleep(slowdown)
 
         return self._add_update(_print_tables)
