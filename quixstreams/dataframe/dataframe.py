@@ -830,7 +830,8 @@ class StreamingDataFrame:
         _collect = functools.partial(_collect, table)
         self._add_update(_collect, metadata=metadata)
 
-        if len(self.processing_context.tables) == 1:
+        # If there are multiple tables, we need to print them all only once
+        if len(self.processing_context.tables) > 1:
             return self
 
         if interactive:
