@@ -822,7 +822,6 @@ class StreamingDataFrame:
         :param slowdown: Time in seconds to wait between updates. Default: 0.1
                         Increase this value if the table updates too quickly.
         """
-        interactive = sys.stdout.isatty()
         start = time.monotonic()
 
         def _collect(table, value, *_metadata):
@@ -839,7 +838,7 @@ class StreamingDataFrame:
         if len(self.processing_context.tables) > 1:
             return self
 
-        if interactive:
+        if sys.stdout.isatty():
             # In interactive mode (terminal/console), we can refresh
             # the table in-place. When a new row arrives, immediately
             # print the new row at the bottom, removing the oldest row
