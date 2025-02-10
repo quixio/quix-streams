@@ -20,6 +20,9 @@ class Table:
     def is_full(self) -> bool:
         return len(self._rows) >= (self._rows.maxlen or 0)
 
+    def clear(self) -> None:
+        self._rows.clear()
+
     def print(self) -> None:
         table = RichTable(title=self._title, title_justify="left", highlight=True)
         columns = sorted(set().union(*self._rows))
@@ -31,9 +34,6 @@ class Table:
             table.add_row(*[str(row.get(column, ""))[:10] for column in columns])
 
         _CONSOLE.print(table)
-
-    def clear(self) -> None:
-        self._rows.clear()
 
 
 def clear_console() -> None:
