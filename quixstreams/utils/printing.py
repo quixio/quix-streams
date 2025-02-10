@@ -21,7 +21,7 @@ class Table:
         return len(self._rows) >= (self._rows.maxlen or 0)
 
     def print(self) -> None:
-        table = RichTable(title=self._title, title_justify="left")
+        table = RichTable(title=self._title, title_justify="left", highlight=True)
         columns = sorted(set().union(*self._rows))
 
         for column in columns:

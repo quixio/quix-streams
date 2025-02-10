@@ -840,22 +840,28 @@ class StreamingDataFrame:
             return self
 
         if interactive:
-
+            # In interactive mode (terminal/console), we can refresh
+            # the table in-place. When a new row arrives, immediately
+            # print the new row at the bottom, removing the oldest row
+            # from the top if table is full.
             def _print_tables(*_):
                 clear_console()
                 for table in self.processing_context.tables:
                     table.print()
                 time.sleep(slowdown)
         else:
-
+            # In non-interactive mode (e.g. redirected output, container logs),
+            # we cannot refresh the table in-place. Instead, collect records
+            # until table is full or timeout is reached, print the complete table,
+            # clear and start collecting a new table.
             def _print_tables(*_):
                 nonlocal start
-                time_to_print = time.monotonic() - start > timeout
+                timeout_reached = time.monotonic() - start > timeout
                 for table in self.processing_context.tables:
-                    if table.is_full() or time_to_print:
+                    if table.is_full() or timeout_reached:
                         table.print()
                         table.clear()
-                if time_to_print:
+                if timeout_reached:
                     start = time.monotonic()
                 time.sleep(slowdown)
 
