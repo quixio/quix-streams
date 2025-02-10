@@ -822,7 +822,6 @@ class StreamingDataFrame:
         :param slowdown: Time in seconds to wait between updates. Default: 0.1
                         Increase this value if the table updates too quickly.
         """
-        start = time.monotonic()
 
         def _collect(table, value, *_metadata):
             if _metadata:
@@ -837,6 +836,8 @@ class StreamingDataFrame:
         # If there are multiple tables, we need to print them all only once
         if len(self.processing_context.tables) > 1:
             return self
+
+        start = time.monotonic()
 
         if sys.stdout.isatty():
             # In interactive mode (terminal/console), we can refresh
