@@ -206,6 +206,7 @@ mongodb_sink = MongoDBSink(
 
 - `url`: MongoDB url; most commonly `mongodb://username:password@host:port`
 - `db`: MongoDB database name
+- `collection`: MongoDB collection name
 - `document_matcher`: How documents are selected to update.    
     A callable that accepts a `BatchItem` and returns a MongoDB "Filter Query".    
     If no match, will insert if `upsert=True`, where `_id` will be either the 
@@ -220,9 +221,9 @@ mongodb_sink = MongoDBSink(
     - "UpdateMany": Updates ALL matching documents (usually NOT based on `_id`).    
     - "ReplaceOne": Replaces the first matching document (usually based on `_id`).    
     **Default**: "UpdateOne".
-- `include_message_metadata`: include key, timestamp, and headers as `__{field}`    
+- `add_message_metadata`: include key, timestamp, and headers as `__{field}`    
     **Default**: False
-- `include_topic_metadata`: include topic, partition, and offset as `__{field}`    
+- `add_topic_metadata`: include topic, partition, and offset as `__{field}`    
     **Default**: False
 - `value_selector`: An optional callable that allows final editing of the
      outgoing document (right before submitting it).    
