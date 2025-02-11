@@ -10,7 +10,7 @@ from .base import (
 )
 from .count_based import CountWindow
 from .sliding import SlidingWindow
-from .time_based import TimeWindow
+from .time_based import ExpirationStrategy, TimeWindow
 
 if TYPE_CHECKING:
     from quixstreams.dataframe.dataframe import StreamingDataFrame
@@ -210,6 +210,7 @@ class TimeWindowDefinition(WindowDefinition):
         name: Optional[str] = None,
         step_ms: Optional[int] = None,
         on_late: Optional[WindowOnLateCallback] = None,
+        expiration_strategy: ExpirationStrategy = ExpirationStrategy.KEY,
     ):
         if not isinstance(duration_ms, int):
             raise TypeError("Window size must be an integer")
@@ -229,6 +230,7 @@ class TimeWindowDefinition(WindowDefinition):
         self._duration_ms = duration_ms
         self._grace_ms = grace_ms
         self._step_ms = step_ms
+        self._expiration_strategy = expiration_strategy
 
     @property
     def duration_ms(self) -> int:
@@ -252,6 +254,7 @@ class HoppingTimeWindowDefinition(TimeWindowDefinition):
         dataframe: "StreamingDataFrame",
         name: Optional[str] = None,
         on_late: Optional[WindowOnLateCallback] = None,
+        expiration_strategy: ExpirationStrategy = ExpirationStrategy.KEY,
     ):
         super().__init__(
             duration_ms=duration_ms,
@@ -260,6 +263,7 @@ class HoppingTimeWindowDefinition(TimeWindowDefinition):
             name=name,
             step_ms=step_ms,
             on_late=on_late,
+            expiration_strategy=expiration_strategy,
         )
 
     def _get_name(self, func_name: str) -> str:
@@ -285,6 +289,7 @@ class HoppingTimeWindowDefinition(TimeWindowDefinition):
             aggregate_collection=aggregate_collection,
             merge_func=merge_func,
             on_late=self._on_late,
+            expiration_strategy=self._expiration_strategy,
         )
 
 
@@ -296,6 +301,7 @@ class TumblingTimeWindowDefinition(TimeWindowDefinition):
         dataframe: "StreamingDataFrame",
         name: Optional[str] = None,
         on_late: Optional[WindowOnLateCallback] = None,
+        expiration_strategy: ExpirationStrategy = ExpirationStrategy.KEY,
     ):
         super().__init__(
             duration_ms=duration_ms,
@@ -303,6 +309,7 @@ class TumblingTimeWindowDefinition(TimeWindowDefinition):
             dataframe=dataframe,
             name=name,
             on_late=on_late,
+            expiration_strategy=expiration_strategy,
         )
 
     def _get_name(self, func_name: str) -> str:
@@ -327,6 +334,7 @@ class TumblingTimeWindowDefinition(TimeWindowDefinition):
             aggregate_collection=aggregate_collection,
             merge_func=merge_func,
             on_late=self._on_late,
+            expiration_strategy=self._expiration_strategy,
         )
 
 

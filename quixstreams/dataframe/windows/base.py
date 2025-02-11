@@ -55,7 +55,7 @@ class Window(abc.ABC):
         key: Any,
         timestamp_ms: int,
         state: WindowedState,
-    ) -> tuple[Iterable[WindowResult], Iterable[WindowResult]]:
+    ) -> tuple[Iterable[WindowResult], list[WindowResult]]:
         pass
 
     def register_store(self):
@@ -106,19 +106,25 @@ class Window(abc.ABC):
         can remain unprocessed until the message the same key is received.
         """
 
-        def window_callback(
-            value: Any, key: Any, timestamp_ms: int, _headers: Any, state: WindowedState
-        ) -> list[tuple[WindowResult, Any, int, Any]]:
-            _, expired_windows = self.process_window(
-                value=value, key=key, timestamp_ms=timestamp_ms, state=state
-            )
-            # Use window start timestamp as a new record timestamp
-            return [(window, key, window["start"], None) for window in expired_windows]
-
         return self._apply_window(
-            func=window_callback,
+            func=self._window_final_callback,
             name=self._name,
         )
+
+    def _window_final_callback(
+        self,
+        value: Any,
+        key: Any,
+        timestamp_ms: int,
+        _headers: Any,
+        state: WindowedState,
+    ) -> list[tuple[WindowResult, Any, int, Any]]:
+        _, expired_windows = self.process_window(
+            value=value, key=key, timestamp_ms=timestamp_ms, state=state
+        )
+
+        # Use window start timestamp as a new record timestamp
+        return [(window, key, window["start"], None) for window in expired_windows]
 
     def current(self) -> "StreamingDataFrame":
         """
