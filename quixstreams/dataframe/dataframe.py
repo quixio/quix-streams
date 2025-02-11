@@ -6,6 +6,7 @@ import operator
 import pprint
 import sys
 import time
+import warnings
 from datetime import timedelta
 from typing import (
     Any,
@@ -781,6 +782,7 @@ class StreamingDataFrame:
         metadata: bool = True,
         slowdown: float = 0.5,
         timeout: int = 5,
+        columns: Optional[List[str]] = None,
     ):
         """
         [EXPERIMENTAL] Print a live-updating table of the most recent records.
@@ -820,13 +822,28 @@ class StreamingDataFrame:
         :param number: Maximum number of records to display in the table. Default: 10
         :param title: Optional title for the table
         :param slowdown: Time in seconds to wait between updates. Default: 0.1
-                        Increase this value if the table updates too quickly.
+            Increase this value if the table updates too quickly.
+        :param columns: Optional list of columns to display. If not provided,
+            all columns will be displayed. Pass empty list to display only metadata.
         """
+        if columns is not None and len(columns) == 0 and not metadata:
+            warnings.warn(f"Cannot print table `{title}` because it is empty.")
 
         def _collect(table, value, *_metadata):
+            row = {}
+
             if _metadata:
-                value["_key"], value["_timestamp"], _ = _metadata
-            table.append(value)
+                row["_key"], row["_timestamp"], _ = _metadata
+
+            if columns is None:
+                row.update(value)
+            else:
+                for column in columns:
+                    if column in value:
+                        row[column] = value[column]
+
+            if row:
+                table.append(row)
 
         table = Table(size=size, title=title)
         self.processing_context.tables.append(table)
