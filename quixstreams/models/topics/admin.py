@@ -103,7 +103,7 @@ class TopicAdmin:
                 request_timeout=timeout,
             )
         configs = {}
-        auth_failures = []
+        auth_failed_topics = []
         for config_resource, config in futures_dict.items():
             try:
                 configs[config_resource.name] = {
@@ -111,13 +111,14 @@ class TopicAdmin:
                 }
             except KafkaException as e:
                 if e.args[0].name() == "TOPIC_AUTHORIZATION_FAILED":
-                    auth_failures.append(config_resource.name)
+                    auth_failed_topics.append(config_resource.name)
                 else:
                     raise
-        if auth_failures:
+        if auth_failed_topics:
+            failed_topics_str = ", ".join([f'"{t}"' for t in auth_failed_topics])
             raise TopicPermissionError(
-                "Unauthorized topic metadata access, likely due to ACL permissioning; "
-                f"ACL must allow topic operation 'DescribeConfigs' for: {auth_failures}"
+                f"Failed to access configs for topics {failed_topics_str}; "
+                f'verify the "DescribeConfigs" operation is allowed for your credentials'
             )
 
         return {
@@ -162,9 +163,9 @@ class TopicAdmin:
                             logger.info(f'Topic "{topic_name}" already exists')
                         elif error_name == "TOPIC_AUTHORIZATION_FAILED":
                             exceptions[topic_name] = (
-                                "Unauthorized, likely due to ACL permissioning; "
-                                "ACL must allow topic operation 'Create' "
-                                f"for '{topic_name}'"
+                                f'Failed to create topic "{topic_name}"; '
+                                f'verify if "Create" and "Read" operations '
+                                f"are allowed for your credentials"
                             )
                         else:
                             exceptions[topic_name] = e.args[0].str()
