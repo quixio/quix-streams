@@ -15,7 +15,7 @@ from confluent_kafka.admin import (
 
 from quixstreams.kafka import ConnectionConfig
 
-from .exceptions import CreateTopicFailure, CreateTopicTimeout
+from .exceptions import CreateTopicFailure, CreateTopicTimeout, TopicPermissionError
 from .topic import Topic, TopicConfig
 
 logger = logging.getLogger(__name__)
@@ -102,10 +102,25 @@ class TopicAdmin:
                 [confluent_topic_config(topic) for topic in existing_topics],
                 request_timeout=timeout,
             )
-        configs = {
-            config_resource.name: {c.name: c.value for c in config.result().values()}
-            for config_resource, config in futures_dict.items()
-        }
+        configs = {}
+        auth_failed_topics = []
+        for config_resource, config in futures_dict.items():
+            try:
+                configs[config_resource.name] = {
+                    c.name: c.value for c in config.result().values()
+                }
+            except KafkaException as e:
+                if e.args[0].name() == "TOPIC_AUTHORIZATION_FAILED":
+                    auth_failed_topics.append(config_resource.name)
+                else:
+                    raise
+        if auth_failed_topics:
+            failed_topics_str = ", ".join([f'"{t}"' for t in auth_failed_topics])
+            raise TopicPermissionError(
+                f"Failed to access configs for topics {failed_topics_str}; "
+                f'verify the "DescribeConfigs" operation is allowed for your credentials'
+            )
+
         return {
             topic: (
                 TopicConfig(
@@ -142,14 +157,21 @@ class TopicAdmin:
                         future.result()
                         logger.info(f'Topic "{topic_name}" has been created')
                     except KafkaException as e:
+                        error_name = e.args[0].name()
                         # Topic was maybe created by another instance
-                        if e.args[0].name() == "TOPIC_ALREADY_EXISTS":
+                        if error_name == "TOPIC_ALREADY_EXISTS":
                             logger.info(f'Topic "{topic_name}" already exists')
+                        elif error_name == "TOPIC_AUTHORIZATION_FAILED":
+                            exceptions[topic_name] = (
+                                f'Failed to create topic "{topic_name}"; '
+                                f'verify if "Create" and "Read" operations '
+                                f"are allowed for your credentials"
+                            )
                         else:
                             exceptions[topic_name] = e.args[0].str()
                     # Not sure how these get raised, but they are supposedly possible
                     except (TypeError, ValueError) as e:
-                        exceptions[topic_name] = e
+                        exceptions[topic_name] = str(e)
                     del futures[topic_name]
         if exceptions:
             raise CreateTopicFailure(f"Failed to create topics: {exceptions}")
