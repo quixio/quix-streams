@@ -24,6 +24,9 @@ class Table:
         self._rows.clear()
 
     def print(self) -> None:
+        if not self._rows:
+            return
+
         table = RichTable(title=self._title, title_justify="left", highlight=True)
         columns = sorted(set().union(*self._rows))
 
