@@ -111,7 +111,7 @@ class DummySink(BatchingSink):
         super().__init__()
         self._results = []
 
-    def setup_client(self):
+    def setup(self):
         return
 
     def write(self, batch: SinkBatch):

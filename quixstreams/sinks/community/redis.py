@@ -81,7 +81,7 @@ class RedisSink(BatchingSink):
             f"{self._client_settings['db']}"
         )
 
-    def setup_client(self):
+    def setup(self):
         self._client = redis.Redis(**self._client_settings)
         self._client.info()
 

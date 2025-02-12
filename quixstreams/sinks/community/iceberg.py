@@ -181,7 +181,7 @@ class IcebergSink(BatchingSink):
             else self._get_default_partition_spec(self._schema)
         )
 
-    def setup_client(self):
+    def setup(self):
         # Our client is an interface for a table, so for the sake of
         # readability, the client will be called "_table"
         self._table = self.data_catalog.create_table_if_not_exists(

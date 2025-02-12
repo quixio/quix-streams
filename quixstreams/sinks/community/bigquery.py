@@ -140,7 +140,7 @@ class BigQuerySink(BatchingSink):
         self._client: Optional[bigquery.Client] = None
         self._client_settings = kwargs
 
-    def setup_client(self):
+    def setup(self):
         if not self._client:
             self._client = bigquery.Client(**self._client_settings)
             logger.info("Successfully authenticated to BigQuery.")

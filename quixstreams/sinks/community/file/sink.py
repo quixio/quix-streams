@@ -61,8 +61,8 @@ class FileSink(BatchingSink):
         self._destination.set_directory(directory)
         self._destination.set_extension(self._format)
 
-    def setup_client(self):
-        self._destination.connect()
+    def setup(self):
+        self._destination.setup()
 
     def write(self, batch: SinkBatch) -> None:
         """Write a batch of data using the configured format and destination.

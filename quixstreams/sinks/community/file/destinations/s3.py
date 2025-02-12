@@ -61,7 +61,7 @@ class S3Destination(Destination):
         }
         self._client: Optional[S3Client] = None
 
-    def connect(self):
+    def setup(self):
         if not self._client:
             # See init comment as to why we cannot set the client here.
             # We then attempt a likely-to-succeed query on the bucket to confirm auth.
