@@ -32,6 +32,7 @@ requirements:
     - azure-storage-blob >=12.24.0,<12.25
     - neo4j >=5.27.0,<6
     - pymongo >=4.11,<5
+    - rich >=13,<14
 
 test:
   imports:

@@ -4,6 +4,7 @@ import contextvars
 import functools
 import operator
 import pprint
+import warnings
 from datetime import timedelta
 from typing import (
     Any,
@@ -770,6 +771,101 @@ class StreamingDataFrame:
             lambda *args: printer({print_args[i]: args[i] for i in range(len(args))}),
             metadata=metadata,
         )
+
+    def print_table(
+        self,
+        size: int = 5,
+        title: Optional[str] = None,
+        metadata: bool = True,
+        timeout: float = 5.0,
+        slowdown: Optional[float] = None,
+        columns: Optional[List[str]] = None,
+        column_widths: Optional[dict[str, int]] = None,
+    ) -> Self:
+        """
+        Print a live-updating table of the most recent records.
+
+        This feature is experimental and subject to change in future releases.
+
+        Creates a live table view that updates as new records arrive, showing the most
+        recent N records in a formatted table. The table includes message metadata
+        (_key, _timestamp) along with the record values.
+
+        Note: This works best in terminal environments. For Jupyter notebooks,
+        consider using `print()` instead.
+
+        Note: The last provided slowdown value will be used for all print_table calls
+        in the pipeline.
+
+        Example Snippet:
+
+        ```python
+        sdf = app.dataframe(topic)
+        # Show last 5 records, update at most every 1 second
+        sdf.print_table(size=5, title="Live Records", slowdown=1)
+        ```
+
+        This will produce a live-updating table like this:
+
+        Live Records
+        ┏━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━┳━━━━━┳━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━┓
+        ┃ _key       ┃ _timestamp ┃ active ┃ id  ┃ name    ┃ score ┃ status   ┃
+        ┡━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━╇━━━━━╇━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━┩
+        │ b'53fe8e4' │ 1738685136 │ True   │ 876 │ Charlie │ 27.74 │ pending  │
+        │ b'91bde51' │ 1738685137 │ True   │ 11  │         │       │ approved │
+        │ b'6617dfe' │ 1738685138 │        │     │ David   │       │          │
+        │ b'f47ac93' │ 1738685139 │        │ 133 │         │       │          │
+        │ b'038e524' │ 1738685140 │ False  │     │         │       │          │
+        └────────────┴────────────┴────────┴─────┴─────────┴───────┴──────────┘
+
+        :param size: Maximum number of records to display in the table. Default: 5
+        :param title: Optional title for the table
+        :param metadata: Whether to include message metadata (_key, _timestamp, headers).
+            Default: True
+        :param timeout: Time in seconds to wait for table to fill up before printing
+            an incomplete table. Only relevant for non-interactive environments
+            (e.g. output redirected to a file). Default: 5.0
+        :param slowdown: Time in seconds to wait between updates.
+            Default: None (which translates to 0.5 seconds).
+            Increase this value if the table updates too quickly.
+        :param columns: Optional list of columns to display. If not provided,
+            all columns will be displayed. Pass empty list to display only metadata.
+        :param column_widths: Optional dictionary mapping column names to their desired
+            widths in characters. If not provided, column widths will be determined
+            automatically based on content. Example: {"name": 20, "id": 10}
+        """
+
+        self.processing_context.printer.slowdown = slowdown  # type: ignore[assignment]
+
+        if columns is not None and len(columns) == 0 and not metadata:
+            warnings.warn(
+                "`columns` is an empty list and `metadata` is False. "
+                f"Table `{title}` will be empty."
+            )
+
+        def _collect(table, value, *_metadata):
+            row = {}
+
+            if _metadata:
+                row["_key"], row["_timestamp"], _ = _metadata
+
+            if columns is None:
+                row.update(value)
+            else:
+                for column in columns:
+                    if column in value:
+                        row[column] = value[column]
+
+            if row:
+                table.append(row)
+
+        table = self.processing_context.printer.create_new_table(
+            size=size,
+            title=title,
+            timeout=timeout,
+            column_widths=column_widths,
+        )
+        return self._add_update(functools.partial(_collect, table), metadata=metadata)
 
     def compose(
         self,
