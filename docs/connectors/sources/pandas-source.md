@@ -62,4 +62,4 @@ If not passed, the current time will be used
 
 ## Topic
 
-The default topic used for the CSV source will use the `name` as a part of the topic name and expect keys to be strings and values to be JSON objects.  
+The default topic used for the Pandas DataFrame source will use the `name` as a part of the topic name and expect keys to be strings and values to be JSON objects.  
