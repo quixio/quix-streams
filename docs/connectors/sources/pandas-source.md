@@ -27,7 +27,7 @@ def main():
     # Create the PandasDataFrameSource instance and pass the df to it
     source = PandasDataFrameSource(
         df=df, # DataFrame to read data from 
-        key_column='SessionID', # A column to be used for message keys
+        key_column="SessionID",  # A column to be used for message keys
         timestamp_column="Timestamp", # A column to be used for message timestamps
         name="data_csv-dataframe" # The name will be included to the default topic name.
     )
