@@ -65,8 +65,8 @@ class InfluxDB3Sink(BatchingSink):
         enable_gzip: bool = True,
         request_timeout_ms: int = 10_000,
         debug: bool = False,
-        client_connect_success_cb: Optional[ClientConnectSuccessCallback] = None,
-        client_connect_failure_cb: Optional[ClientConnectFailureCallback] = None,
+        on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
+        on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
     ):
         """
         A connector to sink processed data to InfluxDB v3.
@@ -129,17 +129,17 @@ class InfluxDB3Sink(BatchingSink):
             Default - `10000`.
         :param debug: if True, print debug logs from InfluxDB client.
             Default - `False`.
-        :param client_connect_success_cb: An optional callback made after successful
+        :param on_client_connect_success: An optional callback made after successful
             client authentication, primarily for additional logging.
-        :param client_connect_failure_cb: An optional callback made after failed
+        :param on_client_connect_failure: An optional callback made after failed
             client authentication (which should raise an Exception).
             Callback should accept the raised Exception as an argument.
             Callback must resolve (or propagate/re-raise) the Exception.
         """
 
         super().__init__(
-            client_connect_success_cb=client_connect_success_cb,
-            client_connect_failure_cb=client_connect_failure_cb,
+            on_client_connect_success=on_client_connect_success,
+            on_client_connect_failure=on_client_connect_failure,
         )
 
         if time_precision not in (time_args := get_args(TimePrecision)):

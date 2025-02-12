@@ -67,8 +67,8 @@ class PubSubSource(Source):
         create_subscription: bool = False,
         enable_message_ordering: bool = False,
         shutdown_timeout: float = 10.0,
-        client_connect_success_cb: Optional[ClientConnectSuccessCallback] = None,
-        client_connect_failure_cb: Optional[ClientConnectFailureCallback] = None,
+        on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
+        on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
     ):
         """
         :param project_id: a Google Cloud project ID.
@@ -85,9 +85,9 @@ class PubSubSource(Source):
         :param enable_message_ordering: When creating a Pub/Sub subscription, whether
             to allow message ordering. NOTE: does NOT affect existing subscriptions!
         :param shutdown_timeout: How long to wait for a graceful shutdown of the source.
-        :param client_connect_success_cb: An optional callback made after successful
+        :param on_client_connect_success: An optional callback made after successful
             client authentication, primarily for additional logging.
-        :param client_connect_failure_cb: An optional callback made after failed
+        :param on_client_connect_failure: An optional callback made after failed
             client authentication (which should raise an Exception).
             Callback should accept the raised Exception as an argument.
             Callback must resolve (or propagate/re-raise) the Exception.
@@ -95,8 +95,8 @@ class PubSubSource(Source):
         super().__init__(
             name=subscription_id,
             shutdown_timeout=shutdown_timeout,
-            client_connect_success_cb=client_connect_success_cb,
-            client_connect_failure_cb=client_connect_failure_cb,
+            on_client_connect_success=on_client_connect_success,
+            on_client_connect_failure=on_client_connect_failure,
         )
 
         self._credentials = service_account_json
