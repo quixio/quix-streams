@@ -4,8 +4,6 @@ import contextvars
 import functools
 import operator
 import pprint
-import sys
-import time
 import warnings
 from datetime import timedelta
 from typing import (
@@ -51,7 +49,6 @@ from quixstreams.models.serializers import DeserializerType, SerializerType
 from quixstreams.processing import ProcessingContext
 from quixstreams.sinks import BaseSink
 from quixstreams.state.base import State
-from quixstreams.utils.printing import Table, clear_console
 
 from .exceptions import InvalidOperation
 from .registry import DataframeRegistry
@@ -777,15 +774,15 @@ class StreamingDataFrame:
 
     def print_table(
         self,
-        size: int = 10,
+        size: int = 5,
         title: Optional[str] = None,
         metadata: bool = True,
-        slowdown: float = 0.5,
-        timeout: int = 5,
+        timeout: float = 5.0,
+        slowdown: Optional[float] = None,
         columns: Optional[List[str]] = None,
-    ):
+    ) -> Self:
         """
-        [EXPERIMENTAL] Print a live-updating table of the most recent records.
+        Print a live-updating table of the most recent records.
 
         This feature is experimental and subject to change in future releases.
 
@@ -796,19 +793,20 @@ class StreamingDataFrame:
         Note: This works best in terminal environments. For Jupyter notebooks,
         consider using `print()` instead.
 
-        Requires:
-            rich: Install with `pip install rich`
+        Note: The last provided slowdown value will be used for all print_table calls
+        in the pipeline.
 
         Example Snippet:
+
         ```python
         sdf = app.dataframe(topic)
-        # Show last 5 records, update at most every 0.5 seconds
-        sdf.print_live_table(number=5, slowdown=0.5, title="Live Records")
+        # Show last 5 records, update at most every 1 second
+        sdf.print_table(size=5, title="Live Records", slowdown=1)
         ```
 
         This will produce a live-updating table like this:
 
-                                    Live Records
+        Live Records
         ┏━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━┳━━━━━┳━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━┓
         ┃ _key       ┃ _timestamp ┃ active ┃ id  ┃ name    ┃ score ┃ status   ┃
         ┡━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━╇━━━━━╇━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━┩
@@ -819,15 +817,27 @@ class StreamingDataFrame:
         │ b'038e524' │ 1738685140 │ False  │     │         │       │          │
         └────────────┴────────────┴────────┴─────┴─────────┴───────┴──────────┘
 
-        :param number: Maximum number of records to display in the table. Default: 10
+        :param size: Maximum number of records to display in the table. Default: 5
         :param title: Optional title for the table
-        :param slowdown: Time in seconds to wait between updates. Default: 0.1
+        :param metadata: Whether to include message metadata (_key, _timestamp, headers).
+            Default: True
+        :param timeout: Time in seconds to wait for table to fill up before printing
+            an incomplete table. Only relevant for non-interactive environments
+            (e.g. output redirected to a file). Default: 5.0
+        :param slowdown: Time in seconds to wait between updates.
+            Default: None (which translates to 0.5 seconds).
             Increase this value if the table updates too quickly.
         :param columns: Optional list of columns to display. If not provided,
             all columns will be displayed. Pass empty list to display only metadata.
         """
+
+        self.processing_context.printer.slowdown = slowdown  # type: ignore[assignment]
+
         if columns is not None and len(columns) == 0 and not metadata:
-            warnings.warn(f"Cannot print table `{title}` because it is empty.")
+            warnings.warn(
+                "`columns` is an empty list and `metadata` is False. "
+                f"Table `{title}` will be empty."
+            )
 
         def _collect(table, value, *_metadata):
             row = {}
@@ -845,44 +855,10 @@ class StreamingDataFrame:
             if row:
                 table.append(row)
 
-        table = Table(size=size, title=title)
-        self.processing_context.tables.append(table)
-        _collect = functools.partial(_collect, table)
-        self._add_update(_collect, metadata=metadata)
-
-        # If there are multiple tables, we need to print them all only once
-        if len(self.processing_context.tables) > 1:
-            return self
-
-        start = time.monotonic()
-
-        if sys.stdout.isatty():
-            # In interactive mode (terminal/console), we can refresh
-            # the table in-place. When a new row arrives, immediately
-            # print the new row at the bottom, removing the oldest row
-            # from the top if table is full.
-            def _print_tables(*_):
-                clear_console()
-                for table in self.processing_context.tables:
-                    table.print()
-                time.sleep(slowdown)
-        else:
-            # In non-interactive mode (e.g. redirected output, container logs),
-            # we cannot refresh the table in-place. Instead, collect records
-            # until table is full or timeout is reached, print the complete table,
-            # clear and start collecting a new table.
-            def _print_tables(*_):
-                nonlocal start
-                timeout_reached = time.monotonic() - start > timeout
-                for table in self.processing_context.tables:
-                    if table.is_full() or timeout_reached:
-                        table.print()
-                        table.clear()
-                if timeout_reached:
-                    start = time.monotonic()
-                time.sleep(slowdown)
-
-        return self._add_update(_print_tables)
+        table = self.processing_context.printer.create_new_table(
+            size=size, title=title, timeout=timeout
+        )
+        return self._add_update(functools.partial(_collect, table), metadata=metadata)
 
     def compose(
         self,
