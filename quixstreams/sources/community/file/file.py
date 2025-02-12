@@ -235,7 +235,7 @@ class FileSource(Source):
             self._file_fetcher.stop()
         super().stop()
 
-    def setup_client(self):
+    def setup(self):
         self._origin = self._origin.__enter__()
 
     def run(self):

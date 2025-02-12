@@ -52,7 +52,7 @@ class CSVSource(Source):
 
         super().__init__(name=name, shutdown_timeout=shutdown_timeout)
 
-    def setup_client(self):
+    def setup(self):
         return
 
     def run(self):

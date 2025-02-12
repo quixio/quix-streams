@@ -132,7 +132,7 @@ class PubSubSource(Source):
             headers=dict(message.attributes),
         )
 
-    def setup_client(self):
+    def setup(self):
         self._client = PubSubConsumer(
             credentials=self._credentials,
             project_id=self._project_id,

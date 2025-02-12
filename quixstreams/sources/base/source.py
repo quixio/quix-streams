@@ -107,7 +107,7 @@ class BaseSource(ABC):
 
     def _init_client(self):
         try:
-            self.setup_client()
+            self.setup()
             self._client_connect_success_cb()
         except Exception as e:
             self._client_connect_failure_cb(e)
@@ -161,7 +161,7 @@ class BaseSource(ABC):
         """
 
     @abstractmethod
-    def setup_client(self):
+    def setup(self):
         """
         When applicable, set up the client here along with any validation to affirm a
         valid/successful authentication/connection.
