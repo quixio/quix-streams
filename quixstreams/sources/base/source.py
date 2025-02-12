@@ -15,11 +15,11 @@ ClientConnectSuccessCallback = Callable[[], None]
 ClientConnectFailureCallback = Callable[[Optional[Exception]], None]
 
 
-def _default_client_connect_success_cb():
+def _default_on_client_connect_success():
     logger.info("CONNECTED!")
 
 
-def _default_client_connect_failure_cb(exception: Exception):
+def _default_on_client_connect_failure(exception: Exception):
     logger.error(f"ERROR: Failed while connecting to client: {exception}")
     raise exception
 
@@ -93,24 +93,24 @@ class BaseSource(ABC):
 
     def __init__(
         self,
-        client_connect_success_cb: Optional[ClientConnectSuccessCallback] = None,
-        client_connect_failure_cb: Optional[ClientConnectFailureCallback] = None,
+        on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
+        on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
     ) -> None:
         self._producer: Optional[RowProducer] = None
         self._producer_topic: Optional[Topic] = None
-        self._client_connect_success_cb = (
-            client_connect_success_cb or _default_client_connect_success_cb
+        self._on_client_connect_success = (
+            on_client_connect_success or _default_on_client_connect_success
         )
-        self._client_connect_failure_cb = (
-            client_connect_failure_cb or _default_client_connect_failure_cb
+        self._on_client_connect_failure = (
+            on_client_connect_failure or _default_on_client_connect_failure
         )
 
     def _init_client(self):
         try:
             self.setup()
-            self._client_connect_success_cb()
+            self._on_client_connect_success()
         except Exception as e:
-            self._client_connect_failure_cb(e)
+            self._on_client_connect_failure(e)
 
     def configure(self, topic: Topic, producer: RowProducer, **kwargs) -> None:
         """
@@ -222,22 +222,22 @@ class Source(BaseSource):
         self,
         name: str,
         shutdown_timeout: float = 10,
-        client_connect_success_cb: Optional[ClientConnectSuccessCallback] = None,
-        client_connect_failure_cb: Optional[ClientConnectFailureCallback] = None,
+        on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
+        on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
     ) -> None:
         """
         :param name: The source unique name. It is used to generate the topic configuration.
         :param shutdown_timeout: Time in second the application waits for the source to gracefully shutdown.
-        :param client_connect_success_cb: An optional callback made after successful
+        :param on_client_connect_success: An optional callback made after successful
             client authentication, primarily for additional logging.
-        :param client_connect_failure_cb: An optional callback made after failed
+        :param on_client_connect_failure: An optional callback made after failed
             client authentication (which should raise an Exception).
             Callback should accept the raised Exception as an argument.
             Callback must resolve (or propagate/re-raise) the Exception.
         """
         super().__init__(
-            client_connect_success_cb=client_connect_success_cb,
-            client_connect_failure_cb=client_connect_failure_cb,
+            on_client_connect_success=on_client_connect_success,
+            on_client_connect_failure=on_client_connect_failure,
         )
 
         # used to generate a unique topic for the source.
@@ -431,15 +431,15 @@ class StatefulSource(Source):
         self,
         name: str,
         shutdown_timeout: float = 10,
-        client_connect_success_cb: Optional[ClientConnectSuccessCallback] = None,
-        client_connect_failure_cb: Optional[ClientConnectFailureCallback] = None,
+        on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
+        on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
     ) -> None:
         """
         :param name: The source unique name. It is used to generate the topic configuration.
         :param shutdown_timeout: Time in second the application waits for the source to gracefully shutdown.
-        :param client_connect_success_cb: An optional callback made after successful
+        :param on_client_connect_success: An optional callback made after successful
             client authentication, primarily for additional logging.
-        :param client_connect_failure_cb: An optional callback made after failed
+        :param on_client_connect_failure: An optional callback made after failed
             client authentication (which should raise an Exception).
             Callback should accept the raised Exception as an argument.
             Callback must resolve (or propagate/re-raise) the Exception.
@@ -447,8 +447,8 @@ class StatefulSource(Source):
         super().__init__(
             name,
             shutdown_timeout=shutdown_timeout,
-            client_connect_success_cb=client_connect_success_cb,
-            client_connect_failure_cb=client_connect_failure_cb,
+            on_client_connect_success=on_client_connect_success,
+            on_client_connect_failure=on_client_connect_failure,
         )
         self._store_partition: Optional[StorePartition] = None
         self._store_transaction: Optional[PartitionTransaction] = None

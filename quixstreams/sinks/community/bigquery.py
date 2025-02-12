@@ -65,8 +65,8 @@ class BigQuerySink(BatchingSink):
         ddl_timeout: float = 10.0,
         insert_timeout: float = 10.0,
         retry_timeout: float = 30.0,
-        client_connect_success_cb: Optional[ClientConnectSuccessCallback] = None,
-        client_connect_failure_cb: Optional[ClientConnectFailureCallback] = None,
+        on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
+        on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
         **kwargs,
     ):
         """
@@ -106,17 +106,17 @@ class BigQuerySink(BatchingSink):
         :param retry_timeout: a total timeout for each request to BigQuery API.
             During this timeout, a request can be retried according
             to the client's default retrying policy.
-        :param client_connect_success_cb: An optional callback made after successful
+        :param on_client_connect_success: An optional callback made after successful
             client authentication, primarily for additional logging.
-        :param client_connect_failure_cb: An optional callback made after failed
+        :param on_client_connect_failure: An optional callback made after failed
             client authentication (which should raise an Exception).
             Callback should accept the raised Exception as an argument.
             Callback must resolve (or propagate/re-raise) the Exception.
         :param kwargs: Additional keyword arguments passed to `bigquery.Client`.
         """
         super().__init__(
-            client_connect_success_cb=client_connect_success_cb,
-            client_connect_failure_cb=client_connect_failure_cb,
+            on_client_connect_success=on_client_connect_success,
+            on_client_connect_failure=on_client_connect_failure,
         )
 
         self.location = location

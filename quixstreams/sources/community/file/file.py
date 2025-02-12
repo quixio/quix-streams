@@ -140,8 +140,8 @@ class FileSource(Source):
         replay_speed: float = 1.0,
         name: Optional[str] = None,
         shutdown_timeout: float = 30,
-        client_connect_success_cb: Optional[ClientConnectSuccessCallback] = None,
-        client_connect_failure_cb: Optional[ClientConnectFailureCallback] = None,
+        on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
+        on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
     ):
         """
         :param directory: a directory to recursively read through; it is recommended to
@@ -158,9 +158,9 @@ class FileSource(Source):
         :param name: The name of the Source application (Default: last folder name).
         :param shutdown_timeout: Time in seconds the application waits for the source
             to gracefully shutdown
-        :param client_connect_success_cb: An optional callback made after successful
+        :param on_client_connect_success: An optional callback made after successful
             client authentication, primarily for additional logging.
-        :param client_connect_failure_cb: An optional callback made after failed
+        :param on_client_connect_failure: An optional callback made after failed
             client authentication (which should raise an Exception).
             Callback should accept the raised Exception as an argument.
             Callback must resolve (or propagate/re-raise) the Exception.
@@ -169,8 +169,8 @@ class FileSource(Source):
         super().__init__(
             name=name or self._directory.name,
             shutdown_timeout=shutdown_timeout,
-            client_connect_success_cb=client_connect_success_cb,
-            client_connect_failure_cb=client_connect_failure_cb,
+            on_client_connect_success=on_client_connect_success,
+            on_client_connect_failure=on_client_connect_failure,
         )
 
         if not replay_speed >= 0:

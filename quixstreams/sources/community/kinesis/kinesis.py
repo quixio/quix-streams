@@ -70,8 +70,8 @@ class KinesisSource(StatefulSource):
         max_records_per_shard: int = 1000,
         commit_interval: float = 5.0,
         retry_backoff_secs: float = 5.0,
-        client_connect_success_cb: Optional[ClientConnectSuccessCallback] = None,
-        client_connect_failure_cb: Optional[ClientConnectFailureCallback] = None,
+        on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
+        on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
     ):
         """
         :param stream_name: name of the desired Kinesis stream to consume.
@@ -92,9 +92,9 @@ class KinesisSource(StatefulSource):
         :param commit_interval: the time between commits
         :param retry_backoff_secs: how long to back off from doing HTTP calls for a
              shard when Kinesis consumer encounters handled/expected errors.
-        :param client_connect_success_cb: An optional callback made after successful
+        :param on_client_connect_success: An optional callback made after successful
             client authentication, primarily for additional logging.
-        :param client_connect_failure_cb: An optional callback made after failed
+        :param on_client_connect_failure: An optional callback made after failed
             client authentication (which should raise an Exception).
             Callback should accept the raised Exception as an argument.
             Callback must resolve (or propagate/re-raise) the Exception.
@@ -102,8 +102,8 @@ class KinesisSource(StatefulSource):
         super().__init__(
             name=f"kinesis_{stream_name}",
             shutdown_timeout=shutdown_timeout,
-            client_connect_success_cb=client_connect_success_cb,
-            client_connect_failure_cb=client_connect_failure_cb,
+            on_client_connect_success=on_client_connect_success,
+            on_client_connect_failure=on_client_connect_failure,
         )
 
         self._stream_name = stream_name

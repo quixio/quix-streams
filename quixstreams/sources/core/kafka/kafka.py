@@ -66,8 +66,8 @@ class KafkaReplicatorSource(Source):
         on_consumer_error: ConsumerErrorCallback = default_on_consumer_error,
         value_deserializer: DeserializerType = "json",
         key_deserializer: DeserializerType = "bytes",
-        client_connect_success_cb: Optional[ClientConnectSuccessCallback] = None,
-        client_connect_failure_cb: Optional[ClientConnectFailureCallback] = None,
+        on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
+        on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
     ) -> None:
         """
         :param name: The source unique name.
@@ -90,9 +90,9 @@ class KafkaReplicatorSource(Source):
             Default - `json`
         :param key_deserializer: The default topic key deserializer, used by StreamingDataframe connected to the source.
             Default - `json`
-        :param client_connect_success_cb: An optional callback made after successful
+        :param on_client_connect_success: An optional callback made after successful
             client authentication, primarily for additional logging.
-        :param client_connect_failure_cb: An optional callback made after failed
+        :param on_client_connect_failure: An optional callback made after failed
             client authentication (which should raise an Exception).
             Callback should accept the raised Exception as an argument.
             Callback must resolve (or propagate/re-raise) the Exception.
@@ -100,8 +100,8 @@ class KafkaReplicatorSource(Source):
         super().__init__(
             name=name,
             shutdown_timeout=shutdown_timeout,
-            client_connect_success_cb=client_connect_success_cb,
-            client_connect_failure_cb=client_connect_failure_cb,
+            on_client_connect_success=on_client_connect_success,
+            on_client_connect_failure=on_client_connect_failure,
         )
 
         if consumer_extra_config is None:
