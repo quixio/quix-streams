@@ -142,7 +142,7 @@ class KinesisSource(StatefulSource):
             timestamp=serialized_msg.timestamp,
         )
 
-    def setup_client(self):
+    def setup(self):
         self._client = KinesisConsumer(
             stream_name=self._stream_name,
             credentials=self._credentials,

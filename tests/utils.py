@@ -161,7 +161,7 @@ class DummySource(Source):
             msg = self.serialize(key=self.key, value=value)
             self.produce(value=msg.value, key=msg.key)
 
-    def setup_client(self):
+    def setup(self):
         return
 
     def cleanup(self, failed):

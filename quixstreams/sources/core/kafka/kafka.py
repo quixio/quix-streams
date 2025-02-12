@@ -176,7 +176,7 @@ class KafkaReplicatorSource(Source):
             raise RuntimeError("source not started")
         return self._target_cluster_admin
 
-    def setup_client(self):
+    def setup(self):
         logger.info(
             f'Starting the source "{self.name}" with the config: '
             f'source_broker_address="{self._broker_address}" '
