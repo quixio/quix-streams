@@ -17,10 +17,12 @@ class _Table:
         size: int = 5,
         title: Optional[str] = None,
         timeout: float = 5.0,
+        column_widths: Optional[dict[str, int]] = None,
     ):
         self._rows: deque[dict[str, Any]] = deque(maxlen=size)
         self._title = title
         self._timeout = timeout
+        self._column_widths = column_widths or {}
         self._has_new_data = False
         self._start = time.monotonic()
 
@@ -49,7 +51,7 @@ class _Table:
         columns = sorted(set().union(*self._rows))
 
         for column in columns:
-            table.add_column(column)
+            table.add_column(column, width=self._column_widths.get(column))
 
         for row in self._rows:
             table.add_row(*[str(row.get(column, "")) for column in columns])
@@ -83,8 +85,14 @@ class Printer:
         size: int = 5,
         title: Optional[str] = None,
         timeout: float = 5.0,
+        column_widths: Optional[dict[str, int]] = None,
     ) -> _Table:
-        table = _Table(size=size, title=title, timeout=timeout)
+        table = _Table(
+            size=size,
+            title=title,
+            timeout=timeout,
+            column_widths=column_widths,
+        )
         self._tables.append(table)
         self._active = True
         return table
