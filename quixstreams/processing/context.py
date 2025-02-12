@@ -10,7 +10,7 @@ from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
 from quixstreams.sinks import SinkManager
 from quixstreams.state import StateStoreManager
-from quixstreams.utils.printing import Table
+from quixstreams.utils.printing import Printer
 
 __all__ = ("ProcessingContext",)
 
@@ -35,7 +35,7 @@ class ProcessingContext:
     pausing_manager: PausingManager
     commit_every: int = 0
     exactly_once: bool = False
-    tables: list[Table] = dataclasses.field(default_factory=list)
+    printer: Printer = Printer()
     _checkpoint: Optional[Checkpoint] = dataclasses.field(
         init=False, repr=False, default=None
     )
