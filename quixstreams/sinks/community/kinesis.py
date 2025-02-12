@@ -87,7 +87,7 @@ class KinesisSink(BaseSink):
         # that records are sent in order at the expense of throughput.
         self._executor = ThreadPoolExecutor(max_workers=1)
 
-    def setup_client(self):
+    def setup(self):
         self._client = boto3.client("kinesis", **self._credentials)
 
         # Check if the Kinesis stream exists

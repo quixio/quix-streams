@@ -109,7 +109,7 @@ class PostgreSQLSink(BatchingSink):
         }
         self._client = None
 
-    def setup_client(self):
+    def setup(self):
         self._client = psycopg2.connect(**self._client_settings)
 
         # Initialize table if schema_auto_update is enabled

@@ -36,7 +36,7 @@ class CSVSink(BatchingSink):
         self._key_serializer = key_serializer
         self._value_serializer = value_serializer
 
-    def setup_client(self):
+    def setup(self):
         return
 
     def write(self, batch: SinkBatch):

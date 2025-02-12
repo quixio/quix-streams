@@ -29,7 +29,7 @@ class LocalDestination(Destination):
         self._mode = "ab" if append else "wb"
         logger.debug("LocalDestination initialized with append=%s", append)
 
-    def connect(self):
+    def setup(self):
         return
 
     def set_extension(self, format: Format) -> None:

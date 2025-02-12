@@ -194,7 +194,7 @@ class InfluxDB3Sink(BatchingSink):
             return setter
         return lambda value: setter
 
-    def setup_client(self):
+    def setup(self):
         self._client = InfluxDBClient3(**self._client_args)
         try:
             # We cannot safely parameterize the table (measurement) selection, so

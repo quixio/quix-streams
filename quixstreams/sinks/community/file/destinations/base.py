@@ -26,7 +26,7 @@ class Destination(ABC):
     _extension: str = ""
 
     @abstractmethod
-    def connect(self):
+    def setup(self):
         """Authenticate and validate connection here"""
         ...
 

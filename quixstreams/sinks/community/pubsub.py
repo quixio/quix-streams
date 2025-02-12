@@ -93,7 +93,7 @@ class PubSubSink(BaseSink):
         self._client: Optional[pubsub_v1.PublisherClient] = None
         self._topic: Optional[str] = None
 
-    def setup_client(self):
+    def setup(self):
         self._client = pubsub_v1.PublisherClient(**self._client_settings)
         self._topic = self._client.topic_path(self._project_id, self._topic_id)
         try:
