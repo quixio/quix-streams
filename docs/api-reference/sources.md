@@ -1289,3 +1289,72 @@ startup; if it already exists, it instead logs its details (DEBUG level).
 to allow message ordering. NOTE: does NOT affect existing subscriptions!
 - `shutdown_timeout`: How long to wait for a graceful shutdown of the source.
 
+<a id="quixstreams.sources.community.pandas"></a>
+
+## quixstreams.sources.community.pandas
+
+<a id="quixstreams.sources.community.pandas.PandasDataFrameSource"></a>
+
+### PandasDataFrameSource
+
+```python
+class PandasDataFrameSource(Source)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/pandas.py#L20)
+
+<a id="quixstreams.sources.community.pandas.PandasDataFrameSource.__init__"></a>
+
+<br><br>
+
+#### PandasDataFrameSource.\_\_init\_\_
+
+```python
+def __init__(df: pd.DataFrame,
+             key_column: str,
+             timestamp_column: str = None,
+             delay: float = 0,
+             shutdown_timeout: float = 10,
+             keep_meta_as_values: bool = True,
+             name: str = "pandas-dataframe-source") -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/pandas.py#L21)
+
+A source that reads data from a pandas.DataFrame and produces rows to a Kafka topic in JSON format.
+
+
+<br>
+***Arguments:***
+
+- `df`: the pandas.DataFrame object to read data from.
+- `key_column`: a column name that contains the messages keys.
+The values in dataframe[key_column] must be either strings or `None`.
+- `timestamp_column`: an optional argument to specify a dataframe column that contains the messages timestamps.
+The values in dataframe[timestamp_column] must be time in milliseconds as `int`.
+If empty, the current epoch will be used.
+Default - `None`
+- `name`: a unique name for the Source, used as a part of the default topic name.
+Default - `"pandas-dataframe-source"`.
+- `delay`: an optional delay after producing each row for stream simulation.
+Default - `0`.
+- `shutdown_timeout`: Time in seconds the application waits for the source to gracefully shut down.
+- `keep_meta_as_values`: Whether to keep metadata (timestamp_column and key_column) as-values data too.
+If True, timestamp and key columns are passed both as metadata and values in the message.
+If False, timestamp and key columns are passed only as the message's metadata.
+Default - `True`.
+
+<a id="quixstreams.sources.community.pandas.PandasDataFrameSource.run"></a>
+
+<br><br>
+
+#### PandasDataFrameSource.run
+
+```python
+def run()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/pandas.py#L103)
+
+Produces data from the DataFrame row by row.
+
