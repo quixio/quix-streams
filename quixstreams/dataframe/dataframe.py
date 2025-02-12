@@ -780,6 +780,7 @@ class StreamingDataFrame:
         timeout: float = 5.0,
         slowdown: Optional[float] = None,
         columns: Optional[List[str]] = None,
+        column_widths: Optional[dict[str, int]] = None,
     ) -> Self:
         """
         Print a live-updating table of the most recent records.
@@ -829,6 +830,9 @@ class StreamingDataFrame:
             Increase this value if the table updates too quickly.
         :param columns: Optional list of columns to display. If not provided,
             all columns will be displayed. Pass empty list to display only metadata.
+        :param column_widths: Optional dictionary mapping column names to their desired
+            widths in characters. If not provided, column widths will be determined
+            automatically based on content. Example: {"name": 20, "id": 10}
         """
 
         self.processing_context.printer.slowdown = slowdown  # type: ignore[assignment]
@@ -856,7 +860,10 @@ class StreamingDataFrame:
                 table.append(row)
 
         table = self.processing_context.printer.create_new_table(
-            size=size, title=title, timeout=timeout
+            size=size,
+            title=title,
+            timeout=timeout,
+            column_widths=column_widths,
         )
         return self._add_update(functools.partial(_collect, table), metadata=metadata)
 
