@@ -86,7 +86,7 @@ class AzureFileDestination(Destination):
             raise
         raise AzureContainerNotFoundError(f"Container not found: {self._container}")
 
-    def connect(self):
+    def setup_client(self):
         if not self._client:
             self._client = self._get_client()
             self._validate_container()
