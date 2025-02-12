@@ -21,7 +21,7 @@ def main():
     
     # Read a DataFrame from a file.
     # File format: "Timestamp", "SessionID", "Metric"
-    df = pd.read_csv('data.csv')
+    df = pd.read_csv("data.csv")
     
     
     # Create the PandasDataFrameSource instance and pass the df to it
