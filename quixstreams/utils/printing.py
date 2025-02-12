@@ -52,7 +52,7 @@ class _Table:
             table.add_column(column)
 
         for row in self._rows:
-            table.add_row(*[str(row.get(column, ""))[:10] for column in columns])
+            table.add_row(*[str(row.get(column, "")) for column in columns])
 
         _CONSOLE.print(table)
         self._has_new_data = False
