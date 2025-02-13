@@ -1,8 +1,7 @@
 import logging
 import sys
 import time
-import typing
-from typing import Any, Callable, Iterable, Literal, Mapping, Optional, Union
+from typing import Any, Callable, Iterable, Literal, Mapping, Optional, Union, get_args
 
 from quixstreams.models import HeadersTuples
 
@@ -16,7 +15,13 @@ except ImportError as exc:
         "run pip install quixstreams[influxdb3] to fix it"
     ) from exc
 
-from ..base import BatchingSink, SinkBackpressureError, SinkBatch
+from ..base import (
+    BatchingSink,
+    ClientConnectFailureCallback,
+    ClientConnectSuccessCallback,
+    SinkBackpressureError,
+    SinkBatch,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +65,8 @@ class InfluxDB3Sink(BatchingSink):
         enable_gzip: bool = True,
         request_timeout_ms: int = 10_000,
         debug: bool = False,
+        on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
+        on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
     ):
         """
         A connector to sink processed data to InfluxDB v3.
@@ -122,10 +129,20 @@ class InfluxDB3Sink(BatchingSink):
             Default - `10000`.
         :param debug: if True, print debug logs from InfluxDB client.
             Default - `False`.
+        :param on_client_connect_success: An optional callback made after successful
+            client authentication, primarily for additional logging.
+        :param on_client_connect_failure: An optional callback made after failed
+            client authentication (which should raise an Exception).
+            Callback should accept the raised Exception as an argument.
+            Callback must resolve (or propagate/re-raise) the Exception.
         """
 
-        super().__init__()
-        if time_precision not in (time_args := typing.get_args(TimePrecision)):
+        super().__init__(
+            on_client_connect_success=on_client_connect_success,
+            on_client_connect_failure=on_client_connect_failure,
+        )
+
+        if time_precision not in (time_args := get_args(TimePrecision)):
             raise ValueError(
                 f"Invalid 'time_precision' argument {time_precision}; "
                 f"valid options: {time_args}"
@@ -138,7 +155,7 @@ class InfluxDB3Sink(BatchingSink):
                     f'Keys {overlap_str} are present in both "fields_keys" and "tags_keys"'
                 )
 
-        self._client = InfluxDBClient3(
+        self._client_args = dict(
             token=token,
             host=host,
             org=organization_id,
@@ -152,7 +169,7 @@ class InfluxDB3Sink(BatchingSink):
                 )
             },
         )
-
+        self._client: Optional[InfluxDBClient3] = None
         self._measurement = self._measurement_callable(measurement)
         self._fields_keys = self._fields_callable(fields_keys)
         self._tags_keys = self._tags_callable(tags_keys)
@@ -176,6 +193,16 @@ class InfluxDB3Sink(BatchingSink):
         if callable(setter):
             return setter
         return lambda value: setter
+
+    def setup(self):
+        self._client = InfluxDBClient3(**self._client_args)
+        try:
+            # We cannot safely parameterize the table (measurement) selection, so
+            # the best we can do is confirm authentication was successful
+            self._client.query("")
+        except Exception as e:
+            if "No SQL statements were provided in the query string" not in str(e):
+                raise
 
     def add(
         self,
@@ -257,7 +284,7 @@ class InfluxDB3Sink(BatchingSink):
 
             try:
                 _start = time.monotonic()
-                self._client.write(
+                self._client.write(  # type: ignore[union-attr]
                     record=records, write_precision=self._write_precision
                 )
                 elapsed = round(time.monotonic() - _start, 2)

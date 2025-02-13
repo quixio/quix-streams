@@ -10,7 +10,7 @@ __all__ = ("Destination",)
 
 logger = logging.getLogger(__name__)
 
-_UNSAFE_CHARACTERS_REGEX = re.compile(r"[^a-zA-Z0-9 ._]")
+_UNSAFE_CHARACTERS_REGEX = re.compile(r"[^a-zA-Z0-9 ._/]")
 
 
 class Destination(ABC):
@@ -25,14 +25,33 @@ class Destination(ABC):
     _base_directory: str = ""
     _extension: str = ""
 
-    def set_directory(self, directory: str) -> None:
+    @abstractmethod
+    def setup(self):
+        """Authenticate and validate connection here"""
+        ...
+
+    @abstractmethod
+    def write(self, data: bytes, batch: SinkBatch) -> None:
+        """Write the serialized data to storage.
+
+        :param data: The serialized data to write.
+        :param batch: The batch information containing topic, partition and offset
+            details.
+        """
+        ...
+
+    def set_directory(
+        self,
+        directory: str,
+    ) -> None:
         """Configure the base directory for storing files.
 
         :param directory: The base directory path where files will be stored.
         :raises ValueError: If the directory path contains invalid characters.
-            Only alphanumeric characters (a-zA-Z0-9), spaces, dots, and
+            Only alphanumeric characters (a-zA-Z0-9), spaces, dots, slashes, and
             underscores are allowed.
         """
+        # TODO: logic around "/" for sinks that require special handling of them
         if _UNSAFE_CHARACTERS_REGEX.search(directory):
             raise ValueError(
                 f"Invalid characters in directory path: {directory}. "
@@ -49,16 +68,6 @@ class Destination(ABC):
         """
         self._extension = format.file_extension
         logger.info("File extension set to '%s'", self._extension)
-
-    @abstractmethod
-    def write(self, data: bytes, batch: SinkBatch) -> None:
-        """Write the serialized data to storage.
-
-        :param data: The serialized data to write.
-        :param batch: The batch information containing topic, partition and offset
-            details.
-        """
-        ...
 
     def _path(self, batch: SinkBatch) -> Path:
         """Generate the full path where the batch data should be stored.

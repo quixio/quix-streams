@@ -36,6 +36,9 @@ class CSVSink(BatchingSink):
         self._key_serializer = key_serializer
         self._value_serializer = value_serializer
 
+    def setup(self):
+        return
+
     def write(self, batch: SinkBatch):
         is_new = not os.path.exists(self.path)
         fieldnames = (

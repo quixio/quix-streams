@@ -7,7 +7,13 @@ from importlib import import_module
 from io import BytesIO
 from typing import Literal, Optional, Type, get_args
 
-from quixstreams.sinks import BatchingSink, SinkBackpressureError, SinkBatch
+from quixstreams.sinks import (
+    BatchingSink,
+    ClientConnectFailureCallback,
+    ClientConnectSuccessCallback,
+    SinkBackpressureError,
+    SinkBatch,
+)
 
 try:
     import pyarrow as pa
@@ -16,6 +22,7 @@ try:
     from pyiceberg.exceptions import CommitFailedException
     from pyiceberg.partitioning import PartitionField, PartitionSpec
     from pyiceberg.schema import NestedField, Schema
+    from pyiceberg.table import Table
     from pyiceberg.transforms import DayTransform, IdentityTransform
     from pyiceberg.types import StringType, TimestampType
 except ImportError as exc:
@@ -97,6 +104,12 @@ class IcebergSink(BatchingSink):
     :param schema: The Iceberg table schema. If None, a default schema is used.
     :param partition_spec: The partition specification for the table.
         If None, a default is used.
+    :param on_client_connect_success: An optional callback made after successful
+        client authentication, primarily for additional logging.
+    :param on_client_connect_failure: An optional callback made after failed
+        client authentication (which should raise an Exception).
+        Callback should accept the raised Exception as an argument.
+        Callback must resolve (or propagate/re-raise) the Exception.
 
     Example setup using an AWS-hosted Iceberg with AWS Glue:
 
@@ -139,36 +152,48 @@ class IcebergSink(BatchingSink):
         data_catalog_spec: DataCatalogSpec,
         schema: Optional[Schema] = None,
         partition_spec: Optional[PartitionSpec] = None,
+        on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
+        on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
     ):
-        super().__init__()
-        self.iceberg_config = config
+        super().__init__(
+            on_client_connect_success=on_client_connect_success,
+            on_client_connect_failure=on_client_connect_failure,
+        )
+
+        self._iceberg_config = config
+        self._table_name = table_name
+        self._table: Optional[Table] = None
 
         # Configure Iceberg Catalog
         data_catalog_cls = _import_data_catalog(data_catalog_spec)
         self.data_catalog = data_catalog_cls(
             name=f"{data_catalog_spec}_catalog",
-            **self.iceberg_config.auth,
+            **self._iceberg_config.auth,
         )
 
         # Set up the schema.
-        if schema is None:
-            # Use a default schema if none is provided.
-            schema = self._get_default_schema()
+        self._schema = schema if schema is not None else self._get_default_schema()
 
         # Set up the partition specification.
-        if partition_spec is None:
-            partition_spec = self._get_default_partition_spec(schema=schema)
+        self._partition_spec = (
+            partition_spec
+            if partition_spec is not None
+            else self._get_default_partition_spec(self._schema)
+        )
 
-        # Create the Iceberg table if it doesn't exist.
-        self.table = self.data_catalog.create_table_if_not_exists(
-            identifier=table_name,
-            schema=schema,
-            location=self.iceberg_config.location,
-            partition_spec=partition_spec,
+    def setup(self):
+        # Our client is an interface for a table, so for the sake of
+        # readability, the client will be called "_table"
+        self._table = self.data_catalog.create_table_if_not_exists(
+            identifier=self._table_name,
+            schema=self._schema,
+            location=self._iceberg_config.location,
+            partition_spec=self._partition_spec,
             properties={"write.distribution-mode": "fanout"},
         )
         logger.info(
-            f"Loaded Iceberg table '{table_name}' at '{self.iceberg_config.location}'."
+            f"Loaded Iceberg table '{self._table_name}' at "
+            f"'{self._iceberg_config.location}'."
         )
 
     def write(self, batch: SinkBatch):
@@ -187,16 +212,16 @@ class IcebergSink(BatchingSink):
             parquet_table = pq.read_table(input_buffer)
 
             # Reload the table to get the latest metadata
-            self.table = self.data_catalog.load_table(self.table.name())
+            self._table = self.data_catalog.load_table(self._table.name())
 
             # Update the table schema if necessary.
-            with self.table.update_schema() as update:
+            with self._table.update_schema() as update:
                 update.union_by_name(parquet_table.schema)
 
             append_start_epoch = time.time()
-            self.table.append(parquet_table)
+            self._table.append(parquet_table)
             logger.info(
-                f"Appended {batch.size} records to {self.table.name()} table "
+                f"Appended {batch.size} records to {self._table.name()} table "
                 f"in {time.time() - append_start_epoch}s."
             )
 

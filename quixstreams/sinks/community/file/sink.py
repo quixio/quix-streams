@@ -1,6 +1,12 @@
 from typing import Optional, Union
 
-from quixstreams.sinks import BatchingSink, SinkBackpressureError, SinkBatch
+from quixstreams.sinks import (
+    BatchingSink,
+    ClientConnectFailureCallback,
+    ClientConnectSuccessCallback,
+    SinkBackpressureError,
+    SinkBatch,
+)
 
 from .destinations import Destination, LocalDestination
 from .formats import Format, FormatName, resolve_format
@@ -27,6 +33,8 @@ class FileSink(BatchingSink):
         directory: str = "",
         format: Union[FormatName, Format] = "json",
         destination: Optional[Destination] = None,
+        on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
+        on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
     ) -> None:
         """Initialize the FileSink with the specified configuration.
 
@@ -36,12 +44,25 @@ class FileSink(BatchingSink):
             ("json", "parquet") or a Format instance.
         :param destination: Storage destination handler. Defaults to
             LocalDestination if not specified.
+        :param on_client_connect_success: An optional callback made after successful
+            client authentication, primarily for additional logging.
+        :param on_client_connect_failure: An optional callback made after failed
+            client authentication (which should raise an Exception).
+            Callback should accept the raised Exception as an argument.
+            Callback must resolve (or propagate/re-raise) the Exception.
         """
-        super().__init__()
+        super().__init__(
+            on_client_connect_success=on_client_connect_success,
+            on_client_connect_failure=on_client_connect_failure,
+        )
+
         self._format = resolve_format(format)
         self._destination = destination or LocalDestination()
         self._destination.set_directory(directory)
         self._destination.set_extension(self._format)
+
+    def setup(self):
+        self._destination.setup()
 
     def write(self, batch: SinkBatch) -> None:
         """Write a batch of data using the configured format and destination.

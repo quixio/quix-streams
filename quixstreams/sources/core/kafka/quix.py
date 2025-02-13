@@ -6,6 +6,10 @@ from quixstreams.models.serializers import DeserializerType
 from quixstreams.models.topics import Topic
 from quixstreams.platforms.quix import QuixKafkaConfigsBuilder
 from quixstreams.platforms.quix.api import QuixPortalApiService
+from quixstreams.sources import (
+    ClientConnectFailureCallback,
+    ClientConnectSuccessCallback,
+)
 
 from .kafka import KafkaReplicatorSource
 
@@ -13,7 +17,7 @@ if TYPE_CHECKING:
     from quixstreams.app import ApplicationConfig
 
 
-__all__ = ["QuixEnvironmentSource"]
+__all__ = ("QuixEnvironmentSource",)
 
 
 class QuixEnvironmentSource(KafkaReplicatorSource):
@@ -62,6 +66,8 @@ class QuixEnvironmentSource(KafkaReplicatorSource):
         on_consumer_error: ConsumerErrorCallback = default_on_consumer_error,
         value_deserializer: DeserializerType = "json",
         key_deserializer: DeserializerType = "bytes",
+        on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
+        on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
     ) -> None:
         """
         :param quix_workspace_id: The Quix workspace ID of the source environment.
@@ -102,6 +108,8 @@ class QuixEnvironmentSource(KafkaReplicatorSource):
             on_consumer_error=on_consumer_error,
             value_deserializer=value_deserializer,
             key_deserializer=key_deserializer,
+            on_client_connect_success=on_client_connect_success,
+            on_client_connect_failure=on_client_connect_failure,
         )
 
     @property
