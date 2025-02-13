@@ -23,13 +23,13 @@ class ListSink(BaseSink, UserList):
 
     app = Application(broker_address="localhost:9092")
     topic = app.topic("some-topic")
-    sink = LocalSink()  # sink will be a list-like object
-    sdf = app.dataframe(topic=topic).sink(sink)
+    list_sink = ListSink()  # sink will be a list-like object
+    sdf = app.dataframe(topic=topic).sink(list_sink)
     app.run(time_limit=10)  # collect data for 10 seconds
 
     # after running 10s
-    print(sink)    # [1, 2, 3]
-    sink[0]        # 1
+    print(list_sink)    # [1, 2, 3]
+    list_sink[0]        # 1
     ```
 
     Metadata Behavior:
