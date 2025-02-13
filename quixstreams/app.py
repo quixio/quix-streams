@@ -75,6 +75,78 @@ class TopicManagerFactory(Protocol):
     ) -> TopicManager: ...
 
 
+class RunTracker:
+    __slots__ = ("running", "_start_time", "_time_limit", "_stop_checker", "_run_count")
+
+    _time_limit_default = 0.0
+
+    def __init__(self):
+        """
+        Tracks the runtime status of an Application, along with managing variables
+        associated with stopping the app based on a timeout
+        """
+        self.running: bool = False
+        self._start_time: float = time.monotonic()
+        self._time_limit: float = self._time_limit_default
+        self._run_count: int = 0
+        self._stop_checker: Optional[Callable[[], bool]] = None
+
+    @property
+    def run_count(self) -> int:
+        """
+        Tracks number of times app.run() has been called.
+        Mostly only here for tracking the initial run.
+        :return:
+        """
+        return self._run_count
+
+    def update_status(self):
+        """
+        Trigger stop if its condition is met.
+        """
+        # most optimal way to keep performance with typical operation (no time_limit)
+        if stopper := self._stop_checker:
+            if stopper():
+                self.stop()
+
+    def start(self):
+        """
+        Called as part of app.run() to initialize/reset stop conditions.
+        """
+        self.running = True
+        self._run_count += 1
+        self.reset_tracking()
+        if self._time_limit:
+            self._stop_checker = self._at_time_limit
+
+    def stop(self):
+        """
+        Called when Application is stopped, or self._stop_checker condition is met.
+        :return:
+        """
+        self.running = False
+        self._time_limit = self._time_limit_default
+
+    def set_stop_condition(self, time_limit: Optional[float] = None):
+        """
+        Called as part of app.run(), where user can pass their time limit.
+        """
+        if time_limit := (time_limit or self._time_limit_default):
+            if time_limit < 0.0:
+                raise ValueError("run timeout must be >= 0.0")
+            logger.info(
+                f"TIME LIMIT DETECTED: "
+                f"Application will run for {time_limit}s (after any recovery)"
+            )
+        self._time_limit = time_limit  # type: ignore
+
+    def reset_tracking(self):
+        self._start_time = time.monotonic()
+
+    def _at_time_limit(self) -> bool:
+        return (time.monotonic() - self._start_time) > self._time_limit
+
+
 class Application:
     """
     The main Application class.
@@ -345,6 +417,7 @@ class Application:
             pausing_manager=self._pausing_manager,
         )
         self._dataframe_registry = DataframeRegistry()
+        self._run_tracker = RunTracker()
 
     @property
     def config(self) -> "ApplicationConfig":
@@ -537,7 +610,7 @@ class Application:
             to unhandled exception, and it shouldn't commit the current checkpoint.
         """
 
-        self._running = False
+        self._run_tracker.stop()
         if fail:
             # Update "_failed" only when fail=True to prevent stop(failed=False) from
             # resetting it
@@ -712,7 +785,11 @@ class Application:
         )
         return topic
 
-    def run(self, dataframe: Optional[StreamingDataFrame] = None):
+    def run(
+        self,
+        dataframe: Optional[StreamingDataFrame] = None,
+        time_limit: Optional[float] = None,
+    ):
         """
         Start processing data from Kafka using provided `StreamingDataFrame`
 
@@ -743,6 +820,7 @@ class Application:
                 "the argument should be removed.",
                 FutureWarning,
             )
+        self._run_tracker.set_stop_condition(time_limit=time_limit)
         self._run()
 
     def _exception_handler(self, exc_type, exc_val, exc_tb):
@@ -758,19 +836,21 @@ class Application:
     def _run(self):
         self._setup_signal_handlers()
 
-        logger.info(
-            f"Starting the Application with the config: "
-            f'broker_address="{self._config.broker_address}" '
-            f'consumer_group="{self._config.consumer_group}" '
-            f'auto_offset_reset="{self._config.auto_offset_reset}" '
-            f"commit_interval={self._config.commit_interval}s "
-            f"commit_every={self._config.commit_every} "
-            f'processing_guarantee="{self._config.processing_guarantee}"'
-        )
-        if self.is_quix_app:
-            self._quix_runtime_init()
+        # These only need to be performed on the first .run() (with interactive running)
+        if not self._run_tracker.run_count:
+            logger.info(
+                f"Starting the Application with the config: "
+                f'broker_address="{self._config.broker_address}" '
+                f'consumer_group="{self._config.consumer_group}" '
+                f'auto_offset_reset="{self._config.auto_offset_reset}" '
+                f"commit_interval={self._config.commit_interval}s "
+                f"commit_every={self._config.commit_every} "
+                f'processing_guarantee="{self._config.processing_guarantee}"'
+            )
+            if self.is_quix_app:
+                self._quix_runtime_init()
 
-        self.setup_topics()
+            self.setup_topics()
 
         exit_stack = contextlib.ExitStack()
         exit_stack.enter_context(self._processing_context)
@@ -794,36 +874,41 @@ class Application:
             on_revoke=self._on_revoke,
             on_lost=self._on_lost,
         )
+
+        # set refs for performance improvements
+        dataframes_composed = self._dataframe_registry.compose_all()
+        state_manager = self._state_manager
+        processing_context = self._processing_context
+        source_manager = self._source_manager
+        process_message = self._process_message
+        run_tracker = self._run_tracker
+
+        processing_context.init_checkpoint()
+        run_tracker.start()
         logger.info("Waiting for incoming messages")
         # Start polling Kafka for messages and callbacks
-        self._running = True
-
-        # Initialize the checkpoint
-        self._processing_context.init_checkpoint()
-
-        dataframes_composed = self._dataframe_registry.compose_all()
-
-        while self._running:
-            if self._state_manager.recovery_required:
-                self._state_manager.do_recovery()
+        while run_tracker.running:
+            if state_manager.recovery_required:
+                state_manager.do_recovery()
+                run_tracker.reset_tracking()
             else:
-                self._process_message(dataframes_composed)
-                self._processing_context.commit_checkpoint()
-                self._processing_context.resume_ready_partitions()
-                self._source_manager.raise_for_error()
+                process_message(dataframes_composed)
+                processing_context.commit_checkpoint()
+                processing_context.resume_ready_partitions()
+                source_manager.raise_for_error()
+                run_tracker.update_status()
 
         logger.info("Stop processing of StreamingDataFrame")
-        self._processing_context.commit_checkpoint(force=True)
+        processing_context.commit_checkpoint(force=True)
 
     def _run_sources(self):
-        self._running = True
+        self._run_tracker.start()
         self._source_manager.start_sources()
-        while self._running:
+        while self._run_tracker.running:
             self._source_manager.raise_for_error()
-
             if not self._source_manager.is_alive():
                 self.stop()
-
+            self._run_tracker.update_status()
             time.sleep(1)
 
     def _quix_runtime_init(self):
