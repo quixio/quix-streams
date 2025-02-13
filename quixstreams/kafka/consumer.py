@@ -571,6 +571,7 @@ class BaseConsumer:
         """
         logger.debug("Closing Kafka consumer")
         self._consumer.close()
+        self._inner_consumer = None
         logger.debug("Kafka consumer closed")
 
     def consumer_group_metadata(self) -> GroupMetadata:

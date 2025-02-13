@@ -75,6 +75,27 @@ class TopicManagerFactory(Protocol):
     ) -> TopicManager: ...
 
 
+class ExitManager:
+    def __init__(self, timeout: Optional[int] = None):
+        """
+        Initialize the exit manager with either a message count limit, timeout, or both.
+        The `should_exit` function will be called for every message processed, so it needs
+        to be highly optimized. To ensure optimal performance, the logic for determining
+        which checks to perform is handled in `__init__` rather than in `should_exit` itself.
+        Args:
+            timeout: Maximum time in seconds to run before exiting
+        """
+        self._timeout = timeout
+        self._start = time.monotonic()
+        self.should_exit = self._met_timeout if timeout else lambda: False
+
+    def reset(self):
+        self._start = time.monotonic()
+
+    def _met_timeout(self) -> bool:
+        return (time.monotonic() - self._start) > self._timeout  # type: ignore
+
+
 class Application:
     """
     The main Application class.
@@ -345,6 +366,7 @@ class Application:
             pausing_manager=self._pausing_manager,
         )
         self._dataframe_registry = DataframeRegistry()
+        self._exit_manager = None
 
     @property
     def config(self) -> "ApplicationConfig":
@@ -546,6 +568,14 @@ class Application:
         if self._state_manager.using_changelogs:
             self._state_manager.stop_recovery()
 
+    def running(self):
+        if not self._running:
+            return False
+        if self._exit_manager.should_exit():
+            self.stop()
+            return False
+        return True
+
     def _get_rowproducer(
         self,
         on_error: Optional[ProducerErrorCallback] = None,
@@ -712,7 +742,11 @@ class Application:
         )
         return topic
 
-    def run(self, dataframe: Optional[StreamingDataFrame] = None):
+    def run(
+        self,
+        dataframe: Optional[StreamingDataFrame] = None,
+        timeout: Optional[int] = None,
+    ):
         """
         Start processing data from Kafka using provided `StreamingDataFrame`
 
@@ -743,6 +777,7 @@ class Application:
                 "the argument should be removed.",
                 FutureWarning,
             )
+        self._exit_manager = ExitManager(timeout)  # type: ignore
         self._run()
 
     def _exception_handler(self, exc_type, exc_val, exc_tb):
@@ -803,9 +838,12 @@ class Application:
 
         dataframes_composed = self._dataframe_registry.compose_all()
 
-        while self._running:
+        while self.running():
             if self._state_manager.recovery_required:
                 self._state_manager.do_recovery()
+                if self._exit_manager:
+                    # timer should start once actual consuming starts
+                    self._exit_manager.reset()
             else:
                 self._process_message(dataframes_composed)
                 self._processing_context.commit_checkpoint()
@@ -818,7 +856,7 @@ class Application:
     def _run_sources(self):
         self._running = True
         self._source_manager.start_sources()
-        while self._running:
+        while self.running():
             self._source_manager.raise_for_error()
 
             if not self._source_manager.is_alive():
