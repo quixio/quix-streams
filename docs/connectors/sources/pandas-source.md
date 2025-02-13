@@ -6,6 +6,15 @@ The PandasDataFrameSource reads the dataframe, produces the data and exit.
 It doesn't keep any state.  
 On restart, the whole file will be re-consumed.
 
+
+## How To Install
+
+Install Quix Streams with the following optional dependencies:
+
+```bash
+pip install quixstreams[pandas]
+```
+
 ## How To Use
 
 To use it, you need to create and instance of `PandasDataFrameSource` and pass it to the `app.dataframe()` method.
