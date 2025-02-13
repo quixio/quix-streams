@@ -835,7 +835,10 @@ class StreamingDataFrame:
             automatically based on content. Example: {"name": 20, "id": 10}
         """
 
-        self.processing_context.printer.slowdown = slowdown  # type: ignore[assignment]
+        if slowdown is not None:
+            if slowdown < 0.0:
+                raise ValueError("Slowdown must be a non-negative float")
+            self.processing_context.printer.set_slowdown(slowdown)
 
         if columns is not None and len(columns) == 0 and not metadata:
             warnings.warn(

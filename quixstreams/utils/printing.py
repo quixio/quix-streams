@@ -8,8 +8,6 @@ from rich.table import Table as RichTable
 
 __all__ = ("Printer",)
 
-_CONSOLE = Console()
-
 
 class _Table:
     def __init__(
@@ -18,7 +16,7 @@ class _Table:
         title: Optional[str] = None,
         timeout: float = 5.0,
         column_widths: Optional[dict[str, int]] = None,
-    ):
+    ) -> None:
         self._rows: deque[dict[str, Any]] = deque(maxlen=size)
         self._title = title
         self._timeout = timeout
@@ -43,7 +41,7 @@ class _Table:
         self._rows.clear()
         self._start = time.monotonic()
 
-    def print(self) -> None:
+    def print(self, console: Console) -> None:
         if not self._rows:
             return
 
@@ -56,11 +54,13 @@ class _Table:
         for row in self._rows:
             table.add_row(*[str(row.get(column, "")) for column in columns])
 
-        _CONSOLE.print(table)
+        console.print(table)
         self._has_new_data = False
 
 
 class Printer:
+    _console = Console()
+
     def __init__(self) -> None:
         self._print = (
             self._print_interactive
@@ -68,17 +68,11 @@ class Printer:
             else self._print_non_interactive
         )
         self._tables: list[_Table] = []
-        self._slowdown: Optional[float] = None
+        self._slowdown = 0.5
         self._active = False
 
-    @property
-    def slowdown(self) -> float:
-        return 0.5 if self._slowdown is None else self._slowdown
-
-    @slowdown.setter
-    def slowdown(self, value: Optional[float]) -> None:
-        if value is not None:
-            self._slowdown = value
+    def set_slowdown(self, value: float) -> None:
+        self._slowdown = value
 
     def create_new_table(
         self,
@@ -100,7 +94,7 @@ class Printer:
     def print(self) -> None:
         if self._active:
             self._print()
-            time.sleep(self.slowdown)
+            time.sleep(self._slowdown)
 
     def _print_interactive(self) -> None:
         # In interactive mode (terminal/console), we can refresh
@@ -113,10 +107,10 @@ class Printer:
                 # Clear console only once per print call
                 # and only if there is new data to print.
                 if not console_cleared:
-                    _CONSOLE.clear()
+                    self._console.clear()
                     console_cleared = True
 
-                table.print()
+                table.print(self._console)
 
     def _print_non_interactive(self) -> None:
         # In non-interactive mode (e.g. output redirected to a file),
@@ -125,5 +119,5 @@ class Printer:
         # clear and start collecting a new table.
         for table in self._tables:
             if table.is_full() or table.timeout_reached():
-                table.print()
+                table.print(self._console)
                 table.clear()
