@@ -58,7 +58,7 @@ class CountWindow(Window):
         key: Any,
         timestamp_ms: int,
         state: WindowedState,
-    ) -> tuple[Iterable[WindowResult], Iterable[WindowResult]]:
+    ) -> tuple[Iterable[WindowResult], list[WindowResult]]:
         """
         Count based windows are different from time based windows as we don't
         have a clear indicator on when a window starts, it depends on the

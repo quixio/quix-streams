@@ -13,7 +13,7 @@ class SlidingWindow(TimeWindow):
         key: Any,
         timestamp_ms: int,
         state: WindowedState,
-    ) -> tuple[Iterable[WindowResult], Iterable[WindowResult]]:
+    ) -> tuple[Iterable[WindowResult], list[WindowResult]]:
         """
         The algorithm is based on the concept that each message
         is associated with a left and a right window.

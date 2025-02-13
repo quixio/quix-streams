@@ -1,13 +1,18 @@
 import logging
+from enum import Enum
 from typing import (
     TYPE_CHECKING,
     Any,
     Iterable,
     Optional,
+    cast,
 )
 
 from quixstreams.context import message_context
-from quixstreams.state import WindowedState
+from quixstreams.state import WindowedPartitionTransaction, WindowedState
+from quixstreams.state.rocksdb.windowed.serialization import (
+    parse_window_key,
+)
 
 from .base import (
     Window,
@@ -25,6 +30,20 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+class ExpirationStrategy(Enum):
+    KEY = "key"
+    PARTITION = "partition"
+
+    @classmethod
+    def new(cls, value: str) -> "ExpirationStrategy":
+        try:
+            return ExpirationStrategy[value.upper()]
+        except KeyError:
+            raise TypeError(
+                'expiration strategy must be one of "key" or "partition'
+            ) from None
+
+
 class TimeWindow(Window):
     def __init__(
         self,
@@ -38,6 +57,7 @@ class TimeWindow(Window):
         merge_func: Optional[WindowMergeFunc] = None,
         step_ms: Optional[int] = None,
         on_late: Optional[WindowOnLateCallback] = None,
+        expiration_strategy: ExpirationStrategy = ExpirationStrategy.KEY,
     ):
         super().__init__(name, dataframe)
 
@@ -49,6 +69,33 @@ class TimeWindow(Window):
         self._merge_func = merge_func or default_merge_func
         self._step_ms = step_ms
         self._on_late = on_late
+        self._expiration_strategy = expiration_strategy
+
+    def _window_final_callback(
+        self,
+        value: Any,
+        key: Any,
+        timestamp_ms: int,
+        _headers: Any,
+        state: WindowedState,
+    ) -> list[tuple[WindowResult, Any, int, Any]]:
+        _, expired_windows = self.process_window(
+            value=value, key=key, timestamp_ms=timestamp_ms, state=state
+        )
+
+        messages = [(window, key, window["start"], None) for window in expired_windows]
+
+        if (
+            self._expiration_strategy == ExpirationStrategy.PARTITION
+            and expired_windows
+        ):
+            for key, window in self.expire_partition_windows(
+                expired_windows=expired_windows
+            ):
+                messages.append((window, key, window["start"], None))
+
+        # Use window start timestamp as a new record timestamp
+        return messages
 
     def process_window(
         self,
@@ -56,7 +103,7 @@ class TimeWindow(Window):
         key: Any,
         timestamp_ms: int,
         state: WindowedState,
-    ) -> tuple[Iterable[WindowResult], Iterable[WindowResult]]:
+    ) -> tuple[Iterable[WindowResult], list[WindowResult]]:
         duration_ms = self._duration_ms
         grace_ms = self._grace_ms
         default = self._aggregate_default
@@ -97,7 +144,7 @@ class TimeWindow(Window):
             aggregated = self._aggregate_func(current_value, value)
             state.update_window(start, end, value=aggregated, timestamp_ms=timestamp_ms)
             updated_windows.append(
-                WindowResult(start=start, end=end, value=self._merge_func(aggregated))
+                WindowResult(start=start, end=end, value=self._merge_func(aggregated)),
             )
 
         if collect:
@@ -112,6 +159,47 @@ class TimeWindow(Window):
                 WindowResult(start=start, end=end, value=self._merge_func(aggregated))
             )
         return updated_windows, expired_windows
+
+    def expire_partition_windows(
+        self, expired_windows: list[WindowResult]
+    ) -> Iterable[tuple[bytes, WindowResult]]:
+        if not expired_windows:
+            return
+
+        ctx = message_context()
+        transaction = cast(
+            WindowedPartitionTransaction,
+            self._dataframe.processing_context.checkpoint.get_store_transaction(
+                topic=ctx.topic,
+                partition=ctx.partition,
+                store_name=self._name,
+            ),
+        )
+
+        max_start_time: int = 0
+        for window in expired_windows:
+            max_start_time = max(max_start_time, window["start"])
+
+        collect = self._aggregate_collection
+
+        seen: set[bytes] = set()
+        for key in transaction.keys():
+            prefix, _, _ = parse_window_key(key)
+            if prefix in seen:
+                continue
+
+            seen.add(prefix)
+            for (start, end), aggregated in transaction.expire_windows(
+                prefix=prefix,
+                max_start_time=max_start_time,
+                collect=collect,
+            ):
+                yield (
+                    prefix,
+                    WindowResult(
+                        start=start, end=end, value=self._merge_func(aggregated)
+                    ),
+                )
 
     def _on_expired_window(
         self,

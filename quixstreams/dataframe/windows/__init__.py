@@ -7,6 +7,7 @@ from .definitions import (
     TumblingCountWindowDefinition,
     TumblingTimeWindowDefinition,
 )
+from .time_based import ExpirationStrategy
 
 __all__ = [
     "TumblingCountWindowDefinition",
@@ -16,4 +17,5 @@ __all__ = [
     "SlidingTimeWindowDefinition",
     "TumblingTimeWindowDefinition",
     "WindowResult",
+    "ExpirationStrategy",
 ]

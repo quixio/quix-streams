@@ -54,6 +54,7 @@ from .registry import DataframeRegistry
 from .series import StreamingSeries
 from .utils import ensure_milliseconds
 from .windows import (
+    ExpirationStrategy,
     HoppingCountWindowDefinition,
     HoppingTimeWindowDefinition,
     SlidingCountWindowDefinition,
@@ -69,6 +70,8 @@ UpdateCallbackStateful = Callable[[Any, State], None]
 UpdateWithMetadataCallbackStateful = Callable[[Any, Any, int, Any, State], None]
 FilterCallbackStateful = Callable[[Any, State], bool]
 FilterWithMetadataCallbackStateful = Callable[[Any, Any, int, Any, State], bool]
+
+ExpirationStrategyLiteral = Literal["key", "partition"]
 
 
 class StreamingDataFrame:
@@ -848,6 +851,7 @@ class StreamingDataFrame:
         grace_ms: Union[int, timedelta] = 0,
         name: Optional[str] = None,
         on_late: Optional[WindowOnLateCallback] = None,
+        expiration_strategy: ExpirationStrategyLiteral = "key",
     ) -> TumblingTimeWindowDefinition:
         """
         Create a time-based tumbling window transformation on this StreamingDataFrame.
@@ -912,6 +916,10 @@ class StreamingDataFrame:
             (default behavior).
             Otherwise, no message will be logged.
 
+        :param expiration_strategy: choose the windows expiration strategy. Either per-key,
+            only message key windows are expired on new messages, or per-partition,
+            the windows of all the keys in the message partition are expired on new messages.
+
         :return: `TumblingTimeWindowDefinition` instance representing the tumbling window
             configuration.
             This object can be further configured with aggregation functions
@@ -927,6 +935,7 @@ class StreamingDataFrame:
             dataframe=self,
             name=name,
             on_late=on_late,
+            expiration_strategy=ExpirationStrategy.new(expiration_strategy),
         )
 
     def tumbling_count_window(
@@ -980,6 +989,7 @@ class StreamingDataFrame:
         grace_ms: Union[int, timedelta] = 0,
         name: Optional[str] = None,
         on_late: Optional[WindowOnLateCallback] = None,
+        expiration_strategy: ExpirationStrategyLiteral = "key",
     ) -> HoppingTimeWindowDefinition:
         """
         Create a time-based hopping window transformation on this StreamingDataFrame.
@@ -1054,6 +1064,10 @@ class StreamingDataFrame:
             (default behavior).
             Otherwise, no message will be logged.
 
+        :param expiration_strategy: choose the windows expiration strategy. Either per-key
+            (default), only message key windows are expired on new messages, or per-partition,
+            the windows of all the keys in the message partition are expired on new messages.
+
         :return: `HoppingTimeWindowDefinition` instance representing the hopping
             window configuration.
             This object can be further configured with aggregation functions
@@ -1071,6 +1085,7 @@ class StreamingDataFrame:
             dataframe=self,
             name=name,
             on_late=on_late,
+            expiration_strategy=ExpirationStrategy.new(expiration_strategy),
         )
 
     def hopping_count_window(

@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Optional, Protocol, Tuple
+from typing import Any, Iterable, Optional, Protocol, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -368,6 +368,15 @@ class WindowedPartitionTransaction(Protocol):
         :param prefix: The key prefix for filtering windows.
         :param backwards: If True, yields windows in reverse order.
         :return: A sorted list of tuples in the format `((start, end), value)`.
+        """
+        ...
+
+    def keys(self, cf_name: str = "default") -> Iterable[bytes]:
+        """
+        Iterate over all keys in the store.
+
+        :param cf_name: rocksdb column family name. Default - "default"
+        :return: An iterable of keys
         """
         ...
 
