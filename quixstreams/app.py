@@ -106,7 +106,7 @@ class RunTracker:
         """
         Trigger stop if its condition is met.
         """
-        # most optimal way to keep performance with typical operation (no timeout)
+        # most optimal way to keep performance with typical operation (no time_limit)
         if stopper := self._stop_checker:
             if stopper():
                 self.stop()
