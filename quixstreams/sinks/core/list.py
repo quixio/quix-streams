@@ -19,7 +19,7 @@ class ListSink(BaseSink, UserList):
     Example:
     ```
     from quixstreams import Application
-    from quixstreams.sinks.core.local import ListSink
+    from quixstreams.sinks.core.list import ListSink
 
     app = Application(broker_address="localhost:9092")
     topic = app.topic("some-topic")
