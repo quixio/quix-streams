@@ -12,6 +12,19 @@ from tests.utils import Timeout
 
 
 class TestRowConsumer:
+    def test_consumer_reuse(self, row_consumer_factory):
+        row_consumer = row_consumer_factory()
+        # just repeat the same thing twice, the consumer should be reusable
+        for i in range(2):
+            assert not row_consumer.consumer_exists
+            with row_consumer as consumer:
+                metadata = consumer.list_topics()
+                assert consumer.consumer_exists
+                assert metadata
+                broker_meta = metadata.brokers[0]
+                broker_address = f"{broker_meta.host}:{broker_meta.port}"
+                assert broker_address
+
     def test_poll_row_success(
         self, row_consumer_factory, topic_json_serdes_factory, producer
     ):
