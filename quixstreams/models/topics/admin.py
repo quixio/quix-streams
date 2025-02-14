@@ -12,6 +12,7 @@ from confluent_kafka.admin import (
 from confluent_kafka.admin import (
     TopicMetadata as ConfluentTopicMetadata,
 )
+from confluent_kafka.cimpl import NewTopic
 
 from quixstreams.kafka import ConnectionConfig
 
@@ -207,12 +208,25 @@ class TopicAdmin:
         for topic in topics_to_create:
             logger.info(
                 f'Creating a new topic "{topic.name}" '
-                f'with config: "{topic.config.as_dict() if topic.config is not None else {}}"'
+                f'with a config: "{topic.config.as_dict() if topic.config is not None else {}}"'
             )
+
+        confl_new_topics = []
+        for topic in topics_to_create:
+            if topic.config is None:
+                confl_new_topic = NewTopic(topic=topic.name)
+            else:
+                confl_new_topic = NewTopic(
+                    topic=topic.name,
+                    num_partitions=topic.config.num_partitions,
+                    replication_factor=topic.config.replication_factor,
+                    config=topic.config.extra_config,
+                )
+            confl_new_topics.append(confl_new_topic)
 
         self._finalize_create(
             self.admin_client.create_topics(
-                [topic.as_newtopic() for topic in topics_to_create],
+                confl_new_topics,
                 request_timeout=timeout,
             ),
             finalize_timeout=finalize_timeout,

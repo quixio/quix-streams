@@ -2,8 +2,6 @@ import dataclasses
 import logging
 from typing import Any, Callable, List, Optional, Union
 
-from confluent_kafka.admin import NewTopic
-
 from quixstreams.models.messagecontext import MessageContext
 from quixstreams.models.messages import KafkaMessage
 from quixstreams.models.rows import Row
@@ -137,23 +135,6 @@ class Topic:
             value_serializer=value_serializer or self._value_serializer,
             key_serializer=key_serializer or self._key_serializer,
             timestamp_extractor=timestamp_extractor or self._timestamp_extractor,
-        )
-
-    def as_newtopic(self) -> NewTopic:
-        """
-        Converts `Topic`s to `NewTopic`s as required for Confluent's
-        `AdminClient.create_topic()`.
-
-        :return: confluent_kafka `NewTopic`s
-        """
-        if self.config is None:
-            return NewTopic(topic=self.name)
-
-        return NewTopic(
-            topic=self.name,
-            num_partitions=self.config.num_partitions,
-            replication_factor=self.config.replication_factor,
-            config=self.config.extra_config,
         )
 
     def row_serialize(self, row: Row, key: Any) -> KafkaMessage:
