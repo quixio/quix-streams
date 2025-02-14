@@ -245,7 +245,7 @@ class StateStoreManager:
             )
 
         if self._state_dir is not None:
-            shutil.rmtree(self._state_dir)
+            shutil.rmtree(self._state_dir, ignore_errors=True)
 
     def on_partition_assign(
         self, topic: Optional[str], partition: int, committed_offset: int
