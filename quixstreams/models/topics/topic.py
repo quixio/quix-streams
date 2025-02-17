@@ -121,20 +121,15 @@ class Topic:
         self,
         name: str,
         config: Optional[TopicConfig] = None,
-        value_deserializer: Optional[DeserializerType] = None,
-        key_deserializer: Optional[DeserializerType] = None,
-        value_serializer: Optional[SerializerType] = None,
-        key_serializer: Optional[SerializerType] = None,
-        timestamp_extractor: Optional[TimestampExtractor] = None,
     ):
         return self.__class__(
             name=name,
             config=config or self.config,
-            value_deserializer=value_deserializer or self._value_deserializer,
-            key_deserializer=key_deserializer or self._key_deserializer,
-            value_serializer=value_serializer or self._value_serializer,
-            key_serializer=key_serializer or self._key_serializer,
-            timestamp_extractor=timestamp_extractor or self._timestamp_extractor,
+            value_deserializer=self._value_deserializer,
+            key_deserializer=self._key_deserializer,
+            value_serializer=self._value_serializer,
+            key_serializer=self._key_serializer,
+            timestamp_extractor=self._timestamp_extractor,
         )
 
     def row_serialize(self, row: Row, key: Any) -> KafkaMessage:
