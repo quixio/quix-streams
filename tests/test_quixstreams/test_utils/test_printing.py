@@ -23,13 +23,14 @@ def test_set_slowdown(printer: Printer, console: mock.Mock) -> None:
     assert printer._slowdown == 1.0
 
 
-def test_create_new_table(printer: Printer) -> None:
-    table = printer.create_new_table(
+def test_add_table(printer: Printer) -> None:
+    index = printer.add_table(
         size=10,
         title="test",
         timeout=12.3,
         column_widths={"id": 20, "name": 30},
     )
+    table = printer._tables[index]
     assert table._rows.maxlen == 10
     assert table._title == "test"
     assert table._timeout == 12.3
@@ -43,14 +44,15 @@ def test_inactive(printer: Printer, console: mock.Mock) -> None:
 
 
 def test_interactive_empty_table(printer: Printer, console: mock.Mock) -> None:
-    printer.create_new_table()
+    printer.add_table()
     printer.print()
     console.print.assert_not_called()
 
 
 def test_interactive_table_with_data(printer: Printer, console: mock.Mock) -> None:
     printer.set_slowdown(0.0)  # do not slow down test suite
-    table = printer.create_new_table()
+    index = printer.add_table()
+    table = printer._tables[index]
     table.append({"id": 1, "name": "A"})
     table.append({"id": 2, "name": "B"})
     printer.print()

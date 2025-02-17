@@ -846,29 +846,16 @@ class StreamingDataFrame:
                 f"Table `{title}` will be empty."
             )
 
-        def _collect(table, value, *_metadata):
-            row = {}
-
-            if _metadata:
-                row["_key"], row["_timestamp"], _ = _metadata
-
-            if columns is None:
-                row.update(value)
-            else:
-                for column in columns:
-                    if column in value:
-                        row[column] = value[column]
-
-            if row:
-                table.append(row)
-
-        table = self.processing_context.printer.create_new_table(
+        table = self.processing_context.printer.add_table(
             size=size,
             title=title,
             timeout=timeout,
+            columns=columns,
             column_widths=column_widths,
+            metadata=metadata,
         )
-        return self._add_update(functools.partial(_collect, table), metadata=metadata)
+        func = functools.partial(self.processing_context.printer.add_row, table)
+        return self._add_update(func, metadata=metadata)
 
     def compose(
         self,
