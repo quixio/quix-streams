@@ -28,7 +28,7 @@ class _Table:
         self._start = time.monotonic()
         self._metadata = metadata
 
-    def append(
+    def add_row(
         self,
         value: dict[str, Any],
         key: Any = None,
@@ -124,7 +124,7 @@ class Printer:
         timestamp: Optional[int] = None,
         headers: Any = None,
     ) -> None:
-        self._tables[table].append(value, key, timestamp)
+        self._tables[table].add_row(value, key, timestamp)
 
     def print(self) -> None:
         if self._active:
