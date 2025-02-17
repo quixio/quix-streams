@@ -53,8 +53,8 @@ def test_interactive_table_with_data(printer: Printer, console: mock.Mock) -> No
     printer.set_slowdown(0.0)  # do not slow down test suite
     index = printer.add_table()
     table = printer._tables[index]
-    table.append({"id": 1, "name": "A"})
-    table.append({"id": 2, "name": "B"})
+    table.add_row({"id": 1, "name": "A"})
+    table.add_row({"id": 2, "name": "B"})
     printer.print()
 
     console.print.assert_called_once()
