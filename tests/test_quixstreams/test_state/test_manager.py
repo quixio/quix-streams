@@ -167,7 +167,9 @@ class TestStateStoreManager:
         group_id = str(uuid.uuid4())
         base_dir_path = tmp_path / "state"
 
-        with state_manager_factory(group_id=group_id, state_dir=str(base_dir_path)) as st:
+        with state_manager_factory(
+            group_id=group_id, state_dir=str(base_dir_path)
+        ) as st:
             shutil.rmtree(base_dir_path, ignore_errors=True)
             st.clear_stores()
 
