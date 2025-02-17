@@ -34,10 +34,19 @@ class _Table:
         key: Any = None,
         timestamp: Optional[int] = None,
     ) -> None:
+        row = {}
         if self._metadata:
-            value["_key"] = key
-            value["_timestamp"] = timestamp
-        self._rows.append(value)
+            row["_key"] = key
+            row["_timestamp"] = timestamp
+
+        if self._columns is None:
+            row.update(value)
+        else:
+            for column in self._columns:
+                if column in value:
+                    row[column] = value[column]
+
+        self._rows.append(row)
         self._has_new_data = True
 
     def has_new_data(self) -> bool:
