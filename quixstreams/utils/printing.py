@@ -15,16 +15,28 @@ class _Table:
         size: int = 5,
         title: Optional[str] = None,
         timeout: float = 5.0,
+        columns: Optional[list[str]] = None,
         column_widths: Optional[dict[str, int]] = None,
+        metadata: bool = False,
     ) -> None:
         self._rows: deque[dict[str, Any]] = deque(maxlen=size)
         self._title = title
         self._timeout = timeout
+        self._columns = columns
         self._column_widths = column_widths or {}
         self._has_new_data = False
         self._start = time.monotonic()
+        self._metadata = metadata
 
-    def append(self, value: dict[str, Any]) -> None:
+    def append(
+        self,
+        value: dict[str, Any],
+        key: Any = None,
+        timestamp: Optional[int] = None,
+    ) -> None:
+        if self._metadata:
+            value["_key"] = key
+            value["_timestamp"] = timestamp
         self._rows.append(value)
         self._has_new_data = True
 
@@ -74,22 +86,36 @@ class Printer:
     def set_slowdown(self, value: float) -> None:
         self._slowdown = value
 
-    def create_new_table(
+    def add_table(
         self,
         size: int = 5,
         title: Optional[str] = None,
         timeout: float = 5.0,
+        columns: Optional[list[str]] = None,
         column_widths: Optional[dict[str, int]] = None,
-    ) -> _Table:
+        metadata: bool = False,
+    ) -> int:
         table = _Table(
             size=size,
             title=title,
             timeout=timeout,
+            columns=columns,
             column_widths=column_widths,
+            metadata=metadata,
         )
         self._tables.append(table)
         self._active = True
-        return table
+        return len(self._tables) - 1
+
+    def add_row(
+        self,
+        table: int,
+        value: dict[str, Any],
+        key: Any = None,
+        timestamp: Optional[int] = None,
+        headers: Any = None,
+    ) -> None:
+        self._tables[table].append(value, key, timestamp)
 
     def print(self) -> None:
         if self._active:
