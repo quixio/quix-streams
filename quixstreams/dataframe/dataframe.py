@@ -859,7 +859,7 @@ class StreamingDataFrame:
             if metadata:
                 key, timestamp, _ = _metadata
                 value = {"_key": key, "_timestamp": timestamp, **value}
-            printer.add_row(table, value)
+            table.add_row(value)
 
         return self._add_update(_add_row, metadata=metadata)
 

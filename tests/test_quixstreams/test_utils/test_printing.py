@@ -21,14 +21,13 @@ def test_set_slowdown() -> None:
 
 
 def test_add_table(printer: Printer) -> None:
-    index = printer.add_table(
+    table = printer.add_table(
         size=10,
         title="test",
         timeout=12.3,
         column_widths={"id": 20, "name": 30},
     )
 
-    table = printer._tables[index]
     assert table._rows.maxlen == 10
     assert table._title == "test"
     assert table._timeout == 12.3
@@ -57,8 +56,7 @@ def test_interactive_table_with_data(
     printer: Printer, get_output: Callable[[], str]
 ) -> None:
     printer._print = printer._print_interactive
-    index = printer.add_table(title="Test Table", size=2)
-    table = printer._tables[index]
+    table = printer.add_table(title="Test Table", size=2)
 
     # Interactive mode prints immediately when a new row arrives
     table.add_row({"foo": 1, "bar": 11})
@@ -102,8 +100,7 @@ def test_non_interactive_table_with_data(
     printer: Printer, get_output: Callable[[], str]
 ) -> None:
     printer._print = printer._print_non_interactive
-    index = printer.add_table(title="Test Table", size=2)
-    table = printer._tables[index]
+    table = printer.add_table(title="Test Table", size=2)
 
     # Table not full, no output
     table.add_row({"foo": 1, "bar": 11})
