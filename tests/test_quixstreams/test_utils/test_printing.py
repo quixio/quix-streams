@@ -52,9 +52,7 @@ def test_empty_table(
     assert get_output() == ""
 
 
-def test_interactive_table_with_data(
-    printer: Printer, get_output: Callable[[], str]
-) -> None:
+def test_print_interactive(printer: Printer, get_output: Callable[[], str]) -> None:
     printer._print = printer._print_interactive
     table = printer.add_table(title="Test Table", size=2)
 
@@ -96,9 +94,7 @@ def test_interactive_table_with_data(
     )
 
 
-def test_non_interactive_table_with_data(
-    printer: Printer, get_output: Callable[[], str]
-) -> None:
+def test_print_non_interactive(printer: Printer, get_output: Callable[[], str]) -> None:
     printer._print = printer._print_non_interactive
     table = printer.add_table(title="Test Table", size=2)
 
@@ -136,4 +132,46 @@ def test_non_interactive_table_with_data(
         "│ 3   │ 33  │ 333 │\n"
         "│ 4   │ 44  │ 444 │\n"
         "└─────┴─────┴─────┘\n"
+    )
+
+
+def test_two_tables(printer: Printer, get_output: Callable[[], str]) -> None:
+    table1 = printer.add_table(title="Table 1", size=1)
+    table2 = printer.add_table(title="Table 2", size=2)
+
+    table1.add_row({"foo": 1})
+    table2.add_row({"bar": 11})
+    printer.print()
+    assert get_output() == (
+        "Table 1\n"
+        "┏━━━━━┓\n"
+        "┃ foo ┃\n"
+        "┡━━━━━┩\n"
+        "│ 1   │\n"
+        "└─────┘\n"
+        "Table 2\n"
+        "┏━━━━━┓\n"
+        "┃ bar ┃\n"
+        "┡━━━━━┩\n"
+        "│ 11  │\n"
+        "└─────┘\n"
+    )
+
+    table1.add_row({"foo": 2})
+    table2.add_row({"bar": 22})
+    printer.print()
+    assert get_output() == (
+        "Table 1\n"
+        "┏━━━━━┓\n"
+        "┃ foo ┃\n"
+        "┡━━━━━┩\n"
+        "│ 2   │\n"
+        "└─────┘\n"
+        "Table 2\n"
+        "┏━━━━━┓\n"
+        "┃ bar ┃\n"
+        "┡━━━━━┩\n"
+        "│ 11  │\n"
+        "│ 22  │\n"
+        "└─────┘\n"
     )
