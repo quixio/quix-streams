@@ -9,7 +9,7 @@ from rich.table import Table as RichTable
 __all__ = ("Printer",)
 
 
-class _Table:
+class Table:
     def __init__(
         self,
         size: int = 5,
@@ -76,7 +76,7 @@ class Printer:
             if sys.stdout.isatty()
             else self._print_non_interactive
         )
-        self._tables: list[_Table] = []
+        self._tables: list[Table] = []
         self._slowdown = 0.5
         self._active = False
 
@@ -90,8 +90,8 @@ class Printer:
         timeout: float = 5.0,
         columns: Optional[list[str]] = None,
         column_widths: Optional[dict[str, int]] = None,
-    ) -> int:
-        table = _Table(
+    ) -> Table:
+        table = Table(
             size=size,
             title=title,
             timeout=timeout,
@@ -100,10 +100,7 @@ class Printer:
         )
         self._tables.append(table)
         self._active = True
-        return len(self._tables) - 1
-
-    def add_row(self, table: int, value: dict[str, Any]) -> None:
-        self._tables[table].add_row(value)
+        return table
 
     def print(self) -> None:
         if self._active:
