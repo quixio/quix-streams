@@ -1,9 +1,11 @@
 import logging
 import operator
 import uuid
+import warnings
 from collections import namedtuple
 from datetime import timedelta
 from typing import Any
+from unittest import mock
 
 import pytest
 
@@ -410,6 +412,12 @@ class TestStreamingDataFrame:
             "│ b'key' │ 12345      │ 1 │\n"
             "└────────┴────────────┴───┘\n"
         )
+
+    def test_print_table_empty_warning(self, dataframe_factory):
+        sdf = dataframe_factory()
+        with mock.patch.object(warnings, "warn") as warn:
+            sdf.print_table(columns=[], metadata=False)
+            warn.assert_called_once()
 
     @pytest.mark.parametrize(
         "columns, expected",
