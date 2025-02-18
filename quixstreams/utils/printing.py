@@ -22,7 +22,8 @@ class _Table:
         self._rows: deque[dict[str, Any]] = deque(maxlen=size)
         self._title = title
         self._timeout = timeout
-        self._columns = columns
+        self._auto_order = columns is None
+        self._columns = columns or []
         self._column_widths = column_widths or {}
         self._has_new_data = False
         self._start = time.monotonic()
@@ -34,17 +35,19 @@ class _Table:
         key: Any = None,
         timestamp: Optional[int] = None,
     ) -> None:
+        if self._auto_order:
+            for key in value.keys():
+                if key not in self._columns:
+                    self._columns.append(key)
+
         row = {}
         if self._metadata:
             row["_key"] = key
             row["_timestamp"] = timestamp
 
-        if self._columns is None:
-            row.update(value)
-        else:
-            for column in self._columns:
-                if column in value:
-                    row[column] = value[column]
+        for column in self._columns:
+            if column in value:
+                row[column] = value[column]
 
         self._rows.append(row)
         self._has_new_data = True
@@ -67,13 +70,12 @@ class _Table:
             return
 
         table = RichTable(title=self._title, title_justify="left", highlight=True)
-        columns = sorted(set().union(*self._rows))
 
-        for column in columns:
+        for column in self._columns:
             table.add_column(column, width=self._column_widths.get(column))
 
         for row in self._rows:
-            table.add_row(*[str(row.get(column, "")) for column in columns])
+            table.add_row(*[str(row.get(column, "")) for column in self._columns])
 
         console.print(table)
         self._has_new_data = False
