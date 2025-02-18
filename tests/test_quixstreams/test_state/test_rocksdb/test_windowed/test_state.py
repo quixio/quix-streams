@@ -67,8 +67,8 @@ def test_expire_windows(transaction_state, delete):
 
     assert len(expired) == 2
     assert expired == [
-        ((0, 10), 1),
-        ((10, 20), 2),
+        ((0, 10), 1, b"__key__"),
+        ((10, 20), 2, b"__key__"),
     ]
 
     with transaction_state() as state:
@@ -106,8 +106,8 @@ def test_expire_windows_with_collect(transaction_state, end_inclusive):
     window_1_value = ["a", "b"] if end_inclusive else ["a"]
     window_2_value = ["b", "c"] if end_inclusive else ["b"]
     assert expired == [
-        ((0, 10), window_1_value),
-        ((10, 20), [777, window_2_value]),
+        ((0, 10), window_1_value, b"__key__"),
+        ((10, 20), [777, window_2_value], b"__key__"),
     ]
 
 
@@ -126,7 +126,7 @@ def test_same_keys_in_db_and_update_cache(transaction_state):
         expired = state.expire_windows(max_start_time=max_start_time)
 
         # Value from the cache takes precedence over the value in the db
-        assert expired == [((0, 10), 3)]
+        assert expired == [((0, 10), 3, b"__key__")]
 
 
 def test_get_latest_timestamp(windowed_rocksdb_store_factory):
@@ -156,7 +156,7 @@ def test_get_latest_timestamp(windowed_rocksdb_store_factory):
             [],
             [],
             dict(start_from_ms=1, start_to_ms=2),
-            [((2, 12), 2)],
+            [((2, 12), 2, b"__key__")],
             id="start-from-exclusive-start-to-inclusive",
         ),
         pytest.param(
@@ -168,7 +168,11 @@ def test_get_latest_timestamp(windowed_rocksdb_store_factory):
             [],
             [],
             dict(start_from_ms=-1, start_to_ms=2),
-            [((0, 10), 1), ((1, 11), 2), ((2, 12), 3)],
+            [
+                ((0, 10), 1, b"__key__"),
+                ((1, 11), 2, b"__key__"),
+                ((2, 12), 3, b"__key__"),
+            ],
             id="messages-in-db",
         ),
         pytest.param(
@@ -180,7 +184,11 @@ def test_get_latest_timestamp(windowed_rocksdb_store_factory):
             ],
             [],
             dict(start_from_ms=-1, start_to_ms=2),
-            [((0, 10), 1), ((1, 11), 2), ((2, 12), 3)],
+            [
+                ((0, 10), 1, b"__key__"),
+                ((1, 11), 2, b"__key__"),
+                ((2, 12), 3, b"__key__"),
+            ],
             id="messages-in-cache",
         ),
         pytest.param(
@@ -193,7 +201,11 @@ def test_get_latest_timestamp(windowed_rocksdb_store_factory):
             ],
             [],
             dict(start_from_ms=-1, start_to_ms=2),
-            [((0, 10), 1), ((1, 11), 2), ((2, 12), 3)],
+            [
+                ((0, 10), 1, b"__key__"),
+                ((1, 11), 2, b"__key__"),
+                ((2, 12), 3, b"__key__"),
+            ],
             id="messages-both-in-db-and-in-cache",
         ),
         pytest.param(
@@ -208,7 +220,12 @@ def test_get_latest_timestamp(windowed_rocksdb_store_factory):
             ],
             [],
             dict(start_from_ms=-1, start_to_ms=3),
-            [((0, 10), 5), ((1, 11), 2), ((2, 12), 3), ((3, 13), 4)],
+            [
+                ((0, 10), 5, b"__key__"),
+                ((1, 11), 2, b"__key__"),
+                ((2, 12), 3, b"__key__"),
+                ((3, 13), 4, b"__key__"),
+            ],
             id="cache-message-overrides-db-message",
         ),
         pytest.param(
@@ -220,7 +237,7 @@ def test_get_latest_timestamp(windowed_rocksdb_store_factory):
             [],
             [dict(start_ms=0, end_ms=10)],
             dict(start_from_ms=-1, start_to_ms=2),
-            [((1, 11), 2), ((2, 12), 3)],
+            [((1, 11), 2, b"__key__"), ((2, 12), 3, b"__key__")],
             id="ignore-deleted-windows",
         ),
         pytest.param(
@@ -232,7 +249,11 @@ def test_get_latest_timestamp(windowed_rocksdb_store_factory):
             [],
             [],
             dict(start_from_ms=-1, start_to_ms=2, backwards=True),
-            [((2, 12), 3), ((1, 11), 2), ((0, 10), 1)],
+            [
+                ((2, 12), 3, b"__key__"),
+                ((1, 11), 2, b"__key__"),
+                ((0, 10), 1, b"__key__"),
+            ],
             id="messages-in-db-backwards",
         ),
         pytest.param(
@@ -244,7 +265,11 @@ def test_get_latest_timestamp(windowed_rocksdb_store_factory):
             ],
             [],
             dict(start_from_ms=-1, start_to_ms=2, backwards=True),
-            [((2, 12), 3), ((1, 11), 2), ((0, 10), 1)],
+            [
+                ((2, 12), 3, b"__key__"),
+                ((1, 11), 2, b"__key__"),
+                ((0, 10), 1, b"__key__"),
+            ],
             id="messages-in-cache-backwards",
         ),
         pytest.param(
@@ -257,7 +282,11 @@ def test_get_latest_timestamp(windowed_rocksdb_store_factory):
             ],
             [],
             dict(start_from_ms=-1, start_to_ms=2, backwards=True),
-            [((2, 12), 3), ((1, 11), 2), ((0, 10), 1)],
+            [
+                ((2, 12), 3, b"__key__"),
+                ((1, 11), 2, b"__key__"),
+                ((0, 10), 1, b"__key__"),
+            ],
             id="messages-both-in-db-and-in-cache-backwards",
         ),
         pytest.param(
@@ -272,7 +301,12 @@ def test_get_latest_timestamp(windowed_rocksdb_store_factory):
             ],
             [],
             dict(start_from_ms=-1, start_to_ms=3, backwards=True),
-            [((3, 13), 4), ((2, 12), 3), ((1, 11), 2), ((0, 10), 5)],
+            [
+                ((3, 13), 4, b"__key__"),
+                ((2, 12), 3, b"__key__"),
+                ((1, 11), 2, b"__key__"),
+                ((0, 10), 5, b"__key__"),
+            ],
             id="cache-message-overrides-db-message",
         ),
         pytest.param(
@@ -284,7 +318,7 @@ def test_get_latest_timestamp(windowed_rocksdb_store_factory):
             [],
             [dict(start_ms=0, end_ms=10)],
             dict(start_from_ms=-1, start_to_ms=2, backwards=True),
-            [((2, 12), 3), ((1, 11), 2)],
+            [((2, 12), 3, b"__key__"), ((1, 11), 2, b"__key__")],
             id="ignore-deleted-windows",
         ),
     ],

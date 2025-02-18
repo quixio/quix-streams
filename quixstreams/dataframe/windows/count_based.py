@@ -1,11 +1,12 @@
 import logging
 from typing import TYPE_CHECKING, Any, Iterable, Optional, TypedDict
 
-from quixstreams.state import WindowedState
+from quixstreams.state import WindowedPartitionTransaction
 
 from .base import (
     Window,
     WindowAggregateFunc,
+    WindowKeyResult,
     WindowMergeFunc,
     WindowResult,
     default_merge_func,
@@ -57,8 +58,8 @@ class CountWindow(Window):
         value: Any,
         key: Any,
         timestamp_ms: int,
-        state: WindowedState,
-    ) -> tuple[Iterable[WindowResult], Iterable[WindowResult]]:
+        transaction: WindowedPartitionTransaction,
+    ) -> tuple[Iterable[WindowKeyResult], Iterable[WindowKeyResult]]:
         """
         Count based windows are different from time based windows as we don't
         have a clear indicator on when a window starts, it depends on the
@@ -79,6 +80,7 @@ class CountWindow(Window):
         For tumbling windows there is no window overlap so we can't rely on that
         optimisation. Instead the msg id reset to 0 on every new window.
         """
+        state = transaction.as_state(prefix=key)
         data = state.get(key=self.STATE_KEY)
         if data is None:
             data = CountWindowsData(windows=[])
@@ -136,10 +138,13 @@ class CountWindow(Window):
                     )
 
                     expired_windows.append(
-                        WindowResult(
-                            start=window["start"],
-                            end=window["end"],
-                            value=self._merge_func(values),
+                        (
+                            key,
+                            WindowResult(
+                                start=window["start"],
+                                end=window["end"],
+                                value=self._merge_func(values),
+                            ),
                         )
                     )
                     to_remove.append(index)
@@ -156,11 +161,15 @@ class CountWindow(Window):
             else:
                 window["value"] = self._aggregate_func(window["value"], value)
 
-                result = WindowResult(
-                    start=window["start"],
-                    end=window["end"],
-                    value=self._merge_func(window["value"]),
+                result = (
+                    key,
+                    WindowResult(
+                        start=window["start"],
+                        end=window["end"],
+                        value=self._merge_func(window["value"]),
+                    ),
                 )
+
                 updated_windows.append(result)
 
                 if window["count"] >= self._max_count:

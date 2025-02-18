@@ -55,14 +55,15 @@ class TestTumblingWindow:
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             key = b"key"
-            state = tx.as_state(prefix=key)
-            window.process_window(value=0, key=key, state=state, timestamp_ms=100)
+            window.process_window(value=0, key=key, transaction=tx, timestamp_ms=100)
             updated, expired = window.process_window(
-                value=0, key=key, state=state, timestamp_ms=100
+                value=0, key=key, transaction=tx, timestamp_ms=100
             )
-        assert len(updated) == 1
-        assert updated[0]["value"] == 2
-        assert not expired
+            updated = list(updated)
+            assert len(updated) == 1
+            assert updated[0][1]["value"] == 2
+
+            assert not list(expired)
 
     def test_tumblingwindow_sum(
         self, tumbling_window_definition_factory, state_manager
@@ -74,14 +75,15 @@ class TestTumblingWindow:
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             key = b"key"
-            state = tx.as_state(prefix=key)
-            window.process_window(value=2, key=key, state=state, timestamp_ms=100)
+            window.process_window(value=2, key=key, transaction=tx, timestamp_ms=100)
             updated, expired = window.process_window(
-                value=1, key=key, state=state, timestamp_ms=100
+                value=1, key=key, transaction=tx, timestamp_ms=100
             )
-        assert len(updated) == 1
-        assert updated[0]["value"] == 3
-        assert not expired
+            updated = list(updated)
+            assert len(updated) == 1
+            assert updated[0][1]["value"] == 3
+
+            assert not list(expired)
 
     def test_tumblingwindow_mean(
         self, tumbling_window_definition_factory, state_manager
@@ -93,14 +95,15 @@ class TestTumblingWindow:
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             key = b"key"
-            state = tx.as_state(prefix=key)
-            window.process_window(value=2, key=key, state=state, timestamp_ms=100)
+            window.process_window(value=2, key=key, transaction=tx, timestamp_ms=100)
             updated, expired = window.process_window(
-                value=1, key=key, state=state, timestamp_ms=100
+                value=1, key=key, transaction=tx, timestamp_ms=100
             )
-        assert len(updated) == 1
-        assert updated[0]["value"] == 1.5
-        assert not expired
+            updated = list(updated)
+            assert len(updated) == 1
+            assert updated[0][1]["value"] == 1.5
+
+            assert not list(expired)
 
     def test_tumblingwindow_reduce(
         self, tumbling_window_definition_factory, state_manager
@@ -115,14 +118,15 @@ class TestTumblingWindow:
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             key = b"key"
-            state = tx.as_state(prefix=key)
-            window.process_window(value=2, key=key, state=state, timestamp_ms=100)
+            window.process_window(value=2, key=key, transaction=tx, timestamp_ms=100)
             updated, expired = window.process_window(
-                value=1, key=key, state=state, timestamp_ms=100
+                value=1, key=key, transaction=tx, timestamp_ms=100
             )
-        assert len(updated) == 1
-        assert updated[0]["value"] == [2, 1]
-        assert not expired
+            updated = list(updated)
+            assert len(updated) == 1
+            assert updated[0][1]["value"] == [2, 1]
+
+            assert not list(expired)
 
     def test_tumblingwindow_max(
         self, tumbling_window_definition_factory, state_manager
@@ -134,14 +138,15 @@ class TestTumblingWindow:
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             key = b"key"
-            state = tx.as_state(prefix=key)
-            window.process_window(value=2, key=key, state=state, timestamp_ms=100)
+            window.process_window(value=2, key=key, transaction=tx, timestamp_ms=100)
             updated, expired = window.process_window(
-                value=1, key=key, state=state, timestamp_ms=100
+                value=1, key=key, transaction=tx, timestamp_ms=100
             )
-        assert len(updated) == 1
-        assert updated[0]["value"] == 2
-        assert not expired
+            updated = list(updated)
+            assert len(updated) == 1
+            assert updated[0][1]["value"] == 2
+
+            assert not list(expired)
 
     def test_tumblingwindow_min(
         self, tumbling_window_definition_factory, state_manager
@@ -153,14 +158,15 @@ class TestTumblingWindow:
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             key = b"key"
-            state = tx.as_state(prefix=key)
-            window.process_window(value=2, key=key, state=state, timestamp_ms=100)
+            window.process_window(value=2, key=key, transaction=tx, timestamp_ms=100)
             updated, expired = window.process_window(
-                value=1, key=key, state=state, timestamp_ms=100
+                value=1, key=key, transaction=tx, timestamp_ms=100
             )
-        assert len(updated) == 1
-        assert updated[0]["value"] == 1
-        assert not expired
+            updated = list(updated)
+            assert len(updated) == 1
+            assert updated[0][1]["value"] == 1
+
+            assert not list(expired)
 
     def test_tumblingwindow_collect(
         self, tumbling_window_definition_factory, state_manager
@@ -172,15 +178,16 @@ class TestTumblingWindow:
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             key = b"key"
-            state = tx.as_state(prefix=key)
-            window.process_window(value=1, key=key, state=state, timestamp_ms=100)
-            window.process_window(value=2, key=key, state=state, timestamp_ms=100)
-            window.process_window(value=3, key=key, state=state, timestamp_ms=101)
+            window.process_window(value=1, key=key, transaction=tx, timestamp_ms=100)
+            window.process_window(value=2, key=key, transaction=tx, timestamp_ms=100)
+            window.process_window(value=3, key=key, transaction=tx, timestamp_ms=101)
             updated, expired = window.process_window(
-                value=4, key=key, state=state, timestamp_ms=200
+                value=4, key=key, transaction=tx, timestamp_ms=200
             )
-        assert not updated
-        assert expired == [{"start": 100, "end": 110, "value": [1, 2, 3]}]
+            assert not updated
+            assert list(expired) == [
+                (key, {"start": 100, "end": 110, "value": [1, 2, 3]})
+            ]
 
     @pytest.mark.parametrize(
         "duration, grace, name",
@@ -212,31 +219,33 @@ class TestTumblingWindow:
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             key = b"key"
-            state = tx.as_state(prefix=key)
             # Add item to the window [100, 110)
             updated, expired = window.process_window(
-                value=1, key=key, state=state, timestamp_ms=100
+                value=1, key=key, transaction=tx, timestamp_ms=100
             )
+            updated = list(updated)
             assert len(updated) == 1
-            assert updated[0]["value"] == 1
-            assert updated[0]["start"] == 100
-            assert updated[0]["end"] == 110
-            assert not expired
+            assert updated[0][1]["value"] == 1
+            assert updated[0][1]["start"] == 100
+            assert updated[0][1]["end"] == 110
+            assert not list(expired)
 
             # Now add item to the window [110, 120)
             # The window [100, 110) is now expired and should be returned
             updated, expired = window.process_window(
-                value=2, key=key, state=state, timestamp_ms=110
+                value=2, key=key, transaction=tx, timestamp_ms=110
             )
+            updated = list(updated)
             assert len(updated) == 1
-            assert updated[0]["value"] == 2
-            assert updated[0]["start"] == 110
-            assert updated[0]["end"] == 120
+            assert updated[0][1]["value"] == 2
+            assert updated[0][1]["start"] == 110
+            assert updated[0][1]["end"] == 120
 
+            expired = list(expired)
             assert len(expired) == 1
-            assert expired[0]["value"] == 1
-            assert expired[0]["start"] == 100
-            assert expired[0]["end"] == 110
+            assert expired[0][1]["value"] == 1
+            assert expired[0][1]["start"] == 100
+            assert expired[0][1]["end"] == 110
 
 
 @pytest.fixture()
@@ -273,14 +282,15 @@ class TestCountTumblingWindow:
         store = state_manager.get_store(topic="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
-            state = tx.as_state(prefix=b"key")
-            window.process_window(key="", value=0, state=state, timestamp_ms=100)
+            window.process_window(key="", value=0, transaction=tx, timestamp_ms=100)
             updated, expired = window.process_window(
-                key="", value=0, state=state, timestamp_ms=100
+                key="", value=0, transaction=tx, timestamp_ms=100
             )
-        assert len(updated) == 1
-        assert updated[0]["value"] == 2
-        assert not expired
+            updated = list(updated)
+            assert len(updated) == 1
+            assert updated[0][1]["value"] == 2
+
+            assert not list(expired)
 
     def test_sum(self, count_tumbling_window_definition_factory, state_manager):
         window_def = count_tumbling_window_definition_factory(count=10)
@@ -289,14 +299,14 @@ class TestCountTumblingWindow:
         store = state_manager.get_store(topic="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
-            state = tx.as_state(prefix=b"key")
-            window.process_window(key="", value=2, state=state, timestamp_ms=100)
+            window.process_window(key="", value=2, transaction=tx, timestamp_ms=100)
             updated, expired = window.process_window(
-                key="", value=1, state=state, timestamp_ms=100
+                key="", value=1, transaction=tx, timestamp_ms=100
             )
-        assert len(updated) == 1
-        assert updated[0]["value"] == 3
-        assert not expired
+            updated = list(updated)
+            assert len(updated) == 1
+            assert updated[0][1]["value"] == 3
+            assert not list(expired)
 
     def test_mean(self, count_tumbling_window_definition_factory, state_manager):
         window_def = count_tumbling_window_definition_factory(count=10)
@@ -305,14 +315,14 @@ class TestCountTumblingWindow:
         store = state_manager.get_store(topic="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
-            state = tx.as_state(prefix=b"key")
-            window.process_window(key="", value=2, state=state, timestamp_ms=100)
+            window.process_window(key="", value=2, transaction=tx, timestamp_ms=100)
             updated, expired = window.process_window(
-                key="", value=1, state=state, timestamp_ms=100
+                key="", value=1, transaction=tx, timestamp_ms=100
             )
-        assert len(updated) == 1
-        assert updated[0]["value"] == 1.5
-        assert not expired
+            updated = list(updated)
+            assert len(updated) == 1
+            assert updated[0][1]["value"] == 1.5
+            assert not list(expired)
 
     def test_reduce(self, count_tumbling_window_definition_factory, state_manager):
         window_def = count_tumbling_window_definition_factory(count=10)
@@ -324,14 +334,14 @@ class TestCountTumblingWindow:
         store = state_manager.get_store(topic="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
-            state = tx.as_state(prefix=b"key")
-            window.process_window(key="", value=2, state=state, timestamp_ms=100)
+            window.process_window(key="", value=2, transaction=tx, timestamp_ms=100)
             updated, expired = window.process_window(
-                key="", value=1, state=state, timestamp_ms=100
+                key="", value=1, transaction=tx, timestamp_ms=100
             )
-        assert len(updated) == 1
-        assert updated[0]["value"] == [2, 1]
-        assert not expired
+            updated = list(updated)
+            assert len(updated) == 1
+            assert updated[0][1]["value"] == [2, 1]
+            assert not list(expired)
 
     def test_max(self, count_tumbling_window_definition_factory, state_manager):
         window_def = count_tumbling_window_definition_factory(count=10)
@@ -340,14 +350,14 @@ class TestCountTumblingWindow:
         store = state_manager.get_store(topic="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
-            state = tx.as_state(prefix=b"key")
-            window.process_window(key="", value=2, state=state, timestamp_ms=100)
+            window.process_window(key="", value=2, transaction=tx, timestamp_ms=100)
             updated, expired = window.process_window(
-                key="", value=1, state=state, timestamp_ms=100
+                key="", value=1, transaction=tx, timestamp_ms=100
             )
-        assert len(updated) == 1
-        assert updated[0]["value"] == 2
-        assert not expired
+            updated = list(updated)
+            assert len(updated) == 1
+            assert updated[0][1]["value"] == 2
+            assert not list(expired)
 
     def test_min(self, count_tumbling_window_definition_factory, state_manager):
         window_def = count_tumbling_window_definition_factory(count=10)
@@ -356,14 +366,14 @@ class TestCountTumblingWindow:
         store = state_manager.get_store(topic="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
-            state = tx.as_state(prefix=b"key")
-            window.process_window(key="", value=2, state=state, timestamp_ms=100)
+            window.process_window(key="", value=2, transaction=tx, timestamp_ms=100)
             updated, expired = window.process_window(
-                key="", value=1, state=state, timestamp_ms=100
+                key="", value=1, transaction=tx, timestamp_ms=100
             )
-        assert len(updated) == 1
-        assert updated[0]["value"] == 1
-        assert not expired
+            updated = list(updated)
+            assert len(updated) == 1
+            assert updated[0][1]["value"] == 1
+            assert not list(expired)
 
     def test_window_expired(
         self,
@@ -376,31 +386,32 @@ class TestCountTumblingWindow:
         store = state_manager.get_store(topic="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
-            state = tx.as_state(prefix=b"key")
             # Add first item to the window
             updated, expired = window.process_window(
-                key="", value=1, state=state, timestamp_ms=100
+                key="", value=1, transaction=tx, timestamp_ms=100
             )
+            updated = list(updated)
             assert len(updated) == 1
-            assert updated[0]["value"] == 1
-            assert updated[0]["start"] == 100
-            assert updated[0]["end"] == 100
-            assert not expired
+            assert updated[0][1]["value"] == 1
+            assert updated[0][1]["start"] == 100
+            assert updated[0][1]["end"] == 100
+            assert not list(expired)
 
             # Now add second item to the window
             # The window is now expired and should be returned
             updated, expired = window.process_window(
-                key="", value=2, state=state, timestamp_ms=110
+                key="", value=2, transaction=tx, timestamp_ms=110
             )
+            updated = list(updated)
             assert len(updated) == 1
-            assert updated[0]["value"] == 3
-            assert updated[0]["start"] == 100
-            assert updated[0]["end"] == 110
+            assert updated[0][1]["value"] == 3
+            assert updated[0][1]["start"] == 100
+            assert updated[0][1]["end"] == 110
 
-            assert len(expired) == 1
-            assert expired[0]["value"] == 3
-            assert expired[0]["start"] == 100
-            assert expired[0]["end"] == 110
+            assert len(list(expired)) == 1
+            assert expired[0][1]["value"] == 3
+            assert expired[0][1]["start"] == 100
+            assert expired[0][1]["end"] == 110
 
     def test_collect(self, count_tumbling_window_definition_factory, state_manager):
         window_def = count_tumbling_window_definition_factory(count=3)
@@ -409,18 +420,19 @@ class TestCountTumblingWindow:
         store = state_manager.get_store(topic="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
-            state = tx.as_state(prefix=b"key")
-            window.process_window(key="", value=1, state=state, timestamp_ms=100)
-            window.process_window(key="", value=2, state=state, timestamp_ms=100)
+            window.process_window(key="", value=1, transaction=tx, timestamp_ms=100)
+            window.process_window(key="", value=2, transaction=tx, timestamp_ms=100)
             updated, expired = window.process_window(
-                key="", value=3, state=state, timestamp_ms=101
+                key="", value=3, transaction=tx, timestamp_ms=101
             )
 
-        assert not updated
-        assert expired == [{"start": 100, "end": 101, "value": [1, 2, 3]}]
+            assert not list(updated)
+            assert list(expired) == [
+                ("", {"start": 100, "end": 101, "value": [1, 2, 3]})
+            ]
 
         with store.start_partition_transaction(0) as tx:
-            state = tx.as_state(prefix=b"key")
+            state = tx.as_state(prefix=b"")
             remaining_items = state.get_from_collection(start=0, end=1000)
             assert remaining_items == []
 
@@ -434,65 +446,62 @@ class TestCountTumblingWindow:
         store.assign_partition(0)
 
         with store.start_partition_transaction(0) as tx:
-            stateKey1 = tx.as_state(prefix=b"key1")
-            stateKey2 = tx.as_state(prefix=b"key2")
+            updated, expired = window.process_window(
+                key="key1", value=1, transaction=tx, timestamp_ms=100
+            )
+            assert len(list(expired)) == 0
+            assert updated[0][1]["value"] == 1
+            updated, expired = window.process_window(
+                key="key2", value=5, transaction=tx, timestamp_ms=100
+            )
+            assert len(list(expired)) == 0
+            assert updated[0][1]["value"] == 5
 
             updated, expired = window.process_window(
-                key="key1", value=1, state=stateKey1, timestamp_ms=100
+                key="key1", value=2, transaction=tx, timestamp_ms=110
             )
-            assert len(expired) == 0
-            assert updated[0]["value"] == 1
+            assert len(list(expired)) == 0
+            assert updated[0][1]["value"] == 3
             updated, expired = window.process_window(
-                key="key2", value=5, state=stateKey2, timestamp_ms=100
+                key="key2", value=4, transaction=tx, timestamp_ms=110
             )
-            assert len(expired) == 0
-            assert updated[0]["value"] == 5
+            assert len(list(expired)) == 0
+            assert updated[0][1]["value"] == 9
 
             updated, expired = window.process_window(
-                key="key1", value=2, state=stateKey1, timestamp_ms=110
+                key="key1", value=3, transaction=tx, timestamp_ms=120
             )
-            assert len(expired) == 0
-            assert updated[0]["value"] == 3
-            updated, expired = window.process_window(
-                key="key2", value=4, state=stateKey2, timestamp_ms=110
-            )
-            assert len(expired) == 0
-            assert updated[0]["value"] == 9
+            assert expired[0][1]["value"] == 6
+            assert updated[0][1]["value"] == 6
 
             updated, expired = window.process_window(
-                key="key1", value=3, state=stateKey1, timestamp_ms=120
+                key="key1", value=4, transaction=tx, timestamp_ms=130
             )
-            assert expired[0]["value"] == 6
-            assert updated[0]["value"] == 6
+            assert len(list(expired)) == 0
+            assert updated[0][1]["value"] == 4
 
             updated, expired = window.process_window(
-                key="key1", value=4, state=stateKey1, timestamp_ms=130
+                key="key2", value=3, transaction=tx, timestamp_ms=120
             )
-            assert len(expired) == 0
-            assert updated[0]["value"] == 4
+            assert expired[0][1]["value"] == 12
+            assert updated[0][1]["value"] == 12
 
             updated, expired = window.process_window(
-                key="key2", value=3, state=stateKey2, timestamp_ms=120
+                key="key2", value=2, transaction=tx, timestamp_ms=130
             )
-            assert expired[0]["value"] == 12
-            assert updated[0]["value"] == 12
+            assert len(list(expired)) == 0
+            assert updated[0][1]["value"] == 2
+            updated, expired = window.process_window(
+                key="key1", value=5, transaction=tx, timestamp_ms=140
+            )
+            assert len(list(expired)) == 0
+            assert updated[0][1]["value"] == 9
 
             updated, expired = window.process_window(
-                key="key2", value=2, state=stateKey2, timestamp_ms=130
+                key="key2", value=1, transaction=tx, timestamp_ms=140
             )
-            assert len(expired) == 0
-            assert updated[0]["value"] == 2
-            updated, expired = window.process_window(
-                key="key1", value=5, state=stateKey1, timestamp_ms=140
-            )
-            assert len(expired) == 0
-            assert updated[0]["value"] == 9
-
-            updated, expired = window.process_window(
-                key="key2", value=1, state=stateKey2, timestamp_ms=140
-            )
-            assert len(expired) == 0
-            assert updated[0]["value"] == 3
+            assert len(list(expired)) == 0
+            assert updated[0][1]["value"] == 3
 
     def test_multiple_keys_collect(
         self, count_tumbling_window_definition_factory, state_manager
@@ -504,73 +513,70 @@ class TestCountTumblingWindow:
         store.assign_partition(0)
 
         with store.start_partition_transaction(0) as tx:
-            stateKey1 = tx.as_state(prefix=b"key1")
-            stateKey2 = tx.as_state(prefix=b"key2")
+            updated, expired = window.process_window(
+                key="key1", value=1, transaction=tx, timestamp_ms=100
+            )
+            assert len(list(expired)) == 0
+            assert len(list(updated)) == 0
+            updated, expired = window.process_window(
+                key="key2", value=5, transaction=tx, timestamp_ms=100
+            )
+            assert len(list(expired)) == 0
+            assert len(list(updated)) == 0
 
             updated, expired = window.process_window(
-                key="key1", value=1, state=stateKey1, timestamp_ms=100
+                key="key1", value=2, transaction=tx, timestamp_ms=110
             )
-            assert len(expired) == 0
-            assert len(updated) == 0
+            assert len(list(expired)) == 0
+            assert len(list(updated)) == 0
             updated, expired = window.process_window(
-                key="key2", value=5, state=stateKey2, timestamp_ms=100
+                key="key2", value=4, transaction=tx, timestamp_ms=110
             )
-            assert len(expired) == 0
-            assert len(updated) == 0
+            assert len(list(expired)) == 0
+            assert len(list(updated)) == 0
 
             updated, expired = window.process_window(
-                key="key1", value=2, state=stateKey1, timestamp_ms=110
+                key="key1", value=3, transaction=tx, timestamp_ms=120
             )
-            assert len(expired) == 0
-            assert len(updated) == 0
-            updated, expired = window.process_window(
-                key="key2", value=4, state=stateKey2, timestamp_ms=110
-            )
-            assert len(expired) == 0
-            assert len(updated) == 0
+            assert expired[0][1]["value"] == [1, 2, 3]
+            assert len(list(updated)) == 0
 
             updated, expired = window.process_window(
-                key="key1", value=3, state=stateKey1, timestamp_ms=120
+                key="key1", value=4, transaction=tx, timestamp_ms=130
             )
-            assert expired[0]["value"] == [1, 2, 3]
-            assert len(updated) == 0
+            assert len(list(expired)) == 0
+            assert len(list(updated)) == 0
 
             updated, expired = window.process_window(
-                key="key1", value=4, state=stateKey1, timestamp_ms=130
+                key="key2", value=3, transaction=tx, timestamp_ms=120
             )
-            assert len(expired) == 0
-            assert len(updated) == 0
+            assert expired[0][1]["value"] == [5, 4, 3]
+            assert len(list(updated)) == 0
 
             updated, expired = window.process_window(
-                key="key2", value=3, state=stateKey2, timestamp_ms=120
+                key="key2", value=2, transaction=tx, timestamp_ms=130
             )
-            assert expired[0]["value"] == [5, 4, 3]
-            assert len(updated) == 0
+            assert len(list(expired)) == 0
+            assert len(list(updated)) == 0
+            updated, expired = window.process_window(
+                key="key1", value=5, transaction=tx, timestamp_ms=140
+            )
+            assert len(list(expired)) == 0
+            assert len(list(updated)) == 0
 
             updated, expired = window.process_window(
-                key="key2", value=2, state=stateKey2, timestamp_ms=130
+                key="key2", value=1, transaction=tx, timestamp_ms=140
             )
-            assert len(expired) == 0
-            assert len(updated) == 0
-            updated, expired = window.process_window(
-                key="key1", value=5, state=stateKey1, timestamp_ms=140
-            )
-            assert len(expired) == 0
-            assert len(updated) == 0
+            assert len(list(expired)) == 0
+            assert len(list(updated)) == 0
 
             updated, expired = window.process_window(
-                key="key2", value=1, state=stateKey2, timestamp_ms=140
+                key="key2", value=0, transaction=tx, timestamp_ms=130
             )
-            assert len(expired) == 0
-            assert len(updated) == 0
-
+            assert expired[0][1]["value"] == [2, 1, 0]
+            assert len(list(updated)) == 0
             updated, expired = window.process_window(
-                key="key2", value=0, state=stateKey2, timestamp_ms=130
+                key="key1", value=6, transaction=tx, timestamp_ms=140
             )
-            assert expired[0]["value"] == [2, 1, 0]
-            assert len(updated) == 0
-            updated, expired = window.process_window(
-                key="key1", value=6, state=stateKey1, timestamp_ms=140
-            )
-            assert expired[0]["value"] == [4, 5, 6]
-            assert len(updated) == 0
+            assert expired[0][1]["value"] == [4, 5, 6]
+            assert len(list(updated)) == 0
