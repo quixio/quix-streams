@@ -53,13 +53,13 @@ def test_interactive_table_with_data(printer: Printer, console: mock.Mock) -> No
     printer.set_slowdown(0.0)  # do not slow down test suite
     index = printer.add_table()
     table = printer._tables[index]
-    table.add_row({"id": 1, "name": "A"})
+    table.add_row({"name": "A", "id": 1})
     table.add_row({"id": 2, "name": "B"})
     printer.print()
 
     console.print.assert_called_once()
     rich_table = console.print.call_args[0][0]
-    assert rich_table.columns[0].header == "id"
-    assert rich_table.columns[1].header == "name"
-    assert list(rich_table.columns[0].cells) == ["1", "2"]
-    assert list(rich_table.columns[1].cells) == ["A", "B"]
+    assert rich_table.columns[0].header == "name"
+    assert rich_table.columns[1].header == "id"
+    assert list(rich_table.columns[0].cells) == ["A", "B"]
+    assert list(rich_table.columns[1].cells) == ["1", "2"]
