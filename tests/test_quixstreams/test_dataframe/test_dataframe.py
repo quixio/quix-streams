@@ -387,7 +387,7 @@ class TestStreamingDataFrame:
             ),
         ],
     )
-    def test_print(self, dataframe_factory, metadata, expected, capsys):
+    def test_print(self, dataframe_factory, metadata, expected, get_output):
         sdf = dataframe_factory()
         sdf.print(metadata=metadata)
 
@@ -395,7 +395,21 @@ class TestStreamingDataFrame:
         key, timestamp, headers = b"key", 0, []
         sdf.test(value=value, key=key, timestamp=timestamp, headers=headers)
 
-        assert expected in capsys.readouterr().out
+        assert expected in get_output()
+
+    def test_print_table(self, dataframe_factory, get_output):
+        sdf = dataframe_factory()
+        sdf.print_table(title="test", metadata=True, slowdown=0.0)
+        sdf.test(value={"x": 1}, key=b"key", timestamp=12345, headers=[])
+        sdf._processing_context.printer.print()
+        assert get_output() == (
+            "test                       \n"
+            "┏━━━━━━━━┳━━━━━━━━━━━━┳━━━┓\n"
+            "┃ _key   ┃ _timestamp ┃ x ┃\n"
+            "┡━━━━━━━━╇━━━━━━━━━━━━╇━━━┩\n"
+            "│ b'key' │ 12345      │ 1 │\n"
+            "└────────┴────────────┴───┘\n"
+        )
 
     @pytest.mark.parametrize(
         "columns, expected",

@@ -1,4 +1,3 @@
-import re
 from typing import Callable
 
 import pytest
@@ -11,16 +10,6 @@ def printer() -> Printer:
     printer = Printer()
     printer.set_slowdown(0.0)  # do not slow down the test suite
     return printer
-
-
-@pytest.fixture
-def get_output(capsys) -> Callable[[], str]:
-    def _get_output() -> str:
-        # Strip ANSI escape codes from the output
-        output = capsys.readouterr().out
-        return re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", output)
-
-    return _get_output
 
 
 def test_set_slowdown() -> None:
