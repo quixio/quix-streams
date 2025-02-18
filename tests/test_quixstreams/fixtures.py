@@ -170,7 +170,9 @@ def topic_json_serdes_factory(topic_factory):
             topic_name = uuid.uuid4()
         return Topic(
             name=topic or topic_name,
-            config=TopicConfig(num_partitions=num_partitions, replication_factor=1),
+            create_config=TopicConfig(
+                num_partitions=num_partitions, replication_factor=1
+            ),
             value_deserializer=JSONDeserializer(),
             value_serializer=JSONSerializer(),
         )
@@ -363,7 +365,7 @@ def quix_mock_config_builder_factory(kafka_container):
     def factory(workspace_id: Optional[str] = None):
         if not workspace_id:
             workspace_id = "my_ws"
-        cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
+        cfg_builder = create_autospec(QuixKafkaConfigsBuilder, spec_set=True)
         patch.object(
             cfg_builder,
             "workspace_id",
@@ -392,8 +394,8 @@ def quix_mock_config_builder_factory(kafka_container):
             "id": f"{workspace_id}-{topic.name}",
             "name": topic.name,
             "configuration": {
-                "partitions": topic.config.num_partitions,
-                "replicationFactor": topic.config.replication_factor,
+                "partitions": topic.create_config.num_partitions,
+                "replicationFactor": topic.create_config.replication_factor,
                 "retentionInMinutes": 1,
                 "retentionInBytes": 1,
                 "cleanupPolicy": "Delete",
@@ -592,7 +594,7 @@ def topic_manager_topic_factory(topic_manager_factory):
             "value_serializer": value_serializer,
             "key_deserializer": key_deserializer,
             "value_deserializer": value_deserializer,
-            "config": topic_manager.topic_config(num_partitions=partitions),
+            "create_config": topic_manager.topic_config(num_partitions=partitions),
             "timestamp_extractor": timestamp_extractor,
         }
         if not use_serdes_nones:

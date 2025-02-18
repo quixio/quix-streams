@@ -378,5 +378,5 @@ class KafkaReplicatorSource(Source):
             key_serializer="bytes",
             value_deserializer=self._value_deserializer,
             key_deserializer=self._key_deserializer,
-            config=config,
+            create_config=config,
         )

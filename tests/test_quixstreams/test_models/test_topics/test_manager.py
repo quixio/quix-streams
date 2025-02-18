@@ -47,7 +47,7 @@ class TestTopicManager:
         topic_replication = 5
         topic = topic_manager.topic(
             name=topic_name,
-            config=TopicConfig(
+            create_config=TopicConfig(
                 num_partitions=topic_partitions,
                 replication_factor=topic_replication,
                 extra_config=extras,
@@ -57,9 +57,9 @@ class TestTopicManager:
         assert topic_manager.topics[topic_name] == topic
 
         assert topic.name == topic_name
-        assert topic.config.num_partitions == topic_partitions
-        assert topic.config.replication_factor == topic_replication
-        assert topic.config.extra_config == extras
+        assert topic.create_config.num_partitions == topic_partitions
+        assert topic.create_config.replication_factor == topic_replication
+        assert topic.create_config.extra_config == extras
 
     def test_topic_no_config(self, topic_manager_factory):
         """
@@ -70,9 +70,12 @@ class TestTopicManager:
         topic = topic_manager.topic(name=topic_name)
 
         assert topic.name == topic_name
-        assert topic.config.num_partitions == topic_manager.default_num_partitions
         assert (
-            topic.config.replication_factor == topic_manager.default_replication_factor
+            topic.create_config.num_partitions == topic_manager.default_num_partitions
+        )
+        assert (
+            topic.create_config.replication_factor
+            == topic_manager.default_replication_factor
         )
 
     def test_changelog_topic(self, topic_manager_factory):
@@ -85,7 +88,7 @@ class TestTopicManager:
         topic_manager = topic_manager_factory(consumer_group=group)
         topic = topic_manager.topic(
             name="my_topic",
-            config=topic_manager.topic_config(num_partitions=5),
+            create_config=topic_manager.topic_config(num_partitions=5),
         )
 
         store_name = "default"
@@ -105,11 +108,16 @@ class TestTopicManager:
             assert isinstance(getattr(changelog, attr), BytesSerializer)
         for attr in ["_key_deserializer", "_value_deserializer"]:
             assert isinstance(getattr(changelog, attr), BytesDeserializer)
-        assert changelog.config.num_partitions == topic.config.num_partitions
-        assert changelog.config.replication_factor == topic.config.replication_factor
+        assert (
+            changelog.create_config.num_partitions == topic.create_config.num_partitions
+        )
+        assert (
+            changelog.create_config.replication_factor
+            == topic.create_config.replication_factor
+        )
 
-        assert topic.config.extra_config.get("cleanup.policy") != "compact"
-        assert changelog.config.extra_config["cleanup.policy"] == "compact"
+        assert topic.create_config.extra_config.get("cleanup.policy") != "compact"
+        assert changelog.create_config.extra_config["cleanup.policy"] == "compact"
 
     def test_changelog_topic_settings_import(self, topic_manager_factory):
         """
@@ -120,7 +128,7 @@ class TestTopicManager:
         topic_manager._changelog_extra_config_imports_defaults = {"import.this"}
         topic = topic_manager.topic(
             name="my_topic",
-            config=topic_manager.topic_config(
+            create_config=topic_manager.topic_config(
                 extra_config={"import.this": "different", "ignore.this": "woo"}
             ),
         )
@@ -129,8 +137,8 @@ class TestTopicManager:
             store_name="default",
         )
 
-        assert "import.this" in changelog.config.extra_config
-        assert "ignore.this" not in changelog.config.extra_config
+        assert "import.this" in changelog.create_config.extra_config
+        assert "ignore.this" not in changelog.create_config.extra_config
 
     def test_changelog_topic_source_exists_in_cluster(
         self, topic_manager_factory, topic_factory
@@ -146,7 +154,7 @@ class TestTopicManager:
 
         topic = topic_manager.topic(
             name=topic_name,
-            config=topic_manager.topic_config(
+            create_config=topic_manager.topic_config(
                 num_partitions=1,
                 extra_config={"ignore.this": "not.set.on.cluster.topic.so.ignore"},
             ),
@@ -156,8 +164,8 @@ class TestTopicManager:
             store_name="default",
         )
 
-        assert changelog.config.num_partitions == partitions == 5
-        assert "ignore.this" not in changelog.config.extra_config
+        assert changelog.create_config.num_partitions == partitions == 5
+        assert "ignore.this" not in changelog.create_config.extra_config
 
     def test_create_all_topics(self, topic_manager_factory, topic_admin_mock):
         timeout = 1
@@ -188,7 +196,7 @@ class TestTopicManager:
         topic_config = _topic_manager.topic_config(
             num_partitions=5, extra_config={"max.message.bytes": "1234567"}
         )
-        topic = _topic_manager.topic(name=str(uuid.uuid4()), config=topic_config)
+        topic = _topic_manager.topic(name=str(uuid.uuid4()), create_config=topic_config)
         _topic_manager.changelog_topic(topic_name=topic.name, store_name="default")
         _topic_manager.create_all_topics(timeout=timeout)
         _topic_manager.validate_all_topics(timeout=timeout)
@@ -197,13 +205,12 @@ class TestTopicManager:
         topic_manager = topic_manager_factory()
         topic_updated = topic_manager.topic(
             name=topic.name,
-            config=topic_manager.topic_config(num_partitions=20),
+            create_config=topic_manager.topic_config(num_partitions=20),
         )
-        changelog = topic_manager.changelog_topic(
+        topic_manager.changelog_topic(
             topic_name=topic_updated.name, store_name="default"
         )
-        changelog.config.num_partitions = None  # proves ignored during validation
-        changelog.config.replication_factor = None
+
         topic_manager.validate_all_topics(timeout=timeout)
 
     def test_validate_all_topics_topic_not_found(
@@ -215,7 +222,7 @@ class TestTopicManager:
         topic_manager = topic_manager_factory(topic_admin_mock)
         topic = topic_manager.topic(
             name="topic",
-            config=topic_manager.topic_config(),
+            create_config=topic_manager.topic_config(),
         )
         topic_admin_mock.inspect_topics.return_value = {
             topic.name: None,
@@ -238,7 +245,7 @@ class TestTopicManager:
         topic_manager = topic_manager_factory(topic_admin_mock)
         source_topic = topic_manager.topic(
             name="topic",
-            config=source_topic_config,
+            create_config=source_topic_config,
         )
 
         changelog_topic = topic_manager.changelog_topic(
@@ -268,7 +275,7 @@ class TestTopicManager:
         topic_manager = topic_manager_factory(topic_admin_mock)
         source_topic = topic_manager.topic(
             name="topic",
-            config=source_topic_config,
+            create_config=source_topic_config,
         )
 
         changelog_topic = topic_manager.changelog_topic(
@@ -277,7 +284,7 @@ class TestTopicManager:
         )
 
         topic_admin_mock.inspect_topics.return_value = {
-            source_topic.name: source_topic.config,
+            source_topic.name: source_topic.create_config,
             changelog_topic.name: topic_manager.topic_config(
                 num_partitions=2, replication_factor=1
             ),
@@ -311,7 +318,7 @@ class TestTopicManager:
         topic_manager = topic_manager_factory(consumer_group=group)
         topic = topic_manager.topic(
             name="my_topic",
-            config=topic_manager.topic_config(num_partitions=5),
+            create_config=topic_manager.topic_config(num_partitions=5),
         )
 
         operation = "my_op"
@@ -324,8 +331,14 @@ class TestTopicManager:
 
         assert topic_manager.repartition_topics[repartition.name] == repartition
         assert repartition.name == f"repartition__{group}--{topic.name}--{operation}"
-        assert repartition.config.num_partitions == topic.config.num_partitions
-        assert repartition.config.replication_factor == topic.config.replication_factor
+        assert (
+            repartition.create_config.num_partitions
+            == topic.create_config.num_partitions
+        )
+        assert (
+            repartition.create_config.replication_factor
+            == topic.create_config.replication_factor
+        )
 
     def test_changelog_nested_internal_topic_naming(self, topic_manager_factory):
         """
@@ -337,7 +350,7 @@ class TestTopicManager:
         topic_manager = topic_manager_factory(consumer_group=group)
         topic = topic_manager.topic(
             name="my_topic",
-            config=topic_manager.topic_config(num_partitions=5),
+            create_config=topic_manager.topic_config(num_partitions=5),
         )
 
         operation = "my_op"
@@ -359,7 +372,7 @@ class TestTopicManager:
         topic_manager = topic_manager_factory(consumer_group=group)
         data_topic = topic_manager.topic(
             name="my_topic",
-            config=topic_manager.topic_config(num_partitions=5),
+            create_config=topic_manager.topic_config(num_partitions=5),
         )
 
         operation = "my_op"

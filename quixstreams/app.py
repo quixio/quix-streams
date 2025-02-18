@@ -466,7 +466,7 @@ class Application:
             value_serializer=value_serializer,
             key_deserializer=key_deserializer,
             value_deserializer=value_deserializer,
-            config=config,
+            create_config=config,
             timestamp_extractor=timestamp_extractor,
         )
 

@@ -208,19 +208,19 @@ class TopicAdmin:
         for topic in topics_to_create:
             logger.info(
                 f'Creating a new topic "{topic.name}" '
-                f'with a config: "{topic.config.as_dict() if topic.config is not None else {}}"'
+                f'with a config: "{topic.create_config.as_dict() if topic.create_config is not None else {}}"'
             )
 
         confl_new_topics = []
         for topic in topics_to_create:
-            if topic.config is None:
+            if topic.create_config is None:
                 confl_new_topic = NewTopic(topic=topic.name)
             else:
                 confl_new_topic = NewTopic(
                     topic=topic.name,
-                    num_partitions=topic.config.num_partitions,
-                    replication_factor=topic.config.replication_factor,
-                    config=topic.config.extra_config,
+                    num_partitions=topic.create_config.num_partitions,
+                    replication_factor=topic.create_config.replication_factor,
+                    config=topic.create_config.extra_config,
                 )
             confl_new_topics.append(confl_new_topic)
 

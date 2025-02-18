@@ -1,5 +1,5 @@
+import copy
 import logging
-from copy import deepcopy
 from itertools import chain
 from typing import Dict, List, Literal, Optional, Set
 
@@ -24,7 +24,7 @@ def affirm_ready_for_create(topics: List[Topic]):
 
     :param topics: list of `Topic`s
     """
-    if invalid := [topic.name for topic in topics if not topic.config]:
+    if invalid := [topic.name for topic in topics if topic.create_config is None]:
         raise ValueError(f"configs for Topics {invalid} were NoneTypes")
 
 
@@ -211,23 +211,31 @@ class TopicManager:
 
         :return: a TopicConfig
         """
-
         topic_config = self._admin.inspect_topics([topic_name], timeout=timeout)[
             topic_name
         ]
+        # If the source topic is not created yet, take its "create_config" instead
         if topic_config is None and topic_name in self.non_changelog_topics:
-            topic_config = deepcopy(self.non_changelog_topics[topic_name].config)
+            topic_config = copy.deepcopy(
+                self.non_changelog_topics[topic_name].create_config
+            )
 
         if topic_config is None:
             raise RuntimeError(f"No configuration can be found for topic {topic_name}")
 
-        # Copy only certain configuration values from original topic
+        # If "extra_imports" is present, copy the specified config values
+        # from the original topic
         if extras_imports:
-            topic_config.extra_config = {
+            extra_config = {
                 k: v
                 for k, v in topic_config.extra_config.items()
                 if k in extras_imports
             }
+            topic_config = TopicConfig(
+                num_partitions=topic_config.num_partitions,
+                replication_factor=topic_config.replication_factor,
+                extra_config=extra_config,
+            )
         return topic_config
 
     def topic_config(
@@ -259,7 +267,7 @@ class TopicManager:
         key_deserializer: Optional[DeserializerType] = "bytes",
         value_serializer: Optional[SerializerType] = None,
         key_serializer: Optional[SerializerType] = "bytes",
-        config: Optional[TopicConfig] = None,
+        create_config: Optional[TopicConfig] = None,
         timestamp_extractor: Optional[TimestampExtractor] = None,
     ) -> Topic:
         """
@@ -271,14 +279,14 @@ class TopicManager:
         :param key_deserializer: a deserializer type for keys
         :param value_serializer: a serializer type for values
         :param key_serializer: a serializer type for keys
-        :param config: optional topic configurations (for creation/validation)
+        :param create_config: optional topic configurations (for creation/validation)
         :param timestamp_extractor: a callable that returns a timestamp in
             milliseconds from a deserialized message.
 
         :return: Topic object with creation configs
         """
-        if not config:
-            config = TopicConfig(
+        if not create_config:
+            create_config = TopicConfig(
                 num_partitions=self.default_num_partitions,
                 replication_factor=self.default_replication_factor,
                 extra_config=self.default_extra_config,
@@ -291,7 +299,7 @@ class TopicManager:
                 value_deserializer=value_deserializer,
                 key_serializer=key_serializer,
                 key_deserializer=key_deserializer,
-                config=config,
+                create_config=create_config,
                 timestamp_extractor=timestamp_extractor,
             )
         )
@@ -306,8 +314,8 @@ class TopicManager:
 
         :param topic: The topic to register
         """
-        if topic.config is None:
-            topic.config = TopicConfig(
+        if topic.create_config is None:
+            topic.create_config = TopicConfig(
                 num_partitions=self.default_num_partitions,
                 replication_factor=self.default_replication_factor,
                 extra_config=self.default_extra_config,
@@ -346,7 +354,7 @@ class TopicManager:
                 key_deserializer=key_deserializer,
                 value_serializer=value_serializer,
                 key_serializer=key_serializer,
-                config=self._get_source_topic_config(
+                create_config=self._get_source_topic_config(
                     topic_name,
                     extras_imports=self._groupby_extra_config_imports_defaults,
                     timeout=timeout if timeout is not None else self._timeout,
@@ -419,7 +427,7 @@ class TopicManager:
                 value_serializer="bytes",
                 key_deserializer="bytes",
                 value_deserializer="bytes",
-                config=config,
+                create_config=config,
             )
         )
         self._changelog_topics.setdefault(topic_name, {})[store_name] = topic

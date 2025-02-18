@@ -39,8 +39,8 @@ class TestQuixTopicManager:
             config_builder.get_or_create_topic.call_args_list[0].args[0].name
             == topic_name
         )
-        assert topic.config.num_partitions == num_partitions
-        assert topic.config.replication_factor == rep_factor
+        assert topic.real_config.num_partitions == num_partitions
+        assert topic.real_config.replication_factor == rep_factor
 
     def test_quix_internal_topic(self, quix_mock_config_builder_factory):
         num_partitions = 5
@@ -77,8 +77,8 @@ class TestQuixTopicManager:
             "id": changelog_id,
             "name": _topic.name,
             "configuration": {
-                "partitions": topic.config.num_partitions,
-                "replicationFactor": topic.config.replication_factor,
+                "partitions": topic.real_config.num_partitions,
+                "replicationFactor": topic.real_config.replication_factor,
                 "retentionInMinutes": 1,
                 "retentionInBytes": 1,
                 "cleanupPolicy": "Compact",
@@ -93,8 +93,10 @@ class TestQuixTopicManager:
             config_builder.get_or_create_topic.call_args_list[1].args[0].name
             == changelog_name
         )
-        assert changelog.config.num_partitions == num_partitions
-        assert changelog.config.replication_factor == rep_factor
+        assert changelog.create_config.num_partitions == num_partitions
+        assert changelog.create_config.replication_factor == rep_factor
+        assert changelog.real_config.num_partitions == num_partitions
+        assert changelog.real_config.replication_factor == rep_factor
 
         config_builder.get_or_create_topic.side_effect = lambda _topic: {
             "id": topic_id,
@@ -114,8 +116,8 @@ class TestQuixTopicManager:
             "id": changelog_id,
             "name": _topic.name,
             "configuration": {
-                "partitions": topic.config.num_partitions,
-                "replicationFactor": topic.config.replication_factor,
+                "partitions": topic.real_config.num_partitions,
+                "replicationFactor": topic.real_config.replication_factor,
                 "retentionInMinutes": 1,
                 "retentionInBytes": 1,
                 "cleanupPolicy": "Compact",
@@ -130,8 +132,10 @@ class TestQuixTopicManager:
             config_builder.get_or_create_topic.call_args_list[1].args[0].name
             == changelog_name
         )
-        assert changelog.config.num_partitions == num_partitions
-        assert changelog.config.replication_factor == rep_factor
+        assert changelog.create_config.num_partitions == num_partitions
+        assert changelog.create_config.replication_factor == rep_factor
+        assert changelog.real_config.num_partitions == num_partitions
+        assert changelog.real_config.replication_factor == rep_factor
 
     def test_quix_changelog_nested_internal_topic_naming(
         self, quix_mock_config_builder_factory
@@ -180,8 +184,8 @@ class TestQuixTopicManager:
             "id": repartition_id,
             "name": _topic.name,
             "configuration": {
-                "partitions": topic.config.num_partitions,
-                "replicationFactor": topic.config.replication_factor,
+                "partitions": topic.real_config.num_partitions,
+                "replicationFactor": topic.real_config.replication_factor,
                 "retentionInMinutes": 1,
                 "retentionInBytes": 1,
                 "cleanupPolicy": "Compact",
@@ -195,8 +199,8 @@ class TestQuixTopicManager:
             "id": changelog_topic_id,
             "name": _topic.name,
             "configuration": {
-                "partitions": topic.config.num_partitions,
-                "replicationFactor": topic.config.replication_factor,
+                "partitions": topic.real_config.num_partitions,
+                "replicationFactor": topic.real_config.replication_factor,
                 "retentionInMinutes": 1,
                 "retentionInBytes": 1,
                 "cleanupPolicy": "Compact",
@@ -209,5 +213,7 @@ class TestQuixTopicManager:
             config_builder.get_or_create_topic.call_args_list[2].args[0].name
             == changelog_name
         )
-        assert changelog.config.num_partitions == num_partitions
-        assert changelog.config.replication_factor == rep_factor
+        assert changelog.create_config.num_partitions == num_partitions
+        assert changelog.create_config.replication_factor == rep_factor
+        assert changelog.real_config.num_partitions == num_partitions
+        assert changelog.real_config.replication_factor == rep_factor

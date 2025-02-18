@@ -64,12 +64,12 @@ class QuixTopicManager(TopicManager):
         Additionally, sets the actual topic configuration since we now have it anyway.
         """
         quix_topic_info = self._quix_config_builder.get_or_create_topic(topic)
-        quix_topic = self._quix_config_builder.convert_topic_response(
-            quix_topic_info,
-            extra_config=topic.config.extra_config if topic.config else {},
-        )
+        quix_topic = self._quix_config_builder.convert_topic_response(quix_topic_info)
 
-        topic_out = topic.__clone__(name=quix_topic.name, config=quix_topic.config)
+        topic_out = topic.__clone__(
+            name=quix_topic.name, create_config=quix_topic.create_config
+        )
+        topic_out.real_config = quix_topic.real_config
         self._topic_id_to_name[topic_out.name] = quix_topic_info["name"]
         return super()._finalize_topic(topic_out)
 

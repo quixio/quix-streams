@@ -87,7 +87,9 @@ class TestTopicAdmin:
         topic_manager = topic_manager_factory()
         invalid_topic = topic_manager.topic(
             name=str(uuid4()),
-            config=topic_manager.topic_config(extra_config={"bad_option": "not_real"}),
+            create_config=topic_manager.topic_config(
+                extra_config={"bad_option": "not_real"}
+            ),
         )
 
         with pytest.raises(CreateTopicFailure, match="Unknown topic config name"):

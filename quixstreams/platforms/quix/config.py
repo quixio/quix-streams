@@ -198,14 +198,14 @@ class QuixKafkaConfigsBuilder:
             )
             extra_config["cleanup.policy"] = cleanup_policy
 
-        return Topic(
-            name=api_response["id"],
-            config=TopicConfig(
-                num_partitions=topic_config["partitions"],
-                replication_factor=topic_config["replicationFactor"],
-                extra_config=extra_config,
-            ),
+        config = TopicConfig(
+            num_partitions=topic_config["partitions"],
+            replication_factor=topic_config["replicationFactor"],
+            extra_config=extra_config,
         )
+        topic = Topic(name=api_response["id"], create_config=config)
+        topic.real_config = config
+        return topic
 
     def strip_workspace_id_prefix(self, s: str) -> str:
         """
@@ -285,12 +285,11 @@ class QuixKafkaConfigsBuilder:
         :param timeout: response timeout (seconds); Default 30
         """
         # TODO: more error handling with the wrong combo of ws_id and topic
-        ws_data: Optional[dict] = None
         if self._workspace_id:
             ws_data = self.search_for_workspace(
                 workspace_name_or_id=self._workspace_id, timeout=timeout
             )
-        elif known_workspace_topic:
+        else:
             ws_data = self.search_for_topic_workspace(
                 known_workspace_topic, timeout=timeout
             )
@@ -326,7 +325,7 @@ class QuixKafkaConfigsBuilder:
         return None
 
     def search_for_topic_workspace(
-        self, topic: str, timeout: Optional[float] = None
+        self, topic: Optional[str], timeout: Optional[float] = None
     ) -> Optional[dict]:
         """
         Find what workspace a topic belongs to.
@@ -363,7 +362,7 @@ class QuixKafkaConfigsBuilder:
         :param topic: a Topic instance
         :param timeout: response timeout (seconds); Default 30
         """
-        cfg = topic.config
+        cfg = topic.create_config
         if cfg is None:
             raise RuntimeError("Topic config not set")
 
