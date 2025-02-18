@@ -1,4 +1,5 @@
-from unittest import mock
+import re
+from typing import Callable
 
 import pytest
 
@@ -6,17 +7,24 @@ from quixstreams.utils.printing import Printer
 
 
 @pytest.fixture
-def printer():
-    return Printer()
+def printer() -> Printer:
+    printer = Printer()
+    printer.set_slowdown(0.0)  # do not slow down the test suite
+    return printer
 
 
 @pytest.fixture
-def console():
-    with mock.patch.object(Printer, "_console") as mock_console:
-        yield mock_console
+def get_output(capsys) -> Callable[[], str]:
+    def _get_output() -> str:
+        # Strip ANSI escape codes from the output
+        output = capsys.readouterr().out
+        return re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", output)
+
+    return _get_output
 
 
-def test_set_slowdown(printer: Printer, console: mock.Mock) -> None:
+def test_set_slowdown() -> None:
+    printer = Printer()
     assert printer._slowdown == 0.5
 
     printer.set_slowdown(1.0)
@@ -30,6 +38,7 @@ def test_add_table(printer: Printer) -> None:
         timeout=12.3,
         column_widths={"id": 20, "name": 30},
     )
+
     table = printer._tables[index]
     assert table._rows.maxlen == 10
     assert table._title == "test"
@@ -38,31 +47,36 @@ def test_add_table(printer: Printer) -> None:
     assert printer._tables == [table]
 
 
-def test_inactive(printer: Printer, console: mock.Mock) -> None:
+def test_inactive(printer: Printer, get_output: Callable[[], str]) -> None:
     printer.print()
-    console.print.assert_not_called()
+    assert get_output() == ""
 
 
-def test_interactive_empty_table(printer: Printer, console: mock.Mock) -> None:
+def test_interactive_empty_table(
+    printer: Printer, get_output: Callable[[], str]
+) -> None:
     printer.add_table()
     printer.print()
-    console.print.assert_not_called()
+    assert get_output() == ""
 
 
-def test_interactive_table_with_data(printer: Printer, console: mock.Mock) -> None:
-    printer.set_slowdown(0.0)  # do not slow down test suite
+def test_interactive_table_with_data(
+    printer: Printer, get_output: Callable[[], str]
+) -> None:
     index = printer.add_table()
     table = printer._tables[index]
     table.add_row({"foo": 1, "bar": 11})
     table.add_row({"foo": 2, "baz": 222, "bar": 22})
     table.add_row({"bar": 33, "baz": 333, "foo": 3})
+
     printer.print()
 
-    console.print.assert_called_once()
-    rich_table = console.print.call_args[0][0]
-    assert rich_table.columns[0].header == "foo"
-    assert rich_table.columns[1].header == "bar"
-    assert rich_table.columns[2].header == "baz"
-    assert list(rich_table.columns[0].cells) == ["1", "2", "3"]
-    assert list(rich_table.columns[1].cells) == ["11", "22", "33"]
-    assert list(rich_table.columns[2].cells) == ["", "222", "333"]
+    assert get_output() == (
+        "┏━━━━━┳━━━━━┳━━━━━┓\n"
+        "┃ foo ┃ bar ┃ baz ┃\n"
+        "┡━━━━━╇━━━━━╇━━━━━┩\n"
+        "│ 1   │ 11  │     │\n"
+        "│ 2   │ 22  │ 222 │\n"
+        "│ 3   │ 33  │ 333 │\n"
+        "└─────┴─────┴─────┘\n"
+    )
