@@ -78,9 +78,9 @@ class TopicManagerFactory(Protocol):
 
 
 class RunTracker:
-    __slots__ = ("running", "_start_time", "_time_limit", "_stop_checker", "_run_count")
+    __slots__ = ("running", "_start_time", "_timeout", "_stop_checker", "_run_count")
 
-    _time_limit_default = 0.0
+    _timeout_default = 0.0
 
     def __init__(self):
         """
@@ -89,7 +89,7 @@ class RunTracker:
         """
         self.running: bool = False
         self._start_time: float = time.monotonic()
-        self._time_limit: float = self._time_limit_default
+        self._timeout: float = self._timeout_default
         self._run_count: int = 0
         self._stop_checker: Optional[Callable[[], bool]] = None
 
@@ -106,7 +106,7 @@ class RunTracker:
         """
         Trigger stop if its condition is met.
         """
-        # most optimal way to keep performance with typical operation (no time_limit)
+        # most optimal way to keep performance with typical operation (no timeout)
         if stopper := self._stop_checker:
             if stopper():
                 self.stop()
@@ -118,8 +118,8 @@ class RunTracker:
         self.running = True
         self._run_count += 1
         self.reset_tracking()
-        if self._time_limit:
-            self._stop_checker = self._at_time_limit
+        if self._timeout:
+            self._stop_checker = self._at_timeout
 
     def stop(self):
         """
@@ -127,26 +127,26 @@ class RunTracker:
         :return:
         """
         self.running = False
-        self._time_limit = self._time_limit_default
+        self._timeout = self._timeout_default
 
-    def set_stop_condition(self, time_limit: Optional[float] = None):
+    def set_stop_condition(self, timeout: Optional[float] = None):
         """
         Called as part of app.run(), where user can pass their time limit.
         """
-        if time_limit := (time_limit or self._time_limit_default):
-            if time_limit < 0.0:
+        if timeout := (timeout or self._timeout_default):
+            if timeout < 0.0:
                 raise ValueError("run timeout must be >= 0.0")
             logger.info(
                 f"TIME LIMIT DETECTED: "
-                f"Application will run for {time_limit}s (after any recovery)"
+                f"Application will run for {timeout}s (after any recovery)"
             )
-        self._time_limit = time_limit  # type: ignore
+        self._timeout = timeout  # type: ignore
 
     def reset_tracking(self):
         self._start_time = time.monotonic()
 
-    def _at_time_limit(self) -> bool:
-        return (time.monotonic() - self._start_time) > self._time_limit
+    def _at_timeout(self) -> bool:
+        return (time.monotonic() - self._start_time) > self._timeout
 
 
 class Application:
@@ -794,7 +794,7 @@ class Application:
     def run(
         self,
         dataframe: Optional[StreamingDataFrame] = None,
-        time_limit: Optional[float] = None,
+        timeout: Optional[float] = None,
     ):
         """
         Start processing data from Kafka using provided `StreamingDataFrame`
@@ -826,7 +826,7 @@ class Application:
                 "the argument should be removed.",
                 FutureWarning,
             )
-        self._run_tracker.set_stop_condition(time_limit=time_limit)
+        self._run_tracker.set_stop_condition(timeout=timeout)
         self._run()
 
     def _exception_handler(self, exc_type, exc_val, exc_tb):
