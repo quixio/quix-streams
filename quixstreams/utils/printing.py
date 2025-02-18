@@ -17,7 +17,6 @@ class _Table:
         timeout: float = 5.0,
         columns: Optional[list[str]] = None,
         column_widths: Optional[dict[str, int]] = None,
-        metadata: bool = False,
     ) -> None:
         self._rows: deque[dict[str, Any]] = deque(maxlen=size)
         self._title = title
@@ -27,27 +26,14 @@ class _Table:
         self._column_widths = column_widths or {}
         self._has_new_data = False
         self._start = time.monotonic()
-        self._metadata = metadata
 
-    def add_row(
-        self,
-        value: dict[str, Any],
-        key: Any = None,
-        timestamp: Optional[int] = None,
-    ) -> None:
+    def add_row(self, value: dict[str, Any]) -> None:
         if self._auto_order:
             for key in value.keys():
                 if key not in self._columns:
                     self._columns.append(key)
 
-        row = {}
-        if self._metadata:
-            row["_key"] = key
-            row["_timestamp"] = timestamp
-
-        for column in self._columns:
-            if column in value:
-                row[column] = value[column]
+        row = {column: value.get(column, "") for column in self._columns}
 
         self._rows.append(row)
         self._has_new_data = True
@@ -104,7 +90,6 @@ class Printer:
         timeout: float = 5.0,
         columns: Optional[list[str]] = None,
         column_widths: Optional[dict[str, int]] = None,
-        metadata: bool = False,
     ) -> int:
         table = _Table(
             size=size,
@@ -112,21 +97,13 @@ class Printer:
             timeout=timeout,
             columns=columns,
             column_widths=column_widths,
-            metadata=metadata,
         )
         self._tables.append(table)
         self._active = True
         return len(self._tables) - 1
 
-    def add_row(
-        self,
-        table: int,
-        value: dict[str, Any],
-        key: Any = None,
-        timestamp: Optional[int] = None,
-        headers: Any = None,
-    ) -> None:
-        self._tables[table].add_row(value, key, timestamp)
+    def add_row(self, table: int, value: dict[str, Any]) -> None:
+        self._tables[table].add_row(value)
 
     def print(self) -> None:
         if self._active:

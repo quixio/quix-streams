@@ -853,10 +853,15 @@ class StreamingDataFrame:
             timeout=timeout,
             columns=columns,
             column_widths=column_widths,
-            metadata=metadata,
         )
-        func = functools.partial(printer.add_row, table)
-        return self._add_update(func, metadata=metadata)
+
+        def _add_row(value, *_metadata):
+            if metadata:
+                key, timestamp, _ = _metadata
+                value = {"_key": key, "_timestamp": timestamp, **value}
+            printer.add_row(table, value)
+
+        return self._add_update(_add_row, metadata=metadata)
 
     def compose(
         self,
