@@ -67,7 +67,32 @@ def test_empty_table(
 def test_interactive_table_with_data(
     printer: Printer, get_output: Callable[[], str]
 ) -> None:
+    printer._print = printer._print_interactive
     index = printer.add_table(title="Test Table")
+    table = printer._tables[index]
+    table.add_row({"foo": 1, "bar": 11})
+    table.add_row({"foo": 2, "baz": 222, "bar": 22})
+    table.add_row({"bar": 33, "baz": 333, "foo": 3})
+
+    printer.print()
+
+    assert get_output() == (
+        "Test Table         \n"
+        "┏━━━━━┳━━━━━┳━━━━━┓\n"
+        "┃ foo ┃ bar ┃ baz ┃\n"
+        "┡━━━━━╇━━━━━╇━━━━━┩\n"
+        "│ 1   │ 11  │     │\n"
+        "│ 2   │ 22  │ 222 │\n"
+        "│ 3   │ 33  │ 333 │\n"
+        "└─────┴─────┴─────┘\n"
+    )
+
+
+def test_non_interactive_table_with_data(
+    printer: Printer, get_output: Callable[[], str]
+) -> None:
+    printer._print = printer._print_non_interactive
+    index = printer.add_table(title="Test Table", size=3)
     table = printer._tables[index]
     table.add_row({"foo": 1, "bar": 11})
     table.add_row({"foo": 2, "baz": 222, "bar": 22})
