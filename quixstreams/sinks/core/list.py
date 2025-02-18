@@ -14,7 +14,7 @@ class ListSink(BaseSink, UserList):
 
     You can optionally include the message metadata as well.
 
-    Intended for debugging with Application.run(time_limit=N)
+    Intended for debugging with Application.run(timeout=N)
 
     Example:
     ```
@@ -25,7 +25,7 @@ class ListSink(BaseSink, UserList):
     topic = app.topic("some-topic")
     list_sink = ListSink()  # sink will be a list-like object
     sdf = app.dataframe(topic=topic).sink(list_sink)
-    app.run(time_limit=10)  # collect data for 10 seconds
+    app.run(timeout=10)  # collect data for 10 seconds
 
     # after running 10s
     print(list_sink)    # [1, 2, 3]
