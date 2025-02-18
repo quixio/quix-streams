@@ -1,19 +1,30 @@
-from typing import Any, Iterable
+from typing import TYPE_CHECKING, Any, Iterable
 
-from quixstreams.state import WindowedState
+from quixstreams.state import WindowedPartitionTransaction, WindowedState
 
-from .base import WindowResult
-from .time_based import TimeWindow
+from .base import WindowKeyResult, WindowResult
+from .time_based import ExpirationStrategyValues, TimeWindow
+
+if TYPE_CHECKING:
+    from quixstreams.dataframe.dataframe import StreamingDataFrame
 
 
 class SlidingWindow(TimeWindow):
+    def final(
+        self, expiration_strategy: ExpirationStrategyValues = "key"
+    ) -> "StreamingDataFrame":
+        if expiration_strategy != "key":
+            raise TypeError("Sliding window only support the 'key' expiration strategy")
+
+        return super().final(expiration_strategy=expiration_strategy)
+
     def process_window(
         self,
         value: Any,
         key: Any,
         timestamp_ms: int,
-        state: WindowedState,
-    ) -> tuple[Iterable[WindowResult], Iterable[WindowResult]]:
+        transaction: WindowedPartitionTransaction,
+    ) -> tuple[Iterable[WindowKeyResult], Iterable[WindowKeyResult]]:
         """
         The algorithm is based on the concept that each message
         is associated with a left and a right window.
@@ -55,7 +66,7 @@ class SlidingWindow(TimeWindow):
             end times. The actual values are collected separately and combined during
             the window expiration step.
         """
-
+        state = transaction.as_state(prefix=key)
         duration = self._duration_ms
         grace = self._grace_ms
         aggregate = self._aggregate_func
@@ -90,7 +101,7 @@ class SlidingWindow(TimeWindow):
         right_exists = False
 
         starts = set([left_start])
-        updated_windows: list[WindowResult] = []
+        updated_windows: list[WindowKeyResult] = []
         iterated_windows = state.get_windows(
             # start_from_ms is exclusive, hence -1
             start_from_ms=max(0, left_start - duration) - 1,
@@ -102,7 +113,7 @@ class SlidingWindow(TimeWindow):
             backwards=True,
         )
 
-        for (start, end), (max_timestamp, aggregation) in iterated_windows:
+        for (start, end), (max_timestamp, aggregation), _ in iterated_windows:
             starts.add(start)
 
             if start == right_start:
@@ -113,6 +124,7 @@ class SlidingWindow(TimeWindow):
                 # Create the right window if it does not exist and will not be empty
                 if not right_exists and max_timestamp > timestamp_ms:
                     self._update_window(
+                        key=key,
                         state=state,
                         start=right_start,
                         end=right_end,
@@ -126,6 +138,7 @@ class SlidingWindow(TimeWindow):
                 if start > max_expired_window_start:
                     max_timestamp = max(timestamp_ms, max_timestamp)
                     window = self._update_window(
+                        key=key,
                         state=state,
                         start=start,
                         end=end,
@@ -151,6 +164,7 @@ class SlidingWindow(TimeWindow):
                     right_start := max_timestamp + 1
                 ) not in starts and max_timestamp < timestamp_ms:
                     self._update_window(
+                        key=key,
                         state=state,
                         start=right_start,
                         end=right_start + duration,
@@ -164,6 +178,7 @@ class SlidingWindow(TimeWindow):
                 if start > max_expired_window_start:
                     updated_windows.append(
                         self._update_window(
+                            key=key,
                             state=state,
                             start=start,
                             end=end,
@@ -189,6 +204,7 @@ class SlidingWindow(TimeWindow):
                     right_end := right_start + duration
                 ) >= timestamp_ms:
                     self._update_window(
+                        key=key,
                         state=state,
                         start=right_start,
                         end=right_start + duration,
@@ -203,6 +219,7 @@ class SlidingWindow(TimeWindow):
 
                 updated_windows.append(
                     self._update_window(
+                        key=key,
                         state=state,
                         start=left_start,
                         end=left_end,
@@ -224,6 +241,7 @@ class SlidingWindow(TimeWindow):
             if left_start > max_expired_window_start:
                 updated_windows.append(
                     self._update_window(
+                        key=key,
                         state=state,
                         start=left_start,
                         end=left_end,
@@ -236,9 +254,12 @@ class SlidingWindow(TimeWindow):
         if collect:
             state.add_to_collection(value=value, id=timestamp_ms)
 
-        expired_windows: list[WindowResult] = [
-            WindowResult(start=start, end=end, value=self._merge_func(aggregation))
-            for (start, end), (max_timestamp, aggregation) in state.expire_windows(
+        expired_windows = [
+            (
+                key,
+                WindowResult(start=start, end=end, value=self._merge_func(aggregation)),
+            )
+            for (start, end), (max_timestamp, aggregation), _ in state.expire_windows(
                 max_start_time=max_expired_window_start,
                 delete=False,
                 collect=collect,
@@ -259,17 +280,18 @@ class SlidingWindow(TimeWindow):
 
     def _update_window(
         self,
+        key: bytes,
         state: WindowedState,
         start: int,
         end: int,
         value: Any,
         timestamp: int,
         max_timestamp: int,
-    ) -> WindowResult:
+    ) -> WindowKeyResult:
         state.update_window(
             start_ms=start,
             end_ms=end,
             value=[max_timestamp, value],
             timestamp_ms=timestamp,
         )
-        return WindowResult(start=start, end=end, value=self._merge_func(value))
+        return (key, WindowResult(start=start, end=end, value=self._merge_func(value)))

@@ -1,6 +1,6 @@
 import itertools
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Optional, cast
+from typing import TYPE_CHECKING, Any, Iterable, Optional, cast
 
 from rocksdict import ReadOptions
 
@@ -12,6 +12,7 @@ from quixstreams.state.serialization import (
     LoadsFunc,
     serialize,
 )
+from quixstreams.state.types import WindowDetail
 
 from .metadata import (
     GLOBAL_COUNTER_CF_NAME,
@@ -26,7 +27,12 @@ from .metadata import (
     LATEST_TIMESTAMPS_CF_NAME,
     VALUES_CF_NAME,
 )
-from .serialization import append_integer, encode_integer_pair, parse_window_key
+from .serialization import (
+    append_integer,
+    encode_integer_pair,
+    int_to_int64_bytes,
+    parse_window_key,
+)
 from .state import WindowedTransactionState
 
 if TYPE_CHECKING:
@@ -98,7 +104,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
             ),
         )
 
-    def get_latest_timestamp(self, prefix: bytes) -> Optional[int]:
+    def get_latest_timestamp(self, prefix: bytes) -> int:
         return self._get_timestamp(
             prefix=prefix, cache=self._latest_timestamps, default=0
         )
@@ -201,9 +207,9 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         delete: bool = True,
         collect: bool = False,
         end_inclusive: bool = False,
-    ) -> list[tuple[tuple[int, int], Any]]:
+    ) -> list[WindowDetail]:
         """
-        Get all expired windows from RocksDB up to the specified `max_start_time` timestamp.
+        Get all expired windows with a set prefix from RocksDB up to the specified `max_start_time` timestamp.
 
         This method marks the latest found window as expired in the expiration index,
         so consecutive calls may yield different results for the same "latest timestamp".
@@ -264,8 +270,8 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
 
         # Collect values into windows
         if collect:
-            collected_expired_windows = []
-            for (start, end), value in expired_windows:
+            collected_expired_windows: list[WindowDetail] = []
+            for (start, end), value, key in expired_windows:
                 collection = self.get_from_collection(
                     start=start,
                     # Sliding windows are inclusive on both ends
@@ -282,17 +288,69 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
                     # value is [max_timestamp, value] where max_timestamp
                     # is the timestamp of the latest message in the window
                     value[1] = collection
-                collected_expired_windows.append(((start, end), value))
+                collected_expired_windows.append(((start, end), value, key))
             expired_windows = collected_expired_windows
 
         # Delete expired windows from the state
         if delete:
-            for (start, end), _ in expired_windows:
+            for (start, end), _, _ in expired_windows:
                 self.delete_window(start, end, prefix=prefix)
             if collect:
                 self.delete_from_collection(end=start, prefix=prefix)
 
         return expired_windows
+
+    def expire_all_windows(
+        self,
+        max_end_time: int,
+        step_ms: int,
+        delete: bool = True,
+        collect: bool = False,
+    ) -> Iterable[WindowDetail]:
+        """
+        Get all expired windows for all prefix from RocksDB up to the specified `max_start_time` timestamp.
+
+        :param max_end_time: The timestamp up to which windows are considered expired, inclusive.
+        :param delete: If True, expired windows will be deleted.
+        :param collect: If True, values will be collected into windows.
+        """
+        last_expired = self._get_timestamp(
+            prefix=b"", cache=self._last_expired_timestamps, default=0
+        )
+
+        windows = windows_to_expire(last_expired, max_end_time, step_ms)
+        if not windows:
+            return
+
+        suffixes: tuple[bytes, ...] = tuple(
+            int_to_int64_bytes(window) for window in windows
+        )
+        to_delete: set[tuple[bytes, int, int]] = set()
+
+        for key in self.keys():
+            if key.endswith(suffixes):
+                prefix, start, end = parse_window_key(key)
+                to_delete.add((prefix, start, end))
+                if collect:
+                    value = self.get_from_collection(
+                        start=start,
+                        end=end,
+                        prefix=prefix,
+                    )
+                else:
+                    value = self.get(encode_integer_pair(start, end), prefix=prefix)
+
+                yield (start, end), value, prefix
+
+        if delete:
+            for prefix, start, end in to_delete:
+                self.delete_window(start, end, prefix)
+                if collect:
+                    self.delete_from_collection(end=start, prefix=prefix)
+
+        self._set_timestamp(
+            prefix=b"", cache=self._last_expired_timestamps, timestamp_ms=max(windows)
+        )
 
     def delete_windows(
         self, max_start_time: int, delete_values: bool, prefix: bytes
@@ -334,7 +392,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         )
 
         last_deleted__gt = None
-        for (start, end), _ in windows:
+        for (start, end), _, _ in windows:
             last_deleted__gt = start
             self.delete_window(start, end, prefix=prefix)
 
@@ -355,7 +413,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         start_to_ms: int,
         prefix: bytes,
         backwards: bool = False,
-    ) -> list[tuple[tuple[int, int], Any]]:
+    ) -> list[WindowDetail]:
         """
         Get all windows within the specified time range.
 
@@ -386,7 +444,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
             _, start, end = parse_window_key(key)
             if start_from_ms < start <= start_to_ms:
                 value = self._deserialize_value(value)
-                result.append(((start, end), value))
+                result.append(((start, end), value, prefix))
 
         return result
 
@@ -450,7 +508,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
 
     def _get_timestamp(
         self, cache: TimestampsCache, prefix: bytes, default: Any = None
-    ) -> Optional[int]:
+    ) -> Any:
         cached_ts = cache.timestamps.get(prefix)
         if cached_ts is not None:
             return cached_ts
@@ -508,3 +566,23 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
 
         self.set(value=cache.counter, **kwargs)
         return cache.counter
+
+
+def windows_to_expire(
+    last_expired: int,
+    timestamp_ms: int,
+    step_ms: int,
+) -> list[int]:
+    if not last_expired:
+        return [timestamp_ms - (timestamp_ms % step_ms)]
+
+    next_to_expire = last_expired + step_ms
+    if next_to_expire > timestamp_ms:
+        return []
+
+    window: list[int] = []
+    while next_to_expire <= timestamp_ms:
+        window.append(next_to_expire)
+        next_to_expire += step_ms
+
+    return window

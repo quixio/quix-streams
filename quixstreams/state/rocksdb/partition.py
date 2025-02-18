@@ -1,6 +1,6 @@
 import logging
 import time
-from typing import Dict, List, Literal, Optional, Union, cast
+from typing import Dict, Iterable, List, Literal, Optional, Union, cast
 
 from rocksdict import AccessType, ColumnFamily, Rdict, WriteBatch
 
@@ -203,6 +203,18 @@ class RocksDBStorePartition(StorePartition):
         """
         cf_dict = self.get_column_family(cf_name)
         return key in cf_dict
+
+    def keys(self, cf_name: str = "default") -> Iterable[bytes]:
+        """
+        Iterate over all keys in the DB.
+
+        Addition and deletion of keys during iteration is not supported.
+
+        :param cf_name: rocksdb column family name. Default - "default"
+        :return: An iterable of keys
+        """
+        cf_dict = self.get_column_family(cf_name)
+        return cast(Iterable[bytes], cf_dict.keys())
 
     def get_processed_offset(self) -> Optional[int]:
         """

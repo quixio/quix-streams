@@ -3,7 +3,16 @@ import functools
 import logging
 from abc import ABC
 from collections import defaultdict
-from typing import TYPE_CHECKING, Any, Dict, Optional, Set, Tuple, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    Iterable,
+    Optional,
+    Set,
+    Tuple,
+    Union,
+)
 
 from quixstreams.models import Headers
 from quixstreams.state.exceptions import InvalidChangelogOffset, StateTransactionError
@@ -285,7 +294,7 @@ class PartitionTransaction(ABC):
         prefix: bytes,
         default: Any = None,
         cf_name: str = "default",
-    ) -> Optional[Any]:
+    ) -> Any:
         """
         Get a key from the store.
 
@@ -375,6 +384,24 @@ class PartitionTransaction(ABC):
             return True
         else:
             return self._partition.exists(key_serialized, cf_name=cf_name)
+
+    @validate_transaction_status(PartitionTransactionStatus.STARTED)
+    def keys(self, cf_name: str = "default") -> Iterable[Any]:
+        db_skip_keys: set[bytes] = set()
+
+        cache = self._update_cache.get_updates(cf_name=cf_name)
+        for prefix_update_cache in cache.values():
+            # when iterating over the DB, skip keys already returned by the cache
+            db_skip_keys.update(prefix_update_cache.keys())
+            yield from prefix_update_cache.keys()
+
+        # skip keys that were deleted from the cache
+        db_skip_keys.update(self._update_cache.get_deletes())
+
+        for key in self._partition.keys(cf_name=cf_name):
+            if key in db_skip_keys:
+                continue
+            yield key
 
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
     def prepare(self, processed_offset: Optional[int]):

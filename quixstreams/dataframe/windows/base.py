@@ -3,14 +3,24 @@ import functools
 import logging
 from abc import abstractmethod
 from collections import deque
-from typing import Any, Callable, Deque, Iterable, Optional, Protocol, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Deque,
+    Iterable,
+    Optional,
+    Protocol,
+    TypedDict,
+    cast,
+)
 
-from typing_extensions import TYPE_CHECKING, TypedDict
+from typing_extensions import TypeAlias
 
 from quixstreams.context import message_context
 from quixstreams.core.stream import TransformExpandedCallback
 from quixstreams.processing import ProcessingContext
-from quixstreams.state import WindowedPartitionTransaction, WindowedState
+from quixstreams.state import WindowedPartitionTransaction
 
 if TYPE_CHECKING:
     from quixstreams.dataframe.dataframe import StreamingDataFrame
@@ -24,11 +34,15 @@ class WindowResult(TypedDict):
     value: Any
 
 
+WindowKeyResult: TypeAlias = tuple[Any, WindowResult]
+Message: TypeAlias = tuple[WindowResult, Any, int, Any]
+
 WindowAggregateFunc = Callable[[Any, Any], Any]
 WindowMergeFunc = Callable[[Any], Any]
 
 TransformRecordCallbackExpandedWindowed = Callable[
-    [Any, Any, int, Any, WindowedState], list[tuple[WindowResult, Any, int, Any]]
+    [Any, Any, int, Any, WindowedPartitionTransaction],
+    Iterable[Message],
 ]
 
 
@@ -54,11 +68,11 @@ class Window(abc.ABC):
         value: Any,
         key: Any,
         timestamp_ms: int,
-        state: WindowedState,
-    ) -> tuple[Iterable[WindowResult], Iterable[WindowResult]]:
+        transaction: WindowedPartitionTransaction,
+    ) -> tuple[Iterable[WindowKeyResult], Iterable[WindowKeyResult]]:
         pass
 
-    def register_store(self):
+    def register_store(self) -> None:
         self._dataframe.processing_context.state_manager.register_windowed_store(
             topic_name=self._dataframe.topic.name, store_name=self._name
         )
@@ -107,13 +121,21 @@ class Window(abc.ABC):
         """
 
         def window_callback(
-            value: Any, key: Any, timestamp_ms: int, _headers: Any, state: WindowedState
-        ) -> list[tuple[WindowResult, Any, int, Any]]:
+            value: Any,
+            key: Any,
+            timestamp_ms: int,
+            _headers: Any,
+            transaction: WindowedPartitionTransaction,
+        ) -> Iterable[Message]:
             _, expired_windows = self.process_window(
-                value=value, key=key, timestamp_ms=timestamp_ms, state=state
+                value=value,
+                key=key,
+                timestamp_ms=timestamp_ms,
+                transaction=transaction,
             )
             # Use window start timestamp as a new record timestamp
-            return [(window, key, window["start"], None) for window in expired_windows]
+            for key, window in expired_windows:
+                yield (window, key, window["start"], None)
 
         return self._apply_window(
             func=window_callback,
@@ -139,12 +161,24 @@ class Window(abc.ABC):
         """
 
         def window_callback(
-            value: Any, key: Any, timestamp_ms: int, _headers: Any, state: WindowedState
-        ) -> list[tuple[WindowResult, Any, int, Any]]:
-            updated_windows, _ = self.process_window(
-                value=value, key=key, timestamp_ms=timestamp_ms, state=state
+            value: Any,
+            key: Any,
+            timestamp_ms: int,
+            _headers: Any,
+            transaction: WindowedPartitionTransaction,
+        ) -> Iterable[Message]:
+            updated_windows, expired_windows = self.process_window(
+                value=value, key=key, timestamp_ms=timestamp_ms, transaction=transaction
             )
-            return [(window, key, window["start"], None) for window in updated_windows]
+
+            # loop over the expired_windows generator to ensure the windows
+            # are expired
+            for key, window in expired_windows:
+                pass
+
+            # Use window start timestamp as a new record timestamp
+            for key, window in updated_windows:
+                yield (window, key, window["start"], None)
 
         return self._apply_window(func=window_callback, name=self._name)
 
@@ -167,7 +201,7 @@ def _as_windowed(
     @functools.wraps(func)
     def wrapper(
         value: Any, key: Any, timestamp: int, headers: Any
-    ) -> list[tuple[WindowResult, Any, int, Any]]:
+    ) -> Iterable[Message]:
         ctx = message_context()
         transaction = cast(
             WindowedPartitionTransaction,
@@ -181,8 +215,7 @@ def _as_windowed(
                 f"partition='{ctx.topic}[{ctx.partition}]' offset='{ctx.offset}'."
             )
             return _noop()
-        state = transaction.as_state(prefix=key)
-        return func(value, key, timestamp, headers, state)
+        return func(value, key, timestamp, headers, transaction)
 
     return wrapper
 
