@@ -1,6 +1,7 @@
+import re
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from typing import Optional, Union
+from typing import Callable, Optional, Union
 from unittest.mock import PropertyMock, create_autospec, patch
 
 import pytest
@@ -603,3 +604,13 @@ def topic_manager_topic_factory(topic_manager_factory):
         return topic
 
     return factory
+
+
+@pytest.fixture
+def get_output(capsys) -> Callable[[], str]:
+    def _get_output() -> str:
+        # Strip ANSI escape codes from the output
+        output = capsys.readouterr().out
+        return re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", output)
+
+    return _get_output
