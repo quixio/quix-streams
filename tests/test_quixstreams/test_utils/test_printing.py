@@ -52,10 +52,14 @@ def test_inactive(printer: Printer, get_output: Callable[[], str]) -> None:
     assert get_output() == ""
 
 
-def test_interactive_empty_table(
-    printer: Printer, get_output: Callable[[], str]
+@pytest.mark.parametrize("interactive", [True, False])
+def test_empty_table(
+    printer: Printer, get_output: Callable[[], str], interactive: bool
 ) -> None:
     printer.add_table()
+    printer._print = (
+        printer._print_interactive if interactive else printer._print_non_interactive
+    )
     printer.print()
     assert get_output() == ""
 
