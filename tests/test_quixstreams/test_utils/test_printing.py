@@ -135,7 +135,10 @@ def test_print_non_interactive(printer: Printer, get_output: Callable[[], str]) 
     )
 
 
-def test_two_tables(printer: Printer, get_output: Callable[[], str]) -> None:
+def test_multiple_tables_interactive(
+    printer: Printer, get_output: Callable[[], str]
+) -> None:
+    printer._print = printer._print_interactive
     table1 = printer.add_table(title="Table 1", size=1)
     table2 = printer.add_table(title="Table 2", size=2)
 
@@ -157,6 +160,48 @@ def test_two_tables(printer: Printer, get_output: Callable[[], str]) -> None:
         "└─────┘\n"
     )
 
+    table1.add_row({"foo": 2})
+    table2.add_row({"bar": 22})
+    printer.print()
+    assert get_output() == (
+        "Table 1\n"
+        "┏━━━━━┓\n"
+        "┃ foo ┃\n"
+        "┡━━━━━┩\n"
+        "│ 2   │\n"
+        "└─────┘\n"
+        "Table 2\n"
+        "┏━━━━━┓\n"
+        "┃ bar ┃\n"
+        "┡━━━━━┩\n"
+        "│ 11  │\n"
+        "│ 22  │\n"
+        "└─────┘\n"
+    )
+
+
+def test_multiple_tables_non_interactive(
+    printer: Printer, get_output: Callable[[], str]
+) -> None:
+    printer._print = printer._print_non_interactive
+    table1 = printer.add_table(title="Table 1", size=1)
+    table2 = printer.add_table(title="Table 2", size=2)
+
+    # Table 2 is not full so it is not printed
+    table1.add_row({"foo": 1})
+    table2.add_row({"bar": 11})
+    printer.print()
+    assert get_output() == (
+        "Table 1\n"
+        "┏━━━━━┓\n"
+        "┃ foo ┃\n"
+        "┡━━━━━┩\n"
+        "│ 1   │\n"
+        "└─────┘\n"
+    )  # fmt: skip
+
+    # Table 1 size is 1, so it prints only the latest row
+    # Table 2 is full now, so it is printed
     table1.add_row({"foo": 2})
     table2.add_row({"bar": 22})
     printer.print()
