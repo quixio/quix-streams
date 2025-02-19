@@ -627,18 +627,18 @@ sdf = sdf[sdf.apply(lambda value: value['field_a'] > 0)]
 
 ## Debugging
 
-To debug code in `StreamingDataFrame`, you can use the usual tools like prints, logging
-and breakpoints.
+To debug code in `StreamingDataFrame`, you can use several built-in tools for
+data inspection and monitoring.
 
-**Example 1**:
+### Simple Value Printing
 
 Using `StreamingDataFrame.print()` to print the current record's value and metadata in the stream:
 
 ```python
 sdf = app.dataframe(...)
-# some SDF transformations happening here ...  
+# some SDF transformations happening here ...
 
-# Print the current record's value, key, timestamp and headers 
+# Print the current record's value, key, timestamp and headers
 sdf.print(metadata=True)
 # It will print the record's data wrapped into a dict for readability:
 # { 'value': {'number': 12183},
@@ -648,11 +648,63 @@ sdf.print(metadata=True)
 #   }
 ```
 
+### Table Printing
 
-**Example 2**:
+The most convenient way to monitor your data stream is using `StreamingDataFrame.print_table()`.
+It creates a live-updating table that shows the most recent records:
 
-Here is how to use `StreamingDataFrame.update()` to set a breakpoint and examine the
-value between operations:
+```python
+sdf = app.dataframe(...)
+# some SDF transformations happening here ...
+
+# Show last 5 records with metadata columns
+sdf.print_table(
+    size=5,
+    title="My Stream",
+    metadata=True,
+    slowdown=1  # Update every second
+)
+
+# For wide datasets, limit columns to improve readability
+sdf.print_table(
+    columns=["id", "name", "value"],
+    column_widths={"name": 20}
+)
+```
+
+This will produce a live table like:
+
+```
+My Stream
+┏━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━┓
+┃ _key       ┃ _timestamp ┃ id     ┃ name                 ┃ value   ┃
+┡━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━┩
+│ b'53fe8e4' │ 1738685136 │ 876    │ Charlie              │ 42.5    │
+│ b'91bde51' │ 1738685137 │ 11     │ Alice                │ 18.3    │
+│ b'6617dfe' │ 1738685138 │ 133    │ Bob                  │ 73.1    │
+│ b'f47ac93' │ 1738685139 │ 244    │ David                │ 55.7    │
+│ b'038e524' │ 1738685140 │ 567    │ Eve                  │ 31.9    │
+└────────────┴────────────┴────────┴──────────────────────┴─────────┘
+```
+
+Note that the "name" column is resized to desired width of 20 characters.
+
+You can monitor multiple points in your pipeline by adding multiple print_table calls:
+
+```python
+sdf = app.dataframe(topic)
+sdf.print_table(title="Raw Input")
+
+sdf = sdf.filter(lambda value: ...)
+sdf.print_table(title="Filtered Values")
+
+sdf = sdf.apply(lambda value: ...)
+sdf.print_table(title="Final Output")
+```
+
+### Using Breakpoints
+
+For detailed examination, you can set breakpoints using `StreamingDataFrame.update()`:
 
 ```python
 import pdb
@@ -722,6 +774,8 @@ sdf = sdf.set_headers(
     lambda value, key, timestamp, headers: [('APP_VERSION', APP_VERSION.encode())]
 )
 ```
+
+
 
 
 ## Accessing Kafka Keys, Timestamps and Headers
