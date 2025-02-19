@@ -71,17 +71,24 @@ class Printer:
     _console = Console()
 
     def __init__(self) -> None:
-        self._print = (
-            self._print_interactive
-            if sys.stdout.isatty()
-            else self._print_non_interactive
-        )
         self._tables: list[Table] = []
         self._slowdown = 0.5
         self._active = False
+        self._live = True
+        self._resolve_print_method()
+
+    def _resolve_print_method(self) -> None:
+        if self._live and sys.stdout.isatty():
+            self._print = self._print_interactive
+        else:
+            self._print = self._print_non_interactive
 
     def set_slowdown(self, value: float) -> None:
         self._slowdown = value
+
+    def set_live(self, value: bool) -> None:
+        self._live = value
+        self._resolve_print_method()
 
     def add_table(
         self,

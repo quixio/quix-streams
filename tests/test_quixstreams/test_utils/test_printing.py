@@ -20,6 +20,16 @@ def test_set_slowdown() -> None:
     assert printer._slowdown == 1.0
 
 
+def test_set_live() -> None:
+    printer = Printer()
+    assert printer._live is True
+    assert printer._print == printer._print_interactive
+
+    printer.set_live(False)
+    assert printer._live is False
+    assert printer._print == printer._print_non_interactive
+
+
 def test_add_table(printer: Printer) -> None:
     table = printer.add_table(
         size=10,

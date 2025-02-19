@@ -778,7 +778,13 @@ class StreamingDataFrame:
         title: Optional[str] = None,
         metadata: bool = True,
         timeout: float = 5.0,
+        # The slowdown and live parameters are handled specially across the pipeline:
+        # - Multiple print_table calls may exist in a pipeline
+        # - Only one state of slowdown and live is maintained per pipeline
+        # - The last provided values of slowdown and live are used for all print_table calls
+        # - Default values are None to prevent overwriting previously set values
         slowdown: Optional[float] = None,
+        live: Optional[bool] = None,
         columns: Optional[List[str]] = None,
         column_widths: Optional[dict[str, int]] = None,
     ) -> Self:
@@ -815,6 +821,9 @@ class StreamingDataFrame:
         Note: The last provided slowdown value will be used for all print_table calls
         in the pipeline.
 
+        Note: The last provided live value will be used for all print_table calls
+        in the pipeline.
+
         Example Snippet:
 
         ```python
@@ -846,6 +855,9 @@ class StreamingDataFrame:
         :param slowdown: Time in seconds to wait between updates.
             Default: None (which translates to 0.5 seconds).
             Increase this value if the table updates too quickly.
+        :param live: Whether to print the table in real-time if possible.
+            If real-time printing is not possible, the table will be printed
+            in non-interactive mode. Default: True
         :param columns: Optional list of columns to display. If not provided,
             all columns will be displayed. Pass empty list to display only metadata.
         :param column_widths: Optional dictionary mapping column names to their desired
@@ -858,6 +870,9 @@ class StreamingDataFrame:
             if slowdown < 0.0:
                 raise ValueError("Slowdown must be a non-negative float")
             printer.set_slowdown(slowdown)
+
+        if live is not None:
+            printer.set_live(live)
 
         if columns is not None:
             if metadata:
