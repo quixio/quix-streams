@@ -401,8 +401,10 @@ class TestStreamingDataFrame:
 
     def test_print_table(self, dataframe_factory, get_output):
         sdf = dataframe_factory()
-        sdf.print_table(size=1, title="test", metadata=True, slowdown=0.0)
-        sdf.test(value={"x": 1}, key=b"key", timestamp=12345, headers=[])
+        sdf.print_table(
+            size=1, title="test", metadata=True, slowdown=0.0, columns=["x"]
+        )
+        sdf.test(value={"x": 1, "y": 2}, key=b"key", timestamp=12345, headers=[])
         sdf._processing_context.printer.print()
         assert get_output() == (
             "test                       \n"
