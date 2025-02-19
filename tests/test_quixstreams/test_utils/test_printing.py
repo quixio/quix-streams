@@ -175,3 +175,16 @@ def test_two_tables(printer: Printer, get_output: Callable[[], str]) -> None:
         "│ 22  │\n"
         "└─────┘\n"
     )
+
+
+def test_column_widths(printer: Printer, get_output: Callable[[], str]) -> None:
+    table = printer.add_table(size=1, column_widths={"foo": 20})
+    table.add_row({"foo": "bar"})
+    printer.print()
+    assert get_output() == (
+        "┏━━━━━━━━━━━━━━━━━━━━━━┓\n"
+        "┃ foo                  ┃\n"
+        "┡━━━━━━━━━━━━━━━━━━━━━━┩\n"
+        "│ bar                  │\n"
+        "└──────────────────────┘\n"
+    )
