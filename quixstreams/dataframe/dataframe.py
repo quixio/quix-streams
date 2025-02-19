@@ -787,9 +787,27 @@ class StreamingDataFrame:
 
         This feature is experimental and subject to change in future releases.
 
-        Creates a live table view that updates as new records arrive, showing the most
-        recent N records in a formatted table. The table includes message metadata
-        (_key, _timestamp) along with the record values.
+        Creates a live table view that updates in real-time as new records are processed,
+        showing the most recent N records in a formatted table. When metadata is enabled,
+        the table includes message metadata columns (_key, _timestamp) along with the
+        record values.
+
+        The table automatically adjusts to show all available columns unless specific
+        columns are requested. Missing values in any column are displayed as empty cells.
+        Column widths adjust automatically to fit content unless explicitly specified.
+
+        Note: Column overflow is not handled gracefully. If your data has many columns,
+        the table may become unreadable. Use the `columns` parameter to specify which
+        columns to display and/or `column_widths` to control column sizes for better
+        visibility.
+
+        Printing Behavior:
+        - Interactive mode (terminal/console): The table refreshes in-place, with new
+          rows appearing at the bottom and old rows being removed from the top when
+          the table is full.
+        - Non-interactive mode (output redirected to file): Collects records until
+          either the table is full or the timeout is reached, then prints the complete
+          table and starts collecting new records.
 
         Note: This works best in terminal environments. For Jupyter notebooks,
         consider using `print()` instead.
@@ -820,7 +838,7 @@ class StreamingDataFrame:
 
         :param size: Maximum number of records to display in the table. Default: 5
         :param title: Optional title for the table
-        :param metadata: Whether to include message metadata (_key, _timestamp, headers).
+        :param metadata: Whether to include message metadata (_key, _timestamp) columns.
             Default: True
         :param timeout: Time in seconds to wait for table to fill up before printing
             an incomplete table. Only relevant for non-interactive environments
