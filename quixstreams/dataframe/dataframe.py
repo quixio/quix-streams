@@ -876,10 +876,9 @@ class StreamingDataFrame:
             column_widths=column_widths,
         )
 
-        def _add_row(value, *_metadata):
+        def _add_row(value: Any, *_metadata: tuple[Any, int, HeadersTuples]) -> None:
             if metadata:
-                key, timestamp, _ = _metadata
-                value = {"_key": key, "_timestamp": timestamp, **value}
+                value = dict(_key=_metadata[0], _timestamp=_metadata[1], **value)
             table.add_row(value)
 
         return self._add_update(_add_row, metadata=metadata)
