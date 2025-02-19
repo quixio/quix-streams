@@ -69,11 +69,12 @@ class QuixPortalApiService:
         self._default_workspace_id = value
 
     def get_librdkafka_connection_config(
-        self, workspace_id: Optional[str] = None
+        self, workspace_id: Optional[str] = None, timeout: float = 30
     ) -> dict:
         workspace_id = workspace_id or self.default_workspace_id
         return self.session.get(
-            self._build_url(f"/workspaces/{workspace_id}/broker/librdkafka")
+            self._build_url(f"/workspaces/{workspace_id}/broker/librdkafka"),
+            timeout=timeout,
         ).json()
 
     def get_workspace_certificate(
