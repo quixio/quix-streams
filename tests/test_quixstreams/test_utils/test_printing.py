@@ -188,3 +188,23 @@ def test_column_widths(printer: Printer, get_output: Callable[[], str]) -> None:
         "│ bar                  │\n"
         "└──────────────────────┘\n"
     )
+
+
+def test_timeout(printer: Printer, get_output: Callable[[], str]) -> None:
+    printer._print = printer._print_non_interactive
+    table = printer.add_table(size=10, timeout=0.1)
+    table.add_row({"foo": "bar"})
+    counter = 0
+    while True:
+        printer.print()
+        if output := get_output():
+            assert counter > 0  # Make sure it does not print immediately
+            assert output == (
+                "┏━━━━━┓\n"
+                "┃ foo ┃\n"
+                "┡━━━━━┩\n"
+                "│ bar │\n"
+                "└─────┘\n"
+            )  # fmt: skip
+            break
+        counter += 1
