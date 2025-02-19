@@ -859,11 +859,14 @@ class StreamingDataFrame:
                 raise ValueError("Slowdown must be a non-negative float")
             printer.set_slowdown(slowdown)
 
-        if columns is not None and len(columns) == 0 and not metadata:
-            warnings.warn(
-                "`columns` is an empty list and `metadata` is False. "
-                f"Table `{title}` will be empty."
-            )
+        if columns is not None:
+            if metadata:
+                columns = ["_key", "_timestamp", *columns]
+            elif len(columns) == 0:
+                warnings.warn(
+                    "`columns` is an empty list and `metadata` is False. "
+                    f"Table `{title}` will be empty."
+                )
 
         table = printer.add_table(
             size=size,
