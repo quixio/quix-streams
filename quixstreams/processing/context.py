@@ -101,6 +101,7 @@ class ProcessingContext:
         self.pausing_manager.revoke(topic=topic, partition=partition)
 
     def __enter__(self):
+        self.sink_manager.start_sinks()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):

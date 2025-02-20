@@ -7,6 +7,7 @@ from typing import Any, Callable, Optional
 try:
     import boto3
     from botocore.exceptions import ClientError
+    from mypy_boto3_kinesis import KinesisClient
 except ImportError as exc:
     raise ImportError(
         f"Package {exc.name} is missing: "
@@ -14,7 +15,11 @@ except ImportError as exc:
     ) from exc
 
 from quixstreams.models.types import HeadersTuples
-from quixstreams.sinks.base import BaseSink
+from quixstreams.sinks.base import (
+    BaseSink,
+    ClientConnectFailureCallback,
+    ClientConnectSuccessCallback,
+)
 from quixstreams.sinks.base.exceptions import SinkBackpressureError
 
 __all__ = ("KinesisSink", "KinesisStreamNotFoundError")
@@ -31,8 +36,11 @@ class KinesisSink(BaseSink):
         aws_access_key_id: Optional[str] = getenv("AWS_ACCESS_KEY_ID"),
         aws_secret_access_key: Optional[str] = getenv("AWS_SECRET_ACCESS_KEY"),
         region_name: Optional[str] = getenv("AWS_REGION", getenv("AWS_DEFAULT_REGION")),
+        aws_endpoint_url: Optional[str] = getenv("AWS_ENDPOINT_URL_KINESIS"),
         value_serializer: Callable[[Any], str] = json.dumps,
         key_serializer: Callable[[Any], str] = bytes.decode,
+        on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
+        on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
         **kwargs,
     ) -> None:
         """
@@ -47,7 +55,19 @@ class KinesisSink(BaseSink):
         :param key_serializer: Function to serialize the key to string
             (defaults to bytes.decode).
         :param kwargs: Additional keyword arguments passed to boto3.client.
+        :param on_client_connect_success: An optional callback made after successful
+            client authentication, primarily for additional logging.
+        :param on_client_connect_failure: An optional callback made after failed
+            client authentication (which should raise an Exception).
+            Callback should accept the raised Exception as an argument.
+            Callback must resolve (or propagate/re-raise) the Exception.
         """
+        super().__init__(
+            on_client_connect_success=on_client_connect_success,
+            on_client_connect_failure=on_client_connect_failure,
+        )
+
+        self._client: Optional[KinesisClient] = None
         self._stream_name = stream_name
         self._value_serializer = value_serializer
         self._key_serializer = key_serializer
@@ -55,21 +75,24 @@ class KinesisSink(BaseSink):
         self._records = defaultdict(list)  # buffer for records before sending
         self._futures = defaultdict(list)  # buffer for requests in progress
 
+        self._credentials = {
+            "endpoint_url": aws_endpoint_url,
+            "region_name": region_name,
+            "aws_access_key_id": aws_access_key_id,
+            "aws_secret_access_key": aws_secret_access_key,
+            **kwargs,
+        }
+
         # Thread pool executor for asynchronous operations. Single thread ensures
         # that records are sent in order at the expense of throughput.
         self._executor = ThreadPoolExecutor(max_workers=1)
 
-        self._kinesis = boto3.client(
-            "kinesis",
-            aws_access_key_id=aws_access_key_id,
-            aws_secret_access_key=aws_secret_access_key,
-            region_name=region_name,
-            **kwargs,
-        )
+    def setup(self):
+        self._client = boto3.client("kinesis", **self._credentials)
 
         # Check if the Kinesis stream exists
         try:
-            self._kinesis.describe_stream(StreamName=self._stream_name)
+            self._client.describe_stream(StreamName=self._stream_name)
         except ClientError as e:
             if e.response["Error"]["Code"] == "ResourceNotFoundException":
                 raise KinesisStreamNotFoundError(
@@ -136,7 +159,7 @@ class KinesisSink(BaseSink):
         self, topic_partition: tuple[str, int], records: list[dict[str, str]]
     ) -> None:
         future = self._executor.submit(
-            self._kinesis.put_records,
+            self._client.put_records,
             Records=records,
             StreamName=self._stream_name,
         )

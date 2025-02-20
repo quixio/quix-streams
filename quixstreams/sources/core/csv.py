@@ -52,6 +52,9 @@ class CSVSource(Source):
 
         super().__init__(name=name, shutdown_timeout=shutdown_timeout)
 
+    def setup(self):
+        return
+
     def run(self):
         # Start reading the file
         with open(self.path, "r") as f:

@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Mapping
+from typing import Any, Mapping, Optional
 
 try:
     import psycopg2
@@ -15,7 +15,12 @@ except ImportError as exc:
 
 from quixstreams.exceptions import QuixException
 from quixstreams.models import HeadersTuples
-from quixstreams.sinks import BatchingSink, SinkBatch
+from quixstreams.sinks import (
+    BatchingSink,
+    ClientConnectFailureCallback,
+    ClientConnectSuccessCallback,
+    SinkBatch,
+)
 
 __all__ = ("PostgreSQLSink", "PostgreSQLSinkException")
 
@@ -55,6 +60,10 @@ class PostgreSQLSink(BatchingSink):
         password: str,
         table_name: str,
         schema_auto_update: bool = True,
+        connection_timeout_seconds: int = 30,
+        statement_timeout_seconds: int = 30,
+        on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
+        on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
         **kwargs,
     ):
         """
@@ -67,16 +76,41 @@ class PostgreSQLSink(BatchingSink):
         :param password: Database user password.
         :param table_name: PostgreSQL table name.
         :param schema_auto_update: Automatically update the schema when new columns are detected.
-        :param ddl_timeout: Timeout for DDL operations such as table creation or schema updates.
+        :param connection_timeout_seconds: Timeout for connection.
+        :param statement_timeout_seconds: Timeout for DDL operations such as table
+            creation or schema updates.
+        :param on_client_connect_success: An optional callback made after successful
+            client authentication, primarily for additional logging.
+        :param on_client_connect_failure: An optional callback made after failed
+            client authentication (which should raise an Exception).
+            Callback should accept the raised Exception as an argument.
+            Callback must resolve (or propagate/re-raise) the Exception.
         :param kwargs: Additional parameters for `psycopg2.connect`.
         """
-        super().__init__()
+        super().__init__(
+            on_client_connect_success=on_client_connect_success,
+            on_client_connect_failure=on_client_connect_failure,
+        )
+
         self.table_name = table_name
         self.schema_auto_update = schema_auto_update
+        options = kwargs.pop("options", "")
+        if "statement_timeout" not in options:
+            options = f"{options} -c statement_timeout={statement_timeout_seconds}s"
+        self._client_settings = {
+            "host": host,
+            "port": port,
+            "dbname": dbname,
+            "user": user,
+            "password": password,
+            "connect_timeout": connection_timeout_seconds,
+            "options": options,
+            **kwargs,
+        }
+        self._client = None
 
-        self.connection = psycopg2.connect(
-            host=host, port=port, dbname=dbname, user=user, password=password, **kwargs
-        )
+    def setup(self):
+        self._client = psycopg2.connect(**self._client_settings)
 
         # Initialize table if schema_auto_update is enabled
         if self.schema_auto_update:
@@ -102,12 +136,12 @@ class PostgreSQLSink(BatchingSink):
             rows.append(row)
 
         try:
-            with self.connection:
+            with self._client:
                 if self.schema_auto_update:
                     self._add_new_columns(cols_types)
                 self._insert_rows(rows)
         except psycopg2.Error as e:
-            self.connection.rollback()
+            self._client.rollback()
             raise PostgreSQLSinkException(f"Failed to write batch: {str(e)}") from e
 
     def add(
@@ -149,7 +183,7 @@ class PostgreSQLSink(BatchingSink):
             key_col=sql.Identifier(_KEY_COLUMN_NAME),
         )
 
-        with self.connection.cursor() as cursor:
+        with self._client.cursor() as cursor:
             cursor.execute(query)
 
     def _add_new_columns(self, columns: dict[str, type]) -> None:
@@ -171,7 +205,7 @@ class PostgreSQLSink(BatchingSink):
                 col_type=sql.SQL(postgres_col_type),
             )
 
-            with self.connection.cursor() as cursor:
+            with self._client.cursor() as cursor:
                 cursor.execute(query)
 
     def _insert_rows(self, rows: list[dict]) -> None:
@@ -188,5 +222,5 @@ class PostgreSQLSink(BatchingSink):
             columns=sql.SQL(", ").join(map(sql.Identifier, columns)),
         )
 
-        with self.connection.cursor() as cursor:
+        with self._client.cursor() as cursor:
             execute_values(cursor, query, values)

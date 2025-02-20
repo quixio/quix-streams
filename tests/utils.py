@@ -111,6 +111,9 @@ class DummySink(BatchingSink):
         super().__init__()
         self._results = []
 
+    def setup(self):
+        return
+
     def write(self, batch: SinkBatch):
         for item in batch:
             self._results.append(item)
@@ -157,6 +160,9 @@ class DummySource(Source):
         for value in self.values:
             msg = self.serialize(key=self.key, value=value)
             self.produce(value=msg.value, key=msg.key)
+
+    def setup(self):
+        return
 
     def cleanup(self, failed):
         if "cleanup" in self.error_in:
