@@ -77,48 +77,84 @@ class TopicManagerFactory(Protocol):
 
 
 class RunTracker:
-    __slots__ = ("running", "_start_time", "_timeout", "_stop_checker", "_run_count")
+    __slots__ = (
+        "running",
+        "last_consumed_tp",
+        "_processing_context",
+        "_start_time",
+        "_timeout",
+        "_run_iterations",
+        "_stop_checker",
+        "_max_count",
+        "_count",
+        "_empty_poll",
+        "_max_empty_poll",
+        "_primary_topics",
+        "_repartition_topics",
+        "_paused",
+        "_repartition_stop_points",
+    )
 
     _timeout_default = 0.0
+    _max_count_default = 0
+    _max_empty_poll_default = 0
 
-    def __init__(self):
+    def __init__(
+        self,
+        processing_context: Optional[ProcessingContext] = None,
+    ):
         """
         Tracks the runtime status of an Application, along with managing variables
-        associated with stopping the app based on a timeout
+        associated with stopping the app based on a timeout or count.
         """
         self.running: bool = False
+        self.last_consumed_tp: Optional[tuple] = None
+        self._processing_context = processing_context
         self._start_time: float = time.monotonic()
         self._timeout: float = self._timeout_default
-        self._run_count: int = 0
+        self._run_iterations: int = 0
         self._stop_checker: Optional[Callable[[], bool]] = None
+        self._max_count: int = self._max_count_default
+        self._count: int = 0
+        self._empty_poll: int = 0
+        self._max_empty_poll: int = self._max_empty_poll_default
+        self._primary_topics: list = []
+        self._repartition_topics: list = []
+        self._paused = False
+        self._repartition_stop_points: dict[tuple, int] = {}
 
     @property
-    def run_count(self) -> int:
+    def _consumer(self):
+        return self._processing_context.consumer
+
+    @property
+    def run_iterations(self) -> int:
         """
         Tracks number of times app.run() has been called.
         Mostly only here for tracking the initial run.
         :return:
         """
-        return self._run_count
+        return self._run_iterations
 
     def update_status(self):
         """
         Trigger stop if its condition is met.
         """
         # most optimal way to keep performance with typical operation (no timeout)
-        if stopper := self._stop_checker:
-            if stopper():
-                self.stop()
+        if (stopper := self._stop_checker) and stopper():
+            self.stop()
 
     def start(self):
         """
         Called as part of app.run() to initialize/reset stop conditions.
         """
         self.running = True
-        self._run_count += 1
+        self._run_iterations += 1
         self.reset_tracking()
         if self._timeout:
             self._stop_checker = self._at_timeout
+        elif self._max_count:
+            self._stop_checker = self._at_count
 
     def stop(self):
         """
@@ -126,12 +162,26 @@ class RunTracker:
         :return:
         """
         self.running = False
+        self._paused = False
         self._timeout = self._timeout_default
+        self._max_count = self._max_count_default
+        self._primary_topics = []
+        self._repartition_topics = []
+        self._repartition_stop_points = {}
 
-    def set_stop_condition(self, timeout: Optional[float] = None):
+    def set_stop_condition(
+        self,
+        timeout: Optional[float] = None,
+        count: Optional[int] = None,
+        max_empty_poll: Optional[int] = None,
+    ):
         """
         Called as part of app.run(), where user can pass their time limit.
         """
+        if timeout is not None and count is not None:
+            raise ValueError(
+                "Can only define either a timeout or count for app.run(), not both"
+            )
         if timeout := (timeout or self._timeout_default):
             if timeout < 0.0:
                 raise ValueError("run timeout must be >= 0.0")
@@ -140,12 +190,120 @@ class RunTracker:
                 f"Application will run for {timeout}s (after any recovery)"
             )
         self._timeout = timeout  # type: ignore
+        if max_count := (count or self._max_count_default):
+            if max_count < 0:
+                raise ValueError("run count must be >= 0")
+            if (max_empty_poll := (max_empty_poll or self._max_empty_poll_default)) < 0:
+                raise ValueError("max empty poll must be >= 0")
+        self._max_count = max_count  # type: ignore
+        self._max_empty_poll = max_empty_poll  # type: ignore
 
     def reset_tracking(self):
         self._start_time = time.monotonic()
+        self._count = 0
+        self._empty_poll = 0
 
     def _at_timeout(self) -> bool:
         return (time.monotonic() - self._start_time) > self._timeout
+
+    def _set_repartition_stop_points(self):
+        """
+        Retrieve the highwaters for repartition topics so we know what the true stopping
+        point is when doing it by count.
+        :return:
+        """
+        print("SETTING PARTITION STOP POINT")
+        partitions = [
+            t
+            for t in self._consumer.assignment()
+            if t.topic in self._repartition_topics
+        ]
+        self._repartition_stop_points = {
+            (t.topic, t.partition): self._consumer.get_watermark_offsets(t)[1]
+            for t in partitions
+        }
+
+    def add_primary_topics(self, topics: list):
+        self._primary_topics = topics
+
+    def add_repartition_topics(self, topics: list):
+        self._repartition_topics = topics
+
+    def _pause_primary_partitions(self):
+        self._consumer.pause(
+            [t for t in self._consumer.assignment() if t.topic in self._primary_topics]
+        )
+        self._paused = True
+
+    def _repartition_status_update(self, last_consumed_tp):
+        # last_consumed_tp = self.last_consumed_tp
+        current_offset = self._consumer.position([TopicPartition(*last_consumed_tp)])[
+            0
+        ].offset
+        print(f"last_consumed_tp: {last_consumed_tp}")
+        print(f"stop points: {self._repartition_stop_points}")
+        print(
+            f"watermark: {self._consumer.get_watermark_offsets(TopicPartition(*last_consumed_tp))[1]}"
+        )
+        print(f"current offset: {current_offset}")
+        if self._repartition_stop_points[last_consumed_tp] == 0:
+            self._set_repartition_stop_points()
+        if current_offset == self._repartition_stop_points[last_consumed_tp]:
+            self._repartition_stop_points.pop(last_consumed_tp)
+            logger.info(f"Finished repartition topic {last_consumed_tp}")
+
+    def _at_count(self) -> bool:
+        print("AT COUNT START")
+        print(f"last consumed at_count: {self.last_consumed_tp}")
+        print(
+            f"WATERMARK: {self._consumer.get_watermark_offsets(TopicPartition(self._repartition_topics[0], 0))}"
+        )
+        # TODO: consider rebalances.
+        # TODO: instead, set another callable which swaps once we know we're paused?
+        if self.last_consumed_tp:
+            tp = TopicPartition(*self.last_consumed_tp)
+            print(f"watermark at_count: {self._consumer.get_watermark_offsets(tp)[1]}")
+            print(self._consumer.committed([tp]))
+            if self.last_consumed_tp[0] in self._primary_topics:
+                print("add count")
+                self._count += 1
+                if (self._max_count - self._count) <= 0:
+                    self._set_repartition_stop_points()
+                    if self._repartition_topics:
+                        logger.info(
+                            f"Count of {self._max_count} Reached. "
+                            "Pausing main topics and finishing downstream operations."
+                        )
+                        self._pause_primary_partitions()
+                        return False
+                    return True
+                return False
+            else:
+                # TODO: move this entire block of logic to _repartition_status_update?
+                if self._paused:
+                    # Finished reading from primary topic, so need to be checking
+                    # status now
+                    self._repartition_status_update(self.last_consumed_tp)
+                    # TODO: move this to _repartition_status_update for ref optimization?
+                    return not bool(self._repartition_stop_points)
+                # Still processing normally, no check needs to be done
+                return False
+        else:
+            if self._paused:
+                for tp in list(self._repartition_stop_points.keys()):
+                    self._repartition_status_update(tp)
+                return not bool(self._repartition_stop_points)
+            elif self._max_empty_poll:
+                self._empty_poll += 1
+                if self._empty_poll >= self._max_empty_poll:
+                    logger.info(
+                        f"Max empty polling of {self._max_empty_poll} reached after "
+                        f"processing {self._count} records"
+                    )
+                    # TODO: consider best behavior here
+                    # self._pause_primary_partitions()
+                    return True
+            return False
 
 
 class Application:
@@ -420,7 +578,7 @@ class Application:
             pausing_manager=self._pausing_manager,
         )
         self._dataframe_registry = DataframeRegistry()
-        self._run_tracker = RunTracker()
+        self._run_tracker = RunTracker(processing_context=self._processing_context)
 
     @property
     def config(self) -> "ApplicationConfig":
@@ -792,6 +950,8 @@ class Application:
         self,
         dataframe: Optional[StreamingDataFrame] = None,
         timeout: Optional[float] = None,
+        count: Optional[int] = None,
+        max_empty_poll: Optional[int] = None,
     ):
         """
         Start processing data from Kafka using provided `StreamingDataFrame`
@@ -823,7 +983,9 @@ class Application:
                 "the argument should be removed.",
                 FutureWarning,
             )
-        self._run_tracker.set_stop_condition(timeout=timeout)
+        self._run_tracker.set_stop_condition(
+            timeout=timeout, count=count, max_empty_poll=max_empty_poll
+        )
         self._run()
 
     def _exception_handler(self, exc_type, exc_val, exc_tb):
@@ -840,7 +1002,7 @@ class Application:
         self._setup_signal_handlers()
 
         # These only need to be performed on the first .run() (with interactive running)
-        if not self._run_tracker.run_count:
+        if not self._run_tracker.run_iterations:
             logger.info(
                 f"Starting the Application with the config: "
                 f'broker_address="{self._config.broker_address}" '
@@ -861,6 +1023,11 @@ class Application:
         exit_stack.enter_context(self._consumer)
         exit_stack.enter_context(self._source_manager)
         exit_stack.push(self._exception_handler)
+
+        self._run_tracker.add_primary_topics([t for t in self._topic_manager.topics])
+        self._run_tracker.add_repartition_topics(
+            [t for t in self._topic_manager.repartition_topics]
+        )
 
         with exit_stack:
             # Subscribe to topics in Kafka and start polling
@@ -884,8 +1051,8 @@ class Application:
         processing_context = self._processing_context
         source_manager = self._source_manager
         process_message = self._process_message
-        run_tracker = self._run_tracker
         printer = self._processing_context.printer
+        run_tracker = self._run_tracker
 
         processing_context.init_checkpoint()
         run_tracker.start()
@@ -938,6 +1105,7 @@ class Application:
         rows = self._consumer.poll_row(timeout=self._config.consumer_poll_timeout)
 
         if rows is None:
+            self._run_tracker.last_consumed_tp = None
             return
 
         # Deserializer may return multiple rows for a single message
@@ -975,6 +1143,7 @@ class Application:
         self._processing_context.store_offset(
             topic=topic_name, partition=partition, offset=offset
         )
+        self._run_tracker.last_consumed_tp = (topic_name, partition)
 
         if self._on_message_processed is not None:
             self._on_message_processed(topic_name, partition, offset)
