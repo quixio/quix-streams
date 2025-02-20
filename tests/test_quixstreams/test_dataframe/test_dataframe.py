@@ -1,9 +1,11 @@
 import logging
 import operator
 import uuid
+import warnings
 from collections import namedtuple
 from datetime import timedelta
 from typing import Any
+from unittest import mock
 
 import pytest
 
@@ -387,7 +389,7 @@ class TestStreamingDataFrame:
             ),
         ],
     )
-    def test_print(self, dataframe_factory, metadata, expected, capsys):
+    def test_print(self, dataframe_factory, metadata, expected, get_output):
         sdf = dataframe_factory()
         sdf.print(metadata=metadata)
 
@@ -395,7 +397,29 @@ class TestStreamingDataFrame:
         key, timestamp, headers = b"key", 0, []
         sdf.test(value=value, key=key, timestamp=timestamp, headers=headers)
 
-        assert expected in capsys.readouterr().out
+        assert expected in get_output()
+
+    def test_print_table(self, dataframe_factory, get_output):
+        sdf = dataframe_factory()
+        sdf.print_table(
+            size=1, title="test", metadata=True, live_slowdown=0.0, columns=["x"]
+        )
+        sdf.test(value={"x": 1, "y": 2}, key=b"key", timestamp=12345, headers=[])
+        sdf._processing_context.printer.print()
+        assert get_output() == (
+            "test                       \n"
+            "┏━━━━━━━━┳━━━━━━━━━━━━┳━━━┓\n"
+            "┃ _key   ┃ _timestamp ┃ x ┃\n"
+            "┡━━━━━━━━╇━━━━━━━━━━━━╇━━━┩\n"
+            "│ b'key' │ 12345      │ 1 │\n"
+            "└────────┴────────────┴───┘\n"
+        )
+
+    def test_print_table_empty_warning(self, dataframe_factory):
+        sdf = dataframe_factory()
+        with mock.patch.object(warnings, "warn") as warn:
+            sdf.print_table(columns=[], metadata=False)
+            warn.assert_called_once()
 
     @pytest.mark.parametrize(
         "columns, expected",

@@ -10,6 +10,7 @@ from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
 from quixstreams.sinks import SinkManager
 from quixstreams.state import StateStoreManager
+from quixstreams.utils.printing import Printer
 
 __all__ = ("ProcessingContext",)
 
@@ -34,6 +35,7 @@ class ProcessingContext:
     pausing_manager: PausingManager
     commit_every: int = 0
     exactly_once: bool = False
+    printer: Printer = Printer()
     _checkpoint: Optional[Checkpoint] = dataclasses.field(
         init=False, repr=False, default=None
     )
@@ -104,3 +106,4 @@ class ProcessingContext:
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.exactly_once:
             self.producer.abort_transaction(5)
+        self.printer.clear()

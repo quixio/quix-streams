@@ -811,6 +811,7 @@ class Application:
                 self._processing_context.commit_checkpoint()
                 self._processing_context.resume_ready_partitions()
                 self._source_manager.raise_for_error()
+                self._processing_context.printer.print()
 
         logger.info("Stop processing of StreamingDataFrame")
         self._processing_context.commit_checkpoint(force=True)

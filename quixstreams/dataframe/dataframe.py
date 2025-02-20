@@ -4,6 +4,7 @@ import contextvars
 import functools
 import operator
 import pprint
+import warnings
 from datetime import timedelta
 from typing import (
     Any,
@@ -48,6 +49,7 @@ from quixstreams.models.serializers import DeserializerType, SerializerType
 from quixstreams.processing import ProcessingContext
 from quixstreams.sinks import BaseSink
 from quixstreams.state.base import State
+from quixstreams.utils.printing import DEFAULT_LIVE, DEFAULT_LIVE_SLOWDOWN
 
 from .exceptions import InvalidOperation
 from .registry import DataframeRegistry
@@ -770,6 +772,120 @@ class StreamingDataFrame:
             lambda *args: printer({print_args[i]: args[i] for i in range(len(args))}),
             metadata=metadata,
         )
+
+    def print_table(
+        self,
+        size: int = 5,
+        title: Optional[str] = None,
+        metadata: bool = True,
+        timeout: float = 5.0,
+        live: bool = DEFAULT_LIVE,
+        live_slowdown: float = DEFAULT_LIVE_SLOWDOWN,
+        columns: Optional[List[str]] = None,
+        column_widths: Optional[dict[str, int]] = None,
+    ) -> Self:
+        """
+        Print a table with the most recent records.
+
+        This feature is experimental and subject to change in future releases.
+
+        Creates a live table view that updates in real-time as new records are processed,
+        showing the most recent N records in a formatted table. When metadata is enabled,
+        the table includes message metadata columns (_key, _timestamp) along with the
+        record values.
+
+        The table automatically adjusts to show all available columns unless specific
+        columns are requested. Missing values in any column are displayed as empty cells.
+        Column widths adjust automatically to fit content unless explicitly specified.
+
+        Note: Column overflow is not handled gracefully. If your data has many columns,
+        the table may become unreadable. Use the `columns` parameter to specify which
+        columns to display and/or `column_widths` to control column sizes for better
+        visibility.
+
+        Printing Behavior:
+        - Interactive mode (terminal/console): The table refreshes in-place, with new
+          rows appearing at the bottom and old rows being removed from the top when
+          the table is full.
+        - Non-interactive mode (output redirected to file): Collects records until
+          either the table is full or the timeout is reached, then prints the complete
+          table and starts collecting new records.
+
+        Note: This works best in terminal environments. For Jupyter notebooks,
+        consider using `print()` instead.
+
+        Note: The last provided live value will be used for all print_table calls
+        in the pipeline.
+
+        Note: The last provided live_slowdown value will be used for all print_table calls
+        in the pipeline.
+
+        Example Snippet:
+
+        ```python
+        sdf = app.dataframe(topic)
+        # Show last 5 records, update at most every 1 second
+        sdf.print_table(size=5, title="Live Records", slowdown=1)
+        ```
+
+        This will produce a live-updating table like this:
+
+        Live Records
+        ┏━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━┳━━━━━┳━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━┓
+        ┃ _key       ┃ _timestamp ┃ active ┃ id  ┃ name    ┃ score ┃ status   ┃
+        ┡━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━╇━━━━━╇━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━┩
+        │ b'53fe8e4' │ 1738685136 │ True   │ 876 │ Charlie │ 27.74 │ pending  │
+        │ b'91bde51' │ 1738685137 │ True   │ 11  │         │       │ approved │
+        │ b'6617dfe' │ 1738685138 │        │     │ David   │       │          │
+        │ b'f47ac93' │ 1738685139 │        │ 133 │         │       │          │
+        │ b'038e524' │ 1738685140 │ False  │     │         │       │          │
+        └────────────┴────────────┴────────┴─────┴─────────┴───────┴──────────┘
+
+        :param size: Maximum number of records to display in the table. Default: 5
+        :param title: Optional title for the table
+        :param metadata: Whether to include message metadata (_key, _timestamp) columns.
+            Default: True
+        :param timeout: Time in seconds to wait for table to fill up before printing
+            an incomplete table. Only relevant for non-interactive environments
+            (e.g. output redirected to a file). Default: 5.0
+        :param live: Whether to print the table in real-time if possible.
+            If real-time printing is not possible, the table will be printed
+            in non-interactive mode. Default: True
+        :param live_slowdown: Time in seconds to wait between live table updates.
+            Increase this value if the table updates too quickly.
+            Default: 0.5 seconds.
+        :param columns: Optional list of columns to display. If not provided,
+            all columns will be displayed. Pass empty list to display only metadata.
+        :param column_widths: Optional dictionary mapping column names to their desired
+            widths in characters. If not provided, column widths will be determined
+            automatically based on content. Example: {"name": 20, "id": 10}
+        """
+        printer = self.processing_context.printer
+        printer.configure_live(live, live_slowdown)
+
+        if columns is not None:
+            if metadata:
+                columns = ["_key", "_timestamp", *columns]
+            elif len(columns) == 0:
+                warnings.warn(
+                    "`columns` is an empty list and `metadata` is False. "
+                    f"Table `{title}` will be empty."
+                )
+
+        table = printer.add_table(
+            size=size,
+            title=title,
+            timeout=timeout,
+            columns=columns,
+            column_widths=column_widths,
+        )
+
+        def _add_row(value: Any, *_metadata: tuple[Any, int, HeadersTuples]) -> None:
+            if metadata:
+                value = dict(_key=_metadata[0], _timestamp=_metadata[1], **value)
+            table.add_row(value)
+
+        return self._add_update(_add_row, metadata=metadata)
 
     def compose(
         self,
