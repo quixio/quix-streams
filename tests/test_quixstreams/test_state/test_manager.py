@@ -1,4 +1,5 @@
 import os
+import shutil
 import uuid
 from unittest.mock import MagicMock
 
@@ -161,6 +162,16 @@ class TestStateStoreManager:
         # Act - Delete stores
         with pytest.raises(PartitionStoreIsUsed):
             state_manager.clear_stores()
+
+    def test_clear_stores_deleted_dir(self, state_manager_factory, tmp_path):
+        group_id = str(uuid.uuid4())
+        base_dir_path = tmp_path / "state"
+
+        with state_manager_factory(
+            group_id=group_id, state_dir=str(base_dir_path)
+        ) as st:
+            shutil.rmtree(base_dir_path, ignore_errors=True)
+            st.clear_stores()
 
 
 @pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
