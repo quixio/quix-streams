@@ -658,15 +658,12 @@ sdf = app.dataframe(...)
 # some SDF transformations happening here ...
 
 # Show last 5 records with metadata columns
-sdf.print_table(
-    size=5,
-    title="My Stream",
-    metadata=True,
-    slowdown=1  # Update every second
-)
+sdf.print_table(size=5, title="My Stream")
 
 # For wide datasets, limit columns to improve readability
 sdf.print_table(
+    size=5,
+    title="My Stream",
     columns=["id", "name", "value"],
     column_widths={"name": 20}
 )

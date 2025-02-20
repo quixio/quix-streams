@@ -8,6 +8,9 @@ from rich.table import Table as RichTable
 
 __all__ = ("Printer",)
 
+DEFAULT_LIVE = True
+DEFAULT_LIVE_SLOWDOWN = 0.5
+
 
 class Table:
     def __init__(
@@ -72,9 +75,9 @@ class Printer:
 
     def __init__(self) -> None:
         self._tables: list[Table] = []
-        self._slowdown = 0.5
         self._active = False
-        self._live = True
+        self._live = DEFAULT_LIVE
+        self._live_slowdown = DEFAULT_LIVE_SLOWDOWN
         self._resolve_print_method()
 
     def _resolve_print_method(self) -> None:
@@ -83,12 +86,13 @@ class Printer:
         else:
             self._print = self._print_non_interactive
 
-    def set_slowdown(self, value: float) -> None:
-        self._slowdown = value
+    def configure_live(self, live: bool, live_slowdown: float) -> None:
+        if live != DEFAULT_LIVE:
+            self._live = live
+            self._resolve_print_method()
 
-    def set_live(self, value: bool) -> None:
-        self._live = value
-        self._resolve_print_method()
+        if live_slowdown != DEFAULT_LIVE_SLOWDOWN:
+            self._live_slowdown = max(0.0, live_slowdown)
 
     def add_table(
         self,
@@ -112,7 +116,6 @@ class Printer:
     def print(self) -> None:
         if self._active:
             self._print()
-            time.sleep(self._slowdown)
 
     def _print_interactive(self) -> None:
         # In interactive mode (terminal/console), we can refresh
@@ -129,6 +132,7 @@ class Printer:
                     console_cleared = True
 
                 table.print(self._console)
+        time.sleep(self._live_slowdown)
 
     def _print_non_interactive(self) -> None:
         # In non-interactive mode (e.g. output redirected to a file),

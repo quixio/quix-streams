@@ -49,6 +49,7 @@ from quixstreams.models.serializers import DeserializerType, SerializerType
 from quixstreams.processing import ProcessingContext
 from quixstreams.sinks import BaseSink
 from quixstreams.state.base import State
+from quixstreams.utils.printing import DEFAULT_LIVE, DEFAULT_LIVE_SLOWDOWN
 
 from .exceptions import InvalidOperation
 from .registry import DataframeRegistry
@@ -778,18 +779,13 @@ class StreamingDataFrame:
         title: Optional[str] = None,
         metadata: bool = True,
         timeout: float = 5.0,
-        # The slowdown and live parameters are handled specially across the pipeline:
-        # - Multiple print_table calls may exist in a pipeline
-        # - Only one state of slowdown and live is maintained per pipeline
-        # - The last provided values of slowdown and live are used for all print_table calls
-        # - Default values are None to prevent overwriting previously set values
-        slowdown: Optional[float] = None,
-        live: Optional[bool] = None,
+        live: bool = DEFAULT_LIVE,
+        live_slowdown: float = DEFAULT_LIVE_SLOWDOWN,
         columns: Optional[List[str]] = None,
         column_widths: Optional[dict[str, int]] = None,
     ) -> Self:
         """
-        Print a live-updating table of the most recent records.
+        Print a table with the most recent records.
 
         This feature is experimental and subject to change in future releases.
 
@@ -818,10 +814,10 @@ class StreamingDataFrame:
         Note: This works best in terminal environments. For Jupyter notebooks,
         consider using `print()` instead.
 
-        Note: The last provided slowdown value will be used for all print_table calls
+        Note: The last provided live value will be used for all print_table calls
         in the pipeline.
 
-        Note: The last provided live value will be used for all print_table calls
+        Note: The last provided live_slowdown value will be used for all print_table calls
         in the pipeline.
 
         Example Snippet:
@@ -852,12 +848,12 @@ class StreamingDataFrame:
         :param timeout: Time in seconds to wait for table to fill up before printing
             an incomplete table. Only relevant for non-interactive environments
             (e.g. output redirected to a file). Default: 5.0
-        :param slowdown: Time in seconds to wait between updates.
-            Default: None (which translates to 0.5 seconds).
-            Increase this value if the table updates too quickly.
         :param live: Whether to print the table in real-time if possible.
             If real-time printing is not possible, the table will be printed
             in non-interactive mode. Default: True
+        :param live_slowdown: Time in seconds to wait between live table updates.
+            Increase this value if the table updates too quickly.
+            Default: 0.5 seconds.
         :param columns: Optional list of columns to display. If not provided,
             all columns will be displayed. Pass empty list to display only metadata.
         :param column_widths: Optional dictionary mapping column names to their desired
@@ -865,14 +861,7 @@ class StreamingDataFrame:
             automatically based on content. Example: {"name": 20, "id": 10}
         """
         printer = self.processing_context.printer
-
-        if slowdown is not None:
-            if slowdown < 0.0:
-                raise ValueError("Slowdown must be a non-negative float")
-            printer.set_slowdown(slowdown)
-
-        if live is not None:
-            printer.set_live(live)
+        printer.configure_live(live, live_slowdown)
 
         if columns is not None:
             if metadata:

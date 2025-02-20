@@ -2,7 +2,7 @@ from typing import Callable
 
 import pytest
 
-from quixstreams.utils.printing import Printer
+from quixstreams.utils.printing import DEFAULT_LIVE, DEFAULT_LIVE_SLOWDOWN, Printer
 
 """Note:
 
@@ -20,25 +20,18 @@ Printer will print in non-interactive mode by default.
 @pytest.fixture
 def printer() -> Printer:
     printer = Printer()
-    printer.set_slowdown(0.0)  # do not slow down the test suite
+    printer.configure_live(True, 0.0)  # do not slow down the test suite
     return printer
 
 
-def test_set_slowdown() -> None:
+def test_configure_live() -> None:
     printer = Printer()
-    assert printer._slowdown == 0.5
+    assert printer._live == DEFAULT_LIVE
+    assert printer._live_slowdown == DEFAULT_LIVE_SLOWDOWN
 
-    printer.set_slowdown(1.0)
-    assert printer._slowdown == 1.0
-
-
-def test_set_live() -> None:
-    printer = Printer()
-    assert printer._live is True
-
-    printer.set_live(False)
-    assert printer._live is False
-    assert printer._print == printer._print_non_interactive
+    printer.configure_live(False, 1.0)
+    assert printer._live == False
+    assert printer._live_slowdown == 1.0
 
 
 def test_add_table(printer: Printer) -> None:
