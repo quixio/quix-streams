@@ -4,6 +4,18 @@ import pytest
 
 from quixstreams.utils.printing import Printer
 
+"""Note:
+
+Printer class will behave differently when run locally on your machine
+versus when run in a CI environment like Github.
+
+Locally, sys.stdout.isatty() will return True, so the Printer will
+drop into interactive mode by default.
+
+In a CI environment, sys.stdout.isatty() will return False, so the
+Printer will print in non-interactive mode by default.
+"""
+
 
 @pytest.fixture
 def printer() -> Printer:
@@ -23,7 +35,6 @@ def test_set_slowdown() -> None:
 def test_set_live() -> None:
     printer = Printer()
     assert printer._live is True
-    assert printer._print == printer._print_interactive
 
     printer.set_live(False)
     assert printer._live is False
