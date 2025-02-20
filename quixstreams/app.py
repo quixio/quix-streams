@@ -79,6 +79,8 @@ class RunTracker:
     __slots__ = (
         "running",
         "last_consumed_tp",
+        "first_run",
+        "first_rebalance",
         "_processing_context",
         "_start_time",
         "_timeout",
@@ -108,11 +110,13 @@ class RunTracker:
         """
         self.running: bool = False
         self.last_consumed_tp: Optional[tuple] = None
+        self.first_run: bool = True
+        self.first_rebalance: bool = True
         self._processing_context = processing_context
         self._start_time: float = time.monotonic()
         self._timeout: float = self._timeout_default
         self._run_iterations: int = 0
-        self._stop_checker: Optional[Callable[[], bool]] = None
+        self._stop_checker: Union[Callable[[], bool], bool] = False
         self._max_count: int = self._max_count_default
         self._count: int = 0
         self._empty_poll: int = 0
@@ -126,34 +130,37 @@ class RunTracker:
     def _consumer(self):
         return self._processing_context.consumer
 
-    @property
-    def run_iterations(self) -> int:
-        """
-        Tracks number of times app.run() has been called.
-        Mostly only here for tracking the initial run.
-        :return:
-        """
-        return self._run_iterations
-
     def update_status(self):
         """
         Trigger stop if its condition is met.
         """
         # most optimal way to keep performance with typical operation (no timeout)
-        if (stopper := self._stop_checker) and stopper():
-            self.stop()
+        if self._stop_checker:
+            if self._stop_checker():
+                self.stop()
 
-    def start(self):
+    def start_runner(self):
         """
         Called as part of app.run() to initialize/reset stop conditions.
         """
         self.running = True
-        self._run_iterations += 1
-        self.reset_tracking()
+        self.first_run = False
+
+    def set_stopper(self):
         if self._timeout:
             self._stop_checker = self._at_timeout
         elif self._max_count:
             self._stop_checker = self._at_count
+        else:
+            # Should already be covered, but just in case
+            self._stop_checker = False
+        if self._stop_checker:
+            self.start_tracking()
+
+    def start_tracking(self):
+        self._start_time = time.monotonic()
+        self._count = 0
+        self._empty_poll = 0
 
     def stop(self):
         """
@@ -161,9 +168,11 @@ class RunTracker:
         :return:
         """
         self.running = False
+        self.first_rebalance = True
         self._paused = False
         self._timeout = self._timeout_default
         self._max_count = self._max_count_default
+        self._stop_checker = False
         self._primary_topics = []
         self._repartition_topics = []
         self._repartition_stop_points = {}
@@ -196,11 +205,6 @@ class RunTracker:
                 raise ValueError("max empty poll must be >= 0")
         self._max_count = max_count  # type: ignore
         self._max_empty_poll = max_empty_poll  # type: ignore
-
-    def reset_tracking(self):
-        self._start_time = time.monotonic()
-        self._count = 0
-        self._empty_poll = 0
 
     def _at_timeout(self) -> bool:
         return (time.monotonic() - self._start_time) > self._timeout
@@ -257,7 +261,6 @@ class RunTracker:
         print(
             f"WATERMARK: {self._consumer.get_watermark_offsets(TopicPartition(self._repartition_topics[0], 0))}"
         )
-        # TODO: consider rebalances.
         # TODO: instead, set another callable which swaps once we know we're paused?
         if self.last_consumed_tp:
             tp = TopicPartition(*self.last_consumed_tp)
@@ -999,7 +1002,7 @@ class Application:
         self._setup_signal_handlers()
 
         # These only need to be performed on the first .run() (with interactive running)
-        if not self._run_tracker.run_iterations:
+        if self._run_tracker.first_run:
             logger.info(
                 f"Starting the Application with the config: "
                 f'broker_address="{self._config.broker_address}" '
@@ -1052,13 +1055,13 @@ class Application:
         run_tracker = self._run_tracker
 
         processing_context.init_checkpoint()
-        run_tracker.start()
+        run_tracker.start_runner()
         logger.info("Waiting for incoming messages")
         # Start polling Kafka for messages and callbacks
         while run_tracker.running:
             if state_manager.recovery_required:
                 state_manager.do_recovery()
-                run_tracker.reset_tracking()
+                run_tracker.start_tracking()
             else:
                 process_message(dataframes_composed)
                 processing_context.commit_checkpoint()
@@ -1071,7 +1074,7 @@ class Application:
         processing_context.commit_checkpoint(force=True)
 
     def _run_sources(self):
-        self._run_tracker.start()
+        self._run_tracker.start_runner()
         self._source_manager.start_sources()
         while self._run_tracker.running:
             self._source_manager.raise_for_error()
@@ -1214,6 +1217,9 @@ class Application:
                         f'is behind the stored offset "{min_stored_offset}". '
                         f"It may lead to distortions in produced data."
                     )
+        if self._run_tracker.first_rebalance:
+            self._run_tracker.first_rebalance = False
+            self._run_tracker.set_stopper()
 
     def _on_revoke(self, _, topic_partitions: List[TopicPartition]):
         """
