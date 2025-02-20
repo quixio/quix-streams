@@ -80,9 +80,10 @@ class RunTracker:
     __slots__ = (
         "running",
         "last_consumed_tp",
-        "first_run",
-        "first_rebalance",
+        "_first_run",
+        "_first_rebalance",
         "_processing_context",
+        "_topic_manager",
         "_start_time",
         "_timeout",
         "_run_iterations",
@@ -104,6 +105,7 @@ class RunTracker:
     def __init__(
         self,
         processing_context: Optional[ProcessingContext] = None,
+        topic_manager: Optional[TopicManager] = None,
     ):
         """
         Tracks the runtime status of an Application, along with managing variables
@@ -111,9 +113,10 @@ class RunTracker:
         """
         self.running: bool = False
         self.last_consumed_tp: Optional[tuple] = None
-        self.first_run: bool = True
-        self.first_rebalance: bool = True
+        self._first_run: bool = True
+        self._first_rebalance: bool = True
         self._processing_context = processing_context
+        self._topic_manager = topic_manager
         self._start_time: float = time.monotonic()
         self._timeout: float = self._timeout_default
         self._run_iterations: int = 0
@@ -122,14 +125,18 @@ class RunTracker:
         self._count: int = 0
         self._empty_poll: int = 0
         self._max_empty_poll: int = self._max_empty_poll_default
-        self._primary_topics: list = []
-        self._repartition_topics: list = []
-        self._paused = False
+        self._primary_topics: list[str] = []
+        self._repartition_topics: list[str] = []
+        self._paused: bool = False
         self._repartition_stop_points: dict[tuple, int] = {}
 
     @property
     def _consumer(self):
         return self._processing_context.consumer
+
+    @property
+    def first_run(self) -> bool:
+        return self._first_run
 
     def update_status(self):
         """
@@ -145,9 +152,17 @@ class RunTracker:
         Called as part of app.run() to initialize/reset stop conditions.
         """
         self.running = True
-        self.first_run = False
+        if self._first_run:
+            self._primary_topics = [t for t in self._topic_manager.topics]
+            self._repartition_topics = [
+                t for t in self._topic_manager.repartition_topics
+            ]
+            self._first_run = False
 
     def set_stopper(self):
+        if not self._first_rebalance:
+            return
+        self._first_rebalance = False
         if self._timeout:
             self._stop_checker = self._at_timeout
         elif self._max_count:
@@ -157,11 +172,18 @@ class RunTracker:
             self._stop_checker = False
         if self._stop_checker:
             self.start_tracking()
+            logger.info("Note: trackers reset if initial recovery check is required...")
 
     def start_tracking(self):
-        self._start_time = time.monotonic()
-        self._count = 0
-        self._empty_poll = 0
+        if self._timeout:
+            logger.info(f"Starting time tracking with {self._timeout}s timeout...")
+            self._start_time = time.monotonic()
+        elif self._max_count:
+            logger.info(f"Starting count tracking for {self._max_count} records...")
+            self._count = 0
+            self._empty_poll = 0
+        else:
+            logger.debug("No trackers set, running until app is stopped or fails...")
 
     def stop(self):
         """
@@ -169,13 +191,11 @@ class RunTracker:
         :return:
         """
         self.running = False
-        self.first_rebalance = True
+        self._first_rebalance = True
         self._paused = False
         self._timeout = self._timeout_default
         self._max_count = self._max_count_default
         self._stop_checker = False
-        self._primary_topics = []
-        self._repartition_topics = []
         self._repartition_stop_points = {}
 
     def set_stop_condition(
@@ -196,7 +216,7 @@ class RunTracker:
                 raise ValueError("run timeout must be >= 0.0")
             logger.info(
                 f"TIME LIMIT DETECTED: "
-                f"Application will run for {timeout}s (after any recovery)"
+                f"Application will run for {timeout}s (after any initial recovery)"
             )
         self._timeout = timeout  # type: ignore
         if max_count := (count or self._max_count_default):
@@ -226,12 +246,6 @@ class RunTracker:
             (t.topic, t.partition): self._consumer.get_watermark_offsets(t)[1]
             for t in partitions
         }
-
-    def add_primary_topics(self, topics: list):
-        self._primary_topics = topics
-
-    def add_repartition_topics(self, topics: list):
-        self._repartition_topics = topics
 
     def _pause_primary_partitions(self):
         self._consumer.pause(
@@ -581,7 +595,10 @@ class Application:
             pausing_manager=self._pausing_manager,
         )
         self._dataframe_registry = DataframeRegistry()
-        self._run_tracker = RunTracker(processing_context=self._processing_context)
+        self._run_tracker = RunTracker(
+            processing_context=self._processing_context,
+            topic_manager=self._topic_manager,
+        )
 
     @property
     def config(self) -> "ApplicationConfig":
@@ -1027,11 +1044,6 @@ class Application:
         exit_stack.enter_context(self._source_manager)
         exit_stack.push(self._exception_handler)
 
-        self._run_tracker.add_primary_topics([t for t in self._topic_manager.topics])
-        self._run_tracker.add_repartition_topics(
-            [t for t in self._topic_manager.repartition_topics]
-        )
-
         with exit_stack:
             # Subscribe to topics in Kafka and start polling
             if self._dataframe_registry.consumer_topics:
@@ -1214,9 +1226,7 @@ class Application:
                         f'is behind the stored offset "{min_stored_offset}". '
                         f"It may lead to distortions in produced data."
                     )
-        if self._run_tracker.first_rebalance:
-            self._run_tracker.first_rebalance = False
-            self._run_tracker.set_stopper()
+        self._run_tracker.set_stopper()
 
     def _on_revoke(self, _, topic_partitions: List[TopicPartition]):
         """
