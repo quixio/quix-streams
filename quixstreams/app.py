@@ -888,6 +888,7 @@ class Application:
         source_manager = self._source_manager
         process_message = self._process_message
         run_tracker = self._run_tracker
+        printer = self._processing_context.printer
 
         processing_context.init_checkpoint()
         run_tracker.start()
@@ -902,6 +903,7 @@ class Application:
                 processing_context.commit_checkpoint()
                 processing_context.resume_ready_partitions()
                 source_manager.raise_for_error()
+                printer.print()
                 run_tracker.update_status()
 
         logger.info("Stop processing of StreamingDataFrame")
