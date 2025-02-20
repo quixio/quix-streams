@@ -106,3 +106,4 @@ class ProcessingContext:
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.exactly_once:
             self.producer.abort_transaction(5)
+        self.printer.clear()

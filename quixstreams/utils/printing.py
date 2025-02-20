@@ -117,6 +117,11 @@ class Printer:
         if self._active:
             self._print()
 
+    def clear(self) -> None:
+        for table in self._tables:
+            table.clear()
+        self._tables.clear()
+
     def _print_interactive(self) -> None:
         # In interactive mode (terminal/console), we can refresh
         # the table in-place. When a new row arrives, immediately

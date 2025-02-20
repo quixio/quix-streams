@@ -1,3 +1,4 @@
+from collections import deque
 from typing import Callable
 
 import pytest
@@ -47,6 +48,30 @@ def test_add_table(printer: Printer) -> None:
     assert table._timeout == 12.3
     assert table._column_widths == {"id": 20, "name": 30}
     assert printer._tables == [table]
+
+
+def test_clear_table(printer: Printer) -> None:
+    table = printer.add_table(title="test")
+    table.add_row({"id": 1})
+    assert table._rows == deque([{"id": 1}])
+
+    table.clear()
+    assert table._rows == deque()
+
+
+def test_clear_printer(printer: Printer) -> None:
+    table1 = printer.add_table(title="test1")
+    table2 = printer.add_table(title="test2")
+    table1.add_row({"id": 1})
+    table2.add_row({"id": 2})
+    assert printer._tables == [table1, table2]
+    assert table1._rows == deque([{"id": 1}])
+    assert table2._rows == deque([{"id": 2}])
+
+    printer.clear()
+    assert printer._tables == []
+    assert table1._rows == deque()
+    assert table2._rows == deque()
 
 
 def test_inactive(printer: Printer, get_output: Callable[[], str]) -> None:
