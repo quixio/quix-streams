@@ -85,7 +85,6 @@ class RunTracker:
         "_topic_manager",
         "_start_time",
         "_timeout",
-        "_run_iterations",
         "_stop_checker",
         "_max_count",
         "_count",
@@ -111,15 +110,18 @@ class RunTracker:
         associated with stopping the app based on a timeout or count.
         """
         self.running: bool = False
-        self.last_consumed_tp: Optional[tuple] = None
         self._first_run: bool = True
         self._first_rebalance: bool = True
         self._processing_context = processing_context
-        self._topic_manager = topic_manager
+        self._stop_checker: Union[Callable[[], bool], bool] = False
+
+        # timeout specific vars
         self._start_time: float = time.monotonic()
         self._timeout: float = self._timeout_default
-        self._run_iterations: int = 0
-        self._stop_checker: Union[Callable[[], bool], bool] = False
+
+        # count specific vars
+        self.last_consumed_tp: Optional[tuple] = None
+        self._topic_manager = topic_manager
         self._max_count: int = self._max_count_default
         self._count: int = 0
         self._empty_poll: int = 0
@@ -148,7 +150,7 @@ class RunTracker:
 
     def start_runner(self):
         """
-        Called as part of app.run() to initialize/reset stop conditions.
+        Called as part of Application.run(), mostly to initialize self.running.
         """
         self.running = True
         if self._first_run:
@@ -171,7 +173,7 @@ class RunTracker:
             self._stop_checker = False
         if self._stop_checker:
             self.start_tracking()
-            logger.info("Note: trackers reset if initial recovery check is required...")
+            logger.info("Note: tracking resets if recovery check is required...")
 
     def start_tracking(self):
         if self._timeout:
@@ -253,16 +255,9 @@ class RunTracker:
         self._paused = True
 
     def _repartition_status_update(self, last_consumed_tp):
-        # last_consumed_tp = self.last_consumed_tp
         current_offset = self._consumer.position([TopicPartition(*last_consumed_tp)])[
             0
         ].offset
-        print(f"last_consumed_tp: {last_consumed_tp}")
-        print(f"stop points: {self._repartition_stop_points}")
-        print(
-            f"watermark: {self._consumer.get_watermark_offsets(TopicPartition(*last_consumed_tp))[1]}"
-        )
-        print(f"current offset: {current_offset}")
         if self._repartition_stop_points[last_consumed_tp] == 0:
             self._set_repartition_stop_points()
         if current_offset == self._repartition_stop_points[last_consumed_tp]:
@@ -270,18 +265,9 @@ class RunTracker:
             logger.info(f"Finished repartition topic {last_consumed_tp}")
 
     def _at_count(self) -> bool:
-        print("AT COUNT START")
-        print(f"last consumed at_count: {self.last_consumed_tp}")
-        print(
-            f"WATERMARK: {self._consumer.get_watermark_offsets(TopicPartition(self._repartition_topics[0], 0))}"
-        )
         # TODO: instead, set another callable which swaps once we know we're paused?
         if self.last_consumed_tp:
-            tp = TopicPartition(*self.last_consumed_tp)
-            print(f"watermark at_count: {self._consumer.get_watermark_offsets(tp)[1]}")
-            print(self._consumer.committed([tp]))
             if self.last_consumed_tp[0] in self._primary_topics:
-                print("add count")
                 self._count += 1
                 if (self._max_count - self._count) <= 0:
                     self._set_repartition_stop_points()
