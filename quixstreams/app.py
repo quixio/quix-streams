@@ -92,7 +92,6 @@ class RunTracker:
         "_max_empty_poll",
         "_primary_topics",
         "_repartition_topics",
-        "_paused",
         "_repartition_stop_points",
     )
 
@@ -128,7 +127,6 @@ class RunTracker:
         self._max_empty_poll: int = self._max_empty_poll_default
         self._primary_topics: list[str] = []
         self._repartition_topics: list[str] = []
-        self._paused: bool = False
         self._repartition_stop_points: dict[tuple, int] = {}
 
     @property
@@ -193,7 +191,6 @@ class RunTracker:
         """
         self.running = False
         self._first_rebalance = True
-        self._paused = False
         self._timeout = self._timeout_default
         self._max_count = self._max_count_default
         self._stop_checker = False
@@ -231,38 +228,35 @@ class RunTracker:
     def _at_timeout(self) -> bool:
         return (time.monotonic() - self._start_time) > self._timeout
 
+    def _get_tp_highwater(self, tp):
+        return self._consumer.get_watermark_offsets(TopicPartition(*tp))[1]
+
     def _set_repartition_stop_points(self):
         """
         Retrieve the highwaters for repartition topics so we know what the true stopping
         point is when doing it by count.
         :return:
         """
-        print("SETTING PARTITION STOP POINT")
-        partitions = [
-            t
-            for t in self._consumer.assignment()
-            if t.topic in self._repartition_topics
+        topic_partitions = [
+            tp
+            for tp in self._consumer.assignment()
+            if tp.topic in self._repartition_topics
         ]
         self._repartition_stop_points = {
-            (t.topic, t.partition): self._consumer.get_watermark_offsets(t)[1]
-            for t in partitions
+            (tp.topic, tp.partition): self._consumer.get_watermark_offsets(tp)[1]
+            for tp in topic_partitions
         }
 
     def _pause_primary_partitions(self):
         self._consumer.pause(
             [t for t in self._consumer.assignment() if t.topic in self._primary_topics]
         )
-        self._paused = True
 
-    def _repartition_status_update(self, last_consumed_tp):
-        current_offset = self._consumer.position([TopicPartition(*last_consumed_tp)])[
-            0
-        ].offset
-        if self._repartition_stop_points[last_consumed_tp] == 0:
-            self._set_repartition_stop_points()
-        if current_offset == self._repartition_stop_points[last_consumed_tp]:
-            self._repartition_stop_points.pop(last_consumed_tp)
-            logger.info(f"Finished repartition topic {last_consumed_tp}")
+    def _repartition_status_update(self, tp):
+        current_offset = self._consumer.position([TopicPartition(*tp)])[0].offset
+        if current_offset == self._repartition_stop_points[tp]:
+            self._repartition_stop_points.pop(tp)
+            logger.info(f"Finished repartition topic {tp}")
 
     def _at_count(self) -> bool:
         # TODO: instead, set another callable which swaps once we know we're paused?
@@ -270,42 +264,31 @@ class RunTracker:
             if self.last_consumed_tp[0] in self._primary_topics:
                 self._count += 1
                 if (self._max_count - self._count) <= 0:
+                    if not self._repartition_topics:
+                        return True
+                    self._processing_context.commit_checkpoint(force=True)  # type: ignore
+                    self._pause_primary_partitions()
                     self._set_repartition_stop_points()
-                    if self._repartition_topics:
-                        logger.info(
-                            f"Count of {self._max_count} Reached. "
-                            "Pausing main topics and finishing downstream operations."
-                        )
-                        self._pause_primary_partitions()
-                        return False
-                    return True
-                return False
-            else:
-                # TODO: move this entire block of logic to _repartition_status_update?
-                if self._paused:
-                    # Finished reading from primary topic, so need to be checking
-                    # status now
-                    self._repartition_status_update(self.last_consumed_tp)
-                    # TODO: move this to _repartition_status_update for ref optimization?
-                    return not bool(self._repartition_stop_points)
-                # Still processing normally, no check needs to be done
-                return False
+                    self._stop_checker = self._finished_processing
         else:
-            if self._paused:
-                for tp in list(self._repartition_stop_points.keys()):
-                    self._repartition_status_update(tp)
-                return not bool(self._repartition_stop_points)
-            elif self._max_empty_poll:
+            # TODO: change this to a timeout?
+            if self._max_empty_poll:
                 self._empty_poll += 1
                 if self._empty_poll >= self._max_empty_poll:
                     logger.info(
                         f"Max empty polling of {self._max_empty_poll} reached after "
                         f"processing {self._count} records"
                     )
-                    # TODO: consider best behavior here
-                    # self._pause_primary_partitions()
                     return True
-            return False
+        return False
+
+    def _finished_processing(self) -> bool:
+        if self.last_consumed_tp:
+            self._repartition_status_update(self.last_consumed_tp)
+        else:
+            for tp in list(self._repartition_stop_points.keys()):
+                self._repartition_status_update(tp)
+        return not bool(self._repartition_stop_points)
 
 
 class Application:
