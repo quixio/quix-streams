@@ -38,6 +38,7 @@ from .platforms.quix import (
     QuixTopicManager,
     check_state_dir,
     check_state_management_enabled,
+    is_quix_deployment,
 )
 from .processing import PausingManager, ProcessingContext
 from .rowconsumer import RowConsumer
@@ -241,7 +242,7 @@ class Application:
         else:
             self._is_quix_app = True
 
-            if state_dir == _default_state_dir:
+            if is_quix_deployment() and state_dir == _default_state_dir:
                 state_dir = Path("/app/state")
 
             if quix_config_builder:

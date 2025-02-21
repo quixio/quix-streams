@@ -5,7 +5,14 @@ from pathlib import Path
 from .env import QUIX_ENVIRONMENT
 
 logger = logging.getLogger(__name__)
-__all__ = ("check_state_management_enabled", "check_state_dir")
+__all__ = ("check_state_management_enabled", "check_state_dir", "is_quix_deployment")
+
+
+def is_quix_deployment() -> bool:
+    """
+    Check if the current deployment is a Quix deployment.
+    """
+    return bool(QUIX_ENVIRONMENT.deployment_id)
 
 
 def check_state_management_enabled() -> None:
@@ -16,7 +23,7 @@ def check_state_management_enabled() -> None:
     If it's disabled, the warning will be logged.
 
     """
-    if QUIX_ENVIRONMENT.deployment_id and not QUIX_ENVIRONMENT.state_management_enabled:
+    if is_quix_deployment() and not QUIX_ENVIRONMENT.state_management_enabled:
         warnings.warn(
             f"State Management feature is disabled for Quix deployment "
             f'"{QUIX_ENVIRONMENT.deployment_id}". '
