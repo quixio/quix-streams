@@ -5,6 +5,7 @@ import time
 import uuid
 from concurrent.futures import Future
 from json import dumps, loads
+from pathlib import Path
 from unittest.mock import create_autospec, patch
 
 import pytest
@@ -1101,6 +1102,21 @@ class TestQuixApplicationWithState:
         warnings = [w for w in warned.list if w.category is RuntimeWarning]
         warning = str(warnings[0].message)
         assert "does not match the state directory" in warning
+
+
+@pytest.mark.parametrize(
+    ["deployment_id", "expected_state_dir"],
+    [
+        ("123", "/app/state"),
+        ("", "state"),
+    ],
+)
+def test_quix_app_state_dir_default(
+    monkeypatch, quix_mock_config_builder_factory, deployment_id, expected_state_dir
+):
+    monkeypatch.setenv(QuixEnvironment.DEPLOYMENT_ID, deployment_id)
+    app = Application(quix_config_builder=quix_mock_config_builder_factory())
+    assert app._config.state_dir == Path(expected_state_dir)
 
 
 @pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
