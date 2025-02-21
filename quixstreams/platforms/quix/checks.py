@@ -8,11 +8,12 @@ logger = logging.getLogger(__name__)
 __all__ = ("check_state_management_enabled", "check_state_dir")
 
 
-def check_state_management_enabled():
+def check_state_management_enabled() -> None:
     """
     Check if State Management feature is enabled for the current deployment on
     Quix platform.
-    If it's disabled, the exception will be raised.
+
+    If it's disabled, the warning will be logged.
 
     """
     if QUIX_ENVIRONMENT.deployment_id and not QUIX_ENVIRONMENT.state_management_enabled:
@@ -25,7 +26,7 @@ def check_state_management_enabled():
         )
 
 
-def check_state_dir(state_dir: Path):
+def check_state_dir(state_dir: Path) -> None:
     """
     Check if Application "state_dir" matches the state dir on Quix platform.
 
