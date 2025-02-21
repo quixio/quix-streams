@@ -127,16 +127,15 @@ class Printer:
         # the table in-place. When a new row arrives, immediately
         # print the new row at the bottom, removing the oldest row
         # from the top if table is full.
-        console_cleared = False
-        for table in self._tables:
-            if table.has_new_data():
-                # Clear console only once per print call
-                # and only if there is new data to print.
-                if not console_cleared:
-                    self._console.clear()
-                    console_cleared = True
 
-                table.print(self._console)
+        if not any(table.has_new_data() for table in self._tables):
+            # If no table has new data, do not print anything.
+            return
+
+        self._console.clear()
+        for table in self._tables:
+            table.print(self._console)
+
         time.sleep(self._live_slowdown)
 
     def _print_non_interactive(self) -> None:
