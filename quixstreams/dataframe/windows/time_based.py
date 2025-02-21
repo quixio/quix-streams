@@ -6,7 +6,6 @@ from quixstreams.context import message_context
 from quixstreams.state import WindowedPartitionTransaction, WindowedState
 
 from .base import (
-    Message,
     Window,
     WindowAggregateFunc,
     WindowKeyResult,
@@ -53,7 +52,6 @@ class TimeWindow(Window):
         merge_func: Optional[WindowMergeFunc] = None,
         step_ms: Optional[int] = None,
         on_late: Optional[WindowOnLateCallback] = None,
-        expiration_strategy: ExpirationStrategy = ExpirationStrategy.KEY,
     ):
         super().__init__(name, dataframe)
 
@@ -65,7 +63,8 @@ class TimeWindow(Window):
         self._merge_func = merge_func or default_merge_func
         self._step_ms = step_ms
         self._on_late = on_late
-        self._expiration_strategy = expiration_strategy
+
+        self._expiration_strategy = ExpirationStrategy.KEY
 
     def final(
         self, expiration_strategy: ExpirationStrategyValues = "key"
@@ -96,29 +95,8 @@ class TimeWindow(Window):
             only message key windows are expired on new messages, or per-partition,
             the windows of all the keys in the message partition are expired on new messages.
         """
-
-        def window_callback(
-            value: Any,
-            key: Any,
-            timestamp_ms: int,
-            _headers: Any,
-            transaction: WindowedPartitionTransaction,
-        ) -> Iterable[Message]:
-            _, expired_windows = self.process_window(
-                value=value,
-                key=key,
-                timestamp_ms=timestamp_ms,
-                transaction=transaction,
-                expiration_strategy=ExpirationStrategy.new(expiration_strategy),
-            )
-            # Use window start timestamp as a new record timestamp
-            for key, window in expired_windows:
-                yield (window, key, window["start"], None)
-
-        return self._apply_window(
-            func=window_callback,
-            name=self._name,
-        )
+        self._expiration_strategy = ExpirationStrategy.new(expiration_strategy)
+        return super().final()
 
     def process_window(
         self,
@@ -126,7 +104,6 @@ class TimeWindow(Window):
         key: Any,
         timestamp_ms: int,
         transaction: WindowedPartitionTransaction,
-        expiration_strategy: ExpirationStrategy = ExpirationStrategy.KEY,
     ) -> tuple[Iterable[WindowKeyResult], Iterable[WindowKeyResult]]:
         state = transaction.as_state(prefix=key)
         duration_ms = self._duration_ms
@@ -180,7 +157,7 @@ class TimeWindow(Window):
         if collect:
             state.add_to_collection(value=value, id=timestamp_ms)
 
-        if expiration_strategy == ExpirationStrategy.PARTITION:
+        if self._expiration_strategy == ExpirationStrategy.PARTITION:
             expired_windows = self.expire_by_partition(
                 timestamp_ms, transaction, collect
             )

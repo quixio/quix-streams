@@ -578,7 +578,7 @@ def expiring_window_end(
         return []
 
     ends = []
-    while next_to_expire < timestamp_ms:
+    while next_to_expire <= timestamp_ms:
         ends.append(next_to_expire)
         next_to_expire += step_ms
 
