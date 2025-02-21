@@ -101,8 +101,8 @@ class RunTracker:
 
     def __init__(
         self,
-        processing_context: Optional[ProcessingContext] = None,
-        topic_manager: Optional[TopicManager] = None,
+        processing_context: ProcessingContext,
+        topic_manager: TopicManager,
     ):
         """
         Tracks the runtime status of an Application, along with managing variables
@@ -228,50 +228,55 @@ class RunTracker:
     def _at_timeout(self) -> bool:
         return (time.monotonic() - self._start_time) > self._timeout
 
-    def _get_tp_highwater(self, tp):
-        return self._consumer.get_watermark_offsets(TopicPartition(*tp))[1]
-
-    def _set_repartition_stop_points(self):
-        """
-        Retrieve the highwaters for repartition topics so we know what the true stopping
-        point is when doing it by count.
-        :return:
-        """
-        topic_partitions = [
-            tp
-            for tp in self._consumer.assignment()
-            if tp.topic in self._repartition_topics
-        ]
-        self._repartition_stop_points = {
-            (tp.topic, tp.partition): self._consumer.get_watermark_offsets(tp)[1]
-            for tp in topic_partitions
-        }
-
-    def _pause_primary_partitions(self):
-        self._consumer.pause(
-            [t for t in self._consumer.assignment() if t.topic in self._primary_topics]
-        )
-
     def _repartition_status_update(self, tp):
         current_offset = self._consumer.position([TopicPartition(*tp)])[0].offset
         if current_offset == self._repartition_stop_points[tp]:
             self._repartition_stop_points.pop(tp)
-            logger.info(f"Finished repartition topic {tp}")
+
+    def _finished_count_processing(self) -> bool:
+        if self.last_consumed_tp:
+            self._repartition_status_update(self.last_consumed_tp)
+        else:
+            for tp in list(self._repartition_stop_points.keys()):
+                self._repartition_status_update(tp)
+        return not bool(self._repartition_stop_points)
 
     def _at_count(self) -> bool:
-        # TODO: instead, set another callable which swaps once we know we're paused?
         if self.last_consumed_tp:
+            # add to count only if message is from a primary topic
             if self.last_consumed_tp[0] in self._primary_topics:
                 self._count += 1
                 if (self._max_count - self._count) <= 0:
+                    # check if need to finish flushing any repartition (groupby) topics
                     if not self._repartition_topics:
                         return True
+                    # change to new stop_checker
+                    self._stop_checker = self._finished_count_processing
+                    # commit checkpoint and pause primary topic
+                    # so repartition watermarks will be accurate
                     self._processing_context.commit_checkpoint(force=True)  # type: ignore
-                    self._pause_primary_partitions()
-                    self._set_repartition_stop_points()
-                    self._stop_checker = self._finished_processing
+                    self._consumer.pause(
+                        [
+                            t
+                            for t in self._consumer.assignment()
+                            if t.topic in self._primary_topics
+                        ]
+                    )
+                    # store repartition watermarks for validation
+                    topic_partitions = [
+                        tp
+                        for tp in self._consumer.assignment()
+                        if tp.topic in self._repartition_topics
+                    ]
+                    self._repartition_stop_points = {
+                        (tp.topic, tp.partition): self._consumer.get_watermark_offsets(
+                            tp
+                        )[1]
+                        for tp in topic_partitions
+                    }
+        # poll was empty (no message)
         else:
-            # TODO: change this to a timeout?
+            # TODO: remove and change to a timeout?
             if self._max_empty_poll:
                 self._empty_poll += 1
                 if self._empty_poll >= self._max_empty_poll:
@@ -281,14 +286,6 @@ class RunTracker:
                     )
                     return True
         return False
-
-    def _finished_processing(self) -> bool:
-        if self.last_consumed_tp:
-            self._repartition_status_update(self.last_consumed_tp)
-        else:
-            for tp in list(self._repartition_stop_points.keys()):
-                self._repartition_status_update(tp)
-        return not bool(self._repartition_stop_points)
 
 
 class Application:
