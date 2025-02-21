@@ -1,17 +1,14 @@
 import logging
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Iterable,
-    Optional,
-)
+from enum import Enum
+from typing import TYPE_CHECKING, Any, Iterable, Literal, Optional
 
 from quixstreams.context import message_context
-from quixstreams.state import WindowedState
+from quixstreams.state import WindowedPartitionTransaction, WindowedState
 
 from .base import (
     Window,
     WindowAggregateFunc,
+    WindowKeyResult,
     WindowMergeFunc,
     WindowOnLateCallback,
     WindowResult,
@@ -23,6 +20,23 @@ if TYPE_CHECKING:
     from quixstreams.dataframe.dataframe import StreamingDataFrame
 
 logger = logging.getLogger(__name__)
+
+
+class ExpirationStrategy(Enum):
+    KEY = "key"
+    PARTITION = "partition"
+
+    @classmethod
+    def new(cls, value: str) -> "ExpirationStrategy":
+        try:
+            return ExpirationStrategy[value.upper()]
+        except KeyError:
+            raise TypeError(
+                'expiration strategy must be one of "key" or "partition'
+            ) from None
+
+
+ExpirationStrategyValues = Literal["key", "partition"]
 
 
 class TimeWindow(Window):
@@ -50,13 +64,48 @@ class TimeWindow(Window):
         self._step_ms = step_ms
         self._on_late = on_late
 
+        self._expiration_strategy = ExpirationStrategy.KEY
+
+    def final(
+        self, expiration_strategy: ExpirationStrategyValues = "key"
+    ) -> "StreamingDataFrame":
+        """
+        Apply the window aggregation and return results only when the windows are
+        closed.
+
+        The format of returned windows:
+        ```python
+        {
+            "start": <window start time in milliseconds>,
+            "end": <window end time in milliseconds>,
+            "value: <aggregated window value>,
+        }
+        ```
+
+        The individual window is closed when the event time
+        (the maximum observed timestamp across the partition) passes
+        its end timestamp + grace period.
+        The closed windows cannot receive updates anymore and are considered final.
+
+        >***NOTE:*** By default windows are closed within the same message key.
+        If some message keys appear irregularly in the stream, the latest windows
+        can remain unprocessed until a message with the same key is received.
+
+        :param expiration_strategy: choose the windows expiration strategy. Either per-key,
+            only message key windows are expired on new messages, or per-partition,
+            the windows of all the keys in the message partition are expired on new messages.
+        """
+        self._expiration_strategy = ExpirationStrategy.new(expiration_strategy)
+        return super().final()
+
     def process_window(
         self,
         value: Any,
         key: Any,
         timestamp_ms: int,
-        state: WindowedState,
-    ) -> tuple[Iterable[WindowResult], Iterable[WindowResult]]:
+        transaction: WindowedPartitionTransaction,
+    ) -> tuple[Iterable[WindowKeyResult], Iterable[WindowKeyResult]]:
+        state = transaction.as_state(prefix=key)
         duration_ms = self._duration_ms
         grace_ms = self._grace_ms
         default = self._aggregate_default
@@ -72,7 +121,7 @@ class TimeWindow(Window):
         latest_timestamp = max(timestamp_ms, state_ts)
         max_expired_window_end = latest_timestamp - grace_ms
         max_expired_window_start = max_expired_window_end - duration_ms
-        updated_windows: list[WindowResult] = []
+        updated_windows: list[WindowKeyResult] = []
         for start, end in ranges:
             if start <= max_expired_window_start:
                 late_by_ms = max_expired_window_end - timestamp_ms
@@ -97,21 +146,60 @@ class TimeWindow(Window):
             aggregated = self._aggregate_func(current_value, value)
             state.update_window(start, end, value=aggregated, timestamp_ms=timestamp_ms)
             updated_windows.append(
-                WindowResult(start=start, end=end, value=self._merge_func(aggregated))
+                (
+                    key,
+                    WindowResult(
+                        start=start, end=end, value=self._merge_func(aggregated)
+                    ),
+                )
             )
 
         if collect:
             state.add_to_collection(value=value, id=timestamp_ms)
 
-        expired_windows: list[WindowResult] = []
-        for (start, end), aggregated in state.expire_windows(
-            max_start_time=max_expired_window_start,
+        if self._expiration_strategy == ExpirationStrategy.PARTITION:
+            expired_windows = self.expire_by_partition(
+                timestamp_ms, transaction, collect
+            )
+        else:
+            expired_windows = self.expire_by_key(
+                key, state, max_expired_window_start, collect
+            )
+
+        return updated_windows, expired_windows
+
+    def expire_by_partition(
+        self,
+        timestamp_ms: int,
+        transaction: WindowedPartitionTransaction,
+        collect: bool,
+    ) -> Iterable[WindowKeyResult]:
+        for (start, end), aggregated, key in transaction.expire_all_windows(
+            max_end_time=timestamp_ms,
+            step_ms=self._step_ms if self._step_ms else self._duration_ms,
+            collect=collect,
+            delete=True,
+        ):
+            yield (
+                key,
+                WindowResult(start=start, end=end, value=self._merge_func(aggregated)),
+            )
+
+    def expire_by_key(
+        self,
+        key: bytes,
+        state: WindowedState,
+        max_expired_start: int,
+        collect: bool,
+    ) -> Iterable[WindowKeyResult]:
+        for (start, end), aggregated, _ in state.expire_windows(
+            max_start_time=max_expired_start,
             collect=collect,
         ):
-            expired_windows.append(
-                WindowResult(start=start, end=end, value=self._merge_func(aggregated))
+            yield (
+                key,
+                WindowResult(start=start, end=end, value=self._merge_func(aggregated)),
             )
-        return updated_windows, expired_windows
 
     def _on_expired_window(
         self,

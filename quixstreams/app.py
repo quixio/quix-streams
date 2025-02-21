@@ -855,6 +855,7 @@ class Application:
         rows = self._consumer.poll_row(timeout=self._config.consumer_poll_timeout)
 
         if rows is None:
+            # self.stop()
             return
 
         # Deserializer may return multiple rows for a single message

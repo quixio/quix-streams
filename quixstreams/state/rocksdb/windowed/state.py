@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING, Any, Optional
 
 from quixstreams.state.base import TransactionState
-from quixstreams.state.types import WindowedState
+from quixstreams.state.types import WindowDetail, WindowedState
 
 if TYPE_CHECKING:
     from .transaction import WindowedRocksDBPartitionTransaction
@@ -125,7 +125,7 @@ class WindowedTransactionState(TransactionState, WindowedState):
         delete: bool = True,
         collect: bool = False,
         end_inclusive: bool = False,
-    ) -> list[tuple[tuple[int, int], Any]]:
+    ) -> list[WindowDetail]:
         """
         Get all expired windows from RocksDB up to the specified `max_start_time` timestamp.
 
@@ -149,7 +149,7 @@ class WindowedTransactionState(TransactionState, WindowedState):
 
     def get_windows(
         self, start_from_ms: int, start_to_ms: int, backwards: bool = False
-    ) -> list[tuple[tuple[int, int], Any]]:
+    ) -> list[WindowDetail]:
         """
         Get all windows that start between "start_from_ms" and "start_to_ms".
 

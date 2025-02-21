@@ -16,7 +16,7 @@ from quixstreams.dataframe.exceptions import (
     InvalidOperation,
 )
 from quixstreams.dataframe.registry import DataframeRegistry
-from quixstreams.dataframe.windows import WindowResult
+from quixstreams.dataframe.windows.base import WindowResult
 from tests.utils import DummySink
 
 RecordStub = namedtuple("RecordStub", ("value", "key", "timestamp"))
