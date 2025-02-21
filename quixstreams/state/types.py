@@ -1,5 +1,7 @@
 import logging
-from typing import Any, Iterable, Optional, Protocol, Tuple, TypeAlias
+from typing import Any, Iterable, Optional, Protocol, Tuple
+
+from typing_extensions import TypeAlias
 
 logger = logging.getLogger(__name__)
 

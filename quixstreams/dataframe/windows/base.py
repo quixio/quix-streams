@@ -11,10 +11,11 @@ from typing import (
     Iterable,
     Optional,
     Protocol,
-    TypeAlias,
     TypedDict,
     cast,
 )
+
+from typing_extensions import TypeAlias
 
 from quixstreams.context import message_context
 from quixstreams.core.stream import TransformExpandedCallback
