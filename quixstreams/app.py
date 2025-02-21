@@ -63,7 +63,6 @@ _default_producer_extra_config = {"enable.idempotence": True}
 consumer_extra_config_overrides = {"partition.assignment.strategy": "range"}
 
 _default_max_poll_interval_ms = 300000
-_default_state_dir = Path("/app/state") if is_quix_deployment() else Path("state")
 
 
 class TopicManagerFactory(Protocol):
@@ -126,7 +125,7 @@ class Application:
         commit_every: int = 0,
         consumer_extra_config: Optional[dict] = None,
         producer_extra_config: Optional[dict] = None,
-        state_dir: Union[str, Path] = _default_state_dir,
+        state_dir: Union[None, str, Path] = None,
         rocksdb_options: Optional[RocksDBOptionsType] = None,
         on_consumer_error: Optional[ConsumerErrorCallback] = None,
         on_processing_error: Optional[ProcessingErrorCallback] = None,
@@ -222,6 +221,8 @@ class Application:
         producer_extra_config = producer_extra_config or {}
         consumer_extra_config = consumer_extra_config or {}
 
+        if state_dir is None:
+            state_dir = "/app/state" if is_quix_deployment() else "state"
         state_dir = Path(state_dir)
 
         # We can't use os.getenv as defaults (and have testing work nicely)
