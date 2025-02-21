@@ -102,6 +102,10 @@ class RowConsumer(BaseConsumer):
         )
         self._topics = topics_map
 
+    @property
+    def consumer_exists(self) -> bool:
+        return self._inner_consumer is not None
+
     def poll_row(self, timeout: Optional[float] = None) -> Union[Row, List[Row], None]:
         """
         Consumes a single message and deserialize it to Row or a list of Rows.
@@ -142,3 +146,7 @@ class RowConsumer(BaseConsumer):
             if to_suppress:
                 return None
             raise
+
+    def close(self):
+        super().close()
+        self._inner_consumer = None
