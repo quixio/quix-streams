@@ -63,7 +63,7 @@ _default_producer_extra_config = {"enable.idempotence": True}
 consumer_extra_config_overrides = {"partition.assignment.strategy": "range"}
 
 _default_max_poll_interval_ms = 300000
-_default_state_dir = Path("state")
+_default_state_dir = Path("/app/state") if is_quix_deployment() else Path("state")
 
 
 class TopicManagerFactory(Protocol):
@@ -241,9 +241,6 @@ class Application:
                 broker_address = ConnectionConfig(bootstrap_servers=broker_address)
         else:
             self._is_quix_app = True
-
-            if is_quix_deployment() and state_dir == _default_state_dir:
-                state_dir = Path("/app/state")
 
             if quix_config_builder:
                 quix_app_source = "Quix Config Builder"
