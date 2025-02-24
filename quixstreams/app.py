@@ -104,9 +104,6 @@ class RunTracker:
         "_repartition_stop_points",
     )
 
-    _timeout_default = 0.0
-    _max_count_default = 0
-
     def __init__(
         self,
         processing_context: ProcessingContext,
@@ -117,27 +114,6 @@ class RunTracker:
           associated with stopping the app based on a timeout or count.
           It is typically used for debugging.
 
-        Has the option of stopping after a set count, timeout, or both.
-
-        Not setting a timeout or count limit will result in the Application running
-          indefinitely (expected production behavior).
-
-        A timeout will immediately stop an Application once T seconds has passed after
-          an initial rebalance and recovery.
-        Note that unlike count, a timeout does NOT ensure downstream operations that
-          rely on internal topics (like groupby) are also finalized.
-
-        A count will process a total of N records across all input/SDF topics (so
-          multiple topics will likely not have the same read total!) after
-          an initial rebalance and recovery.
-        THEN, any remaining processes from things such as groupby (which uses internal
-          topics) will also be validated to ensure the results of said messages are
-          fully processed (this does NOT count towards the process total).
-        Note that the Application will run indefinitely until the limit of N is hit.
-
-        When setting a timeout AND count limit, the timeout behavior takes priority (
-          so make sure your timeout is sufficiently large to ensure fully processed
-          records).
         """
         self.running: bool = False
         self._first_run: bool = True
@@ -148,12 +124,12 @@ class RunTracker:
 
         # timeout specific vars
         self._start_time: float = time.monotonic()
-        self._timeout: float = self._timeout_default
+        self._timeout: float = 0.0
 
         # count specific vars
         self.last_consumed_tp: Optional[tuple] = None
         self._topic_manager = topic_manager
-        self._max_count: int = self._max_count_default
+        self._max_count: int = 0
         self._count: int = 0
         self._primary_topics: list[str] = []
         self._repartition_topics: list[str] = []
@@ -197,9 +173,11 @@ class RunTracker:
         self._finished_first_rebalance = True
         if self._has_stop_checker:
             self.start_tracking()
-            logger.info("Note: tracking resets during initial recovery check...")
         else:
-            logger.debug("No stoppers set, running until app is stopped or fails...")
+            logger.info(
+                "No stoppers set; "
+                "Application will run until it fails or is manually stopped."
+            )
 
     def start_tracking(self):
         """
@@ -221,19 +199,19 @@ class RunTracker:
         self._finished_first_rebalance = False
         self._has_stop_checker = False
         self._stop_checker = None
-        self._timeout = self._timeout_default
-        self._max_count = self._max_count_default
+        self._timeout = 0.0
+        self._max_count = 0
         self._repartition_stop_points = {}
 
     def set_stop_condition(
         self,
-        timeout: Optional[float] = None,
-        count: Optional[int] = None,
+        timeout: float = 0.0,
+        count: int = 0,
     ):
         """
         Called as part of app.run(), where user can pass their time limit.
         """
-        if timeout := (timeout or self._timeout_default):
+        if timeout:
             if timeout < 0.0:
                 raise ValueError("run timeout must be >= 0.0")
             logger.info(
@@ -241,19 +219,19 @@ class RunTracker:
                 f"Application will run for up to {timeout}s (after initial recovery)"
             )
             self._stop_checker = self._at_timeout
-        self._timeout = timeout  # type: ignore
+        self._timeout = timeout
 
-        if max_count := (count or self._max_count_default):
-            if max_count < 0:
+        if count:
+            if count < 0:
                 raise ValueError("run count must be >= 0")
             logger.info(
                 f"COUNT LIMIT DETECTED: "
-                f"Application will process up to {max_count} records"
+                f"Application will process up to {count} records"
             )
             self._stop_checker = self._at_count_and_processed_func()
-        self._max_count = max_count  # type: ignore
+        self._max_count = count
 
-        if timeout != self._timeout_default and count != self._max_count_default:
+        if self._timeout and self._max_count:
             logger.info("NOTE: Application will stop at the first encountered limiter!")
             self._stop_checker = self._at_count_or_timeout_func()
         self._has_stop_checker = bool(self._stop_checker)
@@ -318,7 +296,7 @@ class RunTracker:
             # Count was met for primary topics, now confirm downstream repartitions
             if self._repartition_topics:
                 self._prepare_repartition_check()
-                yield False  # need to poll consumer again
+                yield False  # poll for a new message before continuing
                 while not finished_repartition_processing():
                     yield False
                 logger.info("All downstream internal topics processed with counting!")
@@ -978,14 +956,40 @@ class Application:
     def run(
         self,
         dataframe: Optional[StreamingDataFrame] = None,
-        timeout: Optional[float] = None,
-        count: Optional[int] = None,
+        timeout: float = 0.0,
+        count: int = 0,
     ):
         """
         Start processing data from Kafka using provided `StreamingDataFrame`
 
         Once started, it can be safely terminated with a `SIGTERM` signal
         (like Kubernetes does) or a typical `KeyboardInterrupt` (`Ctrl+C`).
+
+        Alternatively, stop conditions can be set (typically for debugging purposes);
+            has the option of stopping after a number of messages, timeout, or both.
+
+        Not setting a timeout or count limit will result in the Application running
+          indefinitely (expected production behavior).
+
+
+        Stop Condition Details:
+
+        A timeout will immediately stop an Application once T seconds has passed after
+          an initial rebalance and recovery.
+        Note that unlike count, a timeout does NOT ensure downstream operations that
+          rely on internal topics (like groupby) are also finalized.
+
+        A count will process N total records from ANY input/SDF topics (so
+          multiple input topics will very likely differ in their consume total!) after
+          an initial rebalance and recovery.
+        THEN, any remaining processes from things such as groupby (which uses internal
+          topics) will also be validated to ensure the results of said messages are
+          fully processed (this does NOT count towards the process total).
+        Note that the Application will run indefinitely until the limit of N is hit.
+
+        When setting a timeout AND count limit, the timeout behavior takes priority (
+          so make sure your timeout is sufficiently large to ensure fully processed
+          records).
 
 
         Example Snippet:
