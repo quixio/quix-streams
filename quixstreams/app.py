@@ -38,6 +38,7 @@ from .platforms.quix import (
     QuixTopicManager,
     check_state_dir,
     check_state_management_enabled,
+    is_quix_deployment,
 )
 from .processing import PausingManager, ProcessingContext
 from .rowconsumer import RowConsumer
@@ -124,7 +125,7 @@ class Application:
         commit_every: int = 0,
         consumer_extra_config: Optional[dict] = None,
         producer_extra_config: Optional[dict] = None,
-        state_dir: Union[str, Path] = Path("state"),
+        state_dir: Union[None, str, Path] = None,
         rocksdb_options: Optional[RocksDBOptionsType] = None,
         on_consumer_error: Optional[ConsumerErrorCallback] = None,
         on_processing_error: Optional[ProcessingErrorCallback] = None,
@@ -220,6 +221,8 @@ class Application:
         producer_extra_config = producer_extra_config or {}
         consumer_extra_config = consumer_extra_config or {}
 
+        if state_dir is None:
+            state_dir = "/app/state" if is_quix_deployment() else "state"
         state_dir = Path(state_dir)
 
         # We can't use os.getenv as defaults (and have testing work nicely)
