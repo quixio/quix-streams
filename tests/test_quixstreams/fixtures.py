@@ -1,8 +1,7 @@
 import re
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from typing import Callable, Optional, Union
-from typing import List
+from typing import Callable, List, Optional, Union
 from unittest.mock import PropertyMock, create_autospec, patch
 
 import pytest
