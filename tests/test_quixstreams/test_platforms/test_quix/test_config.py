@@ -1,5 +1,4 @@
 import base64
-from contextlib import ExitStack
 from copy import deepcopy
 from unittest.mock import PropertyMock, call, create_autospec, patch
 
@@ -12,7 +11,6 @@ from quixstreams.platforms.quix.config import QuixKafkaConfigsBuilder
 from quixstreams.platforms.quix.exceptions import (
     MultipleWorkspaces,
     NoWorkspaceFound,
-    QuixApiRequestFailure,
     QuixCreateTopicFailure,
     QuixCreateTopicTimeout,
 )
@@ -533,61 +531,6 @@ class TestQuixKafkaConfigsBuilder:
         )
         api.get_topics.return_value = api_data_stub
         assert cfg_builder.get_topics() == api_data_stub
-
-    def test_create_topic_no_status_check_create(self, topic_manager_topic_factory):
-        api_return_stub = {
-            "id": "12345-my_topic",
-            "name": "my_topic",
-            "status": "Creating",
-        }
-
-        topic = topic_manager_topic_factory("12345-topic")
-
-        timeout = 4.5
-        api = create_autospec(QuixPortalApiService)
-        cfg_builder = QuixKafkaConfigsBuilder(
-            workspace_id="12345", quix_portal_api_service=api
-        )
-        stack = ExitStack()
-        get_topic = stack.enter_context(patch.object(cfg_builder, "get_topic"))
-        get_topic.side_effect = QuixApiRequestFailure(
-            404, "wid/topic/", error_text="Topic was not found"
-        )
-        create_topic = stack.enter_context(patch.object(cfg_builder, "create_topic"))
-        create_topic.return_value = api_return_stub
-
-        result = cfg_builder.get_or_create_topic(topic, timeout=timeout)
-        stack.close()
-
-        get_topic.assert_called_once_with(topic_name=topic.name, timeout=timeout)
-        create_topic.assert_called_once_with(topic, timeout=timeout)
-        assert result == api_return_stub
-
-    def test_create_topic_no_status_check_exists(self, topic_manager_topic_factory):
-        api_return_stub = {
-            "id": "12345-my_topic",
-            "name": "my_topic",
-            "status": "Creating",
-        }
-
-        topic = topic_manager_topic_factory("12345-topic")
-
-        timeout = 4.5
-        api = create_autospec(QuixPortalApiService)
-        cfg_builder = QuixKafkaConfigsBuilder(
-            workspace_id="12345", quix_portal_api_service=api
-        )
-        stack = ExitStack()
-        get_topic = stack.enter_context(patch.object(cfg_builder, "get_topic"))
-        get_topic.return_value = api_return_stub
-        create_topic = stack.enter_context(patch.object(cfg_builder, "create_topic"))
-
-        result = cfg_builder.get_or_create_topic(topic, timeout=timeout)
-        stack.close()
-
-        get_topic.assert_called_once_with(topic_name=topic.name, timeout=timeout)
-        create_topic.assert_not_called()
-        assert result == api_return_stub
 
     def test_wait_for_topic_ready_statuses(self, topic_manager_topic_factory):
         def side_effect():

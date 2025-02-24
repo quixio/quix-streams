@@ -55,7 +55,7 @@ class TestKafkaReplicatorSource(Base):
             broker_address = self._external_broker_address
 
         return KafkaReplicatorSource(
-            "test source",
+            "test-source",
             app_config=config,
             topic=topic.name,
             broker_address=broker_address,
@@ -300,7 +300,7 @@ class TestQuixEnvironmentSource(Base):
 
     def source(self, config, topic):
         return QuixEnvironmentSource(
-            "test source",
+            "test-source",
             app_config=config,
             topic=topic.name,
             auto_offset_reset="earliest",

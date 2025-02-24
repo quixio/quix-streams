@@ -1,10 +1,15 @@
+import logging
 from typing import List, Literal, Optional
 
-from quixstreams.models.topics import Topic, TopicAdmin, TopicManager
+from quixstreams.models.topics import Topic, TopicAdmin, TopicConfig, TopicManager
+from quixstreams.models.topics.exceptions import TopicNotFoundError
 
 from .config import QuixKafkaConfigsBuilder
+from .exceptions import QuixApiRequestFailure
 
 __all__ = ("QuixTopicManager",)
+
+logger = logging.getLogger(__name__)
 
 
 class QuixTopicManager(TopicManager):
@@ -56,6 +61,20 @@ class QuixTopicManager(TopicManager):
         self._quix_config_builder = quix_config_builder
         self._topic_id_to_name: dict[str, str] = {}
 
+    def _fetch_topic(self, topic: Topic) -> Topic:
+        try:
+            quix_topic_info = self._quix_config_builder.get_topic(
+                topic=topic, timeout=self._timeout
+            )
+        except QuixApiRequestFailure as e:
+            if e.status_code == 404:
+                raise TopicNotFoundError(
+                    f'Topic "{topic.name}" not found on the broker'
+                )
+            raise
+        quix_topic = self._quix_config_builder.convert_topic_response(quix_topic_info)
+        return quix_topic
+
     def _finalize_topic(self, topic: Topic) -> Topic:
         """
         Returns a Topic object with the true topic name by attempting by finding or
@@ -63,24 +82,56 @@ class QuixTopicManager(TopicManager):
 
         Additionally, sets the actual topic configuration since we now have it anyway.
         """
-        quix_topic_info = self._quix_config_builder.get_or_create_topic(topic)
-        quix_topic = self._quix_config_builder.convert_topic_response(quix_topic_info)
 
-        topic_out = topic.__clone__(
-            name=quix_topic.name, create_config=quix_topic.create_config
+        if self._auto_create_topics:
+            self._validate_topic_name(name=topic.name)
+            self._create_topics(
+                [topic], timeout=self._timeout, create_timeout=self._create_timeout
+            )
+
+        broker_topic = self._fetch_topic(topic=topic)
+        broker_config = broker_topic.real_config
+
+        # A hack to pass extra info back from Quix cloud
+        quix_topic_name = broker_config.extra_config.pop("__quix_topic_name__")
+        topic_out = topic.__clone__(name=broker_topic.name)
+
+        extra_config_imports = (
+            self._groupby_extra_config_imports_defaults
+            | self._changelog_extra_config_imports_defaults
         )
-        topic_out.real_config = quix_topic.real_config
-        self._topic_id_to_name[topic_out.name] = quix_topic_info["name"]
-        return super()._finalize_topic(topic_out)
+        # Set a real config for the topic
+        real_config = TopicConfig(
+            num_partitions=broker_config.num_partitions,
+            replication_factor=broker_config.replication_factor,
+            extra_config={
+                k: v
+                for k, v in broker_config.extra_config.items()
+                if k in extra_config_imports
+            },
+        )
+        topic_out.real_config = real_config
+        self._topic_id_to_name[topic_out.name] = quix_topic_name
+        self._quix_config_builder.wait_for_topic_ready_statuses([topic_out])
+        return topic_out
 
     def _create_topics(
         self, topics: List[Topic], timeout: float, create_timeout: float
     ):
-        """
-        Because we create topics immediately upon Topic generation for Quix Cloud,
-        this method simply confirms topics all have a "Ready" status.
-        """
-        self._quix_config_builder.wait_for_topic_ready_statuses(topics)
+        topic = topics[0]
+        try:
+            self._quix_config_builder.create_topic(topic=topic, timeout=timeout)
+        except QuixApiRequestFailure as exc:
+            error_msg = str(exc)
+            # Find a better way to determine the exact error in the future
+            already_exists = (
+                f"Topic with name similar to '{topic.name}' already exists."
+                in error_msg
+            )
+            if exc.status_code == 400 and already_exists:
+                logger.info(f'Topic "{topic.name}" already exists')
+            else:
+                raise
 
     def _internal_name(
         self,

@@ -637,15 +637,3 @@ class TestTopic:
             TopicConfigurationError, match="The real topic configuration is missing"
         ):
             topic.real_config
-
-    def test_topic_real_config_set_twice_fails(self):
-        topic = Topic(name="test")
-        config = TopicConfig(
-            num_partitions=3, replication_factor=5, extra_config={"a": "b"}
-        )
-        topic.real_config = config
-
-        with pytest.raises(
-            TopicConfigurationError, match="The real topic configuration is already set"
-        ):
-            topic.real_config = config

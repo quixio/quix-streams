@@ -20,7 +20,7 @@ class QuixApiRequestFailure(QuixException):
         self,
         status_code: int,
         url: str,
-        error_text: Optional[object] = None,
+        error_text: Optional[dict[str, str]] = None,
     ):
         self.status_code = status_code
         self.url = url

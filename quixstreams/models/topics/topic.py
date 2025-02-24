@@ -159,10 +159,6 @@ class Topic:
 
     @real_config.setter
     def real_config(self, config: TopicConfig):
-        if self._real_config is not None:
-            raise TopicConfigurationError(
-                f'The real topic configuration is already set for the topic "{self.name}"'
-            )
         self._real_config = copy.deepcopy(config)
 
     def row_serialize(self, row: Row, key: Any) -> KafkaMessage:

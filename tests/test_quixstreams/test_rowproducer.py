@@ -193,7 +193,6 @@ class TestTransactionalRowProducer:
         Simplest transactional consume + produce pattern
         """
         topic_args = dict(
-            create_topic=True,
             value_serializer="json",
             value_deserializer="json",
             partitions=1,  # this test assumes 1 partition topics
@@ -262,7 +261,6 @@ class TestTransactionalRowProducer:
         We confirm offset behavior from both failed and successful transactions.
         """
         topic_args = dict(
-            create_topic=True,
             value_serializer="json",
             value_deserializer="json",
             partitions=1,  # this test assumes 1 partition topics
@@ -370,7 +368,6 @@ class TestTransactionalRowProducer:
         (which also raises an exception to cause the Application to terminate).
         """
         topic_args = dict(
-            create_topic=True,
             value_serializer="json",
             value_deserializer="json",
             partitions=1,  # this test assumes 1 partition topics
