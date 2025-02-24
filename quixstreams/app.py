@@ -81,12 +81,13 @@ class RunTracker:
         "running",
         "last_consumed_tp",
         "_first_run",
-        "_first_rebalance",
+        "_finished_first_rebalance",
         "_processing_context",
         "_topic_manager",
         "_start_time",
         "_timeout",
         "_stop_checker",
+        "_has_stop_checker",
         "_max_count",
         "_count",
         "_empty_poll",
@@ -111,9 +112,10 @@ class RunTracker:
         """
         self.running: bool = False
         self._first_run: bool = True
-        self._first_rebalance: bool = True
+        self._finished_first_rebalance: bool = False
         self._processing_context = processing_context
-        self._stop_checker: Union[Callable[[], bool], bool] = False
+        self._stop_checker: Optional[Callable[[], bool]] = None
+        self._has_stop_checker: bool = False
 
         # timeout specific vars
         self._start_time: float = time.monotonic()
@@ -142,8 +144,8 @@ class RunTracker:
         """
         Trigger stop if its condition is met.
         """
-        # most optimal way to keep performance with typical operation (no timeout)
-        if self._stop_checker:
+        # most optimal way to keep performance with typical operation (no stop_checker)
+        if self._has_stop_checker:
             if self._stop_checker():
                 self.stop()
 
@@ -160,21 +162,20 @@ class RunTracker:
             self._first_run = False
 
     def set_stopper(self):
-        if not self._first_rebalance:
+        """
+        Ensures that timers/checkers are set during initial rebalance only.
+        """
+        if self._finished_first_rebalance:
             return
-        self._first_rebalance = False
-        if self._timeout:
-            self._stop_checker = self._at_timeout
-        elif self._max_count:
-            self._stop_checker = self._at_count
-        else:
-            # Should already be covered, but just in case
-            self._stop_checker = False
+        self._finished_first_rebalance = True
         if self._stop_checker:
             self.start_tracking()
-            logger.info("Note: tracking resets if recovery check is required...")
+            logger.info("Note: tracking resets during initial recovery check...")
 
     def start_tracking(self):
+        """
+        Allows resetting of trackers, primarily during rebalance or after recovery
+        """
         if self._timeout:
             logger.info(f"Starting time tracking with {self._timeout}s timeout...")
             self._start_time = time.monotonic()
@@ -191,10 +192,11 @@ class RunTracker:
         :return:
         """
         self.running = False
-        self._first_rebalance = True
+        self._finished_first_rebalance = False
+        self._has_stop_checker = False
+        self._stop_checker = None
         self._timeout = self._timeout_default
         self._max_count = self._max_count_default
-        self._stop_checker = False
         self._repartition_stop_points = {}
 
     def set_stop_condition(
@@ -217,14 +219,17 @@ class RunTracker:
                 f"TIME LIMIT DETECTED: "
                 f"Application will run for {timeout}s (after any initial recovery)"
             )
+            self._stop_checker = self._at_timeout
         self._timeout = timeout  # type: ignore
         if max_count := (count or self._max_count_default):
             if max_count < 0:
                 raise ValueError("run count must be >= 0")
             if (max_empty_poll := (max_empty_poll or self._max_empty_poll_default)) < 0:
                 raise ValueError("max empty poll must be >= 0")
+            self._stop_checker = self._at_count
         self._max_count = max_count  # type: ignore
         self._max_empty_poll = max_empty_poll  # type: ignore
+        self._has_stop_checker = bool(self._stop_checker)
 
     def _at_timeout(self) -> bool:
         return (time.monotonic() - self._start_time) > self._timeout
@@ -238,6 +243,7 @@ class RunTracker:
         if self.last_consumed_tp:
             self._repartition_status_update(self.last_consumed_tp)
         else:
+            # an empty poll, so check all unfinished partitions to see if done
             for tp in list(self._repartition_stop_points.keys()):
                 self._repartition_status_update(tp)
         return not bool(self._repartition_stop_points)
@@ -248,7 +254,7 @@ class RunTracker:
             if self.last_consumed_tp[0] in self._primary_topics:
                 self._count += 1
                 if (self._max_count - self._count) <= 0:
-                    # check if need to finish flushing any repartition (groupby) topics
+                    # check if flushing any repartition (groupby) topics is needed
                     if not self._repartition_topics:
                         return True
                     # change to new stop_checker
@@ -263,7 +269,7 @@ class RunTracker:
                             if t.topic in self._primary_topics
                         ]
                     )
-                    # store repartition watermarks for validation
+                    # store repartition watermarks for validation purposes
                     topic_partitions = [
                         tp
                         for tp in self._consumer.assignment()
