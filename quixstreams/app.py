@@ -6,7 +6,17 @@ import signal
 import time
 import warnings
 from pathlib import Path
-from typing import Callable, List, Literal, Optional, Protocol, Tuple, Type, Union
+from typing import (
+    Callable,
+    Iterator,
+    List,
+    Literal,
+    Optional,
+    Protocol,
+    Tuple,
+    Type,
+    Union,
+)
 
 from confluent_kafka import TopicPartition
 from pydantic import AliasGenerator, Field
@@ -84,14 +94,12 @@ class RunTracker:
         "_finished_first_rebalance",
         "_processing_context",
         "_topic_manager",
-        "_start_time",
-        "_timeout",
         "_stop_checker",
         "_has_stop_checker",
+        "_start_time",
+        "_timeout",
         "_max_count",
         "_count",
-        "_empty_poll",
-        "_max_empty_poll",
         "_primary_topics",
         "_repartition_topics",
         "_repartition_stop_points",
@@ -99,7 +107,6 @@ class RunTracker:
 
     _timeout_default = 0.0
     _max_count_default = 0
-    _max_empty_poll_default = 0
 
     def __init__(
         self,
@@ -108,7 +115,30 @@ class RunTracker:
     ):
         """
         Tracks the runtime status of an Application, along with managing variables
-        associated with stopping the app based on a timeout or count.
+          associated with stopping the app based on a timeout or count.
+          It is typically used for debugging.
+
+        Has the option of stopping after a set count, timeout, or both.
+
+        Not setting a timeout or count limit will result in the Application running
+          indefinitely (expected production behavior).
+
+        A timeout will immediately stop an Application once T seconds has passed after
+          an initial rebalance and recovery.
+        Note that unlike count, a timeout does NOT ensure downstream operations that
+          rely on internal topics (like groupby) are also finalized.
+
+        A count will process a total of N records across all input/SDF topics (so
+          multiple topics will likely not have the same read total!) after
+          an initial rebalance and recovery.
+        THEN, any remaining processes from things such as groupby (which uses internal
+          topics) will also be validated to ensure the results of said messages are
+          fully processed (this does NOT count towards the process total).
+        Note that the Application will run indefinitely until the limit of N is hit.
+
+        When setting a timeout AND count limit, the timeout behavior takes priority (
+          so make sure your timeout is sufficiently large to ensure fully processed
+          records).
         """
         self.running: bool = False
         self._first_run: bool = True
@@ -126,8 +156,6 @@ class RunTracker:
         self._topic_manager = topic_manager
         self._max_count: int = self._max_count_default
         self._count: int = 0
-        self._empty_poll: int = 0
-        self._max_empty_poll: int = self._max_empty_poll_default
         self._primary_topics: list[str] = []
         self._repartition_topics: list[str] = []
         self._repartition_stop_points: dict[tuple, int] = {}
@@ -143,8 +171,8 @@ class RunTracker:
     def update_status(self):
         """
         Trigger stop if its condition is met.
+        This is optimized for maximum performance for when there is no stop_checker.
         """
-        # most optimal way to keep performance with typical operation (no stop_checker)
         if self._has_stop_checker:
             if self._stop_checker():
                 self.stop()
@@ -168,23 +196,22 @@ class RunTracker:
         if self._finished_first_rebalance:
             return
         self._finished_first_rebalance = True
-        if self._stop_checker:
+        if self._has_stop_checker:
             self.start_tracking()
             logger.info("Note: tracking resets during initial recovery check...")
+        else:
+            logger.debug("No stoppers set, running until app is stopped or fails...")
 
     def start_tracking(self):
         """
-        Allows resetting of trackers, primarily during rebalance or after recovery
+        Allows resetting of trackers, primarily after initial rebalance or recovery
         """
         if self._timeout:
             logger.info(f"Starting time tracking with {self._timeout}s timeout...")
             self._start_time = time.monotonic()
-        elif self._max_count:
+        if self._max_count:
             logger.info(f"Starting count tracking for {self._max_count} records...")
             self._count = 0
-            self._empty_poll = 0
-        else:
-            logger.debug("No trackers set, running until app is stopped or fails...")
 
     def stop(self):
         """
@@ -203,50 +230,40 @@ class RunTracker:
         self,
         timeout: Optional[float] = None,
         count: Optional[int] = None,
-        max_empty_poll: Optional[int] = None,
     ):
         """
         Called as part of app.run(), where user can pass their time limit.
         """
-        if timeout is not None and count is not None:
-            raise ValueError(
-                "Can only define either a timeout or count for app.run(), not both"
-            )
         if timeout := (timeout or self._timeout_default):
             if timeout < 0.0:
                 raise ValueError("run timeout must be >= 0.0")
             logger.info(
                 f"TIME LIMIT DETECTED: "
-                f"Application will run for {timeout}s (after any initial recovery)"
+                f"Application will run for up to {timeout}s (after initial recovery)"
             )
             self._stop_checker = self._at_timeout
         self._timeout = timeout  # type: ignore
+
         if max_count := (count or self._max_count_default):
             if max_count < 0:
                 raise ValueError("run count must be >= 0")
-            if (max_empty_poll := (max_empty_poll or self._max_empty_poll_default)) < 0:
-                raise ValueError("max empty poll must be >= 0")
-            self._stop_checker = self._at_count
+            logger.info(
+                f"COUNT LIMIT DETECTED: "
+                f"Application will process up to {max_count} records"
+            )
+            self._stop_checker = self._at_count_and_processed_func()
         self._max_count = max_count  # type: ignore
-        self._max_empty_poll = max_empty_poll  # type: ignore
+
+        if timeout != self._timeout_default and count != self._max_count_default:
+            logger.info("NOTE: Application will stop at the first encountered limiter!")
+            self._stop_checker = self._at_count_or_timeout_func()
         self._has_stop_checker = bool(self._stop_checker)
 
     def _at_timeout(self) -> bool:
-        return (time.monotonic() - self._start_time) > self._timeout
-
-    def _repartition_status_update(self, tp):
-        current_offset = self._consumer.position([TopicPartition(*tp)])[0].offset
-        if current_offset == self._repartition_stop_points[tp]:
-            self._repartition_stop_points.pop(tp)
-
-    def _finished_count_processing(self) -> bool:
-        if self.last_consumed_tp:
-            self._repartition_status_update(self.last_consumed_tp)
-        else:
-            # an empty poll, so check all unfinished partitions to see if done
-            for tp in list(self._repartition_stop_points.keys()):
-                self._repartition_status_update(tp)
-        return not bool(self._repartition_stop_points)
+        if (time.monotonic() - self._start_time) > self._timeout:
+            logger.info(f"Timeout of {self._timeout}s reached!")
+            return True
+        return False
 
     def _at_count(self) -> bool:
         if self.last_consumed_tp:
@@ -254,45 +271,68 @@ class RunTracker:
             if self.last_consumed_tp[0] in self._primary_topics:
                 self._count += 1
                 if (self._max_count - self._count) <= 0:
-                    # check if flushing any repartition (groupby) topics is needed
-                    if not self._repartition_topics:
-                        return True
-                    # change to new stop_checker
-                    self._stop_checker = self._finished_count_processing
-                    # commit checkpoint and pause primary topic
-                    # so repartition watermarks will be accurate
-                    self._processing_context.commit_checkpoint(force=True)  # type: ignore
-                    self._consumer.pause(
-                        [
-                            t
-                            for t in self._consumer.assignment()
-                            if t.topic in self._primary_topics
-                        ]
-                    )
-                    # store repartition watermarks for validation purposes
-                    topic_partitions = [
-                        tp
-                        for tp in self._consumer.assignment()
-                        if tp.topic in self._repartition_topics
-                    ]
-                    self._repartition_stop_points = {
-                        (tp.topic, tp.partition): self._consumer.get_watermark_offsets(
-                            tp
-                        )[1]
-                        for tp in topic_partitions
-                    }
-        # poll was empty (no message)
-        else:
-            # TODO: remove and change to a timeout?
-            if self._max_empty_poll:
-                self._empty_poll += 1
-                if self._empty_poll >= self._max_empty_poll:
-                    logger.info(
-                        f"Max empty polling of {self._max_empty_poll} reached after "
-                        f"processing {self._count} records"
-                    )
+                    logger.info(f"Count of {self._max_count} records reached!")
                     return True
         return False
+
+    def _prepare_repartition_check(self):
+        """
+        Tracks repartition watermarks for efficient validation purposes.
+        Commits checkpoint and pauses primary topics to ensure watermark accuracy.
+        """
+        self._processing_context.commit_checkpoint(force=True)
+        self._consumer.pause(
+            [t for t in self._consumer.assignment() if t.topic in self._primary_topics]
+        )
+        topic_partitions = [
+            tp
+            for tp in self._consumer.assignment()
+            if tp.topic in self._repartition_topics
+        ]
+        self._repartition_stop_points = {
+            (tp.topic, tp.partition): self._consumer.get_watermark_offsets(tp)[1]
+            for tp in topic_partitions
+        }
+
+    def _repartitions_finished(self) -> bool:
+        """
+        Confirms repartitions are at their watermarks as those messages are consumed.
+        Empty consumer polls will cause a check on all of them.
+        """
+        if self.last_consumed_tp:
+            tps = [self.last_consumed_tp]
+        else:
+            tps = list(self._repartition_stop_points.keys())
+        for tp in tps:
+            current_offset = self._consumer.position([TopicPartition(*tp)])[0].offset
+            if current_offset == self._repartition_stop_points[tp]:
+                self._repartition_stop_points.pop(tp)
+        return not bool(self._repartition_stop_points)
+
+    def _at_count_and_processed_func(self) -> Callable[[], bool]:
+        at_count = self._at_count
+        finished_repartition_processing = self._repartitions_finished
+
+        def at_count_and_processed_gen() -> Iterator[bool]:
+            while not at_count():
+                yield False
+            # Count was met for primary topics, now confirm downstream repartitions
+            if self._repartition_topics:
+                self._prepare_repartition_check()
+                yield False  # need to poll consumer again
+                while not finished_repartition_processing():
+                    yield False
+                logger.info("All downstream internal topics processed with counting!")
+            yield True
+
+        gen = at_count_and_processed_gen()
+
+        return lambda: next(gen)
+
+    def _at_count_or_timeout_func(self) -> Callable[[], bool]:
+        at_timeout = self._at_timeout
+        at_count_and_processed = self._at_count_and_processed_func()
+        return lambda: at_timeout() or at_count_and_processed()
 
 
 class Application:
@@ -943,7 +983,6 @@ class Application:
         dataframe: Optional[StreamingDataFrame] = None,
         timeout: Optional[float] = None,
         count: Optional[int] = None,
-        max_empty_poll: Optional[int] = None,
     ):
         """
         Start processing data from Kafka using provided `StreamingDataFrame`
@@ -975,9 +1014,7 @@ class Application:
                 "the argument should be removed.",
                 FutureWarning,
             )
-        self._run_tracker.set_stop_condition(
-            timeout=timeout, count=count, max_empty_poll=max_empty_poll
-        )
+        self._run_tracker.set_stop_condition(timeout=timeout, count=count)
         self._run()
 
     def _exception_handler(self, exc_type, exc_val, exc_tb):
