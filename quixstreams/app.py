@@ -209,7 +209,7 @@ class RunTracker:
         count: int = 0,
     ):
         """
-        Called as part of app.run(), where user can pass their time limit.
+        Called as part of app.run(), where users pass their optional stop conditions.
         """
         if timeout:
             if timeout < 0.0:
