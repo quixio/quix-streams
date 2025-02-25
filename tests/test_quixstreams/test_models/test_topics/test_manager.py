@@ -55,8 +55,10 @@ class TestTopicManager:
             topic.create_config.replication_factor == create_config.replication_factor
         )
         assert topic.create_config.extra_config == create_config.extra_config
-        assert topic.real_config.num_partitions == create_config.num_partitions
-        assert topic.real_config.replication_factor == create_config.replication_factor
+        assert topic.broker_config.num_partitions == create_config.num_partitions
+        assert (
+            topic.broker_config.replication_factor == create_config.replication_factor
+        )
 
     def test_topic_no_config(self, topic_manager_factory):
         """
@@ -74,9 +76,11 @@ class TestTopicManager:
             topic.create_config.replication_factor
             == topic_manager.default_replication_factor
         )
-        assert topic.real_config.num_partitions == topic_manager.default_num_partitions
         assert (
-            topic.real_config.replication_factor
+            topic.broker_config.num_partitions == topic_manager.default_num_partitions
+        )
+        assert (
+            topic.broker_config.replication_factor
             == topic_manager.default_replication_factor
         )
 

@@ -14,8 +14,10 @@ class TestQuixTopicManager:
         topic = topic_manager.topic(topic_name, create_config=create_config)
         assert topic.name == expected_topic_id
         assert topic_manager.topics[topic.name] == topic
-        assert topic.real_config.num_partitions == create_config.num_partitions
-        assert topic.real_config.replication_factor == create_config.replication_factor
+        assert topic.broker_config.num_partitions == create_config.num_partitions
+        assert (
+            topic.broker_config.replication_factor == create_config.replication_factor
+        )
 
     def test_quix_internal_topic(self, quix_topic_manager_factory):
         consumer_group = "my_group"
@@ -41,16 +43,18 @@ class TestQuixTopicManager:
         assert topic_manager.changelog_topics[topic.name][store_name] == changelog
 
         assert (
-            changelog.create_config.num_partitions == topic.real_config.num_partitions
+            changelog.create_config.num_partitions == topic.broker_config.num_partitions
         )
         assert (
             changelog.create_config.replication_factor
-            == topic.real_config.replication_factor
+            == topic.broker_config.replication_factor
         )
-        assert changelog.real_config.num_partitions == topic.real_config.num_partitions
         assert (
-            changelog.real_config.replication_factor
-            == topic.real_config.replication_factor
+            changelog.broker_config.num_partitions == topic.broker_config.num_partitions
+        )
+        assert (
+            changelog.broker_config.replication_factor
+            == topic.broker_config.replication_factor
         )
 
     def test_quix_changelog_nested_internal_topic_naming(
@@ -91,17 +95,17 @@ class TestQuixTopicManager:
 
         assert (
             changelog.create_config.num_partitions
-            == repartition.real_config.num_partitions
+            == repartition.broker_config.num_partitions
         )
         assert (
             changelog.create_config.replication_factor
-            == repartition.real_config.replication_factor
+            == repartition.broker_config.replication_factor
         )
         assert (
-            changelog.real_config.num_partitions
-            == repartition.real_config.num_partitions
+            changelog.broker_config.num_partitions
+            == repartition.broker_config.num_partitions
         )
         assert (
-            changelog.real_config.replication_factor
-            == repartition.real_config.replication_factor
+            changelog.broker_config.replication_factor
+            == repartition.broker_config.replication_factor
         )

@@ -90,7 +90,7 @@ class QuixTopicManager(TopicManager):
             )
 
         broker_topic = self._fetch_topic(topic=topic)
-        broker_config = broker_topic.real_config
+        broker_config = broker_topic.broker_config
 
         # A hack to pass extra info back from Quix cloud
         quix_topic_name = broker_config.extra_config.pop("__quix_topic_name__")
@@ -100,8 +100,8 @@ class QuixTopicManager(TopicManager):
             self._groupby_extra_config_imports_defaults
             | self._changelog_extra_config_imports_defaults
         )
-        # Set a real config for the topic
-        real_config = TopicConfig(
+        # Set a broker config for the topic
+        broker_config = TopicConfig(
             num_partitions=broker_config.num_partitions,
             replication_factor=broker_config.replication_factor,
             extra_config={
@@ -110,7 +110,7 @@ class QuixTopicManager(TopicManager):
                 if k in extra_config_imports
             },
         )
-        topic_out.real_config = real_config
+        topic_out.broker_config = broker_config
         self._topic_id_to_name[topic_out.name] = quix_topic_name
         self._quix_config_builder.wait_for_topic_ready_statuses([topic_out])
         return topic_out

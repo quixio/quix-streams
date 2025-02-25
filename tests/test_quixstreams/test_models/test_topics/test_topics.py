@@ -627,13 +627,13 @@ class TestTopic:
         config = TopicConfig(
             num_partitions=3, replication_factor=5, extra_config={"a": "b"}
         )
-        topic.real_config = config
+        topic.broker_config = config
 
-        assert topic.real_config == config
+        assert topic.broker_config == config
 
     def test_topic_real_config_not_set_fails(self):
         topic = Topic(name="test")
         with pytest.raises(
-            TopicConfigurationError, match="The real topic configuration is missing"
+            TopicConfigurationError, match="The broker topic configuration is missing"
         ):
-            topic.real_config
+            topic.broker_config

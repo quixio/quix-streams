@@ -309,7 +309,7 @@ class TopicManager:
 
     def validate_all_topics(self):
         """
-        Validates that all topics have ".real_config" set
+        Validates that all topics have ".broker_config" set
         and changelog topics have correct numbers of partitions and replication factors.
 
         Issues are pooled and raised as an Exception once inspections are complete.
@@ -318,11 +318,11 @@ class TopicManager:
         for source_topic in self.non_changelog_topics.values():
             # For any changelog topics, validate the amount of partitions and
             # replication factor match with the source topic
-            source_config = source_topic.real_config
+            source_config = source_topic.broker_config
             for changelog_topic in self.changelog_topics.get(
                 source_topic.name, {}
             ).values():
-                changelog_config = changelog_topic.real_config
+                changelog_config = changelog_topic.broker_config
                 if changelog_config.num_partitions != source_config.num_partitions:
                     raise TopicConfigurationMismatch(
                         f'changelog topic "{changelog_topic.name}" partition count '
@@ -362,7 +362,7 @@ class TopicManager:
         if topic_config is None:
             raise TopicNotFoundError(f'Topic "{topic_name}" not found on the broker')
         topic = Topic(name=topic_name)
-        topic.real_config = topic_config
+        topic.broker_config = topic_config
         return topic
 
     def _finalize_topic(self, topic: Topic) -> Topic:
@@ -378,15 +378,15 @@ class TopicManager:
             )
 
         broker_topic = self._fetch_topic(topic=topic)
-        broker_config = broker_topic.real_config
+        broker_config = broker_topic.broker_config
 
         extra_config_imports = (
             self._groupby_extra_config_imports_defaults
             | self._changelog_extra_config_imports_defaults
         )
 
-        # Set a real config for the topic
-        real_config = TopicConfig(
+        # Set a broker config for the topic
+        broker_config = TopicConfig(
             num_partitions=broker_config.num_partitions,
             replication_factor=broker_config.replication_factor,
             extra_config={
@@ -395,7 +395,7 @@ class TopicManager:
                 if k in extra_config_imports
             },
         )
-        topic.real_config = real_config
+        topic.broker_config = broker_config
         return topic
 
     def _format_nested_name(self, topic_name: str) -> str:

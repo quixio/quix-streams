@@ -203,7 +203,7 @@ class QuixKafkaConfigsBuilder:
             extra_config=extra_config,
         )
         topic = Topic(name=api_response["id"], create_config=config)
-        topic.real_config = config
+        topic.broker_config = config
         return topic
 
     def strip_workspace_id_prefix(self, s: str) -> str:

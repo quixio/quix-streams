@@ -1037,10 +1037,10 @@ class TestQuixApplication:
         expected_topic = topic_manager.topics[topic_id]
         assert topic.name == topic_id
         assert (
-            expected_topic.real_config.replication_factor
+            expected_topic.broker_config.replication_factor
             == topic_manager.default_replication_factor
         )
-        assert expected_topic.real_config.num_partitions == topic_partitions
+        assert expected_topic.broker_config.num_partitions == topic_partitions
 
 
 @pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)

@@ -113,7 +113,7 @@ class Topic:
         """
         self.name = name
         self._create_config = copy.deepcopy(create_config)
-        self._real_config: Optional[TopicConfig] = None
+        self._broker_config: Optional[TopicConfig] = None
         self._value_deserializer = _get_deserializer(value_deserializer)
         self._key_deserializer = _get_deserializer(key_deserializer)
         self._value_serializer = _get_serializer(value_serializer)
@@ -147,19 +147,19 @@ class Topic:
         self._create_config = config
 
     @property
-    def real_config(self) -> TopicConfig:
+    def broker_config(self) -> TopicConfig:
         """
-        A real topic config obtained from the Kafka broker
+        A topic config obtained from the Kafka broker
         """
-        if self._real_config is None:
+        if self._broker_config is None:
             raise TopicConfigurationError(
-                f'The real topic configuration is missing for the topic "{self.name}"'
+                f'The broker topic configuration is missing for the topic "{self.name}"'
             )
-        return self._real_config
+        return self._broker_config
 
-    @real_config.setter
-    def real_config(self, config: TopicConfig):
-        self._real_config = copy.deepcopy(config)
+    @broker_config.setter
+    def broker_config(self, config: TopicConfig):
+        self._broker_config = copy.deepcopy(config)
 
     def row_serialize(self, row: Row, key: Any) -> KafkaMessage:
         """
