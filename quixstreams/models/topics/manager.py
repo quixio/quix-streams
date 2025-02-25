@@ -373,8 +373,8 @@ class TopicManager:
         """
         if self._auto_create_topics:
             self._validate_topic_name(name=topic.name)
-            self._create_topics(
-                [topic], timeout=self._timeout, create_timeout=self._create_timeout
+            self._create_topic(
+                topic, timeout=self._timeout, create_timeout=self._create_timeout
             )
 
         broker_topic = self._fetch_topic(topic=topic)
@@ -445,18 +445,16 @@ class TopicManager:
 
         return f"{topic_type}__{'--'.join(parts)}"
 
-    def _create_topics(
-        self, topics: List[Topic], timeout: float, create_timeout: float
-    ):
+    def _create_topic(self, topic: Topic, timeout: float, create_timeout: float):
         """
         Method that actually creates the topics in Kafka via an `Admin` instance.
 
-        :param topics: list of `Topic`s
+        :param topic: a Topic to create
         :param timeout: creation acknowledge timeout (seconds)
         :param create_timeout: topic finalization timeout (seconds)
         """
         self._admin.create_topics(
-            topics, timeout=timeout, finalize_timeout=create_timeout
+            [topic], timeout=timeout, finalize_timeout=create_timeout
         )
 
     def _get_source_topic_config(

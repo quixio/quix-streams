@@ -1,5 +1,5 @@
 import logging
-from typing import List, Literal, Optional
+from typing import Literal, Optional
 
 from quixstreams.models.topics import Topic, TopicAdmin, TopicConfig, TopicManager
 from quixstreams.models.topics.exceptions import TopicNotFoundError
@@ -85,8 +85,8 @@ class QuixTopicManager(TopicManager):
 
         if self._auto_create_topics:
             self._validate_topic_name(name=topic.name)
-            self._create_topics(
-                [topic], timeout=self._timeout, create_timeout=self._create_timeout
+            self._create_topic(
+                topic, timeout=self._timeout, create_timeout=self._create_timeout
             )
 
         broker_topic = self._fetch_topic(topic=topic)
@@ -115,10 +115,7 @@ class QuixTopicManager(TopicManager):
         self._quix_config_builder.wait_for_topic_ready_statuses([topic_out])
         return topic_out
 
-    def _create_topics(
-        self, topics: List[Topic], timeout: float, create_timeout: float
-    ):
-        topic = topics[0]
+    def _create_topic(self, topic: Topic, timeout: float, create_timeout: float):
         try:
             self._quix_config_builder.create_topic(topic=topic, timeout=timeout)
         except QuixApiRequestFailure as exc:

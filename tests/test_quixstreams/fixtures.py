@@ -1,7 +1,7 @@
 import re
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from typing import Callable, List, Optional, Union
+from typing import Callable, Optional, Union
 from unittest.mock import PropertyMock, create_autospec, patch
 
 import pytest
@@ -449,8 +449,7 @@ def quix_topic_manager_factory(
 
         # Patch the instance of QuixTopicManager to use Kafka Admin API
         # create topics instead of Quix Portal API
-        def _mock_create_topics(topics: List[Topic], timeout, create_timeout):
-            topic = topics[0]
+        def _mock_create_topic(topic: Topic, timeout, create_timeout):
             # Get a topic "id" from the QuixKafkaConfigBuilder
             quix_response = quix_config_builder.get_topic(topic=topic)
             # Replace a topic name with "id" and create a topic in a local broker
@@ -463,7 +462,7 @@ def quix_topic_manager_factory(
             quix_topic_manager,
             default_num_partitions=1,
             default_replication_factor=1,
-            _create_topics=_mock_create_topics,
+            _create_topic=_mock_create_topic,
         ).start()
         return quix_topic_manager
 
