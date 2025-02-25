@@ -153,9 +153,7 @@ def __init__(quix_sdk_token: Optional[str] = None,
 
 ```python
 @classmethod
-def convert_topic_response(cls,
-                           api_response: dict,
-                           extra_config: Optional[dict] = None) -> Topic
+def convert_topic_response(cls, api_response: dict) -> Topic
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L178)
@@ -178,7 +176,7 @@ a corresponding Topic object
 def strip_workspace_id_prefix(s: str) -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L210)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L209)
 
 Remove the workspace ID from a given string if it starts with it.
 
@@ -200,7 +198,7 @@ the string with workspace_id prefix removed
 def prepend_workspace_id(s: str) -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L221)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L220)
 
 Add the workspace ID as a prefix to a given string if it does not have it.
 
@@ -223,7 +221,7 @@ def search_for_workspace(workspace_name_or_id: Optional[str] = None,
                          timeout: Optional[float] = None) -> Optional[dict]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L232)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L231)
 
 Search for a workspace given an expected workspace name or id.
 
@@ -245,7 +243,7 @@ def get_workspace_info(known_workspace_topic: Optional[str] = None,
                        timeout: Optional[float] = None) -> dict
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L275)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L274)
 
 Queries for workspace data from the Quix API, regardless of instance cache,
 
@@ -267,7 +265,7 @@ def search_workspace_for_topic(
         timeout: Optional[float] = None) -> Optional[str]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L305)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L303)
 
 Search through all the topics in the given workspace id to see if there is a
 
@@ -288,12 +286,12 @@ the workspace_id if success, else None
 #### QuixKafkaConfigsBuilder.search\_for\_topic\_workspace
 
 ```python
-def search_for_topic_workspace(topic: str,
-                               timeout: Optional[float] = None
-                               ) -> Optional[dict]
+def search_for_topic_workspace(
+        topic: Optional[str],
+        timeout: Optional[float] = None) -> Optional[dict]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L328)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L326)
 
 Find what workspace a topic belongs to.
 
@@ -314,10 +312,10 @@ workspace data dict if topic search success, else None
 #### QuixKafkaConfigsBuilder.create\_topic
 
 ```python
-def create_topic(topic: Topic, timeout: Optional[float] = None)
+def create_topic(topic: Topic, timeout: Optional[float] = None) -> dict
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L359)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L357)
 
 The actual API call to create the topic.
 
@@ -334,7 +332,7 @@ The actual API call to create the topic.
 def get_or_create_topic(topic: Topic, timeout: Optional[float] = None) -> dict
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L391)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L393)
 
 Get or create topics in a Quix cluster as part of initializing the Topic
 
@@ -356,7 +354,7 @@ def wait_for_topic_ready_statuses(topics: List[Topic],
                                   finalize_timeout: Optional[float] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L419)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L421)
 
 After the broker acknowledges topics for creation, they will be in a
 
@@ -376,16 +374,16 @@ marked as "Ready" (and thus ready to produce to/consume from).
 #### QuixKafkaConfigsBuilder.get\_topic
 
 ```python
-def get_topic(topic_name: str, timeout: Optional[float] = None) -> dict
+def get_topic(topic: Topic, timeout: Optional[float] = None) -> dict
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L462)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L464)
 
 return the topic ID (the actual cluster topic name) if it exists, else raise
 
 **Arguments**:
 
-- `topic_name`: name of the topic
+- `topic`: The Topic to get
 - `timeout`: response timeout (seconds); Default 30
 
 **Raises**:
@@ -404,7 +402,7 @@ response dict of the topic info if topic found, else None
 def get_application_config(consumer_group_id: str) -> QuixApplicationConfig
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L494)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L496)
 
 Get all the necessary attributes for an Application to run on Quix Cloud.
 
@@ -644,7 +642,7 @@ certificate as bytes if present, or None
 class QuixTopicManager(TopicManager)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/topic_manager.py#L10)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/topic_manager.py#L15)
 
 The source of all topic management with quixstreams.
 
@@ -669,7 +667,7 @@ def __init__(topic_admin: TopicAdmin,
              auto_create_topics: bool = True)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/topic_manager.py#L31)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/topic_manager.py#L36)
 
 **Arguments**:
 
@@ -6347,7 +6345,7 @@ dict with headers
 class TopicAdmin()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/admin.py#L30)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/admin.py#L31)
 
 For performing "admin"-level operations on a Kafka cluster, mostly around topics.
 
@@ -6363,7 +6361,7 @@ def __init__(broker_address: Union[str, ConnectionConfig],
              extra_config: Optional[Mapping] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/admin.py#L37)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/admin.py#L38)
 
 **Arguments**:
 
@@ -6381,7 +6379,7 @@ or a ConnectionConfig object if authentication is required.
 def list_topics(timeout: float = -1) -> Dict[str, ConfluentTopicMetadata]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/admin.py#L69)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/admin.py#L70)
 
 Get a list of topics and their metadata from a Kafka cluster
 
@@ -6402,7 +6400,7 @@ def inspect_topics(topic_names: List[str],
                    timeout: float = 30) -> Dict[str, Optional[TopicConfig]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/admin.py#L80)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/admin.py#L81)
 
 A simplified way of getting the topic configurations of the provided topics
 
@@ -6428,7 +6426,7 @@ def create_topics(topics: List[Topic],
                   finalize_timeout: float = 60)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/admin.py#L184)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/admin.py#L185)
 
 Create the given list of topics and confirm they are ready.
 
@@ -6479,7 +6477,7 @@ a list of (key, value) tuples.
 ### TopicConfig
 
 ```python
-@dataclasses.dataclass(eq=True)
+@dataclasses.dataclass(eq=True, frozen=True)
 class TopicConfig()
 ```
 
@@ -6512,7 +6510,7 @@ instance.
 ```python
 def __init__(
         name: str,
-        config: Optional[TopicConfig] = None,
+        create_config: Optional[TopicConfig] = None,
         value_deserializer: Optional[DeserializerType] = None,
         key_deserializer: Optional[DeserializerType] = BytesDeserializer(),
         value_serializer: Optional[SerializerType] = None,
@@ -6525,7 +6523,7 @@ def __init__(
 **Arguments**:
 
 - `name`: topic name
-- `config`: topic configs via `TopicConfig` (creation/validation)
+- `create_config`: a `TopicConfig` to create a new topic if it does not exist
 - `value_deserializer`: a deserializer type for values
 - `key_deserializer`: a deserializer type for keys
 - `value_serializer`: a serializer type for values
@@ -6533,23 +6531,31 @@ def __init__(
 - `timestamp_extractor`: a callable that returns a timestamp in
 milliseconds from a deserialized message.
 
-<a id="quixstreams.models.topics.topic.Topic.as_newtopic"></a>
+<a id="quixstreams.models.topics.topic.Topic.create_config"></a>
 
-#### Topic.as\_newtopic
+#### Topic.create\_config
 
 ```python
-def as_newtopic() -> NewTopic
+@property
+def create_config() -> Optional[TopicConfig]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L142)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L139)
 
-Converts `Topic`s to `NewTopic`s as required for Confluent's
+A config to create the topic
 
-`AdminClient.create_topic()`.
+<a id="quixstreams.models.topics.topic.Topic.broker_config"></a>
 
-**Returns**:
+#### Topic.broker\_config
 
-confluent_kafka `NewTopic`s
+```python
+@property
+def broker_config() -> TopicConfig
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L150)
+
+A topic config obtained from the Kafka broker
 
 <a id="quixstreams.models.topics.topic.Topic.row_serialize"></a>
 
@@ -6559,7 +6565,7 @@ confluent_kafka `NewTopic`s
 def row_serialize(row: Row, key: Any) -> KafkaMessage
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L159)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L164)
 
 Serialize Row to a Kafka message structure
 
@@ -6582,7 +6588,7 @@ def row_deserialize(
 ) -> Union[Row, List[Row], None]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L199)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L204)
 
 Deserialize incoming Kafka message to a Row.
 
@@ -6602,22 +6608,6 @@ Row, list of Rows or None if the message is ignored.
 
 ## quixstreams.models.topics.manager
 
-<a id="quixstreams.models.topics.manager.affirm_ready_for_create"></a>
-
-#### affirm\_ready\_for\_create
-
-```python
-def affirm_ready_for_create(topics: List[Topic])
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L21)
-
-Validate a list of topics is ready for creation attempt
-
-**Arguments**:
-
-- `topics`: list of `Topic`s
-
 <a id="quixstreams.models.topics.manager.TopicManager"></a>
 
 ### TopicManager
@@ -6626,7 +6616,7 @@ Validate a list of topics is ready for creation attempt
 class TopicManager()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L31)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L21)
 
 The source of all topic management for a Quix Streams Application.
 
@@ -6646,7 +6636,7 @@ def __init__(topic_admin: TopicAdmin,
              auto_create_topics: bool = True)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L52)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L42)
 
 **Arguments**:
 
@@ -6664,7 +6654,7 @@ def __init__(topic_admin: TopicAdmin,
 def changelog_topics() -> Dict[Optional[str], Dict[str, Topic]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L92)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L82)
 
 Note: `Topic`s are the changelogs.
 
@@ -6679,7 +6669,7 @@ returns: the changelog topic dict, {topic_name: {suffix: Topic}}
 def changelog_topics_list() -> List[Topic]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L101)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L91)
 
 Returns a list of changelog topics
 
@@ -6694,7 +6684,7 @@ returns: the changelog topic dict, {topic_name: {suffix: Topic}}
 def non_changelog_topics() -> Dict[str, Topic]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L110)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L100)
 
 Returns a dict with normal and repartition topics
 
@@ -6707,7 +6697,7 @@ Returns a dict with normal and repartition topics
 def all_topics() -> Dict[str, Topic]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L117)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L107)
 
 Every registered topic name mapped to its respective `Topic`.
 
@@ -6723,7 +6713,7 @@ def topic_config(num_partitions: Optional[int] = None,
                  extra_config: Optional[dict] = None) -> TopicConfig
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L233)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L115)
 
 Convenience method for generating a `TopicConfig` with default settings
 
@@ -6747,11 +6737,11 @@ def topic(name: str,
           key_deserializer: Optional[DeserializerType] = "bytes",
           value_serializer: Optional[SerializerType] = None,
           key_serializer: Optional[SerializerType] = "bytes",
-          config: Optional[TopicConfig] = None,
+          create_config: Optional[TopicConfig] = None,
           timestamp_extractor: Optional[TimestampExtractor] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L255)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L137)
 
 A convenience method for generating a `Topic`. Will use default config options
 
@@ -6764,7 +6754,7 @@ as dictated by the TopicManager.
 - `key_deserializer`: a deserializer type for keys
 - `value_serializer`: a serializer type for values
 - `key_serializer`: a serializer type for keys
-- `config`: optional topic configurations (for creation/validation)
+- `create_config`: optional topic configurations (for creation/validation)
 - `timestamp_extractor`: a callable that returns a timestamp in
 milliseconds from a deserialized message.
 
@@ -6780,7 +6770,7 @@ Topic object with creation configs
 def register(topic: Topic) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L301)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L183)
 
 Register an already generated :class:`quixstreams.models.topics.Topic` to the topic manager.
 
@@ -6804,7 +6794,7 @@ def repartition_topic(operation: str,
                       timeout: Optional[float] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L319)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L201)
 
 Create an internal repartition topic.
 
@@ -6833,7 +6823,7 @@ def changelog_topic(topic_name: Optional[str],
                     timeout: Optional[float] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L359)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L241)
 
 Performs all the logic necessary to generate a changelog topic based on an
 
@@ -6865,60 +6855,18 @@ generate changelog topics. To turn off changelogs, init an Application with
 
 `Topic` object (which is also stored on the TopicManager)
 
-<a id="quixstreams.models.topics.manager.TopicManager.create_topics"></a>
-
-#### TopicManager.create\_topics
-
-```python
-def create_topics(topics: List[Topic],
-                  timeout: Optional[float] = None,
-                  create_timeout: Optional[float] = None)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L428)
-
-Creates topics via an explicit list of provided `Topics`.
-
-Exists as a way to manually specify what topics to create; otherwise,
-`create_all_topics()` is generally simpler.
-
-**Arguments**:
-
-- `topics`: list of `Topic`s
-- `timeout`: creation acknowledge timeout (seconds); Default 30
-- `create_timeout`: topic finalization timeout (seconds); Default 60
-
-<a id="quixstreams.models.topics.manager.TopicManager.create_all_topics"></a>
-
-#### TopicManager.create\_all\_topics
-
-```python
-def create_all_topics(timeout: Optional[float] = None,
-                      create_timeout: Optional[float] = None)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L456)
-
-A convenience method to create all Topic objects stored on this TopicManager.
-
-If `auto_create_topics` is set to False no topic will be created.
-
-**Arguments**:
-
-- `timeout`: creation acknowledge timeout (seconds); Default 30
-- `create_timeout`: topic finalization timeout (seconds); Default 60
-
 <a id="quixstreams.models.topics.manager.TopicManager.validate_all_topics"></a>
 
 #### TopicManager.validate\_all\_topics
 
 ```python
-def validate_all_topics(timeout: Optional[float] = None)
+def validate_all_topics()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L472)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L310)
 
-Validates all topics exist and changelogs have correct topic and rep factor.
+Validates that all topics have ".broker_config" set
+and changelog topics have correct numbers of partitions and replication factors.
 
 Issues are pooled and raised as an Exception once inspections are complete.
 
@@ -11511,7 +11459,7 @@ def setup_topics()
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L843)
 
-Validate and create the topics
+Validate the application topics
 
 <a id="quixstreams.app.ApplicationConfig"></a>
 
@@ -11521,7 +11469,7 @@ Validate and create the topics
 class ApplicationConfig(BaseSettings)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1031)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1025)
 
 Immutable object holding the application configuration
 
@@ -11542,7 +11490,7 @@ def settings_customise_sources(
 ) -> Tuple[PydanticBaseSettingsSource, ...]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1066)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1060)
 
 Included to ignore reading/setting values from the environment
 
@@ -11554,7 +11502,7 @@ Included to ignore reading/setting values from the environment
 def copy(**kwargs) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1079)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1073)
 
 Update the application config and return a copy
 
@@ -13188,7 +13136,7 @@ Responsible for:
 def raise_for_error() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/manager.py#L206)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/manager.py#L205)
 
 Raise a `quixstreams.sources.manager.SourceException`
 if the child process was terminated with an exception.
@@ -13201,7 +13149,7 @@ if the child process was terminated with an exception.
 def stop()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/manager.py#L230)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/manager.py#L229)
 
 Handle shutdown of the source and its subprocess.
 
@@ -13217,7 +13165,7 @@ is still alive, it will kill it with a SIGKILL.
 class SourceManager()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/manager.py#L253)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/manager.py#L252)
 
 Class managing the sources registered with the app
 
@@ -13232,7 +13180,7 @@ def register(source: BaseSource, topic, producer, consumer,
              topic_manager) -> SourceProcess
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/manager.py#L263)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/manager.py#L262)
 
 Register a new source in the manager.
 
@@ -13246,7 +13194,7 @@ Each source need to already be configured, can't reuse a topic and must be uniqu
 def raise_for_error() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/manager.py#L314)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/manager.py#L313)
 
 Raise an exception if any process has stopped with an exception
 
@@ -13258,7 +13206,7 @@ Raise an exception if any process has stopped with an exception
 def is_alive() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/manager.py#L321)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/manager.py#L320)
 
 Check if any process is alive
 
