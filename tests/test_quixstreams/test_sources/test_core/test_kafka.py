@@ -39,7 +39,9 @@ class TestKafkaReplicatorSource(Base):
     def create_source_topic(self, num_partitions=1):
         source_topic = Topic(
             str(uuid.uuid4()),
-            config=TopicConfig(num_partitions=num_partitions, replication_factor=1),
+            create_config=TopicConfig(
+                num_partitions=num_partitions, replication_factor=1
+            ),
             key_serializer="bytes",
             value_serializer="json",
         )
@@ -53,7 +55,7 @@ class TestKafkaReplicatorSource(Base):
             broker_address = self._external_broker_address
 
         return KafkaReplicatorSource(
-            "test source",
+            "test-source",
             app_config=config,
             topic=topic.name,
             broker_address=broker_address,
@@ -63,7 +65,7 @@ class TestKafkaReplicatorSource(Base):
     def test_missing_source_topic(self, app):
         source_topic = Topic(
             str(uuid.uuid4()),
-            config=TopicConfig(num_partitions=1, replication_factor=1),
+            create_config=TopicConfig(num_partitions=1, replication_factor=1),
         )
         destination_topic = app.topic(str(uuid.uuid4()))
 
@@ -79,7 +81,7 @@ class TestKafkaReplicatorSource(Base):
     def test_missing_destination_topic(self, app):
         destination_topic = Topic(
             str(uuid.uuid4()),
-            config=TopicConfig(num_partitions=1, replication_factor=1),
+            create_config=TopicConfig(num_partitions=1, replication_factor=1),
         )
         source_topic = self.create_source_topic(num_partitions=4)
 
@@ -160,8 +162,8 @@ class TestKafkaReplicatorSource(Base):
             .get(source_topic.name)
         )
 
-        assert destination_topic.config == source_topic_config
-        assert destination_topic.config.num_partitions == 7
+        assert destination_topic.create_config == source_topic_config
+        assert destination_topic.create_config.num_partitions == 7
 
     def test_kafka_source(self, app, executor):
         destination_topic = app.topic(str(uuid.uuid4()))
@@ -298,7 +300,7 @@ class TestQuixEnvironmentSource(Base):
 
     def source(self, config, topic):
         return QuixEnvironmentSource(
-            "test source",
+            "test-source",
             app_config=config,
             topic=topic.name,
             auto_offset_reset="earliest",
@@ -315,14 +317,18 @@ class TestQuixEnvironmentSource(Base):
     def create_source_topic(self, num_partitions=1, quix_workspace_id=None):
         source_topic = Topic(
             str(uuid.uuid4()),
-            config=TopicConfig(num_partitions=num_partitions, replication_factor=1),
+            create_config=TopicConfig(
+                num_partitions=num_partitions, replication_factor=1
+            ),
             key_serializer="bytes",
             value_serializer="json",
         )
 
         source_topic_with_workspace = Topic(
             f"{quix_workspace_id or self.QUIX_WORKSPACE_ID}-{source_topic.name}",
-            config=TopicConfig(num_partitions=num_partitions, replication_factor=1),
+            create_config=TopicConfig(
+                num_partitions=num_partitions, replication_factor=1
+            ),
             key_serializer="bytes",
             value_serializer="json",
         )

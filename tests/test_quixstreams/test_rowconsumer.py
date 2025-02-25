@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 import pytest
 from confluent_kafka import KafkaError, TopicPartition
 
@@ -7,6 +9,7 @@ from quixstreams.models import (
     Deserializer,
     IgnoreMessage,
     SerializationError,
+    Topic,
 )
 from tests.utils import Timeout
 
@@ -59,10 +62,10 @@ class TestRowConsumer:
                     if len(rows) == 2:
                         return
 
-    def test_poll_row_kafka_error(
-        self, row_consumer_factory, topic_manager_topic_factory
-    ):
-        topic = topic_manager_topic_factory()
+    def test_poll_row_kafka_error(self, row_consumer_factory, topic_manager_factory):
+        topic_manager = topic_manager_factory()
+        topic = Topic(name=str(uuid4()), create_config=topic_manager.topic_config())
+
         with row_consumer_factory(
             auto_offset_reset="earliest",
         ) as consumer:

@@ -1,8 +1,7 @@
+import copy
 import dataclasses
 import logging
 from typing import Any, Callable, List, Optional, Union
-
-from confluent_kafka.admin import NewTopic
 
 from quixstreams.models.messagecontext import MessageContext
 from quixstreams.models.messages import KafkaMessage
@@ -23,6 +22,7 @@ from quixstreams.models.serializers import (
     SerializerType,
 )
 from quixstreams.models.timestamps import TimestampType
+from quixstreams.models.topics.exceptions import TopicConfigurationError
 from quixstreams.models.topics.utils import merge_headers
 from quixstreams.models.types import (
     Headers,
@@ -40,7 +40,7 @@ TimestampExtractor = Callable[
 ]
 
 
-@dataclasses.dataclass(eq=True)
+@dataclasses.dataclass(eq=True, frozen=True)
 class TopicConfig:
     """
     Represents all kafka-level configuration for a kafka topic.
@@ -94,7 +94,7 @@ class Topic:
     def __init__(
         self,
         name: str,
-        config: Optional[TopicConfig] = None,
+        create_config: Optional[TopicConfig] = None,
         value_deserializer: Optional[DeserializerType] = None,
         key_deserializer: Optional[DeserializerType] = BytesDeserializer(),
         value_serializer: Optional[SerializerType] = None,
@@ -103,7 +103,7 @@ class Topic:
     ):
         """
         :param name: topic name
-        :param config: topic configs via `TopicConfig` (creation/validation)
+        :param create_config: a `TopicConfig` to create a new topic if it does not exist
         :param value_deserializer: a deserializer type for values
         :param key_deserializer: a deserializer type for keys
         :param value_serializer: a serializer type for values
@@ -112,7 +112,8 @@ class Topic:
             milliseconds from a deserialized message.
         """
         self.name = name
-        self.config = config
+        self._create_config = copy.deepcopy(create_config)
+        self._broker_config: Optional[TopicConfig] = None
         self._value_deserializer = _get_deserializer(value_deserializer)
         self._key_deserializer = _get_deserializer(key_deserializer)
         self._value_serializer = _get_serializer(value_serializer)
@@ -122,39 +123,43 @@ class Topic:
     def __clone__(
         self,
         name: str,
-        config: Optional[TopicConfig] = None,
-        value_deserializer: Optional[DeserializerType] = None,
-        key_deserializer: Optional[DeserializerType] = None,
-        value_serializer: Optional[SerializerType] = None,
-        key_serializer: Optional[SerializerType] = None,
-        timestamp_extractor: Optional[TimestampExtractor] = None,
+        create_config: Optional[TopicConfig] = None,
     ):
         return self.__class__(
             name=name,
-            config=config or self.config,
-            value_deserializer=value_deserializer or self._value_deserializer,
-            key_deserializer=key_deserializer or self._key_deserializer,
-            value_serializer=value_serializer or self._value_serializer,
-            key_serializer=key_serializer or self._key_serializer,
-            timestamp_extractor=timestamp_extractor or self._timestamp_extractor,
+            create_config=create_config or self._create_config,
+            value_deserializer=self._value_deserializer,
+            key_deserializer=self._key_deserializer,
+            value_serializer=self._value_serializer,
+            key_serializer=self._key_serializer,
+            timestamp_extractor=self._timestamp_extractor,
         )
 
-    def as_newtopic(self) -> NewTopic:
+    @property
+    def create_config(self) -> Optional[TopicConfig]:
         """
-        Converts `Topic`s to `NewTopic`s as required for Confluent's
-        `AdminClient.create_topic()`.
-
-        :return: confluent_kafka `NewTopic`s
+        A config to create the topic
         """
-        if self.config is None:
-            return NewTopic(topic=self.name)
+        return self._create_config
 
-        return NewTopic(
-            topic=self.name,
-            num_partitions=self.config.num_partitions,
-            replication_factor=self.config.replication_factor,
-            config=self.config.extra_config,
-        )
+    @create_config.setter
+    def create_config(self, config: Optional[TopicConfig]):
+        self._create_config = config
+
+    @property
+    def broker_config(self) -> TopicConfig:
+        """
+        A topic config obtained from the Kafka broker
+        """
+        if self._broker_config is None:
+            raise TopicConfigurationError(
+                f'The broker topic configuration is missing for the topic "{self.name}"'
+            )
+        return self._broker_config
+
+    @broker_config.setter
+    def broker_config(self, config: TopicConfig):
+        self._broker_config = copy.deepcopy(config)
 
     def row_serialize(self, row: Row, key: Any) -> KafkaMessage:
         """

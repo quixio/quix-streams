@@ -21,9 +21,8 @@ class TestChangelogProducer:
             name=str(uuid.uuid4()),
             key_serializer="bytes",
             value_serializer="bytes",
-            config=topic_manager.topic_config(num_partitions=3),
+            create_config=topic_manager.topic_config(num_partitions=3),
         )
-        topic_manager.create_topics([changelog])
 
         producer = ChangelogProducer(
             changelog_name=changelog.name,

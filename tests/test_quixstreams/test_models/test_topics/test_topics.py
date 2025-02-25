@@ -7,6 +7,8 @@ from quixstreams.models import (
     KafkaHeaders,
     StringSerializer,
     TimestampType,
+    Topic,
+    TopicConfig,
 )
 from quixstreams.models.serializers import (
     DESERIALIZERS,
@@ -26,6 +28,7 @@ from quixstreams.models.serializers import (
     Serializer,
     SerializerIsNotProvidedError,
 )
+from quixstreams.models.topics.exceptions import TopicConfigurationError
 from tests.utils import ConfluentKafkaMessageStub
 
 from ..utils import float_to_bytes, int_to_bytes
@@ -45,10 +48,6 @@ class IgnoreDivisibleBy3Deserializer(IntegerDeserializer):
 
 
 class TestTopic:
-    def test_repr(self, topic_manager_topic_factory):
-        topic = topic_manager_topic_factory(name="foo")
-        assert str(topic) == '<Topic name="foo">'
-
     @pytest.mark.parametrize(
         "key_deserializer, value_deserializer, key, value, expected_key, expected_value",
         [
@@ -622,3 +621,19 @@ class TestTopic:
     def test__get_deserializer_strings_invalid(self, topic_manager_topic_factory):
         with pytest.raises(ValueError):
             topic_manager_topic_factory(key_deserializer="fail_me_bro")
+
+    def test_topic_real_config_success(self):
+        topic = Topic(name="test")
+        config = TopicConfig(
+            num_partitions=3, replication_factor=5, extra_config={"a": "b"}
+        )
+        topic.broker_config = config
+
+        assert topic.broker_config == config
+
+    def test_topic_real_config_not_set_fails(self):
+        topic = Topic(name="test")
+        with pytest.raises(
+            TopicConfigurationError, match="The broker topic configuration is missing"
+        ):
+            topic.broker_config

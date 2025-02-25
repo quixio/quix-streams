@@ -208,7 +208,7 @@ class FileSource(Source):
         :return: the original default topic, with updated partition count
         """
         topic = super().default_topic()
-        topic.config = TopicConfig(
+        topic.create_config = TopicConfig(
             num_partitions=self._origin.get_folder_count(self._directory) or 1,
             replication_factor=1,
         )

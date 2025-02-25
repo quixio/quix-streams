@@ -25,6 +25,7 @@ from quixstreams.models import (
     SerializationError,
     TopicConfig,
 )
+from quixstreams.models.topics.exceptions import TopicNotFoundError
 from quixstreams.platforms.quix import QuixApplicationConfig, QuixKafkaConfigsBuilder
 from quixstreams.platforms.quix.env import QuixEnvironment
 from quixstreams.rowconsumer import RowConsumer
@@ -350,7 +351,6 @@ class TestApplication:
 
         topic_in = app.topic(str(uuid.uuid4()), value_deserializer=JSONDeserializer())
         topic_out = app.topic(str(uuid.uuid4()), value_serializer=JSONSerializer())
-        app._topic_manager.create_all_topics()
 
         sdf = app.dataframe(topic_in)
         sdf = sdf.to_topic(topic_out)
@@ -410,45 +410,36 @@ class TestApplication:
 
         assert produce_output_attempts == produce_input
 
-    def test_topic_init(self):
-        app = Application(broker_address="localhost", consumer_group="test")
-        topic = app.topic(name="test-topic")
-
+    def test_topic_init(self, app_factory):
+        app = app_factory()
+        topic = app.topic(name=str(uuid.uuid4()))
         assert topic
 
-    def test_streamingdataframe_init(self):
-        app = Application(broker_address="localhost", consumer_group="test")
-        topic = app.topic(name="test-topic")
+    def test_streamingdataframe_init(self, app_factory):
+        app = app_factory()
+        topic = app.topic(name=str(uuid.uuid4()))
         sdf = app.dataframe(topic)
         assert isinstance(sdf, StreamingDataFrame)
 
-    def test_topic_auto_create_true(self, app_factory):
+    def test_topic_auto_create_true(self, app_factory, kafka_admin_client):
         """
         Topics are auto-created when auto_create_topics=True
         """
         app = app_factory(auto_create_topics=True)
-        topic_manager = app._topic_manager
-        _ = [app.topic("topic_in"), app.topic("topic_out")]
 
-        with patch.object(topic_manager, "create_all_topics") as create:
-            with patch.object(topic_manager, "validate_all_topics"):
-                app.setup_topics()
-
-        create.assert_called()
+        topic = app.topic(name=str(uuid.uuid4()))
+        topics = kafka_admin_client.list_topics().topics
+        assert topic.name in topics
 
     def test_topic_auto_create_false(self, app_factory):
         """
         Topics are not auto-created when auto_create_topics=False
         """
         app = app_factory(auto_create_topics=False)
-        topic_manager = app._topic_manager
-        _ = [app.topic("topic_in"), app.topic("topic_out")]
 
-        with patch.object(topic_manager, "create_topics") as create:
-            with patch.object(topic_manager, "validate_all_topics"):
-                app.setup_topics()
-
-        create.assert_not_called()
+        # Topic is not created by validated
+        with pytest.raises(TopicNotFoundError):
+            app.topic(name=str(uuid.uuid4()))
 
     def test_topic_validation(self, app_factory):
         """
@@ -458,8 +449,7 @@ class TestApplication:
         topic_manager = app._topic_manager
 
         with patch.object(topic_manager, "validate_all_topics") as validate:
-            with patch.object(topic_manager, "create_all_topics"):
-                app.setup_topics()
+            app.setup_topics()
 
         validate.assert_called()
 
@@ -1047,10 +1037,10 @@ class TestQuixApplication:
         expected_topic = topic_manager.topics[topic_id]
         assert topic.name == topic_id
         assert (
-            expected_topic.config.replication_factor
+            expected_topic.broker_config.replication_factor
             == topic_manager.default_replication_factor
         )
-        assert expected_topic.config.num_partitions == topic_partitions
+        assert expected_topic.broker_config.num_partitions == topic_partitions
 
 
 @pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
@@ -1079,7 +1069,7 @@ class TestQuixApplicationWithState:
 
         with pytest.warns(RuntimeWarning) as warned:
             executor.submit(_stop_app_on_timeout, app, 5.0)
-            app.run(sdf)
+            app.run()
 
         warnings = [w for w in warned.list if w.category is RuntimeWarning]
         warning = str(warnings[0].message)

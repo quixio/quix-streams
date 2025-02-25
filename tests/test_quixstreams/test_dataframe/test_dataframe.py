@@ -1574,7 +1574,6 @@ class TestStreamingDataFrameGroupBy:
             groupby_topic.name == topic_manager.repartition_topic(col, topic.name).name
         )
 
-        topic_manager.create_all_topics()
         with producer:
             pre_groupby_branch_result = sdf.test(
                 value=value,
@@ -1656,7 +1655,6 @@ class TestStreamingDataFrameGroupBy:
             == topic_manager.repartition_topic(op_name, topic.name).name
         )
 
-        topic_manager.create_all_topics()
         with producer:
             pre_groupby_branch_result = sdf.test(
                 value=value,
@@ -1738,7 +1736,6 @@ class TestStreamingDataFrameGroupBy:
             == topic_manager.repartition_topic(op_name, topic.name).name
         )
 
-        topic_manager.create_all_topics()
         with producer:
             pre_groupby_branch_result = sdf.test(
                 value=value,

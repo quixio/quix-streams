@@ -6,6 +6,7 @@ import pytest
 from confluent_kafka.admin import TopicMetadata
 from confluent_kafka.error import KafkaException
 
+from quixstreams.models import Topic
 from quixstreams.models.topics import TopicAdmin, TopicConfig
 from quixstreams.models.topics.exceptions import CreateTopicFailure, CreateTopicTimeout
 
@@ -35,8 +36,9 @@ class TestTopicAdmin:
 
     def test_create_topics(self, topic_admin, topic_manager_factory):
         topic_manager = topic_manager_factory()
-        topic1 = topic_manager.topic(name=str(uuid4()))
-        topic2 = topic_manager.topic(name=str(uuid4()))
+        # Generate topics manually to avoid creating them via TopicManager
+        topic1 = Topic(name=str(uuid4()), create_config=topic_manager.topic_config())
+        topic2 = Topic(name=str(uuid4()), create_config=topic_manager.topic_config())
 
         topic_admin.create_topics([topic1, topic2])
 
@@ -46,8 +48,10 @@ class TestTopicAdmin:
 
     def test_create_topics_timeout(self, topic_manager_factory):
         admin = TopicAdmin("bad_address")
-        topic_manager = topic_manager_factory(topic_admin_=admin)
-        topic = topic_manager.topic(str(uuid4()))
+        topic_manager = topic_manager_factory()
+
+        # Generate topics manually to avoid creating them via TopicManager
+        topic = Topic(name=str(uuid4()), create_config=topic_manager.topic_config())
 
         with pytest.raises(KafkaException):
             admin.create_topics([topic], timeout=1)
@@ -57,12 +61,13 @@ class TestTopicAdmin:
         Finalize timeout raises as expected (not a request-based timeout).
         """
         topic_manager = topic_manager_factory()
-        create = topic_manager.topic(name="create_me_timeout")
+        # Generate topics manually to avoid creating them via TopicManager
+        topic = Topic(name=str(uuid4()), create_config=topic_manager.topic_config())
         with pytest.raises(CreateTopicTimeout) as e:
-            topic_admin.create_topics([create], finalize_timeout=0)
+            topic_admin.create_topics([topic], finalize_timeout=0)
 
         error_str = str(e.value.args[0])
-        assert create.name in error_str
+        assert topic.name in error_str
 
     def test_create_topics_already_exist(
         self, topic_admin, topic_manager_factory, topic_factory, caplog
@@ -70,7 +75,10 @@ class TestTopicAdmin:
         topic_name, _ = topic_factory()
 
         topic_manager = topic_manager_factory()
-        existing_topic = topic_manager.topic(name=topic_name)
+        # Generate topics manually to avoid creating them via TopicManager
+        existing_topic = Topic(
+            name=topic_name, create_config=topic_manager.topic_config()
+        )
 
         with (
             caplog.at_level(level=logging.INFO),
@@ -85,9 +93,11 @@ class TestTopicAdmin:
 
     def test_create_topics_invalid_config(self, topic_admin, topic_manager_factory):
         topic_manager = topic_manager_factory()
-        invalid_topic = topic_manager.topic(
+        invalid_topic = Topic(
             name=str(uuid4()),
-            config=topic_manager.topic_config(extra_config={"bad_option": "not_real"}),
+            create_config=topic_manager.topic_config(
+                extra_config={"bad_option": "not_real"}
+            ),
         )
 
         with pytest.raises(CreateTopicFailure, match="Unknown topic config name"):

@@ -99,7 +99,8 @@ class TestRecoveryManager:
         # Register a source topic and a changelog topic with 2 partitions
         topic_manager = topic_manager_factory()
         topic_manager.topic(
-            topic_name, config=TopicConfig(num_partitions=2, replication_factor=1)
+            topic_name,
+            create_config=TopicConfig(num_partitions=2, replication_factor=1),
         )
         changelog_topic = topic_manager.changelog_topic(
             topic_name=topic_name, store_name=store_name
@@ -177,7 +178,8 @@ class TestRecoveryManager:
         # Register a source topic and a changelog topic with 2 partitions
         topic_manager = topic_manager_factory()
         topic_manager.topic(
-            topic_name, config=TopicConfig(num_partitions=2, replication_factor=1)
+            topic_name,
+            create_config=TopicConfig(num_partitions=2, replication_factor=1),
         )
         changelog_topic = topic_manager.changelog_topic(
             topic_name=topic_name, store_name=store_name
@@ -219,7 +221,8 @@ class TestRecoveryManager:
         # Register a source topic and a changelog topic with two partitions
         topic_manager = topic_manager_factory()
         topic_manager.topic(
-            topic_name, config=TopicConfig(num_partitions=2, replication_factor=1)
+            topic_name,
+            create_config=TopicConfig(num_partitions=2, replication_factor=1),
         )
         changelog_topic = topic_manager.changelog_topic(
             topic_name=topic_name,

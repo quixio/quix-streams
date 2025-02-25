@@ -170,7 +170,9 @@ def topic_json_serdes_factory(topic_factory):
             topic_name = uuid.uuid4()
         return Topic(
             name=topic or topic_name,
-            config=TopicConfig(num_partitions=num_partitions, replication_factor=1),
+            create_config=TopicConfig(
+                num_partitions=num_partitions, replication_factor=1
+            ),
             value_deserializer=JSONDeserializer(),
             value_serializer=JSONSerializer(),
         )
@@ -363,7 +365,7 @@ def quix_mock_config_builder_factory(kafka_container):
     def factory(workspace_id: Optional[str] = None):
         if not workspace_id:
             workspace_id = "my_ws"
-        cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
+        cfg_builder = create_autospec(QuixKafkaConfigsBuilder, spec_set=True)
         patch.object(
             cfg_builder,
             "workspace_id",
@@ -388,17 +390,20 @@ def quix_mock_config_builder_factory(kafka_container):
         # when the app is actually run (for tests, at least).
         # This does simulate an expected topic name with prepended WID which may not
         # always be true, but it's just to make testing easier.
-        cfg_builder.get_or_create_topic.side_effect = lambda topic, timeout=None: {
+        topic_response_mock = lambda topic, timeout=None: {
             "id": f"{workspace_id}-{topic.name}",
             "name": topic.name,
             "configuration": {
-                "partitions": topic.config.num_partitions,
-                "replicationFactor": topic.config.replication_factor,
+                "partitions": topic.create_config.num_partitions,
+                "replicationFactor": topic.create_config.replication_factor,
                 "retentionInMinutes": 1,
                 "retentionInBytes": 1,
                 "cleanupPolicy": "Delete",
             },
         }
+        cfg_builder.get_or_create_topic.side_effect = topic_response_mock
+        cfg_builder.create_topic.side_effect = topic_response_mock
+        cfg_builder.get_topic.side_effect = topic_response_mock
 
         # Connect to local test container rather than Quix
         connection = ConnectionConfig(bootstrap_servers=kafka_container.broker_address)
@@ -432,10 +437,6 @@ def quix_topic_manager_factory(
         consumer_group: str = random_consumer_group,
         quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
     ):
-        topic_manager = topic_manager_factory(
-            topic_admin_=topic_admin, consumer_group=consumer_group
-        )
-
         if not quix_config_builder:
             quix_config_builder = quix_mock_config_builder_factory(
                 workspace_id=workspace_id
@@ -448,11 +449,20 @@ def quix_topic_manager_factory(
 
         # Patch the instance of QuixTopicManager to use Kafka Admin API
         # create topics instead of Quix Portal API
+        def _mock_create_topic(topic: Topic, timeout, create_timeout):
+            # Get a topic "id" from the QuixKafkaConfigBuilder
+            quix_response = quix_config_builder.get_topic(topic=topic)
+            # Replace a topic name with "id" and create a topic in a local broker
+            topic = topic.__clone__(name=quix_response["id"])
+            topic_admin.create_topics(
+                topics=[topic], timeout=timeout, finalize_timeout=create_timeout
+            )
+
         patch.multiple(
             quix_topic_manager,
             default_num_partitions=1,
             default_replication_factor=1,
-            _create_topics=topic_manager.create_topics,
+            _create_topic=_mock_create_topic,
         ).start()
         return quix_topic_manager
 
@@ -498,6 +508,13 @@ def quix_app_factory(
                 "Should provide both QuixTopicManager AND QuixKafkaConfigBuilder with "
                 "corresponding workspace_id, or neither."
             )
+        topic_manager = topic_manager or quix_topic_manager_factory(
+            workspace_id=workspace_id, consumer_group=random_consumer_group
+        )
+        quix_config_builder = quix_config_builder or quix_mock_config_builder_factory(
+            workspace_id=workspace_id
+        )
+
         return Application(
             consumer_group=random_consumer_group,
             state_dir=state_dir,
@@ -510,10 +527,8 @@ def quix_app_factory(
             on_message_processed=on_message_processed,
             auto_create_topics=auto_create_topics,
             use_changelog_topics=use_changelog_topics,
-            topic_manager=topic_manager
-            or quix_topic_manager_factory(workspace_id=workspace_id),
-            quix_config_builder=quix_config_builder
-            or quix_mock_config_builder_factory(workspace_id=workspace_id),
+            topic_manager=topic_manager,
+            quix_config_builder=quix_config_builder,
         )
 
     with patch(
@@ -557,12 +572,14 @@ def topic_manager_factory(topic_admin, random_consumer_group):
         consumer_group: str = random_consumer_group,
         timeout: float = 10,
         create_timeout: float = 20,
+        auto_create_topics: bool = True,
     ) -> TopicManager:
         return TopicManager(
             topic_admin=topic_admin_ or topic_admin,
             consumer_group=consumer_group,
             timeout=timeout,
             create_timeout=create_timeout,
+            auto_create_topics=auto_create_topics,
         )
 
     return factory
@@ -577,7 +594,6 @@ def topic_manager_topic_factory(topic_manager_factory):
     def factory(
         name: Optional[str] = None,
         partitions: int = 1,
-        create_topic: bool = False,
         use_serdes_nones: bool = False,
         key_serializer: Optional[Union[Serializer, str]] = None,
         value_serializer: Optional[Union[Serializer, str]] = None,
@@ -592,15 +608,13 @@ def topic_manager_topic_factory(topic_manager_factory):
             "value_serializer": value_serializer,
             "key_deserializer": key_deserializer,
             "value_deserializer": value_deserializer,
-            "config": topic_manager.topic_config(num_partitions=partitions),
+            "create_config": topic_manager.topic_config(num_partitions=partitions),
             "timestamp_extractor": timestamp_extractor,
         }
         if not use_serdes_nones:
             # will use the topic manager serdes defaults rather than "Nones"
             topic_args = {k: v for k, v in topic_args.items() if v is not None}
         topic = topic_manager.topic(name, **topic_args)
-        if create_topic:
-            topic_manager.create_all_topics()
         return topic
 
     return factory

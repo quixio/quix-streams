@@ -146,7 +146,6 @@ class SourceProcess(process):
             ),
         )
 
-        self._topic_manager.create_all_topics()
         self._topic_manager.validate_all_topics()
 
         # Manually assign the changelog topic-partition for recovery

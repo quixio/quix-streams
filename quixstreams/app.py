@@ -466,7 +466,7 @@ class Application:
             value_serializer=value_serializer,
             key_deserializer=key_deserializer,
             value_deserializer=value_deserializer,
-            config=config,
+            create_config=config,
             timestamp_extractor=timestamp_extractor,
         )
 
@@ -842,14 +842,8 @@ class Application:
 
     def setup_topics(self):
         """
-        Validate and create the topics
+        Validate the application topics
         """
-
-        topics_list = ", ".join(
-            f'"{topic}"' for topic in self._topic_manager.all_topics
-        )
-        logger.info(f"Topics required for this application: {topics_list}")
-        self._topic_manager.create_all_topics()
         self._topic_manager.validate_all_topics()
 
     def _process_message(self, dataframe_composed):

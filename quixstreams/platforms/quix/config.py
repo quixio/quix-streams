@@ -175,21 +175,20 @@ class QuixKafkaConfigsBuilder:
         }
 
     @classmethod
-    def convert_topic_response(
-        cls, api_response: dict, extra_config: Optional[dict] = None
-    ) -> Topic:
+    def convert_topic_response(cls, api_response: dict) -> Topic:
         """
         Converts a GET or POST ("create") topic API response to a Topic object
 
         :param api_response: the dict response from a get or create topic call
         :return: a corresponding Topic object
         """
-        if extra_config is None:
-            extra_config = {}
+        extra_config = {}
 
         topic_config = api_response["configuration"]
         extra_config["retention.ms"] = topic_config["retentionInMinutes"] * 60 * 1000
         extra_config["retention.bytes"] = topic_config["retentionInBytes"]
+        # A hack to pass extra info back from Quix cloud
+        extra_config["__quix_topic_name__"] = api_response["name"]
 
         # Map value returned by Quix API to Kafka Admin API format
         if topic_config.get("cleanupPolicy"):
@@ -198,14 +197,14 @@ class QuixKafkaConfigsBuilder:
             )
             extra_config["cleanup.policy"] = cleanup_policy
 
-        return Topic(
-            name=api_response["id"],
-            config=TopicConfig(
-                num_partitions=topic_config["partitions"],
-                replication_factor=topic_config["replicationFactor"],
-                extra_config=extra_config,
-            ),
+        config = TopicConfig(
+            num_partitions=topic_config["partitions"],
+            replication_factor=topic_config["replicationFactor"],
+            extra_config=extra_config,
         )
+        topic = Topic(name=api_response["id"], create_config=config)
+        topic.broker_config = config
+        return topic
 
     def strip_workspace_id_prefix(self, s: str) -> str:
         """
@@ -285,12 +284,11 @@ class QuixKafkaConfigsBuilder:
         :param timeout: response timeout (seconds); Default 30
         """
         # TODO: more error handling with the wrong combo of ws_id and topic
-        ws_data: Optional[dict] = None
         if self._workspace_id:
             ws_data = self.search_for_workspace(
                 workspace_name_or_id=self._workspace_id, timeout=timeout
             )
-        elif known_workspace_topic:
+        else:
             ws_data = self.search_for_topic_workspace(
                 known_workspace_topic, timeout=timeout
             )
@@ -326,7 +324,7 @@ class QuixKafkaConfigsBuilder:
         return None
 
     def search_for_topic_workspace(
-        self, topic: str, timeout: Optional[float] = None
+        self, topic: Optional[str], timeout: Optional[float] = None
     ) -> Optional[dict]:
         """
         Find what workspace a topic belongs to.
@@ -356,14 +354,14 @@ class QuixKafkaConfigsBuilder:
 
         return None
 
-    def create_topic(self, topic: Topic, timeout: Optional[float] = None):
+    def create_topic(self, topic: Topic, timeout: Optional[float] = None) -> dict:
         """
         The actual API call to create the topic.
 
         :param topic: a Topic instance
         :param timeout: response timeout (seconds); Default 30
         """
-        cfg = topic.config
+        cfg = topic.create_config
         if cfg is None:
             raise RuntimeError("Topic config not set")
 
@@ -372,6 +370,10 @@ class QuixKafkaConfigsBuilder:
         ret_bytes = cfg.extra_config.get("retention.bytes")
 
         # an exception is raised (status code) if topic is not created successfully
+        logger.info(
+            f'Creating topic "{topic.name}" '
+            f'with a config: "{topic.create_config.as_dict() if topic.create_config is not None else {} }"'
+        )
         resp = self.api.post_topic(
             topic_name=topic.name,
             workspace_id=self.workspace_id,
@@ -402,7 +404,7 @@ class QuixKafkaConfigsBuilder:
         marked as "Ready" (and thus ready to produce to/consume from).
         """
         try:
-            return self.get_topic(topic_name=topic.name, timeout=timeout)
+            return self.get_topic(topic=topic, timeout=timeout)
         except QuixApiRequestFailure as e:
             if e.status_code != 404:
                 raise
@@ -414,7 +416,7 @@ class QuixKafkaConfigsBuilder:
             except QuixApiRequestFailure:
                 # Multiple apps likely tried to create at the same time.
                 # If this fails, it raises with all previous API errors
-                return self.get_topic(topic_name=topic.name, timeout=timeout)
+                return self.get_topic(topic=topic, timeout=timeout)
 
     def wait_for_topic_ready_statuses(
         self,
@@ -459,18 +461,18 @@ class QuixKafkaConfigsBuilder:
                 f"topics: {[t['name'] for t in topic_resps if t['id'] in topic_ids]}"
             )
 
-    def get_topic(self, topic_name: str, timeout: Optional[float] = None) -> dict:
+    def get_topic(self, topic: Topic, timeout: Optional[float] = None) -> dict:
         """
         return the topic ID (the actual cluster topic name) if it exists, else raise
 
-        :param topic_name: name of the topic
+        :param topic: The Topic to get
         :param timeout: response timeout (seconds); Default 30
 
         :return: response dict of the topic info if topic found, else None
         :raises QuixApiRequestFailure: when topic does not exist
         """
         return self.api.get_topic(
-            topic_name,
+            topic_name=topic.name,
             workspace_id=self.workspace_id,
             timeout=timeout if timeout is not None else self._timeout,
         )
