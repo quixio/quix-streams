@@ -465,7 +465,7 @@ class QuixKafkaConfigsBuilder:
         """
         return the topic ID (the actual cluster topic name) if it exists, else raise
 
-        :param topic: a Topic to get
+        :param topic: The Topic to get
         :param timeout: response timeout (seconds); Default 30
 
         :return: response dict of the topic info if topic found, else None
