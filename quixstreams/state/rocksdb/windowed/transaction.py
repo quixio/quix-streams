@@ -318,27 +318,48 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
             prefix=b"", cache=self._last_expired_timestamps, default=0
         )
 
-        windows = windows_to_expire(last_expired, max_end_time, step_ms)
-        if not windows:
-            return
-
-        suffixes: set[bytes] = set(int_to_int64_bytes(window) for window in windows)
         to_delete: set[tuple[bytes, int, int]] = set()
 
-        for key in self.keys():
-            if key[-8:] in suffixes:
-                prefix, start, end = parse_window_key(key)
-                to_delete.add((prefix, start, end))
-                if collect:
-                    value = self.get_from_collection(
-                        start=start,
-                        end=end,
-                        prefix=prefix,
-                    )
-                else:
-                    value = self.get(encode_integer_pair(start, end), prefix=prefix)
+        if last_expired:
+            windows = windows_to_expire(last_expired, max_end_time, step_ms)
+            if not windows:
+                return
+            last_expired = windows[-1]  # windows are ordered
+            suffixes: set[bytes] = set(int_to_int64_bytes(window) for window in windows)
+            for key in self.keys():
+                if key[-8:] in suffixes:
+                    prefix, start, end = parse_window_key(key)
+                    to_delete.add((prefix, start, end))
+                    if collect:
+                        value = self.get_from_collection(
+                            start=start,
+                            end=end,
+                            prefix=prefix,
+                        )
+                    else:
+                        value = self.get(encode_integer_pair(start, end), prefix=prefix)
 
-                yield (start, end), value, prefix
+                    yield (start, end), value, prefix
+        else:
+            # If we don't have a saved last_expired value it means one of two cases
+            # 1. It's a new window, iterating over all the keys is fast.
+            # 2. The expiration strategy changed from key to partition. We need to expire all
+            #    the old per-key windows.
+            last_expired = max(windows_to_expire(last_expired, max_end_time, step_ms))
+            for key in self.keys():
+                prefix, start, end = parse_window_key(key)
+                if end <= last_expired:
+                    to_delete.add((prefix, start, end))
+                    if collect:
+                        value = self.get_from_collection(
+                            start=start,
+                            end=end,
+                            prefix=prefix,
+                        )
+                    else:
+                        value = self.get(encode_integer_pair(start, end), prefix=prefix)
+
+                    yield (start, end), value, prefix
 
         if delete:
             for prefix, start, end in to_delete:
@@ -347,7 +368,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
                     self.delete_from_collection(end=start, prefix=prefix)
 
         self._set_timestamp(
-            prefix=b"", cache=self._last_expired_timestamps, timestamp_ms=max(windows)
+            prefix=b"", cache=self._last_expired_timestamps, timestamp_ms=last_expired
         )
 
     def delete_windows(
