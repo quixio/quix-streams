@@ -91,14 +91,16 @@ class RunTracker:
     __slots__ = (
         "running",
         "last_consumed_tp",
-        "_first_run",
-        "_finished_first_rebalance",
+        "_needs_assigning",
+        "_is_recovering",
+        "_is_first_run",
         "_processing_context",
         "_topic_manager",
         "_stop_checker",
         "_has_stop_checker",
         "_start_time",
         "_timeout",
+        "_start_timeout_after_first_msg",
         "_max_count",
         "_count",
         "_primary_topics",
@@ -114,22 +116,25 @@ class RunTracker:
         """
         Tracks the runtime status of an Application, along with managing variables
           associated with stopping the app based on a timeout or count.
-          It is typically used for debugging.
 
+        Though intended for debugging, it is designed to minimize impact on
+        normal Application operation.
         """
         self.running: bool = False
-        self._first_run: bool = True
-        self._finished_first_rebalance: bool = False
+        self.last_consumed_tp: Optional[tuple] = None
+        self._is_first_run: bool = True
         self._processing_context = processing_context
         self._stop_checker: Optional[Callable[[], bool]] = None
         self._has_stop_checker: bool = False
 
         # timeout specific vars
-        self._start_time: float = time.monotonic()
+        self._start_time: float = 0.0
         self._timeout: float = 0.0
+        self._start_timeout_after_first_msg = False
+        self._needs_assigning: bool = True
+        self._is_recovering: bool = False
 
         # count specific vars
-        self.last_consumed_tp: Optional[tuple] = None
         self._topic_manager = topic_manager
         self._max_count: int = 0
         self._count: int = 0
@@ -142,12 +147,12 @@ class RunTracker:
         return self._processing_context.consumer
 
     @property
-    def first_run(self) -> bool:
-        return self._first_run
+    def is_first_run(self) -> bool:
+        return self._is_first_run
 
     def update_status(self):
         """
-        Trigger stop if its condition is met.
+        Trigger stop if any conditions are met.
         This is optimized for maximum performance for when there is no stop_checker.
         """
         if self._has_stop_checker:
@@ -159,84 +164,105 @@ class RunTracker:
         Called as part of Application.run(), mostly to initialize self.running.
         """
         self.running = True
-        if self._first_run:
+        if self._is_first_run:
             self._primary_topics = [t for t in self._topic_manager.topics]
             self._repartition_topics = [
                 t for t in self._topic_manager.repartition_topics
             ]
-            self._first_run = False
-
-    def set_stopper(self):
-        """
-        Ensures that timers/checkers are set during initial rebalance only.
-        """
-        if self._finished_first_rebalance:
-            return
-        self._finished_first_rebalance = True
-        if self._has_stop_checker:
-            self.start_tracking()
-        else:
-            logger.info(
-                "No stoppers set; "
-                "Application will run until it fails or is manually stopped."
-            )
-
-    def start_tracking(self):
-        """
-        Allows resetting of trackers, primarily after initial rebalance or recovery
-        """
-        if self._timeout:
-            logger.info(f"Starting time tracking with {self._timeout}s timeout...")
-            self._start_time = time.monotonic()
-        if self._max_count:
-            logger.info(f"Starting count tracking for {self._max_count} records...")
-            self._count = 0
+            self._is_first_run = False
 
     def stop(self):
         """
         Called when Application is stopped, or self._stop_checker condition is met.
-        :return:
+        Resets all values required for re-running.
         """
         self.running = False
-        self._finished_first_rebalance = False
+        self.last_consumed_tp = None
         self._has_stop_checker = False
         self._stop_checker = None
+
+        self._start_time = 0.0
         self._timeout = 0.0
+        self._start_timeout_after_first_msg = False
+        self._needs_assigning = True
+        self._is_recovering = False
+
         self._max_count = 0
+        self._count = 0
         self._repartition_stop_points = {}
+
+    def handle_rebalance(self, recovery_required: bool):
+        """
+        This is the most common way the timeout start time will be set.
+        """
+        if self._timeout and self._needs_assigning:
+            self._needs_assigning = False
+            self._is_recovering = recovery_required
+            if not (self._start_timeout_after_first_msg or recovery_required):
+                self._set_timeout_start_time()
+
+    def handle_recovery(self):
+        """
+        Sets the timeout start time after a recovery occurs.
+        """
+        if self._timeout:
+            self._is_recovering = False
+            self._set_timeout_start_time()
 
     def set_stop_condition(
         self,
         timeout: float = 0.0,
         count: int = 0,
+        timeout_starts_on_first_message: bool = True,
     ):
         """
-        Called as part of app.run(), where users pass their optional stop conditions.
+        Called as part of app.run(); this handles the users optional stop conditions.
         """
+        if not (timeout or count):
+            logger.info("APP RUN: preparing to run until errors or manually stopped...")
+            return
+
+        logger.info("APP RUN: preparing to run with stop conditions...")
         if timeout:
             if timeout < 0.0:
                 raise ValueError("run timeout must be >= 0.0")
+            self._start_timeout_after_first_msg = timeout_starts_on_first_message
+            if self._start_timeout_after_first_msg:
+                log_snippet = "(after consuming a non-recovery message)"
+            else:
+                log_snippet = "(after initial rebalance or recovery)"
             logger.info(
-                f"TIME LIMIT DETECTED: "
-                f"Application will run for up to {timeout}s (after initial recovery)"
+                f"APP RUN: timeout detected; "
+                f"Application will run for up to {timeout}s {log_snippet}"
             )
-            self._stop_checker = self._at_timeout
+            self._stop_checker = self._at_timeout_func()
         self._timeout = timeout
 
         if count:
             if count < 0:
                 raise ValueError("run count must be >= 0")
             logger.info(
-                f"COUNT LIMIT DETECTED: "
+                f"APP RUN: count limit detected; "
                 f"Application will process up to {count} records"
             )
-            self._stop_checker = self._at_count_and_processed_func()
+            self._stop_checker = self._at_count_func()
         self._max_count = count
 
         if self._timeout and self._max_count:
-            logger.info("NOTE: Application will stop at the first encountered limiter!")
+            logger.info("APP RUN: Application will stop at first satisfied limiter!")
             self._stop_checker = self._at_count_or_timeout_func()
-        self._has_stop_checker = bool(self._stop_checker)
+        self._has_stop_checker = True
+
+    def _set_timeout_start_time(self):
+        """
+        There are three options for calling this, but it will only be set once.
+
+        1. If waiting for first message, it's set during poll loop (`_at_timeout_func`)
+        2. If recovery is required, it's set after recovering (`handle_recovery`)
+        3. Else, it's set immediately after rebalance (`handle_rebalance`)
+        """
+        logger.info(f"Starting time tracking with {self._timeout}s timeout")
+        self._start_time = time.monotonic()
 
     def _at_timeout(self) -> bool:
         if (time.monotonic() - self._start_time) > self._timeout:
@@ -246,7 +272,7 @@ class RunTracker:
 
     def _at_count(self) -> bool:
         if self.last_consumed_tp:
-            # add to count only if message is from a primary topic
+            # add to count only if message is from a non-repartition topic
             if self.last_consumed_tp[0] in self._primary_topics:
                 self._count += 1
                 if (self._max_count - self._count) <= 0:
@@ -256,7 +282,7 @@ class RunTracker:
 
     def _prepare_repartition_check(self):
         """
-        Tracks repartition watermarks for efficient validation purposes.
+        Stores repartition watermarks for efficient validation.
         Commits checkpoint and pauses primary topics to ensure watermark accuracy.
         """
         self._processing_context.commit_checkpoint(force=True)
@@ -288,11 +314,15 @@ class RunTracker:
                 self._repartition_stop_points.pop(tp)
         return not bool(self._repartition_stop_points)
 
-    def _at_count_and_processed_func(self) -> Callable[[], bool]:
+    def _at_count_func(self) -> Callable[[], bool]:
+        """
+        This is handled as a generator to minimize continuous superfluous conditional
+        checks or having to adjust the underlying _stop_checker during runtime.
+        """
         at_count = self._at_count
         finished_repartition_processing = self._repartitions_finished
 
-        def at_count_and_processed_gen() -> Iterator[bool]:
+        def at_count_gen() -> Iterator[bool]:
             while not at_count():
                 yield False
             # Count was met for primary topics, now confirm downstream repartitions
@@ -304,14 +334,39 @@ class RunTracker:
                 logger.info("All downstream internal topics processed with counting!")
             yield True
 
-        gen = at_count_and_processed_gen()
+        gen = at_count_gen()
+        return lambda: next(gen)
 
+    def _at_timeout_func(self) -> Callable[[], bool]:
+        """
+        This is handled as a generator to minimize continuous superfluous conditional
+        checks or having to adjust the underlying _stop_checker during runtime.
+        """
+        at_timeout = self._at_timeout
+
+        def at_timeout_gen() -> Iterator[bool]:
+            while self._needs_assigning or self._is_recovering:
+                yield False
+            if self._start_timeout_after_first_msg:
+                if not self.last_consumed_tp:
+                    logger.debug(
+                        "Waiting for initial message to start timeout tracking..."
+                    )
+                    while not self.last_consumed_tp:
+                        yield False
+                logger.info("First message processed; now starting timeout tracking!")
+                self._set_timeout_start_time()
+            while not at_timeout():
+                yield False
+            yield True
+
+        gen = at_timeout_gen()
         return lambda: next(gen)
 
     def _at_count_or_timeout_func(self) -> Callable[[], bool]:
-        at_timeout = self._at_timeout
-        at_count_and_processed = self._at_count_and_processed_func()
-        return lambda: at_timeout() or at_count_and_processed()
+        at_timeout = self._at_timeout_func()
+        at_count = self._at_count_func()
+        return lambda: at_timeout() or at_count()
 
 
 class Application:
@@ -787,7 +842,7 @@ class Application:
         self._run_tracker.stop()
         if fail:
             # Update "_failed" only when fail=True to prevent stop(failed=False) from
-            # resetting it
+           https://www.nowinstock.net/getd81340 # resetting it
             self._failed = True
 
         if self._state_manager.using_changelogs:
@@ -964,6 +1019,7 @@ class Application:
         dataframe: Optional[StreamingDataFrame] = None,
         timeout: float = 0.0,
         count: int = 0,
+        timeout_starts_on_first_message: bool = False,
     ):
         """
         Start processing data from Kafka using provided `StreamingDataFrame`
@@ -981,7 +1037,11 @@ class Application:
         Stop Condition Details:
 
         A timeout will immediately stop an Application once T seconds has passed after
-          an initial rebalance and recovery.
+          an initial rebalance and recovery (if required).
+        Because waiting for a first message to arrive can sometimes take a while, there
+          is an option to start tracking for timeout once the first message has been
+          fully processed (set `timeout_starts_on_first_message=True`). However, if
+          no message ever arrives, it will run indefinitely.
         Note that unlike count, a timeout does NOT ensure downstream operations that
           rely on internal topics (like groupby) are also finalized.
 
@@ -1021,7 +1081,11 @@ class Application:
                 "the argument should be removed.",
                 FutureWarning,
             )
-        self._run_tracker.set_stop_condition(timeout=timeout, count=count)
+        self._run_tracker.set_stop_condition(
+            timeout=timeout,
+            count=count,
+            timeout_starts_on_first_message=timeout_starts_on_first_message,
+        )
         self._run()
 
     def _exception_handler(self, exc_type, exc_val, exc_tb):
@@ -1038,7 +1102,7 @@ class Application:
         self._setup_signal_handlers()
 
         # These only need to be performed on the first .run() (with interactive running)
-        if self._run_tracker.first_run:
+        if self._run_tracker.is_first_run:
             logger.info(
                 f"Starting the Application with the config: "
                 f'broker_address="{self._config.broker_address}" '
@@ -1092,7 +1156,7 @@ class Application:
         while run_tracker.running:
             if state_manager.recovery_required:
                 state_manager.do_recovery()
-                run_tracker.start_tracking()
+                run_tracker.handle_recovery()
             else:
                 process_message(dataframes_composed)
                 processing_context.commit_checkpoint()
