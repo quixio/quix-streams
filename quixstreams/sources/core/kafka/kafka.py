@@ -261,7 +261,7 @@ class KafkaReplicatorSource(Source):
             start = time.monotonic()
             self.checkpoint.commit()
             elapsed = round(time.monotonic() - start, 2)
-            logger.debug(f"Checkpoint commited in {elapsed}s")
+            logger.info(f"Checkpoint commited in {elapsed}s")
 
         self.init_checkpoint()
 

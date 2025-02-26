@@ -1,4 +1,5 @@
 import logging
+import time
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Iterable, Literal, Optional
 
@@ -87,13 +88,14 @@ class TimeWindow(Window):
         its end timestamp + grace period.
         The closed windows cannot receive updates anymore and are considered final.
 
-        >***NOTE:*** By default windows are closed within the same message key.
-        If some message keys appear irregularly in the stream, the latest windows
-        can remain unprocessed until a message with the same key is received.
 
-        :param expiration_strategy: choose the windows expiration strategy. Either per-key,
-            only message key windows are expired on new messages, or per-partition,
-            the windows of all the keys in the message partition are expired on new messages.
+        :param expiration_strategy: the strategy to use when expiring windows.
+            Possible values:
+              - `"key"` - messages advance time and expire windows with the same key.
+              If some message keys appear irregularly in the stream, the latest windows can remain unprocessed until a message with the same key is received.
+              - `"partition"` - messages advance time and expire windows for the whole partition to which this message key belongs.
+              If timestamps between keys are not ordered, it may increase the number of discarded late messages.
+              Default - `"key"`.
         """
         self._expiration_strategy = ExpirationStrategy.new(expiration_strategy)
         return super().final()
@@ -170,19 +172,35 @@ class TimeWindow(Window):
 
     def expire_by_partition(
         self,
-        timestamp_ms: int,
+        max_expired_end: int,
         transaction: WindowedPartitionTransaction,
         collect: bool,
     ) -> Iterable[WindowKeyResult]:
-        for (start, end), aggregated, key in transaction.expire_all_windows(
-            max_end_time=timestamp_ms,
+        start = time.monotonic()
+        count = 0
+
+        for (
+            window_start,
+            window_end,
+        ), aggregated, key in transaction.expire_all_windows(
+            max_end_time=max_expired_end,
             step_ms=self._step_ms if self._step_ms else self._duration_ms,
             collect=collect,
             delete=True,
         ):
+            count += 1
             yield (
                 key,
-                WindowResult(start=start, end=end, value=self._merge_func(aggregated)),
+                WindowResult(
+                    start=window_start,
+                    end=window_end,
+                    value=self._merge_func(aggregated),
+                ),
+            )
+
+        if count:
+            logger.info(
+                "Expired %s windows in %ss", count, round(time.monotonic() - start, 2)
             )
 
     def expire_by_key(

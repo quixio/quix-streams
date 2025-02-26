@@ -308,7 +308,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         collect: bool = False,
     ) -> Iterable[WindowDetail]:
         """
-        Get all expired windows for all prefix from RocksDB up to the specified `max_start_time` timestamp.
+        Get all expired windows for all prefix from RocksDB up to the specified `max_end_time` timestamp.
 
         :param max_end_time: The timestamp up to which windows are considered expired, inclusive.
         :param delete: If True, expired windows will be deleted.
@@ -322,13 +322,11 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         if not windows:
             return
 
-        suffixes: tuple[bytes, ...] = tuple(
-            int_to_int64_bytes(window) for window in windows
-        )
+        suffixes: set[bytes] = set(int_to_int64_bytes(window) for window in windows)
         to_delete: set[tuple[bytes, int, int]] = set()
 
         for key in self.keys():
-            if key.endswith(suffixes):
+            if key[-8:] in suffixes:
                 prefix, start, end = parse_window_key(key)
                 to_delete.add((prefix, start, end))
                 if collect:
