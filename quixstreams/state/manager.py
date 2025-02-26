@@ -245,6 +245,7 @@ class StateStoreManager:
             )
 
         if self._state_dir is not None:
+            logger.info(f"Removing state folder at {self._state_dir}")
             shutil.rmtree(self._state_dir)
 
     def on_partition_assign(

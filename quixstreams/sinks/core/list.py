@@ -45,8 +45,11 @@ class ListSink(BaseSink, UserList):
         When metadata=False (default), only the message value is stored.
     """
 
-    def __init__(self, metadata: bool = False):
-        UserList.__init__(self)
+    def __init__(self, *args, metadata: bool = False):
+        # parsing args this way ensures UserList operates correctly with certain
+        # functions (like slicing) since it uses positional args internally while
+        # simultaneously obscuring the positional arg from the user
+        UserList.__init__(self, initlist=args[0] if args else None)
         BaseSink.__init__(self)
         self._metadata = metadata
 
@@ -67,7 +70,7 @@ class ListSink(BaseSink, UserList):
             value = {
                 "_key": key,
                 "_timestamp": timestamp,
-                "_headers": str(headers),
+                "_headers": headers,
                 "_topic": topic,
                 "_partition": partition,
                 "_offset": offset,
