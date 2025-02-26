@@ -4,6 +4,7 @@ from quixstreams.dataframe.windows import (
     HoppingCountWindowDefinition,
     HoppingTimeWindowDefinition,
 )
+from quixstreams.dataframe.windows.time_based import ExpirationStrategy
 
 
 @pytest.fixture()
@@ -332,6 +333,91 @@ class TestHoppingWindow:
             assert expired == [
                 (key1, {"start": 100, "end": 110, "value": 4}),
                 (key2, {"start": 100, "end": 110, "value": 12}),
+            ]
+
+    def test_hopping_key_expiration_to_partition(
+        self, hopping_window_definition_factory, state_manager
+    ):
+        window_def = hopping_window_definition_factory(
+            duration_ms=10, grace_ms=0, step_ms=5
+        )
+        window = window_def.sum()
+        window.final(expiration_strategy="key")
+        store = state_manager.get_store(topic="test", store_name=window.name)
+        store.assign_partition(0)
+        with store.start_partition_transaction(0) as tx:
+            key1 = b"key1"
+            key2 = b"key2"
+
+            process(window, value=1, key=key1, transaction=tx, timestamp_ms=100)
+            process(window, value=1, key=key2, transaction=tx, timestamp_ms=102)
+            process(window, value=1, key=key2, transaction=tx, timestamp_ms=105)
+            process(window, value=1, key=key1, transaction=tx, timestamp_ms=106)
+
+        window._expiration_strategy = ExpirationStrategy.PARTITION
+        with store.start_partition_transaction(0) as tx:
+            key3 = b"key3"
+
+            process(window, value=1, key=key1, transaction=tx, timestamp_ms=107)
+            process(window, value=1, key=key2, transaction=tx, timestamp_ms=108)
+            updated, expired = process(
+                window, value=1, key=key3, transaction=tx, timestamp_ms=114
+            )
+
+        assert updated == [
+            (key3, {"start": 105, "end": 115, "value": 1}),
+            (key3, {"start": 110, "end": 120, "value": 1}),
+        ]
+        assert expired == [
+            (key1, {"start": 100, "end": 110, "value": 3}),
+            (key2, {"start": 100, "end": 110, "value": 3}),
+        ]
+
+    def test_hopping_partition_expiration_to_key(
+        self, hopping_window_definition_factory, state_manager
+    ):
+        window_def = hopping_window_definition_factory(
+            duration_ms=10, grace_ms=0, step_ms=5
+        )
+        window = window_def.sum()
+        window.final(expiration_strategy="partition")
+        store = state_manager.get_store(topic="test", store_name=window.name)
+        store.assign_partition(0)
+        with store.start_partition_transaction(0) as tx:
+            key1 = b"key1"
+            key2 = b"key2"
+
+            process(window, value=1, key=key1, transaction=tx, timestamp_ms=100)
+            process(window, value=1, key=key2, transaction=tx, timestamp_ms=102)
+            process(window, value=1, key=key2, transaction=tx, timestamp_ms=105)
+            process(window, value=1, key=key1, transaction=tx, timestamp_ms=106)
+
+        window._expiration_strategy = ExpirationStrategy.KEY
+        with store.start_partition_transaction(0) as tx:
+            key3 = b"key3"
+
+            process(window, value=1, key=key1, transaction=tx, timestamp_ms=107)
+            process(window, value=1, key=key2, transaction=tx, timestamp_ms=108)
+            updated, expired = process(
+                window, value=1, key=key3, transaction=tx, timestamp_ms=114
+            )
+
+            assert updated == [
+                (key3, {"start": 105, "end": 115, "value": 1}),
+                (key3, {"start": 110, "end": 120, "value": 1}),
+            ]
+            assert expired == []
+
+            updated, expired = process(
+                window, value=1, key=key1, transaction=tx, timestamp_ms=116
+            )
+            assert updated == [
+                (key1, {"start": 110, "end": 120, "value": 1}),
+                (key1, {"start": 115, "end": 125, "value": 1}),
+            ]
+            assert expired == [
+                (key1, {"start": 100, "end": 110, "value": 3}),
+                (key1, {"start": 105, "end": 115, "value": 2}),
             ]
 
 

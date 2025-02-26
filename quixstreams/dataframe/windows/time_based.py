@@ -199,7 +199,7 @@ class TimeWindow(Window):
             )
 
         if count:
-            logger.info(
+            logger.debug(
                 "Expired %s windows in %ss", count, round(time.monotonic() - start, 2)
             )
 

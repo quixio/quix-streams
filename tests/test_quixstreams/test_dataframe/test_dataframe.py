@@ -1062,6 +1062,26 @@ class TestStreamingDataFrameTumblingWindow:
             (WindowResult(value=2, start=20, end=30), records[3].key, 20, None),
         ]
 
+    def test_tumbling_window_final_invalid_strategy(
+        self,
+        dataframe_factory,
+        state_manager,
+        message_context_factory,
+        topic_manager_topic_factory,
+    ):
+        topic = topic_manager_topic_factory(
+            name="test",
+        )
+
+        sdf = dataframe_factory(topic, state_manager=state_manager)
+
+        with pytest.raises(TypeError):
+            sdf = (
+                sdf.tumbling_window(duration_ms=10, grace_ms=0)
+                .sum()
+                .final(expiration_strategy="foo")
+            )
+
     def test_tumbling_window_none_key_messages(
         self,
         dataframe_factory,
@@ -1366,6 +1386,26 @@ class TestStreamingDataFrameHoppingWindow:
             (WindowResult(value=5, start=5, end=15), records[3].key, 5, None),
             (WindowResult(value=3, start=10, end=20), records[3].key, 10, None),
         ]
+
+    def test_hopping_window_final_invalid_strategy(
+        self,
+        dataframe_factory,
+        state_manager,
+        message_context_factory,
+        topic_manager_topic_factory,
+    ):
+        topic = topic_manager_topic_factory(
+            name="test",
+        )
+
+        sdf = dataframe_factory(topic, state_manager=state_manager)
+
+        with pytest.raises(TypeError):
+            sdf = (
+                sdf.hopping_window(duration_ms=10, step_ms=5)
+                .sum()
+                .final(expiration_strategy="foo")
+            )
 
     def test_hopping_window_none_key_messages(
         self,
