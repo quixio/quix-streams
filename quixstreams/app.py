@@ -1038,8 +1038,8 @@ class Application:
 
         A timeout will immediately stop an Application once T seconds has passed after
           an initial rebalance and recovery (if required).
-        Because waiting for a first message to arrive can sometimes take a while, there
-          is an option to start tracking for timeout once the first message has been
+        Because the arrival of a first message can sometimes be delayed, there
+          is an option to start tracking the runtime once the first message has been
           fully processed (set `timeout_starts_on_first_message=True`). However, if
           no message ever arrives, it will run indefinitely.
         Note that unlike count, a timeout does NOT ensure downstream operations that
@@ -1071,8 +1071,17 @@ class Application:
         df = app.dataframe(topic)
         df.apply(lambda value, context: print('New message', value)
 
-        app.run()
+        app.run()  # could pass `timeout=5` here, for example
         ```
+        :param dataframe: DEPRECATED - do not use; sdfs are now automatically tracked.
+        :param timeout: how long to run the application for.
+            Default = 0.0 (infinite)
+        :param count: how many input topic messages to process before stopping.
+            Default = 0 (infinite)
+        :param timeout_starts_on_first_message: start tracking runtime only after an
+            input message was processed (could lead to running indefinitely).
+            Otherwise, runtime tracking starts after initial rebalance or recovery.
+            Default = False
         """
         if dataframe is not None:
             warnings.warn(
