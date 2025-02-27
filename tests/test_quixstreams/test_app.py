@@ -2983,7 +2983,7 @@ class TestRunTracker:
             # force a sleep to ensure that if timeout was for some reason not set
             # after recovery, this test would fail by timing out too soon (would only
             # handle 1 message rather than the rest)
-            time.sleep(timeout + 0.1)
+            time.sleep(timeout * 2)
 
         with patch(
             "quixstreams.state.recovery.RecoveryManager.do_recovery", new=sleep_recovery
