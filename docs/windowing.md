@@ -990,9 +990,9 @@ Also, specifying a grace period using `grace_ms` will increase the latency, beca
 
 You can use `final()` mode when some latency is allowed, but the emitted results must be complete and unique.
 
-##### Expiration strategy
+##### Closing strategy
 
-By default windows use the **key** expiration strategy. In this strategy messages advance time and expire windows with the **same** message key.
+By default windows use the **key** closing strategy. In this strategy messages advance time and close windows with the **same** message key.
 
 If some message keys appear irregularly in the stream, the latest windows can remain unprocessed until the message with the same key is received.
 
@@ -1005,7 +1005,7 @@ sdf = app.dataframe(...)
 
 # Calculate a sum of values over a window of 10 seconds 
 # and use .final() to emit results only when the window is complete
-sdf = sdf.tumbling_window(timedelta(seconds=10)).sum().final(expiration_strategy="key")
+sdf = sdf.tumbling_window(timedelta(seconds=10)).sum().final(closing_strategy="key")
 
 # Details:
 # -> Timestamp=100, Key="A", value=1   -> emit nothing (the window is not closed yet) 
@@ -1021,9 +1021,9 @@ sdf = sdf.tumbling_window(timedelta(seconds=10)).sum().final(expiration_strategy
 # No message for key "C" as the window is never closed since no messages with key "C" and a timestamp later than 10000 was received 
 ```
 
-An alternative is to use the **partition** expiraton strategy. In this strategy messages advance time and expire windows for the whole partition to which this message key belongs.
+An alternative is to use the **partition** closing strategy. In this strategy messages advance time and close windows for the whole partition to which this message key belongs.
 
-If messages aren't ordered accross keys some message can be skipped if the windows are already expired.
+If messages aren't ordered accross keys some message can be skipped if the windows are already closed.
 
 ```python
 from datetime import timedelta
@@ -1034,7 +1034,7 @@ sdf = app.dataframe(...)
 
 # Calculate a sum of values over a window of 10 seconds 
 # and use .final() to emit results only when the window is complete
-sdf = sdf.tumbling_window(timedelta(seconds=10)).sum().final(expiration_strategy="partition")
+sdf = sdf.tumbling_window(timedelta(seconds=10)).sum().final(closing_strategy="partition")
 
 # Details:
 # -> Timestamp=100, Key="A", value=1   -> emit nothing (the window is not closed yet) 

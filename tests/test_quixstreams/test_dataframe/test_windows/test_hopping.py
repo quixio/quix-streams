@@ -4,7 +4,7 @@ from quixstreams.dataframe.windows import (
     HoppingCountWindowDefinition,
     HoppingTimeWindowDefinition,
 )
-from quixstreams.dataframe.windows.time_based import ExpirationStrategy
+from quixstreams.dataframe.windows.time_based import ClosingStrategy
 
 
 @pytest.fixture()
@@ -63,7 +63,7 @@ class TestHoppingWindow:
     ):
         window_def = hopping_window_definition_factory(duration_ms=10, step_ms=5)
         window = window_def.count()
-        window.final(expiration_strategy=expiration)
+        window.final(closing_strategy=expiration)
         store = state_manager.get_store(topic="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
@@ -88,7 +88,7 @@ class TestHoppingWindow:
     ):
         window_def = hopping_window_definition_factory(duration_ms=10, step_ms=5)
         window = window_def.sum()
-        window.final(expiration_strategy=expiration)
+        window.final(closing_strategy=expiration)
         store = state_manager.get_store(topic="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
@@ -113,7 +113,7 @@ class TestHoppingWindow:
     ):
         window_def = hopping_window_definition_factory(duration_ms=10, step_ms=5)
         window = window_def.mean()
-        window.final(expiration_strategy=expiration)
+        window.final(closing_strategy=expiration)
         store = state_manager.get_store(topic="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
@@ -141,7 +141,7 @@ class TestHoppingWindow:
             reducer=lambda agg, current: agg + [current],
             initializer=lambda value: [value],
         )
-        window.final(expiration_strategy=expiration)
+        window.final(closing_strategy=expiration)
         store = state_manager.get_store(topic="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
@@ -165,7 +165,7 @@ class TestHoppingWindow:
     ):
         window_def = hopping_window_definition_factory(duration_ms=10, step_ms=5)
         window = window_def.max()
-        window.final(expiration_strategy=expiration)
+        window.final(closing_strategy=expiration)
         store = state_manager.get_store(topic="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
@@ -189,7 +189,7 @@ class TestHoppingWindow:
     ):
         window_def = hopping_window_definition_factory(duration_ms=10, step_ms=5)
         window = window_def.min()
-        window.final(expiration_strategy=expiration)
+        window.final(closing_strategy=expiration)
         store = state_manager.get_store(topic="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
@@ -213,7 +213,7 @@ class TestHoppingWindow:
     ):
         window_def = hopping_window_definition_factory(duration_ms=10, step_ms=5)
         window = window_def.collect()
-        window.final(expiration_strategy=expiration)
+        window.final(closing_strategy=expiration)
         store = state_manager.get_store(topic="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
@@ -265,7 +265,7 @@ class TestHoppingWindow:
             duration_ms=10, grace_ms=0, step_ms=5
         )
         window = window_def.sum()
-        window.final(expiration_strategy=expiration)
+        window.final(closing_strategy=expiration)
         store = state_manager.get_store(topic="test", store_name=window.name)
         store.assign_partition(0)
         key = b"key"
@@ -306,7 +306,7 @@ class TestHoppingWindow:
             duration_ms=10, grace_ms=0, step_ms=5
         )
         window = window_def.sum()
-        window.final(expiration_strategy="partition")
+        window.final(closing_strategy="partition")
         store = state_manager.get_store(topic="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
@@ -342,7 +342,7 @@ class TestHoppingWindow:
             duration_ms=10, grace_ms=0, step_ms=5
         )
         window = window_def.sum()
-        window.final(expiration_strategy="key")
+        window.final(closing_strategy="key")
         store = state_manager.get_store(topic="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
@@ -354,7 +354,7 @@ class TestHoppingWindow:
             process(window, value=1, key=key2, transaction=tx, timestamp_ms=105)
             process(window, value=1, key=key1, transaction=tx, timestamp_ms=106)
 
-        window._expiration_strategy = ExpirationStrategy.PARTITION
+        window._closing_strategy = ClosingStrategy.PARTITION
         with store.start_partition_transaction(0) as tx:
             key3 = b"key3"
 
@@ -380,7 +380,7 @@ class TestHoppingWindow:
             duration_ms=10, grace_ms=0, step_ms=5
         )
         window = window_def.sum()
-        window.final(expiration_strategy="partition")
+        window.final(closing_strategy="partition")
         store = state_manager.get_store(topic="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
@@ -392,7 +392,7 @@ class TestHoppingWindow:
             process(window, value=1, key=key2, transaction=tx, timestamp_ms=105)
             process(window, value=1, key=key1, transaction=tx, timestamp_ms=106)
 
-        window._expiration_strategy = ExpirationStrategy.KEY
+        window._closing_strategy = ClosingStrategy.KEY
         with store.start_partition_transaction(0) as tx:
             key3 = b"key3"
 

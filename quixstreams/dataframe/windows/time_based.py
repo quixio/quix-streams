@@ -23,21 +23,21 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class ExpirationStrategy(Enum):
+class ClosingStrategy(Enum):
     KEY = "key"
     PARTITION = "partition"
 
     @classmethod
-    def new(cls, value: str) -> "ExpirationStrategy":
+    def new(cls, value: str) -> "ClosingStrategy":
         try:
-            return ExpirationStrategy[value.upper()]
+            return ClosingStrategy[value.upper()]
         except KeyError:
             raise TypeError(
-                'expiration strategy must be one of "key" or "partition'
+                'closing strategy must be one of "key" or "partition'
             ) from None
 
 
-ExpirationStrategyValues = Literal["key", "partition"]
+ClosingStrategyValues = Literal["key", "partition"]
 
 
 class TimeWindow(Window):
@@ -65,10 +65,10 @@ class TimeWindow(Window):
         self._step_ms = step_ms
         self._on_late = on_late
 
-        self._expiration_strategy = ExpirationStrategy.KEY
+        self._closing_strategy = ClosingStrategy.KEY
 
     def final(
-        self, expiration_strategy: ExpirationStrategyValues = "key"
+        self, closing_strategy: ClosingStrategyValues = "key"
     ) -> "StreamingDataFrame":
         """
         Apply the window aggregation and return results only when the windows are
@@ -89,15 +89,15 @@ class TimeWindow(Window):
         The closed windows cannot receive updates anymore and are considered final.
 
 
-        :param expiration_strategy: the strategy to use when expiring windows.
+        :param closing_strategy: the strategy to use when closing windows.
             Possible values:
-              - `"key"` - messages advance time and expire windows with the same key.
+              - `"key"` - messages advance time and close windows with the same key.
               If some message keys appear irregularly in the stream, the latest windows can remain unprocessed until a message with the same key is received.
-              - `"partition"` - messages advance time and expire windows for the whole partition to which this message key belongs.
+              - `"partition"` - messages advance time and close windows for the whole partition to which this message key belongs.
               If timestamps between keys are not ordered, it may increase the number of discarded late messages.
               Default - `"key"`.
         """
-        self._expiration_strategy = ExpirationStrategy.new(expiration_strategy)
+        self._closing_strategy = ClosingStrategy.new(closing_strategy)
         return super().final()
 
     def process_window(
@@ -159,7 +159,7 @@ class TimeWindow(Window):
         if collect:
             state.add_to_collection(value=value, id=timestamp_ms)
 
-        if self._expiration_strategy == ExpirationStrategy.PARTITION:
+        if self._closing_strategy == ClosingStrategy.PARTITION:
             expired_windows = self.expire_by_partition(
                 timestamp_ms, transaction, collect
             )
@@ -247,7 +247,7 @@ class TimeWindow(Window):
             )
         if to_log:
             logger.warning(
-                "Skipping window processing for the expired window "
+                "Skipping window processing for the closed window "
                 f"timestamp_ms={timestamp_ms} "
                 f"window={(start, end)} "
                 f"late_by_ms={late_by_ms} "

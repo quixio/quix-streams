@@ -1079,7 +1079,7 @@ class TestStreamingDataFrameTumblingWindow:
             sdf = (
                 sdf.tumbling_window(duration_ms=10, grace_ms=0)
                 .sum()
-                .final(expiration_strategy="foo")
+                .final(closing_strategy="foo")
             )
 
     def test_tumbling_window_none_key_messages(
@@ -1404,7 +1404,7 @@ class TestStreamingDataFrameHoppingWindow:
             sdf = (
                 sdf.hopping_window(duration_ms=10, step_ms=5)
                 .sum()
-                .final(expiration_strategy="foo")
+                .final(closing_strategy="foo")
             )
 
     def test_hopping_window_none_key_messages(

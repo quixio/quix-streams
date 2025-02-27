@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, Any, Iterable
 from quixstreams.state import WindowedPartitionTransaction, WindowedState
 
 from .base import WindowKeyResult, WindowResult
-from .time_based import ExpirationStrategyValues, TimeWindow
+from .time_based import ClosingStrategyValues, TimeWindow
 
 if TYPE_CHECKING:
     from quixstreams.dataframe.dataframe import StreamingDataFrame
@@ -11,12 +11,12 @@ if TYPE_CHECKING:
 
 class SlidingWindow(TimeWindow):
     def final(
-        self, expiration_strategy: ExpirationStrategyValues = "key"
+        self, closing_strategy: ClosingStrategyValues = "key"
     ) -> "StreamingDataFrame":
-        if expiration_strategy != "key":
-            raise TypeError("Sliding window only support the 'key' expiration strategy")
+        if closing_strategy != "key":
+            raise TypeError("Sliding window only support the 'key' closing strategy")
 
-        return super().final(expiration_strategy=expiration_strategy)
+        return super().final(closing_strategy=closing_strategy)
 
     def process_window(
         self,
