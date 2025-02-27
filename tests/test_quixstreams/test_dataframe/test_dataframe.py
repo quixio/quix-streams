@@ -1007,7 +1007,7 @@ class TestStreamingDataFrameTumblingWindow:
             r
             for r in caplog.records
             if r.levelname == "WARNING"
-            and "Skipping window processing for the expired window" in r.message
+            and "Skipping window processing for the closed window" in r.message
         ]
 
         assert warning_logs if should_log else not warning_logs
@@ -1567,7 +1567,7 @@ class TestStreamingDataFrameSlidingWindow:
             r
             for r in caplog.records
             if r.levelname == "WARNING"
-            and "Skipping window processing for the expired window" in r.message
+            and "Skipping window processing for the closed window" in r.message
         ]
 
         assert warning_logs if should_log else not warning_logs
