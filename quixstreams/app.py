@@ -1078,6 +1078,12 @@ class Application:
                 "the argument should be removed.",
                 FutureWarning,
             )
+        if not self._dataframe_registry.consumer_topics:
+            if count or timeout_starts_on_first_message:
+                raise ValueError(
+                    "Can only provide a timeout to .run() when running "
+                    "a plain Source (no StreamingDataFrame)."
+                )
         self._run_tracker.set_stop_condition(
             timeout=timeout,
             count=count,
@@ -1166,14 +1172,17 @@ class Application:
         processing_context.commit_checkpoint(force=True)
 
     def _run_sources(self):
-        self._run_tracker.start_runner()
-        self._source_manager.start_sources()
-        while self._run_tracker.running:
-            self._source_manager.raise_for_error()
-            if not self._source_manager.is_alive():
-                self.stop()
-            self._run_tracker.update_status()
+        run_tracker = self._run_tracker
+        source_manager = self._source_manager
+
+        run_tracker.start_runner()
+        source_manager.start_sources()
+        run_tracker.handle_rebalance(recovery_required=False)
+        while run_tracker.running and source_manager.is_alive():
+            source_manager.raise_for_error()
+            run_tracker.update_status()
             time.sleep(1)
+        self.stop()
 
     def _quix_runtime_init(self):
         """
