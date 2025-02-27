@@ -250,7 +250,7 @@ class TestTumblingWindow:
     def test_tumbling_partition_expiration(
         self, tumbling_window_definition_factory, state_manager
     ):
-        window_def = tumbling_window_definition_factory(duration_ms=10, grace_ms=0)
+        window_def = tumbling_window_definition_factory(duration_ms=10, grace_ms=2)
         window = window_def.sum()
         window.final(closing_strategy="partition")
         store = state_manager.get_store(topic="test", store_name=window.name)
@@ -267,17 +267,36 @@ class TestTumblingWindow:
             process(window, value=5, key=key2, transaction=tx, timestamp_ms=102)
             process(window, value=7, key=key2, transaction=tx, timestamp_ms=108)
 
-            # Expire key1
+            # don't expire key1 due to grace period
             updated, expired = process(
-                window, value=2, key=key1, transaction=tx, timestamp_ms=111
+                window, value=2, key=key1, transaction=tx, timestamp_ms=110
             )
 
             assert updated == [
                 (key1, {"start": 110, "end": 120, "value": 2}),
             ]
+            assert expired == []
+
+            # an older key 2 is accepted
+            updated, expired = process(
+                window, value=2, key=key2, transaction=tx, timestamp_ms=109
+            )
+            assert updated == [
+                (key2, {"start": 100, "end": 110, "value": 14}),
+            ]
+            assert expired == []
+
+            # Expire key1
+            updated, expired = process(
+                window, value=2, key=key1, transaction=tx, timestamp_ms=112
+            )
+
+            assert updated == [
+                (key1, {"start": 110, "end": 120, "value": 4}),
+            ]
             assert expired == [
                 (key1, {"start": 100, "end": 110, "value": 4}),
-                (key2, {"start": 100, "end": 110, "value": 12}),
+                (key2, {"start": 100, "end": 110, "value": 14}),
             ]
 
     def test_tumbling_key_expiration_to_partition(

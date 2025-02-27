@@ -44,7 +44,7 @@ class Message:
     # * Right windows that were not emitted.
     present: list[dict[str, Any]] = field(default_factory=list)
 
-    expected_values_in_state: list[tuple[int, Any]] = field(default_factory=list)
+    expected_values_in_state: list[str] = field(default_factory=list)
 
     @property
     def expected_windows_in_state(self) -> set[tuple[int, int]]:

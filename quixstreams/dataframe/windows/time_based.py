@@ -119,8 +119,13 @@ class TimeWindow(Window):
             step_ms=self._step_ms,
         )
 
-        state_ts = state.get_latest_timestamp() or 0
-        latest_timestamp = max(timestamp_ms, state_ts)
+        if self._closing_strategy == ClosingStrategy.PARTITION:
+            latest_expired_window_end = transaction.get_latest_expired(prefix=b"")
+            latest_timestamp = max(timestamp_ms, latest_expired_window_end)
+        else:
+            state_ts = state.get_latest_timestamp() or 0
+            latest_timestamp = max(timestamp_ms, state_ts)
+
         max_expired_window_end = latest_timestamp - grace_ms
         max_expired_window_start = max_expired_window_end - duration_ms
         updated_windows: list[WindowKeyResult] = []
@@ -161,7 +166,7 @@ class TimeWindow(Window):
 
         if self._closing_strategy == ClosingStrategy.PARTITION:
             expired_windows = self.expire_by_partition(
-                timestamp_ms, transaction, collect
+                transaction, max_expired_window_end, collect
             )
         else:
             expired_windows = self.expire_by_key(
@@ -172,8 +177,8 @@ class TimeWindow(Window):
 
     def expire_by_partition(
         self,
-        max_expired_end: int,
         transaction: WindowedPartitionTransaction,
+        max_expired_end: int,
         collect: bool,
     ) -> Iterable[WindowKeyResult]:
         start = time.monotonic()

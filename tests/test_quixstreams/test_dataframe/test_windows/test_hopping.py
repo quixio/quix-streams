@@ -303,7 +303,7 @@ class TestHoppingWindow:
         self, hopping_window_definition_factory, state_manager
     ):
         window_def = hopping_window_definition_factory(
-            duration_ms=10, grace_ms=0, step_ms=5
+            duration_ms=10, grace_ms=2, step_ms=5
         )
         window = window_def.sum()
         window.final(closing_strategy="partition")
@@ -315,24 +315,44 @@ class TestHoppingWindow:
 
             # items for key1
             process(window, value=1, key=key1, transaction=tx, timestamp_ms=100)
-            process(window, value=3, key=key1, transaction=tx, timestamp_ms=105)
+            process(window, value=3, key=key1, transaction=tx, timestamp_ms=106)
 
             # items for key2
             process(window, value=5, key=key2, transaction=tx, timestamp_ms=102)
             process(window, value=7, key=key2, transaction=tx, timestamp_ms=108)
 
-            # Expire key1
+            # don't expire key1 due to grace period
             updated, expired = process(
-                window, value=2, key=key1, transaction=tx, timestamp_ms=111
+                window, value=2, key=key1, transaction=tx, timestamp_ms=110
             )
 
             assert updated == [
                 (key1, {"start": 105, "end": 115, "value": 5}),
                 (key1, {"start": 110, "end": 120, "value": 2}),
             ]
+            assert expired == []
+
+            # an older key 2 is accepted
+            updated, expired = process(
+                window, value=2, key=key2, transaction=tx, timestamp_ms=109
+            )
+            assert updated == [
+                (key2, {"start": 100, "end": 110, "value": 14}),
+                (key2, {"start": 105, "end": 115, "value": 9}),
+            ]
+            assert expired == []
+
+            # expire key1
+            updated, expired = process(
+                window, value=3, key=key1, transaction=tx, timestamp_ms=112
+            )
+            assert updated == [
+                (key1, {"start": 105, "end": 115, "value": 8}),
+                (key1, {"start": 110, "end": 120, "value": 5}),
+            ]
             assert expired == [
                 (key1, {"start": 100, "end": 110, "value": 4}),
-                (key2, {"start": 100, "end": 110, "value": 12}),
+                (key2, {"start": 100, "end": 110, "value": 14}),
             ]
 
     def test_hopping_key_expiration_to_partition(

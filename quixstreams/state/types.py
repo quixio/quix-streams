@@ -315,6 +315,18 @@ class WindowedPartitionTransaction(Protocol):
         """
         ...
 
+    def get_latest_expired(self, prefix: bytes) -> int:
+        """
+        Get the latest expired timestamp for the current state prefix
+        (same as message key).
+
+        Use this timestamp to determine if the arriving event is late and should be
+        discarded from the processing.
+
+        :return: latest expired timestamp in milliseconds
+        """
+        ...
+
     def expire_windows(
         self,
         max_start_time: int,

@@ -109,6 +109,11 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
             prefix=prefix, cache=self._latest_timestamps, default=0
         )
 
+    def get_latest_expired(self, prefix: bytes) -> int:
+        return self._get_timestamp(
+            prefix=prefix, cache=self._last_expired_timestamps, default=0
+        )
+
     def get_window(
         self,
         start_ms: int,
