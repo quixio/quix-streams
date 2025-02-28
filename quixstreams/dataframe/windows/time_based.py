@@ -88,7 +88,6 @@ class TimeWindow(Window):
         its end timestamp + grace period.
         The closed windows cannot receive updates anymore and are considered final.
 
-
         :param closing_strategy: the strategy to use when closing windows.
             Possible values:
               - `"key"` - messages advance time and close windows with the same key.
@@ -99,6 +98,37 @@ class TimeWindow(Window):
         """
         self._closing_strategy = ClosingStrategy.new(closing_strategy)
         return super().final()
+
+    def current(
+        self, closing_strategy: ClosingStrategyValues = "key"
+    ) -> "StreamingDataFrame":
+        """
+        Apply the window transformation to the StreamingDataFrame to return results
+        for each updated window.
+
+        The format of returned windows:
+        ```python
+        {
+            "start": <window start time in milliseconds>,
+            "end": <window end time in milliseconds>,
+            "value: <aggregated window value>,
+        }
+        ```
+
+        This method processes streaming data and returns results as they come,
+        regardless of whether the window is closed or not.
+
+        :param closing_strategy: the strategy to use when closing windows.
+            Possible values:
+              - `"key"` - messages advance time and close windows with the same key.
+              If some message keys appear irregularly in the stream, the latest windows can remain unprocessed until a message with the same key is received.
+              - `"partition"` - messages advance time and close windows for the whole partition to which this message key belongs.
+              If timestamps between keys are not ordered, it may increase the number of discarded late messages.
+              Default - `"key"`.
+        """
+
+        self._closing_strategy = ClosingStrategy.new(closing_strategy)
+        return super().current()
 
     def process_window(
         self,

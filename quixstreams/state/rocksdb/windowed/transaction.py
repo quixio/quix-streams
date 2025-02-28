@@ -4,7 +4,11 @@ from typing import TYPE_CHECKING, Any, Iterable, Optional, cast
 
 from rocksdict import ReadOptions
 
-from quixstreams.state.base.transaction import PartitionTransaction
+from quixstreams.state.base.transaction import (
+    PartitionTransaction,
+    PartitionTransactionStatus,
+    validate_transaction_status,
+)
 from quixstreams.state.metadata import DEFAULT_PREFIX, SEPARATOR
 from quixstreams.state.recovery import ChangelogProducer
 from quixstreams.state.serialization import (
@@ -103,6 +107,24 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
                 else serialize(prefix, dumps=self._dumps)
             ),
         )
+
+    @validate_transaction_status(PartitionTransactionStatus.STARTED)
+    def keys(self, cf_name: str = "default") -> Iterable[Any]:
+        db_skip_keys: set[bytes] = set()
+
+        cache = self._update_cache.get_updates(cf_name=cf_name)
+        for prefix_update_cache in cache.values():
+            # when iterating over the DB, skip keys already returned by the cache
+            db_skip_keys.update(prefix_update_cache.keys())
+            yield from prefix_update_cache.keys()
+
+        # skip keys that were deleted from the cache
+        db_skip_keys.update(self._update_cache.get_deletes())
+
+        for key in self._partition.iter_keys(cf_name=cf_name):
+            if key in db_skip_keys:
+                continue
+            yield key
 
     def get_latest_timestamp(self, prefix: bytes) -> int:
         return self._get_timestamp(

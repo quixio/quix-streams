@@ -990,7 +990,7 @@ Also, specifying a grace period using `grace_ms` will increase the latency, beca
 
 You can use `final()` mode when some latency is allowed, but the emitted results must be complete and unique.
 
-##### Closing strategy
+## Closing strategies
 
 By default windows use the **key** closing strategy. In this strategy messages advance time and close windows with the **same** message key.
 

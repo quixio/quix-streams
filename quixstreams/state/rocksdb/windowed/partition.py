@@ -60,6 +60,18 @@ class WindowedRocksDBStorePartition(RocksDBStorePartition):
             cf.items(from_key=from_key, read_opt=read_opt),
         )
 
+    def iter_keys(self, cf_name: str = "default") -> Iterator[bytes]:
+        """
+        Iterate over all keys in the DB.
+
+        Addition and deletion of keys during iteration is not supported.
+
+        :param cf_name: rocksdb column family name. Default - "default"
+        :return: An iterable of keys
+        """
+        cf_dict = self.get_column_family(cf_name)
+        return cast(Iterator[bytes], cf_dict.keys())
+
     def begin(self) -> "WindowedRocksDBPartitionTransaction":
         return WindowedRocksDBPartitionTransaction(
             partition=self,

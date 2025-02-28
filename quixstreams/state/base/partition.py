@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Iterable, Literal, Optional, Union
+from typing import TYPE_CHECKING, Literal, Optional, Union
 
 from quixstreams.models import SuccessfulConfluentKafkaMessageProto
 from quixstreams.state.exceptions import ColumnFamilyHeaderMissing
@@ -105,17 +105,6 @@ class StorePartition(ABC):
         :param key: a key encoded to `bytes`.
         :param cf_name: rocksdb column family name. Default - "default"
         :return: `True` if the key is present, `False` otherwise.
-        """
-
-    @abstractmethod
-    def keys(self, cf_name: str = "default") -> Iterable[bytes]:
-        """
-        Iterate over all keys in the store.
-
-        Addition and deletion of keys during iteration is not supported.
-
-        :param cf_name: rocksdb column family name. Default - "default"
-        :return: An iterable of keys
         """
 
     def begin(self) -> PartitionTransaction:

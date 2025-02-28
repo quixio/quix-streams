@@ -1,6 +1,6 @@
 import functools
 import logging
-from typing import Any, Dict, Iterable, Literal, Optional, Union
+from typing import Any, Dict, Literal, Optional, Union
 
 from quixstreams.models import RawConfluentKafkaMessageProto
 from quixstreams.state.base import PartitionTransactionCache, StorePartition
@@ -160,15 +160,3 @@ class MemoryStorePartition(StorePartition):
         :return: `True` if the key is present, `False` otherwise.
         """
         return key in self._state.get(cf_name, {})
-
-    @_validate_partition_state()
-    def keys(self, cf_name: str = "default") -> Iterable[bytes]:
-        """
-        Iterate over all keys in the DB.
-
-        Addition and deletion of keys during iteration is not supported.
-
-        :param cf_name: rocksdb column family name. Default - "default"
-        :return: An iterable of keys
-        """
-        return self._state.get(cf_name, {}).keys()
