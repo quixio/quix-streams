@@ -18,6 +18,14 @@ class SlidingWindow(TimeWindow):
 
         return super().final(closing_strategy=closing_strategy)
 
+    def current(
+        self, closing_strategy: ClosingStrategyValues = "key"
+    ) -> "StreamingDataFrame":
+        if closing_strategy != "key":
+            raise TypeError("Sliding window only support the 'key' closing strategy")
+
+        return super().current(closing_strategy=closing_strategy)
+
     def process_window(
         self,
         value: Any,
