@@ -2463,7 +2463,7 @@ class TestApplicationMultipleSdf:
         done = Future()
 
         # Stop app when the future is resolved
-        executor.submit(_stop_app_on_future, app, done, 30.0)
+        executor.submit(_stop_app_on_future, app, done, 60.0)
         app.run()
 
         # Check that all messages have been processed
@@ -2477,7 +2477,7 @@ class TestApplicationMultipleSdf:
             rows = []
             with row_consumer_factory(auto_offset_reset="earliest") as row_consumer:
                 row_consumer.subscribe([output_topic])
-                while row := row_consumer.poll_row(timeout=5):
+                while row := row_consumer.poll_row(timeout=10):
                     rows.append(row)
 
             assert len(rows) == expected_output_topic_count

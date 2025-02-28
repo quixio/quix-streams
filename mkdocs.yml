@@ -35,6 +35,7 @@ nav:
   - How to:
     - Produce Data to Kafka: producer.md
     - Process & Transform Data: processing.md
+    - Inspecting Data & Debugging: debugging.md
     - GroupBy Operation: groupby.md
     - Windows & Aggregations: windowing.md
     - Configuration: configuration.md
