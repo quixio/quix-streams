@@ -10,15 +10,15 @@ whether for debugging or confirming things are working as expected!
 
 This is generally the simplest approach for inspecting your `Application`.
 
-You can essentially print the current record's value at a given point in a `StreamingDataFrame`.
+You can print the current record's value at desired points in a `StreamingDataFrame`.
 
 ### Single Record Printing
 
 The most log-friendly approach (especially if you do not have a live terminal 
-session, such as when running in Kubernetes) would be `StreamingDataFrame.print()`,
+session, such as when running in Kubernetes) is `StreamingDataFrame.print()`,
 which prints the current record value wherever it's called.
 
-It's a multi-line print by default, but it can do single line with kwarg `pretty=False`.
+It's a multi-line print by default, but it can be single line with kwarg `pretty=False`.
 
 It can additionally include the record metadata with kwarg `metadata=True`:
 
@@ -91,17 +91,19 @@ sdf.print_table(title="Final Output")
 ## Interacting with Data
 
 If you'd like to store or manipulate data from `Application` processing directly, you can 
-do an "interactive" `Application` run by both: 
+do an "interactive" `Application` by executing `Application.run()` within an 
+iPython session (terminal/Pycharm/VS Code etc.) or Jupiter Notebook cell.
 
-- Providing stopping conditions for `Application.run()`
-- Using The Quix Streams `ListSink` sink to store data.
+To do so, you'll need to both:
+
+- Provide stop conditions to `Application.run()`
+- Use Quix Streams `ListSink` + `StreamingDataFrame.sink()` to store data.
 
 Basically:
 
-1. The `Application` runs for a short period of time (as specified by you) 
-in an interactive Python session or Jupiter notebook
-2. While running, data is stored (as specified by you) in specified `ListSink` variable(s). 
-3. Once the Application stops, these variable(s) are now accessible as normal.
+1. The `Application` runs for the specified period in the interactive session.
+2. While running, data is stored in the specified `ListSink` variable(s). 
+3. Once the Application stops, those variable(s) are now accessible as normal.
 
 The details of this pattern are further explained below.
 
@@ -109,7 +111,7 @@ The details of this pattern are further explained below.
 
 In a production setting, `Application.run()` should be called only once with no
 arguments, which means it will run indefinitely (until it encounters an error or 
-is manually stopped by a user).
+is manually stopped by the user).
 
 However, for debugging, the following kwargs can be passed to stop the `Application` 
 when the applicable condition is met:
@@ -187,7 +189,7 @@ to `Pandas.DataFrame()` and it will work as expected!
     
       - `ListSink[:] = []`
 
-## Interactive limitations
+### Interactive limitations
 
 Currently, Quix Streams `Source` functionality is limited due 
 to `multiprocessing` `if __name__ == '__main__':` limitations; specifically:
@@ -216,6 +218,6 @@ sdf.update(lambda value: pdb.set_trace())
 Though likely not helpful for the average user, it is possible to change the
 `Application` loglevel to `DEBUG` for more under-the-hood insight.
 
-Just do `Application(loglevel=DEBUG)`.
+Just do `Application(loglevel="DEBUG")`.
 
 > **NOTE**: This does NOT grant any insights into the message data directly.
