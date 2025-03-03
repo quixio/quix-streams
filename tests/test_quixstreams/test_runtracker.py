@@ -81,9 +81,9 @@ class TestRunTracker:
                 msg = input_topic.serialize(key="some_key", value=value)
                 producer.produce(input_topic.name, key=msg.key, value=msg.value)
 
-        app.run(timeout=timeout, timeout_starts_on_first_message=False)
+        app.run(timeout=timeout)
         assert list_sink == values_in[:1]
-        app.run(timeout=timeout * 2, timeout_starts_on_first_message=False)
+        app.run(timeout=timeout * 2)
         assert list_sink == values_in[:3]
 
         with app.get_consumer() as consumer:
@@ -132,18 +132,17 @@ class TestRunTracker:
                 producer.produce(input_topic.name, key=msg.key, value=msg.value)
 
         # force a timeout after first message (don't want to consume the groupby)
-        app.run(timeout=timeout, timeout_starts_on_first_message=False)
+        app.run(timeout=timeout)
         assert list_sink_pre_gb == values_in[:1]
         assert list_sink_post_gb == []
 
         # count does not include groupby messages for triggering stop
         # remember that timeout check occurs before count check
         with caplog.at_level("INFO"):
-            # timeout tracking won't start until first non-changelog message is read;
-            #   this guarantees that count would trigger stopping first if it actually
-            #   counted groupby msgs (but it shouldn't), so timeout should trigger.
-            app.run(count=1, timeout=timeout, timeout_starts_on_first_message=True)
+            # timeout should trigger since count only tracks non-repartition messages
+            app.run(count=1, timeout=timeout * 10)
             assert f"Timeout of {timeout}s reached!" in caplog.text
+            assert list_sink_pre_gb == values_in[:1]
             assert list_sink_post_gb == values_in[:1]
 
         with app.get_producer() as producer:
@@ -151,7 +150,7 @@ class TestRunTracker:
                 msg = input_topic.serialize(key="some_key", value=value)
                 producer.produce(input_topic.name, key=msg.key, value=msg.value)
 
-        # now check that count enforces ALL downstream groupby's to be fully flushed
+        # count enforces ALL downstream groupby's to be fully flushed
         # when it's the stop trigger (unlike timeout)
         app.run(count=2)
         assert list_sink_pre_gb == values_in[:3]
@@ -161,51 +160,6 @@ class TestRunTracker:
             assert consumer.get_watermark_offsets(TopicPartition(output_topic.name, 0))[
                 1
             ] == len(list_sink_post_gb)
-
-    def test_timeout_starts_on_first_msg(
-        self,
-        app_factory,
-        row_consumer_factory,
-        executor,
-    ):
-        app = app_factory(
-            auto_offset_reset="earliest",
-        )
-        input_topic = app.topic(
-            str(uuid.uuid4()),
-            value_deserializer="json",
-            value_serializer="json",
-        )
-        output_topic = app.topic(
-            str(uuid.uuid4()),
-            value_deserializer="json",
-        )
-
-        values_in = [{"x": 1}, {"x": 2}, {"x": 3}, {"x": 4}]
-        timeout = 0.001
-
-        list_sink = ListSink()
-        app.dataframe(topic=input_topic).update(lambda x: time.sleep(timeout)).to_topic(
-            output_topic
-        ).sink(list_sink)
-
-        def produce_on_delay(app_producer):
-            time.sleep(5)
-            with app_producer as producer:
-                for value in values_in:
-                    msg = input_topic.serialize(key="some_key", value=value)
-                    producer.produce(input_topic.name, key=msg.key, value=msg.value)
-
-        producer = app.get_producer()
-        executor.submit(produce_on_delay, producer)
-        app.run(timeout=timeout, timeout_starts_on_first_message=True)
-        # 2 messages since the timeout doesn't begin tracking until after 1st msg
-        assert list_sink == values_in[:2]
-
-        with app.get_consumer() as consumer:
-            assert consumer.get_watermark_offsets(TopicPartition(output_topic.name, 0))[
-                1
-            ] == len(list_sink)
 
     def test_multiple_mixed_runs(
         self,
@@ -238,7 +192,7 @@ class TestRunTracker:
                 msg = input_topic.serialize(key="some_key", value=value)
                 producer.produce(input_topic.name, key=msg.key, value=msg.value)
 
-        app.run(timeout=timeout, timeout_starts_on_first_message=False)
+        app.run(timeout=timeout)
         app.run(count=2)
 
         assert list_sink == values_in[:3]
@@ -300,7 +254,7 @@ class TestRunTracker:
         with patch(
             "quixstreams.state.recovery.RecoveryManager.do_recovery", new=sleep_recovery
         ):
-            app.run(timeout=timeout, timeout_starts_on_first_message=False)
+            app.run(timeout=timeout)
 
         assert list_sink == values_in
 
@@ -313,6 +267,7 @@ class TestRunTracker:
         self,
         app_factory,
         row_consumer_factory,
+        caplog,
     ):
         """
         Timeout is set only after recovery is complete
@@ -345,12 +300,25 @@ class TestRunTracker:
                 msg = input_topic.serialize(key="some_key", value=value)
                 producer.produce(input_topic.name, key=msg.key, value=msg.value)
 
-        # gets 1 message (hits timeout)
-        app.run(count=2, timeout=timeout, timeout_starts_on_first_message=False)
-        # gets 2 messages (hits count)
-        app.run(count=2, timeout=5, timeout_starts_on_first_message=False)
+        with caplog.at_level("INFO"):
+            # gets 1 message (hits timeout)
+            app.run(count=3, timeout=timeout)
+            assert f"Timeout of {timeout}s reached!" in caplog.text
+            assert list_sink == values_in[:1]
+            caplog.clear()
 
-        assert list_sink == values_in[:3]
+        with caplog.at_level("INFO"):
+            # gets 1 message (hits timeout and count, but timeout takes priority)
+            app.run(count=1, timeout=timeout)
+            assert f"Timeout of {timeout}s reached!" in caplog.text
+            assert list_sink == values_in[:2]
+            caplog.clear()
+
+        with caplog.at_level("INFO"):
+            # gets 1 message (hits count)
+            app.run(count=1, timeout=5)
+            assert f"Count of {1} records reached!" in caplog.text
+            assert list_sink == values_in[:3]
 
         with app.get_consumer() as consumer:
             assert consumer.get_watermark_offsets(TopicPartition(output_topic.name, 0))[
