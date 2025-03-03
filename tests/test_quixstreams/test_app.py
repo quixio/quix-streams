@@ -143,7 +143,7 @@ class TestApplication:
         processed_count = 0
         total_messages = 3
         # Produce messages to the topic and flush
-        timestamp_ms = int(time.time() * 1000)
+        timestamp_ms = int(time.time() / 1000)
         headers = [("header", b"value")]
         data = {
             "key": b"key",
@@ -2320,7 +2320,7 @@ class TestApplicationMultipleSdf:
         messages_per_topic = 3
         total_messages = messages_per_topic * len(input_topics)
         # Produce messages to the topic and flush
-        timestamp_ms = int(time.time() * 1000)
+        timestamp_ms = int(time.time() / 1000)
         headers = [("header", b"value")]
         data = {
             "key": b"key",
@@ -2415,7 +2415,7 @@ class TestApplicationMultipleSdf:
             value_serializer="json",
         )
 
-        timestamp = int(time.time() * 1000)
+        timestamp = 1000
         user_id = "abc123"
         account_id = "def456"
         value_in = {"user": user_id, "account": account_id}
@@ -2461,7 +2461,7 @@ class TestApplicationMultipleSdf:
         done = Future()
 
         # Stop app when the future is resolved
-        executor.submit(_stop_app_on_future, app, done, 30.0)
+        executor.submit(_stop_app_on_future, app, done, 10.0)
         app.run()
 
         # Check that all messages have been processed
