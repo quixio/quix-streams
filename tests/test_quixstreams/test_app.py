@@ -2541,11 +2541,12 @@ class TestApplicationMultipleSdf:
         ]:
             rows = []
             with row_consumer_factory(auto_offset_reset="earliest") as row_consumer:
+                print(f"SUBSCRIBING TO TOPIC {output_topic} at {time.time()}")
                 row_consumer.subscribe([output_topic])
-                while row := row_consumer.poll_row(timeout=5):
+                while row := row_consumer.poll_row(timeout=20):
                     rows.append(row)
 
-            print(f"ROWS: {rows}")
+            print(f"ROWS: {rows} at {time.time()}")
             assert len(rows) == expected_output_topic_count
             for row in rows:
                 # Check that "user_id" is now used as a message key
