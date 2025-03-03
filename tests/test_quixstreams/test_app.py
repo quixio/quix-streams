@@ -2481,12 +2481,14 @@ class TestApplicationMultipleSdf:
         sdf_a_user["groupby_timestamp"] = sdf_a_user.apply(
             lambda value, key, timestamp_, headers: timestamp_, metadata=True
         )
+        sdf_a_user.print()
         sdf_a_user.to_topic(output_topic_user)
 
         sdf_a_account = sdf_a.group_by("account")
         sdf_a_account["groupby_timestamp"] = sdf_a_account.apply(
             lambda value, key, timestamp_, headers: timestamp_, metadata=True
         )
+        sdf_a_account.print()
         sdf_a_account.to_topic(output_topic_account)
 
         sdf_b = app.dataframe(topic=input_topic_b)
@@ -2494,12 +2496,14 @@ class TestApplicationMultipleSdf:
         sdf_b_user["groupby_timestamp"] = sdf_b_user.apply(
             lambda value, key, timestamp_, headers: timestamp_, metadata=True
         )
+        sdf_b_user.print()
         sdf_b_user.to_topic(output_topic_user)
 
         sdf_b_account = sdf_b.group_by("account")
         sdf_b_account["groupby_timestamp"] = sdf_b_account.apply(
             lambda value, key, timestamp_, headers: timestamp_, metadata=True
         )
+        sdf_b_account.print()
         sdf_b_account.to_topic(output_topic_account)
 
         with app.get_producer() as producer:
