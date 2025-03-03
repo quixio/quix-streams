@@ -2534,6 +2534,13 @@ class TestApplicationMultipleSdf:
         # Check that all messages have been processed
         assert processed_count == expected_processed
 
+        def on_assign(consumer, partitions):
+            print(f"ON ASSIGN {(p.topic for p in partitions)}")
+
+        import logging
+
+        logging.basicConfig(level=logging.DEBUG)
+
         # Consume the message from the output topic
         for key, output_topic in [
             (user_id, output_topic_user),
@@ -2544,8 +2551,8 @@ class TestApplicationMultipleSdf:
                 auto_offset_reset="earliest", consumer_group=str(uuid.uuid4())
             ) as row_consumer:
                 print(f"SUBSCRIBING TO TOPIC {output_topic} at {time.time()}")
-                row_consumer.subscribe([output_topic])
-                while row := row_consumer.poll_row(timeout=10):
+                row_consumer.subscribe([output_topic], on_assign=on_assign)
+                while row := row_consumer.poll_row(timeout=20):
                     rows.append(row)
 
             print(f"ROWS: {rows} at {time.time()}")
