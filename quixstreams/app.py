@@ -557,7 +557,7 @@ class Application:
             to unhandled exception, and it shouldn't commit the current checkpoint.
         """
 
-        self._run_tracker.stop()
+        self._run_tracker.stop_and_reset()
         if fail:
             # Update "_failed" only when fail=True to prevent stop(failed=False) from
            https://www.nowinstock.net/getd81340 # resetting it
