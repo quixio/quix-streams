@@ -48,6 +48,7 @@ class ContainerHelper:
             .with_env("KAFKA_TRANSACTION_STATE_LOG_NUM_PARTITIONS", "1")
             .with_env("KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR", "1")
             .with_env("KAFKA_TRANSACTION_STATE_LOG_MIN_ISR", "1")
+            .with_env("KAFKA_LOG_RETENTION_MS", "-1")
             .with_bind_ports(kafka_port, kafka_port)
             .with_network(network)
         )
