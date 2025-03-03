@@ -734,7 +734,6 @@ class Application:
         dataframe: Optional[StreamingDataFrame] = None,
         timeout: float = 0.0,
         count: int = 0,
-        timeout_starts_on_first_message: bool = False,
     ):
         """
         Start processing data from Kafka using provided `StreamingDataFrame`
@@ -753,10 +752,6 @@ class Application:
 
         A timeout will immediately stop an Application once T seconds has passed after
           an initial rebalance and recovery (if required).
-        Because the arrival of a first message can sometimes be delayed, there
-          is an option to start tracking the runtime once the first message has been
-          fully processed (set `timeout_starts_on_first_message=True`). However, if
-          no message ever arrives, it will run indefinitely.
         Note that unlike count, a timeout does NOT ensure downstream operations that
           rely on internal topics (like groupby) are also finalized.
 
@@ -793,10 +788,6 @@ class Application:
             Default = 0.0 (infinite)
         :param count: how many input topic messages to process before stopping.
             Default = 0 (infinite)
-        :param timeout_starts_on_first_message: start tracking runtime only after an
-            input message was processed (could lead to running indefinitely).
-            Otherwise, runtime tracking starts after initial rebalance or recovery.
-            Default = False
         """
         if dataframe is not None:
             warnings.warn(
@@ -807,7 +798,7 @@ class Application:
             )
         if not self._dataframe_registry.consumer_topics:
             # This is a plain source (no SDF), so a timeout is the only valid stopper.
-            if count or timeout_starts_on_first_message:
+            if count:
                 raise ValueError(
                     "Can only provide a timeout to .run() when running "
                     "a plain Source (no StreamingDataFrame)."
@@ -815,7 +806,6 @@ class Application:
         self._run_tracker.set_stop_condition(
             timeout=timeout,
             count=count,
-            timeout_starts_on_first_message=timeout_starts_on_first_message,
         )
         self._run()
 
