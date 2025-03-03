@@ -80,6 +80,62 @@ class TestRecoveryManager:
         consumer.pause.assert_not_called()
         consumer.incremental_assign.assert_not_called()
 
+    def test_single_changelog_message_recovery(
+        self,
+        recovery_manager_factory,
+        recovery_partition_factory,
+        topic_manager_factory,
+    ):
+        """
+        RecoveryManager properly recognizes a recovery for when a single
+        changelog message was successfully produced, and then state was deleted after.
+
+        This covers an edge case around the default return value of -1001 for
+        `recovery_partition` where store_partition has no offset stored yet
+        AND only 1 changelog message was produced.
+        """
+
+        topic_name = "topic_name"
+        store_name = "default"
+        lowwater, highwater = 0, 1
+
+        # make topics
+        topic_manager = topic_manager_factory()
+        topic_manager.topic(
+            topic_name,
+            create_config=TopicConfig(num_partitions=1, replication_factor=1),
+        )
+        changelog_topic = topic_manager.changelog_topic(
+            topic_name=topic_name, store_name=store_name
+        )
+
+        # Create a RecoveryManager
+        consumer = MagicMock(spec_set=Consumer)
+        # Mock the Consumer assignment with changelog topic-partition
+        assignment = [
+            TopicPartition(topic=changelog_topic.name, partition=0),
+        ]
+        consumer.assignment.return_value = assignment
+        recovery_manager = recovery_manager_factory(
+            consumer=consumer, topic_manager=topic_manager
+        )
+
+        # Attempt to assign partition that should need recovery
+        store_partition = MagicMock(spec_set=StorePartition)
+        consumer.get_watermark_offsets.return_value = (lowwater, highwater)
+        store_partition.get_changelog_offset.return_value = None  # will return -1001
+        recovery_manager.assign_partition(
+            topic=topic_name,
+            partition=0,
+            committed_offset=-1001,
+            store_partitions={store_name: store_partition},
+        )
+
+        # the partition should have been recognized as needing recovery,
+        # thus it should have a recovery partition assigned
+        assert recovery_manager.partitions
+        assert recovery_manager.partitions[0][changelog_topic.name].needs_recovery_check
+
     def test_assign_partitions_during_recovery(
         self,
         recovery_manager_factory,
@@ -404,6 +460,81 @@ class TestRecoveryManagerRecover:
             topic=changelog_topic.name,
             partition=0,
             offset=highwater - 2,  # <highwater-1 ensures recovery check will be made
+            key=b"key",
+            value=b"value",
+            headers=[(CHANGELOG_CF_MESSAGE_HEADER, b"default")],
+        )
+
+        # Create a RecoveryManager
+        consumer = MagicMock(spec_set=Consumer)
+        # note how the poll returns None, which signifies no more messages to recover
+        consumer.poll.side_effect = [changelog_message, None]
+        consumer.assignment.return_value = assignment
+        recovery_manager = recovery_manager_factory(
+            consumer=consumer, topic_manager=topic_manager
+        )
+
+        # Assign a partition that needs recovery
+        consumer.get_watermark_offsets.return_value = (lowwater, highwater)
+        # this will get called after a "None" consumer poll result
+        consumer.position.return_value = [
+            ConfluentPartition(changelog_topic.name, 0, highwater)
+        ]
+        recovery_manager.assign_partition(
+            topic=topic_name,
+            partition=0,
+            committed_offset=-1001,
+            store_partitions={store_name: store_partition},
+        )
+
+        # Trigger a recovery
+        recovery_manager.do_recovery()
+
+        # Check that consumer first resumed the changelog topic partition
+        consumer_resume_calls = consumer.resume.call_args_list
+
+        assert len(consumer.poll.call_args_list) == 2
+        assert consumer_resume_calls[0].args[0] == [
+            ConfluentPartition(topic=changelog_topic.name, partition=0)
+        ]
+        # Check that consumer resumed all non-changelog partitions after recovery is done
+        assert consumer_resume_calls[1].args[0] == [data_tp]
+
+        # Check that RecoveryPartitions are unassigned
+        assert not recovery_manager.partitions
+
+    def test_do_recovery_with_deleted_state(
+        self, recovery_manager_factory, topic_manager_factory, store_partition
+    ):
+        """
+        Test that RecoveryManager.do_recovery():
+         - resumes the recovering changelog partition
+         - applies the 1 missing changelog recovery message to the StorePartition
+         - handles a None consumer poll to check for finished recovery (which it is)
+         - revokes the RecoveryPartition
+         - unassigns the changelog partition
+         - unpauses source topic partitions
+        """
+        topic_name = "topic_name"
+        store_name = "default"
+        lowwater, highwater = 0, 1
+
+        # Register a source topic and a changelog topic with one partition
+        topic_manager = topic_manager_factory()
+        data_topic = topic_manager.topic(topic_name)
+        changelog_topic = topic_manager.changelog_topic(
+            topic_name=topic_name,
+            store_name=store_name,
+        )
+
+        data_tp = TopicPartition(topic=data_topic.name, partition=0)
+        changelog_tp = TopicPartition(topic=changelog_topic.name, partition=0)
+        assignment = [data_tp, changelog_tp]
+
+        changelog_message = ConfluentKafkaMessageStub(
+            topic=changelog_topic.name,
+            partition=0,
+            offset=0,
             key=b"key",
             value=b"value",
             headers=[(CHANGELOG_CF_MESSAGE_HEADER, b"default")],
