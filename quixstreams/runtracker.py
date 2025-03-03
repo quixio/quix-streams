@@ -18,23 +18,42 @@ logger = logging.getLogger(__name__)
 
 class RunTracker:
     __slots__ = (
-        "running",
-        "last_consumed_tp",
-        "_needs_assigning",
-        "_is_recovering",
         "_is_first_run",
         "_processing_context",
-        "_topic_manager",
+        "running",
         "_stop_checker",
         "_has_stop_checker",
-        "_start_time",
+        "_needs_assigning",
+        "_is_recovering",
         "_timeout",
-        "_max_count",
-        "_count",
+        "_start_time",
+        "_topic_manager",
         "_primary_topics",
         "_repartition_topics",
+        "last_consumed_tp",
+        "_max_count",
+        "_count",
         "_repartition_stop_points",
     )
+
+    # Here we establish all attrs that will be reset every `Application.run()` call
+    # This avoids various IDE and mypy complaints around not setting them in init.
+
+    running: bool
+    _stop_checker: Optional[Callable[[], bool]]
+    _has_stop_checker: bool
+
+    # timeout-specific attrs
+    _start_time: float
+    _timeout: float
+    _needs_assigning: bool
+    _is_recovering: bool
+
+    # count-specific attrs
+    last_consumed_tp: Optional[tuple]
+    _max_count: int
+    _count: int
+    _repartition_stop_points: dict[tuple, int]
 
     def __init__(
         self,
@@ -48,26 +67,16 @@ class RunTracker:
         Though intended for debugging, it is designed to minimize impact on
         normal Application operation.
         """
-        self.running: bool = False
-        self.last_consumed_tp: Optional[tuple] = None
         self._is_first_run: bool = True
         self._processing_context = processing_context
-        self._stop_checker: Optional[Callable[[], bool]] = None
-        self._has_stop_checker: bool = False
 
-        # timeout specific vars
-        self._start_time: float = 0.0
-        self._timeout: float = 0.0
-        self._needs_assigning: bool = True
-        self._is_recovering: bool = False
-
-        # count specific vars
+        # count specific attrs; 1 time setup
         self._topic_manager = topic_manager
-        self._max_count: int = 0
-        self._count: int = 0
         self._primary_topics: list[str] = []
         self._repartition_topics: list[str] = []
-        self._repartition_stop_points: dict[tuple, int] = {}
+
+        # Sets the resettable attributes, avoiding defining the same values twice.
+        self.stop_and_reset()
 
     @property
     def _consumer(self):
@@ -84,7 +93,7 @@ class RunTracker:
         """
         if self._has_stop_checker:
             if self._stop_checker():
-                self.stop()
+                self.stop_and_reset()
 
     def start_runner(self):
         """
@@ -98,21 +107,21 @@ class RunTracker:
             ]
             self._is_first_run = False
 
-    def stop(self):
+    def stop_and_reset(self):
         """
         Called when Application is stopped, or self._stop_checker condition is met.
         Resets all values required for re-running.
         """
         self.running = False
-        self.last_consumed_tp = None
-        self._has_stop_checker = False
         self._stop_checker = None
+        self._has_stop_checker = False
 
-        self._start_time = 0.0
         self._timeout = 0.0
+        self._start_time = 0.0
         self._needs_assigning = True
         self._is_recovering = False
 
+        self.last_consumed_tp = None
         self._max_count = 0
         self._count = 0
         self._repartition_stop_points = {}
