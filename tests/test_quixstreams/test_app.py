@@ -2548,7 +2548,8 @@ class TestApplicationMultipleSdf:
         ]:
             rows = []
             with row_consumer_factory(
-                auto_offset_reset="earliest", consumer_group=str(uuid.uuid4())
+                auto_offset_reset="earliest",
+                consumer_group=str(uuid.uuid4()),
             ) as row_consumer:
                 print(f"SUBSCRIBING TO TOPIC {output_topic} at {time.time()}")
                 row_consumer.subscribe([output_topic], on_assign=on_assign)
