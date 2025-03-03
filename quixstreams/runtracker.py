@@ -29,7 +29,6 @@ class RunTracker:
         "_has_stop_checker",
         "_start_time",
         "_timeout",
-        "_start_timeout_after_first_msg",
         "_max_count",
         "_count",
         "_primary_topics",
@@ -59,7 +58,6 @@ class RunTracker:
         # timeout specific vars
         self._start_time: float = 0.0
         self._timeout: float = 0.0
-        self._start_timeout_after_first_msg = False
         self._needs_assigning: bool = True
         self._is_recovering: bool = False
 
@@ -112,7 +110,6 @@ class RunTracker:
 
         self._start_time = 0.0
         self._timeout = 0.0
-        self._start_timeout_after_first_msg = False
         self._needs_assigning = True
         self._is_recovering = False
 
@@ -127,7 +124,7 @@ class RunTracker:
         if self._timeout and self._needs_assigning:
             self._needs_assigning = False
             self._is_recovering = recovery_required
-            if not (self._start_timeout_after_first_msg or recovery_required):
+            if not recovery_required:
                 self._set_timeout_start_time()
 
     def handle_recovery(self):
@@ -142,7 +139,6 @@ class RunTracker:
         self,
         timeout: float = 0.0,
         count: int = 0,
-        timeout_starts_on_first_message: bool = True,
     ):
         """
         Called as part of app.run(); this handles the users optional stop conditions.
@@ -155,14 +151,10 @@ class RunTracker:
         if timeout:
             if timeout < 0.0:
                 raise ValueError("run timeout must be >= 0.0")
-            self._start_timeout_after_first_msg = timeout_starts_on_first_message
-            if self._start_timeout_after_first_msg:
-                log_snippet = "(after consuming a non-recovery message)"
-            else:
-                log_snippet = "(after initial rebalance or recovery)"
             logger.info(
                 f"APP RUN: timeout detected; "
-                f"Application will run for up to {timeout}s {log_snippet}"
+                f"Application will run for up to {timeout}s "
+                f"(after initial rebalance or recovery)"
             )
             self._stop_checker = self._at_timeout_func()
             self._timeout = timeout
@@ -276,15 +268,6 @@ class RunTracker:
         def at_timeout_gen() -> Iterator[bool]:
             while self._needs_assigning or self._is_recovering:
                 yield False
-            if self._start_timeout_after_first_msg:
-                if not self.last_consumed_tp:
-                    logger.debug(
-                        "Waiting for initial message to start timeout tracking..."
-                    )
-                    while not self.last_consumed_tp:
-                        yield False
-                logger.info("First message processed; now starting timeout tracking!")
-                self._set_timeout_start_time()
             while not at_timeout():
                 yield False
             yield True
