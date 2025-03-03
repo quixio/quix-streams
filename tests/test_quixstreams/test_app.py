@@ -2435,6 +2435,7 @@ class TestApplicationMultipleSdf:
             # The callback is not triggered if processing fails
             nonlocal processed_count
 
+            print("ON MESSAGE PROCESSED")
             processed_count += 1
             # Stop processing after consuming all the messages
             if processed_count == expected_processed:
@@ -2468,6 +2469,14 @@ class TestApplicationMultipleSdf:
             value_serializer="json",
         )
 
+        def printA(value):
+            print(f"SDF A: {value}")
+            return printA
+
+        def printB(value):
+            print(f"SDF B: {value}")
+            return printB
+
         timestamp = 1000
         user_id = "abc123"
         account_id = "def456"
@@ -2481,14 +2490,14 @@ class TestApplicationMultipleSdf:
         sdf_a_user["groupby_timestamp"] = sdf_a_user.apply(
             lambda value, key, timestamp_, headers: timestamp_, metadata=True
         )
-        sdf_a_user.print()
+        sdf_a_user.apply(printA)
         sdf_a_user.to_topic(output_topic_user)
 
         sdf_a_account = sdf_a.group_by("account")
         sdf_a_account["groupby_timestamp"] = sdf_a_account.apply(
             lambda value, key, timestamp_, headers: timestamp_, metadata=True
         )
-        sdf_a_account.print()
+        sdf_a_account.apply(printA)
         sdf_a_account.to_topic(output_topic_account)
 
         sdf_b = app.dataframe(topic=input_topic_b)
@@ -2496,18 +2505,19 @@ class TestApplicationMultipleSdf:
         sdf_b_user["groupby_timestamp"] = sdf_b_user.apply(
             lambda value, key, timestamp_, headers: timestamp_, metadata=True
         )
-        sdf_b_user.print()
+        sdf_b_user.apply(printB)
         sdf_b_user.to_topic(output_topic_user)
 
         sdf_b_account = sdf_b.group_by("account")
         sdf_b_account["groupby_timestamp"] = sdf_b_account.apply(
             lambda value, key, timestamp_, headers: timestamp_, metadata=True
         )
-        sdf_b_account.print()
+        sdf_b_account.apply(printB)
         sdf_b_account.to_topic(output_topic_account)
 
         with app.get_producer() as producer:
             for topic in input_topics:
+                print(f"PRODUCING TO TOPIC {topic.name}")
                 msg = topic.serialize(
                     key="some_key", value=value_in, timestamp_ms=timestamp
                 )
@@ -2535,6 +2545,7 @@ class TestApplicationMultipleSdf:
                 while row := row_consumer.poll_row(timeout=5):
                     rows.append(row)
 
+            print(f"ROWS: {rows}")
             assert len(rows) == expected_output_topic_count
             for row in rows:
                 # Check that "user_id" is now used as a message key
