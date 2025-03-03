@@ -2419,7 +2419,7 @@ class TestApplicationMultipleSdf:
             assert row.timestamp == timestamp_ms
             assert row.headers == headers
 
-    def test_group_by(
+    def test_group_by_foo(
         self,
         app_factory,
         row_consumer_factory,
@@ -2528,7 +2528,7 @@ class TestApplicationMultipleSdf:
         done = Future()
 
         # Stop app when the future is resolved
-        executor.submit(_stop_app_on_future, app, done, 10.0)
+        executor.submit(_stop_app_on_future, app, done, 30.0)
         app.run()
 
         # Check that all messages have been processed
@@ -2540,10 +2540,12 @@ class TestApplicationMultipleSdf:
             (account_id, output_topic_account),
         ]:
             rows = []
-            with row_consumer_factory(auto_offset_reset="earliest") as row_consumer:
+            with row_consumer_factory(
+                auto_offset_reset="earliest", consumer_group=str(uuid.uuid4())
+            ) as row_consumer:
                 print(f"SUBSCRIBING TO TOPIC {output_topic} at {time.time()}")
                 row_consumer.subscribe([output_topic])
-                while row := row_consumer.poll_row(timeout=20):
+                while row := row_consumer.poll_row(timeout=10):
                     rows.append(row)
 
             print(f"ROWS: {rows} at {time.time()}")
