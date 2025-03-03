@@ -245,13 +245,25 @@ class TimeWindow(Window):
         max_expired_start: int,
         collect: bool,
     ) -> Iterable[WindowKeyResult]:
-        for (start, end), aggregated, _ in state.expire_windows(
+        start = time.monotonic()
+        count = 0
+
+        for (window_start, window_end), aggregated, _ in state.expire_windows(
             max_start_time=max_expired_start,
             collect=collect,
         ):
             yield (
                 key,
-                WindowResult(start=start, end=end, value=self._merge_func(aggregated)),
+                WindowResult(
+                    start=window_start,
+                    end=window_end,
+                    value=self._merge_func(aggregated),
+                ),
+            )
+
+        if count:
+            logger.debug(
+                "Expired %s windows in %ss", count, round(time.monotonic() - start, 2)
             )
 
     def _on_expired_window(
