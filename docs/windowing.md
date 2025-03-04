@@ -1021,7 +1021,8 @@ sdf = sdf.tumbling_window(timedelta(seconds=10)).sum().final(closing_strategy="k
 # No message for key "C" as the window is never closed since no messages with key "C" and a timestamp later than 10000 was received 
 ```
 
-An alternative is to use the **partition** closing strategy. In this strategy messages advance time and close windows for the whole partition to which this message key belongs.
+An alternative is to use the **partition** closing strategy.  
+In this strategy, messages advance time and close windows for the whole partition to which this key belongs.
 
 If messages aren't ordered accross keys some message can be skipped if the windows are already closed.
 
