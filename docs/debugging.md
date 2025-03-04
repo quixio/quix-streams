@@ -130,11 +130,6 @@ There is no need to do any manual cleanup when finished; each run cleans up afte
 
 > **NOTE:** You do not need to re-execute the entire Application setup, just `.run()`.
 
-If the Application seems to take longer than desired with getting initial messages or 
-you know there will be a delay, you can also specify it to wait to start counting the 
-timeout until after a first message is received by specifying 
-`timeout_starts_on_first_message=True`.
-
 ### ListSink
 
 `ListSink` primarily exists to use alongside `Application.run()` stop conditions.
