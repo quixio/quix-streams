@@ -60,6 +60,10 @@ class PandasDataFrameSource(Source):
 
         super().__init__(name=name, shutdown_timeout=shutdown_timeout)
 
+    def setup(self):
+        # nothing client related to set up
+        return
+
     def _get_key_column(self, col_name: str) -> str:
         """
         Validates the key column.
