@@ -992,7 +992,8 @@ You can use `final()` mode when some latency is allowed, but the emitted results
 
 ## Closing strategies
 
-By default windows use the **key** closing strategy. In this strategy messages advance time and close windows with the **same** message key.
+By default, windows use the **key** closing strategy.  
+In this strategy, messages advance time and close only windows with the **same** message key.
 
 If some message keys appear irregularly in the stream, the latest windows can remain unprocessed until the message with the same key is received.
 
