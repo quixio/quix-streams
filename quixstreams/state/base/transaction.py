@@ -3,7 +3,15 @@ import functools
 import logging
 from abc import ABC
 from collections import defaultdict
-from typing import TYPE_CHECKING, Any, Dict, Optional, Set, Tuple, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    Optional,
+    Set,
+    Tuple,
+    Union,
+)
 
 from quixstreams.models import Headers
 from quixstreams.state.exceptions import InvalidChangelogOffset, StateTransactionError
@@ -285,7 +293,7 @@ class PartitionTransaction(ABC):
         prefix: bytes,
         default: Any = None,
         cf_name: str = "default",
-    ) -> Optional[Any]:
+    ) -> Any:
         """
         Get a key from the store.
 

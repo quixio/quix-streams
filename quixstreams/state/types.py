@@ -1,7 +1,11 @@
 import logging
-from typing import Any, Optional, Protocol, Tuple
+from typing import Any, Iterable, Optional, Protocol, Tuple
+
+from typing_extensions import TypeAlias
 
 logger = logging.getLogger(__name__)
+
+WindowDetail: TypeAlias = tuple[tuple[int, int], Any, bytes]  # (start, end), value, key
 
 
 class WindowedState(Protocol):
@@ -133,7 +137,7 @@ class WindowedState(Protocol):
         delete: bool = True,
         collect: bool = False,
         end_inclusive: bool = False,
-    ) -> list[tuple[tuple[int, int], Any]]:
+    ) -> list[WindowDetail]:
         """
         Get all expired windows from RocksDB up to the specified `max_start_time` timestamp.
 
@@ -165,7 +169,7 @@ class WindowedState(Protocol):
 
     def get_windows(
         self, start_from_ms: int, start_to_ms: int, backwards: bool = False
-    ) -> list[tuple[tuple[int, int], Any]]:
+    ) -> list[WindowDetail]:
         """
         Get all windows that start between "start_from_ms" and "start_to_ms".
 
@@ -311,6 +315,18 @@ class WindowedPartitionTransaction(Protocol):
         """
         ...
 
+    def get_latest_expired(self, prefix: bytes) -> int:
+        """
+        Get the latest expired timestamp for the current state prefix
+        (same as message key).
+
+        Use this timestamp to determine if the arriving event is late and should be
+        discarded from the processing.
+
+        :return: latest expired timestamp in milliseconds
+        """
+        ...
+
     def expire_windows(
         self,
         max_start_time: int,
@@ -318,9 +334,9 @@ class WindowedPartitionTransaction(Protocol):
         delete: bool = True,
         collect: bool = False,
         end_inclusive: bool = False,
-    ) -> list[tuple[tuple[int, int], Any]]:
+    ) -> list[WindowDetail]:
         """
-        Get all expired windows from RocksDB up to the specified `max_start_time` timestamp.
+        Get all expired windows with a set prefix from RocksDB up to the specified `max_start_time` timestamp.
 
         This method marks the latest found window as expired in the expiration index,
         so consecutive calls may yield different results for the same "latest timestamp".
@@ -332,6 +348,25 @@ class WindowedPartitionTransaction(Protocol):
         :param end_inclusive: If True, the end of the window will be inclusive.
             Relevant only together with `collect=True`.
         :return: A sorted list of tuples in the format `((start, end), value)`.
+        """
+        ...
+
+    def expire_all_windows(
+        self,
+        max_end_time: int,
+        step_ms: int,
+        delete: bool = True,
+        collect: bool = False,
+    ) -> Iterable[WindowDetail]:
+        """
+        Get all expired windows for all prefix from RocksDB up to the specified `max_start_time` timestamp.
+
+        This method marks the latest found window as expired in the expiration index,
+        so consecutive calls may yield different results for the same "latest timestamp".
+
+        :param max_end_time: The timestamp up to which windows are considered expired, inclusive.
+        :param delete: If True, expired windows will be deleted.
+        :param collect: If True, values will be collected into windows.
         """
         ...
 
@@ -358,7 +393,7 @@ class WindowedPartitionTransaction(Protocol):
         start_to_ms: int,
         prefix: bytes,
         backwards: bool = False,
-    ) -> list[tuple[tuple[int, int], Any]]:
+    ) -> list[WindowDetail]:
         """
         Get all windows that start between "start_from_ms" and "start_to_ms"
         within the specified prefix.
@@ -368,6 +403,17 @@ class WindowedPartitionTransaction(Protocol):
         :param prefix: The key prefix for filtering windows.
         :param backwards: If True, yields windows in reverse order.
         :return: A sorted list of tuples in the format `((start, end), value)`.
+        """
+        ...
+
+    def keys(self, cf_name: str = "default") -> Iterable[bytes]:
+        """
+        Iterate over all keys in the store.
+
+        Addition and deletion of keys during iteration is not supported.
+
+        :param cf_name: rocksdb column family name. Default - "default"
+        :return: An iterable of keys
         """
         ...
 

@@ -16,7 +16,7 @@ from quixstreams.dataframe.exceptions import (
     InvalidOperation,
 )
 from quixstreams.dataframe.registry import DataframeRegistry
-from quixstreams.dataframe.windows import WindowResult
+from quixstreams.dataframe.windows.base import WindowResult
 from tests.utils import DummySink
 
 RecordStub = namedtuple("RecordStub", ("value", "key", "timestamp"))
@@ -1007,7 +1007,7 @@ class TestStreamingDataFrameTumblingWindow:
             r
             for r in caplog.records
             if r.levelname == "WARNING"
-            and "Skipping window processing for the expired window" in r.message
+            and "Skipping window processing for the closed window" in r.message
         ]
 
         assert warning_logs if should_log else not warning_logs
@@ -1061,6 +1061,26 @@ class TestStreamingDataFrameTumblingWindow:
             (WindowResult(value=2, start=0, end=10), records[2].key, 0, None),
             (WindowResult(value=2, start=20, end=30), records[3].key, 20, None),
         ]
+
+    def test_tumbling_window_final_invalid_strategy(
+        self,
+        dataframe_factory,
+        state_manager,
+        message_context_factory,
+        topic_manager_topic_factory,
+    ):
+        topic = topic_manager_topic_factory(
+            name="test",
+        )
+
+        sdf = dataframe_factory(topic, state_manager=state_manager)
+
+        with pytest.raises(TypeError):
+            sdf = (
+                sdf.tumbling_window(duration_ms=10, grace_ms=0)
+                .sum()
+                .final(closing_strategy="foo")
+            )
 
     def test_tumbling_window_none_key_messages(
         self,
@@ -1367,6 +1387,26 @@ class TestStreamingDataFrameHoppingWindow:
             (WindowResult(value=3, start=10, end=20), records[3].key, 10, None),
         ]
 
+    def test_hopping_window_final_invalid_strategy(
+        self,
+        dataframe_factory,
+        state_manager,
+        message_context_factory,
+        topic_manager_topic_factory,
+    ):
+        topic = topic_manager_topic_factory(
+            name="test",
+        )
+
+        sdf = dataframe_factory(topic, state_manager=state_manager)
+
+        with pytest.raises(TypeError):
+            sdf = (
+                sdf.hopping_window(duration_ms=10, step_ms=5)
+                .sum()
+                .final(closing_strategy="foo")
+            )
+
     def test_hopping_window_none_key_messages(
         self,
         dataframe_factory,
@@ -1527,7 +1567,7 @@ class TestStreamingDataFrameSlidingWindow:
             r
             for r in caplog.records
             if r.levelname == "WARNING"
-            and "Skipping window processing for the expired window" in r.message
+            and "Skipping window processing for the closed window" in r.message
         ]
 
         assert warning_logs if should_log else not warning_logs

@@ -44,7 +44,7 @@ class Message:
     # * Right windows that were not emitted.
     present: list[dict[str, Any]] = field(default_factory=list)
 
-    expected_values_in_state: list[tuple[int, Any]] = field(default_factory=list)
+    expected_values_in_state: list[str] = field(default_factory=list)
 
     @property
     def expected_windows_in_state(self) -> set[tuple[int, int]]:
@@ -767,17 +767,17 @@ def window_factory(sliding_window_definition_factory):
 
 
 @pytest.fixture
-def state_factory(state_manager):
+def transaction_factory(state_manager):
     store = None
 
     @contextmanager
-    def factory(window, key: Any = b"key"):
+    def factory(window):
         nonlocal store
         if store is None:
             store = state_manager.get_store(topic="topic", store_name=window.name)
             store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
-            yield tx.as_state(prefix=key)
+            yield tx
 
     return factory
 
@@ -836,25 +836,31 @@ def state_factory(state_manager):
     ],
 )
 def test_sliding_window_reduce(
-    window_factory, state_factory, duration_ms, grace_ms, messages, mock_message_context
+    window_factory,
+    transaction_factory,
+    duration_ms,
+    grace_ms,
+    messages,
+    mock_message_context,
 ):
     window = window_factory(
         aggregation="reduce", duration_ms=duration_ms, grace_ms=grace_ms
     )
     key = b"key"
     for message in messages:
-        with state_factory(window, key=key) as state:
+        with transaction_factory(window) as tx:
             updated, expired = window.process_window(
                 value=message.value,
                 key=key,
                 timestamp_ms=message.timestamp,
-                state=state,
+                transaction=tx,
             )
 
-        assert list(updated) == message.updated
-        assert list(expired) == message.expired
+        assert [msg[1] for msg in updated] == message.updated
+        assert [msg[1] for msg in expired] == message.expired
 
-        with state_factory(window) as state:
+        with transaction_factory(window) as tx:
+            state = tx.as_state(prefix=b"key")
             for deleted in message.deleted:
                 assert not state.get_window(
                     start_ms=deleted["start"], end_ms=deleted["end"]
@@ -968,26 +974,32 @@ COLLECTION_AGGREGATION = [
         pytest.param(10, 5, COLLECTION_AGGREGATION, id="collection-aggregation"),
     ],
 )
-def test_sliding_window_collect(
-    window_factory, state_factory, duration_ms, grace_ms, messages, mock_message_context
+def test_sliding_windw_collect(
+    window_factory,
+    transaction_factory,
+    duration_ms,
+    grace_ms,
+    messages,
+    mock_message_context,
 ):
     key = b"key"
     window = window_factory(
         aggregation="collect", duration_ms=duration_ms, grace_ms=grace_ms
     )
     for message in messages:
-        with state_factory(window, key=key) as state:
+        with transaction_factory(window) as tx:
             updated, expired = window.process_window(
                 value=message.value,
                 key=key,
                 timestamp_ms=message.timestamp,
-                state=state,
+                transaction=tx,
             )
 
         assert list(updated) == []  # updates are not supported for collections
-        assert list(expired) == message.expired
+        assert [msg[1] for msg in expired] == message.expired
 
-        with state_factory(window, key=key) as state:
+        with transaction_factory(window) as tx:
+            state = tx.as_state(prefix=key)
             for deleted in message.deleted:
                 assert not state.get_window(
                     start_ms=deleted["start"], end_ms=deleted["end"]
