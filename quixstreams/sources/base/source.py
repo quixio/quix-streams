@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 from typing import Optional, Union
 
 from quixstreams.checkpointing.exceptions import CheckpointProducerTimeout
+from quixstreams.kafka.producer import PRODUCER_ON_ERROR_RETRIES, PRODUCER_POLL_TIMEOUT
 from quixstreams.models.messages import KafkaMessage
 from quixstreams.models.topics import Topic
 from quixstreams.models.types import Headers
@@ -272,8 +273,8 @@ class Source(BaseSource):
         headers: Optional[Headers] = None,
         partition: Optional[int] = None,
         timestamp: Optional[int] = None,
-        poll_timeout: float = 5.0,
-        buffer_error_max_tries: int = 3,
+        poll_timeout: float = PRODUCER_POLL_TIMEOUT,
+        buffer_error_max_tries: int = PRODUCER_ON_ERROR_RETRIES,
     ) -> None:
         """
         Produce a message to the configured source topic in Kafka.

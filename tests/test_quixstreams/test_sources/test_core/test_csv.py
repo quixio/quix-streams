@@ -44,11 +44,11 @@ class TestCSVSource:
         assert producer.produce.called
         assert producer.produce.call_count == 5
         assert producer.produce.call_args.kwargs == {
-            "buffer_error_max_tries": 3,
+            "buffer_error_max_tries": 10,
             "headers": None,
             "key": b"key5",
             "partition": None,
-            "poll_timeout": 5.0,
+            "poll_timeout": 30.0,
             "timestamp": 5,
             "topic": name,
             "value": b'{"key":"key5","field":"value5","timestamp":"5"}',
@@ -79,11 +79,11 @@ class TestCSVSource:
         assert producer.produce.called
         assert producer.produce.call_count == 5
         assert producer.produce.call_args.kwargs == {
-            "buffer_error_max_tries": 3,
+            "buffer_error_max_tries": 10,
             "headers": None,
             "key": None,
             "partition": None,
-            "poll_timeout": 5.0,
+            "poll_timeout": 30.0,
             "timestamp": None,
             "topic": name,
             "value": b'{"key":"key5","field":"value5","timestamp":"5"}',
