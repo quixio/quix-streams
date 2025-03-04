@@ -147,7 +147,7 @@ a list once the `Application` stops.
 To use a `ListSink`, simply store one in a separate variable and pass it
 like any other `Sink`:
 
-```
+```python
 from quixstreams import Application
 from quixstreams.sinks.core.list import ListSink
 
