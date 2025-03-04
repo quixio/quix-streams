@@ -181,13 +181,7 @@ to `Pandas.DataFrame()` and it will work as expected!
   - Be sure to use it with `Application.run()` stopping conditions.
 
 - `ListSink` does not "refresh" itself per `.run()`; it collects data indefinitely. 
-  - You can remove the current data stored by doing either:
-
-      - `ListSink.clear()` 
-    
-        or...
-    
-      - `ListSink[:] = []`
+  - You can remove the current data stored by doing `list_sink.clear()`.
 
 ### Interactive limitations
 
