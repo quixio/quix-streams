@@ -71,7 +71,7 @@ class RecoveryPartition:
         :return: changelog offset (int)
         """
         offset = self._store_partition.get_changelog_offset() or -1001
-        if not self._initial_offset:
+        if self._initial_offset is None:
             self._initial_offset = offset
         return offset
 
