@@ -127,7 +127,7 @@ class TestRecoveryManager:
         recovery_manager.assign_partition(
             topic=topic_name,
             partition=0,
-            committed_offset=-1001,
+            committed_offsets={topic_name: -1001},
             store_partitions={store_name: store_partition},
         )
 
