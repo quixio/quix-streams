@@ -6,7 +6,16 @@ import signal
 import time
 import warnings
 from pathlib import Path
-from typing import Callable, List, Literal, Optional, Protocol, Tuple, Type, Union
+from typing import (
+    Callable,
+    List,
+    Literal,
+    Optional,
+    Protocol,
+    Tuple,
+    Type,
+    Union,
+)
 
 from confluent_kafka import TopicPartition
 from pydantic import AliasGenerator, Field
@@ -43,6 +52,7 @@ from .platforms.quix import (
 from .processing import PausingManager, ProcessingContext
 from .rowconsumer import RowConsumer
 from .rowproducer import RowProducer
+from .runtracker import RunTracker
 from .sinks import SinkManager
 from .sources import BaseSource, SourceException, SourceManager
 from .state import StateStoreManager
@@ -348,6 +358,10 @@ class Application:
             pausing_manager=self._pausing_manager,
         )
         self._dataframe_registry = DataframeRegistry()
+        self._run_tracker = RunTracker(
+            processing_context=self._processing_context,
+            topic_manager=self._topic_manager,
+        )
 
     @property
     def config(self) -> "ApplicationConfig":
@@ -540,7 +554,7 @@ class Application:
             to unhandled exception, and it shouldn't commit the current checkpoint.
         """
 
-        self._running = False
+        self._run_tracker.stop_and_reset()
         if fail:
             # Update "_failed" only when fail=True to prevent stop(failed=False) from
             # resetting it
@@ -715,12 +729,43 @@ class Application:
         )
         return topic
 
-    def run(self, dataframe: Optional[StreamingDataFrame] = None):
+    def run(
+        self,
+        dataframe: Optional[StreamingDataFrame] = None,
+        timeout: float = 0.0,
+        count: int = 0,
+    ):
         """
         Start processing data from Kafka using provided `StreamingDataFrame`
 
         Once started, it can be safely terminated with a `SIGTERM` signal
         (like Kubernetes does) or a typical `KeyboardInterrupt` (`Ctrl+C`).
+
+        Alternatively, stop conditions can be set (typically for debugging purposes);
+            has the option of stopping after a number of messages, timeout, or both.
+
+        Not setting a timeout or count limit will result in the Application running
+          indefinitely (expected production behavior).
+
+
+        Stop Condition Details:
+
+        A timeout will immediately stop an Application once T seconds has passed after
+          an initial rebalance and recovery (if required).
+        Note that unlike count, a timeout does NOT ensure downstream operations that
+          rely on internal topics (like groupby) are also finalized.
+
+        A count will process N total records from ANY input/SDF topics (so
+          multiple input topics will very likely differ in their consume total!) after
+          an initial rebalance and recovery.
+        THEN, any remaining processes from things such as groupby (which uses internal
+          topics) will also be validated to ensure the results of said messages are
+          fully processed (this does NOT count towards the process total).
+        Note that the Application will run indefinitely until the limit of N is hit.
+
+        When setting a timeout AND count limit, the timeout behavior takes priority (
+          so make sure your timeout is sufficiently large to ensure fully processed
+          records).
 
 
         Example Snippet:
@@ -736,8 +781,13 @@ class Application:
         df = app.dataframe(topic)
         df.apply(lambda value, context: print('New message', value)
 
-        app.run()
+        app.run()  # could pass `timeout=5` here, for example
         ```
+        :param dataframe: DEPRECATED - do not use; sdfs are now automatically tracked.
+        :param timeout: how long to run the application for.
+            Default = 0.0 (infinite)
+        :param count: how many input topic messages to process before stopping.
+            Default = 0 (infinite)
         """
         if dataframe is not None:
             warnings.warn(
@@ -746,6 +796,17 @@ class Application:
                 "the argument should be removed.",
                 FutureWarning,
             )
+        if not self._dataframe_registry.consumer_topics:
+            # This is a plain source (no SDF), so a timeout is the only valid stopper.
+            if count:
+                raise ValueError(
+                    "Can only provide a timeout to .run() when running "
+                    "a plain Source (no StreamingDataFrame)."
+                )
+        self._run_tracker.set_stop_condition(
+            timeout=timeout,
+            count=count,
+        )
         self._run()
 
     def _exception_handler(self, exc_type, exc_val, exc_tb):
@@ -761,19 +822,21 @@ class Application:
     def _run(self):
         self._setup_signal_handlers()
 
-        logger.info(
-            f"Starting the Application with the config: "
-            f'broker_address="{self._config.broker_address}" '
-            f'consumer_group="{self._config.consumer_group}" '
-            f'auto_offset_reset="{self._config.auto_offset_reset}" '
-            f"commit_interval={self._config.commit_interval}s "
-            f"commit_every={self._config.commit_every} "
-            f'processing_guarantee="{self._config.processing_guarantee}"'
-        )
-        if self.is_quix_app:
-            self._quix_runtime_init()
+        # These only need to be performed on the first .run() (with interactive running)
+        if self._run_tracker.is_first_run:
+            logger.info(
+                f"Starting the Application with the config: "
+                f'broker_address="{self._config.broker_address}" '
+                f'consumer_group="{self._config.consumer_group}" '
+                f'auto_offset_reset="{self._config.auto_offset_reset}" '
+                f"commit_interval={self._config.commit_interval}s "
+                f"commit_every={self._config.commit_every} "
+                f'processing_guarantee="{self._config.processing_guarantee}"'
+            )
+            if self.is_quix_app:
+                self._quix_runtime_init()
 
-        self.setup_topics()
+            self.setup_topics()
 
         exit_stack = contextlib.ExitStack()
         exit_stack.enter_context(self._processing_context)
@@ -797,38 +860,47 @@ class Application:
             on_revoke=self._on_revoke,
             on_lost=self._on_lost,
         )
+
+        # set refs for performance improvements
+        dataframes_composed = self._dataframe_registry.compose_all()
+        state_manager = self._state_manager
+        processing_context = self._processing_context
+        source_manager = self._source_manager
+        process_message = self._process_message
+        printer = self._processing_context.printer
+        run_tracker = self._run_tracker
+
+        processing_context.init_checkpoint()
+        run_tracker.start_runner()
         logger.info("Waiting for incoming messages")
         # Start polling Kafka for messages and callbacks
-        self._running = True
-
-        # Initialize the checkpoint
-        self._processing_context.init_checkpoint()
-
-        dataframes_composed = self._dataframe_registry.compose_all()
-
-        while self._running:
-            if self._state_manager.recovery_required:
-                self._state_manager.do_recovery()
+        while run_tracker.running:
+            if state_manager.recovery_required:
+                state_manager.do_recovery()
+                run_tracker.handle_recovery()
             else:
-                self._process_message(dataframes_composed)
-                self._processing_context.commit_checkpoint()
-                self._processing_context.resume_ready_partitions()
-                self._source_manager.raise_for_error()
-                self._processing_context.printer.print()
+                process_message(dataframes_composed)
+                processing_context.commit_checkpoint()
+                processing_context.resume_ready_partitions()
+                source_manager.raise_for_error()
+                printer.print()
+                run_tracker.update_status()
 
         logger.info("Stop processing of StreamingDataFrame")
-        self._processing_context.commit_checkpoint(force=True)
+        processing_context.commit_checkpoint(force=True)
 
     def _run_sources(self):
-        self._running = True
-        self._source_manager.start_sources()
-        while self._running:
-            self._source_manager.raise_for_error()
+        run_tracker = self._run_tracker
+        source_manager = self._source_manager
 
-            if not self._source_manager.is_alive():
-                self.stop()
-
+        run_tracker.start_runner()
+        source_manager.start_sources()
+        run_tracker.handle_rebalance(recovery_required=False)
+        while run_tracker.running and source_manager.is_alive():
+            source_manager.raise_for_error()
+            run_tracker.update_status()
             time.sleep(1)
+        self.stop()
 
     def _quix_runtime_init(self):
         """
@@ -852,6 +924,7 @@ class Application:
         rows = self._consumer.poll_row(timeout=self._config.consumer_poll_timeout)
 
         if rows is None:
+            self._run_tracker.last_consumed_tp = None
             return
 
         # Deserializer may return multiple rows for a single message
@@ -889,6 +962,7 @@ class Application:
         self._processing_context.store_offset(
             topic=topic_name, partition=partition, offset=offset
         )
+        self._run_tracker.last_consumed_tp = (topic_name, partition)
 
         if self._on_message_processed is not None:
             self._on_message_processed(topic_name, partition, offset)
@@ -956,6 +1030,7 @@ class Application:
                         f'is behind the stored offset "{min_stored_offset}". '
                         f"It may lead to distortions in produced data."
                     )
+        self._run_tracker.handle_rebalance(self._state_manager.recovery_required)
 
     def _on_revoke(self, _, topic_partitions: List[TopicPartition]):
         """
