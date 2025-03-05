@@ -212,7 +212,7 @@ class WindowedPartitionTransaction(Protocol):
         """
         ...
 
-    def prepare(self, processed_offset: Optional[int]):
+    def prepare(self, processed_offsets: Optional[dict[str, int]]):
         """
         Produce changelog messages to the changelog topic for all changes accumulated
         in this transaction and prepare transcation to flush its state to the state
@@ -224,7 +224,8 @@ class WindowedPartitionTransaction(Protocol):
         If changelog is disabled for this application, no updates will be produced
         to the changelog topic.
 
-        :param processed_offset: the offset of the latest processed message
+        :param processed_offsets: the dict with <topic: offset> of
+            the latest processed message in the current partition
         """
 
     def as_state(self, prefix: Any) -> WindowedState: ...

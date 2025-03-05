@@ -4,7 +4,6 @@ from typing import Dict, List, Literal, Optional, Union, cast
 
 from rocksdict import AccessType, ColumnFamily, Rdict, WriteBatch
 
-from quixstreams.models import SuccessfulConfluentKafkaMessageProto
 from quixstreams.state.base import PartitionTransactionCache, StorePartition
 from quixstreams.state.exceptions import ColumnFamilyDoesNotExist
 from quixstreams.state.metadata import METADATA_CF_NAME, Marker
@@ -17,7 +16,6 @@ from quixstreams.state.serialization import (
 from .exceptions import ColumnFamilyAlreadyExists
 from .metadata import (
     CHANGELOG_OFFSET_KEY,
-    PROCESSED_OFFSET_KEY,
 )
 from .options import RocksDBOptions
 from .types import RocksDBOptionsType
@@ -63,59 +61,27 @@ class RocksDBStorePartition(StorePartition):
         self._cf_cache: Dict[str, Rdict] = {}
         self._cf_handle_cache: Dict[str, ColumnFamily] = {}
 
-    def _changelog_recover_flush(self, changelog_offset: int, batch: WriteBatch):
-        """
-        Update the changelog offset and flush outstanding writes.
-        """
+    def recover_from_changelog_message(
+        self, key: bytes, value: Optional[bytes], cf_name: str, offset: int
+    ):
+        cf_handle = self.get_column_family_handle(cf_name)
+        batch = WriteBatch(raw_mode=True)
+        if value is None:
+            batch.delete(key, cf_handle)
+        else:
+            batch.put(key, value, cf_handle)
+
+        # Update the changelog offset and flush outstanding writes.
         batch.put(
             CHANGELOG_OFFSET_KEY,
-            int_to_int64_bytes(changelog_offset),
+            int_to_int64_bytes(offset),
             self.get_column_family_handle(METADATA_CF_NAME),
         )
         self._write(batch)
 
-    def _recover_from_changelog_message(
-        self,
-        changelog_message: SuccessfulConfluentKafkaMessageProto,
-        cf_name: str,
-        processed_offset: Optional[int],
-        committed_offset: int,
-    ):
-        """
-        Updates state from a given changelog message.
-
-        The actual update may be skipped when both conditions are met:
-
-        - The changelog message has headers with the processed message offset.
-        - This processed offset is larger than the latest committed offset for the same
-          topic partition.
-
-        This way the state does not apply the state changes for not-yet-committed
-        messages and improves the state consistency guarantees.
-
-        :param changelog_message: A raw Confluent message read from a changelog topic.
-        :param committed_offset: latest committed offset for the partition
-        """
-        batch = WriteBatch(raw_mode=True)
-        if self._should_apply_changelog(processed_offset, committed_offset):
-            cf_handle = self.get_column_family_handle(cf_name)
-            # Determine whether the update should be applied or skipped based on the
-            # latest committed offset and processed offset from the changelog message header
-            key = changelog_message.key()
-            if not isinstance(key, bytes):
-                raise ValueError(f"invalid changelog message key {key}")
-
-            if value := changelog_message.value():
-                batch.put(key, value, cf_handle)
-            else:
-                batch.delete(key, cf_handle)
-
-        self._changelog_recover_flush(changelog_message.offset(), batch)
-
     def write(
         self,
         cache: PartitionTransactionCache,
-        processed_offset: Optional[int],
         changelog_offset: Optional[int],
         batch: Optional[WriteBatch] = None,
     ):
@@ -123,14 +89,11 @@ class RocksDBStorePartition(StorePartition):
         Write data to RocksDB
 
         :param cache: The modified data
-        :param processed_offset: The offset processed to generate the data.
         :param changelog_offset: The changelog message offset of the data.
         :param batch: prefilled `rocksdict.WriteBatch`, optional.
         """
         if batch is None:
             batch = WriteBatch(raw_mode=True)
-
-        meta_cf_handle = self.get_column_family_handle(METADATA_CF_NAME)
 
         # Iterate over the transaction update cache
         column_families = cache.get_column_families()
@@ -146,25 +109,13 @@ class RocksDBStorePartition(StorePartition):
             for key in deletes:
                 batch.delete(key, cf_handle)
 
-        # Save the latest processed input topic offset
-        if processed_offset is not None:
-            batch.put(
-                PROCESSED_OFFSET_KEY,
-                int_to_int64_bytes(processed_offset),
-                meta_cf_handle,
-            )
         # Save the latest changelog topic offset to know where to recover from
         # It may be None if changelog topics are disabled
         if changelog_offset is not None:
-            batch.put(
-                CHANGELOG_OFFSET_KEY,
-                int_to_int64_bytes(changelog_offset),
-                meta_cf_handle,
-            )
+            self._update_changelog_offset(batch=batch, offset=changelog_offset)
         logger.debug(
             f"Flushing state changes to the disk "
             f'path="{self.path}" '
-            f"processed_offset={processed_offset} "
             f"changelog_offset={changelog_offset}"
         )
 
@@ -184,7 +135,6 @@ class RocksDBStorePartition(StorePartition):
         Get a key from RocksDB.
 
         :param key: a key encoded to `bytes`
-        :param default: a default value to return if the key is not found.
         :param cf_name: rocksdb column family name. Default - "default"
         :return: a value if the key is present in the DB. Otherwise, `default`
         """
@@ -204,21 +154,6 @@ class RocksDBStorePartition(StorePartition):
         cf_dict = self.get_column_family(cf_name)
         return key in cf_dict
 
-    def get_processed_offset(self) -> Optional[int]:
-        """
-        Get last processed offset for the given partition
-        :return: offset or `None` if there's no processed offset yet
-        """
-        metadata_cf = self.get_column_family(METADATA_CF_NAME)
-        offset_bytes = metadata_cf.get(PROCESSED_OFFSET_KEY)
-        if offset_bytes is None:
-            offset_bytes = self._db.get(PROCESSED_OFFSET_KEY)
-
-        if offset_bytes is None:
-            return None
-
-        return int_from_int64_bytes(offset_bytes)
-
     def get_changelog_offset(self) -> Optional[int]:
         """
         Get offset that the changelog is up-to-date with.
@@ -230,6 +165,19 @@ class RocksDBStorePartition(StorePartition):
             return None
 
         return int_from_int64_bytes(offset_bytes)
+
+    def write_changelog_offset(self, offset: int):
+        """
+        Write a new changelog offset to the db.
+
+        To be used when we simply need to update the changelog offset without touching
+        the actual data.
+
+        :param offset: new changelog offset
+        """
+        batch = WriteBatch(raw_mode=True)
+        self._update_changelog_offset(batch=batch, offset=offset)
+        self._write(batch)
 
     def close(self):
         """
@@ -377,3 +325,10 @@ class RocksDBStorePartition(StorePartition):
 
                 attempt += 1
                 time.sleep(self._open_retry_backoff)
+
+    def _update_changelog_offset(self, batch: WriteBatch, offset: int):
+        batch.put(
+            CHANGELOG_OFFSET_KEY,
+            int_to_int64_bytes(offset),
+            self.get_column_family_handle(METADATA_CF_NAME),
+        )

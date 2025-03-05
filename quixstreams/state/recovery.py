@@ -11,8 +11,17 @@ from quixstreams.models.types import Headers
 from quixstreams.rowproducer import RowProducer
 from quixstreams.state.base import StorePartition
 from quixstreams.utils.dicts import dict_values
+from quixstreams.utils.json import loads as json_loads
 
-from .exceptions import ChangelogTopicPartitionNotAssigned, InvalidStoreChangelogOffset
+from .exceptions import (
+    ChangelogTopicPartitionNotAssigned,
+    ColumnFamilyHeaderMissing,
+    InvalidStoreChangelogOffset,
+)
+from .metadata import (
+    CHANGELOG_CF_MESSAGE_HEADER,
+    CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +31,8 @@ __all__ = (
     "RecoveryManager",
     "RecoveryPartition",
 )
+
+_NoneType = type(None)
 
 
 class RecoveryPartition:
@@ -37,7 +48,7 @@ class RecoveryPartition:
         changelog_name: str,
         partition_num: int,
         store_partition: StorePartition,
-        committed_offset: int,
+        committed_offsets: dict[str, int],
         lowwater: int,
         highwater: int,
     ):
@@ -46,7 +57,7 @@ class RecoveryPartition:
         self._store_partition = store_partition
         self._changelog_lowwater = lowwater
         self._changelog_highwater = highwater
-        self._committed_offset = committed_offset
+        self._committed_offsets = committed_offsets
         self._recovery_consume_position: Optional[int] = None
         self._initial_offset: Optional[int] = None
 
@@ -114,11 +125,59 @@ class RecoveryPartition:
         """
         Recover the StorePartition using a message read from its respective changelog.
 
-        :param changelog_message: A confluent kafka message (everything as bytes)
+        The actual update may be skipped when both conditions are met:
+
+        - The changelog message has headers with the processed message offset.
+        - This processed offsets are larger than the latest committed offsets
+            for the same topic-partitions.
+
+        This way the state does not apply the state changes for not-yet-committed
+        messages and improves the state consistency guarantees.
+
+        :param changelog_message: An instance of `confluent_kafka.Message`
         """
-        self._store_partition.recover_from_changelog_message(
-            changelog_message=changelog_message, committed_offset=self._committed_offset
+        headers = dict(changelog_message.headers() or ())
+
+        # Parse the column family name from message headers
+        cf_name = headers.get(CHANGELOG_CF_MESSAGE_HEADER, b"").decode()
+        if not cf_name:
+            raise ColumnFamilyHeaderMissing(
+                f"Header '{CHANGELOG_CF_MESSAGE_HEADER}' missing from changelog message"
+            )
+
+        # Parse the processed topic-partition-offset info from the changelog message
+        # headers to determine whether the update should be applied or skipped.
+        # It can be empty if the message was produced by the older version of the lib.
+        processed_offsets = json_loads(
+            headers.get(CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER, b"null")
         )
+        if processed_offsets is None or self._should_apply_changelog(
+            processed_offsets=processed_offsets
+        ):
+            key = changelog_message.key()
+            if not isinstance(key, bytes):
+                raise TypeError(
+                    f'Invalid changelog key type {type(key)}, expected "bytes"'
+                )
+
+            value = changelog_message.value()
+            if not isinstance(value, (bytes, _NoneType)):
+                raise TypeError(
+                    f'Invalid changelog value type {type(value)}, expected "bytes"'
+                )
+
+            self._store_partition.recover_from_changelog_message(
+                cf_name=cf_name,
+                key=key,
+                value=value,
+                offset=changelog_message.offset(),
+            )
+        else:
+            # Even if the changelog update is skipped, roll the changelog offset
+            # to move forward within the changelog topic
+            self._store_partition.write_changelog_offset(
+                offset=changelog_message.offset(),
+            )
 
     def set_recovery_consume_position(self, offset: int):
         """
@@ -130,6 +189,26 @@ class RecoveryPartition:
         :param offset: the consumer's current read position of the changelog
         """
         self._recovery_consume_position = offset
+
+    def _should_apply_changelog(self, processed_offsets: dict[str, int]) -> bool:
+        """
+        Determine whether the changelog update should be skipped.
+
+        :param processed_offsets: a dict with processed offsets
+            from the changelog message header processed offset.
+
+        :return: True if update should be applied, else False.
+        """
+        committed_offsets = self._committed_offsets
+        for topic, processed_offset in processed_offsets.items():
+            # Skip recovering from the message if its processed offset is ahead of the
+            # current committed offset.
+            # This is a best-effort to recover to a consistent state
+            # if the checkpointing code produced the changelog messages
+            # but failed to commit the source topic offset.
+            if processed_offset >= committed_offsets[topic]:
+                return False
+        return True
 
 
 class ChangelogProducerFactory:
@@ -322,7 +401,7 @@ class RecoveryManager:
         topic_name: Optional[str],
         partition_num: int,
         store_partitions: Dict[str, StorePartition],
-        committed_offset: int,
+        committed_offsets: dict[str, int],
     ) -> List[RecoveryPartition]:
         partitions = []
         for store_name, store_partition in store_partitions.items():
@@ -343,7 +422,7 @@ class RecoveryManager:
                     changelog_name=changelog_topic.name,
                     partition_num=partition_num,
                     store_partition=store_partition,
-                    committed_offset=committed_offset,
+                    committed_offsets=committed_offsets,
                     lowwater=lowwater,
                     highwater=highwater,
                 )
@@ -354,7 +433,7 @@ class RecoveryManager:
         self,
         topic: Optional[str],
         partition: int,
-        committed_offset: int,
+        committed_offsets: dict[str, int],
         store_partitions: Dict[str, StorePartition],
     ):
         """
@@ -366,7 +445,7 @@ class RecoveryManager:
             topic_name=topic,
             partition_num=partition,
             store_partitions=store_partitions,
-            committed_offset=committed_offset,
+            committed_offsets=committed_offsets,
         )
 
         assigned_tps = set(

@@ -248,7 +248,10 @@ class StateStoreManager:
             shutil.rmtree(self._state_dir, ignore_errors=True)
 
     def on_partition_assign(
-        self, topic: Optional[str], partition: int, committed_offset: int
+        self,
+        topic: Optional[str],
+        partition: int,
+        committed_offsets: dict[str, int],
     ) -> Dict[str, StorePartition]:
         """
         Assign store partitions for each registered store for the given `TopicPartition`
@@ -256,7 +259,8 @@ class StateStoreManager:
 
         :param topic: Kafka topic name
         :param partition: Kafka topic partition
-        :param committed_offset: latest committed offset for the partition
+        :param committed_offsets: a dict with latest committed offsets
+            of all assigned topics for this partition number.
         :return: list of assigned `StorePartition`
         """
 
@@ -268,7 +272,7 @@ class StateStoreManager:
             self._recovery_manager.assign_partition(
                 topic=topic,
                 partition=partition,
-                committed_offset=committed_offset,
+                committed_offsets=committed_offsets,
                 store_partitions=store_partitions,
             )
         return store_partitions
