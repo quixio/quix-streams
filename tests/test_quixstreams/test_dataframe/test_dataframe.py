@@ -421,6 +421,19 @@ class TestStreamingDataFrame:
             sdf.print_table(columns=[], metadata=False)
             warn.assert_called_once()
 
+    def test_print_table_non_dict_value(self, dataframe_factory, get_output):
+        sdf = dataframe_factory()
+        sdf.print_table(size=1, metadata=False)
+        sdf.test(value=1, key=b"key", timestamp=12345)
+        sdf._processing_context.printer.print()
+        assert get_output() == (
+            "┏━━━┓\n"
+            "┃ 0 ┃\n"
+            "┡━━━┩\n"
+            "│ 1 │\n"
+            "└───┘\n"
+        )  # fmt: skip
+
     @pytest.mark.parametrize(
         "columns, expected",
         [

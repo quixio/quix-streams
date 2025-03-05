@@ -49,7 +49,11 @@ from quixstreams.models.serializers import DeserializerType, SerializerType
 from quixstreams.processing import ProcessingContext
 from quixstreams.sinks import BaseSink
 from quixstreams.state.base import State
-from quixstreams.utils.printing import DEFAULT_LIVE, DEFAULT_LIVE_SLOWDOWN
+from quixstreams.utils.printing import (
+    DEFAULT_COLUMN_NAME,
+    DEFAULT_LIVE,
+    DEFAULT_LIVE_SLOWDOWN,
+)
 
 from .exceptions import InvalidOperation
 from .registry import DataframeRegistry
@@ -881,6 +885,8 @@ class StreamingDataFrame:
         )
 
         def _add_row(value: Any, *_metadata: tuple[Any, int, HeadersTuples]) -> None:
+            if not isinstance(value, dict):
+                value = {DEFAULT_COLUMN_NAME: value}
             if metadata:
                 value = dict(_key=_metadata[0], _timestamp=_metadata[1], **value)
             table.add_row(value)

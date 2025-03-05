@@ -8,6 +8,7 @@ from rich.table import Table as RichTable
 
 __all__ = ("Printer",)
 
+DEFAULT_COLUMN_NAME = "0"
 DEFAULT_LIVE = True
 DEFAULT_LIVE_SLOWDOWN = 0.5
 
