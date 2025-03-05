@@ -1,11 +1,23 @@
 import abc
 import logging
-from typing import Any, Dict, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
 from quixstreams.models import HeadersTuples
 from quixstreams.sinks.base.batch import SinkBatch
 
 logger = logging.getLogger(__name__)
+
+
+ClientConnectSuccessCallback = Callable[[], None]
+ClientConnectFailureCallback = Callable[[Optional[Exception]], None]
+
+
+def _default_on_client_connect_success():
+    logger.info("CONNECTED!")
+
+
+def _default_on_client_connect_failure(exception: Exception):
+    logger.error(f"ERROR: Failed while connecting to client: {exception}")
 
 
 class BaseSink(abc.ABC):
@@ -16,6 +28,26 @@ class BaseSink(abc.ABC):
 
     Note that Sinks are currently in beta, and their design may change over time.
     """
+
+    def __init__(
+        self,
+        on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
+        on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
+    ):
+        """
+        :param on_client_connect_success: An optional callback made after successful
+            client authentication, primarily for additional logging.
+        :param on_client_connect_failure: An optional callback made after failed
+            client authentication (which should raise an Exception).
+            Callback should accept the raised Exception as an argument.
+            Callback must resolve (or propagate/re-raise) the Exception.
+        """
+        self._on_client_connect_success = (
+            on_client_connect_success or _default_on_client_connect_success
+        )
+        self._on_client_connect_failure = (
+            on_client_connect_failure or _default_on_client_connect_failure
+        )
 
     @abc.abstractmethod
     def flush(self, topic: str, partition: int):
@@ -48,6 +80,24 @@ class BaseSink(abc.ABC):
         on flush().
         """
 
+    @abc.abstractmethod
+    def setup(self):
+        """
+        When applicable, set up the client here along with any validation to affirm a
+        valid/successful authentication/connection.
+        """
+
+    def start(self):
+        """
+        Called as part of `Application.run()` to initialize the sink's client.
+        Allows using a callback pattern around the connection attempt.
+        """
+        try:
+            self.setup()
+            self._on_client_connect_success()
+        except Exception as e:
+            self._on_client_connect_failure(e)
+
     def on_paused(self, topic: str, partition: int):
         """
         This method is triggered when the sink is paused due to backpressure, when
@@ -60,7 +110,7 @@ class BaseSink(abc.ABC):
 class BatchingSink(BaseSink):
     """
     A base class for batching sinks, that need to accumulate the data first before
-    sending it to the external destinatios.
+    sending it to the external destinations.
 
     Examples: databases, objects stores, and other destinations where
     writing every message is not optimal.
@@ -73,7 +123,23 @@ class BatchingSink(BaseSink):
 
     _batches: Dict[Tuple[str, int], SinkBatch]
 
-    def __init__(self):
+    def __init__(
+        self,
+        on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
+        on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
+    ):
+        """
+        :param on_client_connect_success: An optional callback made after successful
+            client authentication, primarily for additional logging.
+        :param on_client_connect_failure: An optional callback made after failed
+            client authentication (which should raise an Exception).
+            Callback should accept the raised Exception as an argument.
+            Callback must resolve (or propagate/re-raise) the Exception.
+        """
+        super().__init__(
+            on_client_connect_success=on_client_connect_success,
+            on_client_connect_failure=on_client_connect_failure,
+        )
         self._batches = {}
 
     def __repr__(self):

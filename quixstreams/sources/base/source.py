@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Optional, Union
+from typing import Callable, Optional, Union
 
 from quixstreams.checkpointing.exceptions import CheckpointProducerTimeout
 from quixstreams.models.messages import KafkaMessage
@@ -11,7 +11,17 @@ from quixstreams.state import PartitionTransaction, State, StorePartition
 
 logger = logging.getLogger(__name__)
 
-__all__ = ("BaseSource", "Source", "StatefulSource")
+ClientConnectSuccessCallback = Callable[[], None]
+ClientConnectFailureCallback = Callable[[Optional[Exception]], None]
+
+
+def _default_on_client_connect_success():
+    logger.info("CONNECTED!")
+
+
+def _default_on_client_connect_failure(exception: Exception):
+    logger.error(f"ERROR: Failed while connecting to client: {exception}")
+    raise exception
 
 
 class BaseSource(ABC):
@@ -81,9 +91,26 @@ class BaseSource(ABC):
     # time in seconds the application will wait for the source to stop.
     shutdown_timeout: float = 10
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
+        on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
+    ) -> None:
         self._producer: Optional[RowProducer] = None
         self._producer_topic: Optional[Topic] = None
+        self._on_client_connect_success = (
+            on_client_connect_success or _default_on_client_connect_success
+        )
+        self._on_client_connect_failure = (
+            on_client_connect_failure or _default_on_client_connect_failure
+        )
+
+    def _init_client(self):
+        try:
+            self.setup()
+            self._on_client_connect_success()
+        except Exception as e:
+            self._on_client_connect_failure(e)
 
     def configure(self, topic: Topic, producer: RowProducer, **kwargs) -> None:
         """
@@ -131,6 +158,13 @@ class BaseSource(ABC):
         The source must return a default topic configuration.
 
         Note: if the default topic is used, the Application will prefix its name with "source__".
+        """
+
+    @abstractmethod
+    def setup(self):
+        """
+        When applicable, set up the client here along with any validation to affirm a
+        valid/successful authentication/connection.
         """
 
 
@@ -184,12 +218,27 @@ class Source(BaseSource):
     * `running`
     """
 
-    def __init__(self, name: str, shutdown_timeout: float = 10) -> None:
+    def __init__(
+        self,
+        name: str,
+        shutdown_timeout: float = 10,
+        on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
+        on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
+    ) -> None:
         """
         :param name: The source unique name. It is used to generate the topic configuration.
         :param shutdown_timeout: Time in second the application waits for the source to gracefully shutdown.
+        :param on_client_connect_success: An optional callback made after successful
+            client authentication, primarily for additional logging.
+        :param on_client_connect_failure: An optional callback made after failed
+            client authentication (which should raise an Exception).
+            Callback should accept the raised Exception as an argument.
+            Callback must resolve (or propagate/re-raise) the Exception.
         """
-        super().__init__()
+        super().__init__(
+            on_client_connect_success=on_client_connect_success,
+            on_client_connect_failure=on_client_connect_failure,
+        )
 
         # used to generate a unique topic for the source.
         self.name = name
@@ -233,6 +282,7 @@ class Source(BaseSource):
         """
         self._running = True
         try:
+            self._init_client()
             self.run()
         except BaseException:
             self.cleanup(failed=True)
@@ -377,12 +427,29 @@ class StatefulSource(Source):
     ```
     """
 
-    def __init__(self, name: str, shutdown_timeout: float = 10) -> None:
+    def __init__(
+        self,
+        name: str,
+        shutdown_timeout: float = 10,
+        on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
+        on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
+    ) -> None:
         """
         :param name: The source unique name. It is used to generate the topic configuration.
         :param shutdown_timeout: Time in second the application waits for the source to gracefully shutdown.
+        :param on_client_connect_success: An optional callback made after successful
+            client authentication, primarily for additional logging.
+        :param on_client_connect_failure: An optional callback made after failed
+            client authentication (which should raise an Exception).
+            Callback should accept the raised Exception as an argument.
+            Callback must resolve (or propagate/re-raise) the Exception.
         """
-        super().__init__(name, shutdown_timeout)
+        super().__init__(
+            name,
+            shutdown_timeout=shutdown_timeout,
+            on_client_connect_success=on_client_connect_success,
+            on_client_connect_failure=on_client_connect_failure,
+        )
         self._store_partition: Optional[StorePartition] = None
         self._store_transaction: Optional[PartitionTransaction] = None
         self._store_state: Optional[State] = None

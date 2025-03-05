@@ -1,9 +1,11 @@
 import logging
 import sys
 import time
+from typing import Optional
 
 try:
     import neo4j
+    from neo4j._sync.driver import Driver
     from neo4j.exceptions import (
         DatabaseUnavailable,
         ServiceUnavailable,
@@ -98,14 +100,21 @@ class Neo4jSink(BatchingSink):
         """
 
         super().__init__()
-        self._uri = f"bolt://{host}:{port}"
-        self._client = neo4j.GraphDatabase.driver(
-            self._uri,
-            auth=(username, password),
+        self._credentials = {
+            "uri": f"bolt://{host}:{port}",
+            "auth": (username, password),
             **kwargs,
-        )
+        }
         self._chunk_size = chunk_size
         self._query = self._make_cypher_query(cypher_query)
+        self._client: Optional[Driver] = None
+
+    def setup(self):
+        self._client = neo4j.GraphDatabase.driver(**self._credentials)
+        with self._client.session() as session:
+            # confirms correct credentials
+            for _ in session.run("RETURN 1 AS test"):
+                pass
 
     def _make_cypher_query(self, user_query: str) -> str:
         """

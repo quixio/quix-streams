@@ -1,7 +1,10 @@
+import logging
 import os
 from io import BytesIO
 from pathlib import Path
-from typing import Generator
+from typing import Generator, Optional
+
+from typing_extensions import Self
 
 from .base import Origin
 
@@ -17,6 +20,9 @@ except ImportError as exc:
 __all__ = ("AzureFileOrigin",)
 
 
+logger = logging.getLogger(__name__)
+
+
 class AzureFileOrigin(Origin):
     def __init__(
         self,
@@ -27,17 +33,18 @@ class AzureFileOrigin(Origin):
         :param connection_string: Azure client authentication string.
         :param container: Azure container name.
         """
-        self.root_location = container
-        self._client = self._get_client(connection_string)
+        self._container = container
+        self._auth = connection_string
+        self._client: Optional[ContainerClient] = None
 
-    def _get_client(self, auth: str) -> ContainerClient:
+    def _get_client(self) -> ContainerClient:
         """
         Get an Azure file container client and validate the container exists.
 
         :param auth: Azure client authentication string.
         :return: An Azure ContainerClient
         """
-        storage_client = BlobServiceClient.from_connection_string(auth)
+        storage_client = BlobServiceClient.from_connection_string(self._auth)
         container_client = storage_client.get_container_client(self._container)
         return container_client
 
@@ -64,3 +71,17 @@ class AzureFileOrigin(Origin):
         blob_client = self._client.get_blob_client(str(filepath))
         data = blob_client.download_blob().readall()
         return BytesIO(data)
+
+    def __enter__(self) -> Self:
+        if not self._client:
+            self._client = self._get_client()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self._client:
+            try:
+                self._client.close()
+            except Exception as e:
+                logger.info(f"Source client session exited non-gracefully: {e}")
+                pass
+        self._client = None

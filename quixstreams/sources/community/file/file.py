@@ -7,7 +7,11 @@ from typing import BinaryIO, Optional, Union
 from typing_extensions import Self
 
 from quixstreams.models import Topic, TopicConfig
-from quixstreams.sources import Source
+from quixstreams.sources import (
+    ClientConnectFailureCallback,
+    ClientConnectSuccessCallback,
+    Source,
+)
 
 from .compressions import CompressionName
 from .formats import FORMATS, Format, FormatName
@@ -136,6 +140,8 @@ class FileSource(Source):
         replay_speed: float = 1.0,
         name: Optional[str] = None,
         shutdown_timeout: float = 30,
+        on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
+        on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
     ):
         """
         :param directory: a directory to recursively read through; it is recommended to
@@ -152,20 +158,30 @@ class FileSource(Source):
         :param name: The name of the Source application (Default: last folder name).
         :param shutdown_timeout: Time in seconds the application waits for the source
             to gracefully shutdown
+        :param on_client_connect_success: An optional callback made after successful
+            client authentication, primarily for additional logging.
+        :param on_client_connect_failure: An optional callback made after failed
+            client authentication (which should raise an Exception).
+            Callback should accept the raised Exception as an argument.
+            Callback must resolve (or propagate/re-raise) the Exception.
         """
+        self._directory = Path(directory)
+        super().__init__(
+            name=name or self._directory.name,
+            shutdown_timeout=shutdown_timeout,
+            on_client_connect_success=on_client_connect_success,
+            on_client_connect_failure=on_client_connect_failure,
+        )
+
         if not replay_speed >= 0:
             raise ValueError("`replay_speed` must be a positive value")
 
-        self._directory = Path(directory)
         self._origin = origin
         self._formatter = _get_formatter(format, compression)
         self._replay_speed = replay_speed
         self._previous_timestamp = None
         self._previous_partition = None
         self._file_fetcher: Optional[FileFetcher] = None
-        super().__init__(
-            name=name or self._directory.name, shutdown_timeout=shutdown_timeout
-        )
 
     def _replay_delay(self, current_timestamp: int):
         """
@@ -219,17 +235,21 @@ class FileSource(Source):
             self._file_fetcher.stop()
         super().stop()
 
+    def setup(self):
+        self._origin = self._origin.__enter__()
+
     def run(self):
-        self._file_fetcher = FileFetcher(self._origin, self._directory)
-        logger.info(f"Reading files from topic {self._directory.name}")
-        for file_name, content in self._file_fetcher:
-            logger.debug(f"Reading file {file_name}")
-            self._check_file_partition_number(file_name)
-            for record in self._formatter.read(content):
-                if timestamp := record.get("_timestamp"):
-                    self._replay_delay(timestamp)
-                self._produce(record)
-            self.flush()
+        with self._origin:  # for conveniently exiting the context
+            self._file_fetcher = FileFetcher(self._origin, self._directory)
+            logger.info(f"Reading files from topic {self._directory.name}")
+            for file_name, content in self._file_fetcher:
+                logger.debug(f"Reading file {file_name}")
+                self._check_file_partition_number(file_name)
+                for record in self._formatter.read(content):
+                    if timestamp := record.get("_timestamp"):
+                        self._replay_delay(timestamp)
+                    self._produce(record)
+                self.flush()
 
 
 def _get_formatter(

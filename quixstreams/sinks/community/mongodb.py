@@ -75,7 +75,9 @@ class MongoDBSink(BatchingSink):
         upsert: bool = True,
         add_message_metadata: bool = False,
         add_topic_metadata: bool = False,
+        authentication_timeout_ms: int = 15000,
         value_selector: Optional[Callable[[MongoValue], MongoValue]] = None,
+        **kwargs,
     ) -> None:
         """
         A connector to sink processed data to MongoDB in batches.
@@ -107,17 +109,30 @@ class MongoDBSink(BatchingSink):
         """
 
         super().__init__()
-
-        self._client = MongoClient(url)
+        self._url = url
         self._db_name = db
         self._collection_name = collection
-        self._collection: Collection = self._client[db][collection]
         self._document_matcher = document_matcher
         self._update_method = _UPDATE_MAP[update_method]
         self._upsert = upsert
         self._add_message_metadata = add_message_metadata
         self._add_topic_metadata = add_topic_metadata
         self._value_selector = value_selector
+        self._auth_timeout_ms = authentication_timeout_ms
+        self._client_kwargs = kwargs
+        self._client: Optional[MongoClient] = None
+        self._collection: Optional[Collection] = None
+
+    def setup(self):
+        self._client = MongoClient(
+            self._url,
+            serverSelectionTimeoutMS=self._auth_timeout_ms,
+            **self._client_kwargs,
+        )
+        db = self._client[self._db_name]
+        # confirms connection
+        db.command("ping", maxTimeMS=10000)
+        self._collection = db[self._collection_name]
 
     def _add_metadata(self, topic: str, partition: int, record: SinkItem) -> MongoValue:
         value = record.value

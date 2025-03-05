@@ -15,7 +15,12 @@ except ImportError as exc:
     ) from exc
 
 from quixstreams.models.types import HeadersTuples
-from quixstreams.sinks.base import BaseSink, SinkBackpressureError
+from quixstreams.sinks.base import (
+    BaseSink,
+    ClientConnectFailureCallback,
+    ClientConnectSuccessCallback,
+    SinkBackpressureError,
+)
 
 __all__ = ("PubSubSink", "PubSubTopicNotFoundError")
 
@@ -37,6 +42,8 @@ class PubSubSink(BaseSink):
         value_serializer: Callable[[Any], Union[bytes, str]] = json.dumps,
         key_serializer: Callable[[Any], str] = bytes.decode,
         flush_timeout: int = 5,
+        on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
+        on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
         **kwargs,
     ) -> None:
         """
@@ -53,8 +60,18 @@ class PubSubSink(BaseSink):
             (defaults to json.dumps).
         :param key_serializer: Function to serialize the key to string
             (defaults to bytes.decode).
+        :param on_client_connect_success: An optional callback made after successful
+            client authentication, primarily for additional logging.
+        :param on_client_connect_failure: An optional callback made after failed
+            client authentication (which should raise an Exception).
+            Callback should accept the raised Exception as an argument.
+            Callback must resolve (or propagate/re-raise) the Exception.
         :param kwargs: Additional keyword arguments passed to PublisherClient.
         """
+        super().__init__(
+            on_client_connect_success=on_client_connect_success,
+            on_client_connect_failure=on_client_connect_failure,
+        )
 
         # Parse the service account credentials from JSON
         if service_account_json is not None:
@@ -66,15 +83,21 @@ class PubSubSink(BaseSink):
                 )
             )
 
-        self._publisher = pubsub_v1.PublisherClient(**kwargs)
-        self._topic = self._publisher.topic_path(project_id, topic_id)
+        self._client_settings = kwargs
+        self._project_id = project_id
+        self._topic_id = topic_id
         self._value_serializer = value_serializer
         self._key_serializer = key_serializer
         self._flush_timeout = flush_timeout
         self._futures: dict[TopicPartition, list[Future]] = defaultdict(list)
+        self._client: Optional[pubsub_v1.PublisherClient] = None
+        self._topic: Optional[str] = None
 
+    def setup(self):
+        self._client = pubsub_v1.PublisherClient(**self._client_settings)
+        self._topic = self._client.topic_path(self._project_id, self._topic_id)
         try:
-            self._publisher.get_topic(request={"topic": self._topic})
+            self._client.get_topic(request={"topic": self._topic})
         except google_exceptions.NotFound:
             raise PubSubTopicNotFoundError(f"Topic `{self._topic}` does not exist.")
 
@@ -108,7 +131,7 @@ class PubSubSink(BaseSink):
             **dict(headers),
         }
 
-        future = self._publisher.publish(**kwargs)
+        future = self._client.publish(**kwargs)
         self._futures[(topic, partition)].append(future)
 
     def flush(self, topic: str, partition: int) -> None:
