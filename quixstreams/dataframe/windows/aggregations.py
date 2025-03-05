@@ -1,9 +1,10 @@
 from abc import ABC, abstractmethod
+from enum import Enum
 from typing import (
     Any,
     Callable,
+    Final,
     Generic,
-    Hashable,
     Iterable,
     Optional,
     TypeVar,
@@ -12,8 +13,28 @@ from typing import (
 
 from typing_extensions import TypeAlias
 
+__all__ = [
+    "Collect",
+    "Count",
+    "Max",
+    "Mean",
+    "Min",
+    "Reduce",
+    "Sum",
+]
 
-class Aggregator(ABC):
+
+class _ROOT(Enum):
+    ROOT = 1
+
+
+ROOT: Final = _ROOT.ROOT
+Column: TypeAlias = Union[str, _ROOT]
+
+S = TypeVar("S")
+
+
+class BaseAggregator(ABC, Generic[S]):
     """
     Base class for window aggregation.
 
@@ -25,8 +46,22 @@ class Aggregator(ABC):
     To store all incoming items without reducing them use a `Collector`.
     """
 
+    @property
     @abstractmethod
-    def initialize(self) -> Any:
+    def state_suffix(self) -> str:
+        """
+        The state suffix used to store the aggregation state in the window.
+
+        The complete state key is built using the result column name and this suffix. If any of these
+        values change the state key will change and the aggregation state restart from zero.
+
+        Aggregations should change the state suffix when there parameters change to avoid
+        conflicts with previous state values.
+        """
+        ...
+
+    @abstractmethod
+    def initialize(self) -> S:
         """
         This method is triggered once to build the aggregation starting value.
         It should return the initial value for the aggregation.
@@ -34,7 +69,7 @@ class Aggregator(ABC):
         ...
 
     @abstractmethod
-    def agg(self, old: Any, new: Any) -> Any:
+    def agg(self, old: S, new: Any) -> S:
         """
         This method is trigged when a window is updated with a new value.
         It should return the updated aggregated value.
@@ -42,7 +77,7 @@ class Aggregator(ABC):
         ...
 
     @abstractmethod
-    def result(self, value: Any) -> Any:
+    def result(self, value: S) -> Any:
         """
         This method is triggered when a window is closed.
         It should return the final aggregation result.
@@ -50,19 +85,24 @@ class Aggregator(ABC):
         ...
 
 
+class Aggregator(BaseAggregator):
+    @property
+    def state_suffix(self) -> str:
+        return self.__class__.__name__
+
+
 V = TypeVar("V", int, float)
-
-
-class ROOT:
-    pass
-
-
-Column: TypeAlias = Union[Hashable, type[ROOT]]
 
 
 class Sum(Aggregator):
     def __init__(self, column: Column = ROOT) -> None:
         self.column = column
+
+    @property
+    def state_suffix(self) -> str:
+        if self.column is ROOT:
+            return self.__class__.__name__
+        return f"{self.__class__.__name__}/{self.column}"
 
     def initialize(self) -> int:
         return 0
@@ -90,11 +130,19 @@ class Mean(Aggregator):
     def __init__(self, column: Column = ROOT) -> None:
         self.column = column
 
+    @property
+    def state_suffix(self) -> str:
+        if self.column is ROOT:
+            return self.__class__.__name__
+        return f"{self.__class__.__name__}/{self.column}"
+
     def initialize(self) -> tuple[float, int]:
         return 0.0, 0
 
     def agg(self, old: tuple[V, int], new: Any) -> tuple[V, int]:
-        new = new if self.column is ROOT else new.get(self.column)
+        if self.column is not None:
+            new = new.get(self.column)
+
         if new is None:
             return old
 
@@ -108,31 +156,15 @@ class Mean(Aggregator):
         return sum_ / count_
 
 
-R = TypeVar("R", int, float)
-
-
-class Reduce(Aggregator, Generic[R]):
-    def __init__(
-        self,
-        reducer: Callable[[R, Any], R],
-        initializer: Callable[[Any], R],
-    ) -> None:
-        self._initializer: Callable[[Any], R] = initializer
-        self._reducer: Callable[[R, Any], R] = reducer
-
-    def initialize(self) -> Any:
-        return None
-
-    def agg(self, old: R, new: Any) -> Any:
-        return self._initializer(new) if old is None else self._reducer(old, new)
-
-    def result(self, value: R) -> R:
-        return value
-
-
 class Max(Aggregator):
     def __init__(self, column: Column = ROOT) -> None:
         self.column = column
+
+    @property
+    def state_suffix(self) -> str:
+        if self.column is ROOT:
+            return self.__class__.__name__
+        return f"{self.__class__.__name__}/{self.column}"
 
     def initialize(self) -> None:
         return None
@@ -153,6 +185,12 @@ class Min(Aggregator):
     def __init__(self, column: Column = ROOT) -> None:
         self.column = column
 
+    @property
+    def state_suffix(self) -> str:
+        if self.column is ROOT:
+            return self.__class__.__name__
+        return f"{self.__class__.__name__}/{self.column}"
+
     def initialize(self) -> None:
         return None
 
@@ -168,10 +206,32 @@ class Min(Aggregator):
         return value
 
 
+R = TypeVar("R")
+
+
+class Reduce(Aggregator, Generic[R]):
+    def __init__(
+        self,
+        reducer: Callable[[R, Any], R],
+        initializer: Callable[[Any], R],
+    ) -> None:
+        self._initializer: Callable[[Any], R] = initializer
+        self._reducer: Callable[[R, Any], R] = reducer
+
+    def initialize(self) -> None:
+        return None
+
+    def agg(self, old: Optional[R], new: Any) -> R:
+        return self._initializer(new) if old is None else self._reducer(old, new)
+
+    def result(self, value: R) -> R:
+        return value
+
+
 I = TypeVar("I")
 
 
-class Collector(ABC, Generic[I]):
+class BaseCollector(ABC, Generic[I]):
     """
     Base class for window collections.
 
@@ -199,6 +259,12 @@ class Collector(ABC, Generic[I]):
         It should return the final collection result.
         """
         ...
+
+
+class Collector(BaseCollector):
+    @property
+    def column(self) -> Column:
+        return ROOT
 
 
 class Collect(Collector):

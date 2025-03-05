@@ -19,6 +19,13 @@ AGGREGATE_PARAMS = {
 }
 
 
+def process(window, value, key, transaction, timestamp_ms):
+    updated, expired = window.process_window(
+        value=value, key=key, transaction=transaction, timestamp_ms=timestamp_ms
+    )
+    return list(updated), list(expired)
+
+
 @dataclass
 class Message:
     """
@@ -849,7 +856,8 @@ def test_sliding_window_reduce(
     key = b"key"
     for message in messages:
         with transaction_factory(window) as tx:
-            updated, expired = window.process_window(
+            updated, expired = process(
+                window=window,
                 value=message.value,
                 key=key,
                 timestamp_ms=message.timestamp,
@@ -974,7 +982,7 @@ COLLECTION_AGGREGATION = [
         pytest.param(10, 5, COLLECTION_AGGREGATION, id="collection-aggregation"),
     ],
 )
-def test_sliding_windw_collect(
+def test_sliding_window_collect(
     window_factory,
     transaction_factory,
     duration_ms,
@@ -988,7 +996,8 @@ def test_sliding_windw_collect(
     )
     for message in messages:
         with transaction_factory(window) as tx:
-            updated, expired = window.process_window(
+            updated, expired = process(
+                window=window,
                 value=message.value,
                 key=key,
                 timestamp_ms=message.timestamp,

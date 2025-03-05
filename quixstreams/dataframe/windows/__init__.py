@@ -1,3 +1,4 @@
+from .aggregations import Collect, Count, Max, Mean, Min, Reduce, Sum
 from .definitions import (
     HoppingCountWindowDefinition,
     HoppingTimeWindowDefinition,
@@ -8,10 +9,17 @@ from .definitions import (
 )
 
 __all__ = [
-    "TumblingCountWindowDefinition",
+    "Collect",
+    "Count",
+    "Max",
+    "Mean",
+    "Min",
+    "Reduce",
+    "Sum",
     "HoppingCountWindowDefinition",
-    "SlidingCountWindowDefinition",
     "HoppingTimeWindowDefinition",
+    "SlidingCountWindowDefinition",
     "SlidingTimeWindowDefinition",
+    "TumblingCountWindowDefinition",
     "TumblingTimeWindowDefinition",
 ]

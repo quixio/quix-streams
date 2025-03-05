@@ -16,7 +16,7 @@ from quixstreams.state.serialization import (
     LoadsFunc,
     serialize,
 )
-from quixstreams.state.types import WindowDetail
+from quixstreams.state.types import ExpiredWindowDetail, WindowDetail
 
 from .metadata import (
     GLOBAL_COUNTER_CF_NAME,
@@ -234,7 +234,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         delete: bool = True,
         collect: bool = False,
         end_inclusive: bool = False,
-    ) -> list[WindowDetail]:
+    ) -> Iterable[ExpiredWindowDetail]:
         """
         Get all expired windows with a set prefix from RocksDB up to the specified `max_start_time` timestamp.
 
@@ -277,16 +277,16 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
 
         # Use the latest expired timestamp to limit the iteration over
         # only those windows that have not been expired before
-        expired_windows = self.get_windows(
+        windows = self.get_windows(
             start_from_ms=start_from,
             start_to_ms=max_start_time,
             prefix=prefix,
         )
-        if not expired_windows:
-            return []
+        if not windows:
+            return
 
         # Save the start of the latest expired window to the expiration index
-        latest_window = expired_windows[-1]
+        latest_window = windows[-1]
         last_expired__gt = latest_window[0][0]
 
         self._set_timestamp(
@@ -297,9 +297,8 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
 
         # Collect values into windows
         if collect:
-            collected_expired_windows: list[WindowDetail] = []
-            for (start, end), value, key in expired_windows:
-                collection = self.get_from_collection(
+            for (start, end), aggregated, key in windows:
+                collected = self.get_from_collection(
                     start=start,
                     # Sliding windows are inclusive on both ends
                     # (including timestamps of messages equal to `end`).
@@ -308,24 +307,18 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
                     end=end + 1 if end_inclusive else end,
                     prefix=prefix,
                 )
-                if value is None:
-                    value = collection
-                else:
-                    # Sliding windows are timestamped:
-                    # value is [max_timestamp, value] where max_timestamp
-                    # is the timestamp of the latest message in the window
-                    value[1] = collection
-                collected_expired_windows.append(((start, end), value, key))
-            expired_windows = collected_expired_windows
+                yield ((start, end), aggregated, collected, key)
+
+        else:
+            for window, aggregated, key in windows:
+                yield (window, aggregated, [], key)
 
         # Delete expired windows from the state
         if delete:
-            for (start, end), _, _ in expired_windows:
+            for (start, end), _, _ in windows:
                 self.delete_window(start, end, prefix=prefix)
             if collect:
                 self.delete_from_collection(end=start, prefix=prefix)
-
-        return expired_windows
 
     def expire_all_windows(
         self,
@@ -333,7 +326,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         step_ms: int,
         delete: bool = True,
         collect: bool = False,
-    ) -> Iterable[WindowDetail]:
+    ) -> Iterable[ExpiredWindowDetail]:
         """
         Get all expired windows for all prefix from RocksDB up to the specified `max_end_time` timestamp.
 
@@ -346,6 +339,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         )
 
         to_delete: set[tuple[bytes, int, int]] = set()
+        collected = []
 
         if last_expired:
             windows = windows_to_expire(last_expired, max_end_time, step_ms)
@@ -357,17 +351,17 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
                 if key[-8:] in suffixes:
                     prefix, start, end = parse_window_key(key)
                     to_delete.add((prefix, start, end))
+                    aggregated = self.get(
+                        encode_integer_pair(start, end), prefix=prefix
+                    )
                     if collect:
-                        value: Any = self.get_from_collection(
+                        collected = self.get_from_collection(
                             start=start,
                             end=end,
                             prefix=prefix,
                         )
-                    else:
-                        value = self.get(encode_integer_pair(start, end), prefix=prefix)
-                        assert value is not None  # noqa: S101
+                    yield (start, end), aggregated, collected, prefix
 
-                    yield (start, end), value, prefix
         else:
             # If we don't have a saved last_expired value it means one of two cases
             # 1. It's a new window, iterating over all the keys is fast.
@@ -378,17 +372,17 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
                 prefix, start, end = parse_window_key(key)
                 if end <= last_expired:
                     to_delete.add((prefix, start, end))
+                    aggregated = self.get(
+                        encode_integer_pair(start, end), prefix=prefix
+                    )
                     if collect:
-                        value = self.get_from_collection(
+                        collected = self.get_from_collection(
                             start=start,
                             end=end,
                             prefix=prefix,
                         )
-                    else:
-                        value = self.get(encode_integer_pair(start, end), prefix=prefix)
-                        assert value is not None  # noqa: S101
 
-                    yield (start, end), value, prefix
+                    yield (start, end), aggregated, collected, prefix
 
         if delete:
             for prefix, start, end in to_delete:
