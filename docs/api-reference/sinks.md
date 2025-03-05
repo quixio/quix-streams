@@ -10,13 +10,39 @@
 class BaseSink(abc.ABC)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L11)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L23)
 
 This is a base class for all sinks.
 
 Subclass it and implement its methods to create your own sink.
 
 Note that Sinks are currently in beta, and their design may change over time.
+
+<a id="quixstreams.sinks.base.sink.BaseSink.__init__"></a>
+
+<br><br>
+
+#### BaseSink.\_\_init\_\_
+
+```python
+def __init__(on_client_connect_success: Optional[
+    ClientConnectSuccessCallback] = None,
+             on_client_connect_failure: Optional[
+                 ClientConnectFailureCallback] = None)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L32)
+
+
+<br>
+***Arguments:***
+
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
 
 <a id="quixstreams.sinks.base.sink.BaseSink.flush"></a>
 
@@ -29,7 +55,7 @@ Note that Sinks are currently in beta, and their design may change over time.
 def flush(topic: str, partition: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L21)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L53)
 
 This method is triggered by the Checkpoint class when it commits.
 
@@ -51,13 +77,44 @@ def add(value: Any, key: Any, timestamp: int, headers: HeadersTuples,
         topic: str, partition: int, offset: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L33)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L65)
 
 This method is triggered on every new processed record being sent to this sink.
 
 You can use it to accumulate batches of data before sending them outside, or
 to send results right away in a streaming manner and confirm a delivery later
 on flush().
+
+<a id="quixstreams.sinks.base.sink.BaseSink.setup"></a>
+
+<br><br>
+
+#### BaseSink.setup
+
+```python
+@abc.abstractmethod
+def setup()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L84)
+
+When applicable, set up the client here along with any validation to affirm a
+valid/successful authentication/connection.
+
+<a id="quixstreams.sinks.base.sink.BaseSink.start"></a>
+
+<br><br>
+
+#### BaseSink.start
+
+```python
+def start()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L90)
+
+Called as part of `Application.run()` to initialize the sink's client.
+Allows using a callback pattern around the connection attempt.
 
 <a id="quixstreams.sinks.base.sink.BaseSink.on_paused"></a>
 
@@ -69,7 +126,7 @@ on flush().
 def on_paused(topic: str, partition: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L51)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L101)
 
 This method is triggered when the sink is paused due to backpressure, when
 the `SinkBackpressureError` is raised.
@@ -84,10 +141,10 @@ Here you can react to the backpressure events.
 class BatchingSink(BaseSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L60)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L110)
 
 A base class for batching sinks, that need to accumulate the data first before
-sending it to the external destinatios.
+sending it to the external destinations.
 
 Examples: databases, objects stores, and other destinations where
 writing every message is not optimal.
@@ -96,6 +153,32 @@ It automatically handles batching, keeping batches in memory per topic-partition
 
 You may subclass it and override the `write()` method to implement a custom
 batching sink.
+
+<a id="quixstreams.sinks.base.sink.BatchingSink.__init__"></a>
+
+<br><br>
+
+#### BatchingSink.\_\_init\_\_
+
+```python
+def __init__(on_client_connect_success: Optional[
+    ClientConnectSuccessCallback] = None,
+             on_client_connect_failure: Optional[
+                 ClientConnectFailureCallback] = None)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L126)
+
+
+<br>
+***Arguments:***
+
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
 
 <a id="quixstreams.sinks.base.sink.BatchingSink.write"></a>
 
@@ -108,7 +191,7 @@ batching sink.
 def write(batch: SinkBatch)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L83)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L149)
 
 This method implements actual writing to the external destination.
 
@@ -128,7 +211,7 @@ def add(value: Any, key: Any, timestamp: int, headers: HeadersTuples,
         topic: str, partition: int, offset: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L93)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L159)
 
 Add a new record to in-memory batch.
 
@@ -142,7 +225,7 @@ Add a new record to in-memory batch.
 def flush(topic: str, partition: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L115)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L181)
 
 Flush an accumulated batch to the destination and drop it afterward.
 
@@ -156,7 +239,7 @@ Flush an accumulated batch to the destination and drop it afterward.
 def on_paused(topic: str, partition: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L135)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L201)
 
 When the destination is already backpressure, drop the accumulated batch.
 
@@ -242,7 +325,7 @@ a timeout specified in `retry_after`, and resume it when it's elapsed.
 class InfluxDB3Sink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/influxdb3.py#L38)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/influxdb3.py#L43)
 
 <a id="quixstreams.sinks.core.influxdb3.InfluxDB3Sink.__init__"></a>
 
@@ -265,10 +348,14 @@ def __init__(token: str,
              batch_size: int = 1000,
              enable_gzip: bool = True,
              request_timeout_ms: int = 10_000,
-             debug: bool = False)
+             debug: bool = False,
+             on_client_connect_success: Optional[
+                 ClientConnectSuccessCallback] = None,
+             on_client_connect_failure: Optional[
+                 ClientConnectFailureCallback] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/influxdb3.py#L46)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/influxdb3.py#L51)
 
 A connector to sink processed data to InfluxDB v3.
 
@@ -334,6 +421,12 @@ Default - `True`.
 Default - `10000`.
 - `debug`: if True, print debug logs from InfluxDB client.
 Default - `False`.
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
 
 <a id="quixstreams.sinks.core.csv"></a>
 
@@ -396,7 +489,7 @@ Default - `json.dumps`.
 class AWSIcebergConfig(BaseIcebergConfig)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/iceberg.py#L42)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/iceberg.py#L49)
 
 <a id="quixstreams.sinks.community.iceberg.AWSIcebergConfig.__init__"></a>
 
@@ -412,7 +505,7 @@ def __init__(aws_s3_uri: str,
              aws_session_token: Optional[str] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/iceberg.py#L43)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/iceberg.py#L50)
 
 Configure IcebergSink to work with AWS Glue.
 
@@ -441,7 +534,7 @@ using AWS Glue.
 class IcebergSink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/iceberg.py#L76)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/iceberg.py#L83)
 
 IcebergSink writes batches of data to an Apache Iceberg table.
 
@@ -468,6 +561,12 @@ Supported data catalogs:
 - `schema`: The Iceberg table schema. If None, a default schema is used.
 - `partition_spec`: The partition specification for the table.
 If None, a default is used.
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+    Callback should accept the raised Exception as an argument.
+    Callback must resolve (or propagate/re-raise) the Exception.
 
 Example setup using an AWS-hosted Iceberg with AWS Glue:
 
@@ -512,7 +611,7 @@ if __name__ == "__main__":
 def write(batch: SinkBatch)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/iceberg.py#L174)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/iceberg.py#L199)
 
 Writes a batch of data to the Iceberg table.
 
@@ -536,7 +635,7 @@ Implements retry logic to handle concurrent write conflicts.
 class BigQuerySink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/bigquery.py#L53)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/bigquery.py#L56)
 
 <a id="quixstreams.sinks.community.bigquery.BigQuerySink.__init__"></a>
 
@@ -554,10 +653,14 @@ def __init__(project_id: str,
              ddl_timeout: float = 10.0,
              insert_timeout: float = 10.0,
              retry_timeout: float = 30.0,
+             on_client_connect_success: Optional[
+                 ClientConnectSuccessCallback] = None,
+             on_client_connect_failure: Optional[
+                 ClientConnectFailureCallback] = None,
              **kwargs)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/bigquery.py#L54)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/bigquery.py#L57)
 
 A connector to sink processed data to Google Cloud BigQuery.
 
@@ -599,6 +702,12 @@ Default - 10s.
 - `retry_timeout`: a total timeout for each request to BigQuery API.
 During this timeout, a request can be retried according
 to the client's default retrying policy.
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
 - `kwargs`: Additional keyword arguments passed to `bigquery.Client`.
 
 <a id="quixstreams.sinks.community.file.sink"></a>
@@ -613,7 +722,7 @@ to the client's default retrying policy.
 class FileSink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/sink.py#L11)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/sink.py#L17)
 
 A sink that writes data batches to files using configurable formats and
 destinations.
@@ -634,12 +743,16 @@ configured to use other storage backends (e.g., cloud storage).
 #### FileSink.\_\_init\_\_
 
 ```python
-def __init__(directory: str = "",
-             format: Union[FormatName, Format] = "json",
-             destination: Optional[Destination] = None) -> None
+def __init__(
+    directory: str = "",
+    format: Union[FormatName, Format] = "json",
+    destination: Optional[Destination] = None,
+    on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
+    on_client_connect_failure: Optional[ClientConnectFailureCallback] = None
+) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/sink.py#L25)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/sink.py#L31)
 
 Initialize the FileSink with the specified configuration.
 
@@ -653,6 +766,12 @@ current directory.
 ("json", "parquet") or a Format instance.
 - `destination`: Storage destination handler. Defaults to
 LocalDestination if not specified.
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
 
 <a id="quixstreams.sinks.community.file.sink.FileSink.write"></a>
 
@@ -664,7 +783,7 @@ LocalDestination if not specified.
 def write(batch: SinkBatch) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/sink.py#L46)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/sink.py#L67)
 
 Write a batch of data using the configured format and destination.
 
@@ -696,7 +815,7 @@ that the sink needs backpressure with a 5-second retry delay.
 class AzureContainerNotFoundError(Exception)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/azure.py#L23)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/azure.py#L24)
 
 Raised when the specified Azure File container does not exist.
 
@@ -708,7 +827,7 @@ Raised when the specified Azure File container does not exist.
 class AzureContainerAccessDeniedError(Exception)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/azure.py#L27)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/azure.py#L28)
 
 Raised when the specified Azure File container access is denied.
 
@@ -720,7 +839,7 @@ Raised when the specified Azure File container access is denied.
 class AzureFileDestination(Destination)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/azure.py#L31)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/azure.py#L32)
 
 A destination that writes data to Microsoft Azure File.
 
@@ -737,7 +856,7 @@ be provided directly or via environment variables.
 def __init__(connection_string: str, container: str) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/azure.py#L39)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/azure.py#L40)
 
 Initialize the Azure File destination.
 
@@ -763,7 +882,7 @@ Initialize the Azure File destination.
 def write(data: bytes, batch: SinkBatch) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/azure.py#L88)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/azure.py#L94)
 
 Write data to Azure.
 
@@ -795,51 +914,20 @@ disk, cloud storage, or other locations. They manage the physical writing of
 data while maintaining a consistent directory/path structure based on topics
 and partitions.
 
-<a id="quixstreams.sinks.community.file.destinations.base.Destination.set_directory"></a>
+<a id="quixstreams.sinks.community.file.destinations.base.Destination.setup"></a>
 
 <br><br>
 
-#### Destination.set\_directory
+#### Destination.setup
 
 ```python
-def set_directory(directory: str) -> None
+@abstractmethod
+def setup()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/base.py#L28)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/base.py#L29)
 
-Configure the base directory for storing files.
-
-
-<br>
-***Arguments:***
-
-- `directory`: The base directory path where files will be stored.
-
-**Raises**:
-
-- `ValueError`: If the directory path contains invalid characters.
-Only alphanumeric characters (a-zA-Z0-9), spaces, dots, and
-underscores are allowed.
-
-<a id="quixstreams.sinks.community.file.destinations.base.Destination.set_extension"></a>
-
-<br><br>
-
-#### Destination.set\_extension
-
-```python
-def set_extension(format: Format) -> None
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/base.py#L45)
-
-Set the file extension based on the format.
-
-
-<br>
-***Arguments:***
-
-- `format`: The Format instance that defines the file extension.
+Authenticate and validate connection here
 
 <a id="quixstreams.sinks.community.file.destinations.base.Destination.write"></a>
 
@@ -852,7 +940,7 @@ Set the file extension based on the format.
 def write(data: bytes, batch: SinkBatch) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/base.py#L54)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/base.py#L34)
 
 Write the serialized data to storage.
 
@@ -863,6 +951,52 @@ Write the serialized data to storage.
 - `data`: The serialized data to write.
 - `batch`: The batch information containing topic, partition and offset
 details.
+
+<a id="quixstreams.sinks.community.file.destinations.base.Destination.set_directory"></a>
+
+<br><br>
+
+#### Destination.set\_directory
+
+```python
+def set_directory(directory: str) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/base.py#L43)
+
+Configure the base directory for storing files.
+
+
+<br>
+***Arguments:***
+
+- `directory`: The base directory path where files will be stored.
+
+**Raises**:
+
+- `ValueError`: If the directory path contains invalid characters.
+Only alphanumeric characters (a-zA-Z0-9), spaces, dots, slashes, and
+underscores are allowed.
+
+<a id="quixstreams.sinks.community.file.destinations.base.Destination.set_extension"></a>
+
+<br><br>
+
+#### Destination.set\_extension
+
+```python
+def set_extension(format: Format) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/base.py#L64)
+
+Set the file extension based on the format.
+
+
+<br>
+***Arguments:***
+
+- `format`: The Format instance that defines the file extension.
 
 <a id="quixstreams.sinks.community.file.destinations.local"></a>
 
@@ -914,7 +1048,7 @@ ones. Defaults to False.
 def set_extension(format: Format) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/local.py#L32)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/local.py#L35)
 
 Set the file extension and validate append mode compatibility.
 
@@ -939,7 +1073,7 @@ support appending.
 def write(data: bytes, batch: SinkBatch) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/local.py#L43)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/local.py#L46)
 
 Write data to a local file.
 
@@ -962,7 +1096,7 @@ Write data to a local file.
 class S3BucketNotFoundError(Exception)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/s3.py#L13)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/s3.py#L14)
 
 Raised when the specified S3 bucket does not exist.
 
@@ -974,7 +1108,7 @@ Raised when the specified S3 bucket does not exist.
 class S3BucketAccessDeniedError(Exception)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/s3.py#L17)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/s3.py#L18)
 
 Raised when the specified S3 bucket access is denied.
 
@@ -986,7 +1120,7 @@ Raised when the specified S3 bucket access is denied.
 class S3Destination(Destination)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/s3.py#L21)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/s3.py#L22)
 
 A destination that writes data to Amazon S3.
 
@@ -1006,10 +1140,11 @@ def __init__(bucket: str,
                  "AWS_SECRET_ACCESS_KEY"),
              region_name: Optional[str] = getenv("AWS_REGION",
                                                  getenv("AWS_DEFAULT_REGION")),
+             endpoint_url: Optional[str] = getenv("AWS_ENDPOINT_URL_S3"),
              **kwargs) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/s3.py#L28)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/s3.py#L29)
 
 Initialize the S3 destination.
 
@@ -1024,6 +1159,9 @@ environment variable.
 AWS_SECRET_ACCESS_KEY environment variable.
 - `region_name`: AWS region name. Defaults to AWS_REGION or
 AWS_DEFAULT_REGION environment variable.
+- `endpoint_url`: the endpoint URL to use; only required for connecting
+to a locally hosted S3.
+NOTE: can alternatively set the AWS_ENDPOINT_URL_S3 environment variable
 - `kwargs`: Additional keyword arguments passed to boto3.client.
 
 **Raises**:
@@ -1041,7 +1179,7 @@ AWS_DEFAULT_REGION environment variable.
 def write(data: bytes, batch: SinkBatch) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/s3.py#L78)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/s3.py#L89)
 
 Write data to S3.
 
@@ -1359,7 +1497,7 @@ The serialized batch as bytes in Parquet format.
 class PubSubTopicNotFoundError(Exception)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/pubsub.py#L25)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/pubsub.py#L30)
 
 Raised when the specified topic does not exist.
 
@@ -1371,7 +1509,7 @@ Raised when the specified topic does not exist.
 class PubSubSink(BaseSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/pubsub.py#L29)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/pubsub.py#L34)
 
 A sink that publishes messages to Google Cloud Pub/Sub.
 
@@ -1388,10 +1526,14 @@ def __init__(project_id: str,
              value_serializer: Callable[[Any], Union[bytes, str]] = json.dumps,
              key_serializer: Callable[[Any], str] = bytes.decode,
              flush_timeout: int = 5,
+             on_client_connect_success: Optional[
+                 ClientConnectSuccessCallback] = None,
+             on_client_connect_failure: Optional[
+                 ClientConnectFailureCallback] = None,
              **kwargs) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/pubsub.py#L32)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/pubsub.py#L37)
 
 Initialize the PubSubSink.
 
@@ -1410,6 +1552,12 @@ Default - `None`.
 (defaults to json.dumps).
 - `key_serializer`: Function to serialize the key to string
 (defaults to bytes.decode).
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
 - `kwargs`: Additional keyword arguments passed to PublisherClient.
 
 <a id="quixstreams.sinks.community.pubsub.PubSubSink.add"></a>
@@ -1423,7 +1571,7 @@ def add(value: Any, key: Any, timestamp: int, headers: HeadersTuples,
         topic: str, partition: int, offset: int) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/pubsub.py#L81)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/pubsub.py#L104)
 
 Publish a message to Pub/Sub.
 
@@ -1437,7 +1585,7 @@ Publish a message to Pub/Sub.
 def flush(topic: str, partition: int) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/pubsub.py#L114)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/pubsub.py#L137)
 
 Wait for all publish operations to complete successfully.
 
@@ -1453,7 +1601,7 @@ Wait for all publish operations to complete successfully.
 class PostgreSQLSink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/postgresql.py#L48)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/postgresql.py#L53)
 
 <a id="quixstreams.sinks.community.postgresql.PostgreSQLSink.__init__"></a>
 
@@ -1469,10 +1617,16 @@ def __init__(host: str,
              password: str,
              table_name: str,
              schema_auto_update: bool = True,
+             connection_timeout_seconds: int = 30,
+             statement_timeout_seconds: int = 30,
+             on_client_connect_success: Optional[
+                 ClientConnectSuccessCallback] = None,
+             on_client_connect_failure: Optional[
+                 ClientConnectFailureCallback] = None,
              **kwargs)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/postgresql.py#L49)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/postgresql.py#L54)
 
 A connector to sink topic data to PostgreSQL.
 
@@ -1487,7 +1641,15 @@ A connector to sink topic data to PostgreSQL.
 - `password`: Database user password.
 - `table_name`: PostgreSQL table name.
 - `schema_auto_update`: Automatically update the schema when new columns are detected.
-- `ddl_timeout`: Timeout for DDL operations such as table creation or schema updates.
+- `connection_timeout_seconds`: Timeout for connection.
+- `statement_timeout_seconds`: Timeout for DDL operations such as table
+creation or schema updates.
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
 - `kwargs`: Additional parameters for `psycopg2.connect`.
 
 <a id="quixstreams.sinks.community.kinesis"></a>
@@ -1502,7 +1664,7 @@ A connector to sink topic data to PostgreSQL.
 class KinesisStreamNotFoundError(Exception)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/kinesis.py#L23)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/kinesis.py#L28)
 
 Raised when the specified Kinesis stream does not exist.
 
@@ -1514,7 +1676,7 @@ Raised when the specified Kinesis stream does not exist.
 class KinesisSink(BaseSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/kinesis.py#L27)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/kinesis.py#L32)
 
 <a id="quixstreams.sinks.community.kinesis.KinesisSink.__init__"></a>
 
@@ -1523,18 +1685,23 @@ class KinesisSink(BaseSink)
 #### KinesisSink.\_\_init\_\_
 
 ```python
-def __init__(stream_name: str,
-             aws_access_key_id: Optional[str] = getenv("AWS_ACCESS_KEY_ID"),
-             aws_secret_access_key: Optional[str] = getenv(
-                 "AWS_SECRET_ACCESS_KEY"),
-             region_name: Optional[str] = getenv("AWS_REGION",
-                                                 getenv("AWS_DEFAULT_REGION")),
-             value_serializer: Callable[[Any], str] = json.dumps,
-             key_serializer: Callable[[Any], str] = bytes.decode,
-             **kwargs) -> None
+def __init__(
+        stream_name: str,
+        aws_access_key_id: Optional[str] = getenv("AWS_ACCESS_KEY_ID"),
+        aws_secret_access_key: Optional[str] = getenv("AWS_SECRET_ACCESS_KEY"),
+        region_name: Optional[str] = getenv("AWS_REGION",
+                                            getenv("AWS_DEFAULT_REGION")),
+        aws_endpoint_url: Optional[str] = getenv("AWS_ENDPOINT_URL_KINESIS"),
+        value_serializer: Callable[[Any], str] = json.dumps,
+        key_serializer: Callable[[Any], str] = bytes.decode,
+        on_client_connect_success: Optional[
+            ClientConnectSuccessCallback] = None,
+        on_client_connect_failure: Optional[
+            ClientConnectFailureCallback] = None,
+        **kwargs) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/kinesis.py#L28)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/kinesis.py#L33)
 
 Initialize the KinesisSink.
 
@@ -1551,6 +1718,12 @@ Initialize the KinesisSink.
 - `key_serializer`: Function to serialize the key to string
 (defaults to bytes.decode).
 - `kwargs`: Additional keyword arguments passed to boto3.client.
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
 
 <a id="quixstreams.sinks.community.kinesis.KinesisSink.add"></a>
 
@@ -1563,7 +1736,7 @@ def add(value: Any, key: Any, timestamp: int, headers: HeadersTuples,
         topic: str, partition: int, offset: int) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/kinesis.py#L80)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/kinesis.py#L103)
 
 Buffer a record for the Kinesis stream.
 
@@ -1581,7 +1754,7 @@ will be sent when the flush method is called.
 def flush(topic: str, partition: int) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/kinesis.py#L110)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/kinesis.py#L133)
 
 Flush all buffered records for a given topic-partition.
 
@@ -1602,7 +1775,7 @@ stream.
 class RedisSink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/redis.py#L21)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/redis.py#L26)
 
 <a id="quixstreams.sinks.community.redis.RedisSink.__init__"></a>
 
@@ -1619,10 +1792,14 @@ def __init__(host: str,
                                                                  str]]] = None,
              password: Optional[str] = None,
              socket_timeout: float = 30.0,
+             on_client_connect_success: Optional[
+                 ClientConnectSuccessCallback] = None,
+             on_client_connect_failure: Optional[
+                 ClientConnectFailureCallback] = None,
              **kwargs) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/redis.py#L22)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/redis.py#L27)
 
 A connector to sink processed data to Redis.
 
@@ -1642,6 +1819,12 @@ If not provided, the Kafka message key will be used as is.
 - `password`: Redis password, optional.
 - `socket_timeout`: Redis socket timeout.
 Default - 30s.
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
 - `kwargs`: Additional keyword arguments passed to the `redis.Redis` instance.
 
 <a id="quixstreams.sinks.community.neo4j"></a>
@@ -1656,7 +1839,7 @@ Default - 30s.
 class Neo4jSink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/neo4j.py#L30)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/neo4j.py#L32)
 
 <a id="quixstreams.sinks.community.neo4j.Neo4jSink.__init__"></a>
 
@@ -1674,7 +1857,7 @@ def __init__(host: str,
              **kwargs) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/neo4j.py#L31)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/neo4j.py#L33)
 
 A connector to sink processed data to Neo4j.
 
@@ -1758,19 +1941,20 @@ class MongoDBSink(BatchingSink)
 #### MongoDBSink.\_\_init\_\_
 
 ```python
-def __init__(
-    url: str,
-    db: str,
-    collection: str,
-    document_matcher: Callable[[SinkItem],
-                               MongoQueryFilter] = _default_document_matcher,
-    update_method: Literal["UpdateOne", "UpdateMany",
-                           "ReplaceOne"] = "UpdateOne",
-    upsert: bool = True,
-    add_message_metadata: bool = False,
-    add_topic_metadata: bool = False,
-    value_selector: Optional[Callable[[MongoValue],
-                                      MongoValue]] = None) -> None
+def __init__(url: str,
+             db: str,
+             collection: str,
+             document_matcher: Callable[
+                 [SinkItem], MongoQueryFilter] = _default_document_matcher,
+             update_method: Literal["UpdateOne", "UpdateMany",
+                                    "ReplaceOne"] = "UpdateOne",
+             upsert: bool = True,
+             add_message_metadata: bool = False,
+             add_topic_metadata: bool = False,
+             authentication_timeout_ms: int = 15000,
+             value_selector: Optional[Callable[[MongoValue],
+                                               MongoValue]] = None,
+             **kwargs) -> None
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/mongodb.py#L66)
@@ -1816,7 +2000,7 @@ exclude it here!
 def write(batch: SinkBatch) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/mongodb.py#L138)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/mongodb.py#L153)
 
 Note: Transactions could be an option here, but then each record requires a
 network call, and the transaction has size limits...so `bulk_write` is used
