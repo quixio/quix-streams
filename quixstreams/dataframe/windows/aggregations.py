@@ -1,16 +1,37 @@
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Generic, Optional, TypeVar
+from typing import Any, Callable, Generic, Iterable, Optional, TypeVar, Union
 
 
 class Aggregation(ABC):
-    @abstractmethod
-    def start(self) -> Any: ...
+    """
+    Base class for window aggregation.
+
+    Subclass it to implement custom aggregations.
+    """
 
     @abstractmethod
-    def agg(self, old: Any, new: Any) -> Any: ...
+    def start(self) -> Any:
+        """
+        This method is triggered when a new window is initialized.
+        It should return the initial value for the aggregation.
+        """
+        ...
 
     @abstractmethod
-    def result(self, value: Any) -> Any: ...
+    def agg(self, old: Any, new: Any) -> Any:
+        """
+        This method is trigged when a window is updated with a new value.
+        It should return the updated aggregated value.
+        """
+        ...
+
+    @abstractmethod
+    def result(self, value: Any) -> Any:
+        """
+        This method is triggered when a window is closed.
+        It should return the final aggregation result.
+        """
+        ...
 
 
 V = TypeVar("V", int, float)
@@ -46,7 +67,7 @@ class Mean(Aggregation):
         old_sum, old_count = old
         return old_sum + new, old_count + 1
 
-    def result(self, value: tuple[int | float, int]) -> float:
+    def result(self, value: tuple[Union[int, float], int]) -> float:
         sum_, count_ = value
         return sum_ / count_
 
@@ -99,17 +120,36 @@ class Min(Aggregation):
         return value
 
 
-class Collector(ABC):
-    @abstractmethod
-    def add(self, item: Any) -> Any: ...
+I = TypeVar("I")
+
+
+class Collector(ABC, Generic[I]):
+    """
+    Base class for window collections.
+
+    Subclass it to implement custom collections.
+    """
 
     @abstractmethod
-    def result(self, items: list[Any]) -> Any: ...
+    def add(self, item: Any) -> I:
+        """
+        This method is triggered when a new value is added to the collection.
+        It should return the individual value used by the collection.
+        """
+        ...
+
+    @abstractmethod
+    def result(self, items: Iterable[I]) -> Any:
+        """
+        This method is triggered when a window is closed.
+        It should return the final collection result.
+        """
+        ...
 
 
 class Collect(Collector):
     def add(self, item: Any) -> Any:
         return item
 
-    def result(self, items: list[Any]) -> list[Any]:
-        return items
+    def result(self, items: Iterable[Any]) -> list[Any]:
+        return list(items)
