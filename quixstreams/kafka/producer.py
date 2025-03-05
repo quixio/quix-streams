@@ -30,6 +30,9 @@ IGNORED_KAFKA_ERRORS = (
     KafkaError._DESTROY,  # noqa: SLF001
 )
 
+PRODUCER_POLL_TIMEOUT = 30.0
+PRODUCER_ON_ERROR_RETRIES = 10
+
 
 def _default_error_cb(error: KafkaError):
     error_code = error.code()
@@ -86,8 +89,8 @@ class Producer:
         headers: Optional[Headers] = None,
         partition: Optional[int] = None,
         timestamp: Optional[int] = None,
-        poll_timeout: float = 5.0,
-        buffer_error_max_tries: int = 3,
+        poll_timeout: float = PRODUCER_POLL_TIMEOUT,
+        buffer_error_max_tries: int = PRODUCER_ON_ERROR_RETRIES,
         on_delivery: Optional[DeliveryCallback] = None,
     ):
         """

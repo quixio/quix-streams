@@ -11,7 +11,12 @@ from quixstreams.exceptions import QuixException
 from .error_callbacks import ProducerErrorCallback, default_on_producer_error
 from .kafka.configuration import ConnectionConfig
 from .kafka.exceptions import KafkaProducerDeliveryError
-from .kafka.producer import Producer, TransactionalProducer
+from .kafka.producer import (
+    PRODUCER_ON_ERROR_RETRIES,
+    PRODUCER_POLL_TIMEOUT,
+    Producer,
+    TransactionalProducer,
+)
 from .models import Headers, Row, Topic
 
 logger = logging.getLogger(__name__)
@@ -180,8 +185,8 @@ class RowProducer:
         headers: Optional[Headers] = None,
         partition: Optional[int] = None,
         timestamp: Optional[int] = None,
-        poll_timeout: float = 5.0,
-        buffer_error_max_tries: int = 3,
+        poll_timeout: float = PRODUCER_POLL_TIMEOUT,
+        buffer_error_max_tries: int = PRODUCER_ON_ERROR_RETRIES,
     ):
         self._raise_for_error()
 
