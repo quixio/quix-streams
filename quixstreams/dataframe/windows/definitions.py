@@ -1,12 +1,12 @@
 import abc
 from abc import abstractmethod
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 from .aggregations import (
     ROOT,
-    Aggregator,
+    BaseAggregator,
+    BaseCollector,
     Collect,
-    Collector,
     Count,
     Max,
     Mean,
@@ -18,12 +18,33 @@ from .base import (
     Window,
     WindowOnLateCallback,
 )
-from .count_based import CountWindow
-from .sliding import SlidingWindow
-from .time_based import TimeWindow
+from .count_based import (
+    CountWindow,
+    CountWindowMultiAggregation,
+    CountWindowSingleAggregation,
+)
+from .sliding import (
+    SlidingWindow,
+    SlidingWindowMultiAggregation,
+    SlidingWindowSingleAggregation,
+)
+from .time_based import (
+    TimeWindow,
+    TimeWindowMultiAggregation,
+    TimeWindowSingleAggregation,
+)
 
 if TYPE_CHECKING:
     from quixstreams.dataframe.dataframe import StreamingDataFrame
+
+__all__ = [
+    "TumblingCountWindowDefinition",
+    "HoppingCountWindowDefinition",
+    "SlidingCountWindowDefinition",
+    "HoppingTimeWindowDefinition",
+    "SlidingTimeWindowDefinition",
+    "TumblingTimeWindowDefinition",
+]
 
 
 class WindowDefinition(abc.ABC):
@@ -42,9 +63,9 @@ class WindowDefinition(abc.ABC):
     @abstractmethod
     def _create_window(
         self,
-        func_name: str,
-        aggregators: Optional[dict[str, Aggregator]] = None,
-        collectors: Optional[dict[str, Collector]] = None,
+        func_name: Optional[str],
+        aggregators: Optional[dict[str, BaseAggregator]] = None,
+        collectors: Optional[dict[str, BaseCollector]] = None,
     ) -> Window: ...
 
     def sum(self) -> "Window":
@@ -182,6 +203,31 @@ class WindowDefinition(abc.ABC):
             collectors={"value": Collect(column=ROOT)},
         )
 
+    def agg(
+        self, **operations: dict[str, Union[BaseAggregator, BaseCollector]]
+    ) -> "Window":
+        if "start" in operations or "end" in operations:
+            raise ValueError("`start` and `end` are reserved keywords")
+
+        aggregators: dict[str, BaseAggregator] = {}
+        collectors: dict[str, BaseCollector] = {}
+
+        for column, op in operations.items():
+            if isinstance(op, BaseAggregator):
+                aggregators[column] = op
+            elif isinstance(op, BaseCollector):
+                collectors[column] = op
+            else:
+                raise TypeError(
+                    f"operation `{column}:{op}` must be a BaseAggregator or a BaseCollector"
+                )
+
+        return self._create_window(
+            func_name=None,
+            aggregators=aggregators,
+            collectors=collectors,
+        )
+
 
 class TimeWindowDefinition(WindowDefinition):
     def __init__(
@@ -244,17 +290,27 @@ class HoppingTimeWindowDefinition(TimeWindowDefinition):
             on_late=on_late,
         )
 
-    def _get_name(self, func_name: str) -> str:
+    def _get_name(self, func_name: Optional[str]) -> str:
         prefix = f"{self._name}_hopping_window" if self._name else "hopping_window"
-        return f"{prefix}_{self._duration_ms}_{self._step_ms}_{func_name}"
+        if func_name:
+            return f"{prefix}_{self._duration_ms}_{self._step_ms}_{func_name}"
+        else:
+            return f"{prefix}_{self._duration_ms}_{self._step_ms}"
 
     def _create_window(
         self,
-        func_name: str,
-        aggregators: Optional[dict[str, Aggregator]] = None,
-        collectors: Optional[dict[str, Collector]] = None,
+        func_name: Optional[str],
+        aggregators: Optional[dict[str, BaseAggregator]] = None,
+        collectors: Optional[dict[str, BaseCollector]] = None,
     ) -> TimeWindow:
-        return TimeWindow(
+        if func_name:
+            window_type: Union[
+                type[TimeWindowSingleAggregation], type[TimeWindowMultiAggregation]
+            ] = TimeWindowSingleAggregation
+        else:
+            window_type = TimeWindowMultiAggregation
+
+        return window_type(
             duration_ms=self._duration_ms,
             grace_ms=self._grace_ms,
             step_ms=self._step_ms,
@@ -283,17 +339,27 @@ class TumblingTimeWindowDefinition(TimeWindowDefinition):
             on_late=on_late,
         )
 
-    def _get_name(self, func_name: str) -> str:
+    def _get_name(self, func_name: Optional[str]) -> str:
         prefix = f"{self._name}_tumbling_window" if self._name else "tumbling_window"
-        return f"{prefix}_{self._duration_ms}_{func_name}"
+        if func_name:
+            return f"{prefix}_{self._duration_ms}_{func_name}"
+        else:
+            return f"{prefix}_{self._duration_ms}"
 
     def _create_window(
         self,
-        func_name: str,
-        aggregators: Optional[dict[str, Aggregator]] = None,
-        collectors: Optional[dict[str, Collector]] = None,
+        func_name: Optional[str],
+        aggregators: Optional[dict[str, BaseAggregator]] = None,
+        collectors: Optional[dict[str, BaseCollector]] = None,
     ) -> TimeWindow:
-        return TimeWindow(
+        if func_name:
+            window_type: Union[
+                type[TimeWindowSingleAggregation], type[TimeWindowMultiAggregation]
+            ] = TimeWindowSingleAggregation
+        else:
+            window_type = TimeWindowMultiAggregation
+
+        return window_type(
             duration_ms=self._duration_ms,
             grace_ms=self._grace_ms,
             name=self._get_name(func_name=func_name),
@@ -321,17 +387,28 @@ class SlidingTimeWindowDefinition(TimeWindowDefinition):
             on_late=on_late,
         )
 
-    def _get_name(self, func_name: str) -> str:
+    def _get_name(self, func_name: Optional[str]) -> str:
         prefix = f"{self._name}_sliding_window" if self._name else "sliding_window"
-        return f"{prefix}_{self._duration_ms}_{func_name}"
+        if func_name:
+            return f"{prefix}_{self._duration_ms}_{func_name}"
+        else:
+            return f"{prefix}_{self._duration_ms}"
 
     def _create_window(
         self,
-        func_name: str,
-        aggregators: Optional[dict[str, Aggregator]] = None,
-        collectors: Optional[dict[str, Collector]] = None,
+        func_name: Optional[str],
+        aggregators: Optional[dict[str, BaseAggregator]] = None,
+        collectors: Optional[dict[str, BaseCollector]] = None,
     ) -> SlidingWindow:
-        return SlidingWindow(
+        if func_name:
+            window_type: Union[
+                type[SlidingWindowSingleAggregation],
+                type[SlidingWindowMultiAggregation],
+            ] = SlidingWindowSingleAggregation
+        else:
+            window_type = SlidingWindowMultiAggregation
+
+        return window_type(
             duration_ms=self._duration_ms,
             grace_ms=self._grace_ms,
             name=self._get_name(func_name=func_name),
@@ -357,11 +434,18 @@ class CountWindowDefinition(WindowDefinition):
 class TumblingCountWindowDefinition(CountWindowDefinition):
     def _create_window(
         self,
-        func_name: str,
-        aggregators: Optional[dict[str, Aggregator]] = None,
-        collectors: Optional[dict[str, Collector]] = None,
-    ) -> Window:
-        return CountWindow(
+        func_name: Optional[str],
+        aggregators: Optional[dict[str, BaseAggregator]] = None,
+        collectors: Optional[dict[str, BaseCollector]] = None,
+    ) -> CountWindow:
+        if func_name:
+            window_type: Union[
+                type[CountWindowSingleAggregation], type[CountWindowMultiAggregation]
+            ] = CountWindowSingleAggregation
+        else:
+            window_type = CountWindowMultiAggregation
+
+        return window_type(
             name=self._get_name(func_name=func_name),
             count=self._count,
             aggregators=aggregators or {},
@@ -369,13 +453,16 @@ class TumblingCountWindowDefinition(CountWindowDefinition):
             dataframe=self._dataframe,
         )
 
-    def _get_name(self, func_name: str) -> str:
+    def _get_name(self, func_name: Optional[str]) -> str:
         prefix = (
             f"{self._name}_tumbling_count_window"
             if self._name
             else "tumbling_count_window"
         )
-        return f"{prefix}_{func_name}"
+        if func_name:
+            return f"{prefix}_{func_name}"
+        else:
+            return prefix
 
 
 class HoppingCountWindowDefinition(CountWindowDefinition):
@@ -395,11 +482,18 @@ class HoppingCountWindowDefinition(CountWindowDefinition):
 
     def _create_window(
         self,
-        func_name: str,
-        aggregators: Optional[dict[str, Aggregator]] = None,
-        collectors: Optional[dict[str, Collector]] = None,
-    ) -> Window:
-        return CountWindow(
+        func_name: Optional[str],
+        aggregators: Optional[dict[str, BaseAggregator]] = None,
+        collectors: Optional[dict[str, BaseCollector]] = None,
+    ) -> CountWindow:
+        if func_name:
+            window_type: Union[
+                type[CountWindowSingleAggregation], type[CountWindowMultiAggregation]
+            ] = CountWindowSingleAggregation
+        else:
+            window_type = CountWindowMultiAggregation
+
+        return window_type(
             name=self._get_name(func_name=func_name),
             count=self._count,
             aggregators=aggregators or {},
@@ -408,13 +502,15 @@ class HoppingCountWindowDefinition(CountWindowDefinition):
             step=self._step,
         )
 
-    def _get_name(self, func_name: str) -> str:
+    def _get_name(self, func_name: Optional[str]) -> str:
         prefix = (
             f"{self._name}_hopping_count_window"
             if self._name
             else "hopping_count_window"
         )
-        return f"{prefix}_{func_name}"
+        if func_name:
+            return f"{prefix}_{func_name}"
+        return prefix
 
 
 class SlidingCountWindowDefinition(HoppingCountWindowDefinition):
@@ -423,10 +519,12 @@ class SlidingCountWindowDefinition(HoppingCountWindowDefinition):
     ):
         super().__init__(count=count, dataframe=dataframe, step=1, name=name)
 
-    def _get_name(self, func_name: str) -> str:
+    def _get_name(self, func_name: Optional[str]) -> str:
         prefix = (
             f"{self._name}_sliding_count_window"
             if self._name
             else "sliding_count_window"
         )
-        return f"{prefix}_{func_name}"
+        if func_name:
+            return f"{prefix}_{func_name}"
+        return prefix
