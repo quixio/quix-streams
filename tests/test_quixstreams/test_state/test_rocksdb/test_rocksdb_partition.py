@@ -6,15 +6,11 @@ import pytest
 from rocksdict import Rdict
 
 from quixstreams.state.exceptions import ColumnFamilyDoesNotExist
-from quixstreams.state.metadata import (
-    CHANGELOG_CF_MESSAGE_HEADER,
-)
 from quixstreams.state.rocksdb import (
     ColumnFamilyAlreadyExists,
     RocksDBOptions,
     RocksDBStorePartition,
 )
-from tests.utils import ConfluentKafkaMessageStub
 
 
 class TestRocksdbStorePartition:
@@ -135,26 +131,3 @@ class TestRocksdbStorePartition:
 
     def test_ensure_metadata_cf(self, store_partition):
         assert store_partition.get_column_family("__metadata__")
-
-
-class TestRocksDBStorePartitionChangelog:
-    @pytest.mark.parametrize(
-        ("headers", "error"),
-        [
-            ([(CHANGELOG_CF_MESSAGE_HEADER, b"derp")], ColumnFamilyDoesNotExist),
-        ],
-    )
-    def test_recover_from_changelog_message_wrong_cf_headers(
-        self, store_partition, headers, error
-    ):
-        changelog_msg = ConfluentKafkaMessageStub(
-            key=b'my_key|"count"',
-            value=b"10",
-            headers=headers,
-            offset=50,
-        )
-        with pytest.raises(error):
-            store_partition.recover_from_changelog_message(
-                changelog_msg, committed_offset=-1001
-            )
-        assert store_partition.get_changelog_offset() is None

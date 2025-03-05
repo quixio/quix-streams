@@ -5,6 +5,7 @@ import os
 import signal
 import time
 import warnings
+from collections import defaultdict
 from pathlib import Path
 from typing import Callable, List, Literal, Optional, Protocol, Tuple, Type, Union
 
@@ -923,39 +924,25 @@ class Application:
             non_changelog_tps = [
                 tp for tp in topic_partitions if tp.topic in non_changelog_topics
             ]
+            committed_tps = self._consumer.committed(
+                partitions=non_changelog_tps, timeout=30
+            )
+            committed_offsets: dict[int, dict[str, int]] = defaultdict(dict)
+            for tp in committed_tps:
+                if tp.error:
+                    raise RuntimeError(
+                        f"Failed to get committed offsets for "
+                        f'"{tp.topic}[{tp.partition}]" from the broker: {tp.error}'
+                    )
+                committed_offsets[tp.partition][tp.topic] = tp.offset
+
             for tp in non_changelog_tps:
-                # Get the latest committed offset for the assigned topic partition
-                tp_committed = self._consumer.committed([tp], timeout=30)[0]
                 # Assign store partitions
-                store_partitions = self._state_manager.on_partition_assign(
+                self._state_manager.on_partition_assign(
                     topic=tp.topic,
                     partition=tp.partition,
-                    committed_offset=tp_committed.offset,
+                    committed_offsets=committed_offsets[tp.partition],
                 )
-
-                # Check if the latest committed offset >= stored offset
-                # Otherwise, the re-processed messages might use already updated
-                # state, which can lead to inconsistent outputs
-                stored_offsets = [
-                    offset
-                    for offset in (
-                        store_tp.get_processed_offset()
-                        for store_tp in store_partitions.values()
-                    )
-                    if offset is not None
-                ]
-                min_stored_offset = min(stored_offsets) + 1 if stored_offsets else None
-                if (
-                    min_stored_offset is not None
-                    and min_stored_offset > tp_committed.offset
-                ):
-                    logger.warning(
-                        f'Warning: offset "{tp_committed.offset}" '
-                        f"for topic partition "
-                        f'"{tp_committed.topic}[{tp_committed.partition}]" '
-                        f'is behind the stored offset "{min_stored_offset}". '
-                        f"It may lead to distortions in produced data."
-                    )
 
     def _on_revoke(self, _, topic_partitions: List[TopicPartition]):
         """

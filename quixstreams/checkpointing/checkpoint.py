@@ -199,7 +199,7 @@ class Checkpoint(BaseCheckpoint):
                     f'Detected a failed transaction for store "{store_name}", '
                     f"the checkpoint is aborted"
                 )
-            transaction.prepare(processed_offset=offset)
+            transaction.prepare(processed_offsets={topic: offset})
 
         # Step 2. Flush producer to trigger all delivery callbacks and ensure that
         # all messages are produced
@@ -299,6 +299,4 @@ class Checkpoint(BaseCheckpoint):
             changelog_offset = (
                 produced_offsets.get(changelog_tp) if changelog_tp is not None else None
             )
-            transaction.flush(
-                processed_offset=offset, changelog_offset=changelog_offset
-            )
+            transaction.flush(changelog_offset=changelog_offset)

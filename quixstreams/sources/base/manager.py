@@ -160,7 +160,7 @@ class SourceProcess(process):
         store_partitions = state_manager.on_partition_assign(
             topic=None,
             partition=source.assigned_store_partition,
-            committed_offset=OFFSET_BEGINNING,
+            committed_offsets={},
         )
 
         if state_manager.recovery_required:

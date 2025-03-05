@@ -1,5 +1,4 @@
 import contextlib
-import logging
 import os
 import time
 import uuid
@@ -1135,7 +1134,9 @@ class TestApplicationWithState:
             )
             state_manager.register_store(topic.name, "default")
             state_manager.on_partition_assign(
-                topic=topic.name, partition=partition_index, committed_offset=-1001
+                topic=topic.name,
+                partition=partition_index,
+                committed_offsets={topic.name: -1001},
             )
             store = state_manager.get_store(topic=topic.name, store_name="default")
             with store.start_partition_transaction(partition=partition_index) as tx:
@@ -1263,7 +1264,7 @@ class TestApplicationWithState:
         )
         state_manager.register_store(topic_in.name, "default")
         state_manager.on_partition_assign(
-            topic=topic_in.name, partition=0, committed_offset=-1001
+            topic=topic_in.name, partition=0, committed_offsets={topic_in.name: -1001}
         )
         store = state_manager.get_store(topic=topic_in.name, store_name="default")
         with store.start_partition_transaction(partition=0) as tx:
@@ -1372,7 +1373,9 @@ class TestApplicationWithState:
         with state_manager:
             state_manager.register_store(topic_in_name, "default")
             state_manager.on_partition_assign(
-                topic=topic_in_name, partition=0, committed_offset=-1001
+                topic=topic_in_name,
+                partition=0,
+                committed_offsets={topic_in_name: -1001},
             )
             store = state_manager.get_store(topic=topic_in_name, store_name="default")
             with store.start_partition_transaction(partition=0) as tx:
@@ -1386,7 +1389,9 @@ class TestApplicationWithState:
         with state_manager:
             state_manager.register_store(topic_in_name, "default")
             state_manager.on_partition_assign(
-                topic=topic_in_name, partition=0, committed_offset=-1001
+                topic=topic_in_name,
+                partition=0,
+                committed_offsets={topic_in_name: -1001},
             )
             store = state_manager.get_store(topic=topic_in_name, store_name="default")
             with store.start_partition_transaction(partition=0) as tx:
@@ -1399,67 +1404,6 @@ class TestApplicationWithState:
         """
         app = app_factory(use_changelog_topics=False)
         assert not app._state_manager.using_changelogs
-
-
-class TestApplicationWithRocksDBState:
-    def test_on_assign_topic_offset_behind_warning(
-        self,
-        app_factory,
-        executor,
-        state_manager_factory,
-        tmp_path,
-    ):
-        consumer_group = str(uuid.uuid4())
-        state_dir = (tmp_path / "state").absolute()
-        partition_num = 0
-        app = app_factory(
-            consumer_group=consumer_group,
-            auto_offset_reset="earliest",
-            state_dir=state_dir,
-        )
-
-        topic_in = app.topic(str(uuid.uuid4()), value_deserializer=JSONDeserializer())
-
-        # Set the store partition offset to 9999
-        state_manager = state_manager_factory(
-            group_id=consumer_group, state_dir=state_dir
-        )
-        with state_manager:
-            state_manager.register_store(topic_in.name, "default")
-            state_partitions = state_manager.on_partition_assign(
-                topic=topic_in.name, partition=partition_num, committed_offset=-1001
-            )
-            store = state_manager.get_store(topic_in.name, "default")
-            tx = store.start_partition_transaction(partition_num)
-            # Do some change to probe the Writebatch
-            tx.set("key", "value", prefix=b"__key__")
-            tx.flush(processed_offset=9999)
-            assert state_partitions["default"].get_processed_offset() == 9999
-
-        # Define some stateful function so the App assigns store partitions
-        done = Future()
-
-        sdf = app.dataframe(topic_in).update(
-            lambda *_: done.set_result(True), stateful=True
-        )
-
-        # Produce a message to the topic and flush
-        data = {
-            "key": b"key",
-            "value": dumps({"key": "value"}),
-            "partition": partition_num,
-        }
-        with app.get_producer() as producer:
-            producer.produce(topic_in.name, **data)
-
-        # Stop app when the future is resolved
-        executor.submit(_stop_app_on_future, app, done, 10.0)
-        # Run the application
-        with patch.object(logging.getLoggerClass(), "warning") as mock:
-            app.run(sdf)
-
-        assert mock.called
-        assert "is behind the stored offset" in mock.call_args[0][0]
 
 
 @pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
@@ -1534,7 +1478,9 @@ class TestApplicationRecovery:
                     state_manager.register_store(topic.name, store_name)
                     for p_num, count in partition_msg_count.items():
                         state_manager.on_partition_assign(
-                            topic=topic.name, partition=p_num, committed_offset=-1001
+                            topic=topic.name,
+                            partition=p_num,
+                            committed_offsets={topic.name: -1001},
                         )
                         store = state_manager.get_store(
                             topic=topic.name, store_name=store_name
@@ -1688,7 +1634,9 @@ class TestApplicationRecovery:
                 state_manager.register_windowed_store(topic.name, actual_store_name)
                 for p_num, windows in expected_window_updates.items():
                     state_manager.on_partition_assign(
-                        topic=topic.name, partition=p_num, committed_offset=-1001
+                        topic=topic.name,
+                        partition=p_num,
+                        committed_offsets={topic.name: -1001},
                     )
                     store = state_manager.get_store(
                         topic=topic.name, store_name=actual_store_name
@@ -1865,7 +1813,9 @@ class TestApplicationRecovery:
                     )[0].offset
                     state_manager.register_store(topic.name, store_name)
                     partition = state_manager.on_partition_assign(
-                        topic=topic.name, partition=0, committed_offset=committed_offset
+                        topic=topic.name,
+                        partition=0,
+                        committed_offsets={topic.name: committed_offset},
                     )["default"]
                     with partition.begin() as tx:
                         _validate_transaction_state(tx)
@@ -2568,7 +2518,9 @@ class TestApplicationMultipleSdf:
                 )
                 state_manager.register_store(topic.name, "default")
                 state_manager.on_partition_assign(
-                    topic=topic.name, partition=partition_num, committed_offset=-1001
+                    topic=topic.name,
+                    partition=partition_num,
+                    committed_offsets={topic.name: -1001},
                 )
                 store = state_manager.get_store(topic=topic.name, store_name="default")
                 with store.start_partition_transaction(partition=partition_num) as tx:
