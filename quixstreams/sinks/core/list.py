@@ -53,6 +53,9 @@ class ListSink(BaseSink, UserList):
         BaseSink.__init__(self)
         self._metadata = metadata
 
+    def setup(self):
+        return
+
     def add(
         self,
         value: Any,
