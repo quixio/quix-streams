@@ -24,7 +24,6 @@ class RunTracker:
         "_is_recovering",
         "_timeout",
         "_start_time",
-        "_topic_manager",
         "_primary_topics",
         "_repartition_topics",
         "_current_message_tp",
