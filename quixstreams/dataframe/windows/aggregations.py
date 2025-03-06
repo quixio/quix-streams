@@ -12,7 +12,7 @@ class Aggregation(ABC):
     @abstractmethod
     def start(self) -> Any:
         """
-        This method is triggered when a new window is initialized.
+        This method is triggered once to build the aggregation starting value.
         It should return the initial value for the aggregation.
         """
         ...

@@ -90,9 +90,7 @@ class CountWindow(Window):
                     count=0,
                     start=timestamp_ms,
                     end=timestamp_ms,
-                    value=msg_id
-                    if self._collect
-                    else self._aggregations["value"].start(),
+                    value=msg_id if self._collect else self._aggregate_default,
                 )
             )
         elif self._step is not None and data["windows"][0]["count"] % self._step == 0:
@@ -104,9 +102,7 @@ class CountWindow(Window):
                     count=0,
                     start=timestamp_ms,
                     end=timestamp_ms,
-                    value=msg_id
-                    if self._collect
-                    else self._aggregations["value"].start(),
+                    value=msg_id if self._collect else self._aggregate_default,
                 )
             )
 

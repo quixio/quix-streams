@@ -138,7 +138,7 @@ class TimeWindow(Window):
         duration_ms = self._duration_ms
         grace_ms = self._grace_ms
 
-        default = self._aggregations["value"].start() if self._aggregate else None
+        default = self._aggregate_default
         collect = self._collect
         aggregate = self._aggregate
 

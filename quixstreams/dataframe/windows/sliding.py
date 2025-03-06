@@ -78,7 +78,7 @@ class SlidingWindow(TimeWindow):
         duration = self._duration_ms
         grace = self._grace_ms
         aggregate = self._aggregations["value"].agg if self._aggregate else None
-        default = self._aggregations["value"].start() if self._aggregate else None
+        default = self._aggregate_default
         collect = self._collect
 
         # Sliding windows are inclusive on both ends, so values with
