@@ -8,7 +8,6 @@ from typing import (
 
 from confluent_kafka import TopicPartition
 
-from .models import TopicManager
 from .processing import ProcessingContext
 
 __all__ = ("RunTracker",)
@@ -18,7 +17,6 @@ logger = logging.getLogger(__name__)
 
 class RunTracker:
     __slots__ = (
-        "_is_first_run",
         "_processing_context",
         "running",
         "_stop_checker",
@@ -51,12 +49,13 @@ class RunTracker:
     last_consumed_tp: Optional[tuple]
     _max_count: int
     _current_count: int
+    _primary_topics: list[str]
+    _repartition_topics: list[str]
     _repartition_stop_points: dict[tuple, int]
 
     def __init__(
         self,
         processing_context: ProcessingContext,
-        topic_manager: TopicManager,
     ):
         """
         Tracks the runtime status of an Application, along with managing variables
@@ -65,13 +64,7 @@ class RunTracker:
         Though intended for debugging, it is designed to minimize impact on
           normal Application operation.
         """
-        self._is_first_run: bool = True
         self._processing_context = processing_context
-
-        # count specific attrs; 1 time setup
-        self._topic_manager = topic_manager
-        self._primary_topics: list[str] = []
-        self._repartition_topics: list[str] = []
 
         # Sets the resettable attributes, avoiding defining the same values twice.
         self.stop_and_reset()
@@ -80,9 +73,15 @@ class RunTracker:
     def _consumer(self):
         return self._processing_context.consumer
 
-    @property
-    def is_first_run(self) -> bool:
-        return self._is_first_run
+    def set_topics(self, primary: list[str], repartition: list[str]):
+        self._primary_topics = primary
+        self._repartition_topics = repartition
+
+    def set_as_running(self):
+        """
+        Called as part of Application.run() to initialize self.running.
+        """
+        self.running = True
 
     def update_status(self):
         """
@@ -93,18 +92,6 @@ class RunTracker:
             return False
         if self._stop_checker():
             self.stop_and_reset()
-
-    def start_runner(self):
-        """
-        Called as part of Application.run(), mostly to initialize self.running.
-        """
-        self.running = True
-        if self._is_first_run:
-            self._primary_topics = [t for t in self._topic_manager.topics]
-            self._repartition_topics = [
-                t for t in self._topic_manager.repartition_topics
-            ]
-            self._is_first_run = False
 
     def stop_and_reset(self):
         """
@@ -122,6 +109,8 @@ class RunTracker:
         self.last_consumed_tp = None
         self._max_count = 0
         self._current_count = 0
+        self._primary_topics = []
+        self._repartition_topics = []
         self._repartition_stop_points = {}
 
     def handle_rebalance(self, recovery_required: bool):

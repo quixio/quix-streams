@@ -29,7 +29,7 @@ class TestRunTracker:
         ],
     )
     def test_stop_condition_detected(self, caplog, conditions, should_have_stopper):
-        run_tracker = RunTracker(MagicMock(), MagicMock())
+        run_tracker = RunTracker(MagicMock())
         with caplog.at_level("INFO"):
             run_tracker.set_stop_condition(**conditions)
         condition_detected = "STOP CONDITION DETECTED" in caplog.text
