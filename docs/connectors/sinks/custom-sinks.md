@@ -11,61 +11,6 @@ The `StreamingDataFrame.sink()` accepts implementations of this class.
 Check out [InfluxDB3Sink](../../api-reference/sinks.md#influxdb3sink) and [CSVSink](../../api-reference/sinks.md#csvsink) for example implementations of the batching sinks.
 
 
-Here is the code for `BaseSink` class for the reference:
-
-```python
-import abc
-
-class BaseSink(abc.ABC):
-    """
-    This is a base class for all sinks.
-
-    Subclass and implement its methods to create your own sink.
-
-    Note that sinks are currently in beta, and their design may change over time.
-    """
-
-    @abc.abstractmethod
-    def flush(self, topic: str, partition: int):
-        """
-        This method is triggered by the Checkpoint class when it commits.
-
-        You can use `flush()` to write the batched data to the destination (in case of
-        a batching sink), or confirm the delivery of the previously sent messages
-        (in case of a streaming sink).
-
-        If flush() fails, the checkpoint will be aborted.
-        """
-
-    @abc.abstractmethod
-    def add(
-        self,
-        value: Any,
-        key: Any,
-        timestamp: int,
-        headers: List[Tuple[str, HeaderValue]],
-        topic: str,
-        partition: int,
-        offset: int,
-    ):
-        """
-        This method is triggered on every new record sent to this sink.
-
-        You can use it to accumulate batches of data before sending them outside, or
-        to send results right away in a streaming manner and confirm a delivery later
-        on flush().
-        """
-
-    def on_paused(self, topic: str, partition: int):
-        """
-        This method is triggered when the sink is paused due to backpressure, when
-        the `SinkBackpressureError` is raised.
-
-        Here you can react to backpressure events.
-        """
-```
-
-
 ## Sinks Workflow
 
 During processing, sinks do the following operations:
@@ -109,14 +54,23 @@ class MyDatabaseSink(BatchingSink):
     """
     Some sink writing data to a database
     """
+    def __init__(self, on_client_connect_success=None, on_client_connect_failure=None):
+        super().__init__(
+           on_client_connect_success=on_client_connect_success,
+           on_client_connect_failure=on_client_connect_failure
+        )
+        self._db_connection = None
+
+    def setup(self):
+        self._db_connection = my_database.connect('<connection credentials>')
+        self._db_connection.test()
 
     def write(self, batch: SinkBatch):
         # Simulate some DB connection here
-        db_connection = my_database.connect('<connection credentials>')
         data = [{'value': item.value} for item in batch]
         try:
             # Try to write data to the db
-            db_connection.write(data)
+            self._db_connection.write(data)
         except TimeoutError:
             # In case of timeout, tell the app to wait for 30s 
             # and retry the writing later
