@@ -50,6 +50,9 @@ class TemperatureGenerator(Source):
         }
         super().__init__(name="temperature-event-generator")
 
+    def setup(self):
+        return
+
     def update_machine_temp(self, machine_id):
         """
         Updates the temperature for a machine by -1, 0, or 1 based on its current temp.
