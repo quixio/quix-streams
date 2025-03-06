@@ -1,19 +1,28 @@
 import logging
 from typing import Any, Iterable, Optional, Protocol, Tuple
 
-from typing_extensions import TypeAlias
+from typing_extensions import TypeAlias, TypeVar, overload
 
 logger = logging.getLogger(__name__)
 
-WindowDetail: TypeAlias = tuple[tuple[int, int], Any, bytes]  # (start, end), value, key
+K = TypeVar("K", contravariant=True)
+V = TypeVar("V")
+
+WindowDetail: TypeAlias = tuple[tuple[int, int], V, bytes]  # (start, end), value, key
 
 
-class WindowedState(Protocol):
+class WindowedState(Protocol[K, V]):
     """
     A windowed state to be provided into `StreamingDataFrame` window functions.
     """
 
-    def get(self, key: Any, default: Any = None) -> Optional[Any]:
+    @overload
+    def get(self, key: K) -> Optional[V]: ...
+
+    @overload
+    def get(self, key: K, default: V) -> V: ...
+
+    def get(self, key: K, default: Optional[V] = None) -> Optional[V]:
         """
         Get the value for key if key is present in the state, else default
 
@@ -23,7 +32,7 @@ class WindowedState(Protocol):
         """
         ...
 
-    def set(self, key: Any, value: Any):
+    def set(self, key: K, value: V):
         """
         Set value for the key.
         :param key: key
@@ -31,7 +40,7 @@ class WindowedState(Protocol):
         """
         ...
 
-    def delete(self, key: Any):
+    def delete(self, key: K):
         """
         Delete value for the key.
 
@@ -40,7 +49,7 @@ class WindowedState(Protocol):
         """
         ...
 
-    def exists(self, key: Any) -> bool:
+    def exists(self, key: K) -> bool:
         """
         Check if the key exists in state.
         :param key: key
@@ -48,9 +57,15 @@ class WindowedState(Protocol):
         """
         ...
 
+    @overload
+    def get_window(self, start_ms: int, end_ms: int) -> Optional[V]: ...
+
+    @overload
+    def get_window(self, start_ms: int, end_ms: int, default: V) -> V: ...
+
     def get_window(
-        self, start_ms: int, end_ms: int, default: Any = None
-    ) -> Optional[Any]:
+        self, start_ms: int, end_ms: int, default: Optional[V] = None
+    ) -> Optional[V]:
         """
         Get the value of the window defined by `start` and `end` timestamps
         if the window is present in the state, else default
@@ -66,7 +81,7 @@ class WindowedState(Protocol):
         self,
         start_ms: int,
         end_ms: int,
-        value: Any,
+        value: V,
         timestamp_ms: int,
     ):
         """
@@ -82,7 +97,7 @@ class WindowedState(Protocol):
         """
         ...
 
-    def add_to_collection(self, value: Any, id: Optional[int]) -> int:
+    def add_to_collection(self, value: V, id: Optional[int]) -> int:
         """
         Collect a value for collection-type window aggregations.
 
@@ -97,7 +112,7 @@ class WindowedState(Protocol):
         """
         ...
 
-    def get_from_collection(self, start: int, end: int) -> list[Any]:
+    def get_from_collection(self, start: int, end: int) -> list[V]:
         """
         Return all values from a collection-type window aggregation.
 
@@ -137,7 +152,7 @@ class WindowedState(Protocol):
         delete: bool = True,
         collect: bool = False,
         end_inclusive: bool = False,
-    ) -> list[WindowDetail]:
+    ) -> list[WindowDetail[V]]:
         """
         Get all expired windows from RocksDB up to the specified `max_start_time` timestamp.
 
@@ -169,7 +184,7 @@ class WindowedState(Protocol):
 
     def get_windows(
         self, start_from_ms: int, start_to_ms: int, backwards: bool = False
-    ) -> list[WindowDetail]:
+    ) -> list[WindowDetail[V]]:
         """
         Get all windows that start between "start_from_ms" and "start_to_ms".
 
@@ -181,7 +196,7 @@ class WindowedState(Protocol):
         ...
 
 
-class WindowedPartitionTransaction(Protocol):
+class WindowedPartitionTransaction(Protocol[K, V]):
     @property
     def failed(self) -> bool:
         """
@@ -227,15 +242,15 @@ class WindowedPartitionTransaction(Protocol):
         :param processed_offset: the offset of the latest processed message
         """
 
-    def as_state(self, prefix: Any) -> WindowedState: ...
+    def as_state(self, prefix: Any) -> WindowedState[K, V]: ...
 
     def get_window(
         self,
         start_ms: int,
         end_ms: int,
         prefix: bytes,
-        default: Any = None,
-    ) -> Optional[Any]:
+        default: Optional[V] = None,
+    ) -> Optional[V]:
         """
         Get the value of the window defined by `start` and `end` timestamps
         if the window is present in the state, else default
@@ -249,7 +264,7 @@ class WindowedPartitionTransaction(Protocol):
         ...
 
     def update_window(
-        self, start_ms: int, end_ms: int, value: Any, timestamp_ms: int, prefix: bytes
+        self, start_ms: int, end_ms: int, value: V, timestamp_ms: int, prefix: bytes
     ):
         """
         Set a value for the window.
@@ -265,7 +280,7 @@ class WindowedPartitionTransaction(Protocol):
         """
         ...
 
-    def add_to_collection(self, value: Any, id: Optional[int]) -> int:
+    def add_to_collection(self, value: V, id: Optional[int]) -> int:
         """
         Collect a value for collection-type window aggregations.
 
@@ -280,7 +295,7 @@ class WindowedPartitionTransaction(Protocol):
         """
         ...
 
-    def get_from_collection(self, start: int, end: int) -> list[Any]:
+    def get_from_collection(self, start: int, end: int) -> list[V]:
         """
         Return all values from a collection-type window aggregation.
 
@@ -334,7 +349,7 @@ class WindowedPartitionTransaction(Protocol):
         delete: bool = True,
         collect: bool = False,
         end_inclusive: bool = False,
-    ) -> list[WindowDetail]:
+    ) -> list[WindowDetail[V]]:
         """
         Get all expired windows with a set prefix from RocksDB up to the specified `max_start_time` timestamp.
 
@@ -357,7 +372,7 @@ class WindowedPartitionTransaction(Protocol):
         step_ms: int,
         delete: bool = True,
         collect: bool = False,
-    ) -> Iterable[WindowDetail]:
+    ) -> Iterable[WindowDetail[V]]:
         """
         Get all expired windows for all prefix from RocksDB up to the specified `max_start_time` timestamp.
 
@@ -393,7 +408,7 @@ class WindowedPartitionTransaction(Protocol):
         start_to_ms: int,
         prefix: bytes,
         backwards: bool = False,
-    ) -> list[WindowDetail]:
+    ) -> list[WindowDetail[V]]:
         """
         Get all windows that start between "start_from_ms" and "start_to_ms"
         within the specified prefix.

@@ -7,10 +7,13 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Dict,
+    Generic,
     Optional,
     Set,
     Tuple,
+    TypeVar,
     Union,
+    overload,
 )
 
 from quixstreams.models import Headers
@@ -179,7 +182,11 @@ def validate_transaction_status(*allowed: PartitionTransactionStatus):
     return wrapper
 
 
-class PartitionTransaction(ABC):
+K = TypeVar("K")
+V = TypeVar("V")
+
+
+class PartitionTransaction(ABC, Generic[K, V]):
     """
     A transaction class to perform simple key-value operations like
     "get", "set", "delete" and "exists" on a single storage partition.
@@ -257,18 +264,18 @@ class PartitionTransaction(ABC):
             self.changelog_producer.partition,
         )
 
-    def _serialize_value(self, value: Any) -> bytes:
+    def _serialize_value(self, value: V) -> bytes:
         return serialize(value, dumps=self._dumps)
 
-    def _deserialize_value(self, value: bytes) -> Any:
+    def _deserialize_value(self, value: bytes) -> V:
         return deserialize(value, loads=self._loads)
 
-    def _serialize_key(self, key: Any, prefix: bytes) -> bytes:
+    def _serialize_key(self, key: K, prefix: bytes) -> bytes:
         key_bytes = serialize(key, dumps=self._dumps)
         prefix = prefix + SEPARATOR if prefix else b""
         return prefix + key_bytes
 
-    def as_state(self, prefix: Any = DEFAULT_PREFIX) -> State:
+    def as_state(self, prefix: Any = DEFAULT_PREFIX) -> State[K, V]:
         """
         Create an instance implementing the `State` protocol to be provided
         to `StreamingDataFrame` functions.
@@ -286,14 +293,20 @@ class PartitionTransaction(ABC):
             ),
         )
 
+    @overload
+    def get(self, key: K, prefix: bytes, cf_name: str = "default") -> Optional[V]: ...
+
+    @overload
+    def get(self, key: K, prefix: bytes, default: V, cf_name: str = "default") -> V: ...
+
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
     def get(
         self,
-        key: Any,
+        key: K,
         prefix: bytes,
-        default: Any = None,
+        default: Optional[V] = None,
         cf_name: str = "default",
-    ) -> Any:
+    ) -> Optional[V]:
         """
         Get a key from the store.
 
@@ -323,7 +336,7 @@ class PartitionTransaction(ABC):
         return self._deserialize_value(stored)
 
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
-    def set(self, key: Any, value: Any, prefix: bytes, cf_name: str = "default"):
+    def set(self, key: K, value: V, prefix: bytes, cf_name: str = "default"):
         """
         Set value for the key.
         :param key: key
@@ -346,7 +359,7 @@ class PartitionTransaction(ABC):
             raise
 
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
-    def delete(self, key: Any, prefix: bytes, cf_name: str = "default"):
+    def delete(self, key: K, prefix: bytes, cf_name: str = "default"):
         """
         Delete value for the key.
 
@@ -365,7 +378,7 @@ class PartitionTransaction(ABC):
             raise
 
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
-    def exists(self, key: Any, prefix: bytes, cf_name: str = "default") -> bool:
+    def exists(self, key: K, prefix: bytes, cf_name: str = "default") -> bool:
         """
         Check if the key exists in state.
         :param key: key

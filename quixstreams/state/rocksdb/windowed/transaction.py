@@ -358,13 +358,14 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
                     prefix, start, end = parse_window_key(key)
                     to_delete.add((prefix, start, end))
                     if collect:
-                        value = self.get_from_collection(
+                        value: Any = self.get_from_collection(
                             start=start,
                             end=end,
                             prefix=prefix,
                         )
                     else:
                         value = self.get(encode_integer_pair(start, end), prefix=prefix)
+                        assert value is not None  # noqa: S101
 
                     yield (start, end), value, prefix
         else:
@@ -385,6 +386,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
                         )
                     else:
                         value = self.get(encode_integer_pair(start, end), prefix=prefix)
+                        assert value is not None  # noqa: S101
 
                     yield (start, end), value, prefix
 
@@ -603,14 +605,15 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         :return: Next sequential counter value
         """
         cache = self._global_counter
-        kwargs = {"key": cache.key, "prefix": b"", "cf_name": cache.cf_name}
 
         if cache.counter is None:
-            cache.counter = self.get(default=-1, **kwargs)
+            cache.counter = self.get(
+                default=-1, key=cache.key, prefix=b"", cf_name=cache.cf_name
+            )
 
         cache.counter += 1
 
-        self.set(value=cache.counter, **kwargs)
+        self.set(value=cache.counter, key=cache.key, prefix=b"", cf_name=cache.cf_name)
         return cache.counter
 
 

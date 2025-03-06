@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Generic, Optional, TypeVar, overload
 
 if TYPE_CHECKING:
     from .transaction import PartitionTransaction
@@ -10,13 +10,23 @@ __all__ = ("State", "TransactionState")
 logger = logging.getLogger(__name__)
 
 
-class State(ABC):
+K = TypeVar("K")
+V = TypeVar("V")
+
+
+class State(ABC, Generic[K, V]):
     """
     Primary interface for working with key-value state data from `StreamingDataFrame`
     """
 
+    @overload
+    def get(self, key: K) -> Optional[V]: ...
+
+    @overload
+    def get(self, key: K, default: V) -> V: ...
+
     @abstractmethod
-    def get(self, key: Any, default: Any = None) -> Optional[Any]:
+    def get(self, key: K, default: Optional[V] = None) -> Optional[V]:
         """
         Get the value for key if key is present in the state, else default
 
@@ -27,7 +37,7 @@ class State(ABC):
         ...
 
     @abstractmethod
-    def set(self, key: Any, value: Any):
+    def set(self, key: K, value: V):
         """
         Set value for the key.
         :param key: key
@@ -36,7 +46,7 @@ class State(ABC):
         ...
 
     @abstractmethod
-    def delete(self, key: Any):
+    def delete(self, key: K):
         """
         Delete value for the key.
 
@@ -46,7 +56,7 @@ class State(ABC):
         ...
 
     @abstractmethod
-    def exists(self, key: Any) -> bool:
+    def exists(self, key: K) -> bool:
         """
         Check if the key exists in state.
         :param key: key
@@ -70,7 +80,13 @@ class TransactionState(State):
         self._prefix = prefix
         self._transaction = transaction
 
-    def get(self, key: Any, default: Any = None) -> Optional[Any]:
+    @overload
+    def get(self, key: K) -> Optional[V]: ...
+
+    @overload
+    def get(self, key: K, default: V) -> V: ...
+
+    def get(self, key: K, default: Optional[V] = None) -> Optional[V]:
         """
         Get the value for key if key is present in the state, else default
 
@@ -80,7 +96,7 @@ class TransactionState(State):
         """
         return self._transaction.get(key=key, prefix=self._prefix, default=default)
 
-    def set(self, key: Any, value: Any):
+    def set(self, key: K, value: V):
         """
         Set value for the key.
         :param key: key
@@ -88,7 +104,7 @@ class TransactionState(State):
         """
         return self._transaction.set(key=key, value=value, prefix=self._prefix)
 
-    def delete(self, key: Any):
+    def delete(self, key: K):
         """
         Delete value for the key.
 
@@ -97,7 +113,7 @@ class TransactionState(State):
         """
         return self._transaction.delete(key=key, prefix=self._prefix)
 
-    def exists(self, key: Any) -> bool:
+    def exists(self, key: K) -> bool:
         """
         Check if the key exists in state.
         :param key: key
