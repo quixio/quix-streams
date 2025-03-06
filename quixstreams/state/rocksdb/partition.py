@@ -72,11 +72,7 @@ class RocksDBStorePartition(StorePartition):
             batch.put(key, value, cf_handle)
 
         # Update the changelog offset and flush outstanding writes.
-        batch.put(
-            CHANGELOG_OFFSET_KEY,
-            int_to_int64_bytes(offset),
-            self.get_column_family_handle(METADATA_CF_NAME),
-        )
+        self._update_changelog_offset(batch=batch, offset=offset)
         self._write(batch)
 
     def write(
