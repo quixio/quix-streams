@@ -58,7 +58,7 @@ class CountWindow(Window):
         value: Any,
         key: Any,
         timestamp_ms: int,
-        transaction: WindowedPartitionTransaction,
+        transaction: WindowedPartitionTransaction[str, CountWindowsData],
     ) -> tuple[Iterable[WindowKeyResult], Iterable[WindowKeyResult]]:
         """
         Count based windows are different from time based windows as we don't
@@ -81,9 +81,7 @@ class CountWindow(Window):
         optimisation. Instead the msg id reset to 0 on every new window.
         """
         state = transaction.as_state(prefix=key)
-        data = state.get(key=self.STATE_KEY)
-        if data is None:
-            data = CountWindowsData(windows=[])
+        data = state.get(key=self.STATE_KEY, default=CountWindowsData(windows=[]))
 
         msg_id = None
         if len(data["windows"]) == 0:
