@@ -17,8 +17,8 @@ logger = logging.getLogger(__name__)
 
 class RunTracker:
     __slots__ = (
-        "_processing_context",
         "running",
+        "_processing_context",
         "_stop_checker",
         "_needs_assigning",
         "_is_recovering",
@@ -27,7 +27,7 @@ class RunTracker:
         "_topic_manager",
         "_primary_topics",
         "_repartition_topics",
-        "last_consumed_tp",
+        "_current_message_tp",
         "_max_count",
         "_current_count",
         "_repartition_stop_points",
@@ -46,7 +46,7 @@ class RunTracker:
     _is_recovering: bool
 
     # count-specific attrs
-    last_consumed_tp: Optional[tuple]
+    _current_message_tp: Optional[tuple[str, int]]
     _max_count: int
     _current_count: int
     _primary_topics: list[str]
@@ -83,6 +83,9 @@ class RunTracker:
         """
         self.running = True
 
+    def set_current_message_tp(self, tp: Optional[tuple[str, int]]):
+        self._current_message_tp = tp
+
     def update_status(self):
         """
         Trigger stop if any conditions are met.
@@ -106,7 +109,7 @@ class RunTracker:
         self._needs_assigning = True
         self._is_recovering = False
 
-        self.last_consumed_tp = None
+        self._current_message_tp = None
         self._max_count = 0
         self._current_count = 0
         self._primary_topics = []
@@ -176,9 +179,9 @@ class RunTracker:
         return False
 
     def _at_count(self) -> bool:
-        if self.last_consumed_tp:
+        if self._current_message_tp:
             # add to count only if message is from a non-repartition topic
-            if self.last_consumed_tp[0] in self._primary_topics:
+            if self._current_message_tp[0] in self._primary_topics:
                 self._current_count += 1
                 if (self._max_count - self._current_count) <= 0:
                     logger.info(f"Count of {self._max_count} records reached!")
@@ -209,8 +212,8 @@ class RunTracker:
         Confirms repartitions are at their watermarks as those messages are consumed.
         Empty consumer polls will cause a check on all of them.
         """
-        if self.last_consumed_tp:
-            tps = [self.last_consumed_tp]
+        if self._current_message_tp:
+            tps = [self._current_message_tp]
         else:
             tps = list(self._repartition_stop_points.keys())
         for tp in tps:
