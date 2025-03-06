@@ -78,7 +78,7 @@ class CountWindow(Window):
         optimisation. Instead the msg id reset to 0 on every new window.
         """
         state = transaction.as_state(prefix=key)
-        data = state.get(key=self.STATE_KEY)
+        data = state.get(key=self.STATE_KEY, default=None)
         if data is None:
             data = CountWindowsData(windows=[])
 

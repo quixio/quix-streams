@@ -7,10 +7,13 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Dict,
+    Generic,
     Optional,
     Set,
     Tuple,
+    TypeVar,
     Union,
+    overload,
 )
 
 from quixstreams.models import Headers
@@ -179,7 +182,10 @@ def validate_transaction_status(*allowed: PartitionTransactionStatus):
     return wrapper
 
 
-class PartitionTransaction(ABC):
+V = TypeVar("V")
+
+
+class PartitionTransaction(ABC, Generic[V]):
     """
     A transaction class to perform simple key-value operations like
     "get", "set", "delete" and "exists" on a single storage partition.
@@ -257,10 +263,10 @@ class PartitionTransaction(ABC):
             self.changelog_producer.partition,
         )
 
-    def _serialize_value(self, value: Any) -> bytes:
+    def _serialize_value(self, value: V) -> bytes:
         return serialize(value, dumps=self._dumps)
 
-    def _deserialize_value(self, value: bytes) -> Any:
+    def _deserialize_value(self, value: bytes) -> V:
         return deserialize(value, loads=self._loads)
 
     def _serialize_key(self, key: Any, prefix: bytes) -> bytes:
@@ -286,14 +292,27 @@ class PartitionTransaction(ABC):
             ),
         )
 
+    @overload
+    def get(
+        self, key: Any, prefix: bytes, default: V, cf_name: str = "default"
+    ) -> V: ...
+
+    @overload
+    def get(
+        self,
+        key: Any,
+        prefix: bytes,
+        cf_name: str = "default",
+    ) -> Optional[V]: ...
+
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
     def get(
         self,
         key: Any,
         prefix: bytes,
-        default: Any = None,
+        default: Optional[V] = None,
         cf_name: str = "default",
-    ) -> Any:
+    ) -> Optional[V]:
         """
         Get a key from the store.
 
@@ -323,7 +342,7 @@ class PartitionTransaction(ABC):
         return self._deserialize_value(stored)
 
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
-    def set(self, key: Any, value: Any, prefix: bytes, cf_name: str = "default"):
+    def set(self, key: Any, value: V, prefix: bytes, cf_name: str = "default"):
         """
         Set value for the key.
         :param key: key

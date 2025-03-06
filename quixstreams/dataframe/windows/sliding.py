@@ -264,25 +264,11 @@ class SlidingWindow(TimeWindow):
                 value=self._collectors["value"].add(value), id=timestamp_ms
             )
 
-        expired_windows = [
-            (
-                key,
-                WindowResult(
-                    start=start,
-                    end=end,
-                    value=self._collectors["value"].result(aggregation)
-                    if collect
-                    else self._aggregations["value"].result(aggregation),
-                ),
+        expired_windows = list(
+            self._expire_windows(
+                state, max_timestamp, max_expired_window_start, collect
             )
-            for (start, end), (max_timestamp, aggregation), _ in state.expire_windows(
-                max_start_time=max_expired_window_start,
-                delete=False,
-                collect=collect,
-                end_inclusive=True,
-            )
-            if end == max_timestamp  # Emit only left windows
-        ]
+        )
 
         state.delete_windows(
             max_start_time=max_deleted_window_start,
@@ -293,6 +279,32 @@ class SlidingWindow(TimeWindow):
             return [], expired_windows
         else:
             return reversed(updated_windows), expired_windows
+
+    def _expire_windows(
+        self,
+        state: WindowedState,
+        max_timestamp: int,
+        max_expired_window_start: int,
+        collect: bool,
+    ) -> Iterable[WindowKeyResult]:
+        for (start, end), (
+            max_timestamp,
+            aggregated,
+        ), collected, key in state.expire_windows(
+            max_start_time=max_expired_window_start,
+            delete=False,
+        ):
+            if end == max_timestamp:
+                yield (
+                    key,
+                    WindowResult(
+                        start=start,
+                        end=end,
+                        value=self._collectors["value"].result(collected)
+                        if collect
+                        else self._aggregations["value"].result(aggregated),
+                    ),
+                )
 
     def _update_window(
         self,

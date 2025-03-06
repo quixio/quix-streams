@@ -11,7 +11,6 @@ from .base import (
     Window,
     WindowKeyResult,
     WindowOnLateCallback,
-    WindowResult,
     get_window_ranges,
 )
 
@@ -132,15 +131,13 @@ class TimeWindow(Window):
         value: Any,
         key: Any,
         timestamp_ms: int,
-        transaction: WindowedPartitionTransaction,
+        transaction: WindowedPartitionTransaction[dict[str, Any]],
     ) -> tuple[Iterable[WindowKeyResult], Iterable[WindowKeyResult]]:
-        state = transaction.as_state(prefix=key)
+        state: WindowedState[Any, dict[str, Any]] = transaction.as_state(prefix=key)
         duration_ms = self._duration_ms
         grace_ms = self._grace_ms
 
-        default = self._aggregations["value"].start() if self._aggregate else None
         collect = self._collect
-        aggregate = self._aggregate
 
         ranges = get_window_ranges(
             timestamp_ms=timestamp_ms,
@@ -174,25 +171,21 @@ class TimeWindow(Window):
             # When collecting values, we only mark the window existence with None
             # since actual values are stored separately and combined into an array
             # during window expiration.
-            aggregated = None
-            if aggregate:
-                current_value = state.get_window(start, end, default=default)
-                aggregated = self._aggregations["value"].agg(current_value, value)
-                updated_windows.append(
-                    (
-                        key,
-                        WindowResult(
-                            start=start,
-                            end=end,
-                            value=self._aggregations["value"].result(aggregated),
-                        ),
-                    )
-                )
+            aggregated = {}
+            if self._aggregate:
+                aggregated = state.get_window(start, end, default=self._default)
+                for k, agg in self._aggregations.items():
+                    aggregated[k] = agg.agg(aggregated[k], value)
+
+                result = self._result(aggregated, None, start, end)
+                updated_windows.append((key, result))
+
             state.update_window(start, end, value=aggregated, timestamp_ms=timestamp_ms)
 
         if collect:
             state.add_to_collection(
-                value=self._collectors["value"].add(value), id=timestamp_ms
+                id=timestamp_ms,
+                value={k: col.add(value) for k, col in self._collectors.items()},
             )
 
         if self._closing_strategy == ClosingStrategy.PARTITION:
@@ -206,9 +199,28 @@ class TimeWindow(Window):
 
         return updated_windows, expired_windows
 
+    def _result(
+        self,
+        aggregated: dict[str, Any],
+        collected: Optional[list[dict[str, Any]]],
+        start: int,
+        end: int,
+    ) -> dict[str, Any]:
+        result = {k: agg.result(aggregated[k]) for k, agg in self._aggregations.items()}
+        if collected:
+            values: dict[str, list[Any]] = {
+                k: [c[k] for c in collected] for k in collected[-1]
+            }
+            for k, col in self._collectors.items():
+                result[k] = col.result(values[k])
+
+        result["start"] = start
+        result["end"] = end
+        return result
+
     def expire_by_partition(
         self,
-        transaction: WindowedPartitionTransaction,
+        transaction: WindowedPartitionTransaction[dict[str, Any]],
         max_expired_end: int,
         collect: bool,
     ) -> Iterable[WindowKeyResult]:
@@ -218,26 +230,15 @@ class TimeWindow(Window):
         for (
             window_start,
             window_end,
-        ), aggregated, key in transaction.expire_all_windows(
+        ), aggregated, collected, key in transaction.expire_all_windows(
             max_end_time=max_expired_end,
             step_ms=self._step_ms if self._step_ms else self._duration_ms,
             collect=collect,
             delete=True,
         ):
-            if collect:
-                value = self._collectors["value"].result(aggregated)
-            else:
-                value = self._aggregations["value"].result(aggregated)
-
             count += 1
-            yield (
-                key,
-                WindowResult(
-                    start=window_start,
-                    end=window_end,
-                    value=value,
-                ),
-            )
+            result = self._result(aggregated, collected, window_start, window_end)
+            yield (key, result)
 
         if count:
             logger.debug(
@@ -247,30 +248,23 @@ class TimeWindow(Window):
     def expire_by_key(
         self,
         key: bytes,
-        state: WindowedState,
+        state: WindowedState[Any, dict[str, Any]],
         max_expired_start: int,
         collect: bool,
     ) -> Iterable[WindowKeyResult]:
         start = time.monotonic()
         count = 0
 
-        for (window_start, window_end), aggregated, _ in state.expire_windows(
+        for (
+            window_start,
+            window_end,
+        ), aggregated, collected, _ in state.expire_windows(
             max_start_time=max_expired_start,
             collect=collect,
         ):
-            if collect:
-                value = self._collectors["value"].result(aggregated)
-            else:
-                value = self._aggregations["value"].result(aggregated)
-
-            yield (
-                key,
-                WindowResult(
-                    start=window_start,
-                    end=window_end,
-                    value=value,
-                ),
-            )
+            count += 1
+            result = self._result(aggregated, collected, window_start, window_end)
+            yield (key, result)
 
         if count:
             logger.debug(

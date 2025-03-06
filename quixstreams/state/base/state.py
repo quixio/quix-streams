@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Generic, Optional, TypeVar
 
 if TYPE_CHECKING:
     from .transaction import PartitionTransaction
@@ -10,13 +10,16 @@ __all__ = ("State", "TransactionState")
 logger = logging.getLogger(__name__)
 
 
-class State(ABC):
+V = TypeVar("V")
+
+
+class State(ABC, Generic[V]):
     """
     Primary interface for working with key-value state data from `StreamingDataFrame`
     """
 
     @abstractmethod
-    def get(self, key: Any, default: Any = None) -> Optional[Any]:
+    def get(self, key: Any, default: V) -> V:
         """
         Get the value for key if key is present in the state, else default
 
@@ -27,7 +30,7 @@ class State(ABC):
         ...
 
     @abstractmethod
-    def set(self, key: Any, value: Any):
+    def set(self, key: Any, value: V):
         """
         Set value for the key.
         :param key: key

@@ -11,7 +11,6 @@ from typing import (
     Iterable,
     Optional,
     Protocol,
-    TypedDict,
     cast,
 )
 
@@ -30,12 +29,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class WindowResult(TypedDict):
-    start: int
-    end: int
-    value: Any
-
-
+WindowResult: TypeAlias = dict[str, Any]
 WindowKeyResult: TypeAlias = tuple[Any, WindowResult]
 Message: TypeAlias = tuple[WindowResult, Any, int, Any]
 
@@ -63,6 +57,9 @@ class Window(abc.ABC):
 
         self._aggregations = aggregations
         self._aggregate = len(aggregations) > 0
+        self._default: dict[str, Any] = {
+            k: agg.start() for k, agg in self._aggregations.items()
+        }
 
         self._collectors = collectors
         self._collect = len(collectors) > 0
