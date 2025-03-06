@@ -10,7 +10,13 @@ Quix Streams also provides a set of classes to help users implement custom sourc
 
 The recommended parent class to create a new source. It handles configuring, starting and stopping the source, as well as implementing a series of helpers.
 
-To get started, implement the [`run`](../../api-reference/sources.md#sourcerun) method and return when `self.running` is `False`.
+To get started, implement the [`run`](../../api-reference/sources.md#sourcerun) method 
+which loops while `self.running` is `True` (or until it's done).
+
+When you also have a client pattern, it is recommended to use the required `setup` 
+method to establish the initial connection/authentication so that the built-in callbacks 
+of `on_client_connect_success` and `on_client_connect_failure` can be utilized. 
+Otherwise, just set it to return.
 
 Example subclass:
 
@@ -18,6 +24,9 @@ Example subclass:
 from quixstreams.sources.base import Source
 
 class MySource(Source):
+    def setup(self):
+        return
+    
     def run(self):
         with open("file.txt", "r") as f:
             while self.running:

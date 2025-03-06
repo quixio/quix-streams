@@ -123,3 +123,13 @@ sdf.sink(influx_sink)
 if __name__ == '__main__':
     app.run()
 ```
+
+## Connection Callbacks
+
+Assuming a given connector is set up to utilize them, there are two callbacks that can 
+be set for when a client connects/authenticates successfully or not, named 
+`on_client_connect_success` and `on_client_connect_failure`, respectfully.
+
+Though having a `setup` method is required, it is not guaranteed that it is implemented or
+utilized fully with `community` sinks; you can inspect a given Sink's `setup` method 
+to confirm whether it tests the client connection there (and that the callbacks are then applicable).

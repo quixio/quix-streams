@@ -27,6 +27,9 @@ class ReviewGenerator(Source):
     def __init__(self):
         super().__init__(name="customer-reviews")
 
+    def setup(self):
+        return
+
     def run(self):
         for review in self._review_list:
             event = self.serialize(key=choice(self._product_list), value=review)
