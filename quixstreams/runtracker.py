@@ -22,7 +22,7 @@ class RunTracker:
         "_processing_context",
         "running",
         "_stop_checker",
-        "_has_stop_checker",
+        "_has_stop_condition",
         "_needs_assigning",
         "_is_recovering",
         "_timeout",
@@ -32,7 +32,7 @@ class RunTracker:
         "_repartition_topics",
         "last_consumed_tp",
         "_max_count",
-        "_count",
+        "_current_count",
         "_repartition_stop_points",
     )
 
@@ -41,7 +41,7 @@ class RunTracker:
 
     running: bool
     _stop_checker: Optional[Callable[[], bool]]
-    _has_stop_checker: bool
+    _has_stop_condition: bool
 
     # timeout-specific attrs
     _start_time: float
@@ -52,7 +52,7 @@ class RunTracker:
     # count-specific attrs
     last_consumed_tp: Optional[tuple]
     _max_count: int
-    _count: int
+    _current_count: int
     _repartition_stop_points: dict[tuple, int]
 
     def __init__(
@@ -91,7 +91,7 @@ class RunTracker:
         Trigger stop if any conditions are met.
         This is optimized for maximum performance for when there is no stop_checker.
         """
-        if self._has_stop_checker:
+        if self._has_stop_condition:
             if self._stop_checker():
                 self.stop_and_reset()
 
@@ -114,7 +114,7 @@ class RunTracker:
         """
         self.running = False
         self._stop_checker = None
-        self._has_stop_checker = False
+        self._has_stop_condition = False
 
         self._timeout = 0.0
         self._start_time = 0.0
@@ -123,7 +123,7 @@ class RunTracker:
 
         self.last_consumed_tp = None
         self._max_count = 0
-        self._count = 0
+        self._current_count = 0
         self._repartition_stop_points = {}
 
     def handle_rebalance(self, recovery_required: bool):
@@ -157,7 +157,7 @@ class RunTracker:
 
         self._timeout = timeout
         self._max_count = count
-        self._has_stop_checker = True
+        self._has_stop_condition = True
         if timeout and count:
             self._stop_checker = self._at_count_or_timeout_func()
         else:
@@ -193,8 +193,8 @@ class RunTracker:
         if self.last_consumed_tp:
             # add to count only if message is from a non-repartition topic
             if self.last_consumed_tp[0] in self._primary_topics:
-                self._count += 1
-                if (self._max_count - self._count) <= 0:
+                self._current_count += 1
+                if (self._max_count - self._current_count) <= 0:
                     logger.info(f"Count of {self._max_count} records reached!")
                     return True
         return False
