@@ -10,7 +10,7 @@
 class Producer()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L42)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L45)
 
 <a id="quixstreams.kafka.producer.Producer.__init__"></a>
 
@@ -26,7 +26,7 @@ def __init__(broker_address: Union[str, ConnectionConfig],
              flush_timeout: Optional[float] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L43)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L46)
 
 A wrapper around `confluent_kafka.Producer`.
 
@@ -61,12 +61,12 @@ def produce(topic: str,
             headers: Optional[Headers] = None,
             partition: Optional[int] = None,
             timestamp: Optional[int] = None,
-            poll_timeout: float = 5.0,
-            buffer_error_max_tries: int = 3,
+            poll_timeout: float = PRODUCER_POLL_TIMEOUT,
+            buffer_error_max_tries: int = PRODUCER_ON_ERROR_RETRIES,
             on_delivery: Optional[DeliveryCallback] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L81)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L84)
 
 Produce a message to a topic.
 
@@ -101,7 +101,7 @@ for the produced message.
 def poll(timeout: float = 0)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L142)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L145)
 
 Polls the producer for events and calls `on_delivery` callbacks.
 
@@ -122,7 +122,7 @@ Polls the producer for events and calls `on_delivery` callbacks.
 def flush(timeout: Optional[float] = None) -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L150)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L153)
 
 Wait for all messages in the Producer queue to be delivered.
 
@@ -147,7 +147,7 @@ number of messages remaining to flush
 class TransactionalProducer(Producer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L181)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L184)
 
 A separate producer class used only internally for transactions
 (transactions are only needed when using a consumer).

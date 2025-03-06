@@ -10,7 +10,7 @@
 class BaseSource(ABC)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L17)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L28)
 
 This is the base class for all sources.
 
@@ -83,7 +83,7 @@ if __name__ == "__main__":
 def configure(topic: Topic, producer: RowProducer, **kwargs) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L88)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L116)
 
 This method is triggered before the source is started.
 
@@ -100,7 +100,7 @@ It configures the source's Kafka producer, the topic it will produce to and opti
 def start() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L110)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L138)
 
 This method is triggered in the subprocess when the source is started.
 
@@ -118,7 +118,7 @@ Use it to fetch data and produce it to Kafka.
 def stop() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L119)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L147)
 
 This method is triggered when the application is shutting down.
 
@@ -135,13 +135,29 @@ The source must ensure that the `run` method is completed soon.
 def default_topic() -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L127)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L155)
 
 This method is triggered when the topic is not provided to the source.
 
 The source must return a default topic configuration.
 
 Note: if the default topic is used, the Application will prefix its name with "source__".
+
+<a id="quixstreams.sources.base.source.BaseSource.setup"></a>
+
+<br><br>
+
+#### BaseSource.setup
+
+```python
+@abstractmethod
+def setup()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L165)
+
+When applicable, set up the client here along with any validation to affirm a
+valid/successful authentication/connection.
 
 <a id="quixstreams.sources.base.source.Source"></a>
 
@@ -151,7 +167,7 @@ Note: if the default topic is used, the Application will prefix its name with "s
 class Source(BaseSource)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L137)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L172)
 
 A base class for custom Sources that provides a basic implementation of `BaseSource`
 interface.
@@ -208,10 +224,15 @@ if __name__ == "__main__":
 #### Source.\_\_init\_\_
 
 ```python
-def __init__(name: str, shutdown_timeout: float = 10) -> None
+def __init__(
+    name: str,
+    shutdown_timeout: float = 10,
+    on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
+    on_client_connect_failure: Optional[ClientConnectFailureCallback] = None
+) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L187)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L222)
 
 
 <br>
@@ -219,6 +240,12 @@ def __init__(name: str, shutdown_timeout: float = 10) -> None
 
 - `name`: The source unique name. It is used to generate the topic configuration.
 - `shutdown_timeout`: Time in second the application waits for the source to gracefully shutdown.
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
 
 <a id="quixstreams.sources.base.source.Source.running"></a>
 
@@ -231,7 +258,7 @@ def __init__(name: str, shutdown_timeout: float = 10) -> None
 def running() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L201)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L251)
 
 Property indicating if the source is running.
 
@@ -247,7 +274,7 @@ The `stop` method will set it to `False`. Use it to stop the source gracefully.
 def cleanup(failed: bool) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L209)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L259)
 
 This method is triggered once the `run` method completes.
 
@@ -265,7 +292,7 @@ It flushes the producer when `_run` completes successfully.
 def stop() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L220)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L270)
 
 This method is triggered when the application is shutting down.
 
@@ -281,7 +308,7 @@ It sets the `running` property to `False`.
 def start() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L228)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L278)
 
 This method is triggered in the subprocess when the source is started.
 
@@ -298,7 +325,7 @@ It marks the source as running, execute it's run method and ensure cleanup happe
 def run()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L244)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L295)
 
 This method is triggered in the subprocess when the source is started.
 
@@ -318,7 +345,7 @@ def serialize(key: Optional[object] = None,
               timestamp_ms: Optional[int] = None) -> KafkaMessage
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L252)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L303)
 
 Serialize data to bytes using the producer topic serializers and return a `quixstreams.models.messages.KafkaMessage`.
 
@@ -340,11 +367,11 @@ def produce(value: Optional[Union[str, bytes]] = None,
             headers: Optional[Headers] = None,
             partition: Optional[int] = None,
             timestamp: Optional[int] = None,
-            poll_timeout: float = 5.0,
-            buffer_error_max_tries: int = 3) -> None
+            poll_timeout: float = PRODUCER_POLL_TIMEOUT,
+            buffer_error_max_tries: int = PRODUCER_ON_ERROR_RETRIES) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L268)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L319)
 
 Produce a message to the configured source topic in Kafka.
 
@@ -358,7 +385,7 @@ Produce a message to the configured source topic in Kafka.
 def flush(timeout: Optional[float] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L293)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L344)
 
 This method flush the producer.
 
@@ -385,7 +412,7 @@ None use producer default or -1 is infinite. Default: None
 def default_topic() -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L311)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L362)
 
 Return a default topic matching the source name.
 
@@ -407,7 +434,7 @@ Note: if the default topic is used, the Application will prefix its name with "s
 class StatefulSource(Source)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L330)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L381)
 
 A `Source` class for custom Sources that need a state.
 
@@ -464,10 +491,15 @@ if __name__ == "__main__":
 #### StatefulSource.\_\_init\_\_
 
 ```python
-def __init__(name: str, shutdown_timeout: float = 10) -> None
+def __init__(
+    name: str,
+    shutdown_timeout: float = 10,
+    on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
+    on_client_connect_failure: Optional[ClientConnectFailureCallback] = None
+) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L380)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L431)
 
 
 <br>
@@ -475,6 +507,12 @@ def __init__(name: str, shutdown_timeout: float = 10) -> None
 
 - `name`: The source unique name. It is used to generate the topic configuration.
 - `shutdown_timeout`: Time in second the application waits for the source to gracefully shutdown.
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
 
 <a id="quixstreams.sources.base.source.StatefulSource.configure"></a>
 
@@ -490,7 +528,7 @@ def configure(topic: Topic,
               **kwargs) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L390)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L458)
 
 This method is triggered before the source is started.
 
@@ -507,7 +545,7 @@ It configures the source's Kafka producer, the topic it will produce to and the 
 def store_partitions_count() -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L409)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L477)
 
 Count of store partitions.
 
@@ -524,7 +562,7 @@ Used to configure the number of partition in the changelog topic.
 def assigned_store_partition() -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L418)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L486)
 
 The store partition assigned to this instance
 
@@ -539,7 +577,7 @@ The store partition assigned to this instance
 def store_name() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L425)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L493)
 
 The source store name
 
@@ -554,7 +592,7 @@ The source store name
 def state() -> State
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L432)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L500)
 
 Access the `State` of the source.
 
@@ -572,7 +610,7 @@ Important: after each `.flush()` call, a previously returned instance is invalid
 def flush(timeout: Optional[float] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L451)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L519)
 
 This method commit the state and flush the producer.
 
@@ -660,7 +698,7 @@ Default - `"excel"`.
 class KafkaReplicatorSource(Source)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/core/kafka/kafka.py#L25)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/core/kafka/kafka.py#L27)
 
 Source implementation that replicates a topic from a Kafka broker to your application broker.
 
@@ -698,20 +736,23 @@ app.run()
 
 ```python
 def __init__(
-        name: str,
-        app_config: "ApplicationConfig",
-        topic: str,
-        broker_address: Union[str, ConnectionConfig],
-        auto_offset_reset: Optional[AutoOffsetReset] = "latest",
-        consumer_extra_config: Optional[dict] = None,
-        consumer_poll_timeout: Optional[float] = None,
-        shutdown_timeout: float = 10,
-        on_consumer_error: ConsumerErrorCallback = default_on_consumer_error,
-        value_deserializer: DeserializerType = "json",
-        key_deserializer: DeserializerType = "bytes") -> None
+    name: str,
+    app_config: "ApplicationConfig",
+    topic: str,
+    broker_address: Union[str, ConnectionConfig],
+    auto_offset_reset: Optional[AutoOffsetReset] = "latest",
+    consumer_extra_config: Optional[dict] = None,
+    consumer_poll_timeout: Optional[float] = None,
+    shutdown_timeout: float = 10,
+    on_consumer_error: ConsumerErrorCallback = default_on_consumer_error,
+    value_deserializer: DeserializerType = "json",
+    key_deserializer: DeserializerType = "bytes",
+    on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
+    on_client_connect_failure: Optional[ClientConnectFailureCallback] = None
+) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/core/kafka/kafka.py#L54)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/core/kafka/kafka.py#L56)
 
 
 <br>
@@ -737,6 +778,12 @@ Default - Use the Application `consumer_poll_timeout` setting.
 Default - `json`
 - `key_deserializer`: The default topic key deserializer, used by StreamingDataframe connected to the source.
 Default - `json`
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
 
 <a id="quixstreams.sources.core.kafka.quix"></a>
 
@@ -750,7 +797,7 @@ Default - `json`
 class QuixEnvironmentSource(KafkaReplicatorSource)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/core/kafka/quix.py#L19)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/core/kafka/quix.py#L23)
 
 Source implementation that replicates a topic from a Quix Cloud environment to your application broker.
 It can copy messages for development and testing without risking producing them back or affecting the consumer groups.
@@ -790,22 +837,25 @@ app.run()
 
 ```python
 def __init__(
-        name: str,
-        app_config: "ApplicationConfig",
-        topic: str,
-        quix_sdk_token: str,
-        quix_workspace_id: str,
-        quix_portal_api: Optional[str] = None,
-        auto_offset_reset: Optional[AutoOffsetReset] = None,
-        consumer_extra_config: Optional[dict] = None,
-        consumer_poll_timeout: Optional[float] = None,
-        shutdown_timeout: float = 10,
-        on_consumer_error: ConsumerErrorCallback = default_on_consumer_error,
-        value_deserializer: DeserializerType = "json",
-        key_deserializer: DeserializerType = "bytes") -> None
+    name: str,
+    app_config: "ApplicationConfig",
+    topic: str,
+    quix_sdk_token: str,
+    quix_workspace_id: str,
+    quix_portal_api: Optional[str] = None,
+    auto_offset_reset: Optional[AutoOffsetReset] = None,
+    consumer_extra_config: Optional[dict] = None,
+    consumer_poll_timeout: Optional[float] = None,
+    shutdown_timeout: float = 10,
+    on_consumer_error: ConsumerErrorCallback = default_on_consumer_error,
+    value_deserializer: DeserializerType = "json",
+    key_deserializer: DeserializerType = "bytes",
+    on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
+    on_client_connect_failure: Optional[ClientConnectFailureCallback] = None
+) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/core/kafka/quix.py#L50)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/core/kafka/quix.py#L54)
 
 
 <br>
@@ -830,7 +880,7 @@ For other parameters See `quixstreams.sources.kafka.KafkaReplicatorSource`
 class FileFetcher()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/file.py#L22)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/file.py#L26)
 
 Serves individual files while downloading another in the background.
 
@@ -842,7 +892,7 @@ Serves individual files while downloading another in the background.
 class FileSource(Source)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/file.py#L70)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/file.py#L74)
 
 Ingest a set of files from a desired origin into Kafka by iterating through the
 provided folder and processing all nested files within it.
@@ -914,10 +964,14 @@ def __init__(directory: Union[str, Path],
              compression: Optional[CompressionName] = None,
              replay_speed: float = 1.0,
              name: Optional[str] = None,
-             shutdown_timeout: float = 30)
+             shutdown_timeout: float = 30,
+             on_client_connect_success: Optional[
+                 ClientConnectSuccessCallback] = None,
+             on_client_connect_failure: Optional[
+                 ClientConnectFailureCallback] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/file.py#L130)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/file.py#L134)
 
 
 <br>
@@ -937,6 +991,12 @@ NOTE: Time delay will only be accurate per partition, NOT overall.
 - `name`: The name of the Source application (Default: last folder name).
 - `shutdown_timeout`: Time in seconds the application waits for the source
 to gracefully shutdown
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
 
 <a id="quixstreams.sources.community.file.file.FileSource.default_topic"></a>
 
@@ -948,7 +1008,7 @@ to gracefully shutdown
 def default_topic() -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/file.py#L204)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/file.py#L220)
 
 Uses the file structure to generate the desired partition count for the
 
@@ -976,7 +1036,7 @@ the original default topic, with updated partition count
 class AzureFileOrigin(Origin)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/origins/azure.py#L20)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/origins/azure.py#L26)
 
 <a id="quixstreams.sources.community.file.origins.azure.AzureFileOrigin.__init__"></a>
 
@@ -988,7 +1048,7 @@ class AzureFileOrigin(Origin)
 def __init__(connection_string: str, container: str)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/origins/azure.py#L21)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/origins/azure.py#L27)
 
 
 <br>
@@ -1007,7 +1067,7 @@ def __init__(connection_string: str, container: str)
 def get_folder_count(directory: Path) -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/origins/azure.py#L50)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/origins/azure.py#L57)
 
 This is a simplified version of the recommended way to retrieve folder
 names based on the azure SDK docs examples.
@@ -1117,7 +1177,7 @@ with {_key: str, _value: dict, _timestamp: int}.
 class KinesisSource(StatefulSource)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/kinesis/kinesis.py#L18)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/kinesis/kinesis.py#L22)
 
 NOTE: Requires `pip install quixstreams[kinesis]` to work.
 
@@ -1172,10 +1232,14 @@ def __init__(
         auto_offset_reset: AutoOffsetResetType = "latest",
         max_records_per_shard: int = 1000,
         commit_interval: float = 5.0,
-        retry_backoff_secs: float = 5.0)
+        retry_backoff_secs: float = 5.0,
+        on_client_connect_success: Optional[
+            ClientConnectSuccessCallback] = None,
+        on_client_connect_failure: Optional[
+            ClientConnectFailureCallback] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/kinesis/kinesis.py#L57)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/kinesis/kinesis.py#L61)
 
 
 <br>
@@ -1199,6 +1263,12 @@ to consume per shard (partition) per consume (NOT per-commit).
 - `commit_interval`: the time between commits
 - `retry_backoff_secs`: how long to back off from doing HTTP calls for a
 shard when Kinesis consumer encounters handled/expected errors.
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
 
 <a id="quixstreams.sources.community.pubsub.pubsub"></a>
 
@@ -1212,7 +1282,7 @@ shard when Kinesis consumer encounters handled/expected errors.
 class PubSubSource(Source)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/pubsub/pubsub.py#L16)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/pubsub/pubsub.py#L20)
 
 This source enables reading from a Google Cloud Pub/Sub topic,
 dumping it to a kafka topic using desired SDF-based transformations.
@@ -1265,10 +1335,14 @@ def __init__(project_id: str,
              commit_interval: float = 5.0,
              create_subscription: bool = False,
              enable_message_ordering: bool = False,
-             shutdown_timeout: float = 10.0)
+             shutdown_timeout: float = 10.0,
+             on_client_connect_success: Optional[
+                 ClientConnectSuccessCallback] = None,
+             on_client_connect_failure: Optional[
+                 ClientConnectFailureCallback] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/pubsub/pubsub.py#L55)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/pubsub/pubsub.py#L59)
 
 
 <br>
@@ -1288,6 +1362,12 @@ startup; if it already exists, it instead logs its details (DEBUG level).
 - `enable_message_ordering`: When creating a Pub/Sub subscription, whether
 to allow message ordering. NOTE: does NOT affect existing subscriptions!
 - `shutdown_timeout`: How long to wait for a graceful shutdown of the source.
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
 
 <a id="quixstreams.sources.community.pandas"></a>
 
@@ -1354,7 +1434,7 @@ Default - `True`.
 def run()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/pandas.py#L103)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/pandas.py#L107)
 
 Produces data from the DataFrame row by row.
 
