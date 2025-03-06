@@ -921,7 +921,7 @@ class Application:
         rows = self._consumer.poll_row(timeout=self._config.consumer_poll_timeout)
 
         if rows is None:
-            self._run_tracker.last_consumed_tp = None
+            self._run_tracker.set_current_message_tp(None)
             return
 
         # Deserializer may return multiple rows for a single message
@@ -959,7 +959,7 @@ class Application:
         self._processing_context.store_offset(
             topic=topic_name, partition=partition, offset=offset
         )
-        self._run_tracker.last_consumed_tp = (topic_name, partition)
+        self._run_tracker.set_current_message_tp((topic_name, partition))
 
         if self._on_message_processed is not None:
             self._on_message_processed(topic_name, partition, offset)
