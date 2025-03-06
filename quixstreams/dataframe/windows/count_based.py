@@ -83,26 +83,33 @@ class CountWindow(Window):
         msg_id = None
         if len(data["windows"]) == 0:
             # for new tumbling window, reset the collection id to 0
-            msg_id = 0
+            if self._collect:
+                window_value = msg_id = 0
+            else:
+                window_value = self._aggregations["value"].start()
 
             data["windows"].append(
                 CountWindowData(
                     count=0,
                     start=timestamp_ms,
                     end=timestamp_ms,
-                    value=msg_id if self._collect else self._aggregate_default,
+                    value=window_value,
                 )
             )
         elif self._step is not None and data["windows"][0]["count"] % self._step == 0:
             if self._collect:
-                msg_id = data["windows"][0]["value"] + data["windows"][0]["count"]
+                window_value = msg_id = (
+                    data["windows"][0]["value"] + data["windows"][0]["count"]
+                )
+            else:
+                window_value = self._aggregations["value"].start()
 
             data["windows"].append(
                 CountWindowData(
                     count=0,
                     start=timestamp_ms,
                     end=timestamp_ms,
-                    value=msg_id if self._collect else self._aggregate_default,
+                    value=window_value,
                 )
             )
 

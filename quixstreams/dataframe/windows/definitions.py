@@ -3,6 +3,7 @@ from abc import abstractmethod
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from .aggregations import (
+    ROOT,
     Aggregation,
     Collect,
     Collector,
@@ -56,7 +57,7 @@ class WindowDefinition(abc.ABC):
 
         return self._create_window(
             func_name="sum",
-            aggregations={"value": Sum()},
+            aggregations={"value": Sum(column=ROOT)},
         )
 
     def count(self) -> "Window":
@@ -83,7 +84,7 @@ class WindowDefinition(abc.ABC):
 
         return self._create_window(
             func_name="mean",
-            aggregations={"value": Mean()},
+            aggregations={"value": Mean(column=ROOT)},
         )
 
     def reduce(
@@ -140,7 +141,7 @@ class WindowDefinition(abc.ABC):
 
         return self._create_window(
             func_name="max",
-            aggregations={"value": Max()},
+            aggregations={"value": Max(column=ROOT)},
         )
 
     def min(self) -> "Window":
@@ -153,7 +154,7 @@ class WindowDefinition(abc.ABC):
 
         return self._create_window(
             func_name="min",
-            aggregations={"value": Min()},
+            aggregations={"value": Min(column=ROOT)},
         )
 
     def collect(self) -> "Window":
@@ -178,7 +179,7 @@ class WindowDefinition(abc.ABC):
 
         return self._create_window(
             func_name="collect",
-            collectors={"value": Collect()},
+            collectors={"value": Collect(column=ROOT)},
         )
 
 

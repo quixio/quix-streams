@@ -1,3 +1,4 @@
+import sys
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Generic, Iterable, Optional, TypeVar, Union
 
@@ -36,13 +37,20 @@ class Aggregation(ABC):
 
 V = TypeVar("V", int, float)
 
+ROOT = object()
+
 
 class Sum(Aggregation):
+    def __init__(self, column: Any = ROOT) -> None:
+        self.column = column
+
     def start(self) -> int:
         return 0
 
-    def agg(self, old: V, new: V) -> V:
-        return old + new
+    def agg(self, old: V, new: Any) -> V:
+        if self.column is ROOT:
+            return old + new
+        return old + new[self.column]
 
     def result(self, value: V) -> V:
         return value
@@ -60,12 +68,17 @@ class Count(Aggregation):
 
 
 class Mean(Aggregation):
+    def __init__(self, column: Any = ROOT) -> None:
+        self.column = column
+
     def start(self) -> tuple[float, int]:
         return 0.0, 0
 
-    def agg(self, old: tuple[V, int], new: V) -> tuple[V, int]:
+    def agg(self, old: tuple[V, int], new: Any) -> tuple[V, int]:
         old_sum, old_count = old
-        return old_sum + new, old_count + 1
+        if self.column is ROOT:
+            return old_sum + new, old_count + 1
+        return old_sum + new[self.column], old_count + 1
 
     def result(self, value: tuple[Union[int, float], int]) -> float:
         sum_, count_ = value
@@ -95,26 +108,32 @@ class Reduce(Aggregation, Generic[R]):
 
 
 class Max(Aggregation):
-    def start(self) -> None:
-        return None
+    def __init__(self, column: Any = ROOT) -> None:
+        self.column = column
 
-    def agg(self, old: Optional[V], new: V) -> V:
-        if old is None:
-            return new
-        return max(old, new)
+    def start(self) -> float:
+        return sys.float_info.min
+
+    def agg(self, old: Optional[V], new: Any) -> V:
+        if self.column is ROOT:
+            return max(old, new)
+        return max(old, new[self.column])
 
     def result(self, value: V) -> V:
         return value
 
 
 class Min(Aggregation):
-    def start(self) -> None:
-        return None
+    def __init__(self, column: Any = ROOT) -> None:
+        self.column = column
 
-    def agg(self, old: Optional[V], new: V) -> V:
-        if old is None:
-            return new
-        return min(old, new)
+    def start(self) -> float:
+        return sys.float_info.max
+
+    def agg(self, old: Optional[V], new: Any) -> V:
+        if self.column is ROOT:
+            return min(old, new)
+        return min(old, new[self.column])
 
     def result(self, value: V) -> V:
         return value
@@ -148,8 +167,13 @@ class Collector(ABC, Generic[I]):
 
 
 class Collect(Collector):
+    def __init__(self, column: Any = ROOT) -> None:
+        self.column = column
+
     def add(self, item: Any) -> Any:
-        return item
+        if self.column is ROOT:
+            return item
+        return item[self.column]
 
     def result(self, items: Iterable[Any]) -> list[Any]:
         return list(items)

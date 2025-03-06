@@ -138,7 +138,6 @@ class TimeWindow(Window):
         duration_ms = self._duration_ms
         grace_ms = self._grace_ms
 
-        default = self._aggregate_default
         collect = self._collect
         aggregate = self._aggregate
 
@@ -176,7 +175,10 @@ class TimeWindow(Window):
             # during window expiration.
             aggregated = None
             if aggregate:
-                current_value = state.get_window(start, end, default=default)
+                current_value = state.get_window(start, end)
+                if current_value is None:
+                    current_value = self._aggregations["value"].start()
+
                 aggregated = self._aggregations["value"].agg(current_value, value)
                 updated_windows.append(
                     (

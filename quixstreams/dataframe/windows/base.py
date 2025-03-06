@@ -63,9 +63,6 @@ class Window(abc.ABC):
 
         self._aggregations = aggregations
         self._aggregate = len(aggregations) > 0
-        self._aggregate_default = (
-            self._aggregations["value"].start() if self._aggregate else None
-        )
 
         self._collectors = collectors
         self._collect = len(collectors) > 0

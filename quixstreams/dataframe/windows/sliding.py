@@ -77,8 +77,8 @@ class SlidingWindow(TimeWindow):
         state = transaction.as_state(prefix=key)
         duration = self._duration_ms
         grace = self._grace_ms
+
         aggregate = self._aggregations["value"].agg if self._aggregate else None
-        default = self._aggregate_default
         collect = self._collect
 
         # Sliding windows are inclusive on both ends, so values with
@@ -176,7 +176,9 @@ class SlidingWindow(TimeWindow):
                         state=state,
                         start=right_start,
                         end=right_start + duration,
-                        value=aggregate(default, value) if aggregate else None,
+                        value=aggregate(self._aggregations["value"].start(), value)
+                        if aggregate
+                        else None,
                         timestamp=timestamp_ms,
                         max_timestamp=timestamp_ms,
                     )
@@ -216,14 +218,16 @@ class SlidingWindow(TimeWindow):
                         state=state,
                         start=right_start,
                         end=right_start + duration,
-                        value=aggregate(default, value) if aggregate else None,
+                        value=aggregate(self._aggregations["value"].start(), value)
+                        if aggregate
+                        else None,
                         timestamp=timestamp_ms,
                         max_timestamp=timestamp_ms,
                     )
 
                 # Create a left window with existing aggregation if it falls within the window
                 if left_start > max_timestamp:
-                    aggregation = default
+                    aggregation = self._aggregations["value"].start()
 
                 updated_windows.append(
                     self._update_window(
@@ -253,7 +257,9 @@ class SlidingWindow(TimeWindow):
                         state=state,
                         start=left_start,
                         end=left_end,
-                        value=aggregate(default, value) if aggregate else None,
+                        value=aggregate(self._aggregations["value"].start(), value)
+                        if aggregate
+                        else None,
                         timestamp=timestamp_ms,
                         max_timestamp=timestamp_ms,
                     )
