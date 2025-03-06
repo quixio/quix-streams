@@ -42,7 +42,7 @@ class StorePartition(ABC):
     @abstractmethod
     def get_changelog_offset(self) -> Optional[int]:
         """
-        Get offset that the changelog is up-to-date with.
+        Get the changelog offset that the state is up-to-date with.
         :return: offset or `None` if there's no processed offset yet
         """
         ...
