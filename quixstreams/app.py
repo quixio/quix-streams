@@ -358,10 +358,7 @@ class Application:
             pausing_manager=self._pausing_manager,
         )
         self._dataframe_registry = DataframeRegistry()
-        self._run_tracker = RunTracker(
-            processing_context=self._processing_context,
-            topic_manager=self._topic_manager,
-        )
+        self._run_tracker = RunTracker(processing_context=self._processing_context)
 
     @property
     def config(self) -> "ApplicationConfig":
@@ -803,10 +800,11 @@ class Application:
                     "Can only provide a timeout to .run() when running "
                     "a plain Source (no StreamingDataFrame)."
                 )
-        self._run_tracker.set_stop_condition(
-            timeout=timeout,
-            count=count,
+        self._run_tracker.set_topics(
+            [t for t in self._topic_manager.topics],
+            [t for t in self._topic_manager.repartition_topics],
         )
+        self._run_tracker.set_stop_condition(timeout=timeout, count=count)
         self._run()
 
     def _exception_handler(self, exc_type, exc_val, exc_tb):
@@ -823,20 +821,19 @@ class Application:
         self._setup_signal_handlers()
 
         # These only need to be performed on the first .run() (with interactive running)
-        if self._run_tracker.is_first_run:
-            logger.info(
-                f"Starting the Application with the config: "
-                f'broker_address="{self._config.broker_address}" '
-                f'consumer_group="{self._config.consumer_group}" '
-                f'auto_offset_reset="{self._config.auto_offset_reset}" '
-                f"commit_interval={self._config.commit_interval}s "
-                f"commit_every={self._config.commit_every} "
-                f'processing_guarantee="{self._config.processing_guarantee}"'
-            )
-            if self.is_quix_app:
-                self._quix_runtime_init()
+        logger.info(
+            f"Starting the Application with the config: "
+            f'broker_address="{self._config.broker_address}" '
+            f'consumer_group="{self._config.consumer_group}" '
+            f'auto_offset_reset="{self._config.auto_offset_reset}" '
+            f"commit_interval={self._config.commit_interval}s "
+            f"commit_every={self._config.commit_every} "
+            f'processing_guarantee="{self._config.processing_guarantee}"'
+        )
+        if self.is_quix_app:
+            self._quix_runtime_init()
 
-            self.setup_topics()
+        self.setup_topics()
 
         exit_stack = contextlib.ExitStack()
         exit_stack.enter_context(self._processing_context)
@@ -871,7 +868,7 @@ class Application:
         run_tracker = self._run_tracker
 
         processing_context.init_checkpoint()
-        run_tracker.start_runner()
+        run_tracker.set_as_running()
         logger.info("Waiting for incoming messages")
         # Start polling Kafka for messages and callbacks
         while run_tracker.running:
@@ -893,7 +890,7 @@ class Application:
         run_tracker = self._run_tracker
         source_manager = self._source_manager
 
-        run_tracker.start_runner()
+        run_tracker.set_as_running()
         source_manager.start_sources()
         run_tracker.handle_rebalance(recovery_required=False)
         while run_tracker.running and source_manager.is_alive():
