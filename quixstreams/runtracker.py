@@ -22,7 +22,6 @@ class RunTracker:
         "_processing_context",
         "running",
         "_stop_checker",
-        "_has_stop_condition",
         "_needs_assigning",
         "_is_recovering",
         "_timeout",
@@ -41,7 +40,6 @@ class RunTracker:
 
     running: bool
     _stop_checker: Optional[Callable[[], bool]]
-    _has_stop_condition: bool
 
     # timeout-specific attrs
     _start_time: float
@@ -91,9 +89,10 @@ class RunTracker:
         Trigger stop if any conditions are met.
         This is optimized for maximum performance for when there is no stop_checker.
         """
-        if self._has_stop_condition:
-            if self._stop_checker():
-                self.stop_and_reset()
+        if self._stop_checker is None:
+            return False
+        if self._stop_checker():
+            self.stop_and_reset()
 
     def start_runner(self):
         """
@@ -114,7 +113,6 @@ class RunTracker:
         """
         self.running = False
         self._stop_checker = None
-        self._has_stop_condition = False
 
         self._timeout = 0.0
         self._start_time = 0.0
@@ -157,7 +155,6 @@ class RunTracker:
 
         self._timeout = timeout
         self._max_count = count
-        self._has_stop_condition = True
         if timeout and count:
             self._stop_checker = self._at_count_or_timeout_func()
         else:
