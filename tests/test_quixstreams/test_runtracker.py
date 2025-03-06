@@ -1,14 +1,40 @@
 import time
 import uuid
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
+import pytest
 from confluent_kafka import TopicPartition
 
+from quixstreams.runtracker import RunTracker
 from quixstreams.sinks.core.list import ListSink
 from quixstreams.state.recovery import RecoveryManager
 
 
 class TestRunTracker:
+    @pytest.mark.parametrize(
+        "conditions, should_have_stopper",
+        [
+            ({}, False),
+            ({"timeout": -1.0}, False),
+            ({"timeout": 0.0}, False),
+            ({"timeout": 1.0}, True),
+            ({"count": -1}, False),
+            ({"count": 0}, False),
+            ({"count": 1}, True),
+            ({"timeout": 0.0, "count": 0}, False),
+            ({"timeout": -1.0, "count": -1}, False),
+            ({"timeout": -1.0, "count": 1}, True),
+            ({"timeout": 1.0, "count": -1}, True),
+            ({"timeout": 1.0, "count": 1}, True),
+        ],
+    )
+    def test_stop_condition_detected(self, caplog, conditions, should_have_stopper):
+        run_tracker = RunTracker(MagicMock(), MagicMock())
+        with caplog.at_level("INFO"):
+            run_tracker.set_stop_condition(**conditions)
+        condition_detected = "STOP CONDITION DETECTED" in caplog.text
+        assert should_have_stopper is condition_detected
+
     def test_count(
         self,
         app_factory,

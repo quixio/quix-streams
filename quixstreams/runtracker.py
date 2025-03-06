@@ -65,7 +65,7 @@ class RunTracker:
           associated with stopping the app based on a timeout or count.
 
         Though intended for debugging, it is designed to minimize impact on
-        normal Application operation.
+          normal Application operation.
         """
         self._is_first_run: bool = True
         self._processing_context = processing_context
@@ -152,36 +152,25 @@ class RunTracker:
         """
         Called as part of app.run(); this handles the users optional stop conditions.
         """
-        if not (timeout or count):
-            logger.info("APP RUN: preparing to run until errors or manually stopped...")
+        if not ((timeout := max(timeout, 0.0)) or (count := max(count, 0))):
             return
 
-        logger.info("APP RUN: preparing to run with stop conditions...")
-        if timeout:
-            if timeout < 0.0:
-                raise ValueError("run timeout must be >= 0.0")
-            logger.info(
-                f"APP RUN: timeout detected; "
-                f"Application will run for up to {timeout}s "
-                f"(after initial rebalance or recovery)"
-            )
-            self._stop_checker = self._at_timeout_func()
-            self._timeout = timeout
-
-        if count:
-            if count < 0:
-                raise ValueError("run count must be >= 0")
-            logger.info(
-                f"APP RUN: count limit detected; "
-                f"Application will process up to {count} records"
-            )
-            self._stop_checker = self._at_count_func()
-            self._max_count = count
-
-        if self._timeout and self._max_count:
-            logger.info("APP RUN: Application will stop at first satisfied limiter!")
-            self._stop_checker = self._at_count_or_timeout_func()
+        self._timeout = timeout
+        self._max_count = count
         self._has_stop_checker = True
+        if timeout and count:
+            self._stop_checker = self._at_count_or_timeout_func()
+        else:
+            self._stop_checker = (
+                self._at_timeout_func() if timeout else self._at_count_func()
+            )
+
+        time_stop_log = f"after running for {timeout} seconds" if timeout else ""
+        count_stop_log = f"after processing {count} records" if count else ""
+        logger.info(
+            "APP STOP CONDITION DETECTED: Application will stop "
+            f"{time_stop_log}{' OR ' if (timeout and count) else ''}{count_stop_log}"
+        )
 
     def _set_timeout_start_time(self):
         """
