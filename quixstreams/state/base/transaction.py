@@ -20,7 +20,7 @@ from quixstreams.models import Headers
 from quixstreams.state.exceptions import InvalidChangelogOffset, StateTransactionError
 from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
-    CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER,
+    CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER,
     DEFAULT_PREFIX,
     SEPARATOR,
     Marker,
@@ -398,7 +398,7 @@ class PartitionTransaction(ABC, Generic[K, V]):
             return self._partition.exists(key_serialized, cf_name=cf_name)
 
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
-    def prepare(self, processed_offset: Optional[int]):
+    def prepare(self, processed_offsets: Optional[dict[str, int]]):
         """
         Produce changelog messages to the changelog topic for all changes accumulated
         in this transaction and prepare transaction to flush its state to the state
@@ -410,33 +410,32 @@ class PartitionTransaction(ABC, Generic[K, V]):
         If changelog is disabled for this application, no updates will be produced
         to the changelog topic.
 
-        :param processed_offset: the offset of the latest processed message
+        :param processed_offsets: the dict with <topic: offset> of the latest processed message
         """
 
         try:
-            self._prepare(processed_offset=processed_offset)
+            self._prepare(processed_offsets=processed_offsets)
             self._status = PartitionTransactionStatus.PREPARED
         except Exception:
             self._status = PartitionTransactionStatus.FAILED
             raise
 
-    def _prepare(self, processed_offset: Optional[int]):
+    def _prepare(self, processed_offsets: Optional[dict[str, int]]):
         if self._changelog_producer is None:
             return
 
         logger.debug(
             f"Flushing state changes to the changelog topic "
             f'topic_name="{self._changelog_producer.changelog_name}" '
-            f"partition={self._changelog_producer.partition} "
-            f"processed_offset={processed_offset}"
+            f"partition={self._changelog_producer.partition}"
         )
-        source_tp_offset_header = json_dumps(processed_offset)
+        source_tp_offset_header = json_dumps(processed_offsets)
         column_families = self._update_cache.get_column_families()
 
         for cf_name in column_families:
             headers: Headers = {
                 CHANGELOG_CF_MESSAGE_HEADER: cf_name,
-                CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER: source_tp_offset_header,
+                CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER: source_tp_offset_header,
             }
 
             updates = self._update_cache.get_updates(cf_name=cf_name)
@@ -461,7 +460,6 @@ class PartitionTransaction(ABC, Generic[K, V]):
     )
     def flush(
         self,
-        processed_offset: Optional[int] = None,
         changelog_offset: Optional[int] = None,
     ):
         """
@@ -476,18 +474,17 @@ class PartitionTransaction(ABC, Generic[K, V]):
             not flush ANY data to the database including the offset to optimize
             I/O.
 
-        :param processed_offset: offset of the last processed message, optional.
         :param changelog_offset: offset of the last produced changelog message,
             optional.
         """
         try:
-            self._flush(processed_offset, changelog_offset)
+            self._flush(changelog_offset)
             self._status = PartitionTransactionStatus.COMPLETE
         except Exception:
             self._status = PartitionTransactionStatus.FAILED
             raise
 
-    def _flush(self, processed_offset: Optional[int], changelog_offset: Optional[int]):
+    def _flush(self, changelog_offset: Optional[int]):
         if self._update_cache.is_empty():
             return
 
@@ -503,7 +500,6 @@ class PartitionTransaction(ABC, Generic[K, V]):
 
         self._partition.write(
             cache=self._update_cache,
-            processed_offset=processed_offset,
             changelog_offset=changelog_offset,
         )
 

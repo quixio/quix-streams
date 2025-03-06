@@ -2,7 +2,6 @@ import functools
 import logging
 from typing import Any, Dict, Literal, Optional, Union
 
-from quixstreams.models import RawConfluentKafkaMessageProto
 from quixstreams.state.base import PartitionTransactionCache, StorePartition
 from quixstreams.state.exceptions import ColumnFamilyDoesNotExist
 from quixstreams.state.metadata import METADATA_CF_NAME, Marker
@@ -49,7 +48,6 @@ class MemoryStorePartition(StorePartition):
             loads=json_loads,
             changelog_producer=changelog_producer,
         )
-        self._processed_offset: Optional[int] = None
         self._changelog_offset: Optional[int] = None
         self._state: Dict[str, Dict[bytes, Any]] = {
             "default": {},
@@ -68,18 +66,14 @@ class MemoryStorePartition(StorePartition):
     def write(
         self,
         cache: PartitionTransactionCache,
-        processed_offset: Optional[int],
         changelog_offset: Optional[int],
     ) -> None:
         """
         Write data to the state
 
         :param cache: The partition update cache
-        :param processed_offset: The offset processed to generate the data.
         :param changelog_offset: The changelog message offset of the data.
         """
-        if processed_offset is not None:
-            self._processed_offset = processed_offset
         if changelog_offset is not None:
             self._changelog_offset = changelog_offset
 
@@ -93,41 +87,18 @@ class MemoryStorePartition(StorePartition):
             for key in deletes:
                 self._state[cf_name].pop(key, None)
 
-    def _recover_from_changelog_message(
-        self,
-        changelog_message: RawConfluentKafkaMessageProto,
-        cf_name: str,
-        processed_offset: Optional[int],
-        committed_offset: int,
+    def recover_from_changelog_message(
+        self, key: bytes, value: Optional[bytes], cf_name: str, offset: int
     ) -> None:
-        """
-        Updates state from a given changelog message.
+        if cf_name not in self._state:
+            raise ColumnFamilyDoesNotExist(f'Column family "{cf_name}" does not exist')
 
-        :param changelog_message: A raw Confluent message read from a changelog topic.
-        :param committed_offset: latest committed offset for the partition
-        """
-        if self._should_apply_changelog(processed_offset, committed_offset):
-            if cf_name not in self._state:
-                raise ColumnFamilyDoesNotExist(
-                    f'Column family "{cf_name}" does not exist'
-                )
-            key = changelog_message.key()
-            if not isinstance(key, bytes):
-                raise ValueError(f"invalid changelog message key {key}")
+        if value:
+            self._state.setdefault(cf_name, {})[key] = value
+        else:
+            self._state.setdefault(cf_name, {}).pop(key, None)
 
-            if value := changelog_message.value():
-                self._state.setdefault(cf_name, {})[key] = value
-            else:
-                self._state.setdefault(cf_name, {}).pop(key, None)
-
-        self._changelog_offset = changelog_message.offset()
-
-    def get_processed_offset(self) -> Optional[int]:
-        """
-        Get last processed offset for the given partition
-        :return: offset or `None` if there's no processed offset yet
-        """
-        return self._processed_offset
+        self._changelog_offset = offset
 
     def get_changelog_offset(self) -> Optional[int]:
         """
@@ -135,6 +106,17 @@ class MemoryStorePartition(StorePartition):
         :return: offset or `None` if there's no processed offset yet
         """
         return self._changelog_offset
+
+    def write_changelog_offset(self, offset: int):
+        """
+        Write a new changelog offset to the db.
+
+        To be used when we simply need to update the changelog offset without touching
+        the actual data.
+
+        :param offset: new changelog offset
+        """
+        self._changelog_offset = offset
 
     @_validate_partition_state()
     def get(
@@ -144,7 +126,6 @@ class MemoryStorePartition(StorePartition):
         Get a key from the store
 
         :param key: a key encoded to `bytes`
-        :param default: a default value to return if the key is not found.
         :param cf_name: rocksdb column family name. Default - "default"
         :return: a value if the key is present in the store. Otherwise, `default`
         """

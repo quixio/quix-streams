@@ -15,7 +15,7 @@ from quixstreams.state.exceptions import (
 from quixstreams.state.manager import SUPPORTED_STORES
 from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
-    CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER,
+    CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER,
     Marker,
 )
 from quixstreams.state.serialization import serialize
@@ -226,7 +226,6 @@ class TestPartitionTransaction:
 
         store_partition.write(
             cache=cache,
-            processed_offset=None,
             changelog_offset=None,
         )
 
@@ -307,7 +306,7 @@ class TestPartitionTransaction:
         tx = store_partition.begin()
 
         tx.set(key="key", value="value", prefix=prefix)
-        tx.prepare(processed_offset=1)
+        tx.prepare(processed_offsets={"topic": 1})
         assert tx.prepared
 
         with pytest.raises(StateTransactionError):
@@ -371,20 +370,17 @@ class TestPartitionTransaction:
                 with pytest.raises(StateTransactionError):
                     tx.exists("key", prefix=prefix)
 
-    @pytest.mark.parametrize(
-        "processed_offset, changelog_offset", [(None, None), (1, 1)]
-    )
-    def test_flush_success(self, processed_offset, changelog_offset, store_partition):
+    @pytest.mark.parametrize("changelog_offset", [None, 1])
+    def test_flush_success(self, changelog_offset, store_partition):
         tx = store_partition.begin()
 
         # Set some key to probe the transaction
         tx.set(key="key", value="value", prefix=b"__key__")
 
-        tx.flush(processed_offset=processed_offset, changelog_offset=changelog_offset)
+        tx.flush(changelog_offset=changelog_offset)
         assert tx.completed
 
         assert store_partition.get_changelog_offset() == changelog_offset
-        assert store_partition.get_processed_offset() == processed_offset
 
     def test_flush_invalid_changelog_offset(self, store_partition):
         tx1 = store_partition.begin()
@@ -410,7 +406,7 @@ class TestPartitionTransaction:
         ]
         cf = "default"
         prefix = b"__key__"
-        processed_offset = 1
+        processed_offsets = {"topic": 1}
 
         with store_partition_factory(
             changelog_producer=changelog_producer_mock
@@ -423,7 +419,7 @@ class TestPartitionTransaction:
                     cf_name=cf,
                     prefix=prefix,
                 )
-            tx.prepare(processed_offset=processed_offset)
+            tx.prepare(processed_offsets=processed_offsets)
 
             assert changelog_producer_mock.produce.call_count == len(data)
 
@@ -434,7 +430,9 @@ class TestPartitionTransaction:
                 assert call.kwargs["value"] == tx._serialize_value(value=value)
                 assert call.kwargs["headers"] == {
                     CHANGELOG_CF_MESSAGE_HEADER: cf,
-                    CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER: dumps(processed_offset),
+                    CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER: dumps(
+                        processed_offsets
+                    ),
                 }
 
             assert tx.prepared
@@ -443,7 +441,7 @@ class TestPartitionTransaction:
         key = "key"
         cf = "default"
         prefix = b"__key__"
-        processed_offset = 1
+        processed_offsets = {"topic": 1}
 
         with store_partition_factory(
             changelog_producer=changelog_producer_mock
@@ -451,7 +449,7 @@ class TestPartitionTransaction:
             tx = partition.begin()
             tx.delete(key=key, cf_name=cf, prefix=prefix)
 
-            tx.prepare(processed_offset=processed_offset)
+            tx.prepare(processed_offsets=processed_offsets)
 
             assert tx.prepared
             assert changelog_producer_mock.produce.call_count == 1
@@ -463,7 +461,7 @@ class TestPartitionTransaction:
         assert delete_changelog.kwargs["value"] is None
         assert delete_changelog.kwargs["headers"] == {
             CHANGELOG_CF_MESSAGE_HEADER: cf,
-            CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER: dumps(processed_offset),
+            CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER: dumps(processed_offsets),
         }
 
     def test_set_delete_and_prepare(
@@ -476,7 +474,7 @@ class TestPartitionTransaction:
         key, value = "key", "value"
         cf = "default"
         prefix = b"__key__"
-        processed_offset = 1
+        processed_offsets = {"topic": 1}
 
         with store_partition_factory(
             changelog_producer=changelog_producer_mock
@@ -485,7 +483,7 @@ class TestPartitionTransaction:
             tx.set(key=key, value=value, cf_name=cf, prefix=prefix)
             tx.delete(key=key, cf_name=cf, prefix=prefix)
 
-            tx.prepare(processed_offset=processed_offset)
+            tx.prepare(processed_offsets=processed_offsets)
 
             assert tx.prepared
             assert changelog_producer_mock.produce.call_count == 1
@@ -496,7 +494,7 @@ class TestPartitionTransaction:
             assert delete_changelog.kwargs["value"] is None
             assert delete_changelog.kwargs["headers"] == {
                 CHANGELOG_CF_MESSAGE_HEADER: cf,
-                CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER: dumps(processed_offset),
+                CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER: dumps(processed_offsets),
             }
 
 
