@@ -2,8 +2,7 @@ from collections import UserList
 from typing import Any
 
 from quixstreams.models import HeadersTuples
-
-from ..base import BaseSink
+from quixstreams.sinks.base import BaseSink
 
 
 class ListSink(BaseSink, UserList):
