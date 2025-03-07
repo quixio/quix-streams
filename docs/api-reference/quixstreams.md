@@ -2746,7 +2746,7 @@ class CountWindow(Window)
 ```python
 def process_window(
     value: Any, key: Any, timestamp_ms: int,
-    transaction: WindowedPartitionTransaction
+    transaction: WindowedPartitionTransaction[str, CountWindowsData]
 ) -> tuple[Iterable[WindowKeyResult], Iterable[WindowKeyResult]]
 ```
 
@@ -7318,7 +7318,7 @@ def delete_windows(max_start_time: int, delete_values: bool,
                    prefix: bytes) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L401)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L403)
 
 Delete windows from RocksDB up to the specified `max_start_time` timestamp.
 
@@ -7353,7 +7353,7 @@ def get_windows(start_from_ms: int,
                 backwards: bool = False) -> list[WindowDetail]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L456)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L458)
 
 Get all windows within the specified time range.
 
@@ -8537,10 +8537,10 @@ revoke ALL StorePartitions (across all Stores) for a given partition number
 ### WindowedState
 
 ```python
-class WindowedState(Protocol)
+class WindowedState(Protocol[K, V])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L11)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L14)
 
 A windowed state to be provided into `StreamingDataFrame` window functions.
 
@@ -8549,10 +8549,10 @@ A windowed state to be provided into `StreamingDataFrame` window functions.
 #### WindowedState.get
 
 ```python
-def get(key: Any, default: Any = None) -> Optional[Any]
+def get(key: K, default: Optional[V] = None) -> Optional[V]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L16)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L25)
 
 Get the value for key if key is present in the state, else default
 
@@ -8570,10 +8570,10 @@ value or None if the key is not found and `default` is not provided
 #### WindowedState.set
 
 ```python
-def set(key: Any, value: Any)
+def set(key: K, value: V)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L26)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L35)
 
 Set value for the key.
 
@@ -8587,10 +8587,10 @@ Set value for the key.
 #### WindowedState.delete
 
 ```python
-def delete(key: Any)
+def delete(key: K)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L34)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L43)
 
 Delete value for the key.
 
@@ -8605,10 +8605,10 @@ This function always returns `None`, even if value is not found.
 #### WindowedState.exists
 
 ```python
-def exists(key: Any) -> bool
+def exists(key: K) -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L43)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L52)
 
 Check if the key exists in state.
 
@@ -8627,10 +8627,10 @@ True if key exists, False otherwise
 ```python
 def get_window(start_ms: int,
                end_ms: int,
-               default: Any = None) -> Optional[Any]
+               default: Optional[V] = None) -> Optional[V]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L51)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L66)
 
 Get the value of the window defined by `start` and `end` timestamps
 
@@ -8651,10 +8651,10 @@ value or None if the key is not found and `default` is not provided
 #### WindowedState.update\_window
 
 ```python
-def update_window(start_ms: int, end_ms: int, value: Any, timestamp_ms: int)
+def update_window(start_ms: int, end_ms: int, value: V, timestamp_ms: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L65)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L80)
 
 Set a value for the window.
 
@@ -8673,10 +8673,10 @@ using the provided `timestamp_ms`.
 #### WindowedState.add\_to\_collection
 
 ```python
-def add_to_collection(value: Any, id: Optional[int]) -> int
+def add_to_collection(value: V, id: Optional[int]) -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L85)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L100)
 
 Collect a value for collection-type window aggregations.
 
@@ -8698,10 +8698,10 @@ the message ID, auto-generated if not provided
 #### WindowedState.get\_from\_collection
 
 ```python
-def get_from_collection(start: int, end: int) -> list[Any]
+def get_from_collection(start: int, end: int) -> list[V]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L100)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L115)
 
 Return all values from a collection-type window aggregation.
 
@@ -8718,7 +8718,7 @@ Return all values from a collection-type window aggregation.
 def delete_from_collection(end: int, *, start: Optional[int] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L109)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L124)
 
 Delete collected values with id less than end.
 
@@ -8740,7 +8740,7 @@ re-scanning previously deleted values. It:
 def get_latest_timestamp() -> Optional[int]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L123)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L138)
 
 Get the latest observed timestamp for the current state partition.
 
@@ -8759,10 +8759,10 @@ latest observed event timestamp in milliseconds
 def expire_windows(max_start_time: int,
                    delete: bool = True,
                    collect: bool = False,
-                   end_inclusive: bool = False) -> list[WindowDetail]
+                   end_inclusive: bool = False) -> list[WindowDetail[V]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L134)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L149)
 
 Get all expired windows from RocksDB up to the specified `max_start_time` timestamp.
 
@@ -8789,7 +8789,7 @@ A sorted list of tuples in the format `((start, end), value)`.
 def delete_windows(max_start_time: int, delete_values: bool) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L156)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L171)
 
 Delete windows from RocksDB up to the specified `max_start_time` timestamp.
 
@@ -8810,10 +8810,10 @@ will be deleted, as they can no longer belong to any active window.
 ```python
 def get_windows(start_from_ms: int,
                 start_to_ms: int,
-                backwards: bool = False) -> list[WindowDetail]
+                backwards: bool = False) -> list[WindowDetail[V]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L170)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L185)
 
 Get all windows that start between "start_from_ms" and "start_to_ms".
 
@@ -8832,10 +8832,10 @@ A sorted list of tuples in the format `((start, end), value)`.
 ### WindowedPartitionTransaction
 
 ```python
-class WindowedPartitionTransaction(Protocol)
+class WindowedPartitionTransaction(Protocol[K, V])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L184)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L199)
 
 <a id="quixstreams.state.types.WindowedPartitionTransaction.failed"></a>
 
@@ -8846,7 +8846,7 @@ class WindowedPartitionTransaction(Protocol)
 def failed() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L186)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L201)
 
 Return `True` if transaction failed to update data at some point.
 
@@ -8865,7 +8865,7 @@ bool
 def completed() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L196)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L211)
 
 Return `True` if transaction is successfully completed.
 
@@ -8884,7 +8884,7 @@ bool
 def prepared() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L206)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L221)
 
 Return `True` if transaction is prepared completed.
 
@@ -8902,7 +8902,7 @@ bool
 def prepare(processed_offset: Optional[int])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L215)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L230)
 
 Produce changelog messages to the changelog topic for all changes accumulated
 
@@ -8927,10 +8927,10 @@ to the changelog topic.
 def get_window(start_ms: int,
                end_ms: int,
                prefix: bytes,
-               default: Any = None) -> Optional[Any]
+               default: Optional[V] = None) -> Optional[V]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L232)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L247)
 
 Get the value of the window defined by `start` and `end` timestamps
 
@@ -8952,11 +8952,11 @@ value or None if the key is not found and `default` is not provided
 #### WindowedPartitionTransaction.update\_window
 
 ```python
-def update_window(start_ms: int, end_ms: int, value: Any, timestamp_ms: int,
+def update_window(start_ms: int, end_ms: int, value: V, timestamp_ms: int,
                   prefix: bytes)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L251)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L266)
 
 Set a value for the window.
 
@@ -8976,10 +8976,10 @@ using the provided `timestamp`.
 #### WindowedPartitionTransaction.add\_to\_collection
 
 ```python
-def add_to_collection(value: Any, id: Optional[int]) -> int
+def add_to_collection(value: V, id: Optional[int]) -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L268)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L283)
 
 Collect a value for collection-type window aggregations.
 
@@ -9001,10 +9001,10 @@ the message ID, auto-generated if not provided
 #### WindowedPartitionTransaction.get\_from\_collection
 
 ```python
-def get_from_collection(start: int, end: int) -> list[Any]
+def get_from_collection(start: int, end: int) -> list[V]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L283)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L298)
 
 Return all values from a collection-type window aggregation.
 
@@ -9021,7 +9021,7 @@ Return all values from a collection-type window aggregation.
 def delete_from_collection(end: int) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L292)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L307)
 
 Delete collected values with id less than end.
 
@@ -9043,7 +9043,7 @@ re-scanning previously deleted values. It:
 def get_latest_timestamp(prefix: bytes) -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L306)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L321)
 
 Get the latest observed timestamp for the current state prefix
 
@@ -9064,7 +9064,7 @@ latest observed event timestamp in milliseconds
 def get_latest_expired(prefix: bytes) -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L318)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L333)
 
 Get the latest expired timestamp for the current state prefix
 
@@ -9086,10 +9086,10 @@ def expire_windows(max_start_time: int,
                    prefix: bytes,
                    delete: bool = True,
                    collect: bool = False,
-                   end_inclusive: bool = False) -> list[WindowDetail]
+                   end_inclusive: bool = False) -> list[WindowDetail[V]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L330)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L345)
 
 Get all expired windows with a set prefix from RocksDB up to the specified `max_start_time` timestamp.
 
@@ -9117,10 +9117,10 @@ A sorted list of tuples in the format `((start, end), value)`.
 def expire_all_windows(max_end_time: int,
                        step_ms: int,
                        delete: bool = True,
-                       collect: bool = False) -> Iterable[WindowDetail]
+                       collect: bool = False) -> Iterable[WindowDetail[V]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L354)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L369)
 
 Get all expired windows for all prefix from RocksDB up to the specified `max_start_time` timestamp.
 
@@ -9142,7 +9142,7 @@ def delete_windows(max_start_time: int, delete_values: bool,
                    prefix: bytes) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L373)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L388)
 
 Delete windows from RocksDB up to the specified `max_start_time` timestamp.
 
@@ -9165,10 +9165,10 @@ will be deleted, as they can no longer belong to any active window.
 def get_windows(start_from_ms: int,
                 start_to_ms: int,
                 prefix: bytes,
-                backwards: bool = False) -> list[WindowDetail]
+                backwards: bool = False) -> list[WindowDetail[V]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L390)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L405)
 
 Get all windows that start between "start_from_ms" and "start_to_ms"
 
@@ -9193,7 +9193,7 @@ A sorted list of tuples in the format `((start, end), value)`.
 def keys(cf_name: str = "default") -> Iterable[bytes]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L409)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L424)
 
 Iterate over all keys in the store.
 
@@ -9216,7 +9216,7 @@ def flush(processed_offset: Optional[int] = None,
           changelog_offset: Optional[int] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L420)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L435)
 
 Flush the recent updates to the storage.
 
@@ -9235,7 +9235,7 @@ optional.
 def changelog_topic_partition() -> Optional[Tuple[str, int]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L434)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L449)
 
 Return the changelog topic-partition for the StorePartition of this transaction.
 
@@ -9253,7 +9253,7 @@ Returns `None` if changelog_producer is not provided.
 class PartitionRecoveryTransaction(Protocol)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L448)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L463)
 
 A class for managing recovery for a StorePartition from a changelog message
 
@@ -9265,7 +9265,7 @@ A class for managing recovery for a StorePartition from a changelog message
 def flush()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L455)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/types.py#L470)
 
 Flush the recovery update to the storage.
 
@@ -9813,7 +9813,7 @@ Updates state from a given changelog message.
 class PartitionTransactionCache()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L44)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L47)
 
 A cache with the data updated in the current PartitionTransaction.
 It is used to read-your-own-writes before the transaction is committed to the Store.
@@ -9831,7 +9831,7 @@ def get(key: bytes,
         cf_name: str = "default") -> Union[bytes, Marker]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L67)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L70)
 
 Get a value for the key.
 
@@ -9855,7 +9855,7 @@ If the key is not present in the cache, returns "UNDEFINED sentinel
 def set(key: bytes, value: bytes, prefix: bytes, cf_name: str = "default")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L97)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L100)
 
 Set a value for the key.
 
@@ -9873,7 +9873,7 @@ Set a value for the key.
 def delete(key: Any, prefix: bytes, cf_name: str = "default")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L110)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L113)
 
 Delete a key.
 
@@ -9890,7 +9890,7 @@ Delete a key.
 def is_empty() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L122)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L125)
 
 Return True if any changes have been made (updates or deletes), otherwise
 return False.
@@ -9903,7 +9903,7 @@ return False.
 def get_column_families() -> Set[str]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L129)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L132)
 
 Get all update column families.
 
@@ -9915,7 +9915,7 @@ Get all update column families.
 def get_updates(cf_name: str = "default") -> Dict[bytes, Dict[bytes, bytes]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L135)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L138)
 
 Get all updated keys (excluding deleted)
 
@@ -9932,7 +9932,7 @@ in the format "{<prefix>: {<key>: <value>}}".
 def get_deletes(cf_name: str = "default") -> Set[bytes]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L144)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L147)
 
 Get all deleted keys (excluding updated) as a set.
 
@@ -9944,7 +9944,7 @@ Get all deleted keys (excluding updated) as a set.
 class PartitionTransactionStatus(enum.Enum)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L151)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L154)
 
 <a id="quixstreams.state.base.transaction.PartitionTransactionStatus.STARTED"></a>
 
@@ -9978,7 +9978,7 @@ Transaction is failed, it cannot be used anymore
 def validate_transaction_status(*allowed: PartitionTransactionStatus)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L162)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L165)
 
 Check that the status of `RocksDBTransaction` is valid before calling a method
 
@@ -9987,10 +9987,10 @@ Check that the status of `RocksDBTransaction` is valid before calling a method
 ### PartitionTransaction
 
 ```python
-class PartitionTransaction(ABC)
+class PartitionTransaction(ABC, Generic[K, V])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L182)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L189)
 
 A transaction class to perform simple key-value operations like
 "get", "set", "delete" and "exists" on a single storage partition.
@@ -10004,7 +10004,7 @@ A transaction class to perform simple key-value operations like
 def failed() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L214)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L221)
 
 Return `True` if transaction failed to update data at some point.
 
@@ -10023,7 +10023,7 @@ bool
 def completed() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L224)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L231)
 
 Return `True` if transaction is successfully completed.
 
@@ -10042,7 +10042,7 @@ bool
 def prepared() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L234)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L241)
 
 Return `True` if transaction is prepared completed.
 
@@ -10061,7 +10061,7 @@ bool
 def changelog_topic_partition() -> Optional[Tuple[str, int]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L244)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L251)
 
 Return the changelog topic-partition for the StorePartition of this transaction.
 
@@ -10076,10 +10076,10 @@ Returns `None` if changelog_producer is not provided.
 #### PartitionTransaction.as\_state
 
 ```python
-def as_state(prefix: Any = DEFAULT_PREFIX) -> State
+def as_state(prefix: Any = DEFAULT_PREFIX) -> State[K, V]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L271)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L278)
 
 Create an instance implementing the `State` protocol to be provided
 
@@ -10097,13 +10097,13 @@ an instance implementing the `State` protocol
 
 ```python
 @validate_transaction_status(PartitionTransactionStatus.STARTED)
-def get(key: Any,
+def get(key: K,
         prefix: bytes,
-        default: Any = None,
-        cf_name: str = "default") -> Any
+        default: Optional[V] = None,
+        cf_name: str = "default") -> Optional[V]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L290)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L303)
 
 Get a key from the store.
 
@@ -10126,10 +10126,10 @@ value or None if the key is not found and `default` is not provided
 
 ```python
 @validate_transaction_status(PartitionTransactionStatus.STARTED)
-def set(key: Any, value: Any, prefix: bytes, cf_name: str = "default")
+def set(key: K, value: V, prefix: bytes, cf_name: str = "default")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L326)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L339)
 
 Set value for the key.
 
@@ -10146,10 +10146,10 @@ Set value for the key.
 
 ```python
 @validate_transaction_status(PartitionTransactionStatus.STARTED)
-def delete(key: Any, prefix: bytes, cf_name: str = "default")
+def delete(key: K, prefix: bytes, cf_name: str = "default")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L349)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L362)
 
 Delete value for the key.
 
@@ -10167,10 +10167,10 @@ This function always returns `None`, even if value is not found.
 
 ```python
 @validate_transaction_status(PartitionTransactionStatus.STARTED)
-def exists(key: Any, prefix: bytes, cf_name: str = "default") -> bool
+def exists(key: K, prefix: bytes, cf_name: str = "default") -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L368)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L381)
 
 Check if the key exists in state.
 
@@ -10193,7 +10193,7 @@ True if key exists, False otherwise
 def prepare(processed_offset: Optional[int])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L388)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L401)
 
 Produce changelog messages to the changelog topic for all changes accumulated
 
@@ -10221,7 +10221,7 @@ def flush(processed_offset: Optional[int] = None,
           changelog_offset: Optional[int] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L449)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L462)
 
 Flush the recent updates to the database.
 
@@ -10254,10 +10254,10 @@ optional.
 ### State
 
 ```python
-class State(ABC)
+class State(ABC, Generic[K, V])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L13)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L17)
 
 Primary interface for working with key-value state data from `StreamingDataFrame`
 
@@ -10267,10 +10267,10 @@ Primary interface for working with key-value state data from `StreamingDataFrame
 
 ```python
 @abstractmethod
-def get(key: Any, default: Any = None) -> Optional[Any]
+def get(key: K, default: Optional[V] = None) -> Optional[V]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L19)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L29)
 
 Get the value for key if key is present in the state, else default
 
@@ -10289,10 +10289,10 @@ value or None if the key is not found and `default` is not provided
 
 ```python
 @abstractmethod
-def set(key: Any, value: Any)
+def set(key: K, value: V)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L30)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L40)
 
 Set value for the key.
 
@@ -10307,10 +10307,10 @@ Set value for the key.
 
 ```python
 @abstractmethod
-def delete(key: Any)
+def delete(key: K)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L39)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L49)
 
 Delete value for the key.
 
@@ -10326,10 +10326,10 @@ This function always returns `None`, even if value is not found.
 
 ```python
 @abstractmethod
-def exists(key: Any) -> bool
+def exists(key: K) -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L49)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L59)
 
 Check if the key exists in state.
 
@@ -10349,7 +10349,7 @@ True if key exists, False otherwise
 class TransactionState(State)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L58)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L68)
 
 <a id="quixstreams.state.base.state.TransactionState.__init__"></a>
 
@@ -10359,7 +10359,7 @@ class TransactionState(State)
 def __init__(prefix: bytes, transaction: "PartitionTransaction")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L64)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L74)
 
 Simple key-value state to be provided into `StreamingDataFrame` functions
 
@@ -10372,10 +10372,10 @@ Simple key-value state to be provided into `StreamingDataFrame` functions
 #### TransactionState.get
 
 ```python
-def get(key: Any, default: Any = None) -> Optional[Any]
+def get(key: K, default: Optional[V] = None) -> Optional[V]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L73)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L89)
 
 Get the value for key if key is present in the state, else default
 
@@ -10393,10 +10393,10 @@ value or None if the key is not found and `default` is not provided
 #### TransactionState.set
 
 ```python
-def set(key: Any, value: Any)
+def set(key: K, value: V)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L83)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L99)
 
 Set value for the key.
 
@@ -10410,10 +10410,10 @@ Set value for the key.
 #### TransactionState.delete
 
 ```python
-def delete(key: Any)
+def delete(key: K)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L91)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L107)
 
 Delete value for the key.
 
@@ -10428,10 +10428,10 @@ This function always returns `None`, even if value is not found.
 #### TransactionState.exists
 
 ```python
-def exists(key: Any) -> bool
+def exists(key: K) -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L100)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L116)
 
 Check if the key exists in state.
 
