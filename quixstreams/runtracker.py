@@ -174,7 +174,6 @@ class RunTracker:
             if self._current_message_tp[0] in self._primary_topics:
                 self._current_count += 1
                 if (self._max_count - self._current_count) <= 0:
-                    logger.info(f"Count of {self._max_count} records reached!")
                     return True
         return False
 
@@ -223,6 +222,7 @@ class RunTracker:
         def at_count_gen() -> Iterator[bool]:
             while not at_count():
                 yield False
+            logger.info(f"Count of {self._max_count} records reached!")
             # Count was met for primary topics, now confirm downstream repartitions
             if self._repartition_topics:
                 self._count_prepare_repartition_check()
@@ -237,7 +237,6 @@ class RunTracker:
 
     def _at_timeout(self, timeout) -> bool:
         if (time.monotonic() - self._timeout_start_time) >= timeout:
-            logger.info(f"Timeout of {timeout}s reached!")
             return True
         return False
 
@@ -264,12 +263,14 @@ class RunTracker:
         """
         at_timeout_buffer = self._at_timeout_buffer
         at_timeout = self._at_timeout
+        timeout = self._timeout
 
         def at_timeout_gen() -> Iterator[bool]:
             while not at_timeout_buffer():
                 yield False
-            while not at_timeout(self._timeout):
+            while not at_timeout(timeout):
                 yield False
+            logger.info(f"Timeout of {timeout}s reached!")
             yield True
 
         gen = at_timeout_gen()
