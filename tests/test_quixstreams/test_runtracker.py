@@ -350,3 +350,101 @@ class TestRunTracker:
             assert consumer.get_watermark_offsets(TopicPartition(output_topic.name, 0))[
                 1
             ] == len(list_sink)
+
+    def test_timeout_buffer_waits_for_first_msg(
+        self,
+        app_factory,
+        row_consumer_factory,
+        executor,
+    ):
+        app = app_factory(
+            auto_offset_reset="earliest",
+        )
+        input_topic = app.topic(
+            str(uuid.uuid4()),
+            value_deserializer="json",
+            value_serializer="json",
+        )
+        output_topic = app.topic(
+            str(uuid.uuid4()),
+            value_deserializer="json",
+        )
+
+        values_in = [{"x": 1}, {"x": 2}, {"x": 3}, {"x": 4}]
+        timeout = 0.001
+        buffer = 3.0
+
+        list_sink = ListSink()
+        app.dataframe(topic=input_topic).update(lambda x: time.sleep(timeout)).to_topic(
+            output_topic
+        ).sink(list_sink)
+
+        def produce_on_delay(app_producer):
+            time.sleep(buffer)
+            with app_producer as producer:
+                for value in values_in:
+                    msg = input_topic.serialize(key="some_key", value=value)
+                    producer.produce(input_topic.name, key=msg.key, value=msg.value)
+
+        producer = app.get_producer()
+        executor.submit(produce_on_delay, producer)
+        time_start = time.monotonic()
+        app.run(timeout=timeout, timeout_wait_buffer=buffer * 2)
+        time_end = time.monotonic()
+        assert list_sink == values_in[:1]
+        # confirm the buffer ended from the message arriving rather than timing out
+        assert (time_end - time_start) < buffer * 2
+
+        with app.get_consumer() as consumer:
+            assert consumer.get_watermark_offsets(TopicPartition(output_topic.name, 0))[
+                1
+            ] == len(list_sink)
+
+    def test_timeout_buffer_exceeded(
+        self,
+        app_factory,
+        row_consumer_factory,
+        executor,
+    ):
+        app = app_factory(
+            auto_offset_reset="earliest",
+        )
+        input_topic = app.topic(
+            str(uuid.uuid4()),
+            value_deserializer="json",
+            value_serializer="json",
+        )
+        output_topic = app.topic(
+            str(uuid.uuid4()),
+            value_deserializer="json",
+        )
+
+        values_in = [{"x": 1}, {"x": 2}, {"x": 3}, {"x": 4}]
+        timeout = 1.0
+
+        list_sink = ListSink()
+        app.dataframe(topic=input_topic).update(lambda x: time.sleep(timeout)).to_topic(
+            output_topic
+        ).sink(list_sink)
+
+        def produce_on_delay(app_producer):
+            time.sleep(timeout * 1.5)
+            with app_producer as producer:
+                for value in values_in:
+                    msg = input_topic.serialize(key="some_key", value=value)
+                    producer.produce(input_topic.name, key=msg.key, value=msg.value)
+
+        producer = app.get_producer()
+        executor.submit(produce_on_delay, producer)
+        time_start = time.monotonic()
+        app.run(timeout=timeout, timeout_wait_buffer=timeout)
+        time_end = time.monotonic()
+        assert list_sink == values_in[:1]
+        # confirm the buffer reached the end
+        # (reminder: the sdf.update sleeps for "timeout" time)
+        assert (time_end - time_start) > timeout * 2
+
+        with app.get_consumer() as consumer:
+            assert consumer.get_watermark_offsets(TopicPartition(output_topic.name, 0))[
+                1
+            ] == len(list_sink)
