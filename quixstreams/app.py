@@ -734,6 +734,7 @@ class Application:
         dataframe: Optional[StreamingDataFrame] = None,
         timeout: float = 0.0,
         count: int = 0,
+        timeout_wait_buffer: float = 5.0,
     ):
         """
         Start processing data from Kafka using provided `StreamingDataFrame`
@@ -754,6 +755,10 @@ class Application:
           an initial rebalance and recovery (if required).
         Note that unlike count, a timeout does NOT ensure downstream operations that
           rely on internal topics (like groupby) are also finalized.
+        There is an additional "timeout_wait_buffer" that will wait up to T seconds for
+          a first message to arrive before beginning to track timeout time. Note that
+          recovery time IS included in this (though timeout tracking will only start
+          once recovery is finished).
 
         A count will process N total records from ANY input/SDF topics (so
           multiple input topics will very likely differ in their consume total!) after
@@ -788,6 +793,8 @@ class Application:
             Default = 0.0 (infinite)
         :param count: how many input topic messages to process before stopping.
             Default = 0 (infinite)
+        :param timeout_wait_buffer: how long to wait for a first message before starting
+            timeout tracking.
         """
         if dataframe is not None:
             warnings.warn(
@@ -807,7 +814,9 @@ class Application:
             [t for t in self._topic_manager.topics],
             [t for t in self._topic_manager.repartition_topics],
         )
-        self._run_tracker.set_stop_condition(timeout=timeout, count=count)
+        self._run_tracker.set_stop_condition(
+            timeout=timeout, count=count, timeout_wait_buffer=timeout_wait_buffer
+        )
         self._run()
 
     def _exception_handler(self, exc_type, exc_val, exc_tb):
@@ -877,7 +886,6 @@ class Application:
         while run_tracker.running:
             if state_manager.recovery_required:
                 state_manager.do_recovery()
-                run_tracker.handle_recovery()
             else:
                 process_message(dataframes_composed)
                 processing_context.commit_checkpoint()
@@ -895,7 +903,7 @@ class Application:
 
         run_tracker.set_as_running()
         source_manager.start_sources()
-        run_tracker.handle_rebalance(recovery_required=False)
+        run_tracker.set_timeout_start_time()
         while run_tracker.running and source_manager.is_alive():
             source_manager.raise_for_error()
             run_tracker.update_status()
@@ -926,6 +934,7 @@ class Application:
         if rows is None:
             self._run_tracker.set_current_message_tp(None)
             return
+        self._run_tracker.set_timeout_start_time()
 
         # Deserializer may return multiple rows for a single message
         rows = rows if isinstance(rows, list) else [rows]
