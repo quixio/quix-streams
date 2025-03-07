@@ -98,7 +98,7 @@ class RunTracker:
         This is optimized for maximum performance for when there is no stop_checker.
         """
         if self._stop_checker is None:
-            return False
+            return
         if self._stop_checker():
             self.stop_and_reset()
 
@@ -250,7 +250,7 @@ class RunTracker:
         if self._at_timeout(self._timeout_wait_buffer):
             logger.info(
                 f"Timeout wait period of {self._timeout_wait_buffer} fully elapsed "
-                f"before a message was consumed. Timeout tracking will begin now"
+                f"before a message was consumed; timeout tracking will begin now."
             )
             self.set_timeout_start_time()
             return True
