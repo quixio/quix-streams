@@ -23,7 +23,7 @@ class RunTracker:
         "_timeout",
         "_timeout_start_time",
         "_timeout_wait_buffer",
-        "_timeout_needs_start_time_refresh",
+        "_timeout_needs_refresh",
         "_primary_topics",
         "_repartition_topics",
         "_current_message_tp",
@@ -41,7 +41,7 @@ class RunTracker:
     # timeout-specific attrs
     _timeout: float
     _timeout_start_time: float
-    _timeout_needs_start_time_refresh: bool
+    _timeout_needs_refresh: bool
     _timeout_wait_buffer: float
 
     # count-specific attrs
@@ -82,7 +82,7 @@ class RunTracker:
 
         self._timeout = 0.0
         self._timeout_start_time = 0.0
-        self._timeout_needs_start_time_refresh = False
+        self._timeout_needs_refresh = False
         self._timeout_wait_buffer = 5.0
 
         self._current_message_tp = None
@@ -130,10 +130,10 @@ class RunTracker:
         1. the timeout_wait_buffer threshold is reached, or
         2. the first non-recovery message is consumed
         """
-        if self._timeout_needs_start_time_refresh:
+        if self._timeout_needs_refresh:
             logger.info(f"Starting time tracking with {self._timeout}s timeout")
             self._timeout_start_time = time.monotonic()
-            self._timeout_needs_start_time_refresh = False
+            self._timeout_needs_refresh = False
 
     def set_stop_condition(
         self,
@@ -150,7 +150,7 @@ class RunTracker:
         if timeout:
             self._timeout = timeout
             self._timeout_start_time = time.monotonic()
-            self._timeout_needs_start_time_refresh = True
+            self._timeout_needs_refresh = True
             self._timeout_wait_buffer = max(timeout_wait_buffer, 0.0)
             self._stop_checker = self._at_timeout_func()
 
@@ -161,10 +161,10 @@ class RunTracker:
         if timeout and count:
             self._stop_checker = self._at_count_or_timeout_func()
 
-        time_stop_log = f"after running for {timeout} seconds" if timeout else ""
-        count_stop_log = f"after processing {count} records" if count else ""
+        time_stop_log = f"timeout={timeout} seconds" if timeout else ""
+        count_stop_log = f"count={count} records" if count else ""
         logger.info(
-            "APP STOP CONDITION DETECTED: Application will stop "
+            "APP STOP CONDITIONS SET: "
             f"{time_stop_log}{' OR ' if (timeout and count) else ''}{count_stop_log}"
         )
 
@@ -225,6 +225,7 @@ class RunTracker:
             logger.info(f"Count of {self._max_count} records reached!")
             # Count was met for primary topics, now confirm downstream repartitions
             if self._repartition_topics:
+                logger.info("Finalizing any internal topic processing...")
                 self._count_prepare_repartition_check()
                 yield False  # poll for a new message before continuing
                 while not finished_repartition_processing():
@@ -244,7 +245,7 @@ class RunTracker:
         """
         Wait for a message for a given period of time before beginning to track timeout.
         """
-        if not self._timeout_needs_start_time_refresh:
+        if not self._timeout_needs_refresh:
             # first message was received and start time was reset then
             return True
         if self._at_timeout(self._timeout_wait_buffer):
