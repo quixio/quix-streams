@@ -1592,7 +1592,7 @@ class StreamingDataFrame:
             )
         elif isinstance(item, list):
             # Make a projection and filter keys from the dict
-            return self.apply(lambda value: {k: value[k] for k in item})
+            return self.apply(lambda value: {k: value.get(k) for k in item})
         elif isinstance(item, str):
             # Create a StreamingSeries based on a column name
             return StreamingSeries(name=item, sdf_id=id(self))
