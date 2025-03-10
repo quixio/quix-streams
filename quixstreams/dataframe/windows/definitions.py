@@ -53,7 +53,12 @@ class WindowDefinition(abc.ABC):
         """
 
         def func(old: Any, new: Any) -> Any:
-            return old + new
+            try:
+                return old + new
+            except TypeError as exc:
+                if "NoneType" in str(exc):
+                    return None
+                raise
 
         return self._create_window(
             func_name="sum", aggregate_func=func, aggregate_default=0
