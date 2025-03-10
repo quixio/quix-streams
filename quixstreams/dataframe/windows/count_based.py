@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, Any, Iterable, Optional, TypedDict
 
 from quixstreams.state import WindowedPartitionTransaction
 
-from .aggregations import Aggregation, Collector
+from .aggregations import Aggregator, Collector
 from .base import (
     Window,
     WindowKeyResult,
@@ -36,7 +36,7 @@ class CountWindow(Window):
         count: int,
         name: str,
         dataframe: "StreamingDataFrame",
-        aggregations: dict[str, Aggregation],
+        aggregations: dict[str, Aggregator],
         collectors: dict[str, Collector],
         step: Optional[int] = None,
     ):
@@ -86,7 +86,7 @@ class CountWindow(Window):
             if self._collect:
                 window_value = msg_id = 0
             else:
-                window_value = self._aggregations["value"].start()
+                window_value = self._aggregations["value"].initialize()
 
             data["windows"].append(
                 CountWindowData(
@@ -102,7 +102,7 @@ class CountWindow(Window):
                     data["windows"][0]["value"] + data["windows"][0]["count"]
                 )
             else:
-                window_value = self._aggregations["value"].start()
+                window_value = self._aggregations["value"].initialize()
 
             data["windows"].append(
                 CountWindowData(
@@ -117,9 +117,7 @@ class CountWindow(Window):
             if msg_id is None:
                 msg_id = data["windows"][0]["value"] + data["windows"][0]["count"]
 
-            state.add_to_collection(
-                id=msg_id, value=self._collectors["value"].add(value)
-            )
+            state.add_to_collection(id=msg_id, value=value)
 
         updated_windows, expired_windows, to_remove = [], [], []
         for index, window in enumerate(data["windows"]):

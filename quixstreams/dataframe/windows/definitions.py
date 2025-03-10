@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from .aggregations import (
     ROOT,
-    Aggregation,
+    Aggregator,
     Collect,
     Collector,
     Count,
@@ -43,7 +43,7 @@ class WindowDefinition(abc.ABC):
     def _create_window(
         self,
         func_name: str,
-        aggregations: Optional[dict[str, Aggregation]] = None,
+        aggregations: Optional[dict[str, Aggregator]] = None,
         collectors: Optional[dict[str, Collector]] = None,
     ) -> Window: ...
 
@@ -251,7 +251,7 @@ class HoppingTimeWindowDefinition(TimeWindowDefinition):
     def _create_window(
         self,
         func_name: str,
-        aggregations: Optional[dict[str, Aggregation]] = None,
+        aggregations: Optional[dict[str, Aggregator]] = None,
         collectors: Optional[dict[str, Collector]] = None,
     ) -> TimeWindow:
         return TimeWindow(
@@ -290,7 +290,7 @@ class TumblingTimeWindowDefinition(TimeWindowDefinition):
     def _create_window(
         self,
         func_name: str,
-        aggregations: Optional[dict[str, Aggregation]] = None,
+        aggregations: Optional[dict[str, Aggregator]] = None,
         collectors: Optional[dict[str, Collector]] = None,
     ) -> TimeWindow:
         return TimeWindow(
@@ -328,7 +328,7 @@ class SlidingTimeWindowDefinition(TimeWindowDefinition):
     def _create_window(
         self,
         func_name: str,
-        aggregations: Optional[dict[str, Aggregation]] = None,
+        aggregations: Optional[dict[str, Aggregator]] = None,
         collectors: Optional[dict[str, Collector]] = None,
     ) -> SlidingWindow:
         return SlidingWindow(
@@ -358,7 +358,7 @@ class TumblingCountWindowDefinition(CountWindowDefinition):
     def _create_window(
         self,
         func_name: str,
-        aggregations: Optional[dict[str, Aggregation]] = None,
+        aggregations: Optional[dict[str, Aggregator]] = None,
         collectors: Optional[dict[str, Collector]] = None,
     ) -> Window:
         return CountWindow(
@@ -396,7 +396,7 @@ class HoppingCountWindowDefinition(CountWindowDefinition):
     def _create_window(
         self,
         func_name: str,
-        aggregations: Optional[dict[str, Aggregation]] = None,
+        aggregations: Optional[dict[str, Aggregator]] = None,
         collectors: Optional[dict[str, Collector]] = None,
     ) -> Window:
         return CountWindow(

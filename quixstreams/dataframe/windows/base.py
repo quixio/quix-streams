@@ -22,7 +22,7 @@ from quixstreams.core.stream import TransformExpandedCallback
 from quixstreams.processing import ProcessingContext
 from quixstreams.state import WindowedPartitionTransaction
 
-from .aggregations import Aggregation, Collector
+from .aggregations import Aggregator, Collector
 
 if TYPE_CHECKING:
     from quixstreams.dataframe.dataframe import StreamingDataFrame
@@ -52,7 +52,7 @@ class Window(abc.ABC):
         self,
         name: str,
         dataframe: "StreamingDataFrame",
-        aggregations: dict[str, Aggregation],
+        aggregations: dict[str, Aggregator],
         collectors: dict[str, Collector],
     ) -> None:
         if not name:

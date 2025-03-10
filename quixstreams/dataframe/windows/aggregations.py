@@ -1,9 +1,18 @@
-import sys
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Generic, Iterable, Optional, TypeVar, Union
+from typing import (
+    Any,
+    Callable,
+    Generic,
+    Hashable,
+    Iterable,
+    Optional,
+    TypeAlias,
+    TypeVar,
+    Union,
+)
 
 
-class Aggregation(ABC):
+class Aggregator(ABC):
     """
     Base class for window aggregation.
 
@@ -11,7 +20,7 @@ class Aggregation(ABC):
     """
 
     @abstractmethod
-    def start(self) -> Any:
+    def initialize(self) -> Any:
         """
         This method is triggered once to build the aggregation starting value.
         It should return the initial value for the aggregation.
@@ -37,14 +46,19 @@ class Aggregation(ABC):
 
 V = TypeVar("V", int, float)
 
-ROOT = object()
+
+class ROOT:
+    pass
 
 
-class Sum(Aggregation):
-    def __init__(self, column: Any = ROOT) -> None:
+COLUMN: TypeAlias = Union[Hashable, type[ROOT]]
+
+
+class Sum(Aggregator):
+    def __init__(self, column: COLUMN = ROOT) -> None:
         self.column = column
 
-    def start(self) -> int:
+    def initialize(self) -> int:
         return 0
 
     def agg(self, old: V, new: Any) -> V:
@@ -56,8 +70,8 @@ class Sum(Aggregation):
         return value
 
 
-class Count(Aggregation):
-    def start(self) -> int:
+class Count(Aggregator):
+    def initialize(self) -> int:
         return 0
 
     def agg(self, old: int, new: Any) -> int:
@@ -67,11 +81,11 @@ class Count(Aggregation):
         return value
 
 
-class Mean(Aggregation):
-    def __init__(self, column: Any = ROOT) -> None:
+class Mean(Aggregator):
+    def __init__(self, column: COLUMN = ROOT) -> None:
         self.column = column
 
-    def start(self) -> tuple[float, int]:
+    def initialize(self) -> tuple[float, int]:
         return 0.0, 0
 
     def agg(self, old: tuple[V, int], new: Any) -> tuple[V, int]:
@@ -88,7 +102,7 @@ class Mean(Aggregation):
 R = TypeVar("R", int, float)
 
 
-class Reduce(Aggregation, Generic[R]):
+class Reduce(Aggregator, Generic[R]):
     def __init__(
         self,
         reducer: Callable[[R, Any], R],
@@ -97,7 +111,7 @@ class Reduce(Aggregation, Generic[R]):
         self._initializer: Callable[[Any], R] = initializer
         self._reducer: Callable[[R, Any], R] = reducer
 
-    def start(self) -> Any:
+    def initialize(self) -> Any:
         return None
 
     def agg(self, old: R, new: Any) -> Any:
@@ -107,33 +121,37 @@ class Reduce(Aggregation, Generic[R]):
         return value
 
 
-class Max(Aggregation):
-    def __init__(self, column: Any = ROOT) -> None:
+class Max(Aggregator):
+    def __init__(self, column: COLUMN = ROOT) -> None:
         self.column = column
 
-    def start(self) -> float:
-        return sys.float_info.min
+    def initialize(self) -> None:
+        return None
 
     def agg(self, old: Optional[V], new: Any) -> V:
-        if self.column is ROOT:
-            return max(old, new)
-        return max(old, new[self.column])
+        if self.column is not ROOT:
+            v = new[self.column]
+        if old is None:
+            return v
+        return max(old, v)
 
     def result(self, value: V) -> V:
         return value
 
 
-class Min(Aggregation):
-    def __init__(self, column: Any = ROOT) -> None:
+class Min(Aggregator):
+    def __init__(self, column: COLUMN = ROOT) -> None:
         self.column = column
 
-    def start(self) -> float:
-        return sys.float_info.max
+    def initialize(self) -> None:
+        return None
 
     def agg(self, old: Optional[V], new: Any) -> V:
-        if self.column is ROOT:
-            return min(old, new)
-        return min(old, new[self.column])
+        if self.column is not ROOT:
+            v = new[self.column]
+        if old is None:
+            return v
+        return min(old, v)
 
     def result(self, value: V) -> V:
         return value
@@ -149,8 +167,9 @@ class Collector(ABC, Generic[I]):
     Subclass it to implement custom collections.
     """
 
+    @property
     @abstractmethod
-    def add(self, item: Any) -> I:
+    def column(self) -> COLUMN:
         """
         This method is triggered when a new value is added to the collection.
         It should return the individual value used by the collection.
@@ -167,13 +186,12 @@ class Collector(ABC, Generic[I]):
 
 
 class Collect(Collector):
-    def __init__(self, column: Any = ROOT) -> None:
-        self.column = column
+    def __init__(self, column: COLUMN = ROOT) -> None:
+        self._column = column
 
-    def add(self, item: Any) -> Any:
-        if self.column is ROOT:
-            return item
-        return item[self.column]
+    @property
+    def column(self) -> COLUMN:
+        return self._column
 
     def result(self, items: Iterable[Any]) -> list[Any]:
         return list(items)

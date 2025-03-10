@@ -176,7 +176,7 @@ class SlidingWindow(TimeWindow):
                         state=state,
                         start=right_start,
                         end=right_start + duration,
-                        value=aggregate(self._aggregations["value"].start(), value)
+                        value=aggregate(self._aggregations["value"].initialize(), value)
                         if aggregate
                         else None,
                         timestamp=timestamp_ms,
@@ -218,7 +218,7 @@ class SlidingWindow(TimeWindow):
                         state=state,
                         start=right_start,
                         end=right_start + duration,
-                        value=aggregate(self._aggregations["value"].start(), value)
+                        value=aggregate(self._aggregations["value"].initialize(), value)
                         if aggregate
                         else None,
                         timestamp=timestamp_ms,
@@ -227,7 +227,7 @@ class SlidingWindow(TimeWindow):
 
                 # Create a left window with existing aggregation if it falls within the window
                 if left_start > max_timestamp:
-                    aggregation = self._aggregations["value"].start()
+                    aggregation = self._aggregations["value"].initialize()
 
                 updated_windows.append(
                     self._update_window(
@@ -257,7 +257,7 @@ class SlidingWindow(TimeWindow):
                         state=state,
                         start=left_start,
                         end=left_end,
-                        value=aggregate(self._aggregations["value"].start(), value)
+                        value=aggregate(self._aggregations["value"].initialize(), value)
                         if aggregate
                         else None,
                         timestamp=timestamp_ms,
@@ -266,9 +266,7 @@ class SlidingWindow(TimeWindow):
                 )
 
         if collect:
-            state.add_to_collection(
-                value=self._collectors["value"].add(value), id=timestamp_ms
-            )
+            state.add_to_collection(value=value, id=timestamp_ms)
 
         expired_windows = [
             (

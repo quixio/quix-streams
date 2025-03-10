@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any, Iterable, Literal, Optional
 from quixstreams.context import message_context
 from quixstreams.state import WindowedPartitionTransaction, WindowedState
 
-from .aggregations import Aggregation, Collector
+from .aggregations import Aggregator, Collector
 from .base import (
     Window,
     WindowKeyResult,
@@ -45,7 +45,7 @@ class TimeWindow(Window):
         grace_ms: int,
         name: str,
         dataframe: "StreamingDataFrame",
-        aggregations: dict[str, Aggregation],
+        aggregations: dict[str, Aggregator],
         collectors: dict[str, Collector],
         step_ms: Optional[int] = None,
         on_late: Optional[WindowOnLateCallback] = None,
@@ -177,7 +177,7 @@ class TimeWindow(Window):
             if aggregate:
                 current_value = state.get_window(start, end)
                 if current_value is None:
-                    current_value = self._aggregations["value"].start()
+                    current_value = self._aggregations["value"].initialize()
 
                 aggregated = self._aggregations["value"].agg(current_value, value)
                 updated_windows.append(
@@ -193,9 +193,7 @@ class TimeWindow(Window):
             state.update_window(start, end, value=aggregated, timestamp_ms=timestamp_ms)
 
         if collect:
-            state.add_to_collection(
-                value=self._collectors["value"].add(value), id=timestamp_ms
-            )
+            state.add_to_collection(value=value, id=timestamp_ms)
 
         if self._closing_strategy == ClosingStrategy.PARTITION:
             expired_windows = self.expire_by_partition(
