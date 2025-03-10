@@ -243,18 +243,36 @@ class StreamingSeries:
             other_composed = other.compose_returning()
 
             def f(value: Any, key: Any, timestamp: int, headers: Any) -> Any:
-                return operator_(
-                    self_composed(value, key, timestamp, headers)[0],
-                    other_composed(value, key, timestamp, headers)[0],
-                )
+                try:
+                    # These may raise ColumnDoesNotExist
+                    self_result = self_composed(value, key, timestamp, headers)[0]
+                    other_result = other_composed(value, key, timestamp, headers)[0]
+
+                    # This may raise TypeError
+                    return operator_(self_result, other_result)
+                except ColumnDoesNotExist:
+                    return None
+                except TypeError as exc:
+                    if "NoneType" in str(exc):
+                        return None
+                    raise
 
             return self._from_apply_callback(func=f)
         else:
 
             def f(value: Any, key: Any, timestamp: int, headers: Any) -> Any:
-                return operator_(
-                    self_composed(value, key, timestamp, headers)[0], other
-                )
+                try:
+                    # This may raise ColumnDoesNotExist
+                    self_result = self_composed(value, key, timestamp, headers)[0]
+
+                    # This may raise TypeError
+                    return operator_(self_result, other)
+                except ColumnDoesNotExist:
+                    return None
+                except TypeError as exc:
+                    if "NoneType" in str(exc):
+                        return None
+                    raise
 
             return self._from_apply_callback(func=f)
 
