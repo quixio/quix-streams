@@ -136,10 +136,10 @@ if __name__ == "__main__":
 
 ## Connection Callbacks
 
-Assuming a given connector is set up to utilize them, there are two callbacks that can 
-be set for when a client connects/authenticates successfully or not, named 
-`on_client_connect_success` and `on_client_connect_failure`, respectfully.
+Assuming a given connector has a proper `setup` method to utilize them, there are two 
+callbacks that can be set for when a client connects/authenticates successfully or not, 
+named `on_client_connect_success` and `on_client_connect_failure`, respectfully.
 
-Though having a `setup` method is required, it is not guaranteed that it is implemented or
-utilized fully with `community` sources; you can inspect a given Source's `setup` method 
+Though implementing an applicable `setup` method is strongly encouraged, it is not an
+enforced guarantee with `community` sources; you can inspect a given Source's `setup` method 
 to confirm whether it tests the client connection there (and that the callbacks are then applicable).

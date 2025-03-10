@@ -36,9 +36,6 @@ class CoinbaseSource(Source):
         self._url = url
         self._product_ids = product_ids
 
-    def setup(self):
-        return
-
     def run(self) -> None:
         """
         The main method of the source with the main logic.
