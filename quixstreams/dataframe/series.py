@@ -23,7 +23,7 @@ from quixstreams.core.stream.functions import (
 from quixstreams.core.stream.stream import Stream
 from quixstreams.models.messagecontext import MessageContext
 
-from .exceptions import InvalidColumnReference, InvalidOperation
+from .exceptions import ColumnDoesNotExist, InvalidColumnReference, InvalidOperation
 
 __all__ = ("StreamingSeries",)
 
@@ -42,7 +42,11 @@ def _getitem(d: Mapping, column_name: Union[str, int]) -> object:
     :return: Nested data from column name.
     """
     try:
-        return d.get(column_name)
+        return d[column_name]
+    except KeyError:
+        raise ColumnDoesNotExist(
+            f"Column '{column_name}' does not exist in the message value"
+        )
     except TypeError:
         raise InvalidColumnReference(
             f"Cannot access column '{column_name}'; "
@@ -239,24 +243,36 @@ class StreamingSeries:
             other_composed = other.compose_returning()
 
             def f(value: Any, key: Any, timestamp: int, headers: Any) -> Any:
-                self_result = self_composed(value, key, timestamp, headers)[0]
-                if self_result is None:
+                try:
+                    # These may raise ColumnDoesNotExist
+                    self_result = self_composed(value, key, timestamp, headers)[0]
+                    other_result = other_composed(value, key, timestamp, headers)[0]
+
+                    # This may raise TypeError
+                    return operator_(self_result, other_result)
+                except ColumnDoesNotExist:
                     return None
-                other_result = other_composed(value, key, timestamp, headers)[0]
-                if other_result is None:
-                    return None
-                return operator_(self_result, other_result)
+                except TypeError as exc:
+                    if "NoneType" in str(exc):
+                        return None
+                    raise
 
             return self._from_apply_callback(func=f)
         else:
 
             def f(value: Any, key: Any, timestamp: int, headers: Any) -> Any:
-                if other is None:
+                try:
+                    # This may raise ColumnDoesNotExist
+                    self_result = self_composed(value, key, timestamp, headers)[0]
+
+                    # This may raise TypeError
+                    return operator_(self_result, other)
+                except ColumnDoesNotExist:
                     return None
-                self_result = self_composed(value, key, timestamp, headers)[0]
-                if self_result is None:
-                    return None
-                return operator_(self_result, other)
+                except TypeError as exc:
+                    if "NoneType" in str(exc):
+                        return None
+                    raise
 
             return self._from_apply_callback(func=f)
 
