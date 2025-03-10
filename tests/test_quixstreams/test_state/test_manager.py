@@ -47,7 +47,7 @@ class TestStateStoreManager:
     def test_rebalance_partitions_stores_not_registered(self, state_manager):
         # It's ok to rebalance partitions when there are no stores registered
         state_manager.on_partition_assign(
-            topic="topic", partition=0, committed_offset=-1001
+            topic="topic", partition=0, committed_offsets={"topic": -1001}
         )
         state_manager.on_partition_revoke(topic="topic", partition=0)
 
@@ -70,10 +70,13 @@ class TestStateStoreManager:
         ]
 
         store_partitions = []
+        committed_offsets = {"topic1": -1001, "topic2": -1001}
         for tp in partitions:
             store_partitions.extend(
                 state_manager.on_partition_assign(
-                    topic=tp.topic, partition=tp.partition, committed_offset=-1001
+                    topic=tp.topic,
+                    partition=tp.partition,
+                    committed_offsets=committed_offsets,
                 )
             )
         assert len(store_partitions) == 3
@@ -128,7 +131,9 @@ class TestStateStoreManager:
         # Assign partitions
         for tp in partitions:
             state_manager.on_partition_assign(
-                topic=tp.topic, partition=tp.partition, committed_offset=-1001
+                topic=tp.topic,
+                partition=tp.partition,
+                committed_offsets={"topic1": -1001, "topic2": -1001},
             )
 
         # Collect paths of stores to be deleted
@@ -156,7 +161,7 @@ class TestStateStoreManager:
 
         # Assign the partition
         state_manager.on_partition_assign(
-            topic="topic1", partition=0, committed_offset=-1001
+            topic="topic1", partition=0, committed_offsets={"topic1": -1001}
         )
 
         # Act - Delete stores
@@ -188,7 +193,7 @@ class TestStateStoreManagerWithRecovery:
         )
         # It's ok to rebalance partitions when there are no stores registered
         state_manager.on_partition_assign(
-            topic="topic", partition=0, committed_offset=-1001
+            topic="topic", partition=0, committed_offsets={"topic": -1001}
         )
         state_manager.on_partition_revoke(topic="topic", partition=0)
 
@@ -249,7 +254,7 @@ class TestStateStoreManagerWithRecovery:
 
         # Assign a topic partition
         state_manager.on_partition_assign(
-            topic=topic_name, partition=partition, committed_offset=-1001
+            topic=topic_name, partition=partition, committed_offsets={"topic1": -1001}
         )
 
         # Check that RecoveryManager has a partition assigned
