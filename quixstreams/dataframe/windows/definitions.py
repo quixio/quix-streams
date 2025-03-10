@@ -18,7 +18,12 @@ if TYPE_CHECKING:
 
 def _mean_merge_func(state_value: Tuple[float, int]):
     sum_, count_ = state_value
-    return sum_ / count_
+    try:
+        return sum_ / count_
+    except TypeError as exc:
+        if "NoneType" in str(exc):
+            return None
+        raise
 
 
 class WindowDefinition(abc.ABC):
@@ -90,7 +95,12 @@ class WindowDefinition(abc.ABC):
 
         def func(old: Any, new: Any) -> Any:
             sum_, count_ = old
-            return sum_ + new, count_ + 1
+            try:
+                return sum_ + new, count_ + 1
+            except TypeError as exc:
+                if "NoneType" in str(exc):
+                    return None, count_ + 1
+                raise
 
         return self._create_window(
             func_name="mean",
