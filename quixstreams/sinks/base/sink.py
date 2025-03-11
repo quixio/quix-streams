@@ -80,7 +80,6 @@ class BaseSink(abc.ABC):
         on flush().
         """
 
-    @abc.abstractmethod
     def setup(self):
         """
         When applicable, set up the client here along with any validation to affirm a

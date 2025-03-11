@@ -122,6 +122,13 @@ class BaseSource(ABC):
         self._producer = producer
         self._producer_topic = topic
 
+    def setup(self):
+        """
+        When applicable, set up the client here along with any validation to affirm a
+        valid/successful authentication/connection.
+        """
+        return
+
     @property
     def producer(self) -> RowProducer:
         if self._producer is None:
@@ -159,13 +166,6 @@ class BaseSource(ABC):
         The source must return a default topic configuration.
 
         Note: if the default topic is used, the Application will prefix its name with "source__".
-        """
-
-    @abstractmethod
-    def setup(self):
-        """
-        When applicable, set up the client here along with any validation to affirm a
-        valid/successful authentication/connection.
         """
 
 
@@ -255,13 +255,6 @@ class Source(BaseSource):
         The `stop` method will set it to `False`. Use it to stop the source gracefully.
         """
         return self._running
-
-    def setup(self):
-        """
-        Though implemented for the sake of making simple sources easier to use,
-        it is still recommended to override this when using a client-based pattern.
-        """
-        return
 
     def cleanup(self, failed: bool) -> None:
         """
