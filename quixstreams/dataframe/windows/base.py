@@ -69,7 +69,7 @@ class Window(abc.ABC):
 
         if not self._collect and not self._aggregate:
             raise ValueError("At least one aggregation or collector must be defined")
-        elif sum((len(collectors), len(aggregations))) > 1:
+        elif len(collectors) + len(aggregations) > 1:
             raise ValueError("Only one aggregation or collector can be defined")
 
     @property
