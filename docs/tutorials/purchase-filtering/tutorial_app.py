@@ -66,9 +66,6 @@ class PurchaseGenerator(Source):
     def __init__(self):
         super().__init__(name="customer-purchases")
 
-    def setup(self):
-        return
-
     def run(self):
         for cid, purchase_info in enumerate(self._purchases_data):
             event = self.serialize(key=f"CUSTOMER_ID{cid}", value=purchase_info)

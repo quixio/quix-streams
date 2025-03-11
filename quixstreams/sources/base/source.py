@@ -256,6 +256,13 @@ class Source(BaseSource):
         """
         return self._running
 
+    def setup(self):
+        """
+        Though implemented for the sake of making simple sources easier to use,
+        it is still recommended to override this when using a client-based pattern.
+        """
+        return
+
     def cleanup(self, failed: bool) -> None:
         """
         This method is triggered once the `run` method completes.
