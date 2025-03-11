@@ -18,6 +18,11 @@ class Aggregator(ABC):
     Base class for window aggregation.
 
     Subclass it to implement custom aggregations.
+
+    An Aggregator reduce incoming items into a single value or group of values. When the window
+    is closed the aggregator produce a result based on the reduced value.
+
+    To store all incoming items without reducing them use a `Collector`.
     """
 
     @abstractmethod
@@ -52,11 +57,11 @@ class ROOT:
     pass
 
 
-COLUMN: TypeAlias = Union[Hashable, type[ROOT]]
+Column: TypeAlias = Union[Hashable, type[ROOT]]
 
 
 class Sum(Aggregator):
-    def __init__(self, column: COLUMN = ROOT) -> None:
+    def __init__(self, column: Column = ROOT) -> None:
         self.column = column
 
     def initialize(self) -> int:
@@ -83,7 +88,7 @@ class Count(Aggregator):
 
 
 class Mean(Aggregator):
-    def __init__(self, column: COLUMN = ROOT) -> None:
+    def __init__(self, column: Column = ROOT) -> None:
         self.column = column
 
     def initialize(self) -> tuple[float, int]:
@@ -123,7 +128,7 @@ class Reduce(Aggregator, Generic[R]):
 
 
 class Max(Aggregator):
-    def __init__(self, column: COLUMN = ROOT) -> None:
+    def __init__(self, column: Column = ROOT) -> None:
         self.column = column
 
     def initialize(self) -> None:
@@ -141,7 +146,7 @@ class Max(Aggregator):
 
 
 class Min(Aggregator):
-    def __init__(self, column: COLUMN = ROOT) -> None:
+    def __init__(self, column: Column = ROOT) -> None:
         self.column = column
 
     def initialize(self) -> None:
@@ -166,14 +171,19 @@ class Collector(ABC, Generic[I]):
     Base class for window collections.
 
     Subclass it to implement custom collections.
+
+    A Collector store incoming items un-modified in an optimized way.
+
+    To reduce incoming items as they come in use an `Aggregator`.
     """
 
     @property
     @abstractmethod
-    def column(self) -> COLUMN:
+    def column(self) -> Column:
         """
-        This method is triggered when a new value is added to the collection.
-        It should return the individual value used by the collection.
+        The column to collect.
+
+        Use `ROOT` to collect the whole message.
         """
         ...
 
@@ -187,11 +197,11 @@ class Collector(ABC, Generic[I]):
 
 
 class Collect(Collector):
-    def __init__(self, column: COLUMN = ROOT) -> None:
+    def __init__(self, column: Column = ROOT) -> None:
         self._column = column
 
     @property
-    def column(self) -> COLUMN:
+    def column(self) -> Column:
         return self._column
 
     def result(self, items: Iterable[Any]) -> list[Any]:
