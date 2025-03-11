@@ -68,9 +68,13 @@ class Sum(Aggregator):
         return 0
 
     def agg(self, old: V, new: Any) -> V:
-        if self.column is ROOT:
+        new = new if self.column is ROOT else new.get(self.column)
+        try:
             return old + new
-        return old + new[self.column]
+        except TypeError:
+            if new is None:
+                return old
+            raise
 
     def result(self, value: V) -> V:
         return value
