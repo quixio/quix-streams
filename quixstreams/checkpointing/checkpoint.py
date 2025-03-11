@@ -181,39 +181,16 @@ class Checkpoint(BaseCheckpoint):
         Commit the checkpoint.
 
         This method will:
-         1. Produce the changelogs for each state store
-         2. Flush the producer to ensure everything is delivered.
-         3. Commit topic offsets.
-         4. Flush each state store partition to the disk.
+         1. Flush the registered sinks if any
+         2. Produce the changelogs for each state store
+         3. Flush the producer to ensure everything is delivered.
+         4. Commit topic offsets.
+         5. Flush each state store partition to the disk.
         """
-
-        # Step 1. Produce the changelogs
-        for (
-            topic,
-            partition,
-            store_name,
-        ), transaction in self._store_transactions.items():
-            offset = self._tp_offsets[(topic, partition)]
-            if transaction.failed:
-                raise StoreTransactionFailed(
-                    f'Detected a failed transaction for store "{store_name}", '
-                    f"the checkpoint is aborted"
-                )
-            transaction.prepare(processed_offsets={topic: offset})
-
-        # Step 2. Flush producer to trigger all delivery callbacks and ensure that
-        # all messages are produced
-        logger.debug("Checkpoint: flushing producer")
-        unproduced_msg_count = self._producer.flush()
-        if unproduced_msg_count > 0:
-            raise CheckpointProducerTimeout(
-                f"'{unproduced_msg_count}' messages failed to be produced before "
-                f"the producer flush timeout"
-            )
 
         logger.debug("Checkpoint: flushing sinks")
         sinks = self._sink_manager.sinks
-        # Step 3. Flush sinks
+        # Step 1. Flush sinks
         for (topic, partition), offset in self._tp_offsets.items():
             for sink in sinks:
                 if self._pausing_manager.is_paused(topic=topic, partition=partition):
@@ -245,6 +222,30 @@ class Checkpoint(BaseCheckpoint):
                         resume_after=exc.retry_after,
                         offset_to_seek=offset_to_seek,
                     )
+
+        # Step 2. Produce the changelogs
+        for (
+            topic,
+            partition,
+            store_name,
+        ), transaction in self._store_transactions.items():
+            offset = self._tp_offsets[(topic, partition)]
+            if transaction.failed:
+                raise StoreTransactionFailed(
+                    f'Detected a failed transaction for store "{store_name}", '
+                    f"the checkpoint is aborted"
+                )
+            transaction.prepare(processed_offsets={topic: offset})
+
+        # Step 3. Flush producer to trigger all delivery callbacks and ensure that
+        # all messages are produced
+        logger.debug("Checkpoint: flushing producer")
+        unproduced_msg_count = self._producer.flush()
+        if unproduced_msg_count > 0:
+            raise CheckpointProducerTimeout(
+                f"'{unproduced_msg_count}' messages failed to be produced before "
+                f"the producer flush timeout"
+            )
 
         # Step 4. Commit offsets to Kafka
         # First, filter out offsets of the paused topic partitions.
