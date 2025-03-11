@@ -6,10 +6,11 @@ from typing import (
     Hashable,
     Iterable,
     Optional,
-    TypeAlias,
     TypeVar,
     Union,
 )
+
+from typing_extensions import TypeAlias
 
 
 class Aggregator(ABC):
@@ -130,10 +131,10 @@ class Max(Aggregator):
 
     def agg(self, old: Optional[V], new: Any) -> V:
         if self.column is not ROOT:
-            v = new[self.column]
+            new = new[self.column]
         if old is None:
-            return v
-        return max(old, v)
+            return new
+        return max(old, new)
 
     def result(self, value: V) -> V:
         return value
@@ -148,10 +149,10 @@ class Min(Aggregator):
 
     def agg(self, old: Optional[V], new: Any) -> V:
         if self.column is not ROOT:
-            v = new[self.column]
+            new = new[self.column]
         if old is None:
-            return v
-        return min(old, v)
+            return new
+        return min(old, new)
 
     def result(self, value: V) -> V:
         return value
