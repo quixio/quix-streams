@@ -146,10 +146,11 @@ class Max(Aggregator):
         return None
 
     def agg(self, old: Optional[V], new: Any) -> V:
-        if self.column is not ROOT:
-            new = new[self.column]
+        new = new if self.column is ROOT else new.get(self.column)
         if old is None:
             return new
+        elif new is None:
+            return old
         return max(old, new)
 
     def result(self, value: V) -> V:
@@ -164,10 +165,11 @@ class Min(Aggregator):
         return None
 
     def agg(self, old: Optional[V], new: Any) -> V:
-        if self.column is not ROOT:
-            new = new[self.column]
+        new = new if self.column is ROOT else new.get(self.column)
         if old is None:
             return new
+        elif new is None:
+            return old
         return min(old, new)
 
     def result(self, value: V) -> V:
