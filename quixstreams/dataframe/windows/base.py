@@ -52,7 +52,7 @@ class Window(abc.ABC):
         self,
         name: str,
         dataframe: "StreamingDataFrame",
-        aggregations: dict[str, Aggregator],
+        aggregators: dict[str, Aggregator],
         collectors: dict[str, Collector],
     ) -> None:
         if not name:
@@ -61,15 +61,15 @@ class Window(abc.ABC):
         self._name = name
         self._dataframe = dataframe
 
-        self._aggregations = aggregations
-        self._aggregate = len(aggregations) > 0
+        self._aggregators = aggregators
+        self._aggregate = len(aggregators) > 0
 
         self._collectors = collectors
         self._collect = len(collectors) > 0
 
         if not self._collect and not self._aggregate:
             raise ValueError("At least one aggregation or collector must be defined")
-        elif len(collectors) + len(aggregations) > 1:
+        elif len(collectors) + len(aggregators) > 1:
             raise ValueError("Only one aggregation or collector can be defined")
 
     @property

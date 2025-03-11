@@ -43,7 +43,7 @@ class WindowDefinition(abc.ABC):
     def _create_window(
         self,
         func_name: str,
-        aggregations: Optional[dict[str, Aggregator]] = None,
+        aggregators: Optional[dict[str, Aggregator]] = None,
         collectors: Optional[dict[str, Collector]] = None,
     ) -> Window: ...
 
@@ -57,7 +57,7 @@ class WindowDefinition(abc.ABC):
 
         return self._create_window(
             func_name="sum",
-            aggregations={"value": Sum(column=ROOT)},
+            aggregators={"value": Sum(column=ROOT)},
         )
 
     def count(self) -> "Window":
@@ -70,7 +70,7 @@ class WindowDefinition(abc.ABC):
 
         return self._create_window(
             func_name="count",
-            aggregations={"value": Count()},
+            aggregators={"value": Count()},
         )
 
     def mean(self) -> "Window":
@@ -84,7 +84,7 @@ class WindowDefinition(abc.ABC):
 
         return self._create_window(
             func_name="mean",
-            aggregations={"value": Mean(column=ROOT)},
+            aggregators={"value": Mean(column=ROOT)},
         )
 
     def reduce(
@@ -128,7 +128,7 @@ class WindowDefinition(abc.ABC):
 
         return self._create_window(
             func_name="reduce",
-            aggregations={"value": Reduce(reducer=reducer, initializer=initializer)},
+            aggregators={"value": Reduce(reducer=reducer, initializer=initializer)},
         )
 
     def max(self) -> "Window":
@@ -141,7 +141,7 @@ class WindowDefinition(abc.ABC):
 
         return self._create_window(
             func_name="max",
-            aggregations={"value": Max(column=ROOT)},
+            aggregators={"value": Max(column=ROOT)},
         )
 
     def min(self) -> "Window":
@@ -154,7 +154,7 @@ class WindowDefinition(abc.ABC):
 
         return self._create_window(
             func_name="min",
-            aggregations={"value": Min(column=ROOT)},
+            aggregators={"value": Min(column=ROOT)},
         )
 
     def collect(self) -> "Window":
@@ -251,7 +251,7 @@ class HoppingTimeWindowDefinition(TimeWindowDefinition):
     def _create_window(
         self,
         func_name: str,
-        aggregations: Optional[dict[str, Aggregator]] = None,
+        aggregators: Optional[dict[str, Aggregator]] = None,
         collectors: Optional[dict[str, Collector]] = None,
     ) -> TimeWindow:
         return TimeWindow(
@@ -260,7 +260,7 @@ class HoppingTimeWindowDefinition(TimeWindowDefinition):
             step_ms=self._step_ms,
             name=self._get_name(func_name=func_name),
             dataframe=self._dataframe,
-            aggregations=aggregations or {},
+            aggregators=aggregators or {},
             collectors=collectors or {},
             on_late=self._on_late,
         )
@@ -290,7 +290,7 @@ class TumblingTimeWindowDefinition(TimeWindowDefinition):
     def _create_window(
         self,
         func_name: str,
-        aggregations: Optional[dict[str, Aggregator]] = None,
+        aggregators: Optional[dict[str, Aggregator]] = None,
         collectors: Optional[dict[str, Collector]] = None,
     ) -> TimeWindow:
         return TimeWindow(
@@ -298,7 +298,7 @@ class TumblingTimeWindowDefinition(TimeWindowDefinition):
             grace_ms=self._grace_ms,
             name=self._get_name(func_name=func_name),
             dataframe=self._dataframe,
-            aggregations=aggregations or {},
+            aggregators=aggregators or {},
             collectors=collectors or {},
             on_late=self._on_late,
         )
@@ -328,7 +328,7 @@ class SlidingTimeWindowDefinition(TimeWindowDefinition):
     def _create_window(
         self,
         func_name: str,
-        aggregations: Optional[dict[str, Aggregator]] = None,
+        aggregators: Optional[dict[str, Aggregator]] = None,
         collectors: Optional[dict[str, Collector]] = None,
     ) -> SlidingWindow:
         return SlidingWindow(
@@ -336,7 +336,7 @@ class SlidingTimeWindowDefinition(TimeWindowDefinition):
             grace_ms=self._grace_ms,
             name=self._get_name(func_name=func_name),
             dataframe=self._dataframe,
-            aggregations=aggregations or {},
+            aggregators=aggregators or {},
             collectors=collectors or {},
             on_late=self._on_late,
         )
@@ -358,13 +358,13 @@ class TumblingCountWindowDefinition(CountWindowDefinition):
     def _create_window(
         self,
         func_name: str,
-        aggregations: Optional[dict[str, Aggregator]] = None,
+        aggregators: Optional[dict[str, Aggregator]] = None,
         collectors: Optional[dict[str, Collector]] = None,
     ) -> Window:
         return CountWindow(
             name=self._get_name(func_name=func_name),
             count=self._count,
-            aggregations=aggregations or {},
+            aggregators=aggregators or {},
             collectors=collectors or {},
             dataframe=self._dataframe,
         )
@@ -396,13 +396,13 @@ class HoppingCountWindowDefinition(CountWindowDefinition):
     def _create_window(
         self,
         func_name: str,
-        aggregations: Optional[dict[str, Aggregator]] = None,
+        aggregators: Optional[dict[str, Aggregator]] = None,
         collectors: Optional[dict[str, Collector]] = None,
     ) -> Window:
         return CountWindow(
             name=self._get_name(func_name=func_name),
             count=self._count,
-            aggregations=aggregations or {},
+            aggregators=aggregators or {},
             collectors=collectors or {},
             dataframe=self._dataframe,
             step=self._step,

@@ -36,14 +36,14 @@ class CountWindow(Window):
         count: int,
         name: str,
         dataframe: "StreamingDataFrame",
-        aggregations: dict[str, Aggregator],
+        aggregators: dict[str, Aggregator],
         collectors: dict[str, Collector],
         step: Optional[int] = None,
     ):
         super().__init__(
             name=name,
             dataframe=dataframe,
-            aggregations=aggregations,
+            aggregators=aggregators,
             collectors=collectors,
         )
 
@@ -86,7 +86,7 @@ class CountWindow(Window):
             if self._collect:
                 window_value = msg_id = 0
             else:
-                window_value = self._aggregations["value"].initialize()
+                window_value = self._aggregators["value"].initialize()
 
             data["windows"].append(
                 CountWindowData(
@@ -102,7 +102,7 @@ class CountWindow(Window):
                     data["windows"][0]["value"] + data["windows"][0]["count"]
                 )
             else:
-                window_value = self._aggregations["value"].initialize()
+                window_value = self._aggregators["value"].initialize()
 
             data["windows"].append(
                 CountWindowData(
@@ -157,16 +157,14 @@ class CountWindow(Window):
 
                     state.delete_from_collection(end=delete_end, start=delete_start)
             else:
-                window["value"] = self._aggregations["value"].agg(
-                    window["value"], value
-                )
+                window["value"] = self._aggregators["value"].agg(window["value"], value)
 
                 result = (
                     key,
                     WindowResult(
                         start=window["start"],
                         end=window["end"],
-                        value=self._aggregations["value"].result(window["value"]),
+                        value=self._aggregators["value"].result(window["value"]),
                     ),
                 )
 

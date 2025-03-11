@@ -45,7 +45,7 @@ class TimeWindow(Window):
         grace_ms: int,
         name: str,
         dataframe: "StreamingDataFrame",
-        aggregations: dict[str, Aggregator],
+        aggregators: dict[str, Aggregator],
         collectors: dict[str, Collector],
         step_ms: Optional[int] = None,
         on_late: Optional[WindowOnLateCallback] = None,
@@ -53,7 +53,7 @@ class TimeWindow(Window):
         super().__init__(
             name=name,
             dataframe=dataframe,
-            aggregations=aggregations,
+            aggregators=aggregators,
             collectors=collectors,
         )
 
@@ -177,16 +177,16 @@ class TimeWindow(Window):
             if aggregate:
                 current_value = state.get_window(start, end)
                 if current_value is None:
-                    current_value = self._aggregations["value"].initialize()
+                    current_value = self._aggregators["value"].initialize()
 
-                aggregated = self._aggregations["value"].agg(current_value, value)
+                aggregated = self._aggregators["value"].agg(current_value, value)
                 updated_windows.append(
                     (
                         key,
                         WindowResult(
                             start=start,
                             end=end,
-                            value=self._aggregations["value"].result(aggregated),
+                            value=self._aggregators["value"].result(aggregated),
                         ),
                     )
                 )
@@ -227,7 +227,7 @@ class TimeWindow(Window):
             if collect:
                 value = self._collectors["value"].result(aggregated)
             else:
-                value = self._aggregations["value"].result(aggregated)
+                value = self._aggregators["value"].result(aggregated)
 
             count += 1
             yield (
@@ -261,7 +261,7 @@ class TimeWindow(Window):
             if collect:
                 value = self._collectors["value"].result(aggregated)
             else:
-                value = self._aggregations["value"].result(aggregated)
+                value = self._aggregators["value"].result(aggregated)
 
             yield (
                 key,
