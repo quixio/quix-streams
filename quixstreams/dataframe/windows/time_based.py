@@ -6,14 +6,12 @@ from typing import TYPE_CHECKING, Any, Iterable, Literal, Optional
 from quixstreams.context import message_context
 from quixstreams.state import WindowedPartitionTransaction, WindowedState
 
+from .aggregations import Aggregator, Collector
 from .base import (
     Window,
-    WindowAggregateFunc,
     WindowKeyResult,
-    WindowMergeFunc,
     WindowOnLateCallback,
     WindowResult,
-    default_merge_func,
     get_window_ranges,
 )
 
@@ -47,21 +45,20 @@ class TimeWindow(Window):
         grace_ms: int,
         name: str,
         dataframe: "StreamingDataFrame",
-        aggregate_func: WindowAggregateFunc,
-        aggregate_default: Any,
-        aggregate_collection: bool = False,
-        merge_func: Optional[WindowMergeFunc] = None,
+        aggregators: dict[str, Aggregator],
+        collectors: dict[str, Collector],
         step_ms: Optional[int] = None,
         on_late: Optional[WindowOnLateCallback] = None,
     ):
-        super().__init__(name, dataframe)
+        super().__init__(
+            name=name,
+            dataframe=dataframe,
+            aggregators=aggregators,
+            collectors=collectors,
+        )
 
         self._duration_ms = duration_ms
         self._grace_ms = grace_ms
-        self._aggregate_func = aggregate_func
-        self._aggregate_default = aggregate_default
-        self._aggregate_collection = aggregate_collection
-        self._merge_func = merge_func or default_merge_func
         self._step_ms = step_ms
         self._on_late = on_late
 
@@ -140,8 +137,9 @@ class TimeWindow(Window):
         state = transaction.as_state(prefix=key)
         duration_ms = self._duration_ms
         grace_ms = self._grace_ms
-        default = self._aggregate_default
-        collect = self._aggregate_collection
+
+        collect = self._collect
+        aggregate = self._aggregate
 
         ranges = get_window_ranges(
             timestamp_ms=timestamp_ms,
@@ -172,24 +170,27 @@ class TimeWindow(Window):
                 )
                 continue
 
-            if collect:
-                # When collecting values, we only mark the window existence with None
-                # since actual values are stored separately and combined into an array
-                # during window expiration.
-                state.update_window(start, end, value=None, timestamp_ms=timestamp_ms)
-                continue
+            # When collecting values, we only mark the window existence with None
+            # since actual values are stored separately and combined into an array
+            # during window expiration.
+            aggregated = None
+            if aggregate:
+                current_value = state.get_window(start, end)
+                if current_value is None:
+                    current_value = self._aggregators["value"].initialize()
 
-            current_value = state.get_window(start, end, default=default)
-            aggregated = self._aggregate_func(current_value, value)
-            state.update_window(start, end, value=aggregated, timestamp_ms=timestamp_ms)
-            updated_windows.append(
-                (
-                    key,
-                    WindowResult(
-                        start=start, end=end, value=self._merge_func(aggregated)
-                    ),
+                aggregated = self._aggregators["value"].agg(current_value, value)
+                updated_windows.append(
+                    (
+                        key,
+                        WindowResult(
+                            start=start,
+                            end=end,
+                            value=self._aggregators["value"].result(aggregated),
+                        ),
+                    )
                 )
-            )
+            state.update_window(start, end, value=aggregated, timestamp_ms=timestamp_ms)
 
         if collect:
             state.add_to_collection(value=value, id=timestamp_ms)
@@ -223,13 +224,18 @@ class TimeWindow(Window):
             collect=collect,
             delete=True,
         ):
+            if collect:
+                value = self._collectors["value"].result(aggregated)
+            else:
+                value = self._aggregators["value"].result(aggregated)
+
             count += 1
             yield (
                 key,
                 WindowResult(
                     start=window_start,
                     end=window_end,
-                    value=self._merge_func(aggregated),
+                    value=value,
                 ),
             )
 
@@ -252,12 +258,17 @@ class TimeWindow(Window):
             max_start_time=max_expired_start,
             collect=collect,
         ):
+            if collect:
+                value = self._collectors["value"].result(aggregated)
+            else:
+                value = self._aggregators["value"].result(aggregated)
+
             yield (
                 key,
                 WindowResult(
                     start=window_start,
                     end=window_end,
-                    value=self._merge_func(aggregated),
+                    value=value,
                 ),
             )
 

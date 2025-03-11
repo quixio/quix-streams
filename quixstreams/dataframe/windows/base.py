@@ -22,6 +22,8 @@ from quixstreams.core.stream import TransformExpandedCallback
 from quixstreams.processing import ProcessingContext
 from quixstreams.state import WindowedPartitionTransaction
 
+from .aggregations import Aggregator, Collector
+
 if TYPE_CHECKING:
     from quixstreams.dataframe.dataframe import StreamingDataFrame
 
@@ -38,7 +40,6 @@ WindowKeyResult: TypeAlias = tuple[Any, WindowResult]
 Message: TypeAlias = tuple[WindowResult, Any, int, Any]
 
 WindowAggregateFunc = Callable[[Any, Any], Any]
-WindowMergeFunc = Callable[[Any], Any]
 
 TransformRecordCallbackExpandedWindowed = Callable[
     [Any, Any, int, Any, WindowedPartitionTransaction],
@@ -51,12 +52,25 @@ class Window(abc.ABC):
         self,
         name: str,
         dataframe: "StreamingDataFrame",
+        aggregators: dict[str, Aggregator],
+        collectors: dict[str, Collector],
     ) -> None:
         if not name:
             raise ValueError("Window name must not be empty")
 
         self._name = name
         self._dataframe = dataframe
+
+        self._aggregators = aggregators
+        self._aggregate = len(aggregators) > 0
+
+        self._collectors = collectors
+        self._collect = len(collectors) > 0
+
+        if not self._collect and not self._aggregate:
+            raise ValueError("At least one aggregation or collector must be defined")
+        elif len(collectors) + len(aggregators) > 1:
+            raise ValueError("Only one aggregation or collector can be defined")
 
     @property
     def name(self) -> str:
@@ -260,7 +274,3 @@ def get_window_ranges(
         current_window_start -= step_ms
 
     return window_ranges
-
-
-def default_merge_func(state_value: Any) -> Any:
-    return state_value

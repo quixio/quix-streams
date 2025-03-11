@@ -3,13 +3,11 @@ from typing import TYPE_CHECKING, Any, Iterable, Optional, TypedDict
 
 from quixstreams.state import WindowedPartitionTransaction
 
+from .aggregations import Aggregator, Collector
 from .base import (
     Window,
-    WindowAggregateFunc,
     WindowKeyResult,
-    WindowMergeFunc,
     WindowResult,
-    default_merge_func,
 )
 
 if TYPE_CHECKING:
@@ -35,22 +33,21 @@ class CountWindow(Window):
 
     def __init__(
         self,
-        name: str,
         count: int,
-        aggregate_func: WindowAggregateFunc,
-        aggregate_default: Any,
-        aggregate_collection: bool,
+        name: str,
         dataframe: "StreamingDataFrame",
-        merge_func: Optional[WindowMergeFunc] = None,
+        aggregators: dict[str, Aggregator],
+        collectors: dict[str, Collector],
         step: Optional[int] = None,
     ):
-        super().__init__(name, dataframe)
+        super().__init__(
+            name=name,
+            dataframe=dataframe,
+            aggregators=aggregators,
+            collectors=collectors,
+        )
 
         self._max_count = count
-        self._aggregate_func = aggregate_func
-        self._aggregate_default = aggregate_default
-        self._aggregate_collection = aggregate_collection
-        self._merge_func = merge_func or default_merge_func
         self._step = step
 
     def process_window(
@@ -86,34 +83,37 @@ class CountWindow(Window):
         msg_id = None
         if len(data["windows"]) == 0:
             # for new tumbling window, reset the collection id to 0
-            msg_id = 0
+            if self._collect:
+                window_value = msg_id = 0
+            else:
+                window_value = self._aggregators["value"].initialize()
 
             data["windows"].append(
                 CountWindowData(
                     count=0,
                     start=timestamp_ms,
                     end=timestamp_ms,
-                    value=msg_id
-                    if self._aggregate_collection
-                    else self._aggregate_default,
+                    value=window_value,
                 )
             )
         elif self._step is not None and data["windows"][0]["count"] % self._step == 0:
-            if self._aggregate_collection:
-                msg_id = data["windows"][0]["value"] + data["windows"][0]["count"]
+            if self._collect:
+                window_value = msg_id = (
+                    data["windows"][0]["value"] + data["windows"][0]["count"]
+                )
+            else:
+                window_value = self._aggregators["value"].initialize()
 
             data["windows"].append(
                 CountWindowData(
                     count=0,
                     start=timestamp_ms,
                     end=timestamp_ms,
-                    value=msg_id
-                    if self._aggregate_collection
-                    else self._aggregate_default,
+                    value=window_value,
                 )
             )
 
-        if self._aggregate_collection:
+        if self._collect:
             if msg_id is None:
                 msg_id = data["windows"][0]["value"] + data["windows"][0]["count"]
 
@@ -127,7 +127,7 @@ class CountWindow(Window):
             elif timestamp_ms > window["end"]:
                 window["end"] = timestamp_ms
 
-            if self._aggregate_collection:
+            if self._collect:
                 # window must close
                 if window["count"] >= self._max_count:
                     values = state.get_from_collection(
@@ -141,7 +141,7 @@ class CountWindow(Window):
                             WindowResult(
                                 start=window["start"],
                                 end=window["end"],
-                                value=self._merge_func(values),
+                                value=self._collectors["value"].result(values),
                             ),
                         )
                     )
@@ -157,14 +157,14 @@ class CountWindow(Window):
 
                     state.delete_from_collection(end=delete_end, start=delete_start)
             else:
-                window["value"] = self._aggregate_func(window["value"], value)
+                window["value"] = self._aggregators["value"].agg(window["value"], value)
 
                 result = (
                     key,
                     WindowResult(
                         start=window["start"],
                         end=window["end"],
-                        value=self._merge_func(window["value"]),
+                        value=self._aggregators["value"].result(window["value"]),
                     ),
                 )
 
