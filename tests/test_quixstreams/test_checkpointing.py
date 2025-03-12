@@ -23,7 +23,9 @@ from tests.utils import DummySink
 
 
 @pytest.fixture()
-def checkpoint_factory(state_manager, consumer, row_producer_factory):
+def checkpoint_factory(
+    state_manager, consumer, row_producer_factory, topic_manager_factory
+):
     def factory(
         commit_interval: float = 1,
         commit_every: int = 0,
@@ -36,7 +38,9 @@ def checkpoint_factory(state_manager, consumer, row_producer_factory):
     ):
         consumer_ = consumer_ or consumer
         sink_manager_ = sink_manager_ or SinkManager()
-        pausing_manager_ = pausing_manager_ or PausingManager(consumer=consumer)
+        pausing_manager_ = pausing_manager_ or PausingManager(
+            consumer=consumer, topic_manager=topic_manager_factory()
+        )
         producer_ = producer_ or row_producer_factory(transactional=exactly_once)
         state_manager_ = state_manager_ or state_manager
         return Checkpoint(
@@ -62,9 +66,7 @@ def rowproducer_mock(request):
 
 class BackpressuredSink(BatchingSink):
     def write(self, batch: SinkBatch):
-        raise SinkBackpressureError(
-            retry_after=999, topic=batch.topic, partition=batch.partition
-        )
+        raise SinkBackpressureError(retry_after=999)
 
 
 class FailingSink(BatchingSink):

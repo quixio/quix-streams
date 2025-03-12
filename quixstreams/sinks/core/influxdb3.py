@@ -15,7 +15,7 @@ except ImportError as exc:
         "run pip install quixstreams[influxdb3] to fix it"
     ) from exc
 
-from ..base import (
+from quixstreams.sinks.base import (
     BatchingSink,
     ClientConnectFailureCallback,
     ClientConnectSuccessCallback,
@@ -301,7 +301,5 @@ class InfluxDB3Sink(BatchingSink):
                     # to pause the partition for a certain period of time.
                     raise SinkBackpressureError(
                         retry_after=int(exc.retry_after),
-                        topic=batch.topic,
-                        partition=batch.partition,
                     ) from exc
                 raise

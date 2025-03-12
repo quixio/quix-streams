@@ -27,7 +27,7 @@ def dataframe_factory(topic_manager_topic_factory, topic_manager_factory):
         state_manager = state_manager or MagicMock(spec=StateStoreManager)
         topic = topic or topic_manager_topic_factory("test")
         consumer = MagicMock(spec_set=RowConsumer)
-        pausing_manager = PausingManager(consumer=consumer)
+        pausing_manager = PausingManager(consumer=consumer, topic_manager=topic_manager)
         sink_manager = SinkManager()
 
         processing_ctx = ProcessingContext(

@@ -98,7 +98,7 @@ class ProcessingContext:
         self.pausing_manager.resume_if_ready()
 
     def on_partition_revoke(self, topic: str, partition: int):
-        self.pausing_manager.revoke(topic=topic, partition=partition)
+        self.pausing_manager.reset()
 
     def __enter__(self):
         self.sink_manager.start_sinks()

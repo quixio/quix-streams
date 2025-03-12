@@ -337,7 +337,9 @@ class Application:
 
         self._source_manager = SourceManager()
         self._sink_manager = SinkManager()
-        self._pausing_manager = PausingManager(consumer=self._consumer)
+        self._pausing_manager = PausingManager(
+            consumer=self._consumer, topic_manager=self._topic_manager
+        )
         self._processing_context = ProcessingContext(
             commit_interval=self._config.commit_interval,
             commit_every=self._config.commit_every,

@@ -191,37 +191,35 @@ class Checkpoint(BaseCheckpoint):
         logger.debug("Checkpoint: flushing sinks")
         sinks = self._sink_manager.sinks
         # Step 1. Flush sinks
-        for (topic, partition), offset in self._tp_offsets.items():
-            for sink in sinks:
-                if self._pausing_manager.is_paused(topic=topic, partition=partition):
-                    # The topic-partition is paused, skip flushing other sinks for
-                    # this TP.
-                    # Note: when flushing multiple sinks for the same TP, some
-                    # of them can be flushed before one of the sinks is backpressured.
-                    sink.on_paused(topic=topic, partition=partition)
-                    continue
+        backpressured = False
+        for sink in sinks:
+            if backpressured:
+                # Drop the accumulated data for the other sinks
+                # if one of them is backpressured to limit the number of duplicates
+                # when the data is reprocessed again
+                sink.on_paused()
+                continue
 
-                try:
-                    sink.flush(topic=topic, partition=partition)
-                except SinkBackpressureError as exc:
-                    logger.warning(
-                        f'Backpressure for sink "{sink}" is detected, '
-                        f"the partition will be paused and resumed again "
-                        f"in {exc.retry_after}s; "
-                        f'partition="{topic}[{partition}]" '
-                        f"processed_offset={offset}"
-                    )
-                    # The backpressure is detected from the sink
-                    # Pause the partition to let it cool down and seek it back to
-                    # the first processed offset of this Checkpoint (it must be equal
-                    # to the last committed offset).
-                    offset_to_seek = self._starting_tp_offsets[(topic, partition)]
-                    self._pausing_manager.pause(
-                        topic=topic,
-                        partition=partition,
-                        resume_after=exc.retry_after,
-                        offset_to_seek=offset_to_seek,
-                    )
+            try:
+                sink.flush()
+            except SinkBackpressureError as exc:
+                logger.warning(
+                    f'Backpressure for sink "{sink}" is detected, '
+                    f"all partitions will be paused and resumed again "
+                    f"in {exc.retry_after}s"
+                )
+                # The backpressure is detected from the sink
+                # Pause the assignment to let it cool down and seek it back to
+                # the first processed offsets of this Checkpoint (it must be equal
+                # to the last committed offset).
+                self._pausing_manager.pause(
+                    resume_after=exc.retry_after,
+                    offsets_to_seek=self._starting_tp_offsets.copy(),
+                )
+                backpressured = True
+        if backpressured:
+            # Exit early if backpressure is detected
+            return
 
         # Step 2. Produce the changelogs
         for (
@@ -248,19 +246,9 @@ class Checkpoint(BaseCheckpoint):
             )
 
         # Step 4. Commit offsets to Kafka
-        # First, filter out offsets of the paused topic partitions.
-        tp_offsets = {
-            (topic, partition): offset
-            for (topic, partition), offset in self._tp_offsets.items()
-            if not self._pausing_manager.is_paused(topic=topic, partition=partition)
-        }
-        if not tp_offsets:
-            # No offsets to commit because every partition is paused, exiting early
-            return
-
         offsets = [
             TopicPartition(topic=topic, partition=partition, offset=offset + 1)
-            for (topic, partition), offset in tp_offsets.items()
+            for (topic, partition), offset in self._tp_offsets.items()
         ]
 
         if self._exactly_once:
@@ -282,16 +270,7 @@ class Checkpoint(BaseCheckpoint):
         # offsets.
         # Get produced offsets after flushing the producer
         produced_offsets = self._producer.offsets
-        for (
-            topic,
-            partition,
-            store_name,
-        ), transaction in self._store_transactions.items():
-            offset = tp_offsets.get((topic, partition))
-            # Offset can be None if the partition is paused
-            if offset is None:
-                continue
-
+        for transaction in self._store_transactions.values():
             # Get the changelog topic-partition for the given transaction
             # It can be None if changelog topics are disabled in the app config
             changelog_tp = transaction.changelog_topic_partition

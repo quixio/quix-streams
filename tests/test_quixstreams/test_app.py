@@ -1978,7 +1978,6 @@ class TestApplicationSink:
 
         total_messages = 10
         topic_name = str(uuid.uuid4())
-        partition = 0
 
         class _BackpressureSink(DummySink):
             _backpressured = False
@@ -1987,9 +1986,7 @@ class TestApplicationSink:
                 # Backpressure sink once here to ensure the offset rewind works
                 if not self._backpressured:
                     self._backpressured = True
-                    raise SinkBackpressureError(
-                        topic=topic_name, partition=partition, retry_after=1
-                    )
+                    raise SinkBackpressureError(retry_after=1)
                 return super().write(batch=batch)
 
         app = app_factory(
@@ -2020,7 +2017,7 @@ class TestApplicationSink:
                 )
 
         executor.submit(_stop_app_on_timeout, app, 15.0)
-        app.run(sdf)
+        app.run()
 
         # Ensure all messages were flushed to the sink
         assert len(sink.results) == total_messages

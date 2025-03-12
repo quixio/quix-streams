@@ -3,10 +3,10 @@ from unittest.mock import MagicMock
 
 import influxdb_client_3
 import pytest
-from influxdb_client_3 import InfluxDBClient3, WritePrecision
+from influxdb_client_3 import InfluxDBClient3
 
 from quixstreams.sinks import SinkBackpressureError
-from quixstreams.sinks.core.influxdb3 import InfluxDB3Sink
+from quixstreams.sinks.core.influxdb3 import InfluxDB3Sink, TimePrecision
 
 
 @pytest.fixture()
@@ -18,7 +18,7 @@ def influxdb3_sink_factory():
         tags_keys: Iterable[str] = (),
         time_key: Optional[str] = None,
         batch_size: int = 1000,
-        time_precision: WritePrecision = WritePrecision.MS,
+        time_precision: TimePrecision = "ms",
         include_metadata_tags: bool = False,
     ) -> InfluxDB3Sink:
         sink = InfluxDB3Sink(
@@ -58,8 +58,7 @@ class TestInfluxDB3Sink:
                 partition=partition,
                 offset=1,
             )
-        sink.flush(topic=topic, partition=0)
-        sink.flush(topic=topic, partition=1)
+        sink.flush()
 
         assert client_mock.write.call_count == 2
         first_call = client_mock.write.call_args_list[0]
@@ -95,7 +94,7 @@ class TestInfluxDB3Sink:
             partition=0,
             offset=1,
         )
-        sink.flush(topic=topic, partition=0)
+        sink.flush()
 
         assert client_mock.write.call_count == 1
         first_call = client_mock.write.call_args_list[0]
@@ -131,7 +130,7 @@ class TestInfluxDB3Sink:
             partition=0,
             offset=1,
         )
-        sink.flush(topic=topic, partition=0)
+        sink.flush()
 
         assert client_mock.write.call_count == 1
         first_call = client_mock.write.call_args_list[0]
@@ -185,7 +184,7 @@ class TestInfluxDB3Sink:
             partition=0,
             offset=1,
         )
-        sink.flush(topic=topic, partition=0)
+        sink.flush()
 
         assert client_mock.write.call_count == 1
         first_call = client_mock.write.call_args_list[0]
@@ -234,7 +233,7 @@ class TestInfluxDB3Sink:
             partition=0,
             offset=1,
         )
-        sink.flush(topic=topic, partition=0)
+        sink.flush()
 
         assert client_mock.write.call_count == 1
         first_call = client_mock.write.call_args_list[0]
@@ -279,7 +278,7 @@ class TestInfluxDB3Sink:
             partition=0,
             offset=2,
         )
-        sink.flush(topic=topic, partition=0)
+        sink.flush()
 
         assert client_mock.write.call_count == 2
         first_call, second_call = client_mock.write.call_args_list
@@ -335,7 +334,7 @@ class TestInfluxDB3Sink:
             offset=1,
         )
         with pytest.raises(SinkBackpressureError) as raised:
-            sink.flush(topic=topic, partition=0)
+            sink.flush()
 
         assert raised.value.retry_after == 10
 
@@ -363,4 +362,4 @@ class TestInfluxDB3Sink:
             offset=1,
         )
         with pytest.raises(influxdb_client_3.InfluxDBError):
-            sink.flush(topic=topic, partition=0)
+            sink.flush()

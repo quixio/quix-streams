@@ -11,14 +11,14 @@ class TestBatchingSink:
             value=value,
             key=key,
             topic=topic,
-            partition=0,
+            partition=partition,
             offset=0,
             timestamp=0,
             headers=[],
         )
         # Flush the sink twice to ensure that records are flushed once
-        sink.flush(topic=topic, partition=partition)
-        sink.flush(topic=topic, partition=partition)
+        sink.flush()
+        sink.flush()
         assert len(sink.results) == 1
         result = sink.results[0]
         assert result.value == value
@@ -29,7 +29,7 @@ class TestBatchingSink:
 
     def test_flush_empty(self):
         sink = DummySink()
-        sink.flush(topic="topic", partition=0)
+        sink.flush()
         assert sink.results == []
 
     def test_on_paused(self):
@@ -41,17 +41,17 @@ class TestBatchingSink:
             value=value,
             key=key,
             topic=topic,
-            partition=0,
+            partition=partition,
             offset=0,
             timestamp=0,
             headers=[],
         )
-        sink.on_paused(topic=topic, partition=partition)
-        sink.flush(topic=topic, partition=partition)
+        sink.on_paused()
+        sink.flush()
         assert sink.results == []
 
     def test_on_paused_no_batch(self):
         sink = DummySink()
-        sink.on_paused(topic="topic", partition=0)
-        sink.flush(topic="topic", partition=0)
+        sink.on_paused()
+        sink.flush()
         assert sink.results == []
