@@ -66,14 +66,10 @@ class BackpressuredSink(BatchingSink):
             retry_after=999, topic=batch.topic, partition=batch.partition
         )
 
-    def setup(self): ...
-
 
 class FailingSink(BatchingSink):
     def write(self, batch: SinkBatch):
         raise ValueError("Sink write failed")
-
-    def setup(self): ...
 
 
 @pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
