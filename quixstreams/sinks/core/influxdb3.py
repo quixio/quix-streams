@@ -300,6 +300,6 @@ class InfluxDB3Sink(BatchingSink):
                     # The write limit is exceeded, raise a SinkBackpressureError
                     # to pause the partition for a certain period of time.
                     raise SinkBackpressureError(
-                        retry_after=int(exc.retry_after),
+                        retry_after=int(exc.retry_after)
                     ) from exc
                 raise

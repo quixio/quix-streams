@@ -134,19 +134,15 @@ class PubSubSink(BaseSink):
         future = self._client.publish(**kwargs)
         self._futures[(topic, partition)].append(future)
 
-    def flush(self, topic: str, partition: int) -> None:
+    def flush(self) -> None:
         """
         Wait for all publish operations to complete successfully.
         """
-        if futures := self._futures.pop((topic, partition), None):
+        for futures in self._futures.values():
             result = concurrent.futures.wait(
                 futures,
                 timeout=self._flush_timeout,
                 return_when=concurrent.futures.FIRST_EXCEPTION,
             )
             if result.not_done or any(f.exception() for f in result.done):
-                raise SinkBackpressureError(
-                    retry_after=5.0,
-                    topic=topic,
-                    partition=partition,
-                )
+                raise SinkBackpressureError(retry_after=5.0)

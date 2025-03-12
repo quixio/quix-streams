@@ -81,8 +81,4 @@ class FileSink(BatchingSink):
         try:
             self._destination.write(data, batch)
         except Exception as e:
-            raise SinkBackpressureError(
-                retry_after=5.0,
-                topic=batch.topic,
-                partition=batch.partition,
-            ) from e
+            raise SinkBackpressureError(retry_after=5.0) from e
