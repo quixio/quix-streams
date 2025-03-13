@@ -18,10 +18,12 @@ class PausingManager:
     the timeout is elapsed.
     """
 
+    _resume_at: float
+
     def __init__(self, consumer: BaseConsumer, topic_manager: TopicManager):
         self._consumer = consumer
         self._topic_manager = topic_manager
-        self._resume_at = _MAX_FLOAT
+        self.reset()
 
     def pause(
         self,
@@ -38,11 +40,7 @@ class PausingManager:
         self._resume_at = min(self._resume_at, resume_at)
 
         # Pause only data TPs excluding changelog TPs
-        non_changelog_tps = [
-            tp
-            for tp in self._consumer.assignment()
-            if tp.topic in self._topic_manager.non_changelog_topics
-        ]
+        non_changelog_tps = self._get_non_changelog_assigned_tps()
 
         for tp in non_changelog_tps:
             position, *_ = self._consumer.position([tp])
@@ -74,11 +72,7 @@ class PausingManager:
             return
 
         # Resume only data TPs excluding changelog TPs
-        non_changelog_tps = [
-            tp
-            for tp in self._consumer.assignment()
-            if tp.topic in self._topic_manager.non_changelog_topics
-        ]
+        non_changelog_tps = self._get_non_changelog_assigned_tps()
 
         for tp in non_changelog_tps:
             logger.debug(f'Resuming topic partition "{tp.topic}[{tp.partition}]"')
@@ -90,3 +84,13 @@ class PausingManager:
     def reset(self):
         # Reset the timeout back to its initial state
         self._resume_at = _MAX_FLOAT
+
+    def _get_non_changelog_assigned_tps(self) -> list[TopicPartition]:
+        """
+        Get assigned topic partitions for non-changelog topics.
+        """
+        return [
+            tp
+            for tp in self._consumer.assignment()
+            if tp.topic in self._topic_manager.non_changelog_topics
+        ]
