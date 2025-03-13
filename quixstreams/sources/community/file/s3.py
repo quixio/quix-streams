@@ -47,6 +47,7 @@ class S3FileSource(FileSource):
         key_setter: Optional[Callable[[object], object]] = None,
         value_setter: Optional[Callable[[object], object]] = None,
         timestamp_setter: Optional[Callable[[object], int]] = None,
+        has_partition_folders: bool = False,
         file_format: Union[Format, FormatName] = "json",
         compression: Optional[CompressionName] = None,
         replay_speed: float = 1.0,
@@ -72,6 +73,12 @@ class S3FileSource(FileSource):
         :param timestamp_setter: sets the kafka message timestamp for a record in the file.
         :param file_format: what format the files are stored as (ex: "json").
         :param compression: what compression was used on the files, if any (ex. "gzip").
+        :param has_partition_folders: whether files are nested within partition folders.
+            If True, FileSource will match the output topic partition count with it.
+            Set this flag to True if Quix Streams FileSink was used to dump data.
+            Note: messages will only align with these partitions if original key is used.
+            Example structure - a 2 partition topic (0, 1):
+            [/topic/0/file_0.ext, /topic/0/file_1.ext, /topic/1/file_0.ext]
         :param replay_speed: Produce messages with this speed multiplier, which
             roughly reflects the time "delay" between the original message producing.
             Use any float >= 0, where 0 is no delay, and 1 is the original speed.
@@ -93,8 +100,9 @@ class S3FileSource(FileSource):
             timestamp_setter=timestamp_setter,
             file_format=file_format,
             compression=compression,
+            has_partition_folders=has_partition_folders,
             replay_speed=replay_speed,
-            name=name,
+            name=name or f"s3_{bucket}_{Path(filepath).name}",
             shutdown_timeout=shutdown_timeout,
             on_client_connect_success=on_client_connect_success,
             on_client_connect_failure=on_client_connect_failure,
@@ -108,8 +116,11 @@ class S3FileSource(FileSource):
         }
         self._client: Optional[S3Client] = None
 
+    def _get_client(self):
+        return boto_client("s3", **self._credentials)
+
     def setup(self):
-        self._client = boto_client("s3", **self._credentials)
+        self._client = self._get_client()
 
     def get_file_list(self, filepath: Union[str, Path]) -> Iterable[Path]:
         resp = self._client.list_objects(
@@ -128,3 +139,9 @@ class S3FileSource(FileSource):
             "Body"
         ].read()
         return BytesIO(data)
+
+    def file_partition_counter(self) -> int:
+        resp = self._get_client().list_objects(
+            Bucket=self._bucket, Prefix=f"{self._filepath}/", Delimiter="/"
+        )
+        return len(resp["CommonPrefixes"])

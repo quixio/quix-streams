@@ -1,4 +1,5 @@
 import logging
+import os
 from io import BytesIO
 from pathlib import Path
 from typing import Callable, Iterable, Optional, Union
@@ -46,6 +47,7 @@ class AzureFileSource(FileSource):
         timestamp_setter: Optional[Callable[[object], int]] = None,
         file_format: Union[Format, FormatName] = "json",
         compression: Optional[CompressionName] = None,
+        has_partition_folders: bool = False,
         replay_speed: float = 1.0,
         name: Optional[str] = None,
         shutdown_timeout: float = 30,
@@ -61,6 +63,12 @@ class AzureFileSource(FileSource):
         :param timestamp_setter: sets the kafka message timestamp for a record in the file.
         :param file_format: what format the files are stored as (ex: "json").
         :param compression: what compression was used on the files, if any (ex. "gzip").
+        :param has_partition_folders: whether files are nested within partition folders.
+            If True, FileSource will match the output topic partition count with it.
+            Set this flag to True if Quix Streams FileSink was used to dump data.
+            Note: messages will only align with these partitions if original key is used.
+            Example structure - a 2 partition topic (0, 1):
+            [/topic/0/file_0.ext, /topic/0/file_1.ext, /topic/1/file_0.ext]
         :param replay_speed: Produce messages with this speed multiplier, which
             roughly reflects the time "delay" between the original message producing.
             Use any float >= 0, where 0 is no delay, and 1 is the original speed.
@@ -83,8 +91,9 @@ class AzureFileSource(FileSource):
             timestamp_setter=timestamp_setter,
             file_format=file_format,
             compression=compression,
+            has_partition_folders=has_partition_folders,
             replay_speed=replay_speed,
-            name=name,
+            name=name or f"azurefilestore_{container}_{Path(filepath).name}",
             shutdown_timeout=shutdown_timeout,
             on_client_connect_success=on_client_connect_success,
             on_client_connect_failure=on_client_connect_failure,
@@ -112,3 +121,16 @@ class AzureFileSource(FileSource):
         blob_client = self._client.get_blob_client(str(filepath))
         data = blob_client.download_blob().readall()
         return BytesIO(data)
+
+    def file_partition_counter(self) -> int:
+        """
+        This is a simplified version of the recommended way to retrieve folder
+        names based on the azure SDK docs examples.
+        """
+        path = f"{self._filepath}/"
+        folders = set()
+        for blob in self._client.list_blobs(name_starts_with=path):
+            relative_dir = os.path.dirname(os.path.relpath(blob.name, path))
+            if relative_dir and ("/" not in relative_dir):
+                folders.add(relative_dir)
+        return len(folders)

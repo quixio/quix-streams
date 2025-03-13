@@ -4,6 +4,7 @@ from pathlib import Path
 from time import sleep
 from typing import BinaryIO, Callable, Iterable, Optional, Union
 
+from quixstreams.models import Topic, TopicConfig
 from quixstreams.sources import (
     ClientConnectFailureCallback,
     ClientConnectSuccessCallback,
@@ -47,6 +48,7 @@ class FileSource(Source):
         timestamp_setter: Optional[Callable[[object], int]] = None,
         file_format: Union[Format, FormatName] = "json",
         compression: Optional[CompressionName] = None,
+        has_partition_folders: bool = False,
         replay_speed: float = 1.0,
         name: Optional[str] = None,
         shutdown_timeout: float = 30,
@@ -60,6 +62,12 @@ class FileSource(Source):
         :param timestamp_setter: sets the kafka message timestamp for a record in the file.
         :param file_format: what format the files are stored as (ex: "json").
         :param compression: what compression was used on the files, if any (ex. "gzip").
+        :param has_partition_folders: whether files are nested within partition folders.
+            If True, FileSource will match the output topic partition count with it.
+            Set this flag to True if Quix Streams FileSink was used to dump data.
+            Note: messages will only align with these partitions if original key is used.
+            Example structure - a 2 partition topic (0, 1):
+            [/topic/0/file_0.ext, /topic/0/file_1.ext, /topic/1/file_0.ext]
         :param replay_speed: Produce messages with this speed multiplier, which
             roughly reflects the time "delay" between the original message producing.
             Use any float >= 0, where 0 is no delay, and 1 is the original speed.
@@ -74,16 +82,18 @@ class FileSource(Source):
             Callback should accept the raised Exception as an argument.
             Callback must resolve (or propagate/re-raise) the Exception.
         """
-        self._filepath = Path(filepath)
+        filepath = Path(filepath)
         super().__init__(
-            name=name or self._filepath.name,
+            name=name or f"file_{filepath.name}",
             shutdown_timeout=shutdown_timeout,
             on_client_connect_success=on_client_connect_success,
             on_client_connect_failure=on_client_connect_failure,
         )
+        self._filepath = filepath
         self._key_setter = key_setter or _default_key_setter
         self._value_setter = value_setter or _default_value_setter
         self._timestamp_setter = timestamp_setter or _default_timestamp_setter
+        self._has_partition_folders = has_partition_folders
         self._replay_speed = max(replay_speed, 0)
         self._raw_filestream_deserializer = raw_filestream_deserializer(
             file_format, compression
@@ -146,6 +156,48 @@ class FileSource(Source):
                 logger.debug(f"Sleeping for {replay_diff_seconds} seconds...")
                 sleep(replay_diff_seconds)
         self._previous_timestamp = current_timestamp
+
+    def file_partition_counter(self) -> int:
+        """
+        Can optionally define a way of counting folders to intelligently
+        set the "default_topic" partition count to match partition folder count.
+
+        If defined, class flag "has_partition_folders" can then be set to employ it.
+
+        It is not required since this operation may not be easy to implement, and the
+        file structure may not be used outside of Quix Streams FileSink.
+
+        Example structure with 2 partitions (0,1):
+
+        ```
+        topic_name/
+        ├── 0/               # partition 0
+        │   ├── file_a.ext
+        │   └── file_b.ext
+        └── 1/               # partition 1
+            ├── file_x.ext
+            └── file_y.ext
+
+        ```
+        """
+        raise NotImplementedError(
+            f'{self.__class__.__name__} must implement "file_partition_counter" method'
+            f'to enable the option "has_partition_folders=True"'
+        )
+
+    def default_topic(self) -> Topic:
+        """
+        Optionally allows the file structure to define the partition count for the
+        internal topic (instead of just 1).
+        :return: the default topic with potentially altered partition count
+        """
+        topic = super().default_topic()
+        if self._has_partition_folders:
+            topic.create_config = TopicConfig(
+                num_partitions=self.file_partition_counter(),
+                replication_factor=1,
+            )
+        return topic
 
 
 def _default_key_setter(row: dict) -> object:

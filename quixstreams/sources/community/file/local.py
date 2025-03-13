@@ -34,6 +34,7 @@ class LocalFileSource(FileSource):
         timestamp_setter: Optional[Callable[[object], int]] = None,
         file_format: Union[Format, FormatName] = "json",
         compression: Optional[CompressionName] = None,
+        has_partition_folders: bool = False,
         replay_speed: float = 1.0,
         name: Optional[str] = None,
         shutdown_timeout: float = 30,
@@ -47,6 +48,12 @@ class LocalFileSource(FileSource):
         :param timestamp_setter: sets the kafka message timestamp for a record in the file.
         :param file_format: what format the files are stored as (ex: "json").
         :param compression: what compression was used on the files, if any (ex. "gzip").
+        :param has_partition_folders: whether files are nested within partition folders.
+            If True, FileSource will match the output topic partition count with it.
+            Set this flag to True if Quix Streams FileSink was used to dump data.
+            Note: messages will only align with these partitions if original key is used.
+            Example structure - a 2 partition topic (0, 1):
+            [/topic/0/file_0.ext, /topic/0/file_1.ext, /topic/1/file_0.ext]
         :param replay_speed: Produce messages with this speed multiplier, which
             roughly reflects the time "delay" between the original message producing.
             Use any float >= 0, where 0 is no delay, and 1 is the original speed.
@@ -68,6 +75,7 @@ class LocalFileSource(FileSource):
             timestamp_setter=timestamp_setter,
             file_format=file_format,
             compression=compression,
+            has_partition_folders=has_partition_folders,
             replay_speed=replay_speed,
             name=name,
             shutdown_timeout=shutdown_timeout,
@@ -84,3 +92,7 @@ class LocalFileSource(FileSource):
 
     def read_file(self, filepath: Path) -> BinaryIO:
         return BytesIO(filepath.read_bytes())
+
+    def file_partition_counter(self) -> int:
+        logger.info(f"TOTAL FILES: {len([f for f in self._filepath.iterdir()])}")
+        return len([f for f in self._filepath.iterdir()])
