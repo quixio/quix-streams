@@ -149,8 +149,6 @@ class AzureFileSource(FileSource):
         self._close_client()
         return len(folders)
 
-    def run(self):
-        try:
-            super().run()
-        finally:
-            self._close_client()
+    def stop(self):
+        self._close_client()
+        super().stop()

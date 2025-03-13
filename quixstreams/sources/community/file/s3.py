@@ -155,8 +155,6 @@ class S3FileSource(FileSource):
         self._close_client()
         return len(resp["CommonPrefixes"])
 
-    def run(self):
-        try:
-            super().run()
-        finally:
-            self._close_client()
+    def stop(self):
+        self._close_client()
+        super().stop()

@@ -137,12 +137,15 @@ class FileSource(Source):
         )
 
     def run(self):
-        files = FileFetcher(self.read_file, self.get_file_list(self._filepath))
-        for filepath, raw_filestream in files:
-            logger.info(f"Processing file {filepath}...")
-            for record in self._raw_filestream_deserializer(raw_filestream):
-                self.process_record(record)
-            self._producer.flush()
+        file_fetcher = FileFetcher(self.read_file, self.get_file_list(self._filepath))
+        try:
+            for filepath, raw_filestream in file_fetcher:
+                logger.info(f"Processing file {filepath}...")
+                for record in self._raw_filestream_deserializer(raw_filestream):
+                    self.process_record(record)
+                self._producer.flush()
+        finally:
+            file_fetcher.stop()
 
     def _handle_replay_delay(self, current_timestamp: int):
         """
@@ -168,7 +171,6 @@ class FileSource(Source):
         file structure may not be used outside Quix Streams FileSink.
 
         Example structure with 2 partitions (0,1):
-
         ```
         topic_name/
         ├── 0/               # partition 0
@@ -177,7 +179,6 @@ class FileSource(Source):
         └── 1/               # partition 1
             ├── file_x.ext
             └── file_y.ext
-
         ```
         """
         raise NotImplementedError(
