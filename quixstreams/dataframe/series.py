@@ -363,7 +363,7 @@ class StreamingSeries:
         :param other: object to check for "is"
         :return: new StreamingSeries
         """
-        return self._operation(other, operator.is_)
+        return self._operation(other, operator.is_, missing_column_value=False)
 
     def isnot(self, other: Union[Self, object]) -> Self:
         """
