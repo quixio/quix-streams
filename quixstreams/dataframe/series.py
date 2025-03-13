@@ -235,6 +235,8 @@ class StreamingSeries:
             [Any, _O],
             Union[bool, Self],
         ],
+        missing_column_value: Any = None,
+        missing_data_value: Any = None,
     ) -> Self:
         self._validate_other_series(other)
 
@@ -251,10 +253,10 @@ class StreamingSeries:
                     # This may raise TypeError
                     return operator_(self_result, other_result)
                 except ColumnDoesNotExist:
-                    return None
-                except TypeError as exc:
-                    if "NoneType" in str(exc):
-                        return None
+                    return missing_column_value
+                except TypeError:
+                    if self_result is None or other_result is None:
+                        return missing_data_value
                     raise
         else:
 
@@ -266,15 +268,15 @@ class StreamingSeries:
                     # This may raise TypeError
                     return operator_(self_result, other)
                 except ColumnDoesNotExist:
-                    return None
-                except TypeError as exc:
-                    if "NoneType" in str(exc):
-                        return None
+                    return missing_column_value
+                except TypeError:
+                    if self_result is None or other is None:
+                        return missing_data_value
                     raise
 
         return self._from_apply_callback(func=func)
 
-    def isin(self, other: Container) -> Self:
+    def isin(self, other: Union[Container, Self]) -> Self:
         """
         Check if series value is in "other".
         Same as "StreamingSeries in other".
@@ -303,7 +305,12 @@ class StreamingSeries:
         def f(a, b):
             return contains(b, a)
 
-        return self._operation(other, f)
+        return self._operation(
+            other,
+            f,
+            missing_column_value=False,
+            missing_data_value=False,
+        )
 
     def contains(self, other: Union[Self, object]) -> Self:
         """
@@ -328,7 +335,12 @@ class StreamingSeries:
         :param other: object to check
         :return: new StreamingSeries
         """
-        return self._operation(other, operator.contains)
+        return self._operation(
+            other,
+            operator.contains,
+            missing_column_value=False,
+            missing_data_value=False,
+        )
 
     def is_(self, other: Union[Self, object]) -> Self:
         """
