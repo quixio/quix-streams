@@ -21,10 +21,14 @@ logger = logging.getLogger(__name__)
 
 class FileSource(Source):
     """
-    An interface for interacting with a file-based client.
+    An interface for extracting records using a file-based client.
 
-    Requires defining methods for navigating folders and retrieving/opening raw files
-    that will be handed to other methods.
+    It recursively iterates from a provided path (file or folder) and
+    processes all found files by parsing and producing the given records contained
+    in each file as individual messages to a kafka topic.
+
+    Requires defining methods for navigating folders and retrieving/opening raw
+    files for the respective client.
 
     When these abstract methods are defined, a FileSource will be able to:
     1. Prepare a list of files to download, and retrieve them sequentially
@@ -37,7 +41,7 @@ class FileSource(Source):
 
     def __init__(
         self,
-        directory: Union[str, Path],
+        filepath: Union[str, Path],
         key_setter: Optional[Callable[[object], object]] = None,
         value_setter: Optional[Callable[[object], object]] = None,
         timestamp_setter: Optional[Callable[[object], int]] = None,
@@ -49,9 +53,30 @@ class FileSource(Source):
         on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
         on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
     ):
-        self._directory = Path(directory)
+        """
+        :param filepath: folder to recursively iterate from (a file will be used directly).
+        :param key_setter: sets the kafka message key for a record in the file.
+        :param value_setter: sets the kafka message value for a record in the file.
+        :param timestamp_setter: sets the kafka message timestamp for a record in the file.
+        :param file_format: what format the files are stored as (ex: "json").
+        :param compression: what compression was used on the files, if any (ex. "gzip").
+        :param replay_speed: Produce messages with this speed multiplier, which
+            roughly reflects the time "delay" between the original message producing.
+            Use any float >= 0, where 0 is no delay, and 1 is the original speed.
+            NOTE: Time delay will only be accurate per partition, NOT overall.
+        :param name: The name of the Source application (Default: last folder name).
+        :param shutdown_timeout: Time in seconds the application waits for the source
+            to gracefully shut down.
+        :param on_client_connect_success: An optional callback made after successful
+            client authentication, primarily for additional logging.
+        :param on_client_connect_failure: An optional callback made after failed
+            client authentication (which should raise an Exception).
+            Callback should accept the raised Exception as an argument.
+            Callback must resolve (or propagate/re-raise) the Exception.
+        """
+        self._filepath = Path(filepath)
         super().__init__(
-            name=name or self._directory.name,
+            name=name or self._filepath.name,
             shutdown_timeout=shutdown_timeout,
             on_client_connect_success=on_client_connect_success,
             on_client_connect_failure=on_client_connect_failure,
@@ -102,7 +127,7 @@ class FileSource(Source):
         )
 
     def run(self):
-        files = FileFetcher(self.read_file, self.get_file_list(self._directory))
+        files = FileFetcher(self.read_file, self.get_file_list(self._filepath))
         for filepath, raw_filestream in files:
             logger.info(f"Processing file {filepath}...")
             for record in self._raw_filestream_deserializer(raw_filestream):

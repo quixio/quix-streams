@@ -19,14 +19,16 @@ logger = logging.getLogger(__name__)
 
 class LocalFileSource(FileSource):
     """
-    An interface for interacting with a file-based client.
+    A source for extracting records stored within files in a local filesystem.
 
-    Provides methods for navigating folders and retrieving/opening raw files.
+    It recursively iterates from the provided path (file or folder) and
+    processes all found files by parsing and producing the given records contained
+    in each file as individual messages to a kafka topic (same topic for all).
     """
 
     def __init__(
         self,
-        directory: Union[str, Path],
+        filepath: Union[str, Path],
         key_setter: Optional[Callable[[object], object]] = None,
         value_setter: Optional[Callable[[object], object]] = None,
         timestamp_setter: Optional[Callable[[object], int]] = None,
@@ -38,8 +40,29 @@ class LocalFileSource(FileSource):
         on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
         on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
     ):
+        """
+        :param filepath: folder to recursively iterate from (a file will be used directly).
+        :param key_setter: sets the kafka message key for a record in the file.
+        :param value_setter: sets the kafka message value for a record in the file.
+        :param timestamp_setter: sets the kafka message timestamp for a record in the file.
+        :param file_format: what format the files are stored as (ex: "json").
+        :param compression: what compression was used on the files, if any (ex. "gzip").
+        :param replay_speed: Produce messages with this speed multiplier, which
+            roughly reflects the time "delay" between the original message producing.
+            Use any float >= 0, where 0 is no delay, and 1 is the original speed.
+            NOTE: Time delay will only be accurate per partition, NOT overall.
+        :param name: The name of the Source application (Default: last folder name).
+        :param shutdown_timeout: Time in seconds the application waits for the source
+            to gracefully shut down.
+        :param on_client_connect_success: An optional callback made after successful
+            client authentication, primarily for additional logging.
+        :param on_client_connect_failure: An optional callback made after failed
+            client authentication (which should raise an Exception).
+            Callback should accept the raised Exception as an argument.
+            Callback must resolve (or propagate/re-raise) the Exception.
+        """
         super().__init__(
-            directory=directory,
+            filepath=filepath,
             key_setter=key_setter,
             value_setter=value_setter,
             timestamp_setter=timestamp_setter,
