@@ -387,7 +387,7 @@ class StreamingSeries:
         :param other: object to check for "is_not"
         :return: new StreamingSeries
         """
-        return self._operation(other, operator.is_not)
+        return self._operation(other, operator.is_not, missing_column_value=False)
 
     def isnull(self) -> Self:
         """
@@ -410,7 +410,7 @@ class StreamingSeries:
 
         :return: new StreamingSeries
         """
-        return self._operation(None, operator.is_)
+        return self._operation(None, operator.is_, missing_column_value=True)
 
     def notnull(self) -> Self:
         """
@@ -433,7 +433,7 @@ class StreamingSeries:
 
         :return: new StreamingSeries
         """
-        return self._operation(None, operator.is_not)
+        return self._operation(None, operator.is_not, missing_column_value=False)
 
     def abs(self) -> Self:
         """
