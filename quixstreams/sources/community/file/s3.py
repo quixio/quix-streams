@@ -116,14 +116,18 @@ class S3FileSource(FileSource):
         }
         self._client: Optional[S3Client] = None
 
-    def _get_client(self):
-        """
-        Must be managed this way due to multiprocessing's pickling
-        """
-        return boto_client("s3", **self._credentials)
+    def _close_client(self):
+        logger.debug("Closing S3 client session...")
+        if self._client:
+            try:
+                self._client.close()
+            except Exception as e:
+                logger.error(f"Azure client session exited non-gracefully: {e}")
+        self._client = None
 
     def setup(self):
-        self._client = self._get_client()
+        self._client = boto_client("s3", **self._credentials)
+        self._client.get_bucket_policy(Bucket=self._bucket)
 
     def get_file_list(self, filepath: Union[str, Path]) -> Iterable[Path]:
         resp = self._client.list_objects(
@@ -144,7 +148,15 @@ class S3FileSource(FileSource):
         return BytesIO(data)
 
     def file_partition_counter(self) -> int:
-        resp = self._get_client().list_objects(
+        self._init_client()  # allows connection callbacks to trigger off this
+        resp = self._client.list_objects(
             Bucket=self._bucket, Prefix=f"{self._filepath}/", Delimiter="/"
         )
+        self._close_client()
         return len(resp["CommonPrefixes"])
+
+    def run(self):
+        try:
+            super().run()
+        finally:
+            self._close_client()

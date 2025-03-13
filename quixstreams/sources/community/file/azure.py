@@ -111,6 +111,18 @@ class AzureFileSource(FileSource):
         container_client = storage_client.get_container_client(self._container)
         return container_client
 
+    def _close_client(self):
+        logger.debug("Closing Azure client session...")
+        if self._client:
+            try:
+                self._client.close()
+            except Exception as e:
+                logger.error(f"Azure client session exited non-gracefully: {e}")
+        self._client = None
+
+    def setup(self):
+        self._client = self._get_client()
+
     def get_file_list(self, filepath: Path) -> Iterable[Path]:
         data = self._client.list_blob_names(name_starts_with=str(filepath))
         for page in data.by_page():
@@ -127,10 +139,18 @@ class AzureFileSource(FileSource):
         This is a simplified version of the recommended way to retrieve folder
         names based on the azure SDK docs examples.
         """
+        self._init_client()  # allows connection callbacks to trigger off this
         path = f"{self._filepath}/"
         folders = set()
         for blob in self._client.list_blobs(name_starts_with=path):
             relative_dir = os.path.dirname(os.path.relpath(blob.name, path))
             if relative_dir and ("/" not in relative_dir):
                 folders.add(relative_dir)
+        self._close_client()
         return len(folders)
+
+    def run(self):
+        try:
+            super().run()
+        finally:
+            self._close_client()

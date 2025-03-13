@@ -165,7 +165,7 @@ class FileSource(Source):
         If defined, class flag "has_partition_folders" can then be set to employ it.
 
         It is not required since this operation may not be easy to implement, and the
-        file structure may not be used outside of Quix Streams FileSink.
+        file structure may not be used outside Quix Streams FileSink.
 
         Example structure with 2 partitions (0,1):
 
