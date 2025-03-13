@@ -141,7 +141,6 @@ class KinesisSink(BaseSink):
         """
         # Submit any remaining records
         for tp, records in self._records.items():
-            # if records := self._records.pop(topic_partition, None):
             self._submit(tp, records)
 
         # Wait for all futures to complete
