@@ -242,7 +242,7 @@ class StreamingSeries:
         if isinstance(other, self.__class__):
             other_composed = other.compose_returning()
 
-            def f(value: Any, key: Any, timestamp: int, headers: Any) -> Any:
+            def func(value: Any, key: Any, timestamp: int, headers: Any) -> Any:
                 try:
                     # These may raise ColumnDoesNotExist
                     self_result = self_composed(value, key, timestamp, headers)[0]
@@ -256,11 +256,9 @@ class StreamingSeries:
                     if "NoneType" in str(exc):
                         return None
                     raise
-
-            return self._from_apply_callback(func=f)
         else:
 
-            def f(value: Any, key: Any, timestamp: int, headers: Any) -> Any:
+            def func(value: Any, key: Any, timestamp: int, headers: Any) -> Any:
                 try:
                     # This may raise ColumnDoesNotExist
                     self_result = self_composed(value, key, timestamp, headers)[0]
@@ -274,7 +272,7 @@ class StreamingSeries:
                         return None
                     raise
 
-            return self._from_apply_callback(func=f)
+        return self._from_apply_callback(func=func)
 
     def isin(self, other: Container) -> Self:
         """
