@@ -139,11 +139,14 @@ class FileSource(Source):
     def run(self):
         file_fetcher = FileFetcher(self.read_file, self.get_file_list(self._filepath))
         try:
-            for filepath, raw_filestream in file_fetcher:
+            while self._running:
+                filepath, raw_filestream = next(file_fetcher)
                 logger.info(f"Processing file {filepath}...")
                 for record in self._raw_filestream_deserializer(raw_filestream):
                     self.process_record(record)
                 self._producer.flush()
+        except StopIteration:
+            logger.info("Finished processing all files!")
         finally:
             file_fetcher.stop()
 
@@ -189,8 +192,8 @@ class FileSource(Source):
     def default_topic(self) -> Topic:
         """
         Optionally allows the file structure to define the partition count for the
-        internal topic (instead of just 1).
-        :return: the default topic with potentially altered partition count
+        internal topic with file_partition_counter (instead of the default of 1).
+        :return: the default topic with optionally altered partition count
         """
         topic = super().default_topic()
         if self._has_partition_folders:
