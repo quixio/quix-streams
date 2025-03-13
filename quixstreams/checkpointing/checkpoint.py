@@ -188,11 +188,10 @@ class Checkpoint(BaseCheckpoint):
          5. Flush each state store partition to the disk.
         """
 
-        logger.debug("Checkpoint: flushing sinks")
-        sinks = self._sink_manager.sinks
         # Step 1. Flush sinks
+        logger.debug("Checkpoint: flushing sinks")
         backpressured = False
-        for sink in sinks:
+        for sink in self._sink_manager.sinks:
             if backpressured:
                 # Drop the accumulated data for the other sinks
                 # if one of them is backpressured to limit the number of duplicates
