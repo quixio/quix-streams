@@ -60,7 +60,6 @@ class TestPausingManager:
             topic_name=topic.name, store_name="default", config=topic.broker_config
         )
 
-        # partition1, partition2 = 0, 1
         offset_to_seek = 999
 
         consumer = MagicMock(spec_set=Consumer)
