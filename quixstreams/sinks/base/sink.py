@@ -197,6 +197,6 @@ class BatchingSink(BaseSink):
 
     def on_paused(self):
         """
-        When the destination is already backpressure, drop the accumulated batches.
+        When the destination is already backpressured, drop the accumulated batches.
         """
         self._batches.clear()
