@@ -117,6 +117,9 @@ class S3FileSource(FileSource):
         self._client: Optional[S3Client] = None
 
     def _get_client(self):
+        """
+        Must be managed this way due to multiprocessing's pickling
+        """
         return boto_client("s3", **self._credentials)
 
     def setup(self):
