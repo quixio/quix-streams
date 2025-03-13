@@ -230,7 +230,7 @@ class IcebergSink(BatchingSink):
             logger.warning(f"Commit conflict detected.: {e}")
             # encourage staggered backoff
             sleep_time = random.uniform(0, 5)  # noqa: S311
-            raise SinkBackpressureError(sleep_time, batch.topic, batch.partition)
+            raise SinkBackpressureError(retry_after=sleep_time)
         except Exception as e:
             logger.error(f"Error writing data to Iceberg table: {e}")
             raise

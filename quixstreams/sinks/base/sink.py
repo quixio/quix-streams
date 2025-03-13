@@ -1,6 +1,6 @@
 import abc
 import logging
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Optional
 
 from quixstreams.models import HeadersTuples
 from quixstreams.sinks.base.batch import SinkBatch
@@ -50,7 +50,7 @@ class BaseSink(abc.ABC):
         )
 
     @abc.abstractmethod
-    def flush(self, topic: str, partition: int):
+    def flush(self):
         """
         This method is triggered by the Checkpoint class when it commits.
 
@@ -97,7 +97,7 @@ class BaseSink(abc.ABC):
         except Exception as e:
             self._on_client_connect_failure(e)
 
-    def on_paused(self, topic: str, partition: int):
+    def on_paused(self):
         """
         This method is triggered when the sink is paused due to backpressure, when
         the `SinkBackpressureError` is raised.
@@ -120,7 +120,7 @@ class BatchingSink(BaseSink):
     batching sink.
     """
 
-    _batches: Dict[Tuple[str, int], SinkBatch]
+    _batches: dict[tuple[str, int], SinkBatch]
 
     def __init__(
         self,
@@ -177,28 +177,26 @@ class BatchingSink(BaseSink):
             value=value, key=key, timestamp=timestamp, headers=headers, offset=offset
         )
 
-    def flush(self, topic: str, partition: int):
+    def flush(self):
         """
-        Flush an accumulated batch to the destination and drop it afterward.
+        Flush accumulated batches to the destination and drop them afterward.
         """
-        batch = self._batches.get((topic, partition))
-        if batch is None:
-            return
 
-        logger.debug(
-            f'Flushing sink "{self}" for partition "{topic}[{partition}]; '
-            f'total_records={batch.size}"'
-        )
-        # TODO: Some custom error handling may be needed here
-        #   For now simply fail
         try:
-            self.write(batch)
+            for (topic, partition), batch in self._batches.items():
+                logger.debug(
+                    f'Flushing sink "{self}" for partition "{topic}[{partition}]; '
+                    f'total_records={batch.size}"'
+                )
+                # TODO: Some custom error handling may be needed here
+                #   For now simply fail
+                self.write(batch)
         finally:
-            # Always drop the batch after flushing it
-            self._batches.pop((topic, partition), None)
+            # Always drop batches after flushing
+            self._batches.clear()
 
-    def on_paused(self, topic: str, partition: int):
+    def on_paused(self):
         """
-        When the destination is already backpressure, drop the accumulated batch.
+        When the destination is already backpressured, drop the accumulated batches.
         """
-        self._batches.pop((topic, partition), None)
+        self._batches.clear()

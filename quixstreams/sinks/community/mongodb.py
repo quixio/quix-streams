@@ -217,8 +217,4 @@ class MongoDBSink(BatchingSink):
             "Consecutive MongoDB write attempts failed; "
             f"performing a longer backoff of {_SINK_BACKOFF} seconds..."
         )
-        raise SinkBackpressureError(
-            retry_after=_SINK_BACKOFF,
-            topic=batch.topic,
-            partition=batch.partition,
-        )
+        raise SinkBackpressureError(retry_after=_SINK_BACKOFF)

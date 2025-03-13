@@ -181,13 +181,46 @@ class Checkpoint(BaseCheckpoint):
         Commit the checkpoint.
 
         This method will:
-         1. Produce the changelogs for each state store
-         2. Flush the producer to ensure everything is delivered.
-         3. Commit topic offsets.
-         4. Flush each state store partition to the disk.
+         1. Flush the registered sinks if any
+         2. Produce the changelogs for each state store
+         3. Flush the producer to ensure everything is delivered.
+         4. Commit topic offsets.
+         5. Flush each state store partition to the disk.
         """
 
-        # Step 1. Produce the changelogs
+        # Step 1. Flush sinks
+        logger.debug("Checkpoint: flushing sinks")
+        backpressured = False
+        for sink in self._sink_manager.sinks:
+            if backpressured:
+                # Drop the accumulated data for the other sinks
+                # if one of them is backpressured to limit the number of duplicates
+                # when the data is reprocessed again
+                sink.on_paused()
+                continue
+
+            try:
+                sink.flush()
+            except SinkBackpressureError as exc:
+                logger.warning(
+                    f'Backpressure for sink "{sink}" is detected, '
+                    f"all partitions will be paused and resumed again "
+                    f"in {exc.retry_after}s"
+                )
+                # The backpressure is detected from the sink
+                # Pause the assignment to let it cool down and seek it back to
+                # the first processed offsets of this Checkpoint (it must be equal
+                # to the last committed offset).
+                self._pausing_manager.pause(
+                    resume_after=exc.retry_after,
+                    offsets_to_seek=self._starting_tp_offsets.copy(),
+                )
+                backpressured = True
+        if backpressured:
+            # Exit early if backpressure is detected
+            return
+
+        # Step 2. Produce the changelogs
         for (
             topic,
             partition,
@@ -201,7 +234,7 @@ class Checkpoint(BaseCheckpoint):
                 )
             transaction.prepare(processed_offsets={topic: offset})
 
-        # Step 2. Flush producer to trigger all delivery callbacks and ensure that
+        # Step 3. Flush producer to trigger all delivery callbacks and ensure that
         # all messages are produced
         logger.debug("Checkpoint: flushing producer")
         unproduced_msg_count = self._producer.flush()
@@ -211,55 +244,10 @@ class Checkpoint(BaseCheckpoint):
                 f"the producer flush timeout"
             )
 
-        logger.debug("Checkpoint: flushing sinks")
-        sinks = self._sink_manager.sinks
-        # Step 3. Flush sinks
-        for (topic, partition), offset in self._tp_offsets.items():
-            for sink in sinks:
-                if self._pausing_manager.is_paused(topic=topic, partition=partition):
-                    # The topic-partition is paused, skip flushing other sinks for
-                    # this TP.
-                    # Note: when flushing multiple sinks for the same TP, some
-                    # of them can be flushed before one of the sinks is backpressured.
-                    sink.on_paused(topic=topic, partition=partition)
-                    continue
-
-                try:
-                    sink.flush(topic=topic, partition=partition)
-                except SinkBackpressureError as exc:
-                    logger.warning(
-                        f'Backpressure for sink "{sink}" is detected, '
-                        f"the partition will be paused and resumed again "
-                        f"in {exc.retry_after}s; "
-                        f'partition="{topic}[{partition}]" '
-                        f"processed_offset={offset}"
-                    )
-                    # The backpressure is detected from the sink
-                    # Pause the partition to let it cool down and seek it back to
-                    # the first processed offset of this Checkpoint (it must be equal
-                    # to the last committed offset).
-                    offset_to_seek = self._starting_tp_offsets[(topic, partition)]
-                    self._pausing_manager.pause(
-                        topic=topic,
-                        partition=partition,
-                        resume_after=exc.retry_after,
-                        offset_to_seek=offset_to_seek,
-                    )
-
         # Step 4. Commit offsets to Kafka
-        # First, filter out offsets of the paused topic partitions.
-        tp_offsets = {
-            (topic, partition): offset
-            for (topic, partition), offset in self._tp_offsets.items()
-            if not self._pausing_manager.is_paused(topic=topic, partition=partition)
-        }
-        if not tp_offsets:
-            # No offsets to commit because every partition is paused, exiting early
-            return
-
         offsets = [
             TopicPartition(topic=topic, partition=partition, offset=offset + 1)
-            for (topic, partition), offset in tp_offsets.items()
+            for (topic, partition), offset in self._tp_offsets.items()
         ]
 
         if self._exactly_once:
@@ -281,16 +269,7 @@ class Checkpoint(BaseCheckpoint):
         # offsets.
         # Get produced offsets after flushing the producer
         produced_offsets = self._producer.offsets
-        for (
-            topic,
-            partition,
-            store_name,
-        ), transaction in self._store_transactions.items():
-            offset = tp_offsets.get((topic, partition))
-            # Offset can be None if the partition is paused
-            if offset is None:
-                continue
-
+        for transaction in self._store_transactions.values():
             # Get the changelog topic-partition for the given transaction
             # It can be None if changelog topics are disabled in the app config
             changelog_tp = transaction.changelog_topic_partition

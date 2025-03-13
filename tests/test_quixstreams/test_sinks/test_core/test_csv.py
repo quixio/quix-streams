@@ -21,8 +21,7 @@ class TestCSVSink:
                 partition=partition,
                 offset=1,
             )
-        sink.flush(topic=topic, partition=0)
-        sink.flush(topic=topic, partition=1)
+        sink.flush()
 
         with open(path) as f:
             reader = csv.DictReader(f)

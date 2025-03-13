@@ -130,30 +130,24 @@ class KinesisSink(BaseSink):
             records = self._records.pop(topic_partition)
             self._submit(topic_partition, records)
 
-    def flush(self, topic: str, partition: int) -> None:
+    def flush(self) -> None:
         """
-        Flush all buffered records for a given topic-partition.
+        Flush all records bufferred so far.
 
         This method sends any outstanding records that have not yet been sent
         because the batch size was less than 500. It waits for all futures to
         complete, ensuring that all records are successfully sent to the Kinesis
         stream.
         """
-        topic_partition = (topic, partition)
-
         # Submit any remaining records
-        if records := self._records.pop(topic_partition, None):
-            self._submit(topic_partition, records)
+        for tp, records in self._records.items():
+            self._submit(tp, records)
 
         # Wait for all futures to complete
-        if futures := self._futures.pop(topic_partition, None):
+        for futures in self._futures.values():
             done, not_done = wait(futures, return_when=FIRST_EXCEPTION)
             if not_done or any(f.exception() for f in done):
-                raise SinkBackpressureError(
-                    retry_after=5.0,
-                    topic=topic,
-                    partition=partition,
-                )
+                raise SinkBackpressureError(retry_after=5.0)
 
     def _submit(
         self, topic_partition: tuple[str, int], records: list[dict[str, str]]
