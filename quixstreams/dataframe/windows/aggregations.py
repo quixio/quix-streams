@@ -86,15 +86,43 @@ class BaseAggregator(ABC, Generic[S]):
 
 
 class Aggregator(BaseAggregator):
+    """
+    Implementation of the `BaseAggregator` interface.
+
+    Provides default implementations for the `state_suffix` property.
+    """
+
     @property
     def state_suffix(self) -> str:
         return self.__class__.__name__
+
+
+class Count(Aggregator):
+    """
+    Use `Count()` to aggregate the total number of events  within each window period..
+    """
+
+    def initialize(self) -> int:
+        return 0
+
+    def agg(self, old: int, new: Any) -> int:
+        return old + 1
+
+    def result(self, value: int) -> int:
+        return value
 
 
 V = TypeVar("V", int, float)
 
 
 class Sum(Aggregator):
+    """
+    Use `Sum()` to aggregate the sum of the events, or a column of the events, within each window period.
+
+    :param column: The column to sum. Use `ROOT` to sum the whole message.
+        Default - `ROOT`
+    """
+
     def __init__(self, column: Column = ROOT) -> None:
         self.column = column
 
@@ -115,18 +143,14 @@ class Sum(Aggregator):
         return value
 
 
-class Count(Aggregator):
-    def initialize(self) -> int:
-        return 0
-
-    def agg(self, old: int, new: Any) -> int:
-        return old + 1
-
-    def result(self, value: int) -> int:
-        return value
-
-
 class Mean(Aggregator):
+    """
+    Use `Mean()` to aggregate the mean of the events, or a column of the events, within each window period.
+
+    :param column: The column to mean. Use `ROOT` to mean the whole message.
+        Default - `ROOT`
+    """
+
     def __init__(self, column: Column = ROOT) -> None:
         self.column = column
 
@@ -157,6 +181,13 @@ class Mean(Aggregator):
 
 
 class Max(Aggregator):
+    """
+    Use `Max()` to aggregate the max of the events, or a column of the events, within each window period.
+
+    :param column: The column to max. Use `ROOT` to max the whole message.
+        Default - `ROOT`
+    """
+
     def __init__(self, column: Column = ROOT) -> None:
         self.column = column
 
@@ -182,6 +213,13 @@ class Max(Aggregator):
 
 
 class Min(Aggregator):
+    """
+    Use `Min()` to aggregate the min of the events, or a column of the events, within each window period.
+
+    :param column: The column to min. Use `ROOT` to min the whole message.
+        Default - `ROOT`
+    """
+
     def __init__(self, column: Column = ROOT) -> None:
         self.column = column
 
@@ -210,6 +248,10 @@ R = TypeVar("R")
 
 
 class Reduce(Aggregator, Generic[R]):
+    """
+    `Reduce()` allows you to perform complex aggregations using custom "reducer" and "initializer" functions.
+    """
+
     def __init__(
         self,
         reducer: Callable[[R, Any], R],
@@ -262,12 +304,25 @@ class BaseCollector(ABC, Generic[I]):
 
 
 class Collector(BaseCollector):
+    """
+    Implementation of the `BaseCollector` interface.
+
+    Provides a default implementation for the `column` property.
+    """
+
     @property
     def column(self) -> Column:
         return ROOT
 
 
 class Collect(Collector):
+    """
+    Use `Collect()` to gather all events within each window period. into a list.
+
+    :param column: The column to collect. Use `ROOT` to collect the whole message.
+        Default - `ROOT`
+    """
+
     def __init__(self, column: Column = ROOT) -> None:
         self._column = column
 
