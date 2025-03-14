@@ -235,6 +235,8 @@ class StreamingSeries:
             [Any, _O],
             Union[bool, Self],
         ],
+        missing_column_value: Any = None,
+        missing_data_value: Any = None,
     ) -> Self:
         self._validate_other_series(other)
 
@@ -242,23 +244,39 @@ class StreamingSeries:
         if isinstance(other, self.__class__):
             other_composed = other.compose_returning()
 
-            def f(value: Any, key: Any, timestamp: int, headers: Any) -> Any:
-                return operator_(
-                    self_composed(value, key, timestamp, headers)[0],
-                    other_composed(value, key, timestamp, headers)[0],
-                )
+            def func(value: Any, key: Any, timestamp: int, headers: Any) -> Any:
+                try:
+                    # These may raise ColumnDoesNotExist
+                    self_result = self_composed(value, key, timestamp, headers)[0]
+                    other_result = other_composed(value, key, timestamp, headers)[0]
 
-            return self._from_apply_callback(func=f)
+                    # This may raise TypeError
+                    return operator_(self_result, other_result)
+                except ColumnDoesNotExist:
+                    return missing_column_value
+                except TypeError:
+                    if self_result is None or other_result is None:
+                        return missing_data_value
+                    raise
         else:
 
-            def f(value: Any, key: Any, timestamp: int, headers: Any) -> Any:
-                return operator_(
-                    self_composed(value, key, timestamp, headers)[0], other
-                )
+            def func(value: Any, key: Any, timestamp: int, headers: Any) -> Any:
+                try:
+                    # This may raise ColumnDoesNotExist
+                    self_result = self_composed(value, key, timestamp, headers)[0]
 
-            return self._from_apply_callback(func=f)
+                    # This may raise TypeError
+                    return operator_(self_result, other)
+                except ColumnDoesNotExist:
+                    return missing_column_value
+                except TypeError:
+                    if self_result is None or other is None:
+                        return missing_data_value
+                    raise
 
-    def isin(self, other: Container) -> Self:
+        return self._from_apply_callback(func=func)
+
+    def isin(self, other: Union[Container, Self]) -> Self:
         """
         Check if series value is in "other".
         Same as "StreamingSeries in other".
@@ -287,7 +305,12 @@ class StreamingSeries:
         def f(a, b):
             return contains(b, a)
 
-        return self._operation(other, f)
+        return self._operation(
+            other,
+            f,
+            missing_column_value=False,
+            missing_data_value=False,
+        )
 
     def contains(self, other: Union[Self, object]) -> Self:
         """
@@ -312,7 +335,12 @@ class StreamingSeries:
         :param other: object to check
         :return: new StreamingSeries
         """
-        return self._operation(other, operator.contains)
+        return self._operation(
+            other,
+            operator.contains,
+            missing_column_value=False,
+            missing_data_value=False,
+        )
 
     def is_(self, other: Union[Self, object]) -> Self:
         """
@@ -335,7 +363,7 @@ class StreamingSeries:
         :param other: object to check for "is"
         :return: new StreamingSeries
         """
-        return self._operation(other, operator.is_)
+        return self._operation(other, operator.is_, missing_column_value=False)
 
     def isnot(self, other: Union[Self, object]) -> Self:
         """
@@ -359,7 +387,7 @@ class StreamingSeries:
         :param other: object to check for "is_not"
         :return: new StreamingSeries
         """
-        return self._operation(other, operator.is_not)
+        return self._operation(other, operator.is_not, missing_column_value=False)
 
     def isnull(self) -> Self:
         """
@@ -382,7 +410,7 @@ class StreamingSeries:
 
         :return: new StreamingSeries
         """
-        return self._operation(None, operator.is_)
+        return self._operation(None, operator.is_, missing_column_value=True)
 
     def notnull(self) -> Self:
         """
@@ -405,7 +433,7 @@ class StreamingSeries:
 
         :return: new StreamingSeries
         """
-        return self._operation(None, operator.is_not)
+        return self._operation(None, operator.is_not, missing_column_value=False)
 
     def abs(self) -> Self:
         """
