@@ -96,8 +96,9 @@ Since version 2.6, all windowed aggregations always set timestamps equal to the 
 **Example:**
 
 ```python
-from quixstreams import Application
 from datetime import timedelta
+from quixstreams import Application
+from quixstreams.dataframe.windows import Min
 
 app = Application(...)
 
@@ -107,14 +108,11 @@ sdf = app.dataframe(...)
 # value={"temperature" : 9999}, key="sensor_1", timestamp=10001
 
 sdf = (
-    # Extract the "temperature" column from the dictionary 
-    sdf.apply(lambda value: value['temperature'])
-    
     # Define a tumbling window of 10 seconds
     .tumbling_window(timedelta(seconds=10))
 
     # Calculate the minimum temperature 
-    .min()
+    .agg(minimum_temperature=Min("temperature"))
 
     # Emit results for every incoming message
     .current()
@@ -123,21 +121,12 @@ sdf = (
 # value={
 #   'start': 10000, 
 #   'end': 20000, 
-#   'value': 9999  - minimum temperature
+#   'minimum_temperature': 9999  - minimum temperature
 # }, 
 # key="sensor_1",
 # timestamp=10000 - timestamp equals to the window start timestamp
 
 ```
-
-
-### Message headers of the aggregation results
-
-Currently, windowed aggregations do not store the original headers of the messages.  
-The results of the windowed aggregations will have headers set to `None`.  
-
-You may set messages headers by using the `StreamingDataFrame.set_headers()` API, as 
-described in [the "Updating Kafka Headers" section](./processing.md#updating-kafka-headers).
 
 ## Time-based Tumbling Windows
 Tumbling windows slice time into non-overlapping intervals of a fixed size. 
@@ -177,9 +166,9 @@ Input:
 Expected output:
 
 ```json
-{"avg_temperature": 30, "window_start_ms": 0, "window_end_ms": 3600000}
-{"avg_temperature": 29.5, "window_start_ms": 0, "window_end_ms": 3600000}
-{"avg_temperature": 29, "window_start_ms": 0, "window_end_ms": 3600000}
+{"avg_temperature": 30, "start": 0, "end": 3600000}
+{"avg_temperature": 29.5, "start": 0, "end": 3600000}
+{"avg_temperature": 29, "start": 0, "end": 3600000}
 ```
 
 Here is how to do it using tumbling windows: 
@@ -187,33 +176,22 @@ Here is how to do it using tumbling windows:
 ```python
 from datetime import timedelta
 from quixstreams import Application
+from quixstreams.dataframe.windows import Mean
 
 app = Application(...)
 sdf = app.dataframe(...)
 
 
 sdf = (
-    # Extract "temperature" value from the message
-    sdf.apply(lambda value: value["temperature"])
-
     # Define a tumbling window of 1 hour
     # You can also pass duration_ms as an integer of milliseconds
     .tumbling_window(duration_ms=timedelta(hours=1))
 
     # Specify the "mean" aggregate function
-    .mean()
+    .agg(avg_temperature=Mean("temperature"))
 
     # Emit updates for each incoming message
     .current()
-
-    # Unwrap the aggregated result to match the expected output format
-    .apply(
-        lambda result: {
-            "avg_temperature": result["value"],
-            "window_start_ms": result["start"],
-            "window_end_ms": result["end"],
-        }
-    )
 )
 
 ```
@@ -262,6 +240,7 @@ import urllib.request
 
 from datetime import timedelta
 from quixstreams import Application
+from quixstreams.dataframe.windows import Collect
 
 def external_api(value):
     with urllib.request.urlopen("https://example.com", data=json.dumps(value["data"])) as rep:
@@ -272,26 +251,14 @@ sdf = app.dataframe(...)
 
 
 sdf = (
-    # Extract "experience" value from the message
-    sdf.apply(lambda value: value["data"])
-
     # Define a count-based tumbling window of 3 events
     .tumbling_count_window(count=3)
 
     # Specify the "collect" aggregate function
-    .collect()
+    .agg(data=Collect())
 
     # Emit updates once the window is closed
     .final()
-
-    # Unwrap the aggregated result to match the expected output format
-    .apply(
-        lambda result: {
-            "data": result["value"],
-            "window_start_ms": result["start"],
-            "window_end_ms": result["end"],
-        }
-    )
 )
 
 # Send a request to the external API
@@ -343,45 +310,34 @@ Input:
 Expected output:
 
 ```json
-{"avg_temperature": 30, "window_start_ms": 0, "window_end_ms": 3600000}
+{"avg_temperature": 30, "start": 0, "end": 3600000}
 
-{"avg_temperature": 29.5, "window_start_ms": 0, "window_end_ms": 3600000}
-{"avg_temperature": 30, "window_start_ms": 60000, "window_end_ms": 4200000}
+{"avg_temperature": 29.5, "start": 0, "end": 3600000}
+{"avg_temperature": 30, "start": 60000, "end": 4200000}
 
-{"avg_temperature": 29, "window_start_ms": 0, "window_end_ms": 3600000}
-{"avg_temperature": 28.5, "window_start_ms": 60000, "window_end_ms": 4200000}
+{"avg_temperature": 29, "start": 0, "end": 3600000}
+{"avg_temperature": 28.5, "start": 60000, "end": 4200000}
 ```
 
 
 ```python
 from datetime import timedelta
 from quixstreams import Application
+from quixstreams.dataframe.windows import Mean
 
 app = Application(...)
 sdf = app.dataframe(...)
 
 sdf = (
-    # Extract "temperature" value from the message
-    sdf.apply(lambda value: value["temperature"])
-
     # Define a hopping window of 1h with 10m step
     # You can also pass duration_ms and step_ms as integers of milliseconds
     .hopping_window(duration_ms=timedelta(hours=1), step_ms=timedelta(minutes=10))
 
     # Specify the "mean" aggregate function
-    .mean()
+    .agg(avg_temperature=Mean("temperature"))
 
     # Emit updates for each incoming message
     .current()
-
-    # Unwrap the aggregated result to match the expected output format
-    .apply(
-        lambda result: {
-            "avg_temperature": result["value"],
-            "window_start_ms": result["start"],
-            "window_end_ms": result["end"],
-        }
-    )
 )
 
 ```
@@ -448,43 +404,32 @@ Input:
 Expected output:
 
 ```json
-{"avg_temperature": 30, "window_start_ms": 0, "window_end_ms": 3600000}
-{"avg_temperature": 29.5, "window_start_ms": 1200000, "window_end_ms": 4800000}
-{"avg_temperature": 29, "window_start_ms": 1200001, "window_end_ms": 4800001}
-{"avg_temperature": 28.5, "window_start_ms": 3600000, "window_end_ms": 7200000}
-{"avg_temperature": 27.5, "window_start_ms": 3600001, "window_end_ms": 7200001}  # reading 30 is outside of the window
+{"avg_temperature": 30, "start": 0, "end": 3600000}
+{"avg_temperature": 29.5, "start": 1200000, "end": 4800000}
+{"avg_temperature": 29, "start": 1200001, "end": 4800001}
+{"avg_temperature": 28.5, "start": 3600000, "end": 7200000}
+{"avg_temperature": 27.5, "start": 3600001, "end": 7200001}  # reading 30 is outside of the window
 ```
 
 
 ```python
 from datetime import timedelta
 from quixstreams import Application
+from quixstreams.dataframe.windows import Mean
 
 app = Application(...)
 sdf = app.dataframe(...)
 
 sdf = (
-    # Extract "temperature" value from the message
-    sdf.apply(lambda value: value["temperature"])
-
     # Define a sliding window of 1h
     # You can also pass duration_ms as integer of milliseconds
     .sliding_window(duration_ms=timedelta(hours=1))
 
     # Specify the "mean" aggregate function
-    .mean()
+    .agg(avg_temperature=Mean("temperature"))
 
     # Emit updates for each incoming message
     .current()
-
-    # Unwrap the aggregated result to match the expected output format
-    .apply(
-        lambda result: {
-            "avg_temperature": result["value"],
-            "window_start_ms": result["start"],
-            "window_end_ms": result["end"],
-        }
-    )
 )
 
 ```
@@ -524,10 +469,10 @@ Input:
 Expected window output:
 
 ```json
-{"average": 120, "window_start_ms": 121, "window_end_ms": 583}
-{"average": 100, "window_start_ms": 165, "window_end_ms": 723}
-{"average": 120, "window_start_ms": 583, "window_end_ms": 1009}
-{"average": 80, "window_start_ms": 723, "window_end_ms": 1242}
+{"average": 120, "start": 121, "end": 583}
+{"average": 100, "start": 165, "end": 723}
+{"average": 120, "start": 583, "end": 1009}
+{"average": 80, "start": 723, "end": 1242}
 
 ```
 
@@ -536,301 +481,24 @@ Here is how to do it using sliding windows:
 ```python
 from datetime import timedelta
 from quixstreams import Application
+from quixstreams.dataframe.windows import Mean
 
 app = Application(...)
 sdf = app.dataframe(...)
 
 
 sdf = (
-    # Extract "experience" value from the message
-    sdf.apply(lambda value: value["data"])
-
     # Define a count-based sliding window of 3 events
     .sliding_count_window(count=3)
 
     # Specify the "mean" aggregate function
-    .mean()
+    .agg(average=Mean("amount"))
 
     # Emit updates once the window is closed
     .final()
-
-    # Unwrap the aggregated result to match the expected output format
-    .apply(
-        lambda result: {
-            "average": result["value"],
-            "window_start_ms": result["start"],
-            "window_end_ms": result["end"],
-        }
-    )
 )
 
 ```
-
-## Supported Aggregations
-
-Currently, windows support the following aggregation functions:
-
-- [`reduce()`](api-reference/quixstreams.md#fixedtimewindowdefinitionreduce) - to perform custom aggregations using "reducer" and "initializer" functions
-- [`collect()`](api-reference/quixstreams.md#fixedtimewindowdefinitioncollect) - to collect all values within a window into a list
-- [`min()`](api-reference/quixstreams.md#fixedtimewindowdefinitionmin) - to get a minimum value within a window
-- [`max()`](api-reference/quixstreams.md#fixedtimewindowdefinitionmax) - to get a maximum value within a window
-- [`mean()`](api-reference/quixstreams.md#fixedtimewindowdefinitionmean) - to get a mean value within a window 
-- [`sum()`](api-reference/quixstreams.md#fixedtimewindowdefinitionsum) - to sum values within a window 
-- [`count()`](api-reference/quixstreams.md#fixedtimewindowdefinitioncount) - to count the number of values within a window 
-
-We will go over each ot them in more detail below.
-
-### Reduce()
-
-`.reduce()` allows you to perform complex aggregations using custom "reducer" and "initializer" functions:
-
-- The **"initializer"** function receives the **first** value for the given window, and it must return an initial state for this window.  
-This state will be later passed to the "reducer" function.  
-**It is called only once for each window.**
-
-- The **"reducer"** function receives an aggregated state and a current value, and it must combine them and return a new aggregated state.  
-This function should contain the actual aggregation logic.  
-It will be called for each message coming into the window, except the first one.
-
-With `reduce()`, you can define a wide range of aggregations, such as:
-
-- Aggregating over multiple message fields at once
-- Using multiple message fields to create a single aggregate
-- Calculating multiple aggregates for the same value
-
-**Example**:
-
-Assume you receive the temperature data from the sensor, and you need to calculate these aggregates for each 10-minute tumbling window:
-
-- min temperature
-- max temperature
-- total count of events
-- average temperature
-
-Here is how you can do that with `reduce()`:
-
-```python
-from datetime import timedelta
-from quixstreams import Application
-
-app = Application(...)
-sdf = app.dataframe(...)
-
-
-def initializer(value: dict) -> dict:
-    """
-    Initialize the state for aggregation when a new window starts.
-    
-    It will prime the aggregation when the first record arrives 
-    in the window.
-    """
-    return {
-        'min_temp': value['temperature'],
-        'max_temp': value['temperature'],
-        'total_events': 1,
-        '_sum_temp': value['temperature'],
-        'avg_temp': value['temperature']
-    }
-
-
-def reducer(aggregated: dict, value: dict) -> dict:
-    """
-    Calculate "min", "max", "total" and "average" over temperature values.
-    
-    Reducer always receives two arguments:
-    - previously aggregated value (the "aggregated" argument)
-    - current value (the "value" argument)
-    It combines them into a new aggregated value and returns it.
-    This aggregated value will be also returned as a result of the window.
-    """
-    total_events = aggregated['count'] + 1
-    sum_temp = aggregated['_sum_temp'] + value
-    avg_temp = sum_temp / total_events
-    return {
-        'min_temp': min(aggregated['min_temp'], value['temperature']),
-        'max_temp': max(aggregated['max_temp'], value['temperature']),
-        'total_events': total_events,
-        'avg_temp': avg_temp,
-        '_sum_temp': sum_temp
-    }
-
-
-sdf = (
-    
-    # Define a tumbling window of 10 minutes
-    sdf.tumbling_window(timedelta(minutes=10))
-
-    # Create a "reduce" aggregation with "reducer" and "initializer" functions
-    .reduce(reducer=reducer, initializer=initializer)
-
-    # Emit results only for closed windows
-    .final()
-)
-
-# Output:
-# {
-#   'start': <window start>, 
-#   'end': <window end>, 
-#   'value': {'min_temp': 1, 'max_temp': 999, 'total_events': 999, 'avg_temp': 34.32, '_sum_temp': 9999},
-# }
-
-```
-
-
-### Collect()
-Use `.collect()` to gather all events in the window into a list. This operation is optimized for collecting values and performs significantly better than using `reduce()` to build a list.
-
-!!! note
-    Performance benefit comes at a price: `.collect()` only supports `.final()` mode. Using `.current()` is not supported.
-
-**Example:**
-
-Collect all events over a 10-minute tumbling window into a list.
-
-```python
-from datetime import timedelta
-from quixstreams import Application
-
-app = Application(...)
-sdf = app.dataframe(...)
-
-sdf = (
-    # Define a tumbling window of 10 minutes
-    sdf.tumbling_window(timedelta(minutes=10))
-
-    # Collect events in the window into a list
-    .collect()
-
-    # Emit results only for closed windows
-    .final()
-)
-# Output:
-# {
-#   'start': <window start>, 
-#   'end': <window end>, 
-#   'value': [event1, event2, event3, ...] - list of all events in the window
-# }
-```
-
-
-### Count()
-Use `.count()` to calculate total number of events in the window.
-
-**Example:**
-
-Count all received events over a 10-minute tumbling window.
-
-```python
-from datetime import timedelta
-from quixstreams import Application
-
-app = Application(...)
-sdf = app.dataframe(...)
-
-
-sdf = (
-    
-    # Define a tumbling window of 10 minutes
-    sdf.tumbling_window(timedelta(minutes=10))
-
-    # Count events in the window 
-    .count()
-
-    # Emit results only for closed windows
-    .final()
-)
-# Output:
-# {
-#   'start': <window start>, 
-#   'end': <window end>, 
-#   'value': 9999 - total number of events in the window
-# }
-```
-
-### Min(), Max(), Mean() and Sum()
-
-Methods `.min()`, `.max()`, `.mean()`, and `.sum()` provide short API to calculate these aggregates over the streaming windows.  
-
-
-**These methods assume that incoming values are numbers.**
-
-When they are not, extract the numeric values first using `.apply()` function.
-
-**Example:**
-
-Imagine you receive the temperature data from the sensor, and you need to calculate only a minimum temperature for each 10-minute tumbling window.  
-
-```python
-from datetime import timedelta
-from quixstreams import Application
-
-app = Application(...)
-sdf = app.dataframe(...)
-
-# Input:
-# {"temperature" : 9999}
-
-sdf = (
-    # Extract the "temperature" column from the dictionary 
-    sdf.apply(lambda value: value['temperature'])
-    
-    # Define a tumbling window of 10 minutes
-    .tumbling_window(timedelta(minutes=10))
-
-    # Calculate the minimum temperature 
-    .min()
-
-    # Emit results only for closed windows
-    .final()
-)
-# Output:
-# {
-#   'start': <window start>, 
-#   'end': <window end>, 
-#   'value': 9999  - minimum temperature
-# }
-```
-
-
-
-## Transforming the result of a windowed aggregation
-Windowed aggregations return aggregated results in the following format/schema:
-
-```python
-{"start": <window start ms>, "end": <window end ms>, "value": <aggregated value>}
-```
-
-Since it is rather generic, you may need to transform it into your own schema.  
-Here is how you can do that:
- 
-```python
-from datetime import timedelta
-from quixstreams import Application
-
-app = Application(...)
-sdf = app.dataframe(...)
-
-sdf = (
-    # Define a tumbling window of 10 minutes
-    sdf.tumbling_window(timedelta(minutes=10))
-    # Specify the "count" aggregation function
-    .count()
-    # Emit results only for closed windows
-    .final()
-)
-
-# Input format:
-# {"start": <window start ms>, "end": <window end ms>, "value": <aggregated value>
-sdf = sdf.apply(
-    lambda value: {
-        "count": value["value"], 
-        "window": (value["start"], value["end"]),
-    }
-)
-# Output format:
-# {"count": <aggregated value>, "window": (<window start ms>, <window end ms>)}
-```
-
 
 ## Lateness and Out-of-Order Processing
 When working with event time, some events may be processed later than they're supposed to.  
@@ -941,13 +609,14 @@ To emit results for each processed message in the stream, use the following API:
 ```python
 from datetime import timedelta
 from quixstreams import Application
+from quixstreams.dataframe.windows import Sum
 
 app = Application(...)
 sdf = app.dataframe(...)
 
 # Calculate a sum of values over a window of 10 seconds 
 # and use .current() to emit results immediately
-sdf = sdf.tumbling_window(timedelta(seconds=10)).sum().current()
+sdf = sdf.tumbling_window(timedelta(seconds=10)).agg(value=Sum()).current()
 
 # Results:
 # -> Timestamp=100, value=1 -> emit {"start": 0, "end": 10000, "value": 1} 
@@ -969,13 +638,14 @@ Here is how to emit results only once for each window interval after it's closed
 ```python
 from datetime import timedelta
 from quixstreams import Application
+from quixstreams.dataframe.windows import Sum
 
 app = Application(...)
 sdf = app.dataframe(...)
 
 # Calculate a sum of values over a window of 10 seconds 
 # and use .final() to emit results only when the window is complete
-sdf = sdf.tumbling_window(timedelta(seconds=10)).sum().final()
+sdf = sdf.tumbling_window(timedelta(seconds=10)).agg(value=Sum()).final()
 
 # Results:
 # -> Timestamp=100, value=1   -> emit nothing (the window is not closed yet) 
@@ -1000,13 +670,14 @@ If some message keys appear irregularly in the stream, the latest windows can re
 ```python
 from datetime import timedelta
 from quixstreams import Application
+from quixstreams.dataframe.windows import Sum
 
 app = Application(...)
 sdf = app.dataframe(...)
 
 # Calculate a sum of values over a window of 10 seconds 
 # and use .final() to emit results only when the window is complete
-sdf = sdf.tumbling_window(timedelta(seconds=10)).sum().final(closing_strategy="key")
+sdf = sdf.tumbling_window(timedelta(seconds=10)).agg(value=Sum()).final(closing_strategy="key")
 
 # Details:
 # -> Timestamp=100, Key="A", value=1   -> emit nothing (the window is not closed yet) 
@@ -1030,13 +701,14 @@ If messages aren't ordered accross keys some message can be skipped if the windo
 ```python
 from datetime import timedelta
 from quixstreams import Application
+from quixstreams.dataframe.windows import Sum
 
 app = Application(...)
 sdf = app.dataframe(...)
 
 # Calculate a sum of values over a window of 10 seconds 
 # and use .final() to emit results only when the window is complete
-sdf = sdf.tumbling_window(timedelta(seconds=10)).sum().final(closing_strategy="partition")
+sdf = sdf.tumbling_window(timedelta(seconds=10)).agg(value=Sum()).final(closing_strategy="partition")
 
 # Details:
 # -> Timestamp=100, Key="A", value=1   -> emit nothing (the window is not closed yet) 
@@ -1054,6 +726,55 @@ sdf = sdf.tumbling_window(timedelta(seconds=10)).sum().final(closing_strategy="p
 # (key="B", value={"start": 0, "end": 10000, "value": 2})
 # (key="C", value={"start": 0, "end": 10000, "value": 3})
 ```
+
+## Transforming the result of a windowed aggregation
+Windowed aggregations return aggregated results in the following format/schema:
+
+```python
+{"start": <window start ms>, "end": <window end ms>, <aggregated_result_colum>: <aggregated value>}
+```
+
+Since it is rather generic, you may need to transform it into your own schema.  
+Here is how you can do that:
+ 
+```python
+from datetime import timedelta
+from quixstreams import Application
+from quixstreams.dataframe.windows import Count
+
+app = Application(...)
+sdf = app.dataframe(...)
+
+sdf = (
+    # Define a tumbling window of 10 minutes
+    sdf.tumbling_window(timedelta(minutes=10))
+    # Specify the "count" aggregation function
+    .agg(count=Count())
+    # Emit results only for closed windows
+    .final()
+)
+
+# Input format:
+# {"start": <window start ms>, "end": <window end ms>, "count": <aggregated value>
+sdf = sdf.apply(
+    lambda value: {
+        "count": value["count"], 
+        "window": (value["start"], value["end"]),
+    }
+)
+# Output format:
+# {"count": <aggregated value>, "window": (<window start ms>, <window end ms>)}
+```
+
+
+### Message headers of the aggregation results
+
+Currently, windowed aggregations do not store the original headers of the messages.  
+The results of the windowed aggregations will have headers set to `None`.  
+
+You may set messages headers by using the `StreamingDataFrame.set_headers()` API, as 
+described in [the "Updating Kafka Headers" section](./processing.md#updating-kafka-headers).
+
 
 ## Implementation Details
 
@@ -1075,9 +796,8 @@ The state store name is auto-generated by default using the following window att
 
 - Window type: `"tumbling"` or `"hopping"`
 - Window parameters: `duration_ms` and `step_ms`
-- Aggregation function name: `"sum"`, `"count"`, `"reduce"`, etc.
 
-E.g. a store name for `sum` aggregation over a hopping window of 30 seconds with a 5 second step will be  `hopping_window_30000_5000_sum`.
+E.g. a store name for `sum` aggregation over a hopping window of 30 seconds with a 5 second step will be  `hopping_window_30000_5000`.
 
 ### Updating Window Definitions
 
@@ -1089,9 +809,11 @@ Quix Streams handles some of the situations, like:
 
 - Updating window type (e.g. from tumbling to hopping)
 - Updating window period or step 
-- Updating an aggregation function (except the `reduce()`)
+- Adding/Removing/Updating an aggregation function (except the `reduce()`)
 
-All of the above will change the name of the underlying state store, and the new window definition will use a different one.
+Updating the window type and parameters will change the name of the underlying state store, and the new window definition will use a different one.
+
+Updating an aggregation parameter will change the aggregation state key and reset the modified aggregation state, other aggregations are not impacted.
 
 But in some cases, these measures are not enough. For example, updating a code used in `reduce()` will not change the store name, but the data can still become inconsistent.
 
