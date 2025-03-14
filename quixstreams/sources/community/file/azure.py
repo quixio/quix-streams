@@ -102,15 +102,6 @@ class AzureFileSource(FileSource):
         self._auth = connection_string
         self._client: Optional[ContainerClient] = None
 
-    def _get_client(self) -> ContainerClient:
-        """
-        Get an Azure file container client and validate the container exists.
-        :return: An Azure ContainerClient
-        """
-        storage_client = BlobServiceClient.from_connection_string(self._auth)
-        container_client = storage_client.get_container_client(self._container)
-        return container_client
-
     def _close_client(self):
         logger.debug("Closing Azure client session...")
         if self._client:
@@ -121,7 +112,10 @@ class AzureFileSource(FileSource):
         self._client = None
 
     def setup(self):
-        self._client = self._get_client()
+        if self._client is None:
+            storage_client = BlobServiceClient.from_connection_string(self._auth)
+            self._client = storage_client.get_container_client(self._container)
+            # TODO: add client connection test
 
     def get_file_list(self, filepath: Path) -> Iterable[Path]:
         data = self._client.list_blob_names(name_starts_with=str(filepath))
@@ -146,7 +140,6 @@ class AzureFileSource(FileSource):
             relative_dir = os.path.dirname(os.path.relpath(blob.name, path))
             if relative_dir and ("/" not in relative_dir):
                 folders.add(relative_dir)
-        self._close_client()
         return len(folders)
 
     def stop(self):

@@ -126,8 +126,9 @@ class S3FileSource(FileSource):
         self._client = None
 
     def setup(self):
-        self._client = boto_client("s3", **self._credentials)
-        self._client.get_bucket_policy(Bucket=self._bucket)
+        if self._client is None:
+            self._client = boto_client("s3", **self._credentials)
+            self._client.get_bucket_policy(Bucket=self._bucket)
 
     def get_file_list(self, filepath: Union[str, Path]) -> Iterable[Path]:
         resp = self._client.list_objects(
@@ -152,7 +153,7 @@ class S3FileSource(FileSource):
         resp = self._client.list_objects(
             Bucket=self._bucket, Prefix=f"{self._filepath}/", Delimiter="/"
         )
-        self._close_client()
+        self._close_client()  # close due to multiprocessing pickling limitations
         return len(resp["CommonPrefixes"])
 
     def stop(self):
