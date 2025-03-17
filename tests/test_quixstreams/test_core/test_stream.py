@@ -9,6 +9,7 @@ from quixstreams.core.stream.functions import (
     TransformFunction,
     UpdateFunction,
 )
+from quixstreams.core.stream.stream import InvalidTopology
 from quixstreams.dataframe.exceptions import InvalidOperation
 
 from .utils import Sink
@@ -362,6 +363,16 @@ class TestStream:
             (2, "key2", 2, [("key", b"value2")]),
         ]
 
+    def test_compose_single_multiple_roots_fails(self):
+        stream1 = Stream().add_apply(lambda v: v + 1)
+        stream2 = Stream().add_apply(lambda v: v + 2)
+
+        merged = stream1.merge(stream2)
+        with pytest.raises(
+            InvalidTopology, match="Expected a single root Stream, got 2"
+        ):
+            merged.compose_single()
+
 
 class TestStreamBranching:
     def test_basic_branching(self):
@@ -560,3 +571,70 @@ class TestStreamBranching:
 
         # each operation is only called once (no redundant processing)
         assert sink == expected
+
+
+class TestStreamMerge:
+    def test_merge_different_streams_success(self):
+        root1 = Stream()
+        stream1 = root1.add_apply(lambda v: v + 1)
+
+        root2 = Stream()
+        stream2 = root2.add_apply(lambda v: v + 2)
+
+        merged = stream1.merge(stream2).add_apply(lambda v: v * 2)
+        sink = Sink()
+        executors = merged.compose(sink=sink.append_record)
+        assert len(executors) == 2
+
+        executors[root1](1, "key", 0, [])
+        executors[root2](1, "key", 0, [])
+        assert sink == [(4, "key", 0, []), (6, "key", 0, [])]
+
+    def test_merge_branched_streams_success(self):
+        root = Stream()
+        stream1 = root.add_apply(lambda v: v + 1)
+        stream2 = root.add_apply(lambda v: v + 2)
+
+        merged = stream1.merge(stream2).add_apply(lambda v: v * 2)
+        sink = Sink()
+        executors = merged.compose(sink=sink.append_record)
+        assert len(executors) == 1
+
+        executors[root](1, "key", 0, [])
+        assert sink == [(4, "key", 0, []), (6, "key", 0, [])]
+
+    def test_merge_stream_to_itself_fails(self):
+        root = Stream()
+        with pytest.raises(InvalidOperation, match="Cannot merge a SDF with itself"):
+            root.merge(root)
+
+    def test_merge_stream_twice_fails(self):
+        root = Stream()
+        stream1 = root.add_apply(lambda v: v + 1)
+        stream2 = root.add_apply(lambda v: v + 2)
+
+        merged = stream1.merge(stream2)
+        with pytest.raises(
+            InvalidOperation, match="The target SDF is already present in the topology"
+        ):
+            merged.merge(stream2)
+
+    def test_merge_parent_stream_fails(self):
+        root = Stream()
+        stream1 = root.add_apply(lambda v: v + 1)
+        stream2 = stream1.add_apply(lambda v: v + 2)
+
+        with pytest.raises(
+            InvalidOperation, match="The target SDF is already present in the topology"
+        ):
+            stream2.merge(stream1)
+
+    def test_merge_child_stream_fails(self):
+        root = Stream()
+        stream1 = root.add_apply(lambda v: v + 1)
+        stream2 = stream1.add_apply(lambda v: v + 2)
+
+        with pytest.raises(
+            InvalidOperation, match="The target SDF is already present in the topology"
+        ):
+            stream1.merge(stream2)
