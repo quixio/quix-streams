@@ -147,13 +147,13 @@ class RunTracker:
         if self._max_count:
             if self._max_count == self._current_count:
                 return self._count_repartitions_finished()
-            elif self._current_message_tp:
-                # add to count only if message is from a non-repartition topic
-                if self._current_message_tp[0] in self._primary_topics:
-                    self._current_count += 1
-                    if self._max_count == self._current_count:
-                        logger.info(f"Count of {self._max_count} records reached.")
-                        self._count_prepare_repartition_check()
+            if (tp := self._current_message_tp) and tp[0] in self._primary_topics:
+                self._current_count += 1
+                if self._max_count == self._current_count:
+                    logger.info(f"Count of {self._max_count} records reached.")
+                    if not self._repartition_topics:
+                        return True
+                    self._count_prepare_repartition_check()
         return False
 
     def _count_prepare_repartition_check(self):
@@ -161,12 +161,11 @@ class RunTracker:
         Stores repartition watermarks for efficient validation.
         Commits checkpoint and pauses primary topics to ensure watermark accuracy.
         """
+        logger.info("Finalizing any repartition topic processing...")
         self._processing_context.commit_checkpoint(force=True)
         self._consumer.pause(
             [t for t in self._consumer.assignment() if t.topic in self._primary_topics]
         )
-        if not self._repartition_topics:
-            return
         topic_partitions = [
             tp
             for tp in self._consumer.assignment()
@@ -176,7 +175,6 @@ class RunTracker:
             (tp.topic, tp.partition): self._consumer.get_watermark_offsets(tp)[1]
             for tp in topic_partitions
         }
-        logger.info("Finalizing any repartition topic processing...")
 
     def _count_repartitions_finished(self) -> bool:
         """
@@ -191,7 +189,7 @@ class RunTracker:
             current_offset = self._consumer.position([TopicPartition(*tp)])[0].offset
             if current_offset >= self._repartition_stop_points[tp]:
                 self._repartition_stop_points.pop(tp)
-        if not bool(self._repartition_stop_points):
+        if not self._repartition_stop_points:
             logger.info("All downstream repartition topics processed with counting.")
             return True
         return False
