@@ -41,7 +41,7 @@ from .functions import (
     VoidExecutor,
 )
 
-__all__ = ("Stream",)
+__all__ = ("Stream", "InvalidTopology")
 
 
 class Stream:
@@ -283,6 +283,27 @@ class Stream:
         :return: a new Stream derived from the current one
         """
         return self._add(TransformFunction(func, expand=expand))  # type: ignore[call-overload]
+
+    def merge(self, other: Self) -> Self:
+        """
+        Merge two Streams together and return a new Stream with two parents
+
+        :param other: a `Stream` to merge with.
+        """
+
+        # Check if other is not already present in the "self" Stream topology.
+        # Otherwise, it will create a cycle in the graph breaking the DAG
+        if other is self:
+            # Merging a stream with itself is prohibited
+            raise InvalidOperation("Cannot merge a SDF with itself")
+        elif other in self.root_path() or self in other.root_path():
+            # Merge child streams with parents and vice versa is prohibited
+            raise InvalidOperation("The target SDF is already present in the topology")
+
+        merged_stream = self.__class__(parents=[self, other])
+        self.children.append(merged_stream)
+        other.children.append(merged_stream)
+        return merged_stream
 
     def diff(self, other: Self) -> Self:
         """
