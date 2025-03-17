@@ -116,10 +116,14 @@ is manually stopped by the user).
 However, for debugging, the following kwargs can be passed to stop the `Application` 
 when the applicable condition is met:
 
-- `timeout`: the given amount of time in seconds to run after initial rebalance or recovery (default: `0.0` == infinite)
+- `timeout`: maximum time to wait for a new message (default `0.0` == infinite)
 - `count`: number of messages to process from main SDF input topics (default `0` == infinite)
 
-> **NOTE:** If both are passed, the first condition met will trigger the stop.
+If used together (which is the recommended pattern for debugging), either condition 
+will trigger the stop.
+
+> **NOTE:** using only `timeout` when collecting data from a high-volume topic 
+> with a `ListSink` could cause out-of-memory errors.
 
 #### Multiple Application.run() calls
 
@@ -150,7 +154,7 @@ app = Application(broker_address="localhost:9092")
 topic = app.topic("some-topic")
 list_sink = ListSink()  # sink will be a list-like object
 sdf = app.dataframe(topic=topic).sink(list_sink)
-app.run(timeout=10)  # run for 10 seconds
+app.run(count=50, timeout=10)  # get up to 50 records (stops if no messages for 10s)
 ```
 
 You can then interact with it once the `Application` stops:
