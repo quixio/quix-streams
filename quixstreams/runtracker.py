@@ -121,7 +121,7 @@ class RunTracker:
         """
         self._timeout_start_time = time.monotonic()
 
-    def check_stop_condition(
+    def set_stop_condition(
         self,
         timeout: float = 0.0,
         count: int = 0,

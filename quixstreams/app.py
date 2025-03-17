@@ -811,7 +811,7 @@ class Application:
             [t for t in self._topic_manager.topics],
             [t for t in self._topic_manager.repartition_topics],
         )
-        self._run_tracker.check_stop_condition(timeout=timeout, count=count)
+        self._run_tracker.set_stop_condition(timeout=timeout, count=count)
         self._run()
 
     def _exception_handler(self, exc_type, exc_val, exc_tb):
