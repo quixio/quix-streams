@@ -1,17 +1,13 @@
 from abc import ABC, abstractmethod
-from enum import Enum
 from typing import (
     Any,
     Callable,
-    Final,
     Generic,
     Iterable,
     Optional,
     TypeVar,
     Union,
 )
-
-from typing_extensions import TypeAlias
 
 __all__ = [
     "Collect",
@@ -23,13 +19,6 @@ __all__ = [
     "Sum",
 ]
 
-
-class _ROOT(Enum):
-    ROOT = 1
-
-
-ROOT: Final = _ROOT.ROOT
-Column: TypeAlias = Union[str, _ROOT]
 
 S = TypeVar("S")
 
@@ -119,16 +108,16 @@ class Sum(Aggregator):
     """
     Use `Sum()` to aggregate the sum of the events, or a column of the events, within each window period.
 
-    :param column: The column to sum. Use `ROOT` to sum the whole message.
-        Default - `ROOT`
+    :param column: The column to sum. Use `None` to sum the whole message.
+        Default - `None`
     """
 
-    def __init__(self, column: Column = ROOT) -> None:
+    def __init__(self, column: Optional[str]) -> None:
         self.column = column
 
     @property
     def state_suffix(self) -> str:
-        if self.column is ROOT:
+        if self.column is None:
             return self.__class__.__name__
         return f"{self.__class__.__name__}/{self.column}"
 
@@ -136,8 +125,13 @@ class Sum(Aggregator):
         return 0
 
     def agg(self, old: V, new: Any) -> V:
-        new = new if self.column is ROOT else new.get(self.column)
-        return old + (new or 0)
+        if self.column is not None:
+            new = new.get(self.column)
+
+        if new is None:
+            return old
+
+        return old + new
 
     def result(self, value: V) -> V:
         return value
@@ -147,16 +141,16 @@ class Mean(Aggregator):
     """
     Use `Mean()` to aggregate the mean of the events, or a column of the events, within each window period.
 
-    :param column: The column to mean. Use `ROOT` to mean the whole message.
-        Default - `ROOT`
+    :param column: The column to mean. Use `None` to mean the whole message.
+        Default - `None`
     """
 
-    def __init__(self, column: Column = ROOT) -> None:
+    def __init__(self, column: Optional[str] = None) -> None:
         self.column = column
 
     @property
     def state_suffix(self) -> str:
-        if self.column is ROOT:
+        if self.column is None:
             return self.__class__.__name__
         return f"{self.__class__.__name__}/{self.column}"
 
@@ -184,16 +178,16 @@ class Max(Aggregator):
     """
     Use `Max()` to aggregate the max of the events, or a column of the events, within each window period.
 
-    :param column: The column to max. Use `ROOT` to max the whole message.
-        Default - `ROOT`
+    :param column: The column to max. Use `None` to max the whole message.
+        Default - `None`
     """
 
-    def __init__(self, column: Column = ROOT) -> None:
+    def __init__(self, column: Optional[str] = None) -> None:
         self.column = column
 
     @property
     def state_suffix(self) -> str:
-        if self.column is ROOT:
+        if self.column is None:
             return self.__class__.__name__
         return f"{self.__class__.__name__}/{self.column}"
 
@@ -201,11 +195,13 @@ class Max(Aggregator):
         return None
 
     def agg(self, old: Optional[V], new: Any) -> V:
-        new = new if self.column is ROOT else new.get(self.column)
+        if self.column is not None:
+            new = new.get(self.column)
+
+        if new is None:
+            return old
         if old is None:
             return new
-        elif new is None:
-            return old
         return max(old, new)
 
     def result(self, value: V) -> V:
@@ -216,16 +212,16 @@ class Min(Aggregator):
     """
     Use `Min()` to aggregate the min of the events, or a column of the events, within each window period.
 
-    :param column: The column to min. Use `ROOT` to min the whole message.
-        Default - `ROOT`
+    :param column: The column to min. Use `None` to min the whole message.
+        Default - `None`
     """
 
-    def __init__(self, column: Column = ROOT) -> None:
+    def __init__(self, column: Optional[str] = None) -> None:
         self.column = column
 
     @property
     def state_suffix(self) -> str:
-        if self.column is ROOT:
+        if self.column is None:
             return self.__class__.__name__
         return f"{self.__class__.__name__}/{self.column}"
 
@@ -233,11 +229,13 @@ class Min(Aggregator):
         return None
 
     def agg(self, old: Optional[V], new: Any) -> V:
-        new = new if self.column is ROOT else new.get(self.column)
+        if self.column is not None:
+            new = new.get(self.column)
+
+        if new is None:
+            return old
         if old is None:
             return new
-        elif new is None:
-            return old
         return min(old, new)
 
     def result(self, value: V) -> V:
@@ -286,11 +284,11 @@ class BaseCollector(ABC, Generic[I]):
 
     @property
     @abstractmethod
-    def column(self) -> Column:
+    def column(self) -> Optional[str]:
         """
         The column to collect.
 
-        Use `ROOT` to collect the whole message.
+        Use `None` to collect the whole message.
         """
         ...
 
@@ -311,23 +309,23 @@ class Collector(BaseCollector):
     """
 
     @property
-    def column(self) -> Column:
-        return ROOT
+    def column(self) -> Optional[str]:
+        return None
 
 
 class Collect(Collector):
     """
     Use `Collect()` to gather all events within each window period. into a list.
 
-    :param column: The column to collect. Use `ROOT` to collect the whole message.
-        Default - `ROOT`
+    :param column: The column to collect. Use `None` to collect the whole message.
+        Default - `None`
     """
 
-    def __init__(self, column: Column = ROOT) -> None:
+    def __init__(self, column: Optional[str] = None) -> None:
         self._column = column
 
     @property
-    def column(self) -> Column:
+    def column(self) -> Optional[str]:
         return self._column
 
     def result(self, items: Iterable[Any]) -> list[Any]:

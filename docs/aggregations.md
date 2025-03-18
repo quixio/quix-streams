@@ -266,11 +266,8 @@ By default a collector will collect the full message. Sometime that's unecessary
 An implementation of `ReversedCollect` taking an optinal `column` parameter
 
 ```python
-# ROOT tells quixstreams to collect the complete message
-from quixstreams.dataframe.windows.aggregations import ROOT
-
 class ReversedCollect(Collector):
-    def __init__(self, column = ROOT)
+    def __init__(self, column = None)
         self._column = column
 
     @property

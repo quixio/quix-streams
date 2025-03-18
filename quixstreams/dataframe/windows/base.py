@@ -22,7 +22,7 @@ from quixstreams.dataframe.exceptions import InvalidOperation
 from quixstreams.processing import ProcessingContext
 from quixstreams.state import WindowedPartitionTransaction
 
-from .aggregations import ROOT, BaseAggregator, BaseCollector, Column
+from .aggregations import BaseAggregator, BaseCollector
 
 if TYPE_CHECKING:
     from quixstreams.dataframe.dataframe import StreamingDataFrame
@@ -298,10 +298,10 @@ class MultiAggregationWindowMixin:
 
         self._collect_all = False
         self._collect_columns: set[str] = set()
-        self._collectors: dict[str, tuple[Column, BaseCollector]] = {}
+        self._collectors: dict[str, tuple[Optional[str], BaseCollector]] = {}
         for result_column, col in collectors.items():
             input_column = col.column
-            if input_column is ROOT:
+            if input_column is None:
                 self._collect_all = True
             else:
                 self._collect_columns.add(input_column)
@@ -361,7 +361,7 @@ class MultiAggregationWindowMixin:
 
         collected_columns = self._collected_by_columns(collected)
         for result_col, (input_col, col) in self._collectors.items():
-            if input_col is ROOT:
+            if input_col is None:
                 yield result_col, col.result(collected)
             else:
                 yield result_col, col.result(collected_columns[input_col])
