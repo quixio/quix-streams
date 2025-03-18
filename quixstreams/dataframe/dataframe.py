@@ -1411,6 +1411,55 @@ class StreamingDataFrame:
             name=name,
         )
 
+    def fill(self, *columns: str, **mapping: Any) -> Self:
+        """
+        Fill missing values in the message value with a constant value.
+
+        This operation occurs in-place, meaning reassignment is entirely OPTIONAL: the
+        original `StreamingDataFrame` is returned for chaining (`sdf.update().print()`).
+
+        Example Snippets:
+
+        Fill missing values for a single column with a None:
+        ```python
+        # This would transform {"x": 1} to {"x": 1, "y": None}
+        sdf.fill("y")
+        ```
+
+        Fill missing values for multiple columns with a None:
+        ```python
+        # This would transform {"x": 1} to {"x": 1, "y": None, "z": None}
+        sdf.fill("y", "z")
+        ```
+
+        Fill missing values in the value with a constant value using a dictionary:
+        ```python
+        # This would transform {"x": None} to {"x": 1, "y": 2}
+        sdf.fill(x=1, y=2)
+        ```
+
+        Use a combination of positional and keyword arguments:
+        ```python
+        # This would transform {"y": None} to {"x": None, "y": 2}
+        sdf.fill("x", y=2)
+        ```
+
+        :param columns: a list of column names as strings.
+        :param mapping: a dictionary where keys are column names and values are the fill values.
+        :return: the original `StreamingDataFrame` instance for chaining.
+        """
+        mapping = {**{column: None for column in columns}, **mapping}
+
+        def _fill(value: Any) -> Any:
+            if not isinstance(value, dict):
+                return value
+            for column, fill_value in mapping.items():
+                incoming_value = value.get(column)
+                value[column] = fill_value if incoming_value is None else incoming_value
+            return value
+
+        return self._add_update(_fill, metadata=False)
+
     def drop(
         self,
         columns: Union[str, List[str]],
