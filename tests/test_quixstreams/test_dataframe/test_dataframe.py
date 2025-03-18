@@ -435,6 +435,26 @@ class TestStreamingDataFrame:
         )  # fmt: skip
 
     @pytest.mark.parametrize(
+        ["fill", "value", "expected"],
+        [
+            ("x", {"x": 1}, {"x": 1}),
+            ("x", {}, {"x": None}),
+            ("x", 1, 1),
+            (["x", "y"], {"x": 1, "y": 2}, {"x": 1, "y": 2}),
+            (["x", "y"], {"x": 1}, {"x": 1, "y": None}),
+            (["x", "y"], {}, {"x": None, "y": None}),
+            ({"x": 1, "y": 2}, {"x": 3, "y": 4}, {"x": 3, "y": 4}),
+            ({"x": 1, "y": 2}, {"x": 3}, {"x": 3, "y": 2}),
+            ({"x": 1, "y": 2}, {}, {"x": 1, "y": 2}),
+            ({"x": 1, "y": None}, {"x": 2}, {"x": 2, "y": None}),
+        ],
+    )
+    def test_fill(self, dataframe_factory, fill, value, expected):
+        sdf = dataframe_factory()
+        sdf.fill(fill)
+        assert sdf.test(value=value)[0][0] == expected
+
+    @pytest.mark.parametrize(
         "columns, expected",
         [
             ("col_a", {"col_b": 2, "col_c": 3}),

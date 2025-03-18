@@ -1385,6 +1385,71 @@ class StreamingDataFrame:
             name=name,
         )
 
+    def fill(self, columns: Union[str, list[str], dict[str, Any]]) -> Self:
+        """
+        Fill missing values in the message value with a constant value.
+
+        This operation occurs in-place, meaning reassignment is entirely OPTIONAL: the
+        original `StreamingDataFrame` is returned for chaining (`sdf.update().print()`).
+
+        Example Snippets:
+
+        - Fill missing values for a single column with a None:
+          ```python
+          # This would transform {"x": 1} to {"x": 1, "y": None}
+          sdf = StreamingDataFrame()
+          sdf.fill("y")
+          ```
+
+        - Fill missing values for multiple columns with a None:
+          ```python
+          # This would transform {"x": 1} to {"x": 1, "y": None, "z": None}
+          sdf = StreamingDataFrame()
+          sdf.fill(["y", "z"])
+          ```
+
+        - Fill missing values in the value with a constant value using a dictionary:
+          ```python
+          # This would transform {"x": 1} to {"x": 1, "y": 2}
+          sdf = StreamingDataFrame()
+          sdf.fill({"x": 1, "y": 2})
+          ```
+
+        :param columns: a single column name as a `str`, a list of column
+            names as `list[str]`, or a dictionary where keys are column
+            names and values are the fill values.
+        :return: the original `StreamingDataFrame` instance for chaining.
+        """
+        if isinstance(columns, str):
+            column = columns
+
+            def _fill(value: Any) -> Any:
+                if not isinstance(value, dict):
+                    return value
+                value[column] = value.get(column)
+                return value
+        elif isinstance(columns, list):
+
+            def _fill(value: Any) -> Any:
+                if not isinstance(value, dict):
+                    return value
+                for column in columns:
+                    value[column] = value.get(column)
+                return value
+        elif isinstance(columns, dict):
+
+            def _fill(value: Any) -> Any:
+                if not isinstance(value, dict):
+                    return value
+                for column, fill_value in columns.items():
+                    value[column] = value.get(column, fill_value)
+                return value
+        else:
+            raise TypeError(
+                f"Expected a string, a list of strings, or a dict, not {type(columns)}"
+            )
+        return self._add_update(_fill, metadata=False)
+
     def drop(
         self,
         columns: Union[str, List[str]],
