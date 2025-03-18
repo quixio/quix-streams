@@ -69,12 +69,7 @@ class Sum(Aggregator):
 
     def agg(self, old: V, new: Any) -> V:
         new = new if self.column is ROOT else new.get(self.column)
-        try:
-            return old + new
-        except TypeError:
-            if new is None:
-                return old
-            raise
+        return old if new is None else old + new
 
     def result(self, value: V) -> V:
         return value
@@ -99,14 +94,12 @@ class Mean(Aggregator):
         return 0.0, 0
 
     def agg(self, old: tuple[V, int], new: Any) -> tuple[V, int]:
-        old_sum, old_count = old
         new = new if self.column is ROOT else new.get(self.column)
-        try:
-            return old_sum + new, old_count + 1
-        except TypeError:
-            if new is None:
-                return old
-            raise
+        if new is None:
+            return old
+
+        old_sum, old_count = old
+        return old_sum + new, old_count + 1
 
     def result(self, value: tuple[Union[int, float], int]) -> float:
         sum_, count_ = value
