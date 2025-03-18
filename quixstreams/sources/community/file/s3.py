@@ -128,7 +128,7 @@ class S3FileSource(FileSource):
     def setup(self):
         if self._client is None:
             self._client = boto_client("s3", **self._credentials)
-            self._client.get_bucket_policy(Bucket=self._bucket)
+            self._client.head_bucket(Bucket=self._bucket)
 
     def get_file_list(self, filepath: Union[str, Path]) -> Iterable[Path]:
         resp = self._client.list_objects(
