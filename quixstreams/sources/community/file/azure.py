@@ -14,8 +14,7 @@ from .compressions import CompressionName
 from .formats import Format, FormatName
 
 try:
-    from azure.storage.blob import BlobServiceClient
-    from azure.storage.blob._container_client import ContainerClient
+    from azure.storage.blob import ContainerClient
 except ImportError as exc:
     raise ImportError(
         f"Package {exc.name} is missing: "
@@ -26,6 +25,9 @@ __all__ = ("AzureFileSource",)
 
 
 logger = logging.getLogger(__name__)
+
+
+class MissingAzureContainer(Exception): ...
 
 
 class AzureFileSource(FileSource):
@@ -113,9 +115,17 @@ class AzureFileSource(FileSource):
 
     def setup(self):
         if self._client is None:
-            storage_client = BlobServiceClient.from_connection_string(self._auth)
-            self._client = storage_client.get_container_client(self._container)
-            # TODO: add client connection test
+            self._client = ContainerClient.from_connection_string(
+                conn_str=self._auth,
+                container_name=self._container,
+            )
+            # Test the connection, plus raise if container is missing
+            if not self._client.exists(
+                timeout=10, connection_timeout=10, retry_connect=1
+            ):
+                raise MissingAzureContainer(
+                    f'Azure container "{self._container}" does not exist.'
+                )
 
     def get_file_list(self, filepath: Path) -> Iterable[Path]:
         data = self._client.list_blob_names(name_starts_with=str(filepath))

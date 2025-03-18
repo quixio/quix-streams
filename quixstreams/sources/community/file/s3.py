@@ -4,6 +4,8 @@ from os import getenv
 from pathlib import Path
 from typing import Callable, Iterable, Optional, Union
 
+import botocore.exceptions
+
 from quixstreams.sources import (
     ClientConnectFailureCallback,
     ClientConnectSuccessCallback,
@@ -25,6 +27,9 @@ except ImportError as exc:
 logger = logging.getLogger(__name__)
 
 __all__ = ("S3FileSource",)
+
+
+class MissingS3Bucket(Exception): ...
 
 
 class S3FileSource(FileSource):
@@ -128,7 +133,12 @@ class S3FileSource(FileSource):
     def setup(self):
         if self._client is None:
             self._client = boto_client("s3", **self._credentials)
-            self._client.head_bucket(Bucket=self._bucket)
+            try:
+                self._client.head_bucket(Bucket=self._bucket)
+            except botocore.exceptions.ClientError as e:
+                if "404" in str(e):
+                    raise MissingS3Bucket(f'S3 bucket "{self._bucket}" does not exist.')
+                raise
 
     def get_file_list(self, filepath: Union[str, Path]) -> Iterable[Path]:
         resp = self._client.list_objects(
