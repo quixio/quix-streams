@@ -781,7 +781,7 @@ class Application:
         app.run()  # could pass `timeout=5` here, for example
         ```
         :param dataframe: DEPRECATED - do not use; sdfs are now automatically tracked.
-        :param timeout: how long to run the application for.
+        :param timeout: maximum time to wait for a new message.
             Default = 0.0 (infinite)
         :param count: how many input topic messages to process before stopping.
             Default = 0 (infinite)
