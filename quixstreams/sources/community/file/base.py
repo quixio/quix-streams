@@ -146,7 +146,7 @@ class FileSource(Source):
                     self.process_record(record)
                 self._producer.flush()
         except StopIteration:
-            logger.info("Finished processing all files!")
+            logger.info("Finished processing all files.")
         finally:
             file_fetcher.stop()
 
