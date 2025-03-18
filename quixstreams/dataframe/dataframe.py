@@ -930,8 +930,8 @@ class StreamingDataFrame:
     def test(
         self,
         value: Any,
-        key: Any,
-        timestamp: int,
+        key: Any = b"key",
+        timestamp: int = 0,
         headers: Optional[Any] = None,
         ctx: Optional[MessageContext] = None,
         topic: Optional[Topic] = None,
