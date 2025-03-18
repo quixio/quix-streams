@@ -557,7 +557,7 @@ class Application:
         self._run_tracker.stop_and_reset()
         if fail:
             # Update "_failed" only when fail=True to prevent stop(failed=False) from
-           https://www.nowinstock.net/getd81340 # resetting it
+            # resetting it
             self._failed = True
 
         if self._state_manager.using_changelogs:
@@ -750,14 +750,8 @@ class Application:
 
         Stop Condition Details:
 
-        A timeout will immediately stop an Application once T seconds has passed after
-          an initial rebalance and recovery (if required).
-        Note that unlike count, a timeout does NOT ensure downstream operations that
-          rely on internal topics (like groupby) are also finalized.
-        There is an additional "timeout_wait_buffer" that will wait up to T seconds for
-          a first message to arrive before beginning to track timeout time. Note that
-          recovery time IS included in this (though timeout tracking will only start
-          once recovery is finished).
+        A timeout will immediately stop an Application once no new messages have
+            been consumed after T seconds (after rebalance and recovery).
 
         A count will process N total records from ANY input/SDF topics (so
           multiple input topics will very likely differ in their consume total!) after
@@ -765,11 +759,10 @@ class Application:
         THEN, any remaining processes from things such as groupby (which uses internal
           topics) will also be validated to ensure the results of said messages are
           fully processed (this does NOT count towards the process total).
-        Note that the Application will run indefinitely until the limit of N is hit.
+        Note that without a timeout, the Application runs until the count is hit.
 
-        When setting a timeout AND count limit, the timeout behavior takes priority (
-          so make sure your timeout is sufficiently large to ensure fully processed
-          records).
+        If timeout and count are used together (which is the recommended pattern for
+        debugging), either condition will trigger a stop.
 
 
         Example Snippet:
@@ -827,7 +820,6 @@ class Application:
     def _run(self):
         self._setup_signal_handlers()
 
-        # These only need to be performed on the first .run() (with interactive running)
         logger.info(
             f"Starting the Application with the config: "
             f'broker_address="{self._config.broker_address}" '
@@ -1019,6 +1011,7 @@ class Application:
                     partition=tp.partition,
                     committed_offsets=committed_offsets[tp.partition],
                 )
+        self._run_tracker.timeout_refresh()
 
     def _on_revoke(self, _, topic_partitions: List[TopicPartition]):
         """

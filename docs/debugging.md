@@ -122,8 +122,36 @@ when the applicable condition is met:
 If used together (which is the recommended pattern for debugging), either condition 
 will trigger the stop.
 
-> **NOTE:** using only `timeout` when collecting data from a high-volume topic 
-> with a `ListSink` could cause out-of-memory errors.
+
+#### Count Behavior
+
+There are a few of things to be aware of with `count`:
+
+- It only counts messages from (input) topics passed by the user to a `StreamingDatFrame`.
+    - this means things like repartition topics (group by) are NOT counted.
+
+- It's a total message count _across all input topics_, NOT for each input topic 
+    - ex: for `count=20`, `topic_a` could get 5 messages, and `topic_b` 15 messages
+
+- Things like `SDF.apply(expand=True`) and branching do not affect counts. 
+
+- AFTER the count is reached, the `Application` flushes any respective 
+  repartition topics so all downstream processing is included.
+    - repartition highwaters are recorded when condition is met and is consumed up to 
+      those watermarks.
+
+
+#### Timeout Behavior
+
+A couple things to note about `timeout`:
+
+- Though it can be used standalone, it's recommended to be paired with a `count`.
+
+- Tracking starts once the first partition assignment (or recovery, if needed) finishes.
+  - There is a 60s wait buffer for the first assignment to trigger.
+
+- Using only `timeout` when collecting data from a high-volume topic 
+  with a `ListSink` could cause out-of-memory errors.
 
 #### Multiple Application.run() calls
 

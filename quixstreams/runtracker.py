@@ -103,7 +103,9 @@ class RunTracker:
         Called as part of Application.run() to initialize self.running.
         """
         self.running = True
-        self.timeout_refresh()
+        if self._timeout:
+            # allow a 60s window for initial assignment to trigger
+            self._timeout_start_time = time.monotonic() + 60
 
     def set_current_message_tp(self, tp: Optional[tuple[str, int]]):
         """
@@ -114,7 +116,6 @@ class RunTracker:
     def timeout_refresh(self):
         """
         Timeout is refreshed when:
-        - When app.run() is called
         - Rebalance completes
         - Recovery completes
         - Any message is consumed (reset during timeout check)
