@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from io import BytesIO
-from typing import BinaryIO, Generator, Iterable, Literal, Optional
+from typing import BinaryIO, Iterable, Literal, Optional
 
 from ..compressions import COMPRESSION_MAPPER, CompressionName, Decompressor
 
@@ -54,5 +54,5 @@ class Format(ABC):
     def _set_decompressor(self, extension_or_name: CompressionName):
         self._decompressor = COMPRESSION_MAPPER[extension_or_name]()
 
-    def read(self, filestream: BinaryIO) -> Generator[dict, None, None]:
+    def read(self, filestream: BinaryIO) -> Iterable[dict]:
         yield from self.deserialize(self._decompress(filestream))
