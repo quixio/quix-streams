@@ -212,7 +212,6 @@ class TestKafkaReplicatorSource(Base):
                 logger.exception("error")
                 raise
 
-        app.setup_topics()
         executor.submit(_consume, app.config)
         app._run()
 
@@ -235,9 +234,6 @@ class TestKafkaReplicatorSource(Base):
                     key=msg.key,
                     value=msg.value,
                 )
-
-        # Topic must exist before commiting to it
-        app.setup_topics()
 
         # Set offset in main kafka
         start_offset = 4
@@ -407,7 +403,6 @@ class TestQuixEnvironmentSource(Base):
                 logger.exception("error")
                 raise
 
-        app.setup_topics()
         executor.submit(_consume, app.config)
         app._run()
 

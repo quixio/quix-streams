@@ -78,7 +78,7 @@ def memory_store_factory():
         changelog_producer_factory: Optional[ChangelogProducerFactory] = None,
     ):
         return MemoryStore(
-            topic=topic or str(uuid.uuid4()),
+            stream_id=topic or str(uuid.uuid4()),
             name=name,
             changelog_producer_factory=changelog_producer_factory,
         )
@@ -94,7 +94,7 @@ def rocksdb_store_factory(tmp_path):
     ) -> RocksDBStore:
         topic = topic or str(uuid.uuid4())
         return RocksDBStore(
-            topic=topic,
+            stream_id=topic,
             name=name,
             base_dir=str(tmp_path),
             changelog_producer_factory=changelog_producer_factory,

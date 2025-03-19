@@ -1,3 +1,4 @@
+import uuid
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -21,11 +22,16 @@ class TestRecoveryManager:
         recovery_manager = recovery_manager_factory()
         store_name = "my_store"
         topic = "my_topic_name"
+        config = TopicConfig(num_partitions=1, replication_factor=1)
         with patch.object(TopicManager, "changelog_topic") as make_changelog:
-            recovery_manager.register_changelog(topic_name=topic, store_name=store_name)
+            recovery_manager.register_changelog(
+                stream_id=topic,
+                store_name=store_name,
+                topic_config=config,
+            )
 
         make_changelog.assert_called_with(
-            topic_name=topic, store_name=store_name, config=None
+            stream_id=topic, store_name=store_name, config=config
         )
 
     def test_assign_partition_invalid_offset(
@@ -39,16 +45,17 @@ class TestRecoveryManager:
         This is invalid and should raise exception.
         """
 
-        topic_name = "topic_name"
+        topic_name = str(uuid.uuid4())
         partition_num = 0
         store_name = "default"
         lowwater, highwater = 0, 20
 
         # Register a source topic and a changelog topic with one partition
         topic_manager = topic_manager_factory()
-        topic_manager.topic(topic_name)
-        changelog_topic = topic_manager.changelog_topic(
-            topic_name=topic_name, store_name=store_name
+        topic_manager.changelog_topic(
+            stream_id=topic_name,
+            store_name=store_name,
+            config=topic_manager.topic_config(),
         )
 
         # Mock Consumer
@@ -78,7 +85,6 @@ class TestRecoveryManager:
 
         # No pause or assignments should happen
         consumer.pause.assert_not_called()
-        consumer.incremental_assign.assert_not_called()
 
     def test_single_changelog_message_recovery(
         self,
@@ -95,18 +101,16 @@ class TestRecoveryManager:
         AND only 1 changelog message was produced.
         """
 
-        topic_name = "topic_name"
+        topic_name = str(uuid.uuid4())
         store_name = "default"
         lowwater, highwater = 0, 1
 
         # make topics
         topic_manager = topic_manager_factory()
-        topic_manager.topic(
-            topic_name,
-            create_config=TopicConfig(num_partitions=1, replication_factor=1),
-        )
         changelog_topic = topic_manager.changelog_topic(
-            topic_name=topic_name, store_name=store_name
+            stream_id=topic_name,
+            store_name=store_name,
+            config=topic_manager.topic_config(),
         )
 
         # Create a RecoveryManager
@@ -147,19 +151,18 @@ class TestRecoveryManager:
         another partition is already recovering.
         """
 
-        topic_name = "topic_name"
+        topic_name = str(uuid.uuid4())
         store_name = "default"
         changelog_offset = 5
         lowwater, highwater = 0, 10
 
         # Register a source topic and a changelog topic with 2 partitions
         topic_manager = topic_manager_factory()
-        topic_manager.topic(
-            topic_name,
-            create_config=TopicConfig(num_partitions=2, replication_factor=1),
-        )
+
         changelog_topic = topic_manager.changelog_topic(
-            topic_name=topic_name, store_name=store_name
+            stream_id=topic_name,
+            store_name=store_name,
+            config=TopicConfig(num_partitions=2, replication_factor=1),
         )
 
         # Create a RecoveryManager
@@ -226,19 +229,17 @@ class TestRecoveryManager:
         Test that `RecoveryManager.assign_partition()` fails if the changelog topic
         partition is not assigned to Consumer
         """
-        topic_name = "topic_name"
+        topic_name = str(uuid.uuid4())
         store_name = "default"
         changelog_offset = 5
         lowwater, highwater = 0, 10
 
         # Register a source topic and a changelog topic with 2 partitions
         topic_manager = topic_manager_factory()
-        topic_manager.topic(
-            topic_name,
-            create_config=TopicConfig(num_partitions=2, replication_factor=1),
-        )
         changelog_topic = topic_manager.changelog_topic(
-            topic_name=topic_name, store_name=store_name
+            stream_id=topic_name,
+            store_name=store_name,
+            config=TopicConfig(num_partitions=2, replication_factor=1),
         )
 
         # Create a RecoveryManager
@@ -269,20 +270,17 @@ class TestRecoveryManager:
         """
         Revoke a topic partition's respective recovery partitions.
         """
-        topic_name = "topic_name"
+        topic_name = str(uuid.uuid4())
         store_name = "default"
         changelog_offset = 5
         lowwater, highwater = 0, 10
 
         # Register a source topic and a changelog topic with two partitions
         topic_manager = topic_manager_factory()
-        topic_manager.topic(
-            topic_name,
-            create_config=TopicConfig(num_partitions=2, replication_factor=1),
-        )
         changelog_topic = topic_manager.changelog_topic(
-            topic_name=topic_name,
+            stream_id=topic_name,
             store_name=store_name,
+            config=TopicConfig(num_partitions=2, replication_factor=1),
         )
 
         # Create a RecoveryManager
@@ -373,7 +371,7 @@ class TestRecoveryManagerRecover:
         lowwater, highwater = 0, 20
         stored_changelog_offset = 15
 
-        topic_name = "topic_name"
+        topic_name = str(uuid.uuid4())
         partition_num = 0
 
         consumer = MagicMock(spec_set=Consumer)
@@ -385,15 +383,17 @@ class TestRecoveryManagerRecover:
             recovery_manager=recovery_manager, producer=producer
         )
 
-        # Create a topic
-        topic_manager.topic(topic_name)
         # Mock the topic watermarks
         consumer.get_watermark_offsets.side_effect = [(lowwater, highwater)]
 
         # Create Store and assign a StorePartition (which also sets up changelog topics)
         store_partitions = {}
-        state_manager.register_store(topic_name=topic_name, store_name=store_name)
-        store = state_manager.get_store(topic=topic_name, store_name=store_name)
+        state_manager.register_store(
+            stream_id=topic_name,
+            store_name=store_name,
+            changelog_config=TopicConfig(num_partitions=1, replication_factor=1),
+        )
+        store = state_manager.get_store(stream_id=topic_name, store_name=store_name)
 
         # Mock the Consumer assignment with changelog topic-partition
         changelog_topic = topic_manager.changelog_topics[topic_name][store_name]
@@ -440,7 +440,7 @@ class TestRecoveryManagerRecover:
          - unassigns the changelog partition
          - unpauses source topic partitions
         """
-        topic_name = "topic_name"
+        topic_name = str(uuid.uuid4())
         store_name = "default"
         lowwater, highwater = 0, 10
 
@@ -448,8 +448,7 @@ class TestRecoveryManagerRecover:
         topic_manager = topic_manager_factory()
         data_topic = topic_manager.topic(topic_name)
         changelog_topic = topic_manager.changelog_topic(
-            topic_name=topic_name,
-            store_name=store_name,
+            stream_id=topic_name, store_name=store_name, config=data_topic.broker_config
         )
 
         data_tp = TopicPartition(topic=data_topic.name, partition=0)

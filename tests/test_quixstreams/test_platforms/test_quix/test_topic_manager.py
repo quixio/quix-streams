@@ -37,7 +37,7 @@ class TestQuixTopicManager:
         assert topic.name == expected_topic_id
 
         changelog = topic_manager.changelog_topic(
-            topic_name=topic.name, store_name=store_name
+            stream_id=topic.name, store_name=store_name, config=topic.broker_config
         )
         assert changelog.name == expected_changelog_id
         assert topic_manager.changelog_topics[topic.name][store_name] == changelog
@@ -85,11 +85,17 @@ class TestQuixTopicManager:
         topic = topic_manager.topic(topic_name, create_config=create_config)
         assert topic.name == topic_id
 
-        repartition = topic_manager.repartition_topic(operation, topic.name)
+        repartition = topic_manager.repartition_topic(
+            operation=operation, stream_id=topic.name, config=topic.broker_config
+        )
         assert repartition.name == repartition_id
         assert topic_manager.repartition_topics[repartition.name] == repartition
 
-        changelog = topic_manager.changelog_topic(repartition.name, store_name)
+        changelog = topic_manager.changelog_topic(
+            stream_id=repartition.name,
+            store_name=store_name,
+            config=repartition.broker_config,
+        )
         assert changelog.name == changelog_topic_id
         assert topic_manager.changelog_topics[repartition.name][store_name] == changelog
 

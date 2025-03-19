@@ -57,7 +57,7 @@ class TestPausingManager:
         )
         # Create a changelog topic
         topic_manager.changelog_topic(
-            topic_name=topic.name, store_name="default", config=topic.broker_config
+            stream_id=topic.name, store_name="default", config=topic.broker_config
         )
 
         offset_to_seek = 999

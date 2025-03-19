@@ -340,19 +340,19 @@ class RecoveryManager:
 
     def register_changelog(
         self,
-        topic_name: Optional[str],
+        stream_id: Optional[str],
         store_name: str,
-        topic_config: Optional[TopicConfig] = None,
+        topic_config: TopicConfig,
     ) -> Topic:
         """
         Register a changelog Topic with the TopicManager.
 
-        :param topic_name: source topic name
+        :param stream_id: stream id
         :param store_name: name of the store
         :param topic_config: a TopicConfig to use, optional.
         """
         return self._topic_manager.changelog_topic(
-            topic_name=topic_name,
+            stream_id=stream_id,
             store_name=store_name,
             config=topic_config,
         )

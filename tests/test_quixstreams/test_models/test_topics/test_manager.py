@@ -1,7 +1,6 @@
 import uuid
 
 import pytest
-from confluent_kafka.cimpl import NewPartitions
 
 from quixstreams.models.serializers import BytesDeserializer, BytesSerializer
 from quixstreams.models.topics import TopicConfig
@@ -83,6 +82,9 @@ class TestTopicManager:
             topic.broker_config.replication_factor
             == topic_manager.default_replication_factor
         )
+        assert "retention.ms" in topic.broker_config.extra_config
+        assert "retention.bytes" in topic.broker_config.extra_config
+        assert "cleanup.policy" in topic.broker_config.extra_config
 
     def test_topic_not_found(self, topic_manager_factory):
         """
@@ -95,6 +97,65 @@ class TestTopicManager:
                 create_config=topic_manager.topic_config(),
             )
 
+    def test_derive_topic_config_success(self, topic_manager_factory):
+        topic_manager = topic_manager_factory()
+        topic1 = topic_manager.topic(
+            name=str(uuid.uuid4()),
+            create_config=TopicConfig(
+                num_partitions=2,
+                replication_factor=1,
+                extra_config={"retention.bytes": "10000", "retention.ms": "10000"},
+            ),
+        )
+        topic2 = topic_manager.topic(
+            name=str(uuid.uuid4()),
+            create_config=TopicConfig(
+                num_partitions=1,
+                replication_factor=1,
+                extra_config={"retention.bytes": "9999", "retention.ms": "10001"},
+            ),
+        )
+
+        config = topic_manager.derive_topic_config(topic1, topic2)
+        assert config.num_partitions == 2
+        assert config.replication_factor == 1
+        assert config.extra_config == {
+            "retention.bytes": "10000",
+            "retention.ms": "10001",
+        }
+
+    def test_derive_topic_config_no_topics(self, topic_manager_factory):
+        topic_manager = topic_manager_factory()
+        with pytest.raises(ValueError, match="At least one Topic must be passed"):
+            topic_manager.derive_topic_config()
+
+    def test_derive_topic_config_max_retention(self, topic_manager_factory):
+        topic_manager = topic_manager_factory()
+        topic1 = topic_manager.topic(
+            name=str(uuid.uuid4()),
+            create_config=TopicConfig(
+                num_partitions=2,
+                replication_factor=1,
+                extra_config={"retention.bytes": "-1", "retention.ms": "-1"},
+            ),
+        )
+        topic2 = topic_manager.topic(
+            name=str(uuid.uuid4()),
+            create_config=TopicConfig(
+                num_partitions=1,
+                replication_factor=1,
+                extra_config={"retention.bytes": "9999", "retention.ms": "10001"},
+            ),
+        )
+
+        config = topic_manager.derive_topic_config(topic1, topic2)
+        assert config.num_partitions == 2
+        assert config.replication_factor == 1
+        assert config.extra_config == {
+            "retention.bytes": "-1",
+            "retention.ms": "-1",
+        }
+
     def test_changelog_topic(self, topic_manager_factory):
         """
         A changelog `Topic` is created with settings that match the source `Topic`
@@ -103,20 +164,17 @@ class TestTopicManager:
 
         group = "my_consumer_group"
         topic_manager = topic_manager_factory(consumer_group=group)
-        topic = topic_manager.topic(
-            name="my_topic",
-            create_config=topic_manager.topic_config(num_partitions=5),
-        )
-
         store_name = "default"
+        stream_id = str(uuid.uuid4())
         changelog = topic_manager.changelog_topic(
-            topic_name=topic.name,
+            stream_id=stream_id,
             store_name=store_name,
+            config=TopicConfig(num_partitions=1, replication_factor=1),
         )
 
-        assert topic_manager.changelog_topics[topic.name][store_name] == changelog
+        assert topic_manager.changelog_topics[stream_id][store_name] == changelog
 
-        assert changelog.name == f"changelog__{group}--{topic.name}--{store_name}"
+        assert changelog.name == f"changelog__{group}--{stream_id}--{store_name}"
 
         for attr in [
             "_key_serializer",
@@ -125,134 +183,37 @@ class TestTopicManager:
             assert isinstance(getattr(changelog, attr), BytesSerializer)
         for attr in ["_key_deserializer", "_value_deserializer"]:
             assert isinstance(getattr(changelog, attr), BytesDeserializer)
-        assert (
-            changelog.create_config.num_partitions == topic.create_config.num_partitions
-        )
-        assert (
-            changelog.create_config.replication_factor
-            == topic.create_config.replication_factor
-        )
+        assert changelog.broker_config.num_partitions == 1
+        assert changelog.broker_config.replication_factor == 1
+        assert changelog.broker_config.extra_config["cleanup.policy"] == "compact"
 
-        assert topic.create_config.extra_config.get("cleanup.policy") != "compact"
-        assert changelog.create_config.extra_config["cleanup.policy"] == "compact"
-
-    def test_changelog_topic_settings_import(self, topic_manager_factory):
-        """
-        A changelog `Topic` only imports specified extra_configs from source `Topic`.
-        """
-
-        topic_manager = topic_manager_factory()
-        extra_config = {
-            "segment.ms": 1000,  # this must be ignored
-            "retention.bytes": 10,  # this must be imported
-        }
-
-        topic = topic_manager.topic(
-            name="my_topic",
-            create_config=topic_manager.topic_config(extra_config=extra_config),
-        )
-        changelog = topic_manager.changelog_topic(
-            topic_name=topic.name,
-            store_name="default",
-        )
-
-        assert "retention.bytes" in changelog.create_config.extra_config
-        assert "segment.ms" not in changelog.create_config.extra_config
-
-    def test_changelog_topic_source_exists_in_cluster(
-        self, topic_manager_factory, topic_factory
-    ):
-        """
-        `TopicConfig` is inferred from the cluster topic metadata rather than the
-        source `Topic` object if the topic already exists AND an `TopicAdmin` is provided.
-        """
-
-        topic_manager = topic_manager_factory()
-        topic_manager._changelog_extra_config_imports_defaults = {"ignore.this"}
-        topic_name, partitions = topic_factory(num_partitions=5, timeout=15)
-
-        topic = topic_manager.topic(
-            name=topic_name,
-            create_config=topic_manager.topic_config(
-                num_partitions=1,
-                extra_config={"segment.ms": "1000"},
-            ),
-        )
-        changelog = topic_manager.changelog_topic(
-            topic_name=topic.name,
-            store_name="default",
-        )
-
-        assert changelog.create_config.num_partitions == partitions == 5
-        assert "segment.ms" not in changelog.create_config.extra_config
-
-    def test_validate_all_topics(self, topic_manager_factory):
-        """
-        Validation succeeds, regardless of whether a Topic.config matches its actual
-        kafka settings.
-
-        Tests a "happy path" fresh creation + validation, followed by a config update.
-        """
-
-        # happy path with new topics
-        _topic_manager = topic_manager_factory()
-        topic_config = _topic_manager.topic_config(
-            num_partitions=5, extra_config={"max.message.bytes": "1234567"}
-        )
-        topic = _topic_manager.topic(name=str(uuid.uuid4()), create_config=topic_config)
-        _topic_manager.changelog_topic(topic_name=topic.name, store_name="default")
-        _topic_manager.validate_all_topics()
-
-        # assume attempt to recreate topics with altered configs (it ignores them).
-        topic_manager = topic_manager_factory()
-        topic_updated = topic_manager.topic(
-            name=topic.name,
-            create_config=topic_manager.topic_config(num_partitions=20),
-        )
-        topic_manager.changelog_topic(
-            topic_name=topic_updated.name, store_name="default"
-        )
-
-        topic_manager.validate_all_topics()
-
-    def test_validate_all_topics_changelog_partition_count_mismatch(
+    def test_changelog_topic_partition_count_mismatch(
         self, topic_manager_factory, kafka_admin_client
     ):
         """
         Changelog topic validation must fail if it has a different number of partitions
-        than the source topic.
+        than expected.
+
         """
-        source_topic_config = TopicConfig(num_partitions=2, replication_factor=1)
         topic_manager = topic_manager_factory()
 
-        # Create a source topic and a corresponding changelog topic
-        source_topic = topic_manager.topic(
-            name="topic",
-            create_config=source_topic_config,
-        )
+        stream_id = str(uuid.uuid4())
+        # Create a new changelog topic with 1 partition
         topic_manager.changelog_topic(
-            topic_name=source_topic.name, store_name="default"
+            stream_id=stream_id,
+            store_name="store",
+            config=TopicConfig(num_partitions=1, replication_factor=1),
         )
 
-        # Increase a number of source partitions
-        fut = kafka_admin_client.create_partitions(
-            [NewPartitions(topic=source_topic.name, new_total_count=3)]
-        )
-        fut[source_topic.name].result(timeout=5)
-
-        # Re-define the topics
-        source_topic = topic_manager.topic(
-            name="topic",
-            create_config=source_topic_config,
-        )
-        topic_manager.changelog_topic(
-            topic_name=source_topic.name, store_name="default"
-        )
-
-        # Validation must fail because the changelog topic already exists
-        # and has only 2 partitions, while the source topic was changed
+        # Re-create the same changelog topic but with 2 partitions.
+        # The validation must fail because the changelog topic already exists
+        # and has only 1 partition
         with pytest.raises(TopicConfigurationMismatch, match="partition count"):
-            topic_manager.validate_all_topics()
+            topic_manager.changelog_topic(
+                stream_id=stream_id,
+                store_name="store",
+                config=TopicConfig(num_partitions=2, replication_factor=1),
+            )
 
     def test_topic_name_len_exceeded(self, topic_manager_factory):
         topic_manager = topic_manager_factory()
@@ -263,11 +224,11 @@ class TestTopicManager:
 
     def test_changelog_name_len_exceeded(self, topic_manager_factory):
         topic_manager = topic_manager_factory()
-
-        topic = topic_manager.topic("good_name")
         with pytest.raises(TopicNameLengthExceeded):
             topic_manager.changelog_topic(
-                topic_name=topic.name, store_name="store" * 100
+                stream_id=str(uuid.uuid4()),
+                store_name="store" * 100,
+                config=TopicConfig(num_partitions=1, replication_factor=1),
             )
 
     def test_repartition_topic(self, topic_manager_factory):
@@ -277,55 +238,61 @@ class TestTopicManager:
         """
         group = "my_consumer_group"
         topic_manager = topic_manager_factory(consumer_group=group)
-        topic = topic_manager.topic(
-            name="my_topic",
-            create_config=topic_manager.topic_config(num_partitions=5),
-        )
 
         operation = "my_op"
+        stream_id = str(uuid.uuid4())
         repartition = topic_manager.repartition_topic(
             operation=operation,
-            topic_name=topic.name,
+            stream_id=stream_id,
             key_serializer="bytes",
             value_serializer="bytes",
+            config=TopicConfig(
+                num_partitions=1,
+                replication_factor=1,
+                extra_config={"retention.ms": "1000", "retention.bytes": "1000"},
+            ),
         )
 
         assert topic_manager.repartition_topics[repartition.name] == repartition
-        assert repartition.name == f"repartition__{group}--{topic.name}--{operation}"
-        assert (
-            repartition.create_config.num_partitions
-            == topic.create_config.num_partitions
-        )
-        assert (
-            repartition.create_config.replication_factor
-            == topic.create_config.replication_factor
-        )
+        assert repartition.name == f"repartition__{group}--{stream_id}--{operation}"
+        assert repartition.broker_config.num_partitions == 1
+        assert repartition.broker_config.replication_factor == 1
+        assert repartition.broker_config.extra_config["retention.ms"] == "1000"
+        assert repartition.broker_config.extra_config["retention.bytes"] == "1000"
 
     def test_changelog_nested_internal_topic_naming(self, topic_manager_factory):
         """
         Confirm expected formatting for an internal topic that spawns another internal
         topic (changelog)
         """
-        store = "my_store"
+        store_name = "my_store"
         group = "my_consumer_group"
         topic_manager = topic_manager_factory(consumer_group=group)
-        topic = topic_manager.topic(
-            name="my_topic",
-            create_config=topic_manager.topic_config(num_partitions=5),
-        )
 
+        stream_id = str(uuid.uuid4())
         operation = "my_op"
-        repartition = topic_manager.repartition_topic(
+        repartition_topic = topic_manager.repartition_topic(
             operation=operation,
-            topic_name=topic.name,
+            stream_id=stream_id,
             key_serializer="bytes",
             value_serializer="bytes",
+            config=TopicConfig(
+                num_partitions=1,
+                replication_factor=1,
+            ),
         )
-        changelog = topic_manager.changelog_topic(repartition.name, store)
+        changelog = topic_manager.changelog_topic(
+            stream_id=repartition_topic.name,
+            store_name=store_name,
+            config=TopicConfig(
+                num_partitions=1,
+                replication_factor=1,
+            ),
+        )
 
         assert (
             changelog.name
-            == f"changelog__{group}--repartition.{topic.name}.{operation}--{store}"
+            == f"changelog__{group}--repartition.{stream_id}.{operation}--{store_name}"
         )
 
     def test_non_changelog_topics(self, topic_manager_factory):
@@ -339,13 +306,16 @@ class TestTopicManager:
         operation = "my_op"
         repartition_topic = topic_manager.repartition_topic(
             operation=operation,
-            topic_name=data_topic.name,
+            stream_id=data_topic.name,
             key_serializer="bytes",
             value_serializer="bytes",
+            config=TopicConfig(num_partitions=1, replication_factor=1),
         )
 
         changelog_topic = topic_manager.changelog_topic(
-            topic_name=data_topic.name, store_name="default"
+            stream_id=data_topic.name,
+            store_name="default",
+            config=TopicConfig(num_partitions=1, replication_factor=1),
         )
 
         assert data_topic.name in topic_manager.non_changelog_topics
