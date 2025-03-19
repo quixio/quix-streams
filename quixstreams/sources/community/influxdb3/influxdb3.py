@@ -74,9 +74,9 @@ class InfluxDB3Source(Source):
 
     It processes measurements sequentially by gathering/producing a tumbling
       "time_delta"-sized window of data, starting from 'start_date' and eventually
-      stopping at 'end_date'.
+      stopping at 'end_date', completing that measurement.
 
-    Once stopped, it processes the next measurement, until all are complete.
+    It then starts the next measurement, continuing until all are complete.
 
     If no 'end_date' is provided, it will run indefinitely for a single
       measurement (which means no other measurements will be processed!).
