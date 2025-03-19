@@ -366,12 +366,20 @@ class TestInfluxDB3Sink:
         with pytest.raises(influxdb_client_3.InfluxDBError):
             sink.flush()
 
-    def test_convert_ints_to_floats(self, influxdb3_sink_factory):
+    @pytest.mark.parametrize(
+        "fields_keys, result",
+        [
+            ((), {"str_key": "value", "int_key": 0.0, "float_key": 1.1}),
+            (("str_key", "int_key"), {"str_key": "value", "int_key": 0.0}),
+        ],
+    )
+    def test_convert_ints_to_floats(self, influxdb3_sink_factory, fields_keys, result):
         client_mock = MagicMock(spec_set=InfluxDBClient3)
         measurement = "measurement"
         sink = influxdb3_sink_factory(
             client_mock=client_mock,
             measurement=measurement,
+            fields_keys=fields_keys,
             convert_ints_to_floats=True,
         )
         topic = "test-topic"
@@ -395,7 +403,7 @@ class TestInfluxDB3Sink:
                 {
                     "measurement": measurement,
                     "tags": {},
-                    "fields": {"str_key": "value", "int_key": 0.0, "float_key": 1.1},
+                    "fields": result,
                     "time": timestamp,
                 }
             ],
