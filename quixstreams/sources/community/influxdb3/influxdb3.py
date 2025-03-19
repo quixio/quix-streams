@@ -4,7 +4,7 @@ import random
 import time
 from datetime import datetime, timedelta, timezone
 from functools import wraps
-from typing import Optional
+from typing import Optional, Union
 
 from influxdb_client_3 import InfluxDBClient3
 
@@ -15,23 +15,27 @@ from quixstreams.sources import (
     Source,
 )
 
+__all__ = ("InfluxDB3Source",)
+
+
 logger = logging.getLogger(__name__)
 
 TIME_UNITS = {"s": 1, "m": 60, "h": 3600, "d": 86400}
 
-__all__ = ("InfluxDB3Source",)
+
+class NoMeasurementsFound(Exception): ...
 
 
 # retry decorator
 def with_retry(func):
     @wraps(func)
     def wrapper(self, *args, **kwargs):
-        max_attempts = self.max_attempts
-        attempts_remaining = self.max_attempts
+        max_attempts = self._max_attempts
+        attempts_remaining = self._max_attempts
         backoff = 1  # Initial backoff in seconds
         while attempts_remaining:
             try:
-                return func(*args, **kwargs)
+                return func(self, *args, **kwargs)
             except Exception as e:
                 logger.debug(f"{func.__name__} encountered an error: {e}")
                 attempts_remaining -= 1
@@ -50,16 +54,43 @@ def with_retry(func):
     return wrapper
 
 
+def _interval_to_seconds(interval: str) -> int:
+    return int(interval[:-1]) * TIME_UNITS[interval[-1]]
+
+
+def _set_sql_query(sql_query: str) -> str:
+    return (
+        sql_query.format(start_time="$start_time", end_time="$end_time")
+        or "SELECT * FROM {measurement_name} "  # noqa: S608
+        "WHERE time >= $start_time "
+        "AND time < $end_time"
+    )
+
+
 class InfluxDB3Source(Source):
+    """
+    InfluxDB3Source extracts data from a specified set of measurements in a
+      database (or all available ones if none are specified).
+
+    It processes measurements sequentially by gathering/producing a tumbling
+      "time_delta"-sized window of data, starting from 'start_date' and eventually
+      stopping at 'end_date'.
+
+    Once stopped, it processes the next measurement, until all are complete.
+
+    If no 'end_date' is provided, it will run indefinitely for a single
+      measurement (which means no other measurements will be processed!).
+    """
+
     def __init__(
         self,
-        influxdb_host: str,
-        influxdb_token: str,
-        influxdb_org: str,
-        influxdb_database: str,
-        start_date: datetime,
+        host: str,
+        token: str,
+        organization_id: str,
+        database: str,
+        start_date: datetime = datetime.now(tz=timezone.utc),
         end_date: Optional[datetime] = None,
-        measurement: Optional[str] = None,
+        measurements: Optional[Union[str, list[str]]] = None,
         sql_query: Optional[str] = None,
         time_delta: str = "5m",
         delay: float = 0,
@@ -70,13 +101,13 @@ class InfluxDB3Source(Source):
         on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
     ) -> None:
         """
-        :param influxdb_host: Host URL of the InfluxDB instance.
-        :param influxdb_token: Authentication token for InfluxDB.
-        :param influxdb_org: Organization name in InfluxDB.
-        :param influxdb_database: Database name in InfluxDB.
-        :param start_date: The start datetime for querying InfluxDB.
-        :param end_date: The end datetime for querying InfluxDB.
-        :param measurement: The measurement to query. If None, all measurements will be processed.
+        :param host: Host URL of the InfluxDB instance.
+        :param token: Authentication token for InfluxDB.
+        :param organization_id: Organization name in InfluxDB.
+        :param database: Database name in InfluxDB.
+        :param start_date: The start datetime for querying InfluxDB. Uses current time by default.
+        :param end_date: The end datetime for querying InfluxDB. If none provided, runs indefinitely for a single measurement.
+        :param measurements: The measurements to query. If None, all measurements will be processed.
         :param sql_query: Custom SQL query for retrieving data. If provided, it overrides the default logic.
         :param time_delta: Time interval for batching queries, e.g., "5m" for 5 minutes.
         :param delay: An optional delay between producing batches.
@@ -90,42 +121,55 @@ class InfluxDB3Source(Source):
             Callback should accept the raised Exception as an argument.
             Callback must resolve (or propagate/re-raise) the Exception.
         """
+        if isinstance(measurements, str):
+            measurements = [measurements]
+        measurements = measurements or []
         super().__init__(
-            name=name or f"influxdb_{influxdb_database}_{measurement}",
+            name=name
+            or f"influxdb3_{database}_{'-'.join(measurements) or 'measurements'}",
             shutdown_timeout=shutdown_timeout,
             on_client_connect_success=on_client_connect_success,
             on_client_connect_failure=on_client_connect_failure,
         )
 
         self._client_kwargs = {
-            "host": influxdb_host,
-            "token": influxdb_token,
-            "org": influxdb_org,
-            "database": influxdb_database,
+            "host": host,
+            "token": token,
+            "org": organization_id,
+            "database": database,
         }
-        self.measurement = measurement
-        self.sql_query = sql_query  # Custom SQL query
-        self.start_date = start_date
-        self.end_date = end_date
-        self.time_delta = time_delta
-        self.delay = delay
-        self.max_retries = max_retries
+        self._measurements = measurements
+        self._sql_query = _set_sql_query(sql_query or "")
+        self._start_date = start_date
+        self._end_date = end_date
+        self._time_delta_seconds = _interval_to_seconds(time_delta)
+        self._delay = delay
+        self._max_attempts = max_retries + 1
 
         self._client: Optional[InfluxDBClient3] = None
 
     def setup(self):
-        self._client = InfluxDBClient3(**self._client_kwargs)
-        try:
-            # We cannot safely parameterize the table (measurement) selection, so
-            # the best we can do is confirm authentication was successful
-            self._client.query("")
-        except Exception as e:
-            if "No SQL statements were provided in the query string" not in str(e):
-                raise
+        if not self._client:
+            self._client = InfluxDBClient3(**self._client_kwargs)
+            self._client.query(
+                query="SHOW MEASUREMENTS", mode="pandas", language="influxql"
+            )
+
+    def _close_client(self):
+        if self._client:
+            self._client.close()
+            self._client = None
+
+    @property
+    def _measurement_names(self) -> list[str]:
+        if not self._measurements:
+            self._measurements = self._get_measurements()
+        return self._measurements
 
     @with_retry
-    def produce_records(self, records: list[dict], measurement_name: str):
+    def _produce_records(self, records: list[dict], measurement_name: str):
         for record in records:
+            # TODO: a key, value, and timestamp setter
             msg = self.serialize(
                 key=f"{measurement_name}_{random.randint(1, 1000)}",  # noqa: S311
                 value=record,
@@ -133,74 +177,99 @@ class InfluxDB3Source(Source):
             self.produce(value=msg.value, key=msg.key)
         self.producer.flush()
 
-    def run(self):
-        measurements = (
-            [self.measurement] if self.measurement else self.get_measurements()
-        )
-
-        for measurement_name in measurements:
-            logger.info(f"Processing measurement: {measurement_name}")
-            _start_date = self.start_date
-            _end_date = self.end_date
-
-            is_running = (
-                True
-                if _end_date is None
-                else (self.running and _start_date < _end_date)
-            )
-
-            while is_running:
-                end_time = _start_date + timedelta(
-                    seconds=interval_to_seconds(self.time_delta)
-                )
-                wait_time = (end_time - datetime.now(timezone.utc)).total_seconds()
-                if _end_date is None and wait_time > 0:
-                    logger.info(f"Sleeping for {wait_time}s")
-                    time.sleep(wait_time)
-
-                data = self.query_data(measurement_name, _start_date, end_time)
-                if data is not None and not data.empty:
-                    if "iox::measurement" in data.columns:
-                        data = data.drop(columns=["iox::measurement"])
-                    self.produce_records(
-                        json.loads(data.to_json(orient="records", date_format="iso")),
-                        data["measurement_name"],
-                    )
-
-                _start_date = end_time
-                if self.delay > 0:
-                    time.sleep(self.delay)
-
-    def get_measurements(self):
+    def _get_measurements(self) -> list[str]:
         try:
-            query = "SHOW MEASUREMENTS"
-            result = self._client.query(query=query, mode="pandas", language="influxql")
-            return result["name"].tolist() if not result.empty else []
+            result = self._client.query(
+                query="SHOW MEASUREMENTS", mode="pandas", language="influxql"
+            )
         except Exception as e:
             logger.error(f"Failed to retrieve measurements: {e}")
-            return []
+            raise
+        else:
+            if result.empty:
+                raise NoMeasurementsFound(
+                    "query 'SHOW MEASUREMENTS' returned an empty result set"
+                )
+            return result["name"].tolist()
 
     @with_retry
-    def query_data(self, measurement_name, start_time, end_time):
+    def _query_data(self, measurement_name, start_time, end_time):
+        logger.info(
+            f"Executing query for {measurement_name} FROM '{start_time}' TO '{end_time}'"
+        )
         try:
-            if self.sql_query:
-                query = self.sql_query.format(
-                    measurement_name=measurement_name,
-                    start_time=start_time.isoformat(),
-                    end_time=end_time.isoformat(),
-                )
-            else:
-                query = (
-                    f'SELECT * FROM "{measurement_name}" '  # noqa: S608
-                    f"WHERE time >= '{start_time.isoformat()}' "
-                    f"AND time < '{end_time.isoformat()}'"
-                )
-
-            logger.info(f"Executing query: {query}")
-            return self._client.query(query=query, mode="pandas", language="influxql")
+            return self._client.query(
+                query=self._sql_query.format(measurement_name=measurement_name),
+                mode="pandas",
+                language="influxql",
+                query_parameters={
+                    "start_time": start_time.isoformat(),
+                    "end_time": end_time.isoformat(),
+                },
+            )
         except Exception as e:
             logger.error(f"Query failed for measurement {measurement_name}: {e}")
             raise
+
+    def _do_measurement_processing(self, current_time: datetime) -> bool:
+        if not self.running:
+            logger.info("Stopping all measurement processing...")
+            return False
+        if not self._end_date or (current_time < self._end_date):
+            return True
+        logger.info(f"Measurement is now at defined end_date: {self._end_date}")
+        return False
+
+    def _process_measurement(self, measurement_name):
+        logger.info(f"Processing measurement: {measurement_name}")
+        start_time = self._start_date
+
+        while self._do_measurement_processing(start_time):
+            end_time = start_time + timedelta(seconds=self._time_delta_seconds)
+
+            # TODO: maybe allow querying more frequently once "caught up"?
+            if self._end_date is None:
+                if wait_time := max(
+                    0.0, (end_time - datetime.now(timezone.utc)).total_seconds()
+                ):
+                    logger.info(
+                        f"At current time; sleeping for {wait_time}s "
+                        f"to allow a {self._time_delta_seconds}s query window"
+                    )
+                    time.sleep(wait_time)
+
+            data = self._query_data(measurement_name, start_time, end_time)
+            if data is not None and not data.empty:
+                if "iox::measurement" in data.columns:
+                    data = data.drop(columns=["iox::measurement"])
+                data["measurement_name"] = measurement_name
+                self._produce_records(
+                    json.loads(data.to_json(orient="records", date_format="iso")),
+                    data,
+                )
+
+            start_time = end_time
+            if self._delay > 0:
+                logger.debug(f"Applying query delay of {self._delay}s")
+                time.sleep(self._delay)
+        logger.debug(f"Ended processing for {measurement_name}.")
+
+    def run(self):
+        if len(self._measurement_names) > 1 and not self._end_date:
+            logger.warning(
+                "More than one measurement was found and no end_date "
+                f"was specified; only measurement '{self._measurement_names[0]}' "
+                f"will be processed!"
+            )
+        measurement_names = iter(self._measurement_names)
+        try:
+            while self.running:
+                self._process_measurement(next(measurement_names))
+        except StopIteration:
+            logger.info("Finished processing all measurements.")
+        finally:
+            logger.info("Stopping InfluxDB3 client...")
+            self._close_client()
 
     def default_topic(self) -> Topic:
         return Topic(
@@ -210,7 +279,3 @@ class InfluxDB3Source(Source):
             value_deserializer="json",
             value_serializer="json",
         )
-
-
-def interval_to_seconds(interval: str) -> int:
-    return int(interval[:-1]) * TIME_UNITS[interval[-1]]
