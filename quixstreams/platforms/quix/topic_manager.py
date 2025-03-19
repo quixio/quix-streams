@@ -85,10 +85,6 @@ class QuixTopicManager(TopicManager):
         quix_topic_name = broker_config.extra_config.pop("__quix_topic_name__")
         topic_out = topic.__clone__(name=broker_topic.name)
 
-        extra_config_imports = (
-            self._groupby_extra_config_imports_defaults
-            | self._changelog_extra_config_imports_defaults
-        )
         # Set a broker config for the topic
         broker_config = TopicConfig(
             num_partitions=broker_config.num_partitions,
@@ -96,7 +92,7 @@ class QuixTopicManager(TopicManager):
             extra_config={
                 k: v
                 for k, v in broker_config.extra_config.items()
-                if k in extra_config_imports
+                if k in self._extra_config_imports
             },
         )
         topic_out.broker_config = broker_config

@@ -7,12 +7,12 @@ from .exceptions import (
     InvalidOperation,
     StreamingDataFrameDuplicate,
 )
-from .registry import DataframeRegistry
+from .registry import DataFrameRegistry
 from .series import StreamingSeries
 
 __all__ = (
     "ColumnDoesNotExist",
-    "DataframeRegistry",
+    "DataFrameRegistry",
     "GroupByDuplicate",
     "GroupByNestingLimit",
     "InvalidColumnReference",

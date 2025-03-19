@@ -10,7 +10,9 @@ from quixstreams.checkpointing.exceptions import (
     CheckpointConsumerCommitError,
     CheckpointProducerTimeout,
 )
+from quixstreams.dataframe import DataFrameRegistry
 from quixstreams.kafka import Consumer
+from quixstreams.models import TopicConfig
 from quixstreams.processing import PausingManager
 from quixstreams.rowproducer import RowProducer
 from quixstreams.sinks import BatchingSink, SinkBackpressureError, SinkManager
@@ -34,6 +36,7 @@ def checkpoint_factory(
         state_manager_: Optional[StateStoreManager] = None,
         sink_manager_: Optional[SinkManager] = None,
         pausing_manager_: Optional[PausingManager] = None,
+        dataframe_registry_: Optional[DataFrameRegistry] = None,
         exactly_once: bool = False,
     ):
         consumer_ = consumer_ or consumer
@@ -43,6 +46,7 @@ def checkpoint_factory(
         )
         producer_ = producer_ or row_producer_factory(transactional=exactly_once)
         state_manager_ = state_manager_ or state_manager
+        dataframe_registry_ = dataframe_registry_ or DataFrameRegistry()
         return Checkpoint(
             commit_interval=commit_interval,
             commit_every=commit_every,
@@ -51,6 +55,7 @@ def checkpoint_factory(
             state_manager=state_manager_,
             sink_manager=sink_manager_,
             pausing_manager=pausing_manager_,
+            dataframe_registry=dataframe_registry_,
             exactly_once=exactly_once,
         )
 
@@ -142,9 +147,14 @@ class TestCheckpoint:
     ):
         topic_name, _ = topic_factory()
 
+        dataframe_registry = DataFrameRegistry()
+        dataframe_registry.register_stream_id(topic_name, [topic_name])
         state_manager = state_manager_factory(producer=rowproducer_mock)
         checkpoint = checkpoint_factory(
-            consumer_=consumer, state_manager_=state_manager, producer_=rowproducer_mock
+            consumer_=consumer,
+            state_manager_=state_manager,
+            producer_=rowproducer_mock,
+            dataframe_registry_=dataframe_registry,
         )
         processed_offset = 999
         key, value, prefix = "key", "value", b"__key__"
@@ -189,12 +199,22 @@ class TestCheckpoint:
         state_manager = state_manager_factory(
             producer=row_producer, recovery_manager=recovery_manager
         )
+        dataframe_registry = DataFrameRegistry()
+        dataframe_registry.register_stream_id(topic_name, [topic_name])
+
         checkpoint = checkpoint_factory(
-            consumer_=consumer, state_manager_=state_manager, producer_=row_producer
+            consumer_=consumer,
+            state_manager_=state_manager,
+            producer_=row_producer,
+            dataframe_registry_=dataframe_registry,
         )
         processed_offset = 999
         value, prefix = "value", b"__key__"
-        state_manager.register_store(topic_name, "default")
+        state_manager.register_store(
+            topic_name,
+            "default",
+            changelog_config=TopicConfig(num_partitions=1, replication_factor=1),
+        )
         store = state_manager.get_store(topic_name, "default")
         store_partition = store.assign_partition(0)
 
@@ -232,14 +252,22 @@ class TestCheckpoint:
         state_manager = state_manager_factory(
             producer=row_producer, recovery_manager=recovery_manager
         )
+        dataframe_registry = DataFrameRegistry()
+        dataframe_registry.register_stream_id(topic_name, [topic_name])
+
         checkpoint = checkpoint_factory(
             consumer_=consumer,
             state_manager_=state_manager,
             producer_=row_producer,
+            dataframe_registry_=dataframe_registry,
             exactly_once=exactly_once,
         )
         processed_offset = 999
-        state_manager.register_store(topic_name, "default")
+        state_manager.register_store(
+            topic_name,
+            "default",
+            changelog_config=TopicConfig(num_partitions=1, replication_factor=1),
+        )
         store = state_manager.get_store(topic_name, "default")
         store_partition = store.assign_partition(0)
 
@@ -292,16 +320,20 @@ class TestCheckpoint:
     ):
         consumer_mock = MagicMock(spec_set=Consumer)
         state_manager = state_manager_factory(producer=rowproducer_mock)
+        dataframe_registry = DataFrameRegistry()
+        topic_name = "topic"
+        dataframe_registry.register_stream_id(topic_name, [topic_name])
         checkpoint = checkpoint_factory(
             consumer_=consumer_mock,
             state_manager_=state_manager,
             producer_=rowproducer_mock,
+            dataframe_registry_=dataframe_registry,
             exactly_once=exactly_once,
         )
         processed_offset = 999
         key, value, prefix = "key", "value", b"__key__"
-        state_manager.register_store("topic", "default")
-        store = state_manager.get_store("topic", "default")
+        state_manager.register_store(topic_name, "default")
+        store = state_manager.get_store(topic_name, "default")
         store.assign_partition(0)
 
         # Simulate a failed transaction
@@ -343,22 +375,26 @@ class TestCheckpoint:
     ):
         consumer_mock = MagicMock(spec_set=Consumer)
         state_manager = state_manager_factory(producer=rowproducer_mock)
+        topic_name = "topic"
+        dataframe_registry = DataFrameRegistry()
+        dataframe_registry.register_stream_id(topic_name, [topic_name])
         checkpoint = checkpoint_factory(
             consumer_=consumer_mock,
             state_manager_=state_manager,
             producer_=rowproducer_mock,
             exactly_once=exactly_once,
+            dataframe_registry_=dataframe_registry,
         )
         processed_offset = 999
         key, value, prefix = "key", "value", b"__key__"
-        state_manager.register_store("topic", "default")
-        store = state_manager.get_store("topic", "default")
+        state_manager.register_store(topic_name, "default")
+        store = state_manager.get_store(topic_name, "default")
         store.assign_partition(0)
 
         # Do some state updates and store the processed offset to simulate processing
-        tx = checkpoint.get_store_transaction("topic", 0)
+        tx = checkpoint.get_store_transaction(topic_name, 0)
         tx.set(key=key, value=value, prefix=prefix)
-        checkpoint.store_offset("topic", 0, processed_offset)
+        checkpoint.store_offset(topic_name, 0, processed_offset)
 
         rowproducer_mock.flush.side_effect = ValueError("Flush failure")
         # Checkpoint commit should fail if producer failed to flush
@@ -377,21 +413,26 @@ class TestCheckpoint:
     ):
         consumer_mock = MagicMock(spec_set=Consumer)
         state_manager = state_manager_factory(producer=rowproducer_mock)
+        topic_name = "topic"
+        dataframe_registry = DataFrameRegistry()
+        dataframe_registry.register_stream_id(topic_name, [topic_name])
+
         checkpoint = checkpoint_factory(
             consumer_=consumer_mock,
             state_manager_=state_manager,
+            dataframe_registry_=dataframe_registry,
             producer_=rowproducer_mock,
         )
         processed_offset = 999
         key, value, prefix = "key", "value", b"__key__"
-        state_manager.register_store("topic", "default")
-        store = state_manager.get_store("topic", "default")
+        state_manager.register_store(topic_name, "default")
+        store = state_manager.get_store(topic_name, "default")
         store.assign_partition(0)
 
         # Do some state updates and store the processed offset to simulate processing
-        tx = checkpoint.get_store_transaction("topic", 0)
+        tx = checkpoint.get_store_transaction(topic_name, 0)
         tx.set(key=key, value=value, prefix=prefix)
-        checkpoint.store_offset("topic", 0, processed_offset)
+        checkpoint.store_offset(topic_name, 0, processed_offset)
 
         consumer_mock.commit.side_effect = ValueError("Commit failure")
         # Checkpoint commit should fail if consumer failed to commit
@@ -413,12 +454,13 @@ class TestCheckpoint:
     def test_get_store_transaction_success(self, checkpoint_factory, state_manager):
         state_manager.register_store("topic", "default")
         store = state_manager.get_store("topic", "default")
+        topic_name = "topic"
         store.assign_partition(0)
 
         checkpoint = checkpoint_factory(state_manager_=state_manager)
-        tx = checkpoint.get_store_transaction("topic", 0, "default")
+        tx = checkpoint.get_store_transaction(topic_name, 0, "default")
         assert tx
-        tx2 = checkpoint.get_store_transaction("topic", 0, "default")
+        tx2 = checkpoint.get_store_transaction(topic_name, 0, "default")
         assert tx2 is tx
 
     @pytest.mark.parametrize("rowproducer_mock", [1], indirect=True)

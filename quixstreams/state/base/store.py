@@ -20,11 +20,15 @@ class Store(ABC):
     partitions' transactions.
     """
 
-    def __init__(self, name: str, topic: Optional[str]) -> None:
+    def __init__(
+        self,
+        name: str,
+        stream_id: Optional[str],
+    ) -> None:
         super().__init__()
 
         self._name = name
-        self._topic = topic
+        self._stream_id = stream_id
         self._partitions: Dict[int, StorePartition] = {}
 
     @abstractmethod
@@ -32,11 +36,11 @@ class Store(ABC):
         pass
 
     @property
-    def topic(self) -> Optional[str]:
+    def stream_id(self) -> Optional[str]:
         """
         Topic name
         """
-        return self._topic
+        return self._stream_id
 
     @property
     def name(self) -> str:
@@ -64,7 +68,7 @@ class Store(ABC):
         if store_partition is not None:
             logger.debug(
                 f'Partition "{partition}" for store "{self._name}" '
-                f'(topic "{self._topic}") '
+                f'(stream "{self._stream_id}") '
                 f"is already assigned"
             )
             return store_partition
@@ -73,10 +77,10 @@ class Store(ABC):
 
         self._partitions[partition] = store_partition
         logger.debug(
-            'Assigned store partition "%s[%s]" (topic "%s")',
+            'Assigned store partition "%s[%s]" (stream "%s")',
             self._name,
             partition,
-            self._topic,
+            self._stream_id,
         )
         return store_partition
 
@@ -92,10 +96,10 @@ class Store(ABC):
 
         store_partition.close()
         logger.debug(
-            'Revoked store partition "%s[%s]" topic("%s")',
+            'Revoked store partition "%s[%s]" (stream "%s")',
             self._name,
             partition,
-            self._topic,
+            self._stream_id,
         )
 
     def start_partition_transaction(self, partition: int) -> PartitionTransaction:
@@ -111,7 +115,7 @@ class Store(ABC):
             # Requested partition has not been assigned. Something went completely wrong
             raise PartitionNotAssignedError(
                 f'Store partition "{self._name}[{partition}]" '
-                f'(topic "{self._topic}") is not assigned'
+                f'(stream "{self._stream_id}") is not assigned'
             )
 
         return store_partition.begin()
@@ -120,10 +124,10 @@ class Store(ABC):
         """
         Close store and revoke all store partitions
         """
-        logger.debug(f'Closing store "{self.name}" (topic "{self.topic}")')
+        logger.debug(f'Closing store "{self.name}" (stream "{self.stream_id}")')
         for partition in list(self._partitions.keys()):
             self.revoke_partition(partition)
-        logger.debug(f'Closed store "{self.name}" (topic "{self.topic}")')
+        logger.debug(f'Closed store "{self.name}" (stream "{self.stream_id}")')
 
     def __enter__(self):
         return self

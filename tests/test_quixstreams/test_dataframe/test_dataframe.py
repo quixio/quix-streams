@@ -15,7 +15,7 @@ from quixstreams.dataframe.exceptions import (
     GroupByNestingLimit,
     InvalidOperation,
 )
-from quixstreams.dataframe.registry import DataframeRegistry
+from quixstreams.dataframe.registry import DataFrameRegistry
 from quixstreams.dataframe.windows.base import WindowResult
 from tests.utils import DummySink
 
@@ -758,7 +758,7 @@ class TestStreamingDataframeStateful:
         sdf = sdf.apply(stateful_func, stateful=True)
 
         state_manager.on_partition_assign(
-            topic=topic.name, partition=0, committed_offsets={topic.name: -1001}
+            stream_id=topic.name, partition=0, committed_offsets={topic.name: -1001}
         )
         values = [
             {"number": 1},
@@ -797,7 +797,7 @@ class TestStreamingDataframeStateful:
         sdf = sdf.update(stateful_func, stateful=True)
 
         state_manager.on_partition_assign(
-            topic=topic.name, partition=0, committed_offsets={topic.name: -1001}
+            stream_id=topic.name, partition=0, committed_offsets={topic.name: -1001}
         )
         result = None
         values = [
@@ -837,7 +837,7 @@ class TestStreamingDataframeStateful:
         sdf = sdf.filter(lambda v, state: state.get("max") >= 3, stateful=True)
 
         state_manager.on_partition_assign(
-            topic=topic.name, partition=0, committed_offsets={topic.name: -1001}
+            stream_id=topic.name, partition=0, committed_offsets={topic.name: -1001}
         )
         values = [
             {"number": 1},
@@ -878,7 +878,7 @@ class TestStreamingDataframeStateful:
         sdf = sdf[sdf.apply(lambda v, state: state.get("max") >= 3, stateful=True)]
 
         state_manager.on_partition_assign(
-            topic=topic.name, partition=0, committed_offsets={topic.name: -1001}
+            stream_id=topic.name, partition=0, committed_offsets={topic.name: -1001}
         )
         values = [
             {"number": 1},
@@ -949,7 +949,7 @@ class TestStreamingDataFrameTumblingWindow:
         )
 
         state_manager.on_partition_assign(
-            topic=topic.name, partition=0, committed_offsets={topic.name: -1001}
+            stream_id=topic.name, partition=0, committed_offsets={topic.name: -1001}
         )
 
         records = [
@@ -1025,7 +1025,7 @@ class TestStreamingDataFrameTumblingWindow:
         )
 
         state_manager.on_partition_assign(
-            topic=topic.name, partition=0, committed_offsets={topic.name: -1001}
+            stream_id=topic.name, partition=0, committed_offsets={topic.name: -1001}
         )
         records = [
             # Create window [0, 10)
@@ -1078,7 +1078,7 @@ class TestStreamingDataFrameTumblingWindow:
         sdf = sdf.tumbling_window(duration_ms=10, grace_ms=0).sum().final()
 
         state_manager.on_partition_assign(
-            topic=topic.name, partition=0, committed_offsets={topic.name: -1001}
+            stream_id=topic.name, partition=0, committed_offsets={topic.name: -1001}
         )
         records = [
             # Create window [0, 10)
@@ -1140,7 +1140,7 @@ class TestStreamingDataFrameTumblingWindow:
         sdf = sdf.tumbling_window(duration_ms=10).sum().current()
 
         state_manager.on_partition_assign(
-            topic=topic.name, partition=0, committed_offsets={topic.name: -1001}
+            stream_id=topic.name, partition=0, committed_offsets={topic.name: -1001}
         )
         records = [
             # Create window [0,10)
@@ -1190,7 +1190,7 @@ class TestStreamingDataFrameTumblingWindow:
         )
 
         state_manager.on_partition_assign(
-            topic=topic.name, partition=0, committed_offsets={topic.name: -1001}
+            stream_id=topic.name, partition=0, committed_offsets={topic.name: -1001}
         )
 
         records = [
@@ -1303,7 +1303,7 @@ class TestStreamingDataFrameHoppingWindow:
         sdf = sdf.hopping_window(duration_ms=10, step_ms=5).sum().current()
 
         state_manager.on_partition_assign(
-            topic=topic.name, partition=0, committed_offsets={topic.name: -1001}
+            stream_id=topic.name, partition=0, committed_offsets={topic.name: -1001}
         )
         records = [
             # Create window [0,10)
@@ -1354,7 +1354,7 @@ class TestStreamingDataFrameHoppingWindow:
         sdf = sdf.hopping_window(duration_ms=10, step_ms=5).sum().current()
 
         state_manager.on_partition_assign(
-            topic=topic.name, partition=0, committed_offsets={topic.name: -1001}
+            stream_id=topic.name, partition=0, committed_offsets={topic.name: -1001}
         )
         records = [
             # Create window [0,10)
@@ -1398,7 +1398,7 @@ class TestStreamingDataFrameHoppingWindow:
         sdf = sdf.hopping_window(duration_ms=10, step_ms=5).sum().final()
 
         state_manager.on_partition_assign(
-            topic=topic.name, partition=0, committed_offsets={topic.name: -1001}
+            stream_id=topic.name, partition=0, committed_offsets={topic.name: -1001}
         )
 
         records = [
@@ -1465,7 +1465,7 @@ class TestStreamingDataFrameHoppingWindow:
         sdf = sdf.hopping_window(duration_ms=10, step_ms=5).sum().current()
 
         state_manager.on_partition_assign(
-            topic=topic.name, partition=0, committed_offsets={topic.name: -1001}
+            stream_id=topic.name, partition=0, committed_offsets={topic.name: -1001}
         )
         records = [
             # Create window [0,10)
@@ -1512,7 +1512,7 @@ class TestStreamingDataFrameSlidingWindow:
         )
 
         state_manager.on_partition_assign(
-            topic=topic.name, partition=0, committed_offsets={topic.name: -1001}
+            stream_id=topic.name, partition=0, committed_offsets={topic.name: -1001}
         )
 
         records = [
@@ -1585,7 +1585,7 @@ class TestStreamingDataFrameSlidingWindow:
         )
 
         state_manager.on_partition_assign(
-            topic=topic.name, partition=0, committed_offsets={topic.name: -1001}
+            stream_id=topic.name, partition=0, committed_offsets={topic.name: -1001}
         )
         records = [
             # Create window [0, 1]
@@ -1646,18 +1646,16 @@ class TestStreamingDataFrameGroupBy:
         col_update = "updated_col"
         headers = [("key", b"value")]
 
-        sdf_registry = DataframeRegistry()
+        sdf_registry = DataFrameRegistry()
         sdf = dataframe_factory(
             topic, topic_manager=topic_manager, producer=producer, registry=sdf_registry
         )
         sdf = sdf.group_by(col)
         sdf[col] = col_update
 
-        groupby_topic = sdf.topic
-        assert sdf_registry.consumer_topics == [topic, sdf.topic]
-        assert (
-            groupby_topic.name == topic_manager.repartition_topic(col, topic.name).name
-        )
+        groupby_topic = sdf.topics[0]
+        assert sdf_registry.consumer_topics == [topic, groupby_topic]
+        assert groupby_topic.name.startswith("repartition__")
 
         with producer:
             pre_groupby_branch_result = sdf.test(
@@ -1726,19 +1724,16 @@ class TestStreamingDataFrameGroupBy:
         col_update = "updated_col"
         headers = [("key", b"value")]
 
-        sdf_registry = DataframeRegistry()
+        sdf_registry = DataFrameRegistry()
         sdf = dataframe_factory(
             topic, topic_manager=topic_manager, producer=producer, registry=sdf_registry
         )
         sdf = sdf.group_by(col, name=op_name)
         sdf[col] = col_update
 
-        groupby_topic = sdf.topic
-        assert sdf_registry.consumer_topics == [topic, sdf.topic]
-        assert (
-            groupby_topic.name
-            == topic_manager.repartition_topic(op_name, topic.name).name
-        )
+        groupby_topic = sdf.topics[0]
+        assert sdf_registry.consumer_topics == [topic, groupby_topic]
+        assert groupby_topic.name.startswith("repartition__")
 
         with producer:
             pre_groupby_branch_result = sdf.test(
@@ -1807,19 +1802,15 @@ class TestStreamingDataFrameGroupBy:
         col_update = "updated_col"
         headers = [("key", b"value")]
 
-        sdf_registry = DataframeRegistry()
+        sdf_registry = DataFrameRegistry()
         sdf = dataframe_factory(
             topic, topic_manager=topic_manager, producer=producer, registry=sdf_registry
         )
         sdf = sdf.group_by(lambda v: v[col], name=op_name)
         sdf[col] = col_update
 
-        groupby_topic = sdf.topic
-        assert sdf_registry.consumer_topics == [topic, sdf.topic]
-        assert (
-            groupby_topic.name
-            == topic_manager.repartition_topic(op_name, topic.name).name
-        )
+        groupby_topic = sdf.topics[0]
+        assert sdf_registry.consumer_topics == [topic, groupby_topic]
 
         with producer:
             pre_groupby_branch_result = sdf.test(

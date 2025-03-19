@@ -5,6 +5,7 @@ from typing import Dict, Tuple
 
 from confluent_kafka import KafkaException, TopicPartition
 
+from quixstreams.dataframe import DataFrameRegistry
 from quixstreams.kafka import BaseConsumer
 from quixstreams.processing.pausing import PausingManager
 from quixstreams.rowproducer import RowProducer
@@ -127,6 +128,7 @@ class Checkpoint(BaseCheckpoint):
         state_manager: StateStoreManager,
         sink_manager: SinkManager,
         pausing_manager: PausingManager,
+        dataframe_registry: DataFrameRegistry,
         exactly_once: bool = False,
         commit_every: int = 0,
     ):
@@ -140,31 +142,34 @@ class Checkpoint(BaseCheckpoint):
         self._producer = producer
         self._sink_manager = sink_manager
         self._pausing_manager = pausing_manager
+        self._dataframe_registry = dataframe_registry
         self._exactly_once = exactly_once
         if self._exactly_once:
             self._producer.begin_transaction()
 
     def get_store_transaction(
-        self, topic: str, partition: int, store_name: str = DEFAULT_STATE_STORE_NAME
+        self, stream_id: str, partition: int, store_name: str = DEFAULT_STATE_STORE_NAME
     ) -> PartitionTransaction:
         """
         Get a PartitionTransaction for the given store, topic and partition.
 
         It will return already started transaction if there's one.
 
-        :param topic: topic name
+        :param stream_id: stream id
         :param partition: partition number
         :param store_name: store name
         :return: instance of `PartitionTransaction`
         """
-        transaction = self._store_transactions.get((topic, partition, store_name))
+        transaction = self._store_transactions.get((stream_id, partition, store_name))
         if transaction is not None:
             return transaction
 
-        store = self._state_manager.get_store(topic=topic, store_name=store_name)
+        store = self._state_manager.get_store(
+            stream_id=stream_id, store_name=store_name
+        )
         transaction = store.start_partition_transaction(partition=partition)
 
-        self._store_transactions[(topic, partition, store_name)] = transaction
+        self._store_transactions[(stream_id, partition, store_name)] = transaction
         return transaction
 
     def close(self):
@@ -222,17 +227,24 @@ class Checkpoint(BaseCheckpoint):
 
         # Step 2. Produce the changelogs
         for (
-            topic,
+            stream_id,
             partition,
             store_name,
         ), transaction in self._store_transactions.items():
-            offset = self._tp_offsets[(topic, partition)]
+            topics = self._dataframe_registry.get_topics_for_stream_id(
+                stream_id=stream_id
+            )
+            processed_offsets = {
+                topic: offset
+                for (topic, partition_), offset in self._tp_offsets.items()
+                if topic in topics and partition_ == partition
+            }
             if transaction.failed:
                 raise StoreTransactionFailed(
                     f'Detected a failed transaction for store "{store_name}", '
                     f"the checkpoint is aborted"
                 )
-            transaction.prepare(processed_offsets={topic: offset})
+            transaction.prepare(processed_offsets=processed_offsets)
 
         # Step 3. Flush producer to trigger all delivery callbacks and ensure that
         # all messages are produced
