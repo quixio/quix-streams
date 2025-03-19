@@ -60,7 +60,11 @@ def _interval_to_seconds(interval: str) -> int:
 
 def _set_sql_query(sql_query: str) -> str:
     return (
-        sql_query.format(start_time="$start_time", end_time="$end_time")
+        (
+            sql_query.replace("{start_time}", "$start_time").replace(
+                "{end_time}", "$end_time"
+            )
+        )
         or "SELECT * FROM {measurement_name} "  # noqa: S608
         "WHERE time >= $start_time "
         "AND time < $end_time"
@@ -166,17 +170,6 @@ class InfluxDB3Source(Source):
             self._measurements = self._get_measurements()
         return self._measurements
 
-    @with_retry
-    def _produce_records(self, records: list[dict], measurement_name: str):
-        for record in records:
-            # TODO: a key, value, and timestamp setter
-            msg = self.serialize(
-                key=f"{measurement_name}_{random.randint(1, 1000)}",  # noqa: S311
-                value=record,
-            )
-            self.produce(value=msg.value, key=msg.key)
-        self.producer.flush()
-
     def _get_measurements(self) -> list[str]:
         try:
             result = self._client.query(
@@ -191,6 +184,17 @@ class InfluxDB3Source(Source):
                     "query 'SHOW MEASUREMENTS' returned an empty result set"
                 )
             return result["name"].tolist()
+
+    @with_retry
+    def _produce_records(self, records: list[dict], measurement_name: str):
+        for record in records:
+            # TODO: a key, value, and timestamp setter
+            msg = self.serialize(
+                key=f"{measurement_name}_{random.randint(1, 1000)}",  # noqa: S311
+                value=record,
+            )
+            self.produce(value=msg.value, key=msg.key)
+        self.producer.flush()
 
     @with_retry
     def _query_data(self, measurement_name, start_time, end_time):
