@@ -112,7 +112,7 @@ class Sum(Aggregator):
         Default - `None`
     """
 
-    def __init__(self, column: Optional[str]) -> None:
+    def __init__(self, column: Optional[str] = None) -> None:
         self.column = column
 
     @property
