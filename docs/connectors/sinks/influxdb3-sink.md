@@ -131,8 +131,8 @@ Default - `False`.
 
 ## Testing Locally
 
-Rather than connect to Azure, you can alternatively test your application using a local 
-emulated Azure host via Docker:
+Rather than connect to a hosted InfluxDB3 instance, you can alternatively test your 
+application using a local instance of InfluxDb3 using Docker:
 
 1. Execute in terminal:
 
