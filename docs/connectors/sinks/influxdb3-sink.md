@@ -113,6 +113,9 @@ Default - `ms`.
 - `include_metadata_tags` - if True, includes the record's key, topic, and partition as tags.  
 Default - `False`.
 
+- `convert_ints_to_floats` - if True, converts all integer values to floats.  
+Default - `False`.
+
 - `batch_size` - the number of records to write to InfluxDB in one request.    
 Note that it only affects the size of one write request, and not the number of records flushed on each checkpoint.    
 Default - `1000`.
@@ -125,3 +128,29 @@ Default - `10000`.
 
 - `debug` - if True, print debug logs from InfluxDB client.  
 Default - `False`.
+
+## Testing Locally
+
+Rather than connect to Azure, you can alternatively test your application using a local 
+emulated Azure host via Docker:
+
+1. Execute in terminal:
+
+    ```bash
+    docker run --rm -d --name influxdb3 \
+    -p 8181:8181 \
+    quay.io/influxdb/influxdb3-core:latest \
+    serve --node-id=host0 --object-store=memory
+    ```
+
+2. Use the following settings for `InfluxDB3Sink` to connect:
+
+    ```python
+    InfluxDB3Sink(
+        host="http://localhost:8181",   # be sure to add http
+        organization_id="local",        # unused, but required
+        token="local",                  # unused, but required
+   )
+    ```
+
+The `database` you provide will be auto-created for you.

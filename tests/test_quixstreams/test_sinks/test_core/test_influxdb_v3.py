@@ -19,6 +19,7 @@ def influxdb3_sink_factory():
         time_key: Optional[str] = None,
         batch_size: int = 1000,
         time_precision: TimePrecision = "ms",
+        convert_ints_to_floats: bool = False,
         include_metadata_tags: bool = False,
     ) -> InfluxDB3Sink:
         sink = InfluxDB3Sink(
@@ -32,6 +33,7 @@ def influxdb3_sink_factory():
             time_key=time_key,
             time_precision=time_precision,
             include_metadata_tags=include_metadata_tags,
+            convert_ints_to_floats=convert_ints_to_floats,
             batch_size=batch_size,
         )
         sink._client = client_mock
@@ -363,3 +365,39 @@ class TestInfluxDB3Sink:
         )
         with pytest.raises(influxdb_client_3.InfluxDBError):
             sink.flush()
+
+    def test_convert_ints_to_floats(self, influxdb3_sink_factory):
+        client_mock = MagicMock(spec_set=InfluxDBClient3)
+        measurement = "measurement"
+        sink = influxdb3_sink_factory(
+            client_mock=client_mock,
+            measurement=measurement,
+            convert_ints_to_floats=True,
+        )
+        topic = "test-topic"
+
+        value, timestamp = {"str_key": "value", "int_key": 0, "float_key": 1.1}, 1
+        sink.add(
+            value=value,
+            key="key",
+            timestamp=timestamp,
+            headers=[],
+            topic=topic,
+            partition=0,
+            offset=1,
+        )
+        sink.flush()
+
+        assert client_mock.write.call_count == 1
+        first_call = client_mock.write.call_args_list[0]
+        assert first_call.kwargs == {
+            "record": [
+                {
+                    "measurement": measurement,
+                    "tags": {},
+                    "fields": {"str_key": "value", "int_key": 0.0, "float_key": 1.1},
+                    "time": timestamp,
+                }
+            ],
+            "write_precision": "ms",
+        }
