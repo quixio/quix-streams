@@ -104,7 +104,7 @@ class RunTracker:
         """
         self.running = True
         if self._timeout:
-            # allow a 60s window for initial assignment to trigger
+            # give an additional 60s buffer for initial assignment to trigger
             self._timeout_start_time = time.monotonic() + 60
 
     def set_current_message_tp(self, tp: Optional[tuple[str, int]]):
@@ -145,16 +145,17 @@ class RunTracker:
         )
 
     def _at_count(self) -> bool:
-        if self._max_count:
+        if not self._max_count:
+            return False
+        if self._max_count == self._current_count:
+            return self._count_repartitions_finished()
+        if (tp := self._current_message_tp) and tp[0] in self._primary_topics:
+            self._current_count += 1
             if self._max_count == self._current_count:
-                return self._count_repartitions_finished()
-            if (tp := self._current_message_tp) and tp[0] in self._primary_topics:
-                self._current_count += 1
-                if self._max_count == self._current_count:
-                    logger.info(f"Count of {self._max_count} records reached.")
-                    if not self._repartition_topics:
-                        return True
-                    self._count_prepare_repartition_check()
+                logger.info(f"Count of {self._max_count} records reached.")
+                if not self._repartition_topics:
+                    return True
+                self._count_prepare_repartition_check()
         return False
 
     def _count_prepare_repartition_check(self):
@@ -196,11 +197,12 @@ class RunTracker:
         return False
 
     def _at_timeout(self) -> bool:
-        if self._timeout:
-            if self._current_message_tp:
-                # refresh when any message is consumed
-                self.timeout_refresh()
-            elif (time.monotonic() - self._timeout_start_time) >= self._timeout:
-                logger.info(f"Timeout of {self._timeout}s reached.")
-                return True
+        if not self._timeout:
+            return False
+        if self._current_message_tp:
+            # refresh when any message is consumed
+            self.timeout_refresh()
+        elif (time.monotonic() - self._timeout_start_time) >= self._timeout:
+            logger.info(f"Timeout of {self._timeout}s reached.")
+            return True
         return False
