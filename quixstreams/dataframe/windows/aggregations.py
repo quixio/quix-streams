@@ -68,9 +68,8 @@ class Sum(Aggregator):
         return 0
 
     def agg(self, old: V, new: Any) -> V:
-        if self.column is ROOT:
-            return old + new
-        return old + new[self.column]
+        new = new if self.column is ROOT else new.get(self.column) or 0
+        return old + (new or 0)
 
     def result(self, value: V) -> V:
         return value
@@ -95,13 +94,17 @@ class Mean(Aggregator):
         return 0.0, 0
 
     def agg(self, old: tuple[V, int], new: Any) -> tuple[V, int]:
+        new = new if self.column is ROOT else new.get(self.column)
+        if new is None:
+            return old
+
         old_sum, old_count = old
-        if self.column is ROOT:
-            return old_sum + new, old_count + 1
-        return old_sum + new[self.column], old_count + 1
+        return old_sum + new, old_count + 1
 
     def result(self, value: tuple[Union[int, float], int]) -> float:
         sum_, count_ = value
+        if sum_ == 0.0:
+            return 0.0
         return sum_ / count_
 
 
@@ -135,10 +138,11 @@ class Max(Aggregator):
         return None
 
     def agg(self, old: Optional[V], new: Any) -> V:
-        if self.column is not ROOT:
-            new = new[self.column]
+        new = new if self.column is ROOT else new.get(self.column)
         if old is None:
             return new
+        elif new is None:
+            return old
         return max(old, new)
 
     def result(self, value: V) -> V:
@@ -153,10 +157,11 @@ class Min(Aggregator):
         return None
 
     def agg(self, old: Optional[V], new: Any) -> V:
-        if self.column is not ROOT:
-            new = new[self.column]
+        new = new if self.column is ROOT else new.get(self.column)
         if old is None:
             return new
+        elif new is None:
+            return old
         return min(old, new)
 
     def result(self, value: V) -> V:
