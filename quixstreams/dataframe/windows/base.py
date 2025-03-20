@@ -327,7 +327,7 @@ class MultiAggregationWindowMixin:
         return {
             k: agg.agg(state_values[k], value)
             if k in state_values
-            else agg.initialize()
+            else agg.agg(agg.initialize(), value)
             for k, (_, agg) in self._aggregators.items()
         }
 
