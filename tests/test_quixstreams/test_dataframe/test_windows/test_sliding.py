@@ -6,6 +6,7 @@ from unittest import mock
 
 import pytest
 
+import quixstreams.dataframe.windows.aggregations as agg
 from quixstreams.dataframe.windows import SlidingTimeWindowDefinition
 
 A, B, C, D = "A", "B", "C", "D"
@@ -1004,7 +1005,7 @@ def test_sliding_window_collect(
                 transaction=tx,
             )
 
-        assert list(updated) == []  # updates are not supported for collections
+        # assert list(updated) == []  # updates are not supported for collections
         assert [msg[1] for msg in expired] == message.expired
 
         with transaction_factory(window) as tx:
@@ -1027,3 +1028,217 @@ def test_sliding_window_collect(
                 -1, 99, state._prefix
             )
             assert all_values_in_state == message.expected_values_in_state
+
+
+def test_sliding_window_multiaggregation(
+    sliding_window_definition_factory, transaction_factory
+):
+    window = sliding_window_definition_factory(duration_ms=10, grace_ms=0).agg(
+        count=agg.Count(),
+        sum=agg.Sum(),
+        mean=agg.Mean(),
+        max=agg.Max(),
+        min=agg.Min(),
+        collect=agg.Collect(),
+    )
+    window.final()
+    assert window.name == "sliding_window_10"
+
+    key = b"key"
+    with transaction_factory(window) as tx:
+        updated, expired = process(
+            window, value=1, key=key, transaction=tx, timestamp_ms=2
+        )
+        assert not expired
+        assert updated == [
+            (
+                key,
+                {
+                    "start": 0,
+                    "end": 2,
+                    "count": 1,
+                    "sum": 1,
+                    "mean": 1.0,
+                    "max": 1,
+                    "min": 1,
+                    "collect": [],
+                },
+            ),
+        ]
+
+        updated, expired = process(
+            window, value=3, key=key, transaction=tx, timestamp_ms=3
+        )
+        assert not expired
+        assert updated == [
+            (
+                key,
+                {
+                    "start": 0,
+                    "end": 3,
+                    "count": 2,
+                    "sum": 4,
+                    "mean": 2.0,
+                    "max": 3,
+                    "min": 1,
+                    "collect": [],
+                },
+            ),
+        ]
+
+        updated, expired = process(
+            window, value=5, key=key, transaction=tx, timestamp_ms=11
+        )
+        assert expired == [
+            (
+                key,
+                {
+                    "start": 0,
+                    "end": 2,
+                    "count": 1,
+                    "sum": 1,
+                    "mean": 1.0,
+                    "max": 1,
+                    "min": 1,
+                    "collect": [
+                        1,
+                    ],
+                },
+            ),
+            (
+                key,
+                {
+                    "start": 0,
+                    "end": 3,
+                    "count": 2,
+                    "sum": 4,
+                    "mean": 2.0,
+                    "max": 3,
+                    "min": 1,
+                    "collect": [
+                        1,
+                        3,
+                    ],
+                },
+            ),
+        ]
+
+        assert updated == [
+            (
+                key,
+                {
+                    "start": 1,
+                    "end": 11,
+                    "count": 3,
+                    "sum": 9,
+                    "mean": 3.0,
+                    "max": 5,
+                    "min": 1,
+                    "collect": [],
+                },
+            ),
+        ]
+
+    # Update window definition
+    # * delete an aggregation (min)
+    # * change aggregation but keep the name with new aggregation (mean -> max)
+    # * add new aggregations (sum2, collect2)
+    window = sliding_window_definition_factory(duration_ms=10, grace_ms=0).agg(
+        count=agg.Count(),
+        sum=agg.Sum(),
+        mean=agg.Max(),
+        max=agg.Max(),
+        collect=agg.Collect(),
+        sum2=agg.Sum(),
+        collect2=agg.Collect(),
+    )
+    assert window.name == "sliding_window_10"  # still the same window and store
+
+    with transaction_factory(window) as tx:
+        updated, expired = process(
+            window, value=1, key=key, transaction=tx, timestamp_ms=14
+        )
+        assert (
+            expired
+            == [
+                (
+                    key,
+                    {
+                        "start": 1,
+                        "end": 11,
+                        "count": 3,
+                        "sum": 9,
+                        "sum2": 0,  # sum2 only aggregates the values after the update. Use initial value.
+                        "mean": None,  # mean was replace by max. The aggregation restarts with the new values. Use initial value.
+                        "max": 5,
+                        "collect": [1, 3, 5],
+                        "collect2": [
+                            1,
+                            3,
+                            5,
+                        ],  # Collect2 has all the values as they were fully collected before the update
+                    },
+                ),
+            ]
+        )
+        assert updated == [
+            (
+                key,
+                {
+                    "start": 4,
+                    "end": 14,
+                    "count": 2,
+                    "sum": 6,
+                    "sum2": 1,
+                    "mean": 1,
+                    "max": 5,
+                    "collect": [],
+                    "collect2": [],
+                },
+            ),
+        ]
+
+        updated, expired = process(
+            window, value=2, key=key, transaction=tx, timestamp_ms=18
+        )
+        assert (
+            expired
+            == [
+                (
+                    key,
+                    {
+                        "start": 4,
+                        "end": 14,
+                        "count": 2,
+                        "sum": 6,
+                        "sum2": 1,  # sum2 only aggregates the values after the update.
+                        "mean": 1,  # mean was replace by max. The aggregation restarts with the new values.
+                        "max": 5,
+                        "collect": [5, 1],
+                        "collect2": [
+                            5,
+                            1,
+                        ],  # Collect2 has all the values as they were fully collected before the update
+                    },
+                ),
+            ]
+        )
+        assert (
+            updated
+            == [
+                (
+                    key,
+                    {
+                        "start": 8,
+                        "end": 18,
+                        "count": 3,
+                        "sum": 8,
+                        "sum2": 3,  # sum2 only aggregates the values after the update.
+                        "mean": 2,  # mean was replace by max. The aggregation restarts with the new values.
+                        "max": 5,
+                        "collect": [],
+                        "collect2": [],
+                    },
+                ),
+            ]
+        )

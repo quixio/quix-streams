@@ -279,10 +279,7 @@ class SlidingWindow(TimeWindow):
             delete_values=collect,
         )
 
-        if collect:
-            return [], expired_windows
-        else:
-            return reversed(updated_windows), expired_windows
+        return reversed(updated_windows), expired_windows
 
     def _expired_windows(self, state, max_expired_window_start, collect):
         for window in state.expire_windows(
