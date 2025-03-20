@@ -69,7 +69,7 @@ class Sum(Aggregator):
 
     def agg(self, old: V, new: Any) -> V:
         new = new if self.column is ROOT else new.get(self.column)
-        return old if new is None else old + new
+        return old + (new or 0)
 
     def result(self, value: V) -> V:
         return value
@@ -103,10 +103,9 @@ class Mean(Aggregator):
 
     def result(self, value: tuple[Union[int, float], int]) -> float:
         sum_, count_ = value
-        try:
-            return sum_ / count_
-        except ZeroDivisionError:
+        if sum_ == 0.0:
             return 0.0
+        return sum_ / count_
 
 
 R = TypeVar("R", int, float)
