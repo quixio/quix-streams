@@ -55,7 +55,7 @@ from quixstreams.utils.printing import (
     DEFAULT_LIVE_SLOWDOWN,
 )
 
-from .exceptions import InvalidOperation
+from .exceptions import InvalidOperation, TopicPartitionsMismatch
 from .registry import DataFrameRegistry
 from .series import StreamingSeries
 from .utils import ensure_milliseconds
@@ -1582,21 +1582,38 @@ class StreamingDataFrame:
         # uses apply without returning to make this operation terminal
         self.apply(_sink_callback, metadata=True)
 
-    def merge(self, other: Self) -> Self:
+    def concat(self, other: Self) -> Self:
+        """
+        Concatenate two StreamingDataFrames together and return a new one.
+        The transformations applied on this new StreamingDataFrame will update data
+        from both origins.
+
+        Use it to concatenate dataframes belonging to different topics as well as to merge the branches
+        of the same original dataframe.
+
+        If concatenated dataframes belong to different topics, the stateful operations
+        on the new dataframe will create different state stores
+        unrelated to the original dataframes and topics.
+        The same is true for the repartition topics created by `.group_by()`.
+
+        :param other: other StreamingDataFrame
+        :return: a new StreamingDataFrame
+
+        """
         merged_stream = self.stream.merge(other.stream)
         topics = set(self.topics) | set(other.topics)
-
-        # Ensure that topics have the same number of partitions
-        # TODO: Validate partitions counts only on state registration.
-        #  Test that diff partitions fail
-        #  Test SDF.merge()
-        partitions_counts = set(t.broker_config.num_partitions for t in topics)
-        if len(partitions_counts) > 1:
-            raise ValueError(
-                f"Cannot merge topics with mismatching partition counts: {partitions_counts}"
-            )
-
         return self.__dataframe_clone__(*topics, stream=merged_stream)
+
+    def ensure_topics_copartitioned(self):
+        partitions_counts = set(t.broker_config.num_partitions for t in self._topics)
+        if len(partitions_counts) > 1:
+            msg = ", ".join(
+                f'"{t.name}" ({t.broker_config.num_partitions} partitions)'
+                for t in self._topics
+            )
+            raise TopicPartitionsMismatch(
+                f"The underlying topics must have the same number of partitions to use State; got {msg}"
+            )
 
     def _produce(
         self,
@@ -1624,6 +1641,8 @@ class StreamingDataFrame:
         """
         Register the default store for the current stream_id in StateStoreManager.
         """
+        self.ensure_topics_copartitioned()
+
         # Generate a changelog topic config based on the underlying topics.
         changelog_topic_config = self._topic_manager.derive_topic_config(*self._topics)
 

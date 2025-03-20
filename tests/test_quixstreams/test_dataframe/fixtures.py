@@ -15,6 +15,9 @@ from quixstreams.state import StateStoreManager
 
 @pytest.fixture()
 def dataframe_factory(topic_manager_topic_factory, topic_manager_factory):
+    # Init default registry here to share between SDFs in the same test
+    default_registry = DataFrameRegistry()
+
     def factory(
         topic: Optional[Topic] = None,
         topic_manager: Optional[TopicManager] = None,
@@ -29,9 +32,7 @@ def dataframe_factory(topic_manager_topic_factory, topic_manager_factory):
         consumer = MagicMock(spec_set=RowConsumer)
         pausing_manager = PausingManager(consumer=consumer, topic_manager=topic_manager)
         sink_manager = SinkManager()
-
-        if not registry:
-            registry = DataFrameRegistry()
+        registry = registry or default_registry
 
         processing_ctx = ProcessingContext(
             producer=producer,

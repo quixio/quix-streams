@@ -14,9 +14,11 @@ from quixstreams.dataframe.exceptions import (
     GroupByDuplicate,
     GroupByNestingLimit,
     InvalidOperation,
+    TopicPartitionsMismatch,
 )
 from quixstreams.dataframe.registry import DataFrameRegistry
 from quixstreams.dataframe.windows.base import WindowResult
+from quixstreams.models import TopicConfig
 from tests.utils import DummySink
 
 RecordStub = namedtuple("RecordStub", ("value", "key", "timestamp"))
@@ -2394,3 +2396,116 @@ class TestStreamingDataFrameBranching:
 
         with pytest.raises(InvalidOperation, match="All column operations"):
             sdf["new_col"] = sdf2["v"] + sdf3["v"]
+
+
+class TestStreamingDataFrameConcat:
+    def test_concat_different_topics_success(
+        self, topic_manager_factory, dataframe_factory
+    ):
+        topic_manager = topic_manager_factory()
+        topic1 = topic_manager.topic(
+            str(uuid.uuid4()),
+            create_config=TopicConfig(num_partitions=1, replication_factor=1),
+        )
+        topic2 = topic_manager.topic(
+            str(uuid.uuid4()),
+            create_config=TopicConfig(num_partitions=2, replication_factor=1),
+        )
+
+        sdf1 = dataframe_factory(topic=topic1)
+        sdf2 = dataframe_factory(topic=topic2)
+
+        sdf_concatenated = sdf1.concat(sdf2).apply(lambda v: v + 1)
+        assert sdf_concatenated.test(
+            value=1, key=b"key1", timestamp=1, topic=topic1
+        ) == [(2, b"key1", 1, None)]
+        assert sdf_concatenated.test(
+            value=2, key=b"key2", timestamp=1, topic=topic2
+        ) == [(3, b"key2", 1, None)]
+
+    def test_concat_same_topic_success(self, topic_manager_factory, dataframe_factory):
+        """
+        Test that `StreamingDataFrame.concat()` can merge two branches of the same SDF
+        """
+        topic_manager = topic_manager_factory()
+        topic = topic_manager.topic(str(uuid.uuid4()))
+
+        sdf = dataframe_factory(topic)
+        sdf_branch1 = sdf.apply(lambda v: v + 1)
+        sdf_branch2 = sdf.apply(lambda v: v + 2)
+
+        # Branching is not exclusive, and it duplicates data in this case.
+        # Check that we receive the results from both branches
+        sdf_concatenated = sdf_branch1.concat(sdf_branch2)
+        assert sdf_concatenated.test(value=1, key=b"key1", timestamp=1) == [
+            (2, b"key1", 1, None),
+            (3, b"key1", 1, None),
+        ]
+
+    def test_concat_stateful_success(
+        self,
+        topic_manager_factory,
+        dataframe_factory,
+        state_manager,
+        message_context_factory,
+    ):
+        topic_manager = topic_manager_factory()
+        topic1 = topic_manager.topic(str(uuid.uuid4()))
+        topic2 = topic_manager.topic(str(uuid.uuid4()))
+
+        def accumulate(value: dict, state: State) -> []:
+            items = state.get("items", [])
+            items.append(value)
+            state.set("items", items)
+            return items
+
+        sdf1 = dataframe_factory(topic1, state_manager=state_manager)
+        sdf2 = dataframe_factory(topic2, state_manager=state_manager)
+        sdf_concatenated = sdf1.concat(sdf2).apply(accumulate, stateful=True)
+
+        state_manager.on_partition_assign(
+            stream_id=sdf_concatenated.stream_id,
+            partition=0,
+            committed_offsets={},
+        )
+
+        key, timestamp, headers = b"key", 0, None
+
+        assert sdf_concatenated.test(
+            1,
+            key=key,
+            timestamp=timestamp,
+            headers=headers,
+            topic=topic1,
+            ctx=message_context_factory(topic=topic1.name),
+        ) == [([1], key, timestamp, headers)]
+
+        assert sdf_concatenated.test(
+            2,
+            key=key,
+            timestamp=timestamp,
+            headers=headers,
+            topic=topic2,
+            ctx=message_context_factory(topic=topic2.name),
+        ) == [([1, 2], key, timestamp, headers)]
+
+    def test_concat_stateful_mismatching_partitions_fails(
+        self, topic_manager_factory, dataframe_factory, state_manager
+    ):
+        topic_manager = topic_manager_factory()
+        topic1 = topic_manager.topic(
+            str(uuid.uuid4()),
+            create_config=TopicConfig(num_partitions=1, replication_factor=1),
+        )
+        topic2 = topic_manager.topic(
+            str(uuid.uuid4()),
+            create_config=TopicConfig(num_partitions=2, replication_factor=1),
+        )
+
+        sdf1 = dataframe_factory(topic1, state_manager=state_manager)
+        sdf2 = dataframe_factory(topic2, state_manager=state_manager)
+        with pytest.raises(
+            TopicPartitionsMismatch,
+            match="The underlying topics must have the same number of partitions to use State",
+        ):
+            sdf1.concat(sdf2).update(lambda v, state: None, stateful=True)
