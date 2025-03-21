@@ -3,17 +3,27 @@ from typing import (
     Any,
     Callable,
     Generic,
-    Hashable,
     Iterable,
     Optional,
     TypeVar,
     Union,
 )
 
-from typing_extensions import TypeAlias
+__all__ = [
+    "Collect",
+    "Count",
+    "Max",
+    "Mean",
+    "Min",
+    "Reduce",
+    "Sum",
+]
 
 
-class Aggregator(ABC):
+S = TypeVar("S")
+
+
+class BaseAggregator(ABC, Generic[S]):
     """
     Base class for window aggregation.
 
@@ -25,8 +35,22 @@ class Aggregator(ABC):
     To store all incoming items without reducing them use a `Collector`.
     """
 
+    @property
     @abstractmethod
-    def initialize(self) -> Any:
+    def state_suffix(self) -> str:
+        """
+        The state suffix used to store the aggregation state in the window.
+
+        The complete state key is built using the result column name and this suffix. If any of these
+        values change the state key will change and the aggregation state restart from zero.
+
+        Aggregations should change the state suffix when there parameters change to avoid
+        conflicts with previous state values.
+        """
+        ...
+
+    @abstractmethod
+    def initialize(self) -> S:
         """
         This method is triggered once to build the aggregation starting value.
         It should return the initial value for the aggregation.
@@ -34,7 +58,7 @@ class Aggregator(ABC):
         ...
 
     @abstractmethod
-    def agg(self, old: Any, new: Any) -> Any:
+    def agg(self, old: S, new: Any) -> S:
         """
         This method is trigged when a window is updated with a new value.
         It should return the updated aggregated value.
@@ -42,7 +66,7 @@ class Aggregator(ABC):
         ...
 
     @abstractmethod
-    def result(self, value: Any) -> Any:
+    def result(self, value: S) -> Any:
         """
         This method is triggered when a window is closed.
         It should return the final aggregation result.
@@ -50,33 +74,23 @@ class Aggregator(ABC):
         ...
 
 
-V = TypeVar("V", int, float)
+class Aggregator(BaseAggregator):
+    """
+    Implementation of the `BaseAggregator` interface.
 
+    Provides default implementations for the `state_suffix` property.
+    """
 
-class ROOT:
-    pass
-
-
-Column: TypeAlias = Union[Hashable, type[ROOT]]
-
-
-class Sum(Aggregator):
-    def __init__(self, column: Column = ROOT) -> None:
-        self.column = column
-
-    def initialize(self) -> int:
-        return 0
-
-    def agg(self, old: V, new: Any) -> V:
-        if self.column is ROOT:
-            return old + new
-        return old + new[self.column]
-
-    def result(self, value: V) -> V:
-        return value
+    @property
+    def state_suffix(self) -> str:
+        return self.__class__.__name__
 
 
 class Count(Aggregator):
+    """
+    Use `Count()` to aggregate the total number of events  within each window period..
+    """
+
     def initialize(self) -> int:
         return 0
 
@@ -87,55 +101,93 @@ class Count(Aggregator):
         return value
 
 
-class Mean(Aggregator):
-    def __init__(self, column: Column = ROOT) -> None:
+V = TypeVar("V", int, float)
+
+
+class Sum(Aggregator):
+    """
+    Use `Sum()` to aggregate the sum of the events, or a column of the events, within each window period.
+
+    :param column: The column to sum. Use `None` to sum the whole message.
+        Default - `None`
+    """
+
+    def __init__(self, column: Optional[str] = None) -> None:
         self.column = column
+
+    @property
+    def state_suffix(self) -> str:
+        if self.column is None:
+            return self.__class__.__name__
+        return f"{self.__class__.__name__}/{self.column}"
+
+    def initialize(self) -> int:
+        return 0
+
+    def agg(self, old: V, new: Any) -> V:
+        if self.column is None:
+            return old + new
+        return old + new[self.column]
+
+    def result(self, value: V) -> V:
+        return value
+
+
+class Mean(Aggregator):
+    """
+    Use `Mean()` to aggregate the mean of the events, or a column of the events, within each window period.
+
+    :param column: The column to mean. Use `None` to mean the whole message.
+        Default - `None`
+    """
+
+    def __init__(self, column: Optional[str] = None) -> None:
+        self.column = column
+
+    @property
+    def state_suffix(self) -> str:
+        if self.column is None:
+            return self.__class__.__name__
+        return f"{self.__class__.__name__}/{self.column}"
 
     def initialize(self) -> tuple[float, int]:
         return 0.0, 0
 
     def agg(self, old: tuple[V, int], new: Any) -> tuple[V, int]:
         old_sum, old_count = old
-        if self.column is ROOT:
+        if self.column is None:
             return old_sum + new, old_count + 1
         return old_sum + new[self.column], old_count + 1
 
-    def result(self, value: tuple[Union[int, float], int]) -> float:
+    def result(self, value: tuple[Union[int, float], int]) -> Optional[float]:
         sum_, count_ = value
+        if count_ == 0:
+            return None
         return sum_ / count_
 
 
-R = TypeVar("R", int, float)
-
-
-class Reduce(Aggregator, Generic[R]):
-    def __init__(
-        self,
-        reducer: Callable[[R, Any], R],
-        initializer: Callable[[Any], R],
-    ) -> None:
-        self._initializer: Callable[[Any], R] = initializer
-        self._reducer: Callable[[R, Any], R] = reducer
-
-    def initialize(self) -> Any:
-        return None
-
-    def agg(self, old: R, new: Any) -> Any:
-        return self._initializer(new) if old is None else self._reducer(old, new)
-
-    def result(self, value: R) -> R:
-        return value
-
-
 class Max(Aggregator):
-    def __init__(self, column: Column = ROOT) -> None:
+    """
+    Use `Max()` to aggregate the max of the events, or a column of the events, within each window period.
+
+    :param column: The column to max. Use `None` to max the whole message.
+        Default - `None`
+    """
+
+    def __init__(self, column: Optional[str] = None) -> None:
         self.column = column
+
+    @property
+    def state_suffix(self) -> str:
+        if self.column is None:
+            return self.__class__.__name__
+        return f"{self.__class__.__name__}/{self.column}"
 
     def initialize(self) -> None:
         return None
 
     def agg(self, old: Optional[V], new: Any) -> V:
-        if self.column is not ROOT:
+        if self.column is not None:
             new = new[self.column]
         if old is None:
             return new
@@ -146,14 +198,27 @@ class Max(Aggregator):
 
 
 class Min(Aggregator):
-    def __init__(self, column: Column = ROOT) -> None:
+    """
+    Use `Min()` to aggregate the min of the events, or a column of the events, within each window period.
+
+    :param column: The column to min. Use `None` to min the whole message.
+        Default - `None`
+    """
+
+    def __init__(self, column: Optional[str] = None) -> None:
         self.column = column
+
+    @property
+    def state_suffix(self) -> str:
+        if self.column is None:
+            return self.__class__.__name__
+        return f"{self.__class__.__name__}/{self.column}"
 
     def initialize(self) -> None:
         return None
 
     def agg(self, old: Optional[V], new: Any) -> V:
-        if self.column is not ROOT:
+        if self.column is not None:
             new = new[self.column]
         if old is None:
             return new
@@ -163,10 +228,36 @@ class Min(Aggregator):
         return value
 
 
+R = TypeVar("R")
+
+
+class Reduce(Aggregator, Generic[R]):
+    """
+    `Reduce()` allows you to perform complex aggregations using custom "reducer" and "initializer" functions.
+    """
+
+    def __init__(
+        self,
+        reducer: Callable[[R, Any], R],
+        initializer: Callable[[Any], R],
+    ) -> None:
+        self._initializer: Callable[[Any], R] = initializer
+        self._reducer: Callable[[R, Any], R] = reducer
+
+    def initialize(self) -> None:
+        return None
+
+    def agg(self, old: Optional[R], new: Any) -> R:
+        return self._initializer(new) if old is None else self._reducer(old, new)
+
+    def result(self, value: R) -> R:
+        return value
+
+
 I = TypeVar("I")
 
 
-class Collector(ABC, Generic[I]):
+class BaseCollector(ABC, Generic[I]):
     """
     Base class for window collections.
 
@@ -179,11 +270,11 @@ class Collector(ABC, Generic[I]):
 
     @property
     @abstractmethod
-    def column(self) -> Column:
+    def column(self) -> Optional[str]:
         """
         The column to collect.
 
-        Use `ROOT` to collect the whole message.
+        Use `None` to collect the whole message.
         """
         ...
 
@@ -196,12 +287,31 @@ class Collector(ABC, Generic[I]):
         ...
 
 
+class Collector(BaseCollector):
+    """
+    Implementation of the `BaseCollector` interface.
+
+    Provides a default implementation for the `column` property.
+    """
+
+    @property
+    def column(self) -> Optional[str]:
+        return None
+
+
 class Collect(Collector):
-    def __init__(self, column: Column = ROOT) -> None:
+    """
+    Use `Collect()` to gather all events within each window period. into a list.
+
+    :param column: The column to collect. Use `None` to collect the whole message.
+        Default - `None`
+    """
+
+    def __init__(self, column: Optional[str] = None) -> None:
         self._column = column
 
     @property
-    def column(self) -> Column:
+    def column(self) -> Optional[str]:
         return self._column
 
     def result(self, items: Iterable[Any]) -> list[Any]:

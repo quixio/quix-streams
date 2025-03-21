@@ -1,7 +1,7 @@
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Iterable, Optional
 
 from quixstreams.state.base import TransactionState
-from quixstreams.state.types import WindowDetail, WindowedState
+from quixstreams.state.types import ExpiredWindowDetail, WindowDetail, WindowedState
 
 if TYPE_CHECKING:
     from .transaction import WindowedRocksDBPartitionTransaction
@@ -125,7 +125,7 @@ class WindowedTransactionState(TransactionState, WindowedState):
         delete: bool = True,
         collect: bool = False,
         end_inclusive: bool = False,
-    ) -> list[WindowDetail]:
+    ) -> Iterable[ExpiredWindowDetail]:
         """
         Get all expired windows from RocksDB up to the specified `max_start_time` timestamp.
 

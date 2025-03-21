@@ -247,7 +247,7 @@ what `store_id` it came from) ***over the past hour***.
 In this case, we need to get a windowed sum based on a single column identifier: `item`.
 
 This can be done by simply passing the `item` column name to `.groupby()`, followed by 
-a [`tumbling_window()`](windowing.md#tumbling-windows) [`.sum()`](windowing.md#min-max-mean-and-sum) over the past `3600` seconds:
+a [`tumbling_window()`](windowing.md#time-based-tumbling-windows) [`.sum()`](aggregations.md#min-max-mean-and-sum) over the past `3600` seconds:
 
 ```python
 sdf = StreamingDataFrame()
