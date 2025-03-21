@@ -3745,6 +3745,57 @@ def resume_if_ready()
 
 Resume consuming from assigned data partitions after the wait period has elapsed.
 
+<a id="quixstreams.sinks.core.list"></a>
+
+## quixstreams.sinks.core.list
+
+<a id="quixstreams.sinks.core.list.ListSink"></a>
+
+### ListSink
+
+```python
+class ListSink(BaseSink, UserList)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/list.py#L8)
+
+A sink that accumulates data into a list for interactive debugging/inspection.
+
+It behaves just like a list. Messages are appended as they are handled by it.
+
+You can optionally include the message metadata as well.
+
+Intended for debugging with Application.run(timeout=N)
+
+**Example**:
+
+```
+from quixstreams import Application
+from quixstreams.sinks.core.list import ListSink
+
+app = Application(broker_address="localhost:9092")
+topic = app.topic("some-topic")
+list_sink = ListSink()  # sink will be a list-like object
+sdf = app.dataframe(topic=topic).sink(list_sink)
+app.run(timeout=10)  # collect data for 10 seconds
+
+# after running 10s
+print(list_sink)    # [1, 2, 3]
+list_sink[0]        # 1
+```
+  
+  Metadata Behavior:
+  When initialized with metadata=True, each record will be
+  enriched with the following metadata fields as a prefix
+  to the value dictionary:
+  - _key: The message key
+  - _timestamp: Message timestamp
+  - _headers: String representation of message headers
+  - _topic: Source topic name
+  - _partition: Source partition number
+  - _offset: Message offset in partition
+  When metadata=False (default), only the message value is stored.
+
 <a id="quixstreams.sinks.core.influxdb3"></a>
 
 ## quixstreams.sinks.core.influxdb3
@@ -9554,7 +9605,7 @@ def on_partition_assign(
         committed_offsets: dict[str, int]) -> Dict[str, StorePartition]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L250)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L251)
 
 Assign store partitions for each registered store for the given `TopicPartition`
 
@@ -9579,7 +9630,7 @@ list of assigned `StorePartition`
 def on_partition_revoke(topic: str, partition: int) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L280)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L281)
 
 Revoke store partitions for each registered store for the given `TopicPartition`
 
@@ -9596,7 +9647,7 @@ Revoke store partitions for each registered store for the given `TopicPartition`
 def init() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L293)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L294)
 
 Initialize `StateStoreManager` and create a store directory
 
@@ -9609,7 +9660,7 @@ Initialize `StateStoreManager` and create a store directory
 def close() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L300)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L301)
 
 Close all registered stores
 
@@ -11461,7 +11512,7 @@ Used by the producer during consumer offset sending for an EOS transaction.
 class Application()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L80)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L90)
 
 The main Application class.
 
@@ -11530,7 +11581,7 @@ def __init__(broker_address: Optional[Union[str, ConnectionConfig]] = None,
              processing_guarantee: ProcessingGuarantee = "at-least-once")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L118)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L128)
 
 **Arguments**:
 
@@ -11615,7 +11666,7 @@ instead of the default one.
 def Quix(cls, *args, **kwargs)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L364)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L375)
 
 RAISES EXCEPTION: DEPRECATED.
 
@@ -11636,7 +11687,7 @@ def topic(name: str,
           timestamp_extractor: Optional[TimestampExtractor] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L396)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L407)
 
 Create a topic definition.
 
@@ -11708,7 +11759,7 @@ def dataframe(topic: Optional[Topic] = None,
               source: Optional[BaseSource] = None) -> StreamingDataFrame
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L476)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L487)
 
 A simple helper method that generates a `StreamingDataFrame`, which is used
 
@@ -11756,7 +11807,7 @@ to be used as an input topic.
 def stop(fail: bool = False)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L532)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L543)
 
 Stop the internal poll loop and the message processing.
 
@@ -11779,7 +11830,7 @@ to unhandled exception, and it shouldn't commit the current checkpoint.
 def get_producer() -> Producer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L577)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L588)
 
 Create and return a pre-configured Producer instance.
 The Producer is initialized with params passed to Application.
@@ -11810,7 +11861,7 @@ with app.get_producer() as producer:
 def get_consumer(auto_commit_enable: bool = True) -> Consumer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L632)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L643)
 
 Create and return a pre-configured Consumer instance.
 
@@ -11861,7 +11912,7 @@ Default - True
 def clear_state()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L682)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L693)
 
 Clear the state of the application.
 
@@ -11873,7 +11924,7 @@ Clear the state of the application.
 def add_source(source: BaseSource, topic: Optional[Topic] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L688)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L699)
 
 Add a source to the application.
 
@@ -11893,15 +11944,40 @@ Note: the names of default topics are prefixed with "source__".
 #### Application.run
 
 ```python
-def run(dataframe: Optional[StreamingDataFrame] = None)
+def run(dataframe: Optional[StreamingDataFrame] = None,
+        timeout: float = 0.0,
+        count: int = 0)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L721)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L732)
 
 Start processing data from Kafka using provided `StreamingDataFrame`
 
 Once started, it can be safely terminated with a `SIGTERM` signal
 (like Kubernetes does) or a typical `KeyboardInterrupt` (`Ctrl+C`).
+
+Alternatively, stop conditions can be set (typically for debugging purposes);
+    has the option of stopping after a number of messages, timeout, or both.
+
+Not setting a timeout or count limit will result in the Application running
+  indefinitely (expected production behavior).
+
+
+Stop Condition Details:
+
+A timeout will immediately stop an Application once no new messages have
+    been consumed after T seconds (after rebalance and recovery).
+
+A count will process N total records from ANY input/SDF topics (so
+  multiple input topics will very likely differ in their consume total!) after
+  an initial rebalance and recovery.
+THEN, any remaining processes from things such as groupby (which uses internal
+  topics) will also be validated to ensure the results of said messages are
+  fully processed (this does NOT count towards the process total).
+Note that without a timeout, the Application runs until the count is hit.
+
+If timeout and count are used together (which is the recommended pattern for
+debugging), either condition will trigger a stop.
 
 
 Example Snippet:
@@ -11917,8 +11993,16 @@ topic = app.topic('test-topic')
 df = app.dataframe(topic)
 df.apply(lambda value, context: print('New message', value)
 
-app.run()
+app.run()  # could pass `timeout=5` here, for example
 ```
+
+**Arguments**:
+
+- `dataframe`: DEPRECATED - do not use; sdfs are now automatically tracked.
+- `timeout`: maximum time to wait for a new message.
+Default = 0.0 (infinite)
+- `count`: how many input topic messages to process before stopping.
+Default = 0 (infinite)
 
 <a id="quixstreams.app.Application.setup_topics"></a>
 
@@ -11928,7 +12012,7 @@ app.run()
 def setup_topics()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L846)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L910)
 
 Validate the application topics
 
@@ -11940,7 +12024,7 @@ Validate the application topics
 class ApplicationConfig(BaseSettings)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1014)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1081)
 
 Immutable object holding the application configuration
 
@@ -11961,7 +12045,7 @@ def settings_customise_sources(
 ) -> Tuple[PydanticBaseSettingsSource, ...]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1049)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1116)
 
 Included to ignore reading/setting values from the environment
 
@@ -11973,9 +12057,127 @@ Included to ignore reading/setting values from the environment
 def copy(**kwargs) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1062)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1129)
 
 Update the application config and return a copy
+
+<a id="quixstreams.runtracker"></a>
+
+## quixstreams.runtracker
+
+<a id="quixstreams.runtracker.RunTracker"></a>
+
+### RunTracker
+
+```python
+class RunTracker()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/runtracker.py#L14)
+
+<a id="quixstreams.runtracker.RunTracker.__init__"></a>
+
+#### RunTracker.\_\_init\_\_
+
+```python
+def __init__(processing_context: ProcessingContext)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/runtracker.py#L48)
+
+Tracks the runtime status of an Application, along with managing variables
+  associated with stopping the app based on a timeout or count.
+
+Though intended for debugging, it is designed to minimize impact on
+  normal Application operation.
+
+<a id="quixstreams.runtracker.RunTracker.stop_and_reset"></a>
+
+#### RunTracker.stop\_and\_reset
+
+```python
+def stop_and_reset()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/runtracker.py#L68)
+
+Called when Application is stopped, or self._stop_checker condition is met.
+Resets all values required for re-running.
+
+<a id="quixstreams.runtracker.RunTracker.update_status"></a>
+
+#### RunTracker.update\_status
+
+```python
+def update_status()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/runtracker.py#L86)
+
+Trigger stop if any stop conditions are met.
+
+<a id="quixstreams.runtracker.RunTracker.set_topics"></a>
+
+#### RunTracker.set\_topics
+
+```python
+def set_topics(primary: list[str], repartition: list[str])
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/runtracker.py#L94)
+
+Sets the primary and repartition topic lists for counting.
+
+<a id="quixstreams.runtracker.RunTracker.set_as_running"></a>
+
+#### RunTracker.set\_as\_running
+
+```python
+def set_as_running()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/runtracker.py#L101)
+
+Called as part of Application.run() to initialize self.running.
+
+<a id="quixstreams.runtracker.RunTracker.set_current_message_tp"></a>
+
+#### RunTracker.set\_current\_message\_tp
+
+```python
+def set_current_message_tp(tp: Optional[tuple[str, int]])
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/runtracker.py#L110)
+
+Sets the current message topic partition (if one was consumed)
+
+<a id="quixstreams.runtracker.RunTracker.timeout_refresh"></a>
+
+#### RunTracker.timeout\_refresh
+
+```python
+def timeout_refresh()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/runtracker.py#L116)
+
+Timeout is refreshed when:
+- Rebalance completes
+- Recovery completes
+- Any message is consumed (reset during timeout check)
+
+<a id="quixstreams.runtracker.RunTracker.set_stop_condition"></a>
+
+#### RunTracker.set\_stop\_condition
+
+```python
+def set_stop_condition(timeout: float = 0.0, count: int = 0)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/runtracker.py#L125)
+
+Called as part of app.run(); this handles the users optional stop conditions.
 
 <a id="quixstreams.sources.core"></a>
 
@@ -13867,7 +14069,7 @@ for example, may fail.
 def poll_row(timeout: Optional[float] = None) -> Union[Row, List[Row], None]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer.py#L105)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer.py#L109)
 
 Consumes a single message and deserialize it to Row or a list of Rows.
 

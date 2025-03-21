@@ -10,7 +10,7 @@
 class Application()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L80)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L90)
 
 The main Application class.
 
@@ -85,7 +85,7 @@ def __init__(broker_address: Optional[Union[str, ConnectionConfig]] = None,
              processing_guarantee: ProcessingGuarantee = "at-least-once")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L118)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L128)
 
 
 <br>
@@ -174,7 +174,7 @@ instead of the default one.
 def Quix(cls, *args, **kwargs)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L364)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L375)
 
 RAISES EXCEPTION: DEPRECATED.
 
@@ -197,7 +197,7 @@ def topic(name: str,
           timestamp_extractor: Optional[TimestampExtractor] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L396)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L407)
 
 Create a topic definition.
 
@@ -279,7 +279,7 @@ def dataframe(topic: Optional[Topic] = None,
               source: Optional[BaseSource] = None) -> StreamingDataFrame
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L476)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L487)
 
 A simple helper method that generates a `StreamingDataFrame`, which is used
 
@@ -335,7 +335,7 @@ to be used as an input topic.
 def stop(fail: bool = False)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L532)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L543)
 
 Stop the internal poll loop and the message processing.
 
@@ -362,7 +362,7 @@ to unhandled exception, and it shouldn't commit the current checkpoint.
 def get_producer() -> Producer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L577)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L588)
 
 Create and return a pre-configured Producer instance.
 The Producer is initialized with params passed to Application.
@@ -397,7 +397,7 @@ with app.get_producer() as producer:
 def get_consumer(auto_commit_enable: bool = True) -> Consumer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L632)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L643)
 
 Create and return a pre-configured Consumer instance.
 
@@ -454,7 +454,7 @@ with app.get_consumer() as consumer:
 def clear_state()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L682)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L693)
 
 Clear the state of the application.
 
@@ -468,7 +468,7 @@ Clear the state of the application.
 def add_source(source: BaseSource, topic: Optional[Topic] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L688)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L699)
 
 Add a source to the application.
 
@@ -492,15 +492,40 @@ Note: the names of default topics are prefixed with "source__".
 #### Application.run
 
 ```python
-def run(dataframe: Optional[StreamingDataFrame] = None)
+def run(dataframe: Optional[StreamingDataFrame] = None,
+        timeout: float = 0.0,
+        count: int = 0)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L721)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L732)
 
 Start processing data from Kafka using provided `StreamingDataFrame`
 
 Once started, it can be safely terminated with a `SIGTERM` signal
 (like Kubernetes does) or a typical `KeyboardInterrupt` (`Ctrl+C`).
+
+Alternatively, stop conditions can be set (typically for debugging purposes);
+    has the option of stopping after a number of messages, timeout, or both.
+
+Not setting a timeout or count limit will result in the Application running
+  indefinitely (expected production behavior).
+
+
+Stop Condition Details:
+
+A timeout will immediately stop an Application once no new messages have
+    been consumed after T seconds (after rebalance and recovery).
+
+A count will process N total records from ANY input/SDF topics (so
+  multiple input topics will very likely differ in their consume total!) after
+  an initial rebalance and recovery.
+THEN, any remaining processes from things such as groupby (which uses internal
+  topics) will also be validated to ensure the results of said messages are
+  fully processed (this does NOT count towards the process total).
+Note that without a timeout, the Application runs until the count is hit.
+
+If timeout and count are used together (which is the recommended pattern for
+debugging), either condition will trigger a stop.
 
 
 
@@ -518,8 +543,18 @@ topic = app.topic('test-topic')
 df = app.dataframe(topic)
 df.apply(lambda value, context: print('New message', value)
 
-app.run()
+app.run()  # could pass `timeout=5` here, for example
 ```
+
+
+<br>
+***Arguments:***
+
+- `dataframe`: DEPRECATED - do not use; sdfs are now automatically tracked.
+- `timeout`: maximum time to wait for a new message.
+Default = 0.0 (infinite)
+- `count`: how many input topic messages to process before stopping.
+Default = 0 (infinite)
 
 <a id="quixstreams.app.Application.setup_topics"></a>
 
@@ -531,7 +566,7 @@ app.run()
 def setup_topics()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L846)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L910)
 
 Validate the application topics
 
@@ -543,7 +578,7 @@ Validate the application topics
 class ApplicationConfig(BaseSettings)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1014)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1081)
 
 Immutable object holding the application configuration
 
@@ -566,7 +601,7 @@ def settings_customise_sources(
 ) -> Tuple[PydanticBaseSettingsSource, ...]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1049)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1116)
 
 Included to ignore reading/setting values from the environment
 
@@ -580,7 +615,7 @@ Included to ignore reading/setting values from the environment
 def copy(**kwargs) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1062)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1129)
 
 Update the application config and return a copy
 
