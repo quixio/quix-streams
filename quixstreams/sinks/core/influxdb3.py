@@ -253,8 +253,9 @@ class InfluxDB3Sink(BatchingSink):
                     #  by doing str().
                     #  We may add some extra validation here in the future to prevent
                     #  unwanted conversion.
-                    tag = value.pop(tag_key)
-                    tags[tag_key] = tag
+                    if tag_key in value:
+                        tag = value.pop(tag_key)
+                        tags[tag_key] = tag
 
                 if self._include_metadata_tags:
                     tags["__key"] = item.key
