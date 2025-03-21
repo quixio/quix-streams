@@ -10,7 +10,7 @@
 class BaseSink(abc.ABC)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L23)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L24)
 
 This is a base class for all sinks.
 
@@ -31,7 +31,7 @@ def __init__(on_client_connect_success: Optional[
                  ClientConnectFailureCallback] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L32)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L33)
 
 
 <br>
@@ -52,10 +52,10 @@ Callback must resolve (or propagate/re-raise) the Exception.
 
 ```python
 @abc.abstractmethod
-def flush(topic: str, partition: int)
+def flush()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L53)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L54)
 
 This method is triggered by the Checkpoint class when it commits.
 
@@ -77,7 +77,7 @@ def add(value: Any, key: Any, timestamp: int, headers: HeadersTuples,
         topic: str, partition: int, offset: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L65)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L66)
 
 This method is triggered on every new processed record being sent to this sink.
 
@@ -92,7 +92,6 @@ on flush().
 #### BaseSink.setup
 
 ```python
-@abc.abstractmethod
 def setup()
 ```
 
@@ -123,7 +122,7 @@ Allows using a callback pattern around the connection attempt.
 #### BaseSink.on\_paused
 
 ```python
-def on_paused(topic: str, partition: int)
+def on_paused()
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L101)
@@ -222,12 +221,12 @@ Add a new record to in-memory batch.
 #### BatchingSink.flush
 
 ```python
-def flush(topic: str, partition: int)
+def flush()
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L181)
 
-Flush an accumulated batch to the destination and drop it afterward.
+Flush accumulated batches to the destination and drop them afterward.
 
 <a id="quixstreams.sinks.base.sink.BatchingSink.on_paused"></a>
 
@@ -236,12 +235,12 @@ Flush an accumulated batch to the destination and drop it afterward.
 #### BatchingSink.on\_paused
 
 ```python
-def on_paused(topic: str, partition: int)
+def on_paused()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L201)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L199)
 
-When the destination is already backpressure, drop the accumulated batch.
+When the destination is already backpressured, drop the accumulated batches.
 
 <a id="quixstreams.sinks.base.batch"></a>
 
@@ -301,17 +300,15 @@ An exception to be raised by Sinks during flush() call
 
 to signal a backpressure event to the application.
 
-When raised, the app will drop the accumulated sink batch,
-pause the corresponding topic partition for
-a timeout specified in `retry_after`, and resume it when it's elapsed.
+When raised, the app will drop the accumulated sink batches,
+pause all assigned topic partitions for
+a timeout specified in `retry_after`, and resume them when it's elapsed.
 
 
 <br>
 ***Arguments:***
 
 - `retry_after`: a timeout in seconds to pause for
-- `topic`: a topic name to pause
-- `partition`: a partition number to pause
 
 <a id="quixstreams.sinks.core.influxdb3"></a>
 
@@ -1582,7 +1579,7 @@ Publish a message to Pub/Sub.
 #### PubSubSink.flush
 
 ```python
-def flush(topic: str, partition: int) -> None
+def flush() -> None
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/pubsub.py#L137)
@@ -1751,12 +1748,12 @@ will be sent when the flush method is called.
 #### KinesisSink.flush
 
 ```python
-def flush(topic: str, partition: int) -> None
+def flush() -> None
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/kinesis.py#L133)
 
-Flush all buffered records for a given topic-partition.
+Flush all records bufferred so far.
 
 This method sends any outstanding records that have not yet been sent
 because the batch size was less than 500. It waits for all futures to

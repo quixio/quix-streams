@@ -89,6 +89,21 @@ This method is triggered before the source is started.
 
 It configures the source's Kafka producer, the topic it will produce to and optional dependencies.
 
+<a id="quixstreams.sources.base.source.BaseSource.setup"></a>
+
+<br><br>
+
+#### BaseSource.setup
+
+```python
+def setup()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L125)
+
+When applicable, set up the client here along with any validation to affirm a
+valid/successful authentication/connection.
+
 <a id="quixstreams.sources.base.source.BaseSource.start"></a>
 
 <br><br>
@@ -100,7 +115,7 @@ It configures the source's Kafka producer, the topic it will produce to and opti
 def start() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L138)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L145)
 
 This method is triggered in the subprocess when the source is started.
 
@@ -118,7 +133,7 @@ Use it to fetch data and produce it to Kafka.
 def stop() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L147)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L154)
 
 This method is triggered when the application is shutting down.
 
@@ -135,29 +150,13 @@ The source must ensure that the `run` method is completed soon.
 def default_topic() -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L155)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L162)
 
 This method is triggered when the topic is not provided to the source.
 
 The source must return a default topic configuration.
 
 Note: if the default topic is used, the Application will prefix its name with "source__".
-
-<a id="quixstreams.sources.base.source.BaseSource.setup"></a>
-
-<br><br>
-
-#### BaseSource.setup
-
-```python
-@abstractmethod
-def setup()
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L165)
-
-When applicable, set up the client here along with any validation to affirm a
-valid/successful authentication/connection.
 
 <a id="quixstreams.sources.base.source.Source"></a>
 
