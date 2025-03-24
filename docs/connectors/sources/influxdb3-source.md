@@ -86,17 +86,28 @@ Here are the InfluxDB-related configurations to be aware of (see [InfluxDB3Sourc
 
 
 ### Optional:
-
-- `start_date`: The start datetime for querying InfluxDB. Uses current time by default.
-- `end_date`: The end datetime for querying InfluxDB. If none provided, runs indefinitely for a single measurement.
-- `measurements`: The measurements to query. If None, all measurements will be processed.
+- `key_setter`: sets the kafka message key for a measurement record.  
+  By default, will set the key to the measurement's name.
+- `timestamp_setter`: sets the kafka message timestamp for a measurement record.  
+  By default, the timestamp will be the Kafka default (Kafka produce time).
+- `start_date`: The start datetime for querying InfluxDB.  
+  Uses current time by default.
+- `end_date`: The end datetime for querying InfluxDB.  
+  If none provided, runs indefinitely for a single measurement.
+- `measurements`: The measurements to query.  
+  If None, all measurements will be processed.
+- `measurement_column_name`: The column name used for appending the measurement name to the record.
+  Default: `_measurement_name`.
 - `sql_query`: Custom SQL query for retrieving data.
-    Query expects a `{start_time}`, `{end_time}`, and `{measurement_name}` for later formatting. 
-    If provided, it overrides the default window-query logic.
-- `time_delta`: Time interval for batching queries, e.g. "5m" for 5 minutes.
-- `delay`: Add a delay (in seconds) between producing batches.
-- `max_retries`: Maximum number of retries for querying or producing;    
-    Note that consecutive retries have a multiplicative backoff.
+  Query expects a `{start_time}`, `{end_time}`, and `{measurement_name}` for later formatting.  
+  If provided, it overrides the default window-query logic.
+- `time_delta`: Time interval for batching queries, e.g. "5m" for 5 minutes.  
+  Default: `5m`.
+- `delay`: Add a delay (in seconds) between producing batches.  
+  Default: `0`.
+- `max_retries`: Maximum number of retries for querying or producing;  
+  Note that consecutive retries have a multiplicative backoff.
+  Default: `5`.
 
 
 ## Testing Locally
