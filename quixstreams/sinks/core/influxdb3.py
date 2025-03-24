@@ -270,18 +270,20 @@ class InfluxDB3Sink(BatchingSink):
                     tags["__topic"] = batch.topic
                     tags["__partition"] = batch.partition
 
-                field_values = (
-                    (f, value[f])
-                    for f in _fields_keys
-                    if f in value or not self._allow_missing_fields
-                )
+                if _fields_keys:
+                    fields = {
+                        f: value[f]
+                        for f in _fields_keys
+                        if f in value or not self._allow_missing_fields
+                    }
+                else:
+                    fields = value
+
                 if self._convert_ints_to_floats:
                     fields = {
                         k: float(v) if isinstance(v, int) else v
-                        for k, v in (field_values if _fields_keys else value.items())
+                        for k, v in fields.items()
                     }
-                else:
-                    fields = {k: v for k, v in field_values} if _fields_keys else value
 
                 ts = value[time_key] if time_key is not None else item.timestamp
                 record = {
