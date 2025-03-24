@@ -1454,8 +1454,8 @@ class StreamingDataFrame:
             if not isinstance(value, dict):
                 return value
             for column, fill_value in mapping.items():
-                incoming_value = value.get(column)
-                value[column] = fill_value if incoming_value is None else incoming_value
+                if value.get(column) is None:
+                    value[column] = fill_value
             return value
 
         return self._add_update(_fill, metadata=False)
