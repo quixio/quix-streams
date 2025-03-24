@@ -112,12 +112,15 @@ class InfluxDB3Source(Source):
         :param start_date: The start datetime for querying InfluxDB. Uses current time by default.
         :param end_date: The end datetime for querying InfluxDB. If none provided, runs indefinitely for a single measurement.
         :param measurements: The measurements to query. If None, all measurements will be processed.
-        :param sql_query: Custom SQL query for retrieving data. If provided, it overrides the default logic.
+        :param sql_query: Custom SQL query for retrieving data.
+            Query expects a `{start_time}`, `{end_time}`, and `{measurement_name}` for later formatting.
+            If provided, it overrides the default window-query logic.
         :param time_delta: Time interval for batching queries, e.g., "5m" for 5 minutes.
         :param delay: An optional delay between producing batches.
         :param name: A unique name for the Source, used as part of the topic name.
         :param shutdown_timeout: Time in seconds to wait for graceful shutdown.
         :param max_retries: Maximum number of retries for querying or producing.
+            Note that consecutive retries have a multiplicative backoff.
         :param on_client_connect_success: An optional callback made after successful
             client authentication, primarily for additional logging.
         :param on_client_connect_failure: An optional callback made after failed
