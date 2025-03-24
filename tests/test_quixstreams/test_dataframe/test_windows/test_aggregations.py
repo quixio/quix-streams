@@ -26,7 +26,7 @@ from quixstreams.dataframe.windows.aggregations import (
         (Mean(), [1, 2], 1.5),
         (Mean(), [0], 0),
         (Mean(), [1, None, 2], 1.5),
-        (Mean(), [None], 0),
+        (Mean(), [None], None),
         (Mean(column="foo"), [{"foo": 1}, {"foo": 2}], 1.5),
         (Mean(column="foo"), [{"foo": 1}, {"foo": None}], 1),
         (Mean(column="foo"), [{"foo": 1}, {"bar": 2}], 1),

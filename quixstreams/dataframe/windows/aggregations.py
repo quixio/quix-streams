@@ -101,10 +101,10 @@ class Mean(Aggregator):
         old_sum, old_count = old
         return old_sum + new, old_count + 1
 
-    def result(self, value: tuple[Union[int, float], int]) -> float:
+    def result(self, value: tuple[Union[int, float], int]) -> Optional[float]:
         sum_, count_ = value
-        if sum_ == 0.0:
-            return 0.0
+        if count_ == 0:
+            return None
         return sum_ / count_
 
 
