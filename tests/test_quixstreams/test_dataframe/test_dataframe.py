@@ -437,6 +437,7 @@ class TestStreamingDataFrame:
     @pytest.mark.parametrize(
         ["columns", "mapping", "value", "expected"],
         [
+            ([], {}, {"x": 1}, {"x": 1}),
             (["x"], {}, {"x": 1}, {"x": 1}),
             (["x"], {}, {}, {"x": None}),
             (["x"], {}, 1, 1),
