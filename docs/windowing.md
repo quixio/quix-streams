@@ -731,7 +731,7 @@ sdf = sdf.tumbling_window(timedelta(seconds=10)).agg(value=Sum()).final(closing_
 Windowed aggregations return aggregated results in the following format/schema:
 
 ```python
-{"start": <window start ms>, "end": <window end ms>, <aggregated_result_colum>: <aggregated value>}
+{"start": <window start ms>, "end": <window end ms>, <aggregated result colum>: <aggregated value>}
 ```
 
 Since it is rather generic, you may need to transform it into your own schema.  
@@ -809,12 +809,12 @@ Quix Streams handles some of the situations, like:
 
 - Updating window type (e.g. from tumbling to hopping)
 - Updating window period or step 
-- Adding/Removing/Updating an aggregation function (except the `reduce()`)
+- Adding/Removing/Updating an aggregation function (except `Reduce()`)
 
 Updating the window type and parameters will change the name of the underlying state store, and the new window definition will use a different one.
 
 Updating an aggregation parameter will change the aggregation state key and reset the modified aggregation state, other aggregations are not impacted.
 
-But in some cases, these measures are not enough. For example, updating a code used in `reduce()` will not change the store name, but the data can still become inconsistent.
+But in some cases, these measures are not enough. For example, updating a code used in `Reduce()` will not change the store name, but the data can still become inconsistent.
 
 In this case, you may need to update the `consumer_group` passed to the `Application` class. It will re-create all the state stores from scratch.

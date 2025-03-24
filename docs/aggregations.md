@@ -9,7 +9,7 @@ Currently, [windows](windowing.md) support the following aggregation and collect
 - [`Sum()`](api-reference/quixstreams.md#sum) - to sum values within a window 
 - [`Collect()`](api-reference/quixstreams.md#collect) - to collect all values within a window into a list
 
-You can also create your own custom aggregator and collector. We will go over each ot them in more detail below.
+You can also create your own custom aggregator and collector. We will go over each of them in more detail below.
 
 ## Aggregators
 
@@ -267,13 +267,6 @@ An implementation of `ReversedCollect` taking an optinal `column` parameter
 
 ```python
 class ReversedCollect(Collector):
-    def __init__(self, column = None)
-        self._column = column
-
-    @property
-    def column(self):
-        return self._column
-
     def result(self, items):
         # items is the list of all collected item during the window
         return list(reversed(items))
@@ -297,8 +290,6 @@ Assume you receive the temperature data from the sensor, and you need to calcula
 - max temperature
 - total count of events
 - average temperature
-
-Here is how you can do that with multiple aggregations
 
 ```python
 from datetime import timedelta
@@ -336,7 +327,7 @@ sdf = (
 # }
 ```
 
-Here is how you can do that with `reduce()`:
+Here is how you can do that with `Reduce()`:
 
 ```python
 from datetime import timedelta

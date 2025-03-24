@@ -17,6 +17,10 @@ __all__ = [
     "Min",
     "Reduce",
     "Sum",
+    "Aggregator",
+    "BaseAggregator",
+    "Collector",
+    "BaseCollector",
 ]
 
 
@@ -44,7 +48,7 @@ class BaseAggregator(ABC, Generic[S]):
         The complete state key is built using the result column name and this suffix. If any of these
         values change the state key will change and the aggregation state restart from zero.
 
-        Aggregations should change the state suffix when there parameters change to avoid
+        Aggregations should change the state suffix when their parameters change to avoid
         conflicts with previous state values.
         """
         ...
@@ -81,9 +85,14 @@ class Aggregator(BaseAggregator):
     Provides default implementations for the `state_suffix` property.
     """
 
+    def __init__(self, column: Optional[str] = None) -> None:
+        self.column = column
+
     @property
     def state_suffix(self) -> str:
-        return self.__class__.__name__
+        if self.column is None:
+            return self.__class__.__name__
+        return f"{self.__class__.__name__}/{self.column}"
 
 
 class Count(Aggregator):
@@ -95,7 +104,12 @@ class Count(Aggregator):
         return 0
 
     def agg(self, old: int, new: Any) -> int:
-        return old + 1
+        if self.column is not None and self.column in new:
+            return old + 1
+        elif self.column is None and new is not None:
+            return old + 1
+
+        return old
 
     def result(self, value: int) -> int:
         return value
@@ -111,15 +125,6 @@ class Sum(Aggregator):
     :param column: The column to sum. Use `None` to sum the whole message.
         Default - `None`
     """
-
-    def __init__(self, column: Optional[str] = None) -> None:
-        self.column = column
-
-    @property
-    def state_suffix(self) -> str:
-        if self.column is None:
-            return self.__class__.__name__
-        return f"{self.__class__.__name__}/{self.column}"
 
     def initialize(self) -> int:
         return 0
@@ -144,15 +149,6 @@ class Mean(Aggregator):
     :param column: The column to mean. Use `None` to mean the whole message.
         Default - `None`
     """
-
-    def __init__(self, column: Optional[str] = None) -> None:
-        self.column = column
-
-    @property
-    def state_suffix(self) -> str:
-        if self.column is None:
-            return self.__class__.__name__
-        return f"{self.__class__.__name__}/{self.column}"
 
     def initialize(self) -> tuple[float, int]:
         return 0.0, 0
@@ -182,15 +178,6 @@ class Max(Aggregator):
         Default - `None`
     """
 
-    def __init__(self, column: Optional[str] = None) -> None:
-        self.column = column
-
-    @property
-    def state_suffix(self) -> str:
-        if self.column is None:
-            return self.__class__.__name__
-        return f"{self.__class__.__name__}/{self.column}"
-
     def initialize(self) -> None:
         return None
 
@@ -215,15 +202,6 @@ class Min(Aggregator):
     :param column: The column to min. Use `None` to min the whole message.
         Default - `None`
     """
-
-    def __init__(self, column: Optional[str] = None) -> None:
-        self.column = column
-
-    @property
-    def state_suffix(self) -> str:
-        if self.column is None:
-            return self.__class__.__name__
-        return f"{self.__class__.__name__}/{self.column}"
 
     def initialize(self) -> None:
         return None
@@ -308,9 +286,12 @@ class Collector(BaseCollector):
     Provides a default implementation for the `column` property.
     """
 
+    def __init__(self, column: Optional[str] = None) -> None:
+        self._column = column
+
     @property
     def column(self) -> Optional[str]:
-        return None
+        return self._column
 
 
 class Collect(Collector):
@@ -320,13 +301,6 @@ class Collect(Collector):
     :param column: The column to collect. Use `None` to collect the whole message.
         Default - `None`
     """
-
-    def __init__(self, column: Optional[str] = None) -> None:
-        self._column = column
-
-    @property
-    def column(self) -> Optional[str]:
-        return self._column
 
     def result(self, items: Iterable[Any]) -> list[Any]:
         return list(items)
