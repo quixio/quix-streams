@@ -228,7 +228,7 @@ Input:
 Expected window output:
 
 ```json
-{"data": [100, 50, 200], "window_start_ms": 121, "window_end_ms": 583}
+{"data": [100, 50, 200], "start": 121, "end": 583}
 ```
 
 Here is how to do it using tumbling windows: 

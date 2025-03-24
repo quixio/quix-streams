@@ -244,11 +244,11 @@ class SingleAggregationWindowMixin:
 
     @property
     def aggregate(self) -> bool:
-        return self._collector is None
+        return self._aggregator is not None
 
     @property
     def collect(self) -> bool:
-        return self._aggregator is None
+        return self._collector is not None
 
     def _initialize_value(self) -> Any:
         if self._aggregator:
