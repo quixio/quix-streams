@@ -438,6 +438,7 @@ class TestStreamingDataFrame:
         ["columns", "mapping", "value", "expected"],
         [
             ([], {}, {"x": 1}, {"x": 1}),
+            (["x"], {}, 1, 1),  # value is not a dict, fill ignored
             (["x"], {}, {"x": 1}, {"x": 1}),
             (["x"], {}, {}, {"x": None}),
             (["x"], {}, 1, 1),
