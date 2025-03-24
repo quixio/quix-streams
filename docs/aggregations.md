@@ -6,10 +6,11 @@ Currently, [windows](windowing.md) support the following aggregation and collect
 - [`Min()`](api-reference/quixstreams.md#min) - to get a minimum value within a window
 - [`Max()`](api-reference/quixstreams.md#max) - to get a maximum value within a window
 - [`Mean()`](api-reference/quixstreams.md#mean) - to get a mean value within a window 
-- [`Sum()`](api-reference/quixstreams.md#sum) - to sum values within a window 
+- [`Sum()`](api-reference/quixstreams.md#sum) - to sum values within a window
+- [`Reduce()`](api-reference/quixstreams.md#reduce) - to write a custom aggregation (deprecated use [custom aggregator](#custom-aggregator) instead)
 - [`Collect()`](api-reference/quixstreams.md#collect) - to collect all values within a window into a list
 
-You can also create your own custom aggregator and collector. We will go over each of them in more detail below.
+You can also create your own **custom aggregator and collector**. We will go over each of them in more detail below.
 
 ## Aggregators
 
@@ -304,7 +305,6 @@ sdf = (
     # Define a tumbling window of 10 minutes
     sdf.tumbling_window(timedelta(minutes=10))
 
-    # Create a "reduce" aggregation with "reducer" and "initializer" functions
     .agg(
         min_temp=Min("temperature"),
         max_temp=Max("temperature"),
