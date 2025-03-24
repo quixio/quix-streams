@@ -1,10 +1,9 @@
 import json
 import logging
-import random
 import time
 from datetime import datetime, timedelta, timezone
 from functools import wraps
-from typing import Optional, Union
+from typing import Callable, Optional, Union
 
 from influxdb_client_3 import InfluxDBClient3
 
@@ -92,9 +91,12 @@ class InfluxDB3Source(Source):
         token: str,
         organization_id: str,
         database: str,
+        key_setter: Optional[Callable[[object], object]] = None,
+        timestamp_setter: Optional[Callable[[object], int]] = None,
         start_date: datetime = datetime.now(tz=timezone.utc),
         end_date: Optional[datetime] = None,
         measurements: Optional[Union[str, list[str]]] = None,
+        measurement_column_name: str = "_measurement_name",
         sql_query: Optional[str] = None,
         time_delta: str = "5m",
         delay: float = 0,
@@ -109,9 +111,15 @@ class InfluxDB3Source(Source):
         :param token: Authentication token for InfluxDB.
         :param organization_id: Organization name in InfluxDB.
         :param database: Database name in InfluxDB.
+        :param key_setter: sets the kafka message key for a measurement record.
+            By default, will set the key to the measurement's name.
+        :param timestamp_setter: sets the kafka message timestamp for a measurement record.
+            By default, the timestamp will be the Kafka default (Kafka produce time).
         :param start_date: The start datetime for querying InfluxDB. Uses current time by default.
-        :param end_date: The end datetime for querying InfluxDB. If none provided, runs indefinitely for a single measurement.
+        :param end_date: The end datetime for querying InfluxDB.
+            If none provided, runs indefinitely for a single measurement.
         :param measurements: The measurements to query. If None, all measurements will be processed.
+        :param measurement_column_name: The column name used for appending the measurement name to the record.
         :param sql_query: Custom SQL query for retrieving data.
             Query expects a `{start_time}`, `{end_time}`, and `{measurement_name}` for later formatting.
             If provided, it overrides the default window-query logic.
@@ -145,6 +153,9 @@ class InfluxDB3Source(Source):
             "org": organization_id,
             "database": database,
         }
+        self._measurement_column_name = measurement_column_name
+        self._key_setter = key_setter or self._default_key_setter
+        self._timestamp_setter = timestamp_setter
         self._measurements = measurements
         self._sql_query = _set_sql_query(sql_query or "")
         self._start_date = start_date
@@ -166,6 +177,9 @@ class InfluxDB3Source(Source):
         if self._client:
             self._client.close()
             self._client = None
+
+    def _default_key_setter(self, record: dict):
+        return record[self._measurement_column_name]
 
     @property
     def _measurement_names(self) -> list[str]:
@@ -189,14 +203,16 @@ class InfluxDB3Source(Source):
             return result["name"].tolist()
 
     @with_retry
-    def _produce_records(self, records: list[dict], measurement_name: str):
+    def _produce_records(self, records: list[dict]):
         for record in records:
-            # TODO: a key, value, and timestamp setter
             msg = self.serialize(
-                key=f"{measurement_name}_{random.randint(1, 1000)}",  # noqa: S311
+                key=self._key_setter(record),
                 value=record,
+                timestamp_ms=self._timestamp_setter(record)
+                if self._timestamp_setter
+                else None,
             )
-            self.produce(value=msg.value, key=msg.key)
+            self.produce(value=msg.value, key=msg.key, timestamp=msg.timestamp)
         self.producer.flush()
 
     @with_retry
@@ -249,10 +265,9 @@ class InfluxDB3Source(Source):
             if data is not None and not data.empty:
                 if "iox::measurement" in data.columns:
                     data = data.drop(columns=["iox::measurement"])
-                data["measurement_name"] = measurement_name
+                data[self._measurement_column_name] = measurement_name
                 self._produce_records(
                     json.loads(data.to_json(orient="records", date_format="iso")),
-                    data,
                 )
 
             start_time = end_time
