@@ -268,6 +268,8 @@ class PartitionTransaction(ABC, Generic[K, V]):
         return serialize(value, dumps=self._dumps)
 
     def _deserialize_value(self, value: bytes) -> V:
+        if not isinstance(value, bytes):
+            return value
         return deserialize(value, loads=self._loads)
 
     def _serialize_key(self, key: K, prefix: bytes) -> bytes:
@@ -327,7 +329,8 @@ class PartitionTransaction(ABC, Generic[K, V]):
             return default
 
         if cached is not Marker.UNDEFINED:
-            return self._deserialize_value(cached)
+            # return self._deserialize_value(cached)
+            return cached
 
         stored = self._partition.get(key_serialized, cf_name)
         if stored is Marker.UNDEFINED:
@@ -347,10 +350,10 @@ class PartitionTransaction(ABC, Generic[K, V]):
 
         try:
             key_serialized = self._serialize_key(key, prefix=prefix)
-            value_serialized = self._serialize_value(value)
+            # value_serialized = self._serialize_value(value)
             self._update_cache.set(
                 key=key_serialized,
-                value=value_serialized,
+                value=value,
                 prefix=prefix,
                 cf_name=cf_name,
             )
@@ -443,7 +446,7 @@ class PartitionTransaction(ABC, Generic[K, V]):
                 for key, value in prefix_update_cache.items():
                     self._changelog_producer.produce(
                         key=key,
-                        value=value,
+                        value=self._serialize_value(value),
                         headers=headers,
                     )
 

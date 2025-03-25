@@ -99,7 +99,7 @@ class RocksDBStorePartition(StorePartition):
             updates = cache.get_updates(cf_name=cf_name)
             for prefix_update_cache in updates.values():
                 for key, value in prefix_update_cache.items():
-                    batch.put(key, value, cf_handle)
+                    batch.put(key, self._dumps(value), cf_handle)
 
             deletes = cache.get_deletes(cf_name=cf_name)
             for key in deletes:
