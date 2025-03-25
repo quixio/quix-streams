@@ -198,7 +198,7 @@ class Window(abc.ABC):
     def _initialize_value(self) -> Any: ...
 
     @abstractmethod
-    def _aggregate_value(self, state_value: Any, value: Any) -> Any: ...
+    def _aggregate_value(self, state_value: Any, value: Any, timestamp) -> Any: ...
 
     @abstractmethod
     def _collect_value(self, value: Any): ...
@@ -255,9 +255,9 @@ class SingleAggregationWindowMixin:
             return self._aggregator.initialize()
         return None
 
-    def _aggregate_value(self, state_value: Any, value: Any) -> Any:
+    def _aggregate_value(self, state_value: Any, value: Any, timestamp: int) -> Any:
         if self._aggregator:
-            return self._aggregator.agg(state_value, value)
+            return self._aggregator.agg(state_value, value, timestamp)
         return None
 
     def _collect_value(self, value: Any):
@@ -322,12 +322,12 @@ class MultiAggregationWindowMixin:
         return {k: agg.initialize() for k, (_, agg) in self._aggregators.items()}
 
     def _aggregate_value(
-        self, state_values: dict[str, Any], value: Any
+        self, state_values: dict[str, Any], value: Any, timestamp: int
     ) -> dict[str, Any]:
         return {
-            k: agg.agg(state_values[k], value)
+            k: agg.agg(state_values[k], value, timestamp)
             if k in state_values
-            else agg.agg(agg.initialize(), value)
+            else agg.agg(agg.initialize(), value, timestamp)
             for k, (_, agg) in self._aggregators.items()
         }
 

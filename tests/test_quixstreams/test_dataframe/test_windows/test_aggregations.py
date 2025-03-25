@@ -62,7 +62,7 @@ class TestAggregators:
     def test_aggregation(self, aggregator, values, expected):
         old = aggregator.initialize()
         for new in values:
-            old = aggregator.agg(old, new)
+            old = aggregator.agg(old, new, 0)
 
         assert aggregator.result(old) == expected
 

@@ -175,7 +175,7 @@ class TimeWindow(Window):
                 if current_value is None:
                     current_value = self._initialize_value()
 
-                aggregated = self._aggregate_value(current_value, value)
+                aggregated = self._aggregate_value(current_value, value, timestamp_ms)
                 updated_windows.append(
                     (
                         key,

@@ -154,7 +154,7 @@ class SlidingWindow(TimeWindow):
                         state=state,
                         start=start,
                         end=end,
-                        value=self._aggregate_value(aggregation, value),
+                        value=self._aggregate_value(aggregation, value, timestamp_ms),
                         timestamp=timestamp_ms,
                         max_timestamp=max_timestamp,
                     )
@@ -180,7 +180,9 @@ class SlidingWindow(TimeWindow):
                         state=state,
                         start=right_start,
                         end=right_start + duration,
-                        value=self._aggregate_value(self._initialize_value(), value),
+                        value=self._aggregate_value(
+                            self._initialize_value(), value, timestamp_ms
+                        ),
                         timestamp=timestamp_ms,
                         max_timestamp=timestamp_ms,
                     )
@@ -194,7 +196,9 @@ class SlidingWindow(TimeWindow):
                             state=state,
                             start=start,
                             end=end,
-                            value=self._aggregate_value(aggregation, value),
+                            value=self._aggregate_value(
+                                aggregation, value, timestamp_ms
+                            ),
                             timestamp=timestamp_ms,
                             max_timestamp=timestamp_ms,
                         )
@@ -220,7 +224,9 @@ class SlidingWindow(TimeWindow):
                         state=state,
                         start=right_start,
                         end=right_start + duration,
-                        value=self._aggregate_value(self._initialize_value(), value)
+                        value=self._aggregate_value(
+                            self._initialize_value(), value, timestamp_ms
+                        )
                         if aggregate
                         else None,
                         timestamp=timestamp_ms,
@@ -237,7 +243,7 @@ class SlidingWindow(TimeWindow):
                         state=state,
                         start=left_start,
                         end=left_end,
-                        value=self._aggregate_value(aggregation, value),
+                        value=self._aggregate_value(aggregation, value, timestamp_ms),
                         timestamp=timestamp_ms,
                         max_timestamp=timestamp_ms,
                     )
@@ -259,7 +265,9 @@ class SlidingWindow(TimeWindow):
                         state=state,
                         start=left_start,
                         end=left_end,
-                        value=self._aggregate_value(self._initialize_value(), value),
+                        value=self._aggregate_value(
+                            self._initialize_value(), value, timestamp_ms
+                        ),
                         timestamp=timestamp_ms,
                         max_timestamp=timestamp_ms,
                     )

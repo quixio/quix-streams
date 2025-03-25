@@ -62,7 +62,7 @@ class BaseAggregator(ABC, Generic[S]):
         ...
 
     @abstractmethod
-    def agg(self, old: S, new: Any) -> S:
+    def agg(self, old: S, new: Any, timestamp: int) -> S:
         """
         This method is trigged when a window is updated with a new value.
         It should return the updated aggregated value.
@@ -103,7 +103,7 @@ class Count(Aggregator):
     def initialize(self) -> int:
         return 0
 
-    def agg(self, old: int, new: Any) -> int:
+    def agg(self, old: int, new: Any, timestamp: int) -> int:
         if self.column is not None and self.column in new:
             return old + 1
         elif self.column is None and new is not None:
@@ -129,7 +129,7 @@ class Sum(Aggregator):
     def initialize(self) -> int:
         return 0
 
-    def agg(self, old: V, new: Any) -> V:
+    def agg(self, old: V, new: Any, timestamp: int) -> V:
         if self.column is not None:
             new = new.get(self.column)
 
@@ -153,7 +153,7 @@ class Mean(Aggregator):
     def initialize(self) -> tuple[float, int]:
         return 0.0, 0
 
-    def agg(self, old: tuple[V, int], new: Any) -> tuple[V, int]:
+    def agg(self, old: tuple[V, int], new: Any, timestamp: int) -> tuple[V, int]:
         if self.column is not None:
             new = new.get(self.column)
 
@@ -181,7 +181,7 @@ class Max(Aggregator):
     def initialize(self) -> None:
         return None
 
-    def agg(self, old: Optional[V], new: Any) -> V:
+    def agg(self, old: Optional[V], new: Any, timestamp: int) -> Optional[V]:
         if self.column is not None:
             new = new.get(self.column)
 
@@ -206,7 +206,7 @@ class Min(Aggregator):
     def initialize(self) -> None:
         return None
 
-    def agg(self, old: Optional[V], new: Any) -> V:
+    def agg(self, old: Optional[V], new: Any, timestamp: int) -> Optional[V]:
         if self.column is not None:
             new = new.get(self.column)
 
@@ -239,7 +239,7 @@ class Reduce(Aggregator, Generic[R]):
     def initialize(self) -> None:
         return None
 
-    def agg(self, old: Optional[R], new: Any) -> R:
+    def agg(self, old: Optional[R], new: Any, timestamp: int) -> R:
         return self._initializer(new) if old is None else self._reducer(old, new)
 
     def result(self, value: R) -> R:

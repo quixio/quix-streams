@@ -138,7 +138,7 @@ class CountWindow(Window):
 
             if aggregate:
                 window["aggregations"] = self._aggregate_value(
-                    self._get_aggregations(window), value
+                    self._get_aggregations(window), value, timestamp_ms
                 )
                 updated_windows.append(
                     (

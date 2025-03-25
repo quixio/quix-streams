@@ -112,7 +112,7 @@ class PowerSum(Aggregator):
     def initialize(self):
         return 0
 
-    def agg(self, aggregated, new):
+    def agg(self, aggregated, new, timestamp):
         return aggregated + (new * new)
 
     def result(self, aggregated):
@@ -156,7 +156,7 @@ class PowerSum(Aggregator):
     def initialize(self):
         return 0
 
-    def agg(self, aggregated, new):
+    def agg(self, aggregated, new, timestamp):
         value = new[self._column]
         return aggregated + (value * value)
 
