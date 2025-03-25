@@ -165,10 +165,13 @@ Assume you receive the temperature data from the sensor, and you need to calcula
 ```python
 from datetime import timedelta
 from quixstreams import Application
-from quixstreams.dataframe.windows import Min, Max, Count, Mean
+from quixstreams.dataframe.windows import Min, Max, Count, Mean, Latest
 
 app = Application(...)
 sdf = app.dataframe(...)
+
+# Input:
+# {"temperature" : 9999, "sensor": "my sensor"}
 
 sdf = (
     
@@ -180,6 +183,7 @@ sdf = (
         max_temp=Max("temperature"),
         avg_temp=Mean("temperature"),
         total_events=Count(),
+        sensor=Latest("sensor")  # Propagate the sensor name
     )
 
     # Emit results only for closed windows
@@ -194,6 +198,7 @@ sdf = (
 #   'max_temp': 999,
 #   'avg_temp': 34.32,
 #   'total_events': 999,
+#   'sensor': 'my sensor',
 # }
 ```
 
@@ -207,6 +212,10 @@ sdf = (
 - [`Max()`](api-reference/quixstreams.md#max) - to get a maximum value within a window.
 - [`Mean()`](api-reference/quixstreams.md#mean) - to get a mean value within a window.
 - [`Sum()`](api-reference/quixstreams.md#sum) - to sum values within a window.
+- [`Earliest`](api-reference/quixstreams.md#earliest) - to get the earliest value within a window.
+- [`Latest`](api-reference/quixstreams.md#latest) - to get the latest value within a window.
+- [`First`](api-reference/quixstreams.md#first) - to get the first value within a window.
+- [`Last`](api-reference/quixstreams.md#last) - to get the last value within a window.
 - [`Reduce()`](api-reference/quixstreams.md#reduce) - to write a custom aggregation (deprecated, use [custom aggregator](#custom-aggregator) instead).
 
 **Collectors:**
