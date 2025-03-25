@@ -77,6 +77,8 @@ def _clear_schema_registry(
     while subjects := schema_registry_client.get_subjects():
         for subject in subjects:
             try:
+                # Schema must be soft-deleted first, then permanently deleted.
+                schema_registry_client.delete_subject(subject)
                 schema_registry_client.delete_subject(subject, permanent=True)
             except Exception as exc:
                 if exc.error_code == 42206:
