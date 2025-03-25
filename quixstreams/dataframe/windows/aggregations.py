@@ -104,12 +104,13 @@ class Count(Aggregator):
         return 0
 
     def agg(self, old: int, new: Any, timestamp: int) -> int:
-        if self.column is not None and self.column in new:
-            return old + 1
-        elif self.column is None and new is not None:
-            return old + 1
+        if self.column is not None:
+            new = new.get(self.column)
 
-        return old
+        if new is None:
+            return old
+
+        return old + 1
 
     def result(self, value: int) -> int:
         return value
