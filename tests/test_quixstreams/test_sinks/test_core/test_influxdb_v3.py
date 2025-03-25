@@ -98,10 +98,8 @@ class TestInfluxDB3Sink:
         )
         sink.flush()
 
-        assert client_mock.write.call_count == 1
-        first_call = client_mock.write.call_args_list[0]
-        assert first_call.kwargs == {
-            "record": [
+        client_mock.write.assert_called_once_with(
+            record=[
                 {
                     "measurement": measurement,
                     "tags": {},
@@ -109,8 +107,8 @@ class TestInfluxDB3Sink:
                     "time": timestamp,
                 }
             ],
-            "write_precision": "ms",
-        }
+            write_precision="ms",
+        )
 
     def test_write_tags_keys(self, influxdb3_sink_factory):
         client_mock = MagicMock(spec_set=InfluxDBClient3)
@@ -134,10 +132,8 @@ class TestInfluxDB3Sink:
         )
         sink.flush()
 
-        assert client_mock.write.call_count == 1
-        first_call = client_mock.write.call_args_list[0]
-        assert first_call.kwargs == {
-            "record": [
+        client_mock.write.assert_called_once_with(
+            record=[
                 {
                     "measurement": measurement,
                     "tags": {"tag1": 1},
@@ -145,8 +141,8 @@ class TestInfluxDB3Sink:
                     "time": timestamp,
                 }
             ],
-            "write_precision": "ms",
-        }
+            write_precision="ms",
+        )
 
     def test_write_values_not_dicts_fail(self, influxdb3_sink_factory):
         client_mock = MagicMock(spec_set=InfluxDBClient3)
@@ -188,10 +184,8 @@ class TestInfluxDB3Sink:
         )
         sink.flush()
 
-        assert client_mock.write.call_count == 1
-        first_call = client_mock.write.call_args_list[0]
-        assert first_call.kwargs == {
-            "record": [
+        client_mock.write.assert_called_once_with(
+            record=[
                 {
                     "measurement": measurement,
                     "tags": {"b": 2},
@@ -199,8 +193,8 @@ class TestInfluxDB3Sink:
                     "time": timestamp,
                 }
             ],
-            "write_precision": "ms",
-        }
+            write_precision="ms",
+        )
 
     def test_init_fields_keys_and_tags_keys_overlap_fails(self, influxdb3_sink_factory):
         client_mock = MagicMock(spec_set=InfluxDBClient3)
@@ -237,10 +231,8 @@ class TestInfluxDB3Sink:
         )
         sink.flush()
 
-        assert client_mock.write.call_count == 1
-        first_call = client_mock.write.call_args_list[0]
-        assert first_call.kwargs == {
-            "record": [
+        client_mock.write.assert_called_once_with(
+            record=[
                 {
                     "measurement": measurement,
                     "tags": {"__topic": topic, "__partition": 0, "__key": key},
@@ -248,8 +240,8 @@ class TestInfluxDB3Sink:
                     "time": timestamp,
                 }
             ],
-            "write_precision": "ms",
-        }
+            write_precision="ms",
+        )
 
     def test_write_batch_size(self, influxdb3_sink_factory):
         client_mock = MagicMock(spec_set=InfluxDBClient3)
@@ -396,10 +388,8 @@ class TestInfluxDB3Sink:
         )
         sink.flush()
 
-        assert client_mock.write.call_count == 1
-        first_call = client_mock.write.call_args_list[0]
-        assert first_call.kwargs == {
-            "record": [
+        client_mock.write.assert_called_once_with(
+            record=[
                 {
                     "measurement": measurement,
                     "tags": {},
@@ -407,5 +397,5 @@ class TestInfluxDB3Sink:
                     "time": timestamp,
                 }
             ],
-            "write_precision": "ms",
-        }
+            write_precision="ms",
+        )
