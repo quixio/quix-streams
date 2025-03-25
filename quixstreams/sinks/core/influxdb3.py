@@ -61,6 +61,7 @@ class InfluxDB3Sink(BatchingSink):
         time_precision: TimePrecision = "ms",
         allow_missing_fields: bool = False,
         include_metadata_tags: bool = False,
+        convert_ints_to_floats: bool = False,
         batch_size: int = 1000,
         enable_gzip: bool = True,
         request_timeout_ms: int = 10_000,
@@ -119,6 +120,8 @@ class InfluxDB3Sink(BatchingSink):
         :param include_metadata_tags: if True, includes record's key, topic,
             and partition as tags.
             Default - `False`.
+        :param convert_ints_to_floats: if True, converts all integer values to floats.
+            Default - `False`.
         :param batch_size: how many records to write to InfluxDB in one request.
             Note that it only affects the size of one write request, and not the number
             of records flushed on each checkpoint.
@@ -155,20 +158,20 @@ class InfluxDB3Sink(BatchingSink):
                     f'Keys {overlap_str} are present in both "fields_keys" and "tags_keys"'
                 )
 
-        self._client_args = dict(
-            token=token,
-            host=host,
-            org=organization_id,
-            database=database,
-            debug=debug,
-            enable_gzip=enable_gzip,
-            timeout=request_timeout_ms,
-            write_client_options={
+        self._client_args = {
+            "token": token,
+            "host": host,
+            "org": organization_id,
+            "database": database,
+            "debug": debug,
+            "enable_gzip": enable_gzip,
+            "timeout": request_timeout_ms,
+            "write_client_options": {
                 "write_options": WriteOptions(
                     write_type=WriteType.synchronous,
                 )
             },
-        )
+        }
         self._client: Optional[InfluxDBClient3] = None
         self._measurement = self._measurement_callable(measurement)
         self._fields_keys = self._fields_callable(fields_keys)
@@ -178,6 +181,7 @@ class InfluxDB3Sink(BatchingSink):
         self._write_precision = self._TIME_PRECISIONS[time_precision]
         self._batch_size = batch_size
         self._allow_missing_fields = allow_missing_fields
+        self._convert_ints_to_floats = convert_ints_to_floats
 
     def _measurement_callable(self, setter: MeasurementSetter) -> MeasurementCallable:
         if callable(setter):
@@ -201,7 +205,11 @@ class InfluxDB3Sink(BatchingSink):
             # the best we can do is confirm authentication was successful
             self._client.query("")
         except Exception as e:
-            if "No SQL statements were provided in the query string" not in str(e):
+            e_str = str(e)
+            if not (
+                "No SQL statements were provided in the query string" in e_str
+                or "database not found" in e_str  # attempts making db when writing
+            ):
                 raise
 
     def add(
@@ -262,16 +270,21 @@ class InfluxDB3Sink(BatchingSink):
                     tags["__topic"] = batch.topic
                     tags["__partition"] = batch.partition
 
-                fields = (
-                    {
-                        field_key: value[field_key]
-                        for field_key in _fields_keys
-                        if (field_key in value or not self._allow_missing_fields)
-                        and field_key not in _tags_keys
+                if _fields_keys:
+                    fields = {
+                        f: value[f]
+                        for f in _fields_keys
+                        if f in value or not self._allow_missing_fields
                     }
-                    if _fields_keys
-                    else value
-                )
+                else:
+                    fields = value
+
+                if self._convert_ints_to_floats:
+                    fields = {
+                        k: float(v) if isinstance(v, int) else v
+                        for k, v in fields.items()
+                    }
+
                 ts = value[time_key] if time_key is not None else item.timestamp
                 record = {
                     "measurement": _measurement,
