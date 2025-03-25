@@ -2,11 +2,17 @@ import pytest
 
 from quixstreams.dataframe.windows.aggregations import (
     Collect,
+    CollectUnique,
     Count,
+    Earliest,
+    First,
+    Last,
+    Latest,
     Max,
     Mean,
     Min,
     Reduce,
+    Sort,
     Sum,
 )
 
@@ -63,10 +69,104 @@ class TestAggregators:
             (Min(column="foo"), [{"foo": 3}, {}], 3),
         ],
     )
-    def test_aggregation(self, aggregator, values, expected):
+    def test_number_aggregation(self, aggregator, values, expected):
         old = aggregator.initialize()
         for new in values:
             old = aggregator.agg(old, new, 0)
+
+        assert aggregator.result(old) == expected
+
+    @pytest.mark.parametrize(
+        "aggregator, values, expected",
+        [
+            (First(), [[1, 1], [2, 2], [3, 3]], 1),
+            (First(), [[1, 3], [2, 2], [3, 1]], 1),
+            (
+                First(column="foo"),
+                [[{"foo": 1}, 1], [{"foo": 2}, 2], [{"foo": 3}, 3]],
+                1,
+            ),
+            (
+                First(column="foo"),
+                [[{"foo": 1}, 3], [{"foo": 2}, 2], [{"foo": 3}, 1]],
+                1,
+            ),
+            (
+                First(column="foo"),
+                [[{"bar": 1}, 3], [{"bar": 2}, 2], [{"foo": 3}, 3]],
+                3,
+            ),
+            (First(column="foo"), [[{"bar": 1}, 3], [{}, 2], [{"foo": 3}, 1]], 3),
+            (Last(), [[1, 1], [2, 2], [3, 3]], 3),
+            (Last(), [[1, 3], [2, 2], [3, 1]], 3),
+            (
+                Last(column="foo"),
+                [[{"foo": 1}, 1], [{"foo": 2}, 2], [{"foo": 3}, 3]],
+                3,
+            ),
+            (
+                Last(column="foo"),
+                [[{"foo": 1}, 3], [{"foo": 2}, 2], [{"foo": 3}, 1]],
+                3,
+            ),
+            (
+                Last(column="foo"),
+                [[{"foo": 1}, 3], [{"bar": 2}, 2], [{"bar": 3}, 3]],
+                1,
+            ),
+            (Last(column="foo"), [[{"foo": 1}, 3], [{}, 2], [{"bar": 3}, 1]], 1),
+            (Earliest(), [[1, 1], [2, 2], [3, 3]], 1),
+            (Earliest(), [[1, 3], [2, 2], [3, 1]], 3),
+            (
+                Earliest(),
+                [[1, 1], [2, 1], [3, 1]],
+                1,
+            ),  # if multiple equal timestamp use first seen
+            (
+                Earliest(column="foo"),
+                [[{"foo": 1}, 1], [{"foo": 2}, 2], [{"foo": 3}, 3]],
+                1,
+            ),
+            (
+                Earliest(column="foo"),
+                [[{"foo": 1}, 3], [{"foo": 2}, 2], [{"foo": 3}, 1]],
+                3,
+            ),
+            (
+                Earliest(column="foo"),
+                [[{"bar": 1}, 3], [{"bar": 2}, 2], [{"foo": 3}, 1]],
+                3,
+            ),
+            (Earliest(column="foo"), [[{"bar": 1}, 3], [{}, 2], [{"foo": 3}, 1]], 3),
+            (Latest(), [[1, 1], [2, 2], [3, 3]], 3),
+            (Latest(), [[1, 3], [2, 2], [3, 1]], 1),
+            (
+                Latest(),
+                [[1, 1], [2, 1], [3, 1]],
+                3,
+            ),  # if multiple equal timestamp use last seen
+            (
+                Latest(column="foo"),
+                [[{"foo": 1}, 1], [{"foo": 2}, 2], [{"foo": 3}, 3]],
+                3,
+            ),
+            (
+                Latest(column="foo"),
+                [[{"foo": 1}, 3], [{"foo": 2}, 2], [{"foo": 3}, 1]],
+                1,
+            ),
+            (
+                Latest(column="foo"),
+                [[{"bar": 1}, 3], [{"bar": 2}, 2], [{"foo": 3}, 1]],
+                3,
+            ),
+            (Latest(column="foo"), [[{"bar": 1}, 3], [{"foo": 3}, 1], [{}, 2]], 3),
+        ],
+    )
+    def test_other_aggregation(self, aggregator, values, expected):
+        old = aggregator.initialize()
+        for new, timestamp in values:
+            old = aggregator.agg(old, new, timestamp)
 
         assert aggregator.result(old) == expected
 
@@ -91,13 +191,22 @@ class TestAggregators:
 
 class TestCollectors:
     @pytest.mark.parametrize(
-        "inputs, result",
+        "collector, inputs, result",
         [
-            ([], []),
-            ([0, 1, 2, 3], [0, 1, 2, 3]),
-            (range(4), [0, 1, 2, 3]),
+            (Collect(), [], []),
+            (Collect(), [0, 1, 1, 0], [0, 1, 1, 0]),
+            (Collect(), ["foo", "bar", "foo", "bar"], ["foo", "bar", "foo", "bar"]),
+            (Collect(), list(range(4)), [0, 1, 2, 3]),
+            (CollectUnique(), [], set()),
+            (CollectUnique(), [0, 1, 1, 0], {0, 1}),
+            (CollectUnique(), ["foo", "bar", "foo", "bar"], {"foo", "bar"}),
+            (CollectUnique(), list(range(4)), {0, 1, 2, 3}),
+            (Sort(), [], []),
+            (Sort(), [0, 1, 1, 0], [0, 0, 1, 1]),
+            (Sort(), ["foo", "bar", "foo", "bar"], ["bar", "bar", "foo", "foo"]),
+            (Sort(reverse=True), list(range(4)), [3, 2, 1, 0]),
+            (Sort(key=lambda v: v % 10), [54, 36, 22, 10], [10, 22, 54, 36]),
         ],
     )
-    def test_collect(self, inputs, result):
-        col = Collect()
-        assert col.result(inputs) == result
+    def test_collect(self, collector, inputs, result):
+        assert collector.result(inputs) == result

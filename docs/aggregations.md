@@ -1,14 +1,23 @@
 # Aggregations and Collections
 
-Currently, quixstreams implements the following aggregators and collectors:
+Currently, quixstreams implements the following aggregators:
 
-- [`Count()`](api-reference/quixstreams.md#count) - to count the number of values within a window.
-- [`Min()`](api-reference/quixstreams.md#min) - to get a minimum value within a window.
-- [`Max()`](api-reference/quixstreams.md#max) - to get a maximum value within a window.
-- [`Mean()`](api-reference/quixstreams.md#mean) - to get a mean value within a window.
-- [`Sum()`](api-reference/quixstreams.md#sum) - to sum values within a window.
-- [`Reduce()`](api-reference/quixstreams.md#reduce) - to write a custom aggregation (deprecated use [custom aggregator](#custom-aggregator) instead).
-- [`Collect()`](api-reference/quixstreams.md#collect) - to collect all values within a window into a list.
+- [`Count()`](api-reference/quixstreams.md#count) - to count the number of values within a window 
+- [`Min()`](api-reference/quixstreams.md#min) - to get a minimum value within a window
+- [`Max()`](api-reference/quixstreams.md#max) - to get a maximum value within a window
+- [`Mean()`](api-reference/quixstreams.md#mean) - to get a mean value within a window 
+- [`Sum()`](api-reference/quixstreams.md#sum) - to sum values within a window
+- [`Earliest`](api-reference/quixstreams.md#earliest) - to get the earliest value within a window
+- [`Latest`](api-reference/quixstreams.md#latest) - to get the latest value within a window
+- [`First`](api-reference/quixstreams.md#first) - to get the first value within a window
+- [`Last`](api-reference/quixstreams.md#last) - to get the last value within a window
+- [`Reduce()`](api-reference/quixstreams.md#reduce) - to write a custom aggregation (deprecated use [custom aggregator](#custom-aggregator) instead)
+
+and the following collectors:
+
+- [`Collect()`](api-reference/quixstreams.md#collect) - to collect all values within a window into a list
+- [`CollectUnique()`](api-reference/quixstreams.md#collectunique) - to collect all unique values within a window into a set
+- [`Sort()`](api-reference/quixstreams.md#sort) - to collect all value within a window into a list and sort them
 
 We will go over each of them in more detail below.
 
@@ -16,7 +25,7 @@ You can also create your own **custom aggregator and collector**.
 
 ## Aggregators
 
-**Aggergators allow you to select a column using the `column` optional parameter**
+**Aggregators allow you to select a column using the `column` optional parameter**
 
 ### Count
 Use [`Count()`](api-reference/quixstreams.md#count) to calculate total number of events within each window period.
@@ -89,6 +98,19 @@ sdf = (
 #   'value': 9999  - minimum temperature
 # }
 ```
+
+### Earliest and Latest
+
+Use [`Earliest()`](api-reference/quixstreams.md#earliest) and [`Latest()`](api-reference/quixstreams.md#latest) to return the earliest or latest value seen within a window.
+
+`Earliest` and `Latest` order events based on their timestamp.
+
+### First and Last
+
+Use [`First()`](api-reference/quixstreams.md#first) and [`Lastt()`](api-reference/quixstreams.md#last) to return the first or last value seen within a window.
+
+ `First` and ` Last` order events based on the order they are received.
+
 
 ### Custom Aggregator
 
@@ -205,6 +227,18 @@ sdf = (
 #   'events': [event1, event2, event3, ..., eventN] - list of all events in the window
 # }
 ```
+
+### Collect Unique
+
+Use [`CollectUnique()`](api-reference/quixstreams.md#collectunique) to gather all unique events within each window period into a set. Duplicate values are skipped. 
+
+**CollectUnique allow you to select a column using the column optional parameter**
+
+### Sort
+
+Use [`Sort()`](api-reference/quixstreams.md#sort) to gather all events within each window period into a list and sort them.
+
+**Sort allow you to select a column using the column optional parameter**
 
 ### Custom Collector
 

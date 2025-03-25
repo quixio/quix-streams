@@ -3,7 +3,6 @@ from typing import (
     Any,
     Callable,
     Generic,
-    Iterable,
     Optional,
     TypeVar,
     Union,
@@ -21,8 +20,15 @@ __all__ = [
     "BaseAggregator",
     "Collector",
     "BaseCollector",
+    "CollectUnique",
+    "Earliest",
+    "Latest",
+    "First",
+    "Last",
+    "Sort",
 ]
 
+from quixstreams.types import SupportsLessThan
 
 S = TypeVar("S")
 
@@ -221,6 +227,114 @@ class Min(Aggregator):
         return value
 
 
+class Earliest(Aggregator):
+    """
+    Use `Earliest()` to get the earliest event, or a column of the event, within each window period.
+
+    :param column: The column to aggregate. Use `None` to earliest the whole message.
+        Default - `None`
+    """
+
+    def initialize(self) -> None:
+        return None
+
+    def agg(self, old: Any, new: Any, timestamp: int) -> Any:
+        if self.column is not None:
+            new = new.get(self.column)
+
+        if new is None:
+            return old
+        if old is None:
+            return (new, timestamp)
+
+        old_value, old_timestamp = old
+        if timestamp < old_timestamp:
+            return (new, timestamp)
+        return old
+
+    def result(self, value: Optional[tuple[Any, int]]) -> Any:
+        if value is None:
+            return value
+        return value[0]
+
+
+class Latest(Aggregator):
+    """
+    Use `Latest()` to get the latest event, or a column of the event, within each window period.
+
+    :param column: The column to aggregate. Use `None` to latest the whole message.
+        Default - `None`
+    """
+
+    def initialize(self) -> None:
+        return None
+
+    def agg(self, old: Any, new: Any, timestamp: int) -> tuple[Any, int]:
+        if self.column is not None:
+            new = new.get(self.column)
+
+        if new is None:
+            return old
+        if old is None:
+            return (new, timestamp)
+
+        old_value, old_timestamp = old
+        if timestamp >= old_timestamp:
+            return (new, timestamp)
+        return old
+
+    def result(self, value: Optional[tuple[Any, int]]) -> Any:
+        if value is None:
+            return value
+        return value[0]
+
+
+class First(Aggregator):
+    """
+    Use `First()` to get the first event, or a column of the event, within each window period.
+
+    :param column: The column to aggregate. Use `None` to first the whole message.
+        Default - `None`
+    """
+
+    def initialize(self) -> None:
+        return None
+
+    def agg(self, old: Any, new: Any, timestamp: int) -> Any:
+        if self.column is not None:
+            new = new.get(self.column)
+
+        if old is None:
+            return new
+        return old
+
+    def result(self, value: Any) -> Any:
+        return value
+
+
+class Last(Aggregator):
+    """
+    Use `Last()` to get the last event, or a column of the event, within each window period.
+
+    :param column: The column to aggregate. Use `None` to last the whole message.
+        Default - `None`
+    """
+
+    def initialize(self) -> None:
+        return None
+
+    def agg(self, old: Any, new: Any, timestamp: int) -> Any:
+        if self.column is not None:
+            new = new.get(self.column)
+
+        if new is None:
+            return old
+        return new
+
+    def result(self, value: Any) -> Any:
+        return value
+
+
 R = TypeVar("R")
 
 
@@ -272,7 +386,7 @@ class BaseCollector(ABC, Generic[I]):
         ...
 
     @abstractmethod
-    def result(self, items: Iterable[I]) -> Any:
+    def result(self, items: list[I]) -> Any:
         """
         This method is triggered when a window is closed.
         It should return the final collection result.
@@ -303,5 +417,41 @@ class Collect(Collector):
         Default - `None`
     """
 
-    def result(self, items: Iterable[Any]) -> list[Any]:
-        return list(items)
+    def result(self, items: list[Any]) -> list[Any]:
+        return items
+
+
+class CollectUnique(Collector):
+    """
+    Use `CollectUnique()` to gather all unique events within each window period. into a list.
+
+    :param column: The column to collect. Use `None` to collect the whole message.
+        Default - `None`
+    """
+
+    def result(self, items: list[Any]) -> set[Any]:
+        return set(items)
+
+
+class Sort(Collector):
+    """
+    Use `Sort()` to gather all events within each window period. into a list and sort them.
+
+    :param column: The column to collect. Use `None` to collect the whole message.
+        Default - `None`
+    """
+
+    def __init__(
+        self,
+        column: Optional[str] = None,
+        *,
+        key: Optional[Callable[[Any], SupportsLessThan]] = None,
+        reverse: bool = False,
+    ) -> None:
+        super().__init__(column=column)
+        self._key = key
+        self._reverse = reverse
+
+    def result(self, items: list[Any]) -> list[Any]:
+        items.sort(key=self._key, reverse=self._reverse)
+        return items
