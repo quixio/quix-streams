@@ -371,13 +371,16 @@ class TopicManager:
         Validates the original topic name and returns the Topic from the broker
         either by fetching it or creating it if it doesn't exist.
         """
-        if self._auto_create_topics:
+        try:
+            return self._fetch_topic(topic=topic)
+        except TopicNotFoundError:
+            if not self._auto_create_topics:
+                raise
             self._validate_topic_name(name=topic.name)
             self._create_topic(
                 topic, timeout=self._timeout, create_timeout=self._create_timeout
             )
-
-        return self._fetch_topic(topic=topic)
+            return self._fetch_topic(topic=topic)
 
     def _configure_topic(self, topic: Topic, broker_topic: Topic) -> Topic:
         """
