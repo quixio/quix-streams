@@ -2712,3 +2712,88 @@ class TestApplicationMultipleSdf:
             consumer_group,
             state_dir,
         )
+
+    @pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
+    def test_concatenated_sdfs_stateful(
+        self,
+        app_factory,
+        executor,
+        state_manager_factory,
+        tmp_path,
+    ):
+        def on_message_processed(*_):
+            # Set the callback to track total messages processed
+            # The callback is not triggered if processing fails
+            nonlocal processed_count
+
+            processed_count += 1
+            # Stop processing after consuming all the messages
+            if processed_count == total_messages:
+                done.set_result(True)
+
+        processed_count = 0
+
+        consumer_group = str(uuid.uuid4())
+        state_dir = (tmp_path / "state").absolute()
+        partition_num = 0
+        app = app_factory(
+            commit_interval=0,
+            consumer_group=consumer_group,
+            auto_offset_reset="earliest",
+            state_dir=state_dir,
+            on_message_processed=on_message_processed,
+            use_changelog_topics=True,
+        )
+        input_topic_a = app.topic(
+            str(uuid.uuid4()), value_deserializer=JSONDeserializer()
+        )
+        input_topic_b = app.topic(
+            str(uuid.uuid4()), value_deserializer=JSONDeserializer()
+        )
+        input_topics = [input_topic_a, input_topic_b]
+        messages_per_topic = 3
+        total_messages = messages_per_topic * len(input_topics)
+
+        # Define a function that counts incoming Rows using state
+        def count(_, state: State):
+            total = state.get("total", 0)
+            total += 1
+            state.set("total", total)
+
+        sdf_a = app.dataframe(input_topic_a)
+        sdf_b = app.dataframe(input_topic_b)
+
+        sdf_concat = sdf_a.concat(sdf_b)
+        sdf_concat.update(count, stateful=True)
+
+        # Produce messages to the topic and flush
+        message_key = b"key"
+        data = {
+            "key": message_key,
+            "value": dumps({"key": "value"}),
+            "partition": partition_num,
+        }
+        with app.get_producer() as producer:
+            for topic in input_topics:
+                for _ in range(messages_per_topic):
+                    producer.produce(topic.name, **data)
+
+        done = Future()
+        # Stop app when the future is resolved
+        executor.submit(_stop_app_on_future, app, done, 10.0)
+
+        stores = {}
+
+        def revoke_partition(store_, partition):
+            stores[store_.stream_id] = store_
+
+        with patch("quixstreams.state.base.Store.revoke_partition", revoke_partition):
+            app.run()
+
+        assert processed_count == total_messages
+
+        store = stores[sdf_concat.stream_id]
+        partition = store.partitions[partition_num]
+        with partition.begin() as tx:
+            assert tx.get("total", prefix=message_key) == total_messages
+        store.revoke_partition(partition_num)
