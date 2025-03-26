@@ -2,7 +2,6 @@ import pytest
 
 from quixstreams.dataframe.windows.aggregations import (
     Collect,
-    CollectUnique,
     Count,
     Earliest,
     First,
@@ -12,7 +11,6 @@ from quixstreams.dataframe.windows.aggregations import (
     Mean,
     Min,
     Reduce,
-    Sort,
     Sum,
 )
 
@@ -197,15 +195,6 @@ class TestCollectors:
             (Collect(), [0, 1, 1, 0], [0, 1, 1, 0]),
             (Collect(), ["foo", "bar", "foo", "bar"], ["foo", "bar", "foo", "bar"]),
             (Collect(), list(range(4)), [0, 1, 2, 3]),
-            (CollectUnique(), [], set()),
-            (CollectUnique(), [0, 1, 1, 0], {0, 1}),
-            (CollectUnique(), ["foo", "bar", "foo", "bar"], {"foo", "bar"}),
-            (CollectUnique(), list(range(4)), {0, 1, 2, 3}),
-            (Sort(), [], []),
-            (Sort(), [0, 1, 1, 0], [0, 0, 1, 1]),
-            (Sort(), ["foo", "bar", "foo", "bar"], ["bar", "bar", "foo", "foo"]),
-            (Sort(reverse=True), list(range(4)), [3, 2, 1, 0]),
-            (Sort(key=lambda v: v % 10), [54, 36, 22, 10], [10, 22, 54, 36]),
         ],
     )
     def test_collect(self, collector, inputs, result):

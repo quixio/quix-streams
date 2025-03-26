@@ -20,15 +20,12 @@ __all__ = [
     "BaseAggregator",
     "Collector",
     "BaseCollector",
-    "CollectUnique",
     "Earliest",
     "Latest",
     "First",
     "Last",
-    "Sort",
 ]
 
-from quixstreams.types import SupportsLessThan
 
 S = TypeVar("S")
 
@@ -418,40 +415,4 @@ class Collect(Collector):
     """
 
     def result(self, items: list[Any]) -> list[Any]:
-        return items
-
-
-class CollectUnique(Collector):
-    """
-    Use `CollectUnique()` to gather all unique events within each window period. into a list.
-
-    :param column: The column to collect. Use `None` to collect the whole message.
-        Default - `None`
-    """
-
-    def result(self, items: list[Any]) -> set[Any]:
-        return set(items)
-
-
-class Sort(Collector):
-    """
-    Use `Sort()` to gather all events within each window period. into a list and sort them.
-
-    :param column: The column to collect. Use `None` to collect the whole message.
-        Default - `None`
-    """
-
-    def __init__(
-        self,
-        column: Optional[str] = None,
-        *,
-        key: Optional[Callable[[Any], SupportsLessThan]] = None,
-        reverse: bool = False,
-    ) -> None:
-        super().__init__(column=column)
-        self._key = key
-        self._reverse = reverse
-
-    def result(self, items: list[Any]) -> list[Any]:
-        items.sort(key=self._key, reverse=self._reverse)
         return items

@@ -16,8 +16,6 @@ Currently, quixstreams implements the following aggregators:
 and the following collectors:
 
 - [`Collect()`](api-reference/quixstreams.md#collect) - to collect all values within a window into a list
-- [`CollectUnique()`](api-reference/quixstreams.md#collectunique) - to collect all unique values within a window into a set
-- [`Sort()`](api-reference/quixstreams.md#sort) - to collect all value within a window into a list and sort them
 
 We will go over each of them in more detail below.
 
@@ -227,18 +225,6 @@ sdf = (
 #   'events': [event1, event2, event3, ..., eventN] - list of all events in the window
 # }
 ```
-
-### Collect Unique
-
-Use [`CollectUnique()`](api-reference/quixstreams.md#collectunique) to gather all unique events within each window period into a set. Duplicate values are skipped. 
-
-**CollectUnique allow you to select a column using the column optional parameter**
-
-### Sort
-
-Use [`Sort()`](api-reference/quixstreams.md#sort) to gather all events within each window period into a list and sort them.
-
-**Sort allow you to select a column using the column optional parameter**
 
 ### Custom Collector
 
