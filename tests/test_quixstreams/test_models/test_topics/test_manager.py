@@ -49,6 +49,7 @@ class TestTopicManager:
         assert topic_manager.topics[topic_name] == topic
 
         assert topic.name == topic_name
+        assert topic.quix_name == topic_name
         assert topic.create_config.num_partitions == create_config.num_partitions
         assert (
             topic.create_config.replication_factor == create_config.replication_factor
@@ -321,3 +322,16 @@ class TestTopicManager:
         assert data_topic.name in topic_manager.non_changelog_topics
         assert repartition_topic.name in topic_manager.non_changelog_topics
         assert changelog_topic.name not in topic_manager.non_changelog_topics
+
+    def test_stream_id_from_topics_success(self, topic_manager_factory):
+        topic_manager = topic_manager_factory()
+        topic1 = topic_manager.topic("test1")
+        topic2 = topic_manager.topic("test2")
+        stream_id = topic_manager.stream_id_from_topics(topic1, topic2)
+
+        assert stream_id == "test1--test2"
+
+    def test_stream_id_from_topics_no_topics_fails(self, topic_manager_factory):
+        topic_manager = topic_manager_factory()
+        with pytest.raises(ValueError):
+            topic_manager.stream_id_from_topics()

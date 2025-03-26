@@ -1,3 +1,5 @@
+import pytest
+
 from quixstreams.models import TopicConfig
 
 
@@ -13,6 +15,7 @@ class TestQuixTopicManager:
         topic_manager = quix_topic_manager_factory()
         topic = topic_manager.topic(topic_name, create_config=create_config)
         assert topic.name == expected_topic_id
+        assert topic.quix_name == topic_name
         assert topic_manager.topics[topic.name] == topic
         assert topic.broker_config.num_partitions == create_config.num_partitions
         assert (
@@ -115,3 +118,31 @@ class TestQuixTopicManager:
             changelog.broker_config.replication_factor
             == repartition.broker_config.replication_factor
         )
+
+    def test_stream_id_from_topics_multiple_topics_success(
+        self, quix_topic_manager_factory
+    ):
+        topic_manager = quix_topic_manager_factory(workspace_id="workspace_id")
+        topic1 = topic_manager.topic("test1")
+        topic2 = topic_manager.topic("test2")
+        stream_id = topic_manager.stream_id_from_topics(topic1, topic2)
+
+        assert stream_id == "test1--test2"
+
+    def test_stream_id_from_topics_single_topic_prefixed_with_workspace(
+        self, quix_topic_manager_factory
+    ):
+        """
+        Test that stream_id is prefixed with workspace_id if the single topic is passed
+        for the backwards compatibility.
+        """
+        topic_manager = quix_topic_manager_factory(workspace_id="workspace_id")
+        topic1 = topic_manager.topic("test1")
+        stream_id = topic_manager.stream_id_from_topics(topic1)
+
+        assert stream_id == "workspace_id-test1"
+
+    def test_stream_id_from_topics_no_topics_fails(self, quix_topic_manager_factory):
+        topic_manager = quix_topic_manager_factory()
+        with pytest.raises(ValueError):
+            topic_manager.stream_id_from_topics()
