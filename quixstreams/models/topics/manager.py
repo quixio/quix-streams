@@ -333,6 +333,15 @@ class TopicManager:
             },
         )
 
+    def stream_id_from_topics(self, *topics: Topic) -> str:
+        """
+        Generate a stream_id by combining names of the provided topics.
+        """
+        if not topics:
+            raise ValueError("At least one Topic must be passed")
+
+        return "--".join(t.name for t in topics)
+
     def _validate_topic_name(self, name: str) -> None:
         """
         Validates the original topic name

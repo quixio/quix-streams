@@ -187,8 +187,6 @@ class QuixKafkaConfigsBuilder:
         topic_config = api_response["configuration"]
         extra_config["retention.ms"] = topic_config["retentionInMinutes"] * 60 * 1000
         extra_config["retention.bytes"] = topic_config["retentionInBytes"]
-        # A hack to pass extra info back from Quix cloud
-        extra_config["__quix_topic_name__"] = api_response["name"]
 
         # Map value returned by Quix API to Kafka Admin API format
         if topic_config.get("cleanupPolicy"):
@@ -202,7 +200,11 @@ class QuixKafkaConfigsBuilder:
             replication_factor=topic_config["replicationFactor"],
             extra_config=extra_config,
         )
-        topic = Topic(name=api_response["id"], create_config=config)
+        topic = Topic(
+            name=api_response["id"],
+            create_config=config,
+            quix_name=api_response["name"],
+        )
         topic.broker_config = config
         return topic
 

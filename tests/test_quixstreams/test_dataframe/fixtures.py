@@ -26,9 +26,11 @@ def dataframe_factory(topic_manager_topic_factory, topic_manager_factory):
         registry: Optional[DataFrameRegistry] = None,
     ) -> StreamingDataFrame:
         producer = producer if producer is not None else MagicMock(spec_set=RowProducer)
-        topic_manager = topic_manager or MagicMock(spec=TopicManager)
+        topic_manager = topic_manager or topic_manager_factory()
         state_manager = state_manager or MagicMock(spec=StateStoreManager)
-        topic = topic or topic_manager_topic_factory("test")
+        topic = topic or topic_manager_topic_factory(
+            "test", topic_manager=topic_manager
+        )
         consumer = MagicMock(spec_set=RowConsumer)
         pausing_manager = PausingManager(consumer=consumer, topic_manager=topic_manager)
         sink_manager = SinkManager()

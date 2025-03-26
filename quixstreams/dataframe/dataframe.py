@@ -172,9 +172,7 @@ class StreamingDataFrame:
 
         By default, a topic name or a combination of topic names are used as `stream_id`.
         """
-
-        topics = sorted(self._topics, key=lambda t: t.name)
-        return "--".join(t.name for t in topics)
+        return self._topic_manager.stream_id_from_topics(*self.topics)
 
     @property
     def topics(self) -> list[Topic]:
