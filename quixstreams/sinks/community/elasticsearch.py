@@ -9,7 +9,6 @@ except ImportError as exc:
 import logging
 import sys
 import time
-from functools import partial
 from typing import Callable, Optional
 
 from quixstreams.sinks import SinkBatch
@@ -55,10 +54,10 @@ class ElasticsearchSink(BatchingSink):
             Callable[[SinkItem], Optional[str]]
         ] = _default_document_id_setter,
         batch_size: int = 500,
+        max_bulk_retries: int = 3,
+        ignore_bulk_upload_errors: bool = False,
         add_message_metadata: bool = False,
         add_topic_metadata: bool = False,
-        ignore_bulk_upload_errors: bool = False,
-        max_bulk_retries: int = 3,
         on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
         on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
         **kwargs,
@@ -70,9 +69,9 @@ class ElasticsearchSink(BatchingSink):
         :param document_id_setter: how to select the document id; the default is the Kafka message key
         :param batch_size: how large each chunk size is with bulk
         :param max_bulk_retries: number of retry attempts for each bulk batch
+        :param ignore_bulk_upload_errors: ignore any errors that occur when attempting an upload
         :param add_message_metadata: add key, timestamp, and headers as `__{field}`
         :param add_topic_metadata: add topic, partition, and offset as `__{field}`
-        :param ignore_bulk_upload_errors: ignore any errors that occur when attempting an upload
         :param on_client_connect_success: An optional callback made after successful
             client authentication, primarily for additional logging.
         :param on_client_connect_failure: An optional callback made after failed
@@ -89,11 +88,11 @@ class ElasticsearchSink(BatchingSink):
         self._client_kwargs = {"hosts": url, **kwargs}
         self._url = url
         self._index = index
+        self._document_id_setter = document_id_setter
+        self._mapping = mapping or DEFAULT_MAPPING
         self._batch_size = batch_size
         self._max_bulk_retries = max_bulk_retries
         self._ignore_bulk_errors = ignore_bulk_upload_errors
-        self._document_id_setter = document_id_setter
-        self._mapping = mapping or DEFAULT_MAPPING
         self._add_message_metadata = add_message_metadata
         self._add_topic_metadata = add_topic_metadata
         self._client: Optional[Elasticsearch] = None
@@ -106,12 +105,12 @@ class ElasticsearchSink(BatchingSink):
     def _create_index(self):
         """Create index if it doesn't exist."""
         if not self._client.indices.exists(index=self._index):
-            logging.info(
-                f"Creating Index '{self._index}' created with mapping: '{self._mapping}'..."
+            logger.info(
+                f"Creating Index '{self._index}' with mapping: '{self._mapping}'..."
             )
             self._client.indices.create(index=self._index, body=self._mapping)
         else:
-            logging.debug(f"Index '{self._index}' already exists.")
+            logger.debug(f"Index '{self._index}' already exists.")
 
     def _add_metadata(self, topic: str, partition: int, record: SinkItem) -> dict:
         value = record.value
@@ -139,11 +138,7 @@ class ElasticsearchSink(BatchingSink):
         start = time.monotonic()
         min_timestamp = sys.maxsize
         max_timestamp = -1
-
-        if self._add_message_metadata or self._add_topic_metadata:
-            add_metadata = partial(self._add_metadata, batch.topic, batch.partition)
-        else:
-            add_metadata = None
+        add_metadata = self._add_message_metadata or self._add_topic_metadata
 
         for chunk in batch.iter_chunks(n=self._batch_size):
             records = []
@@ -151,17 +146,23 @@ class ElasticsearchSink(BatchingSink):
                 ts = item.timestamp
                 records.append(
                     {
-                        # TODO: Allow users to select their own index
+                        # TODO: Allow users to dynamically select indexes
                         # _index: custom_index_function,
                         "_id": self._document_id_setter(item)
                         if self._document_id_setter
                         else None,
-                        "_source": add_metadata(item) if add_metadata else item.value,
+                        "_source": self._add_metadata(
+                            batch.topic, batch.partition, item
+                        )
+                        if add_metadata
+                        else item.value,
                     }
                 )
                 min_timestamp = min(ts, min_timestamp)
                 max_timestamp = max(ts, max_timestamp)
 
+            # TODO: raise a SinkBackoff once we see how max retries due to network
+            #   failures manifest
             success, failure = es_helpers.bulk(
                 client=self._client,
                 actions=records,

@@ -6,7 +6,7 @@
 
     To learn more about differences between Core and Community connectors, see the [Community and Core Connectors](../community-and-core.md) page.
 
-This sink writes data to a Elasticsearch Index, with a few ways to dump data.
+This sink writes data to a Elasticsearch Index, with a few options for dumping data.
 
 
 ## How To Install
@@ -19,20 +19,20 @@ pip install quixstreams[elasticsearch]
 
 ## How It Works
 
-`ElasticsearchSink` is a streaming sink that publishes messages to Elasticsearch in batches.
+`ElasticsearchSink` publishes messages to Elasticsearch in batches.
 
 You can customize how to handle/export them with `ElasticsearchSink`, but the most common
 (and default) approach is having a 1:1 correspondence between Kafka message `key` and 
 document `_id`, and field types automatically ("dynamically") inferred.
 
-Also, messages are sent to Elasticsearch in the same order they are received from Kafka
-for each specific partition.
+Messages are sent to Elasticsearch in the same order they are received from Kafka
+_for each topic partition_.
 
 
 ## Export Behavior
 
 How data is dumped with `ElasticsearchSink` primarily depends on two parameters: the 
-`document_id_setter` and `mapper`.
+`document_id_setter` and `mapper` (with sensible defaults already defined).
 
 ### Specifying Index Field Types
 
@@ -42,7 +42,7 @@ By default, a simple "dynamic" mapping is used, which determines a field's type 
 on the initial type encountered.
 
 > ex: if the first encountered instance of field `quantity` is `5`, then 
-that field is assumed to be an `integer` field.
+> that field is assumed to be an `integer` field.
 
 #### Using a Custom Mapping
 
@@ -160,23 +160,36 @@ if __name__ == "__main__":
     app.run()
 ```
 
+## Authenticating
+
+To provide the most amount of flexibility for authentication, `ElasticsearchSink` 
+forwards any unused`kwargs` directly to the underlying `Elasticsearch` client.
+
+[Check out the `Elasticsearch` connection documentation](https://www.elastic.co/guide/en/elasticsearch/client/python-api/current/connecting.html) 
+to learn what authentication method applies to your use case.
+
 ## Configuration Options
+
+### Required
 
 - `url`: Elasticsearch url
 - `index`: Elasticsearch index name
+
+### Optional
+
 - `mapping`: a custom mapping  
     **Default**: Dynamically maps all field types
+- `document_id_setter`: how to select the document id.  
+    **Default**: `_id` set to the kafka message key.
 - `batch_size`: how large each chunk size is with bulk  
     **Default**: 500
 - `max_bulk_retries`: number of retry attempts for each bulk batch  
     **Default**: 3
-- `document_id_setter`: how to select the document id.  
-    **Default**: `_id` set to the kafka message key.
+- `ignore_bulk_upload_errors`: ignore any errors that occur when attempting an upload  
+    **Default**: False
 - `add_message_metadata`: include key, timestamp, and headers as `__{field}`    
     **Default**: False
 - `add_topic_metadata`: include topic, partition, and offset as `__{field}`    
-    **Default**: False
-- `ignore_bulk_upload_errors`: ignore any errors that occur when attempting an upload  
     **Default**: False
 
 Additional keyword arguments are passed to the `Elasticsearch` client.
@@ -203,4 +216,4 @@ You can test your application using a local Elasticsearch based on the
     )
     ```
 
-3. Optionally, try out the included `Kibana` frontend to see your data.
+3. Optionally, try out the included `Kibana` frontend to see your uploaded data.
