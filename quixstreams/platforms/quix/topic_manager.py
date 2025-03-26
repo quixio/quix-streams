@@ -75,21 +75,10 @@ class QuixTopicManager(TopicManager):
         quix_topic = self._quix_config_builder.convert_topic_response(quix_topic_info)
         return quix_topic
 
-    def _finalize_topic(self, topic: Topic) -> Topic:
+    def _configure_topic(self, topic: Topic, broker_topic: Topic) -> Topic:
         """
-        Returns a Topic object with the true topic name by attempting by finding or
-        creating it in Quix Cloud and using the returned ID (the true topic name).
-
-        Additionally, sets the actual topic configuration since we now have it anyway.
+        Configure the topic with the correct broker config and extra config imports.
         """
-
-        if self._auto_create_topics:
-            self._validate_topic_name(name=topic.name)
-            self._create_topic(
-                topic, timeout=self._timeout, create_timeout=self._create_timeout
-            )
-
-        broker_topic = self._fetch_topic(topic=topic)
         broker_config = broker_topic.broker_config
 
         # A hack to pass extra info back from Quix cloud
