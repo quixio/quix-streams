@@ -252,15 +252,14 @@ a [`tumbling_window()`](windowing.md#time-based-tumbling-windows) [`.sum()`](agg
 ```python
 sdf = StreamingDataFrame()
 sdf = sdf.group_by("item")
-sdf = sdf.tumbling_window(duration_ms=3600).sum().final()
-sdf = sdf.apply(lambda window_result: {"total_quantity": window_result["value"]})
+sdf = sdf.tumbling_window(duration_ms=3600).agg(total_quantity=agg.Sum()).final()
 ```
 which generates data like:
 
 ```python
-{"key": "A", "value": {"total_quantity": 9}}
+{"key": "A", "total_quantity": 9}
 # ...etc...
-{"key": "B", "value": {"total_quantity": 4}}
+{"key": "B", "total_quantity": 4}
 # ...etc...
 ```
 

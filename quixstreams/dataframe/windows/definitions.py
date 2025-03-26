@@ -188,7 +188,7 @@ class WindowDefinition(abc.ABC):
         Example Snippet:
         ```python
         # Collect all values in 1-second windows
-        window = df.tumbling_window(duration_ms=1000).collect()
+        window = sdf.tumbling_window(duration_ms=1000).collect()
         # Each window will contain a list of all values that occurred
         # within that second
         ```

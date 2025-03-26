@@ -1,18 +1,22 @@
 # Aggregations and Collections
 
-Currently, [windows](windowing.md) support the following aggregation and collection functions:
+Currently, quixstreams implements the following aggregators and collectors:
 
-- [`Count()`](api-reference/quixstreams.md#count) - to count the number of values within a window 
-- [`Min()`](api-reference/quixstreams.md#min) - to get a minimum value within a window
-- [`Max()`](api-reference/quixstreams.md#max) - to get a maximum value within a window
-- [`Mean()`](api-reference/quixstreams.md#mean) - to get a mean value within a window 
-- [`Sum()`](api-reference/quixstreams.md#sum) - to sum values within a window
-- [`Reduce()`](api-reference/quixstreams.md#reduce) - to write a custom aggregation (deprecated use [custom aggregator](#custom-aggregator) instead)
-- [`Collect()`](api-reference/quixstreams.md#collect) - to collect all values within a window into a list
+- [`Count()`](api-reference/quixstreams.md#count) - to count the number of values within a window.
+- [`Min()`](api-reference/quixstreams.md#min) - to get a minimum value within a window.
+- [`Max()`](api-reference/quixstreams.md#max) - to get a maximum value within a window.
+- [`Mean()`](api-reference/quixstreams.md#mean) - to get a mean value within a window.
+- [`Sum()`](api-reference/quixstreams.md#sum) - to sum values within a window.
+- [`Reduce()`](api-reference/quixstreams.md#reduce) - to write a custom aggregation (deprecated use [custom aggregator](#custom-aggregator) instead).
+- [`Collect()`](api-reference/quixstreams.md#collect) - to collect all values within a window into a list.
 
-You can also create your own **custom aggregator and collector**. We will go over each of them in more detail below.
+We will go over each of them in more detail below.
+
+You can also create your own **custom aggregator and collector**. 
 
 ## Aggregators
+
+**Aggergators allow you to select a column using the `column` optional parameter**
 
 ### Count
 Use [`Count()`](api-reference/quixstreams.md#count) to calculate total number of events within each window period.
@@ -52,8 +56,6 @@ sdf = (
 ### Min, Max, Mean and Sum
 
 [`Min()`](api-reference/quixstreams.md#min), [`Max()`](api-reference/quixstreams.md#max), [`Mean()`](api-reference/quixstreams.md#mean), and [`Sum()`](api-reference/quixstreams.md#sum) aggregators provide short API to calculate these aggregates over the streaming windows. They assume the incoming values are numbers.
-
-**These methods allow you to select a column using the `column` optional parameter**
 
 **Example:**
 
@@ -113,6 +115,8 @@ class PowerSum(Aggregator):
         return 0
 
     def agg(self, aggregated, new, timestamp):
+        if self.column is not None:
+            new = new[self.column]
         return aggregated + (new * new)
 
     def result(self, aggregated):
@@ -142,28 +146,6 @@ sdf = (
 
 By default the aggregation state key is build using the aggregation class name. If your aggregations takes parameters, like a column name, you can override the [`state_suffix`](api-reference/quixstreams.md#baseaggregatorstate_suffix) property to include those parameters in the state key. Whenever the state key change the aggregation state is reset.
 
-An implementation of `PowerSum` that calculate the sum of a column.
-
-```python
-class PowerSum(Aggregator):
-    def __init__(self, column: str):
-        self._column = column
-
-    @property
-    def state_suffix(self) -> str:
-        return f"{self.__class__.__name__}/{self.column}"
-
-    def initialize(self):
-        return 0
-
-    def agg(self, aggregated, new, timestamp):
-        value = new[self._column]
-        return aggregated + (value * value)
-
-    def result(self, aggregated):
-        return aggregated
-```
-
 ### Reduce
 
 !!! warning
@@ -184,14 +166,15 @@ It will be called for each message coming into the window, except the first one.
 Collectors are used to gather all input into a list and perform an operation on the complete list of values when the window is closed.
 Collectors are optimized for collecting values and performs significantly better than using [`Reduce`](aggregations.md#reduce) to build a list.
 
+**Collectors allow you to select a column using the column optional parameter**
+
 !!! note
     Performance benefit comes at a price, collections only supports [`.final()`](windowing.md#emitting-after-the-window-is-closed) mode. Using [`.current()`](windowing.md#emitting-updates-for-each-message) is not supported.
 
 ### Collect
 
-Use [`Collect()`](api-reference/quixstreams.md#collect) to gather all events within each window period. into a list. Collect takes an optional `column` parameter to limit the collection to one column of the input.
+Use [`Collect()`](api-reference/quixstreams.md#collect) to gather all events within each window period into a list. Collect takes an optional `column` parameter to limit the collection to one column of the input.
 
-**Collect allow you to select a column using the column optional parameter**
 
 **Example:**
 
@@ -264,14 +247,6 @@ sdf = (
 
 By default a collector will collect the full message. Sometime that's unecessary if you are only interested in a specific column. A custom collector can override the [`column`](api-reference/quixstreams.md#basecollectorcolumn) property to tell quixstreams which column it needs.
 
-An implementation of `ReversedCollect` taking an optinal `column` parameter
-
-```python
-class ReversedCollect(Collector):
-    def result(self, items):
-        # items is the list of all collected item during the window
-        return list(reversed(items))
-```
 
 ## Multiple aggregations
 
