@@ -170,7 +170,7 @@ if __name__ == "__main__":
     **Default**: 500
 - `max_bulk_retries`: number of retry attempts for each bulk batch  
     **Default**: 3
-- `document_id_setter`: how to select the document id.
+- `document_id_setter`: how to select the document id.  
     **Default**: `_id` set to the kafka message key.
 - `add_message_metadata`: include key, timestamp, and headers as `__{field}`    
     **Default**: False
