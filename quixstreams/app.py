@@ -362,7 +362,6 @@ class Application:
             pausing_manager=self._pausing_manager,
             dataframe_registry=self._dataframe_registry,
         )
-        self._dataframe_registry = DataFrameRegistry()
         self._run_tracker = RunTracker(processing_context=self._processing_context)
 
     @property
