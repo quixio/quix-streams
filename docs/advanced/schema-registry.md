@@ -4,13 +4,7 @@ Serializers and deserializers for JSON Schema, Avro, and Protobuf support integr
 
 The current implementation wraps Confluent's serializers and deserializers, which are tightly coupled with the Schema Registry.
 
-To integrate your existing Schema Registry, install the `schema_registry` extra
-
-```bash
-pip install quixstreams[schema_registry]
-```
-
-and pass `SchemaRegistryClientConfig` to your serializers and deserializers. Additional optional configuration can be provided via `SchemaRegistrySerializationConfig`. 
+To integrate your existing Schema Registry, pass `SchemaRegistryClientConfig` to your serializers and deserializers. Additional optional configuration can be provided via `SchemaRegistrySerializationConfig`. 
 
 > NOTE: Not every `Serializer`/`Deserializer` uses `SchemaRegistrySerializationConfig`; refer to each serialization type below for
 > valid use.
