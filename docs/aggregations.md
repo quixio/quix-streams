@@ -258,7 +258,7 @@ You can define a wide range of aggregations, such as:
 - Using multiple message fields to create a single aggregate
 - Calculating multiple aggregates for the same value
 
-**Example**:
+**Multi-aggregations Example**:
 
 Assume you receive the temperature data from the sensor, and you need to calculate these aggregates for each 10-minute tumbling window:
 
@@ -295,14 +295,82 @@ sdf = (
 # {
 #   'start': <window start>, 
 #   'end': <window end>, 
-#   'min_temp': 1
-#   'max_temp': 999
-#   'avg_temp': 34.32
-#   'total_events': 999
+#   'min_temp': 1,
+#   'max_temp': 999,
+#   'avg_temp': 34.32,
+#   'total_events': 999,
 # }
 ```
 
-Here is how you can do that with `Reduce()`:
+**Custom Aggregator Example**
+
+You can achieve a similar result by using a [custom aggregator](aggregations.md#custom-aggregator)
+
+```python
+from datetime import timedelta
+from quixstreams import Application
+from quixstreams.dataframe.windows import Min, Max, Count, Mean, Aggregator
+
+class TemperatureAggregator(Aggregator):
+    def initialize(self):
+        return {
+            "min_temp": 0,
+            "max_temp": 0,
+            "total_events": 0,
+            "sum_temp": 0,
+        }
+    
+    def agg(self, old, new, ts):
+        if self.column is not None:
+            new = new[self.column]
+
+        old["min_temp"] = min(old["min_temp"], new)
+        old["max_temp"] = max(old["max_temp"], new)
+        old["total_events"] += 1
+        old["sum_temp"] += new
+        return old
+
+    def result(self, stored):
+        return {
+            "min_temp": stored["min_temp"],
+            "max_temp": stored["max_temp"],
+            "total_events": stored["total_events"]
+            "avg_temp": stored["sum_temp"] / stored["total_events"]
+        }
+        
+
+app = Application(...)
+sdf = app.dataframe(...)
+
+sdf = (
+    
+    # Define a tumbling window of 10 minutes
+    sdf.tumbling_window(timedelta(minutes=10))
+
+    .agg(
+        value=TemperatureAggregator(column="Temperature")
+    )
+
+    # Emit results only for closed windows
+    .final()
+)
+
+# Output:
+# {
+#   'start': <window start>, 
+#   'end': <window end>,
+#   'value': {
+#       'min_temp': 1,
+#       'max_temp': 999,
+#       'avg_temp': 34.32,
+#       'total_events': 999,
+#   }
+# }
+```
+
+**Reduce Example**
+
+You can also achieve a similar result using the deprecated `Reduce()`
 
 ```python
 from datetime import timedelta

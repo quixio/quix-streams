@@ -1,4 +1,14 @@
-from .aggregations import Collect, Count, Max, Mean, Min, Reduce, Sum
+from .aggregations import (
+    Aggregator,
+    Collect,
+    Collector,
+    Count,
+    Max,
+    Mean,
+    Min,
+    Reduce,
+    Sum,
+)
 from .definitions import (
     HoppingCountWindowDefinition,
     HoppingTimeWindowDefinition,
@@ -16,6 +26,8 @@ __all__ = [
     "Min",
     "Reduce",
     "Sum",
+    "Aggregator",
+    "Collector",
     "HoppingCountWindowDefinition",
     "HoppingTimeWindowDefinition",
     "SlidingCountWindowDefinition",

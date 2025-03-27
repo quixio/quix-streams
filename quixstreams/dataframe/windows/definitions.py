@@ -206,7 +206,9 @@ class WindowDefinition(abc.ABC):
         self, **operations: dict[str, Union[BaseAggregator, BaseCollector]]
     ) -> "Window":
         if "start" in operations or "end" in operations:
-            raise ValueError("`start` and `end` are reserved keywords")
+            raise ValueError(
+                "`start` and `end` are reserved keywords for the window boundaries"
+            )
 
         aggregators: dict[str, BaseAggregator] = {}
         collectors: dict[str, BaseCollector] = {}

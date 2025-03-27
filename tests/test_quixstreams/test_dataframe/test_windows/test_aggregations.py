@@ -78,6 +78,7 @@ class TestAggregators:
             (Mean(), "Mean"),
             (Max(), "Max"),
             (Min(), "Min"),
+            (Count("value"), "Count/value"),
             (Sum("value"), "Sum/value"),
             (Mean("value"), "Mean/value"),
             (Min("value"), "Min/value"),
