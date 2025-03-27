@@ -163,21 +163,25 @@ class ElasticsearchSink(BatchingSink):
 
             # TODO: raise a SinkBackoff once we see how max retries due to network
             #   failures manifest
-            success, failure = es_helpers.bulk(
-                client=self._client,
-                actions=records,
-                index=self._index,
-                max_retries=self._max_bulk_retries,
-                max_backoff=30,
-                raise_on_exception=not self._ignore_bulk_errors,
-            )
-            # Note: this will only occur when self._ignore_bulk_errors is True,
-            # as failures should otherwise raise.
-            if failure:
-                logger.warning(
-                    f"Ignoring ElasticSearch upload errors "
-                    f'due to "ignore_bulk_errors" setting: {failure}'
+            try:
+                success, failure = es_helpers.bulk(
+                    client=self._client,
+                    actions=records,
+                    index=self._index,
+                    max_retries=self._max_bulk_retries,
+                    max_backoff=30,
+                    raise_on_error=not self._ignore_bulk_errors,
                 )
+                # Note: this will only occur when self._ignore_bulk_errors is True,
+                # as failures should otherwise raise.
+                if failure:
+                    logger.warning(
+                        f"Ignoring ElasticSearch upload errors "
+                        f'due to "ignore_bulk_errors" setting: {failure}'
+                    )
+            except es_helpers.BulkIndexError as e:
+                logger.error(f"{e}, {e.errors}")
+                raise
 
         logger.info(
             "Sent documents to ElasticSearch; "
