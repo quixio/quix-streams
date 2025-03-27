@@ -60,7 +60,7 @@ class TestTumblingWindow:
         window_def = tumbling_window_definition_factory(duration_ms=10, grace_ms=5)
         window = window_def.count()
         window.final(closing_strategy=expiration)
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             key = b"key"
@@ -79,7 +79,7 @@ class TestTumblingWindow:
         window_def = tumbling_window_definition_factory(duration_ms=10, grace_ms=5)
         window = window_def.sum()
         window.final(closing_strategy=expiration)
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             key = b"key"
@@ -98,7 +98,7 @@ class TestTumblingWindow:
         window_def = tumbling_window_definition_factory(duration_ms=10, grace_ms=5)
         window = window_def.mean()
         window.final(closing_strategy=expiration)
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             key = b"key"
@@ -120,7 +120,7 @@ class TestTumblingWindow:
             initializer=lambda value: [value],
         )
         window.final(closing_strategy=expiration)
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             key = b"key"
@@ -139,7 +139,7 @@ class TestTumblingWindow:
         window_def = tumbling_window_definition_factory(duration_ms=10, grace_ms=5)
         window = window_def.max()
         window.final(closing_strategy=expiration)
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             key = b"key"
@@ -158,7 +158,7 @@ class TestTumblingWindow:
         window_def = tumbling_window_definition_factory(duration_ms=10, grace_ms=5)
         window = window_def.min()
         window.final(closing_strategy=expiration)
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             key = b"key"
@@ -177,7 +177,7 @@ class TestTumblingWindow:
         window_def = tumbling_window_definition_factory(duration_ms=10, grace_ms=5)
         window = window_def.collect()
         window.final(closing_strategy=expiration)
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             key = b"key"
@@ -218,7 +218,7 @@ class TestTumblingWindow:
         window_def = tumbling_window_definition_factory(duration_ms=10, grace_ms=0)
         window = window_def.sum()
         window.final(closing_strategy=expiration)
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             key = b"key"
@@ -253,7 +253,7 @@ class TestTumblingWindow:
         window_def = tumbling_window_definition_factory(duration_ms=10, grace_ms=2)
         window = window_def.sum()
         window.final(closing_strategy="partition")
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             key1 = b"key1"
@@ -305,7 +305,7 @@ class TestTumblingWindow:
         window_def = tumbling_window_definition_factory(duration_ms=10, grace_ms=0)
         window = window_def.sum()
         window.final(closing_strategy="key")
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             key1 = b"key1"
@@ -340,7 +340,7 @@ class TestTumblingWindow:
         window_def = tumbling_window_definition_factory(duration_ms=10, grace_ms=0)
         window = window_def.sum()
         window.final(closing_strategy="partition")
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             key1 = b"key1"
@@ -402,7 +402,7 @@ class TestCountTumblingWindow:
         window_def = count_tumbling_window_definition_factory(count=10)
         window = window_def.count()
         window.register_store()
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             process(window, key="", value=0, transaction=tx, timestamp_ms=100)
@@ -417,7 +417,7 @@ class TestCountTumblingWindow:
         window_def = count_tumbling_window_definition_factory(count=10)
         window = window_def.sum()
         window.register_store()
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             process(window, key="", value=2, transaction=tx, timestamp_ms=100)
@@ -432,7 +432,7 @@ class TestCountTumblingWindow:
         window_def = count_tumbling_window_definition_factory(count=10)
         window = window_def.mean()
         window.register_store()
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             process(window, key="", value=2, transaction=tx, timestamp_ms=100)
@@ -450,7 +450,7 @@ class TestCountTumblingWindow:
             initializer=lambda value: [value],
         )
         window.register_store()
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             process(window, key="", value=2, transaction=tx, timestamp_ms=100)
@@ -465,7 +465,7 @@ class TestCountTumblingWindow:
         window_def = count_tumbling_window_definition_factory(count=10)
         window = window_def.max()
         window.register_store()
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             process(window, key="", value=2, transaction=tx, timestamp_ms=100)
@@ -480,7 +480,7 @@ class TestCountTumblingWindow:
         window_def = count_tumbling_window_definition_factory(count=10)
         window = window_def.min()
         window.register_store()
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             process(window, key="", value=2, transaction=tx, timestamp_ms=100)
@@ -499,7 +499,7 @@ class TestCountTumblingWindow:
         window_def = count_tumbling_window_definition_factory(count=2)
         window = window_def.sum()
         window.register_store()
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             # Add first item to the window
@@ -531,7 +531,7 @@ class TestCountTumblingWindow:
         window_def = count_tumbling_window_definition_factory(count=3)
         window = window_def.collect()
         window.register_store()
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             process(window, key="", value=1, transaction=tx, timestamp_ms=100)
@@ -554,7 +554,7 @@ class TestCountTumblingWindow:
         window_def = count_tumbling_window_definition_factory(count=3)
         window = window_def.sum()
         window.register_store()
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
 
         with store.start_partition_transaction(0) as tx:
@@ -621,7 +621,7 @@ class TestCountTumblingWindow:
         window_def = count_tumbling_window_definition_factory(count=3)
         window = window_def.collect()
         window.register_store()
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
 
         with store.start_partition_transaction(0) as tx:
