@@ -38,6 +38,7 @@ from quixstreams.models.topics import (
     TopicConfig,
     TopicManager,
 )
+from quixstreams.models.topics.exceptions import TopicNotFoundError
 from quixstreams.platforms.quix import QuixTopicManager
 from quixstreams.platforms.quix.config import (
     QuixApplicationConfig,
@@ -452,6 +453,23 @@ def quix_topic_manager_factory(
         )
 
         # Patch the instance of QuixTopicManager to use Kafka Admin API
+        # to fetch topics instead of Quix Portal API
+        def _mock_fetch_topic(topic: Topic):
+            quix_topic_name = quix_config_builder.get_topic(topic=topic)["id"]
+
+            actual_configs = topic_admin.inspect_topics([quix_topic_name])
+            topic_config = actual_configs[quix_topic_name]
+            if topic_config is None:
+                raise TopicNotFoundError(
+                    f'Topic "{quix_topic_name}" not found on the broker'
+                )
+
+            topic_config.extra_config["__quix_topic_name__"] = topic.name
+            topic = topic.__clone__(name=quix_topic_name)
+            topic.broker_config = topic_config
+            return topic
+
+        # Patch the instance of QuixTopicManager to use Kafka Admin API
         # create topics instead of Quix Portal API
         def _mock_create_topic(topic: Topic, timeout, create_timeout):
             # Get a topic "id" from the QuixKafkaConfigBuilder
@@ -466,6 +484,7 @@ def quix_topic_manager_factory(
             quix_topic_manager,
             default_num_partitions=1,
             default_replication_factor=1,
+            _fetch_topic=_mock_fetch_topic,
             _create_topic=_mock_create_topic,
         ).start()
         return quix_topic_manager
