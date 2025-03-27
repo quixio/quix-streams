@@ -166,17 +166,17 @@ class TopicManager:
                 extra_config=self.default_extra_config,
             )
 
-        topic = self._finalize_topic(
-            Topic(
-                name=name,
-                value_serializer=value_serializer,
-                value_deserializer=value_deserializer,
-                key_serializer=key_serializer,
-                key_deserializer=key_deserializer,
-                create_config=create_config,
-                timestamp_extractor=timestamp_extractor,
-            )
+        topic = Topic(
+            name=name,
+            value_serializer=value_serializer,
+            value_deserializer=value_deserializer,
+            key_serializer=key_serializer,
+            key_deserializer=key_deserializer,
+            create_config=create_config,
+            timestamp_extractor=timestamp_extractor,
         )
+        broker_topic = self._get_or_create_broker_topic(topic)
+        topic = self._configure_topic(topic, broker_topic)
         self._topics[topic.name] = topic
         return topic
 
@@ -194,7 +194,8 @@ class TopicManager:
                 replication_factor=self.default_replication_factor,
                 extra_config=self.default_extra_config,
             )
-        topic = self._finalize_topic(topic)
+        broker_topic = self._get_or_create_broker_topic(topic)
+        topic = self._configure_topic(topic, broker_topic)
         self._topics[topic.name] = topic
         return topic
 
@@ -221,20 +222,20 @@ class TopicManager:
 
         :return: `Topic` object (which is also stored on the TopicManager)
         """
-        topic = self._finalize_topic(
-            Topic(
-                name=self._internal_name("repartition", topic_name, operation),
-                value_deserializer=value_deserializer,
-                key_deserializer=key_deserializer,
-                value_serializer=value_serializer,
-                key_serializer=key_serializer,
-                create_config=self._get_source_topic_config(
-                    topic_name,
-                    extras_imports=self._groupby_extra_config_imports_defaults,
-                    timeout=timeout if timeout is not None else self._timeout,
-                ),
-            )
+        topic = Topic(
+            name=self._internal_name("repartition", topic_name, operation),
+            value_deserializer=value_deserializer,
+            key_deserializer=key_deserializer,
+            value_serializer=value_serializer,
+            key_serializer=key_serializer,
+            create_config=self._get_source_topic_config(
+                topic_name,
+                extras_imports=self._groupby_extra_config_imports_defaults,
+                timeout=timeout if timeout is not None else self._timeout,
+            ),
         )
+        broker_topic = self._get_or_create_broker_topic(topic)
+        topic = self._configure_topic(topic, broker_topic)
         self._repartition_topics[topic.name] = topic
         return topic
 
@@ -294,16 +295,16 @@ class TopicManager:
         # always override some default configuration
         config.extra_config.update(self._changelog_extra_config_override)
 
-        topic = self._finalize_topic(
-            Topic(
-                name=self._internal_name("changelog", topic_name, store_name),
-                key_serializer="bytes",
-                value_serializer="bytes",
-                key_deserializer="bytes",
-                value_deserializer="bytes",
-                create_config=config,
-            )
+        topic = Topic(
+            name=self._internal_name("changelog", topic_name, store_name),
+            key_serializer="bytes",
+            value_serializer="bytes",
+            key_deserializer="bytes",
+            value_deserializer="bytes",
+            create_config=config,
         )
+        broker_topic = self._get_or_create_broker_topic(topic)
+        topic = self._configure_topic(topic, broker_topic)
         self._changelog_topics.setdefault(topic_name, {})[store_name] = topic
         return topic
 
@@ -365,19 +366,28 @@ class TopicManager:
         topic.broker_config = topic_config
         return topic
 
-    def _finalize_topic(self, topic: Topic) -> Topic:
+    def _get_or_create_broker_topic(self, topic: Topic) -> Topic:
         """
-        Validates the original topic name and returns the Topic.
-
-        Does more in QuixTopicManager.
+        Validates the original topic name and returns the Topic from the broker
+        either by fetching it or creating it if it doesn't exist.
         """
-        if self._auto_create_topics:
+        try:
+            return self._fetch_topic(topic=topic)
+        except TopicNotFoundError:
+            if not self._auto_create_topics:
+                raise
             self._validate_topic_name(name=topic.name)
             self._create_topic(
                 topic, timeout=self._timeout, create_timeout=self._create_timeout
             )
+            return self._fetch_topic(topic=topic)
 
-        broker_topic = self._fetch_topic(topic=topic)
+    def _configure_topic(self, topic: Topic, broker_topic: Topic) -> Topic:
+        """
+        Configure the topic with the correct broker config and extra config imports.
+
+        Does more in QuixTopicManager.
+        """
         broker_config = broker_topic.broker_config
 
         extra_config_imports = (
