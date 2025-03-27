@@ -342,6 +342,7 @@ def __init__(token: str,
              time_precision: TimePrecision = "ms",
              allow_missing_fields: bool = False,
              include_metadata_tags: bool = False,
+             convert_ints_to_floats: bool = False,
              batch_size: int = 1000,
              enable_gzip: bool = True,
              request_timeout_ms: int = 10_000,
@@ -407,6 +408,8 @@ Default - `"ms"`.
 Default - `False`
 - `include_metadata_tags`: if True, includes record's key, topic,
 and partition as tags.
+Default - `False`.
+- `convert_ints_to_floats`: if True, converts all integer values to floats.
 Default - `False`.
 - `batch_size`: how many records to write to InfluxDB in one request.
 Note that it only affects the size of one write request, and not the number

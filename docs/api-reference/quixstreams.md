@@ -2938,7 +2938,7 @@ It should return the final aggregation result.
 class Collector(ABC, Generic[I])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L169)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L174)
 
 Base class for window collections.
 
@@ -2958,7 +2958,7 @@ To reduce incoming items as they come in use an `Aggregator`.
 def column() -> Column
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L182)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L187)
 
 The column to collect.
 
@@ -2973,7 +2973,7 @@ Use `ROOT` to collect the whole message.
 def result(items: Iterable[I]) -> Any
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L191)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L196)
 
 This method is triggered when a window is closed.
 It should return the final collection result.
@@ -3826,6 +3826,7 @@ def __init__(token: str,
              time_precision: TimePrecision = "ms",
              allow_missing_fields: bool = False,
              include_metadata_tags: bool = False,
+             convert_ints_to_floats: bool = False,
              batch_size: int = 1000,
              enable_gzip: bool = True,
              request_timeout_ms: int = 10_000,
@@ -3889,6 +3890,8 @@ Default - `"ms"`.
 Default - `False`
 - `include_metadata_tags`: if True, includes record's key, topic,
 and partition as tags.
+Default - `False`.
+- `convert_ints_to_floats`: if True, converts all integer values to floats.
 Default - `False`.
 - `batch_size`: how many records to write to InfluxDB in one request.
 Note that it only affects the size of one write request, and not the number
