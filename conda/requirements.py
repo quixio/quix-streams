@@ -11,7 +11,6 @@ CONDA_META_REQUIREMENTS = re.compile(r"\s{4}- ([\w-]+) ([><=,.\d]*)?")
 CONDA_POST_LINK_REQUIREMENTS = re.compile(r"'([\w\[\],-]+)([><=,.\d]*)?")
 
 PYPI_TO_CONDA_NAME_MAPPING = {
-    "confluent-kafka": "python-confluent-kafka",
     "neo4j": "neo4j-python-driver",
 }
 
