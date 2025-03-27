@@ -30,7 +30,7 @@ requirements:
     - boto3 >=1.35.65,<2.0
     - boto3-stubs >=1.35.65,<2.0
     - azure-storage-blob >=12.24.0,<12.25
-    - neo4j >=5.27.0,<6
+    - neo4j-python-driver >=5.27.0,<6
     - pymongo >=4.11,<5
     - pandas >=1.0.0,<3.0
     - rich >=13,<14
