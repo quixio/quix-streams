@@ -202,9 +202,7 @@ class WindowDefinition(abc.ABC):
             collectors={"value": Collect(column=None)},
         )
 
-    def agg(
-        self, **operations: dict[str, Union[BaseAggregator, BaseCollector]]
-    ) -> "Window":
+    def agg(self, **operations: Union[BaseAggregator, BaseCollector]) -> "Window":
         if "start" in operations or "end" in operations:
             raise ValueError(
                 "`start` and `end` are reserved keywords for the window boundaries"
