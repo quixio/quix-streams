@@ -198,7 +198,8 @@ sdf = (
 ```
 
 
-## Built-in Aggregations
+## Built-in Aggregators and Collectors
+
 **Aggregators:**
 
 - [`Count()`](api-reference/quixstreams.md#count) - to count the number of values within a window.
@@ -209,8 +210,8 @@ sdf = (
 - [`Reduce()`](api-reference/quixstreams.md#reduce) - to write a custom aggregation (deprecated, use [custom aggregator](#custom-aggregator) instead).
 
 **Collectors:**
-- [`Collect()`](api-reference/quixstreams.md#collect) - to collect all values within a window into a list.
 
+- [`Collect()`](api-reference/quixstreams.md#collect) - to collect all values within a window into a list.
 
 
 ## Custom Aggregators
@@ -221,6 +222,13 @@ To implement a custom aggregator, subclass the `Aggregator` class and implement 
 - [`initialize`](api-reference/quixstreams.md#baseaggregatorinitialize): Called when initializing a new window. Starting value of the aggregation.
 - [`agg`](api-reference/quixstreams.md#baseaggregatoragg): Called for every item added to the window. It should merge the new value with the aggregated state.
 - [`result`](api-reference/quixstreams.md#baseaggregatorresult): Called to generate the result from the aggregated value
+
+
+By default, the aggregation state key includes the aggregation class name.
+
+If your aggregations accepts parameters, like a column name, you can override the [`state_suffix`](api-reference/quixstreams.md#baseaggregatorstate_suffix) property to include those parameters in the state key.  
+Whenever the state key changes, the aggregation's state is reset.
+
 
 **Example 1. Power sum**
 
@@ -267,11 +275,6 @@ sdf = (
 #   'sum': 13
 # }
 ```
-
-By default, the aggregation state key includes the aggregation class name.
-
-If your aggregations accepts parameters, like a column name, you can override the [`state_suffix`](api-reference/quixstreams.md#baseaggregatorstate_suffix) property to include those parameters in the state key.  
-Whenever the state key changes, the aggregation's state is reset.
 
 
 **Example 2. Custom aggregation over multiple message fields**
@@ -346,6 +349,10 @@ To implement a custom **Collector**, subclass the [`Collector`](api-reference/qu
 
 It is called when the window is closed with an iterable of all the collected items in this window. 
 
+By default, **Collectors** always store the full message.  
+
+If you only need in a specific column, you can override the [`column`](api-reference/quixstreams.md#basecollectorcolumn) property to specify which column needs to be stored.
+
 
 **Example:**
 
@@ -381,10 +388,6 @@ sdf = (
 #   'events': [eventN, ..., event3, event2, event1] - reversed list of all events in the window
 # }
 ```
-
-By default, **Collectors** always store the full message.  
-
-If you only need in a specific column, you can override the [`column`](api-reference/quixstreams.md#basecollectorcolumn) property to specify which column needs to be stored.
 
 ## Reduce
 
