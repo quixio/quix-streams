@@ -389,7 +389,7 @@ If you only need in a specific column, you can override the [`column`](api-refer
 ## Reduce
 
 !!! warning
-    `Reduce` is deprecated. Use [multiple aggregations](aggregations.md#multiple-aggregations) and [custom aggregators](aggregations.md#custom-aggregator) instead. They provide more control over parameters and better state management. 
+    `Reduce` is deprecated. Use [multiple aggregations](aggregations.md#multiple-aggregations) and [custom Aggregators](aggregations.md#custom-aggregators) instead. They provide more control over parameters and better state management. 
 
 [`Reduce()`](api-reference/quixstreams.md#reduce) allows you to perform complex aggregations using custom "reducer" and "initializer" functions:
 
