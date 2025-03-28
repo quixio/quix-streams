@@ -218,7 +218,7 @@ class WindowDefinition(abc.ABC):
                 collectors[column] = op
             else:
                 raise TypeError(
-                    f"operation `{column}:{op}` must be a BaseAggregator or a BaseCollector"
+                    f"operation `{column}:{op}` must be either BaseAggregator or BaseCollector"
                 )
 
         return self._create_window(
