@@ -247,20 +247,19 @@ what `store_id` it came from) ***over the past hour***.
 In this case, we need to get a windowed sum based on a single column identifier: `item`.
 
 This can be done by simply passing the `item` column name to `.groupby()`, followed by 
-a [`tumbling_window()`](windowing.md#tumbling-windows) [`.sum()`](windowing.md#min-max-mean-and-sum) over the past `3600` seconds:
+a [`tumbling_window()`](windowing.md#time-based-tumbling-windows) [`.sum()`](aggregations.md#min-max-mean-and-sum) over the past `3600` seconds:
 
 ```python
 sdf = StreamingDataFrame()
 sdf = sdf.group_by("item")
-sdf = sdf.tumbling_window(duration_ms=3600).sum().final()
-sdf = sdf.apply(lambda window_result: {"total_quantity": window_result["value"]})
+sdf = sdf.tumbling_window(duration_ms=3600).agg(total_quantity=agg.Sum()).final()
 ```
 which generates data like:
 
 ```python
-{"key": "A", "value": {"total_quantity": 9}}
+{"key": "A", "total_quantity": 9}
 # ...etc...
-{"key": "B", "value": {"total_quantity": 4}}
+{"key": "B", "total_quantity": 4}
 # ...etc...
 ```
 

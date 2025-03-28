@@ -1,13 +1,13 @@
 import logging
-from typing import TYPE_CHECKING, Any, Iterable, Optional, TypedDict
+from typing import TYPE_CHECKING, Any, Iterable, Optional, TypedDict, Union, cast
 
 from quixstreams.state import WindowedPartitionTransaction
 
-from .aggregations import Aggregator, Collector
 from .base import (
+    MultiAggregationWindowMixin,
+    SingleAggregationWindowMixin,
     Window,
     WindowKeyResult,
-    WindowResult,
 )
 
 if TYPE_CHECKING:
@@ -16,12 +16,19 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_MISSING = object()
+
 
 class CountWindowData(TypedDict):
     count: int
     start: int
     end: int
-    value: Any
+
+    # Can be None for single aggregation windows not migrated
+    aggregations: Union[Any, dict[str, Any]]
+    collection_start_id: int
+
+    # value: Any deprecated. Only used in single aggregation windows for both collection id tracking and aggregation
 
 
 class CountWindowsData(TypedDict):
@@ -36,15 +43,11 @@ class CountWindow(Window):
         count: int,
         name: str,
         dataframe: "StreamingDataFrame",
-        aggregators: dict[str, Aggregator],
-        collectors: dict[str, Collector],
         step: Optional[int] = None,
     ):
         super().__init__(
             name=name,
             dataframe=dataframe,
-            aggregators=aggregators,
-            collectors=collectors,
         )
 
         self._max_count = count
@@ -79,45 +82,51 @@ class CountWindow(Window):
         """
         state = transaction.as_state(prefix=key)
         data = state.get(key=self.STATE_KEY, default=CountWindowsData(windows=[]))
+        collect = self.collect
+        aggregate = self.aggregate
 
-        msg_id = None
+        # Start at -1 to indicate that we don't have a collection id yet. If we go from a no-collection window
+        # to collection window we add the count to the previous window collection id to get the new collection id.
+        # The count is always bigger or equal to 1 so we can safely use -1 as a marker.
+        collection_start_id = -1
         if len(data["windows"]) == 0:
-            # for new tumbling window, reset the collection id to 0
-            if self._collect:
-                window_value = msg_id = 0
-            else:
-                window_value = self._aggregators["value"].initialize()
-
+            collection_start_id = 0
             data["windows"].append(
                 CountWindowData(
                     count=0,
                     start=timestamp_ms,
                     end=timestamp_ms,
-                    value=window_value,
+                    aggregations=self._initialize_value(),
+                    collection_start_id=collection_start_id,
                 )
             )
         elif self._step is not None and data["windows"][0]["count"] % self._step == 0:
-            if self._collect:
-                window_value = msg_id = (
-                    data["windows"][0]["value"] + data["windows"][0]["count"]
+            if collect:
+                collection_start_id = (
+                    self._get_collection_start_id(data["windows"][0])
+                    + data["windows"][0]["count"]
                 )
-            else:
-                window_value = self._aggregators["value"].initialize()
 
             data["windows"].append(
                 CountWindowData(
                     count=0,
                     start=timestamp_ms,
                     end=timestamp_ms,
-                    value=window_value,
+                    aggregations=self._initialize_value(),
+                    collection_start_id=collection_start_id,
                 )
             )
 
-        if self._collect:
-            if msg_id is None:
-                msg_id = data["windows"][0]["value"] + data["windows"][0]["count"]
+        if collect:
+            if collection_start_id is -1:
+                collection_start_id = (
+                    self._get_collection_start_id(data["windows"][0])
+                    + data["windows"][0]["count"]
+                )
 
-            state.add_to_collection(id=msg_id, value=value)
+            state.add_to_collection(
+                id=collection_start_id, value=self._collect_value(value)
+            )
 
         updated_windows, expired_windows, to_remove = [], [], []
         for index, window in enumerate(data["windows"]):
@@ -127,55 +136,76 @@ class CountWindow(Window):
             elif timestamp_ms > window["end"]:
                 window["end"] = timestamp_ms
 
-            if self._collect:
-                # window must close
-                if window["count"] >= self._max_count:
-                    values = state.get_from_collection(
-                        start=window["value"],
-                        end=window["value"] + self._max_count,
+            if aggregate:
+                window["aggregations"] = self._aggregate_value(
+                    self._get_aggregations(window), value, timestamp_ms
+                )
+                updated_windows.append(
+                    (
+                        key,
+                        self._results(
+                            window["aggregations"], [], window["start"], window["end"]
+                        ),
                     )
+                )
 
-                    expired_windows.append(
-                        (
-                            key,
-                            WindowResult(
-                                start=window["start"],
-                                end=window["end"],
-                                value=self._collectors["value"].result(values),
-                            ),
-                        )
+            if window["count"] >= self._max_count:
+                to_remove.append(index)
+
+                if collect:
+                    collection_start_id = self._get_collection_start_id(window)
+
+                    collected = state.get_from_collection(
+                        start=collection_start_id,
+                        end=collection_start_id + self._max_count,
                     )
-                    to_remove.append(index)
-
                     # for tumbling window we need to force deletion from 0
                     delete_start = 0 if self._step is None else None
 
                     # for hopping windows we can only delete the value in the first step, the rest is
                     # needed by follow up hopping windows
                     step = self._max_count if self._step is None else self._step
-                    delete_end = window["value"] + step
+                    delete_end = collection_start_id + step
 
                     state.delete_from_collection(end=delete_end, start=delete_start)
-            else:
-                window["value"] = self._aggregators["value"].agg(window["value"], value)
+                else:
+                    collected = []
 
-                result = (
-                    key,
-                    WindowResult(
-                        start=window["start"],
-                        end=window["end"],
-                        value=self._aggregators["value"].result(window["value"]),
-                    ),
+                expired_windows.append(
+                    (
+                        key,
+                        self._results(
+                            window["aggregations"],
+                            collected,
+                            window["start"],
+                            window["end"],
+                        ),
+                    )
                 )
-
-                updated_windows.append(result)
-
-                if window["count"] >= self._max_count:
-                    expired_windows.append(result)
-                    to_remove.append(index)
 
         for i in to_remove:
             del data["windows"][i]
 
         state.set(key=self.STATE_KEY, value=data)
         return updated_windows, expired_windows
+
+    def _get_collection_start_id(self, window: CountWindowData) -> int:
+        start_id = window.get("collection_start_id", _MISSING)
+        if start_id is _MISSING:
+            start_id = cast(int, window["value"])  # type: ignore[typeddict-item]
+            window["collection_start_id"] = start_id
+        return start_id  # type: ignore[return-value]
+
+    def _get_aggregations(self, window: CountWindowData) -> Union[Any, dict[str, Any]]:
+        aggregations = window.get("aggregations", _MISSING)
+        if aggregations is _MISSING:
+            return window["value"]  # type: ignore[typeddict-item]
+        return aggregations
+
+
+class CountWindowSingleAggregation(SingleAggregationWindowMixin, CountWindow):
+    pass
+
+
+class CountWindowMultiAggregation(MultiAggregationWindowMixin, CountWindow):
+    pass

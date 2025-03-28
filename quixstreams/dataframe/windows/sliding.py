@@ -2,7 +2,11 @@ from typing import TYPE_CHECKING, Any, Iterable
 
 from quixstreams.state import WindowedPartitionTransaction, WindowedState
 
-from .base import WindowKeyResult, WindowResult
+from .base import (
+    MultiAggregationWindowMixin,
+    SingleAggregationWindowMixin,
+    WindowKeyResult,
+)
 from .time_based import ClosingStrategyValues, TimeWindow
 
 if TYPE_CHECKING:
@@ -78,8 +82,8 @@ class SlidingWindow(TimeWindow):
         duration = self._duration_ms
         grace = self._grace_ms
 
-        aggregate = self._aggregators["value"].agg if self._aggregate else None
-        collect = self._collect
+        aggregate = self.aggregate
+        collect = self.collect
 
         # Sliding windows are inclusive on both ends, so values with
         # timestamps equal to latest_timestamp - duration - grace
@@ -150,7 +154,7 @@ class SlidingWindow(TimeWindow):
                         state=state,
                         start=start,
                         end=end,
-                        value=aggregate(aggregation, value) if aggregate else None,
+                        value=self._aggregate_value(aggregation, value, timestamp_ms),
                         timestamp=timestamp_ms,
                         max_timestamp=max_timestamp,
                     )
@@ -176,9 +180,9 @@ class SlidingWindow(TimeWindow):
                         state=state,
                         start=right_start,
                         end=right_start + duration,
-                        value=aggregate(self._aggregators["value"].initialize(), value)
-                        if aggregate
-                        else None,
+                        value=self._aggregate_value(
+                            self._initialize_value(), value, timestamp_ms
+                        ),
                         timestamp=timestamp_ms,
                         max_timestamp=timestamp_ms,
                     )
@@ -192,7 +196,9 @@ class SlidingWindow(TimeWindow):
                             state=state,
                             start=start,
                             end=end,
-                            value=aggregate(aggregation, value) if aggregate else None,
+                            value=self._aggregate_value(
+                                aggregation, value, timestamp_ms
+                            ),
                             timestamp=timestamp_ms,
                             max_timestamp=timestamp_ms,
                         )
@@ -218,7 +224,9 @@ class SlidingWindow(TimeWindow):
                         state=state,
                         start=right_start,
                         end=right_start + duration,
-                        value=aggregate(self._aggregators["value"].initialize(), value)
+                        value=self._aggregate_value(
+                            self._initialize_value(), value, timestamp_ms
+                        )
                         if aggregate
                         else None,
                         timestamp=timestamp_ms,
@@ -227,7 +235,7 @@ class SlidingWindow(TimeWindow):
 
                 # Create a left window with existing aggregation if it falls within the window
                 if left_start > max_timestamp:
-                    aggregation = self._aggregators["value"].initialize()
+                    aggregation = self._initialize_value()
 
                 updated_windows.append(
                     self._update_window(
@@ -235,7 +243,7 @@ class SlidingWindow(TimeWindow):
                         state=state,
                         start=left_start,
                         end=left_end,
-                        value=aggregate(aggregation, value) if aggregate else None,
+                        value=self._aggregate_value(aggregation, value, timestamp_ms),
                         timestamp=timestamp_ms,
                         max_timestamp=timestamp_ms,
                     )
@@ -257,46 +265,40 @@ class SlidingWindow(TimeWindow):
                         state=state,
                         start=left_start,
                         end=left_end,
-                        value=aggregate(self._aggregators["value"].initialize(), value)
-                        if aggregate
-                        else None,
+                        value=self._aggregate_value(
+                            self._initialize_value(), value, timestamp_ms
+                        ),
                         timestamp=timestamp_ms,
                         max_timestamp=timestamp_ms,
                     )
                 )
 
         if collect:
-            state.add_to_collection(value=value, id=timestamp_ms)
+            state.add_to_collection(value=self._collect_value(value), id=timestamp_ms)
 
-        expired_windows = [
-            (
-                key,
-                WindowResult(
-                    start=start,
-                    end=end,
-                    value=self._collectors["value"].result(aggregation)
-                    if collect
-                    else self._aggregators["value"].result(aggregation),
-                ),
-            )
-            for (start, end), (max_timestamp, aggregation), _ in state.expire_windows(
-                max_start_time=max_expired_window_start,
-                delete=False,
-                collect=collect,
-                end_inclusive=True,
-            )
-            if end == max_timestamp  # Emit only left windows
-        ]
+        # build a complete list otherwise expired windows could be deleted
+        # in state.delete_windows() and never be fetched.
+        expired_windows = list(
+            self._expired_windows(state, max_expired_window_start, collect)
+        )
 
         state.delete_windows(
             max_start_time=max_deleted_window_start,
             delete_values=collect,
         )
 
-        if collect:
-            return [], expired_windows
-        else:
-            return reversed(updated_windows), expired_windows
+        return reversed(updated_windows), expired_windows
+
+    def _expired_windows(self, state, max_expired_window_start, collect):
+        for window in state.expire_windows(
+            max_start_time=max_expired_window_start,
+            delete=False,
+            collect=collect,
+            end_inclusive=True,
+        ):
+            (start, end), (max_timestamp, aggregated), collected, key = window
+            if end == max_timestamp:
+                yield key, self._results(aggregated, collected, start, end)
 
     def _update_window(
         self,
@@ -314,13 +316,12 @@ class SlidingWindow(TimeWindow):
             value=[max_timestamp, value],
             timestamp_ms=timestamp,
         )
-        return (
-            key,
-            WindowResult(
-                start=start,
-                end=end,
-                value=self._aggregators["value"].result(value)
-                if self._aggregate
-                else None,
-            ),
-        )
+        return (key, self._results(value, [], start, end))
+
+
+class SlidingWindowSingleAggregation(SingleAggregationWindowMixin, SlidingWindow):
+    pass
+
+
+class SlidingWindowMultiAggregation(MultiAggregationWindowMixin, SlidingWindow):
+    pass

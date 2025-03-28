@@ -11,7 +11,6 @@ from typing import (
     Iterable,
     Optional,
     Protocol,
-    TypedDict,
     cast,
 )
 
@@ -19,10 +18,11 @@ from typing_extensions import TypeAlias
 
 from quixstreams.context import message_context
 from quixstreams.core.stream import TransformExpandedCallback
+from quixstreams.dataframe.exceptions import InvalidOperation
 from quixstreams.processing import ProcessingContext
 from quixstreams.state import WindowedPartitionTransaction
 
-from .aggregations import Aggregator, Collector
+from .aggregations import BaseAggregator, BaseCollector
 
 if TYPE_CHECKING:
     from quixstreams.dataframe.dataframe import StreamingDataFrame
@@ -30,12 +30,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class WindowResult(TypedDict):
-    start: int
-    end: int
-    value: Any
-
-
+WindowResult: TypeAlias = dict[str, Any]
 WindowKeyResult: TypeAlias = tuple[Any, WindowResult]
 Message: TypeAlias = tuple[WindowResult, Any, int, Any]
 
@@ -52,25 +47,12 @@ class Window(abc.ABC):
         self,
         name: str,
         dataframe: "StreamingDataFrame",
-        aggregators: dict[str, Aggregator],
-        collectors: dict[str, Collector],
     ) -> None:
         if not name:
             raise ValueError("Window name must not be empty")
 
         self._name = name
         self._dataframe = dataframe
-
-        self._aggregators = aggregators
-        self._aggregate = len(aggregators) > 0
-
-        self._collectors = collectors
-        self._collect = len(collectors) > 0
-
-        if not self._collect and not self._aggregate:
-            raise ValueError("At least one aggregation or collector must be defined")
-        elif len(collectors) + len(aggregators) > 1:
-            raise ValueError("Only one aggregation or collector can be defined")
 
     @property
     def name(self) -> str:
@@ -174,6 +156,11 @@ class Window(abc.ABC):
         regardless of whether the window is closed or not.
         """
 
+        if self.collect:
+            raise InvalidOperation(
+                "BaseCollectors are not supported by `current` windows"
+            )
+
         def window_callback(
             value: Any,
             key: Any,
@@ -195,6 +182,201 @@ class Window(abc.ABC):
                 yield (window, key, window["start"], None)
 
         return self._apply_window(func=window_callback, name=self._name)
+
+    # Implemented by SingleAggregationWindowMixin and MultiAggregationWindowMixin
+    # Single aggregation and multi aggregation windows store aggregations and collections
+    # values in a different format.
+    @property
+    @abstractmethod
+    def collect(self) -> bool: ...
+
+    @property
+    @abstractmethod
+    def aggregate(self) -> bool: ...
+
+    @abstractmethod
+    def _initialize_value(self) -> Any: ...
+
+    @abstractmethod
+    def _aggregate_value(self, state_value: Any, value: Any, timestamp) -> Any: ...
+
+    @abstractmethod
+    def _collect_value(self, value: Any): ...
+
+    @abstractmethod
+    def _results(
+        self,
+        aggregated: Any,
+        collected: list[Any],
+        start: int,
+        end: int,
+    ) -> WindowResult: ...
+
+
+class SingleAggregationWindowMixin:
+    """
+    DEPRECATED: Use MultiAggregationWindowMixin instead.
+
+    Single aggregation window mixin for windows with a single aggregation or collection.
+    Store aggregated value directly in the window value.
+    """
+
+    def __init__(
+        self,
+        *,
+        aggregators: dict[str, BaseAggregator],
+        collectors: dict[str, BaseCollector],
+        **kwargs,
+    ) -> None:
+        if (len(collectors) + len(aggregators)) > 1:
+            raise ValueError("Only one aggregator or collector can be defined")
+
+        if len(aggregators) > 0:
+            self._aggregator: Optional[BaseAggregator] = aggregators["value"]
+            self._collector: Optional[BaseCollector] = None
+        elif len(collectors) > 0:
+            self._collector = collectors["value"]
+            self._aggregator = None
+        else:
+            raise ValueError("At least one aggregator or collector must be defined")
+
+        super().__init__(**kwargs)
+
+    @property
+    def aggregate(self) -> bool:
+        return self._aggregator is not None
+
+    @property
+    def collect(self) -> bool:
+        return self._collector is not None
+
+    def _initialize_value(self) -> Any:
+        if self._aggregator:
+            return self._aggregator.initialize()
+        return None
+
+    def _aggregate_value(self, state_value: Any, value: Any, timestamp: int) -> Any:
+        if self._aggregator:
+            return self._aggregator.agg(state_value, value, timestamp)
+        return None
+
+    def _collect_value(self, value: Any):
+        # Single aggregation collect() always stores the full message
+        return value
+
+    def _results(
+        self,
+        aggregated: Any,
+        collected: list[Any],
+        start: int,
+        end: int,
+    ) -> WindowResult:
+        result = {"start": start, "end": end}
+        if self._aggregator:
+            result["value"] = self._aggregator.result(aggregated)
+        elif self._collector:
+            result["value"] = self._collector.result(collected)
+
+        return result
+
+
+class MultiAggregationWindowMixin:
+    def __init__(
+        self,
+        *,
+        aggregators: dict[str, BaseAggregator],
+        collectors: dict[str, BaseCollector],
+        **kwargs,
+    ) -> None:
+        if not collectors and not aggregators:
+            raise ValueError("At least one aggregator or collector must be defined")
+
+        self._aggregators: dict[str, tuple[str, BaseAggregator]] = {
+            f"{result_column}/{agg.state_suffix}": (result_column, agg)
+            for result_column, agg in aggregators.items()
+        }
+
+        self._collect_all = False
+        self._collect_columns: set[str] = set()
+        self._collectors: dict[str, tuple[Optional[str], BaseCollector]] = {}
+        for result_column, col in collectors.items():
+            input_column = col.column
+            if input_column is None:
+                self._collect_all = True
+            else:
+                self._collect_columns.add(input_column)
+
+            self._collectors[result_column] = (input_column, col)
+
+        super().__init__(**kwargs)
+
+    @property
+    def aggregate(self) -> bool:
+        return bool(self._aggregators)
+
+    @property
+    def collect(self) -> bool:
+        return bool(self._collectors)
+
+    def _initialize_value(self) -> dict[str, Any]:
+        return {k: agg.initialize() for k, (_, agg) in self._aggregators.items()}
+
+    def _aggregate_value(
+        self, state_values: dict[str, Any], value: Any, timestamp: int
+    ) -> dict[str, Any]:
+        return {
+            k: agg.agg(state_values[k], value, timestamp)
+            if k in state_values
+            else agg.agg(agg.initialize(), value, timestamp)
+            for k, (_, agg) in self._aggregators.items()
+        }
+
+    def _collect_value(self, value) -> dict[str, Any]:
+        if self._collect_all:
+            return value
+        return {col: value[col] for col in self._collect_columns}
+
+    def _results(
+        self,
+        aggregated: dict[str, Any],
+        collected: list[dict[str, Any]],
+        start: int,
+        end: int,
+    ) -> WindowResult:
+        result = {k: v for k, v in self._build_results(aggregated, collected)}
+        result["start"] = start
+        result["end"] = end
+        return result
+
+    def _build_results(
+        self,
+        aggregated: dict[str, Any],
+        collected: list[dict[str, Any]],
+    ) -> Iterable[tuple[str, Any]]:
+        for key, (result_col, agg) in self._aggregators.items():
+            if key in aggregated:
+                yield result_col, agg.result(aggregated[key])
+            else:
+                yield result_col, agg.result(agg.initialize())
+
+        collected_columns = self._collected_by_columns(collected)
+        for result_col, (input_col, col) in self._collectors.items():
+            if input_col is None:
+                yield result_col, col.result(collected)
+            else:
+                yield result_col, col.result(collected_columns[input_col])
+
+    def _collected_by_columns(
+        self, collected: list[dict[str, Any]]
+    ) -> dict[str, list[Any]]:
+        if not self._collect_columns:
+            return {}
+
+        colums: dict[str, list[Any]] = {col: [] for col in self._collect_columns}
+        for c in collected:
+            for col in colums:
+                colums[col].append(c[col])
+        return colums
 
 
 def _noop() -> Any:

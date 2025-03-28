@@ -6,12 +6,12 @@ from typing import TYPE_CHECKING, Any, Iterable, Literal, Optional
 from quixstreams.context import message_context
 from quixstreams.state import WindowedPartitionTransaction, WindowedState
 
-from .aggregations import Aggregator, Collector
 from .base import (
+    MultiAggregationWindowMixin,
+    SingleAggregationWindowMixin,
     Window,
     WindowKeyResult,
     WindowOnLateCallback,
-    WindowResult,
     get_window_ranges,
 )
 
@@ -45,16 +45,12 @@ class TimeWindow(Window):
         grace_ms: int,
         name: str,
         dataframe: "StreamingDataFrame",
-        aggregators: dict[str, Aggregator],
-        collectors: dict[str, Collector],
         step_ms: Optional[int] = None,
         on_late: Optional[WindowOnLateCallback] = None,
     ):
         super().__init__(
             name=name,
             dataframe=dataframe,
-            aggregators=aggregators,
-            collectors=collectors,
         )
 
         self._duration_ms = duration_ms
@@ -138,8 +134,8 @@ class TimeWindow(Window):
         duration_ms = self._duration_ms
         grace_ms = self._grace_ms
 
-        collect = self._collect
-        aggregate = self._aggregate
+        collect = self.collect
+        aggregate = self.aggregate
 
         ranges = get_window_ranges(
             timestamp_ms=timestamp_ms,
@@ -177,23 +173,22 @@ class TimeWindow(Window):
             if aggregate:
                 current_value = state.get_window(start, end)
                 if current_value is None:
-                    current_value = self._aggregators["value"].initialize()
+                    current_value = self._initialize_value()
 
-                aggregated = self._aggregators["value"].agg(current_value, value)
+                aggregated = self._aggregate_value(current_value, value, timestamp_ms)
                 updated_windows.append(
                     (
                         key,
-                        WindowResult(
-                            start=start,
-                            end=end,
-                            value=self._aggregators["value"].result(aggregated),
-                        ),
+                        self._results(aggregated, [], start, end),
                     )
                 )
             state.update_window(start, end, value=aggregated, timestamp_ms=timestamp_ms)
 
         if collect:
-            state.add_to_collection(value=value, id=timestamp_ms)
+            state.add_to_collection(
+                value=self._collect_value(value),
+                id=timestamp_ms,
+            )
 
         if self._closing_strategy == ClosingStrategy.PARTITION:
             expired_windows = self.expire_by_partition(
@@ -218,26 +213,14 @@ class TimeWindow(Window):
         for (
             window_start,
             window_end,
-        ), aggregated, key in transaction.expire_all_windows(
+        ), aggregated, collected, key in transaction.expire_all_windows(
             max_end_time=max_expired_end,
             step_ms=self._step_ms if self._step_ms else self._duration_ms,
             collect=collect,
             delete=True,
         ):
-            if collect:
-                value = self._collectors["value"].result(aggregated)
-            else:
-                value = self._aggregators["value"].result(aggregated)
-
             count += 1
-            yield (
-                key,
-                WindowResult(
-                    start=window_start,
-                    end=window_end,
-                    value=value,
-                ),
-            )
+            yield key, self._results(aggregated, collected, window_start, window_end)
 
         if count:
             logger.debug(
@@ -254,23 +237,15 @@ class TimeWindow(Window):
         start = time.monotonic()
         count = 0
 
-        for (window_start, window_end), aggregated, _ in state.expire_windows(
+        for (
+            window_start,
+            window_end,
+        ), aggregated, collected, _ in state.expire_windows(
             max_start_time=max_expired_start,
             collect=collect,
         ):
-            if collect:
-                value = self._collectors["value"].result(aggregated)
-            else:
-                value = self._aggregators["value"].result(aggregated)
-
-            yield (
-                key,
-                WindowResult(
-                    start=window_start,
-                    end=window_end,
-                    value=value,
-                ),
-            )
+            count += 1
+            yield (key, self._results(aggregated, collected, window_start, window_end))
 
         if count:
             logger.debug(
@@ -313,3 +288,11 @@ class TimeWindow(Window):
                 f"partition={ctx.topic}[{ctx.partition}] "
                 f"offset={ctx.offset}"
             )
+
+
+class TimeWindowSingleAggregation(SingleAggregationWindowMixin, TimeWindow):
+    pass
+
+
+class TimeWindowMultiAggregation(MultiAggregationWindowMixin, TimeWindow):
+    pass

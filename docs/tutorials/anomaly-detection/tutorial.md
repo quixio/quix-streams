@@ -180,31 +180,12 @@ which means we will be consuming data from a non-Kafka origin.
 Let's go over the SDF operations in this example in detail.
 
 
-
-### Prep Data for Windowing
-
-```python
-sdf = sdf.apply(lambda data: data["Temperature_C"])
-```
-
-To use the built-in windowing functions, our incoming event needs to be transformed: at this point the unaltered event dictionary will look something like (and this should be familiar!):
-
-`>>> {"Temperature_C": 65, "Timestamp": 1710856626905833677}`
-
-But it needs to be just the temperature:
-
-`>>> 65`
-
-So we'll perform a generic SDF transformation using [`SDF.apply(F)`](../../processing.md#streamingdataframeapply), 
-(`F` should take your current message value as an argument, and return your new message value): 
-our `F` is a simple `lambda`, in this case.
-
-
-
 ### Windowing
 
 ```python
-sdf = sdf.hopping_window(duration_ms=5000, step_ms=1000).mean().current()
+import quixstreams.dataframe.windows.aggregations as agg
+
+sdf = sdf.hopping_window(duration_ms=5000, step_ms=1000).agg(value=agg.Mean(column="Temperature_C")).current()
 ```
 
 Now we do a (5 second) windowing operation on our temperature value. A few very important notes here:

@@ -60,15 +60,19 @@ def test_expire_windows(transaction_state, delete):
     with transaction_state() as state:
         state.update_window(start_ms=20, end_ms=30, value=3, timestamp_ms=20)
         max_start_time = state.get_latest_timestamp() - duration_ms
-        expired = state.expire_windows(max_start_time=max_start_time, delete=delete)
+        expired = list(
+            state.expire_windows(max_start_time=max_start_time, delete=delete)
+        )
         # "expire_windows" must update the expiration index so that the same
         # windows are not expired twice
-        assert not state.expire_windows(max_start_time=max_start_time, delete=delete)
+        assert not list(
+            state.expire_windows(max_start_time=max_start_time, delete=delete)
+        )
 
     assert len(expired) == 2
     assert expired == [
-        ((0, 10), 1, b"__key__"),
-        ((10, 20), 2, b"__key__"),
+        ((0, 10), 1, [], b"__key__"),
+        ((10, 20), 2, [], b"__key__"),
     ]
 
     with transaction_state() as state:
@@ -97,17 +101,19 @@ def test_expire_windows_with_collect(transaction_state, end_inclusive):
     with transaction_state() as state:
         state.update_window(start_ms=20, end_ms=30, value=None, timestamp_ms=20)
         max_start_time = state.get_latest_timestamp() - duration_ms
-        expired = state.expire_windows(
-            max_start_time=max_start_time,
-            collect=True,
-            end_inclusive=end_inclusive,
+        expired = list(
+            state.expire_windows(
+                max_start_time=max_start_time,
+                collect=True,
+                end_inclusive=end_inclusive,
+            )
         )
 
     window_1_value = ["a", "b"] if end_inclusive else ["a"]
     window_2_value = ["b", "c"] if end_inclusive else ["b"]
     assert expired == [
-        ((0, 10), window_1_value, b"__key__"),
-        ((10, 20), [777, window_2_value], b"__key__"),
+        ((0, 10), None, window_1_value, b"__key__"),
+        ((10, 20), [777, None], window_2_value, b"__key__"),
     ]
 
 
@@ -123,10 +129,10 @@ def test_same_keys_in_db_and_update_cache(transaction_state):
 
         state.update_window(start_ms=10, end_ms=20, value=2, timestamp_ms=10)
         max_start_time = state.get_latest_timestamp() - duration_ms
-        expired = state.expire_windows(max_start_time=max_start_time)
+        expired = list(state.expire_windows(max_start_time=max_start_time))
 
         # Value from the cache takes precedence over the value in the db
-        assert expired == [((0, 10), 3, b"__key__")]
+        assert expired == [((0, 10), 3, [], b"__key__")]
 
 
 def test_get_latest_timestamp(windowed_rocksdb_store_factory):

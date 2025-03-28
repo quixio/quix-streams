@@ -2,6 +2,7 @@ import os
 import random
 import time
 
+import quixstreams.dataframe.windows.aggregations as agg
 from quixstreams import Application
 from quixstreams.sources import Source
 
@@ -105,8 +106,11 @@ def main():
 
     # If reading from a Kafka topic, pass topic=<Topic> instead of a source
     sdf = app.dataframe(source=TemperatureGenerator())
-    sdf = sdf.apply(lambda data: data["Temperature_C"])
-    sdf = sdf.hopping_window(duration_ms=5000, step_ms=1000).mean().current()
+    sdf = (
+        sdf.hopping_window(duration_ms=5000, step_ms=1000)
+        .agg(value=agg.Mean("Temperature_C"))
+        .current()
+    )
     sdf = sdf.apply(lambda result: round(result["value"], 2)).filter(
         should_alert, metadata=True
     )
