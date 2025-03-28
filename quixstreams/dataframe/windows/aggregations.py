@@ -45,7 +45,7 @@ class BaseAggregator(ABC, Generic[S]):
         """
         The state suffix is used to store the aggregation state in the window.
 
-        The complete state key is built using the result column name and this suffix.  
+        The complete state key is built using the result column name and this suffix.
         If these values change, the state key will also change, and the aggregation state will restart from zero.
 
         Aggregations should change the state suffix when their parameters change to avoid
