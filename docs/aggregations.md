@@ -64,7 +64,7 @@ sdf = (
 
 [`Min()`](api-reference/quixstreams.md#min), [`Max()`](api-reference/quixstreams.md#max), [`Mean()`](api-reference/quixstreams.md#mean), and [`Sum()`](api-reference/quixstreams.md#sum) aggregators provide short API to calculate these aggregates over the streaming windows. They assume the incoming values are numbers.
 
-**Example:**
+**Example**
 
 Imagine you receive the temperature data from the sensor, and you need to calculate only a minimum temperature for each 10-minute tumbling window.  
 
@@ -97,18 +97,47 @@ sdf = (
 # }
 ```
 
-### Earliest and Latest
+### First, Last, Earliest and Latest
 
-Use [`Earliest()`](api-reference/quixstreams.md#earliest) and [`Latest()`](api-reference/quixstreams.md#latest) to return the earliest or latest value seen within a window.
+Use [`First()`](api-reference/quixstreams.md#first), [`Lastt()`](api-reference/quixstreams.md#last), [`Earliest()`](api-reference/quixstreams.md#earliest) and [`Latest()`](api-reference/quixstreams.md#latest) to propagate the content of one event over the streaming window. Incoming values can be of any types. 
 
-`Earliest` and `Latest` order events based on their timestamp.
+`First` and ` Last` order events based on the order they are received while `Earliest` and `Latest` order events based on their timestamp.
 
-### First and Last
+**Example**
 
-Use [`First()`](api-reference/quixstreams.md#first) and [`Lastt()`](api-reference/quixstreams.md#last) to return the first or last value seen within a window.
+Imagine you receive the temperature data from the sensor, and you need to calculate a minimum temperature for each 10-minute tumbling window. The sensor data also include a human-readable name identyfing the sensor that you want to propagate.
 
- `First` and ` Last` order events based on the order they are received.
+```python
+from datetime import timedelta
+from quixstreams import Application
+from quixstreams.dataframe.windows import Min, Latest
 
+app = Application(...)
+sdf = app.dataframe(...)
+
+# Input:
+# {"temperature" : 9999, "sensor": "my sensor"}
+
+sdf = (
+    # Define a tumbling window of 10 minutes
+    .tumbling_window(timedelta(minutes=10))
+
+    .agg(
+        value=Min(column="temperature"),  # Calculate the minimum temperature 
+        sensor=Latest(column="sensor"),  # Propagate the sensor name. We use Latest to propagate the updated name in case the sensor name is updated mid-aggregation
+    )
+
+    # Emit results only for closed windows
+    .final()
+)
+# Output:
+# {
+#   'start': <window start>, 
+#   'end': <window end>, 
+#   'value': 9999,  - minimum temperature
+#   'sensor': "my sensor",
+# }
+```
 
 ### Custom Aggregator
 
