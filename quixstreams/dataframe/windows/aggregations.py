@@ -43,10 +43,10 @@ class BaseAggregator(ABC, Generic[S]):
     @abstractmethod
     def state_suffix(self) -> str:
         """
-        The state suffix used to store the aggregation state in the window.
+        The state suffix is used to store the aggregation state in the window.
 
-        The complete state key is built using the result column name and this suffix. If any of these
-        values change the state key will change and the aggregation state restart from zero.
+        The complete state key is built using the result column name and this suffix.  
+        If these values change, the state key will also change, and the aggregation state will restart from zero.
 
         Aggregations should change the state suffix when their parameters change to avoid
         conflicts with previous state values.

@@ -220,7 +220,7 @@ class TimeWindow(Window):
             delete=True,
         ):
             count += 1
-            yield (key, self._results(aggregated, collected, window_start, window_end))
+            yield key, self._results(aggregated, collected, window_start, window_end)
 
         if count:
             logger.debug(

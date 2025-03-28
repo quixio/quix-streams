@@ -261,7 +261,7 @@ class SingleAggregationWindowMixin:
         return None
 
     def _collect_value(self, value: Any):
-        # Single aggregation collect() always store the full message
+        # Single aggregation collect() always stores the full message
         return value
 
     def _results(
