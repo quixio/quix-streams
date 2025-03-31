@@ -785,11 +785,13 @@ on top of the data and emit results downstream.
   
   
   
-  
 <br>
 ***Example Snippet:***
   
 ```python
+from quixstreams import Application
+import quixstreams.dataframe.windows.aggregations as agg
+
 app = Application()
 sdf = app.dataframe(...)
 
@@ -800,7 +802,7 @@ sdf = (
     )
 
     # Specify the aggregation function
-    .sum()
+    .agg(value=agg.Sum())
 
     # Specify how the results should be emitted downstream.
     # "current()" will emit results as they come for each updated window,
@@ -856,7 +858,7 @@ def tumbling_count_window(
         name: Optional[str] = None) -> TumblingCountWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1054)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1056)
 
 Create a count-based tumbling window transformation on this StreamingDataFrame.
 
@@ -871,16 +873,22 @@ on top of the data and emit results downstream.
   - Every window is grouped by the current Kafka message key.
   - Messages with `None` key will be ignored.
   
+  
+  
 <br>
 ***Example Snippet:***
+  
 ```python
+from quixstreams import Application
+import quixstreams.dataframe.windows.aggregations as agg
+
 app = Application()
 sdf = app.dataframe(...)
 sdf = (
     # Define a tumbling window of 10 messages
     sdf.tumbling_count_window(count=10)
     # Specify the aggregation function
-    .sum()
+    .agg(value=agg.Sum())
     # Specify how the results should be emitted downstream.
     # "current()" will emit results as they come for each updated window,
     # possibly producing multiple messages per key-window pair
@@ -923,7 +931,7 @@ def hopping_window(
 ) -> HoppingTimeWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1098)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1106)
 
 Create a time-based hopping window transformation on this StreamingDataFrame.
 
@@ -947,6 +955,9 @@ on top of the data and emit results downstream.
 ***Example Snippet:***
   
 ```python
+from quixstreams import Application
+import quixstreams.dataframe.windows.aggregations as agg
+
 app = Application()
 sdf = app.dataframe(...)
 
@@ -959,7 +970,7 @@ sdf = (
     )
 
     # Specify the aggregation function
-    .sum()
+    .agg(value=agg.Sum())
 
     # Specify how the results should be emitted downstream.
     # "current()" will emit results as they come for each updated window,
@@ -1023,7 +1034,7 @@ def hopping_count_window(
         name: Optional[str] = None) -> HoppingCountWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1198)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1209)
 
 Create a count-based hopping window transformation on this StreamingDataFrame.
 
@@ -1039,9 +1050,15 @@ on top of the data and emit results downstream.
   - Every window is grouped by the current Kafka message key.
   - Messages with `None` key will be ignored.
   
+  
+  
 <br>
 ***Example Snippet:***
+  
 ```python
+from quixstreams import Application
+import quixstreams.dataframe.windows.aggregations as agg
+
 app = Application()
 sdf = app.dataframe(...)
 sdf = (
@@ -1051,7 +1068,7 @@ sdf = (
         step=5,
     )
     # Specify the aggregation function
-    .sum()
+    .agg(value=agg.Sum())
     # Specify how the results should be emitted downstream.
     # "current()" will emit results as they come for each updated window,
     # possibly producing multiple messages per key-window pair
@@ -1095,7 +1112,7 @@ def sliding_window(
 ) -> SlidingTimeWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1249)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1266)
 
 Create a time-based sliding window transformation on this StreamingDataFrame.
 
@@ -1123,6 +1140,9 @@ on top of the data and emit results downstream.
 ***Example Snippet:***
   
 ```python
+from quixstreams import Application
+import quixstreams.dataframe.windows.aggregations as agg
+
 app = Application()
 sdf = app.dataframe(...)
 
@@ -1134,7 +1154,7 @@ sdf = (
     )
 
     # Specify the aggregation function
-    .sum()
+    .agg(value=agg.Sum())
 
     # Specify how the results should be emitted downstream.
     # "current()" will emit results as they come for each updated window,
@@ -1190,7 +1210,7 @@ def sliding_count_window(
         name: Optional[str] = None) -> SlidingCountWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1341)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1361)
 
 Create a count-based sliding window transformation on this StreamingDataFrame.
 
@@ -1208,16 +1228,22 @@ on top of the data and emit results downstream.
   - Messages with `None` key will be ignored.
   - Every window contains a distinct aggregation.
   
+  
+  
 <br>
 ***Example Snippet:***
+  
 ```python
+from quixstreams import Application
+import quixstreams.dataframe.windows.aggregations as agg
+
 app = Application()
 sdf = app.dataframe(...)
 sdf = (
     # Define a sliding window of 10 messages
     sdf.sliding_count_window(count=10)
     # Specify the aggregation function
-    .sum()
+    .sum(value=agg.Sum())
     # Specify how the results should be emitted downstream.
     # "current()" will emit results as they come for each updated window,
     # possibly producing multiple messages per key-window pair
@@ -1255,7 +1281,7 @@ def drop(columns: Union[str, List[str]],
          errors: Literal["ignore", "raise"] = "raise") -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1388)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1414)
 
 Drop column(s) from the message value (value must support `del`, like a dict).
 
@@ -1299,7 +1325,7 @@ a new StreamingDataFrame instance
 def sink(sink: BaseSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1432)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1458)
 
 Sink the processed data to the specified destination.
 
