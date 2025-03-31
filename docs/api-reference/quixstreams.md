@@ -4022,6 +4022,70 @@ Callback should accept the raised Exception as an argument.
 Callback must resolve (or propagate/re-raise) the Exception.
 - `kwargs`: Additional parameters for `psycopg2.connect`.
 
+<a id="quixstreams.sinks.community.elasticsearch"></a>
+
+## quixstreams.sinks.community.elasticsearch
+
+<a id="quixstreams.sinks.community.elasticsearch.ElasticsearchSink"></a>
+
+### ElasticsearchSink
+
+```python
+class ElasticsearchSink(BatchingSink)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/elasticsearch.py#L38)
+
+Pushes data to an ElasticSearch index.
+
+By default, uses the kafka message key as the document ID, and dynamically generates
+the field types.
+
+You can pass your own type mapping or document ID setter for custom behavior.
+
+<a id="quixstreams.sinks.community.elasticsearch.ElasticsearchSink.__init__"></a>
+
+#### ElasticsearchSink.\_\_init\_\_
+
+```python
+def __init__(url: str,
+             index: str,
+             mapping: Optional[dict] = None,
+             document_id_setter: Optional[Callable[
+                 [SinkItem], Optional[str]]] = _default_document_id_setter,
+             batch_size: int = 500,
+             max_bulk_retries: int = 3,
+             ignore_bulk_upload_errors: bool = False,
+             add_message_metadata: bool = False,
+             add_topic_metadata: bool = False,
+             on_client_connect_success: Optional[
+                 ClientConnectSuccessCallback] = None,
+             on_client_connect_failure: Optional[
+                 ClientConnectFailureCallback] = None,
+             **kwargs)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/elasticsearch.py#L48)
+
+**Arguments**:
+
+- `url`: the ElasticSearch host url
+- `index`: the ElasticSearch index name
+- `mapping`: a custom mapping; the default dynamically maps all field types
+- `document_id_setter`: how to select the document id; the default is the Kafka message key
+- `batch_size`: how large each chunk size is with bulk
+- `max_bulk_retries`: number of retry attempts for each bulk batch
+- `ignore_bulk_upload_errors`: ignore any errors that occur when attempting an upload
+- `add_message_metadata`: add key, timestamp, and headers as `__{field}`
+- `add_topic_metadata`: add topic, partition, and offset as `__{field}`
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
+- `kwargs`: additional kwargs that are passed to the ElasticSearch client
+
 <a id="quixstreams.sinks.community.file.formats.parquet"></a>
 
 ## quixstreams.sinks.community.file.formats.parquet
