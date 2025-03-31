@@ -986,10 +986,12 @@ class StreamingDataFrame:
         - The time windows always use the current event time.
 
 
-
         Example Snippet:
 
         ```python
+        from quixstreams import Application
+        import quixstreams.dataframe.windows.aggregations as agg
+
         app = Application()
         sdf = app.dataframe(...)
 
@@ -1000,7 +1002,7 @@ class StreamingDataFrame:
             )
 
             # Specify the aggregation function
-            .sum()
+            .agg(value=agg.Sum())
 
             # Specify how the results should be emitted downstream.
             # "current()" will emit results as they come for each updated window,
@@ -1064,15 +1066,21 @@ class StreamingDataFrame:
         - The end timestamp of the aggregation result is set to the latest timestamp.
         - Every window is grouped by the current Kafka message key.
         - Messages with `None` key will be ignored.
+
+
         Example Snippet:
+
         ```python
+        from quixstreams import Application
+        import quixstreams.dataframe.windows.aggregations as agg
+
         app = Application()
         sdf = app.dataframe(...)
         sdf = (
             # Define a tumbling window of 10 messages
             sdf.tumbling_count_window(count=10)
             # Specify the aggregation function
-            .sum()
+            .agg(value=agg.Sum())
             # Specify how the results should be emitted downstream.
             # "current()" will emit results as they come for each updated window,
             # possibly producing multiple messages per key-window pair
@@ -1122,6 +1130,9 @@ class StreamingDataFrame:
         Example Snippet:
 
         ```python
+        from quixstreams import Application
+        import quixstreams.dataframe.windows.aggregations as agg
+
         app = Application()
         sdf = app.dataframe(...)
 
@@ -1134,7 +1145,7 @@ class StreamingDataFrame:
             )
 
             # Specify the aggregation function
-            .sum()
+            .agg(value=agg.Sum())
 
             # Specify how the results should be emitted downstream.
             # "current()" will emit results as they come for each updated window,
@@ -1209,8 +1220,14 @@ class StreamingDataFrame:
         - The end timestamp of the aggregation result is set to the latest timestamp.
         - Every window is grouped by the current Kafka message key.
         - Messages with `None` key will be ignored.
+
+
         Example Snippet:
+
         ```python
+        from quixstreams import Application
+        import quixstreams.dataframe.windows.aggregations as agg
+
         app = Application()
         sdf = app.dataframe(...)
         sdf = (
@@ -1220,7 +1237,7 @@ class StreamingDataFrame:
                 step=5,
             )
             # Specify the aggregation function
-            .sum()
+            .agg(value=agg.Sum())
             # Specify how the results should be emitted downstream.
             # "current()" will emit results as they come for each updated window,
             # possibly producing multiple messages per key-window pair
@@ -1276,6 +1293,9 @@ class StreamingDataFrame:
         Example Snippet:
 
         ```python
+        from quixstreams import Application
+        import quixstreams.dataframe.windows.aggregations as agg
+
         app = Application()
         sdf = app.dataframe(...)
 
@@ -1287,7 +1307,7 @@ class StreamingDataFrame:
             )
 
             # Specify the aggregation function
-            .sum()
+            .agg(value=agg.Sum())
 
             # Specify how the results should be emitted downstream.
             # "current()" will emit results as they come for each updated window,
@@ -1354,15 +1374,21 @@ class StreamingDataFrame:
         - Every window is grouped by the current Kafka message key.
         - Messages with `None` key will be ignored.
         - Every window contains a distinct aggregation.
+
+
         Example Snippet:
+
         ```python
+        from quixstreams import Application
+        import quixstreams.dataframe.windows.aggregations as agg
+
         app = Application()
         sdf = app.dataframe(...)
         sdf = (
             # Define a sliding window of 10 messages
             sdf.sliding_count_window(count=10)
             # Specify the aggregation function
-            .sum()
+            .sum(value=agg.Sum())
             # Specify how the results should be emitted downstream.
             # "current()" will emit results as they come for each updated window,
             # possibly producing multiple messages per key-window pair

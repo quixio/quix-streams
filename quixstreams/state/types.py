@@ -8,7 +8,12 @@ logger = logging.getLogger(__name__)
 K = TypeVar("K", contravariant=True)
 V = TypeVar("V")
 
-WindowDetail: TypeAlias = tuple[tuple[int, int], V, bytes]  # (start, end), value, key
+WindowDetail: TypeAlias = tuple[
+    tuple[int, int], V, bytes
+]  # (start, end), aggregated, key
+ExpiredWindowDetail: TypeAlias = tuple[
+    tuple[int, int], V, list[V], bytes
+]  # (start, end), aggregated, collected, key
 
 
 class WindowedState(Protocol[K, V]):
@@ -152,7 +157,7 @@ class WindowedState(Protocol[K, V]):
         delete: bool = True,
         collect: bool = False,
         end_inclusive: bool = False,
-    ) -> list[WindowDetail[V]]:
+    ) -> Iterable[ExpiredWindowDetail[V]]:
         """
         Get all expired windows from RocksDB up to the specified `max_start_time` timestamp.
 
@@ -350,7 +355,7 @@ class WindowedPartitionTransaction(Protocol[K, V]):
         delete: bool = True,
         collect: bool = False,
         end_inclusive: bool = False,
-    ) -> list[WindowDetail[V]]:
+    ) -> Iterable[ExpiredWindowDetail[V]]:
         """
         Get all expired windows with a set prefix from RocksDB up to the specified `max_start_time` timestamp.
 
@@ -373,7 +378,7 @@ class WindowedPartitionTransaction(Protocol[K, V]):
         step_ms: int,
         delete: bool = True,
         collect: bool = False,
-    ) -> Iterable[WindowDetail[V]]:
+    ) -> Iterable[ExpiredWindowDetail[V]]:
         """
         Get all expired windows for all prefix from RocksDB up to the specified `max_start_time` timestamp.
 
