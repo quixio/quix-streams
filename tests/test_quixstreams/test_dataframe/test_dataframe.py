@@ -437,7 +437,6 @@ class TestStreamingDataFrame:
     @pytest.mark.parametrize(
         ["columns", "mapping", "value", "expected"],
         [
-            ([], {}, {"x": 1}, {"x": 1}),
             (["x"], {}, 1, 1),  # value is not a dict, fill ignored
             (["x"], {}, {"x": 1}, {"x": 1}),
             (["x"], {}, {}, {"x": None}),
@@ -459,6 +458,13 @@ class TestStreamingDataFrame:
         sdf = dataframe_factory()
         sdf.fill(*columns, **mapping)
         assert sdf.test(value=value)[0][0] == expected
+
+    def test_fill_no_columns_or_mapping(self, dataframe_factory):
+        sdf = dataframe_factory()
+        with pytest.raises(
+            ValueError, match="No columns or mapping provided to fill()."
+        ):
+            sdf.fill()
 
     @pytest.mark.parametrize(
         "columns, expected",

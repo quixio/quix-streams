@@ -1451,11 +1451,7 @@ class StreamingDataFrame:
         mapping = {**{column: None for column in columns}, **mapping}
 
         if not mapping:
-            warnings.warn(
-                "No columns or mapping provided to fill(). "
-                "No changes will be made to the data."
-            )
-            return self
+            raise ValueError("No columns or mapping provided to fill().")
 
         def _fill(value: Any) -> Any:
             if not isinstance(value, dict):
