@@ -719,8 +719,8 @@ and returns a result of StreamingDataFrame
 
 ```python
 def test(value: Any,
-         key: Any,
-         timestamp: int,
+         key: Any = b"key",
+         timestamp: int = 0,
          headers: Optional[Any] = None,
          ctx: Optional[MessageContext] = None,
          topic: Optional[Topic] = None) -> List[Any]
@@ -1270,6 +1270,62 @@ sdf = (
   This object can be further configured with aggregation functions
   like `sum`, `count`, etc. applied to the StreamingDataFrame.
 
+<a id="quixstreams.dataframe.dataframe.StreamingDataFrame.fill"></a>
+
+<br><br>
+
+#### StreamingDataFrame.fill
+
+```python
+def fill(*columns: str, **mapping: Any) -> Self
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1414)
+
+Fill missing values in the message value with a constant value.
+
+This operation occurs in-place, meaning reassignment is entirely OPTIONAL: the
+original `StreamingDataFrame` is returned for chaining (`sdf.update().print()`).
+
+Example Snippets:
+
+Fill missing values for a single column with a None:
+```python
+# This would transform {"x": 1} to {"x": 1, "y": None}
+sdf.fill("y")
+```
+
+Fill missing values for multiple columns with a None:
+```python
+# This would transform {"x": 1} to {"x": 1, "y": None, "z": None}
+sdf.fill("y", "z")
+```
+
+Fill missing values in the value with a constant value using a dictionary:
+```python
+# This would transform {"x": None} to {"x": 1, "y": 2}
+sdf.fill(x=1, y=2)
+```
+
+Use a combination of positional and keyword arguments:
+```python
+# This would transform {"y": None} to {"x": None, "y": 2}
+sdf.fill("x", y=2)
+```
+
+
+<br>
+***Arguments:***
+
+- `columns`: a list of column names as strings.
+- `mapping`: a dictionary where keys are column names and values are the fill values.
+
+
+<br>
+***Returns:***
+
+the original `StreamingDataFrame` instance for chaining.
+
 <a id="quixstreams.dataframe.dataframe.StreamingDataFrame.drop"></a>
 
 <br><br>
@@ -1281,7 +1337,7 @@ def drop(columns: Union[str, List[str]],
          errors: Literal["ignore", "raise"] = "raise") -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1414)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1466)
 
 Drop column(s) from the message value (value must support `del`, like a dict).
 
@@ -1325,7 +1381,7 @@ a new StreamingDataFrame instance
 def sink(sink: BaseSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1458)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1510)
 
 Sink the processed data to the specified destination.
 
