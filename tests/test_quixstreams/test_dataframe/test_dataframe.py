@@ -435,6 +435,38 @@ class TestStreamingDataFrame:
         )  # fmt: skip
 
     @pytest.mark.parametrize(
+        ["columns", "mapping", "value", "expected"],
+        [
+            (["x"], {}, 1, 1),  # value is not a dict, fill ignored
+            (["x"], {}, {"x": 1}, {"x": 1}),
+            (["x"], {}, {}, {"x": None}),
+            (["x"], {}, 1, 1),
+            (["x", "y"], {}, {"x": 1, "y": 2}, {"x": 1, "y": 2}),
+            (["x", "y"], {}, {"x": 1}, {"x": 1, "y": None}),
+            (["x", "y"], {}, {}, {"x": None, "y": None}),
+            ([], {"x": 1, "y": 2}, {"x": 3, "y": 4}, {"x": 3, "y": 4}),
+            ([], {"x": 1, "y": 2}, {"x": 3}, {"x": 3, "y": 2}),
+            ([], {"x": 1, "y": 2}, {}, {"x": 1, "y": 2}),
+            ([], {"x": 1, "y": 2}, {"x": None}, {"x": 1, "y": 2}),
+            ([], {"x": 1, "y": None}, {"x": 2}, {"x": 2, "y": None}),
+            (["x"], {"y": 2}, {"y": None}, {"x": None, "y": 2}),
+            # overlapping column names, kwargs take precedence
+            (["x"], {"x": 2}, {"x": None}, {"x": 2}),
+        ],
+    )
+    def test_fill(self, dataframe_factory, columns, mapping, value, expected):
+        sdf = dataframe_factory()
+        sdf.fill(*columns, **mapping)
+        assert sdf.test(value=value)[0][0] == expected
+
+    def test_fill_no_columns_or_mapping(self, dataframe_factory):
+        sdf = dataframe_factory()
+        with pytest.raises(
+            ValueError, match="No columns or mapping provided to fill()."
+        ):
+            sdf.fill()
+
+    @pytest.mark.parametrize(
         "columns, expected",
         [
             ("col_a", {"col_b": 2, "col_c": 3}),
