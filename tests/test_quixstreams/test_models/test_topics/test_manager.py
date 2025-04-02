@@ -331,6 +331,15 @@ class TestTopicManager:
 
         assert stream_id == "test1--test2"
 
+    def test_stream_id_from_topics_sorted(self, topic_manager_factory):
+        topic_manager = topic_manager_factory()
+        topic1 = topic_manager.topic("test1")
+        topic2 = topic_manager.topic("test2")
+
+        assert topic_manager.stream_id_from_topics(
+            [topic1, topic2]
+        ) == topic_manager.stream_id_from_topics([topic2, topic1])
+
     def test_stream_id_from_topics_no_topics_fails(self, topic_manager_factory):
         topic_manager = topic_manager_factory()
         with pytest.raises(ValueError):

@@ -146,3 +146,12 @@ class TestQuixTopicManager:
         topic_manager = quix_topic_manager_factory()
         with pytest.raises(ValueError):
             topic_manager.stream_id_from_topics([])
+
+    def test_stream_id_from_topics_sorted(self, quix_topic_manager_factory):
+        topic_manager = quix_topic_manager_factory()
+        topic1 = topic_manager.topic("test1")
+        topic2 = topic_manager.topic("test2")
+
+        assert topic_manager.stream_id_from_topics(
+            [topic1, topic2]
+        ) == topic_manager.stream_id_from_topics([topic2, topic1])

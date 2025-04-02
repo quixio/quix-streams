@@ -73,7 +73,7 @@ class QuixTopicManager(TopicManager):
 
         # Use the "quix_name" to generate stream_id.
         # In Quix Cloud, the "quix_name" can differ from the actual broker topic name
-        return "--".join(t.quix_name for t in topics)
+        return "--".join(sorted(t.quix_name for t in topics))
 
     def _fetch_topic(self, topic: Topic) -> Topic:
         try:
