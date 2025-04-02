@@ -1,3 +1,4 @@
+import datetime
 from typing import Iterable, Optional
 from unittest.mock import MagicMock
 
@@ -395,6 +396,56 @@ class TestInfluxDB3Sink:
                     "tags": {},
                     "fields": result,
                     "time": timestamp,
+                }
+            ],
+            write_precision="ms",
+        )
+
+    @pytest.mark.parametrize(
+        "time",
+        (
+            1625140800,
+            1625140800.123456,
+            "2021-07-01T00:00:00Z",
+            datetime.datetime(2021, 7, 1, 0, 0, 0, 123456),
+        ),
+    )
+    def test_valid_timestamps(self, influxdb3_sink_factory, time, caplog):
+        """
+        Valid timestamps are accepted and correctly recognize as mins/maxes.
+        """
+        client_mock = MagicMock(spec_set=InfluxDBClient3)
+        measurement = "measurement"
+        sink = influxdb3_sink_factory(
+            client_mock=client_mock,
+            measurement=measurement,
+            convert_ints_to_floats=True,
+            time_key="time",
+        )
+        topic = "test-topic"
+
+        value = {"str_key": "value", "int_key": 10, "time": time}
+        sink.add(
+            value=value,
+            key="key",
+            timestamp=1,
+            headers=[],
+            topic=topic,
+            partition=0,
+            offset=1,
+        )
+        with caplog.at_level("INFO"):
+            sink.flush()
+            assert f"min_timestamp={str(time)}" in caplog.text
+            assert f"max_timestamp={str(time)}" in caplog.text
+
+        client_mock.write.assert_called_once_with(
+            record=[
+                {
+                    "measurement": measurement,
+                    "tags": {},
+                    "fields": value,
+                    "time": time,
                 }
             ],
             write_precision="ms",

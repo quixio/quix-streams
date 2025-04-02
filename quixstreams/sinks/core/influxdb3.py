@@ -1,6 +1,7 @@
 import logging
 import sys
 import time
+from datetime import datetime
 from typing import Any, Callable, Iterable, Literal, Mapping, Optional, Union, get_args
 
 from quixstreams.models import HeadersTuples
@@ -245,8 +246,8 @@ class InfluxDB3Sink(BatchingSink):
         for write_batch in batch.iter_chunks(n=self._batch_size):
             records = []
 
-            min_timestamp = sys.maxsize
-            max_timestamp = -1
+            min_timestamp = None
+            max_timestamp = None
 
             for item in write_batch:
                 value = item.value
@@ -285,7 +286,16 @@ class InfluxDB3Sink(BatchingSink):
                         for k, v in fields.items()
                     }
 
-                ts = value[time_key] if time_key is not None else item.timestamp
+                if time_key is None:
+                    ts = item.timestamp
+                else:
+                    ts = value[time_key]
+                    # Note: currently NOT validating the timestamp itself is valid
+                    if not isinstance(ts, valid := (str, int, float, datetime)):
+                        raise TypeError(
+                            f'Influxdb3 "time" field expects: {valid}, got {type(ts)}'
+                        )
+
                 record = {
                     "measurement": _measurement,
                     "tags": tags,
@@ -293,8 +303,8 @@ class InfluxDB3Sink(BatchingSink):
                     "time": ts,
                 }
                 records.append(record)
-                min_timestamp = min(ts, min_timestamp)
-                max_timestamp = max(ts, max_timestamp)
+                min_timestamp = min(ts, min_timestamp or _ts_min_default(ts))
+                max_timestamp = max(ts, max_timestamp or _ts_max_default(ts))
 
             try:
                 _start = time.monotonic()
@@ -317,3 +327,21 @@ class InfluxDB3Sink(BatchingSink):
                         retry_after=int(exc.retry_after)
                     ) from exc
                 raise
+
+
+def _ts_min_default(timestamp: Union[int, float, str, datetime]):
+    if isinstance(timestamp, (int, float)):
+        return sys.maxsize
+    elif isinstance(timestamp, str):
+        return "~"  # lexicographically largest ASCII char
+    elif isinstance(timestamp, datetime):
+        return datetime.max
+
+
+def _ts_max_default(timestamp: Union[int, float, str, datetime]):
+    if isinstance(timestamp, (int, float)):
+        return -1
+    elif isinstance(timestamp, str):
+        return ""
+    elif isinstance(timestamp, datetime):
+        return datetime.min
