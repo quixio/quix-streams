@@ -19,9 +19,9 @@ from typing_extensions import TypeAlias
 from quixstreams.context import message_context
 from quixstreams.core.stream import TransformExpandedCallback
 from quixstreams.dataframe.exceptions import InvalidOperation
+from quixstreams.models.topics.manager import TopicManager
 from quixstreams.state import WindowedPartitionTransaction
 
-from ...models import TopicManager
 from .aggregations import BaseAggregator, BaseCollector
 
 if TYPE_CHECKING:
