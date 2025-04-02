@@ -340,7 +340,7 @@ class TopicManager:
         if not topics:
             raise ValueError("At least one Topic must be passed")
 
-        return "--".join(t.name for t in topics)
+        return "--".join(sorted(t.name for t in topics))
 
     def _validate_topic_name(self, name: str) -> None:
         """
