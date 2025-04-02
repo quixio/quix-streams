@@ -85,8 +85,8 @@ class LocalFileSource(FileSource):
 
     def get_file_list(self, filepath: Path) -> Iterable[Path]:
         if filepath.is_dir():
-            for i in sorted(filepath.iterdir(), key=lambda x: x.name):
-                yield from self.get_file_list(i)
+            for fp in sorted(filepath.iterdir()):
+                yield from self.get_file_list(fp)
         else:
             yield filepath
 
