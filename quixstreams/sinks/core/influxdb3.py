@@ -297,7 +297,6 @@ class InfluxDB3Sink(BatchingSink):
                 else:
                     ts = value[time_key]
                     # Note: currently NOT validating the timestamp itself is valid
-                    # Also, int length must correspond to the passed `time_precision`
                     if not isinstance(ts, valid := (str, int, datetime)):
                         raise TypeError(
                             f'InfluxDB3 "time" field expects: {valid}, got {type(ts)}'
