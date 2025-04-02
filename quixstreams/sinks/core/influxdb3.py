@@ -40,11 +40,12 @@ InfluxDBValueMap = dict[str, Union[str, int, float, bool]]
 FieldsCallable = Callable[[InfluxDBValueMap], Iterable[str]]
 MeasurementCallable = Callable[[InfluxDBValueMap], str]
 TagsCallable = Callable[[InfluxDBValueMap], Iterable[str]]
-
+TimeCallable = Callable[[InfluxDBValueMap], Optional[Union[str, int, datetime]]]
 
 FieldsSetter = Union[Iterable[str], FieldsCallable]
 MeasurementSetter = Union[str, MeasurementCallable]
 TagsSetter = Union[Iterable[str], TagsCallable]
+TimeSetter = Union[str, TimeCallable]
 
 
 class InfluxDB3Sink(BatchingSink):
@@ -64,7 +65,7 @@ class InfluxDB3Sink(BatchingSink):
         measurement: MeasurementSetter,
         fields_keys: FieldsSetter = (),
         tags_keys: TagsSetter = (),
-        time_key: Optional[str] = None,
+        time_setter: Optional[TimeSetter] = None,
         time_precision: TimePrecision = "ms",
         allow_missing_fields: bool = False,
         include_metadata_tags: bool = False,
@@ -115,7 +116,7 @@ class InfluxDB3Sink(BatchingSink):
             - If empty, no tags will be sent.
             >***NOTE***: InfluxDB client always converts tag values to strings.
             Default - `()`.
-        :param time_key: a key to be used as "time" when writing to InfluxDB.
+        :param time_setter: a key to be used as "time" when writing to InfluxDB.
             By default, the record timestamp will be used with "ms" time precision.
             When using a custom key, you may need to adjust the `time_precision` setting
             to match.
@@ -180,30 +181,15 @@ class InfluxDB3Sink(BatchingSink):
             },
         }
         self._client: Optional[InfluxDBClient3] = None
-        self._measurement = self._measurement_callable(measurement)
-        self._fields_keys = self._fields_callable(fields_keys)
-        self._tags_keys = self._tags_callable(tags_keys)
+        self._measurement = _measurement_callable(measurement)
+        self._fields_keys = _fields_callable(fields_keys)
+        self._tags_keys = _tags_callable(tags_keys)
+        self._time_setter = _time_callable(time_setter)
         self._include_metadata_tags = include_metadata_tags
-        self._time_key = time_key
         self._write_precision = self._TIME_PRECISIONS[time_precision]
         self._batch_size = batch_size
         self._allow_missing_fields = allow_missing_fields
         self._convert_ints_to_floats = convert_ints_to_floats
-
-    def _measurement_callable(self, setter: MeasurementSetter) -> MeasurementCallable:
-        if callable(setter):
-            return setter
-        return lambda value: setter
-
-    def _fields_callable(self, setter: FieldsSetter) -> FieldsCallable:
-        if callable(setter):
-            return setter
-        return lambda value: setter
-
-    def _tags_callable(self, setter: TagsSetter) -> TagsCallable:
-        if callable(setter):
-            return setter
-        return lambda value: setter
 
     def setup(self):
         self._client = InfluxDBClient3(**self._client_args)
@@ -248,7 +234,7 @@ class InfluxDB3Sink(BatchingSink):
         measurement = self._measurement
         fields_keys = self._fields_keys
         tags_keys = self._tags_keys
-        time_key = self._time_key
+        time_setter = self._time_setter
         for write_batch in batch.iter_chunks(n=self._batch_size):
             records = []
 
@@ -261,6 +247,7 @@ class InfluxDB3Sink(BatchingSink):
                 _measurement = measurement(value)
                 _tags_keys = tags_keys(value)
                 _fields_keys = fields_keys(value)
+                ts = time_setter(value)
 
                 tags = {}
                 for tag_key in _tags_keys:
@@ -271,6 +258,25 @@ class InfluxDB3Sink(BatchingSink):
                     if tag_key in value:
                         tag = value.pop(tag_key)
                         tags[tag_key] = tag
+
+                if ts is None:
+                    ts = item.timestamp
+                else:
+                    # Note: currently NOT validating the timestamp itself is valid
+                    if not isinstance(ts, valid := (str, int, datetime)):
+                        raise TypeError(
+                            f'InfluxDB3 "time" field expects: {valid}, got {type(ts)}'
+                        )
+
+                if isinstance(ts, int):
+                    time_len = len(str(ts))
+                    expected = TIME_PRECISION_LEN[self._write_precision]
+                    if time_len != expected:
+                        raise ValueError(
+                            f'`time_precision` of "{self._write_precision}" '
+                            f"expects a {expected}-digit integer epoch, "
+                            f"got {time_len} (timestamp: {ts})."
+                        )
 
                 if self._include_metadata_tags:
                     tags["__key"] = item.key
@@ -291,25 +297,6 @@ class InfluxDB3Sink(BatchingSink):
                         k: float(v) if isinstance(v, int) else v
                         for k, v in fields.items()
                     }
-
-                if time_key is None:
-                    ts = item.timestamp
-                else:
-                    ts = value[time_key]
-                    # Note: currently NOT validating the timestamp itself is valid
-                    if not isinstance(ts, valid := (str, int, datetime)):
-                        raise TypeError(
-                            f'InfluxDB3 "time" field expects: {valid}, got {type(ts)}'
-                        )
-                if isinstance(ts, int):
-                    time_len = len(str(ts))
-                    expected = TIME_PRECISION_LEN[self._write_precision]
-                    if time_len != expected:
-                        raise ValueError(
-                            f'`time_precision` of "{self._write_precision}" '
-                            f"expects a {expected}-digit integer epoch, "
-                            f"got {time_len} (timestamp: {ts})."
-                        )
 
                 record = {
                     "measurement": _measurement,
@@ -360,3 +347,29 @@ def _ts_max_default(timestamp: Union[int, str, datetime]):
         return ""
     elif isinstance(timestamp, datetime):
         return datetime.min.replace(tzinfo=timezone.utc)
+
+
+def _measurement_callable(setter: MeasurementSetter) -> MeasurementCallable:
+    if callable(setter):
+        return setter
+    return lambda value: setter
+
+
+def _fields_callable(setter: FieldsSetter) -> FieldsCallable:
+    if callable(setter):
+        return setter
+    return lambda value: setter
+
+
+def _tags_callable(setter: TagsSetter) -> TagsCallable:
+    if callable(setter):
+        return setter
+    return lambda value: setter
+
+
+def _time_callable(setter: Optional[TimeSetter]) -> TimeCallable:
+    if callable(setter):
+        return setter
+    if isinstance(setter, str):
+        return lambda value: value[setter]  # type:  ignore
+    return lambda value: None  # the kafka timestamp will be used

@@ -31,7 +31,7 @@ def influxdb3_sink_factory():
             measurement=measurement,
             fields_keys=fields_keys,
             tags_keys=tags_keys,
-            time_key=time_key,
+            time_setter=time_key,
             time_precision=time_precision,
             include_metadata_tags=include_metadata_tags,
             convert_ints_to_floats=convert_ints_to_floats,
@@ -50,7 +50,7 @@ class TestInfluxDB3Sink:
         sink = influxdb3_sink_factory(client_mock=client_mock, measurement=measurement)
         topic = "test-topic"
 
-        value, timestamp = {"key": "value"}, 1
+        value, timestamp = {"key": "value"}, 1234567890123
         for partition in (0, 1):
             sink.add(
                 value=value,
@@ -87,7 +87,7 @@ class TestInfluxDB3Sink:
         )
         topic = "test-topic"
 
-        value, timestamp = {"key1": 1, "key2": 2}, 1
+        value, timestamp = {"key1": 1, "key2": 2}, 1234567890123
         sink.add(
             value=value,
             key="key",
@@ -121,7 +121,7 @@ class TestInfluxDB3Sink:
         )
         topic = "test-topic"
 
-        value, timestamp = {"key1": 1, "tag1": 1}, 1
+        value, timestamp = {"key1": 1, "tag1": 1}, 1234567890123
         sink.add(
             value=value,
             key="key",
@@ -173,7 +173,7 @@ class TestInfluxDB3Sink:
         )
         topic = "test-topic"
 
-        value, timestamp = {"a": 1, "b": 2}, 1
+        value, timestamp = {"a": 1, "b": 2}, 1234567890123
         sink.add(
             value=value,
             key="key",
@@ -220,7 +220,7 @@ class TestInfluxDB3Sink:
         )
         topic = "test-topic"
 
-        key, value, timestamp = "key", {"key1": 1, "tag1": 1}, 1
+        key, value, timestamp = "key", {"key1": 1, "tag1": 1}, 1234567890123
         sink.add(
             value=value,
             key=key,
@@ -254,7 +254,7 @@ class TestInfluxDB3Sink:
         topic = "test-topic"
 
         value1, value2 = {"key": "value1"}, {"key": "value2"}
-        timestamp = 1
+        timestamp = 1234567890123
         sink.add(
             value=value1,
             key="key",
@@ -318,7 +318,7 @@ class TestInfluxDB3Sink:
         topic = "test-topic"
 
         value1 = {"key": "value1"}
-        timestamp = 1
+        timestamp = 1234567890123
         sink.add(
             value=value1,
             key="key",
@@ -346,7 +346,7 @@ class TestInfluxDB3Sink:
         topic = "test-topic"
 
         value1 = {"key": "value1"}
-        timestamp = 1
+        timestamp = 1234567890123
         sink.add(
             value=value1,
             key="key",
@@ -377,7 +377,8 @@ class TestInfluxDB3Sink:
         )
         topic = "test-topic"
 
-        value, timestamp = {"str_key": "value", "int_key": 0, "float_key": 1.1}, 1
+        value = {"str_key": "value", "int_key": 0, "float_key": 1.1}
+        timestamp = 1234567890123
         sink.add(
             value=value,
             key="key",
@@ -429,7 +430,7 @@ class TestInfluxDB3Sink:
         sink.add(
             value=value,
             key="key",
-            timestamp=1,
+            timestamp=1234567890123,
             headers=[],
             topic=topic,
             partition=0,
@@ -472,7 +473,7 @@ class TestInfluxDB3Sink:
         sink.add(
             value=value,
             key="key",
-            timestamp=1,
+            timestamp=1234567890123,
             headers=[],
             topic=topic,
             partition=0,
@@ -484,3 +485,6 @@ class TestInfluxDB3Sink:
         error_str = str(e)
         assert precision in error_str
         assert "got 16" in error_str
+
+
+# TODO: add tests for all the different passable callables.
