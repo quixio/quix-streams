@@ -141,7 +141,7 @@ class StreamingDataFrame:
             raise ValueError("At least one Topic must be passed")
 
         self._stream: Stream = stream or Stream()
-        self._topics = set(topics)
+        self._topics = frozenset(topics)
         self._topic_manager = topic_manager
         self._registry = registry
         self._processing_context = processing_context
