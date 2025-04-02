@@ -125,7 +125,7 @@ class TestQuixTopicManager:
         topic_manager = quix_topic_manager_factory(workspace_id="workspace_id")
         topic1 = topic_manager.topic("test1")
         topic2 = topic_manager.topic("test2")
-        stream_id = topic_manager.stream_id_from_topics(topic1, topic2)
+        stream_id = topic_manager.stream_id_from_topics([topic1, topic2])
 
         assert stream_id == "test1--test2"
 
@@ -138,11 +138,11 @@ class TestQuixTopicManager:
         """
         topic_manager = quix_topic_manager_factory(workspace_id="workspace_id")
         topic1 = topic_manager.topic("test1")
-        stream_id = topic_manager.stream_id_from_topics(topic1)
+        stream_id = topic_manager.stream_id_from_topics([topic1])
 
         assert stream_id == "workspace_id-test1"
 
     def test_stream_id_from_topics_no_topics_fails(self, quix_topic_manager_factory):
         topic_manager = quix_topic_manager_factory()
         with pytest.raises(ValueError):
-            topic_manager.stream_id_from_topics()
+            topic_manager.stream_id_from_topics([])

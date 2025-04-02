@@ -1,5 +1,5 @@
 import logging
-from typing import Literal, Optional
+from typing import Literal, Optional, Sequence
 
 from quixstreams.models.topics import Topic, TopicAdmin, TopicConfig, TopicManager
 from quixstreams.models.topics.exceptions import TopicNotFoundError
@@ -60,7 +60,7 @@ class QuixTopicManager(TopicManager):
         )
         self._quix_config_builder = quix_config_builder
 
-    def stream_id_from_topics(self, *topics: Topic) -> str:
+    def stream_id_from_topics(self, topics: Sequence[Topic]) -> str:
         """
         Generate a stream_id by combining names of the provided topics.
         """

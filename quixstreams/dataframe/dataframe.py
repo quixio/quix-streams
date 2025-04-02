@@ -172,7 +172,7 @@ class StreamingDataFrame:
 
         By default, a topic name or a combination of topic names are used as `stream_id`.
         """
-        return self._topic_manager.stream_id_from_topics(*self.topics)
+        return self._topic_manager.stream_id_from_topics(self.topics)
 
     @property
     def topics(self) -> list[Topic]:
@@ -587,7 +587,7 @@ class StreamingDataFrame:
             )
 
         # Generate a config for the new repartition topic based on the underlying topics
-        repartition_config = self._topic_manager.derive_topic_config(*self._topics)
+        repartition_config = self._topic_manager.derive_topic_config(self._topics)
 
         groupby_topic = self._topic_manager.repartition_topic(
             operation=operation,
@@ -1642,7 +1642,7 @@ class StreamingDataFrame:
         self.ensure_topics_copartitioned()
 
         # Generate a changelog topic config based on the underlying topics.
-        changelog_topic_config = self._topic_manager.derive_topic_config(*self._topics)
+        changelog_topic_config = self._topic_manager.derive_topic_config(self._topics)
 
         self._processing_context.state_manager.register_store(
             stream_id=self.stream_id, changelog_config=changelog_topic_config
@@ -1676,7 +1676,7 @@ class StreamingDataFrame:
         """
 
         clone = self.__class__(
-            *topics or self._topics,
+            *(topics or self._topics),
             stream=stream,
             processing_context=self._processing_context,
             topic_manager=self._topic_manager,

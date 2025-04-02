@@ -1,6 +1,6 @@
 import logging
 from itertools import chain
-from typing import Dict, List, Literal, Optional
+from typing import Dict, Iterable, List, Literal, Optional, Sequence
 
 from quixstreams.models.serializers import DeserializerType, SerializerType
 
@@ -283,7 +283,7 @@ class TopicManager:
         return topic
 
     @classmethod
-    def derive_topic_config(cls, *topics: Topic) -> TopicConfig:
+    def derive_topic_config(cls, topics: Iterable[Topic]) -> TopicConfig:
         """
         Derive a topic config based on one or more input Topic configs.
         To be used for generating the internal changelogs and repartition topics.
@@ -333,7 +333,7 @@ class TopicManager:
             },
         )
 
-    def stream_id_from_topics(self, *topics: Topic) -> str:
+    def stream_id_from_topics(self, topics: Sequence[Topic]) -> str:
         """
         Generate a stream_id by combining names of the provided topics.
         """

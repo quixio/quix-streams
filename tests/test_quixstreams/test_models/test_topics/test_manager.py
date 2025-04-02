@@ -117,7 +117,7 @@ class TestTopicManager:
             ),
         )
 
-        config = topic_manager.derive_topic_config(topic1, topic2)
+        config = topic_manager.derive_topic_config([topic1, topic2])
         assert config.num_partitions == 2
         assert config.replication_factor == 1
         assert config.extra_config == {
@@ -128,7 +128,7 @@ class TestTopicManager:
     def test_derive_topic_config_no_topics(self, topic_manager_factory):
         topic_manager = topic_manager_factory()
         with pytest.raises(ValueError, match="At least one Topic must be passed"):
-            topic_manager.derive_topic_config()
+            topic_manager.derive_topic_config([])
 
     def test_derive_topic_config_max_retention(self, topic_manager_factory):
         topic_manager = topic_manager_factory()
@@ -149,7 +149,7 @@ class TestTopicManager:
             ),
         )
 
-        config = topic_manager.derive_topic_config(topic1, topic2)
+        config = topic_manager.derive_topic_config([topic1, topic2])
         assert config.num_partitions == 2
         assert config.replication_factor == 1
         assert config.extra_config == {
@@ -327,11 +327,11 @@ class TestTopicManager:
         topic_manager = topic_manager_factory()
         topic1 = topic_manager.topic("test1")
         topic2 = topic_manager.topic("test2")
-        stream_id = topic_manager.stream_id_from_topics(topic1, topic2)
+        stream_id = topic_manager.stream_id_from_topics([topic1, topic2])
 
         assert stream_id == "test1--test2"
 
     def test_stream_id_from_topics_no_topics_fails(self, topic_manager_factory):
         topic_manager = topic_manager_factory()
         with pytest.raises(ValueError):
-            topic_manager.stream_id_from_topics()
+            topic_manager.stream_id_from_topics([])
