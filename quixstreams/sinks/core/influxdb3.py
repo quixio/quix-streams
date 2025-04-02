@@ -28,6 +28,12 @@ logger = logging.getLogger(__name__)
 
 
 TimePrecision = Literal["ms", "ns", "us", "s"]
+TIME_PRECISION_LEN = {
+    "s": 10,
+    "ms": 13,
+    "ns": 16,
+    "us": 19,
+}
 
 InfluxDBValueMap = dict[str, Union[str, int, float, bool]]
 
@@ -43,10 +49,10 @@ TagsSetter = Union[Iterable[str], TagsCallable]
 
 class InfluxDB3Sink(BatchingSink):
     _TIME_PRECISIONS = {
+        "s": WritePrecision.S,
         "ms": WritePrecision.MS,
         "ns": WritePrecision.NS,
         "us": WritePrecision.US,
-        "s": WritePrecision.S,
     }
 
     def __init__(
@@ -291,9 +297,18 @@ class InfluxDB3Sink(BatchingSink):
                 else:
                     ts = value[time_key]
                     # Note: currently NOT validating the timestamp itself is valid
-                    if not isinstance(ts, valid := (str, int, float, datetime)):
+                    # Also, int length must correspond to the passed `time_precision`
+                    if not isinstance(ts, valid := (str, int, datetime)):
                         raise TypeError(
-                            f'Influxdb3 "time" field expects: {valid}, got {type(ts)}'
+                            f'InfluxDB3 "time" field expects: {valid}, got {type(ts)}'
+                        )
+                if isinstance(ts, int):
+                    time_len = len(str(ts))
+                    expected = TIME_PRECISION_LEN[self._write_precision]
+                    if time_len != expected:
+                        raise ValueError(
+                            f'`time_precision` of "{self._write_precision}" '
+                            f"expects a {expected}-digit integer epoch, got {time_len}"
                         )
 
                 record = {
@@ -329,8 +344,8 @@ class InfluxDB3Sink(BatchingSink):
                 raise
 
 
-def _ts_min_default(timestamp: Union[int, float, str, datetime]):
-    if isinstance(timestamp, (int, float)):
+def _ts_min_default(timestamp: Union[int, str, datetime]):
+    if isinstance(timestamp, int):
         return sys.maxsize
     elif isinstance(timestamp, str):
         return "~"  # lexicographically largest ASCII char
@@ -338,8 +353,8 @@ def _ts_min_default(timestamp: Union[int, float, str, datetime]):
         return datetime.max
 
 
-def _ts_max_default(timestamp: Union[int, float, str, datetime]):
-    if isinstance(timestamp, (int, float)):
+def _ts_max_default(timestamp: Union[int, str, datetime]):
+    if isinstance(timestamp, int):
         return -1
     elif isinstance(timestamp, str):
         return ""

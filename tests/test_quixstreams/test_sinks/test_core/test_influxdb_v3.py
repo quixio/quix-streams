@@ -404,8 +404,7 @@ class TestInfluxDB3Sink:
     @pytest.mark.parametrize(
         "time",
         (
-            1625140800,
-            1625140800.123456,
+            1625140800123,
             "2021-07-01T00:00:00Z",
             datetime.datetime(2021, 7, 1, 0, 0, 0, 123456),
         ),
@@ -450,3 +449,36 @@ class TestInfluxDB3Sink:
             ],
             write_precision="ms",
         )
+
+    def test_invalid_int_timestamp(self, influxdb3_sink_factory):
+        """
+        Valid timestamps are accepted and correctly recognize as mins/maxes.
+        """
+        precision = "ms"
+        client_mock = MagicMock(spec_set=InfluxDBClient3)
+        measurement = "measurement"
+        sink = influxdb3_sink_factory(
+            client_mock=client_mock,
+            measurement=measurement,
+            convert_ints_to_floats=True,
+            time_key="time",
+            time_precision=precision,
+        )
+        topic = "test-topic"
+
+        value = {"str_key": "value", "int_key": 10, "time": 1234567890123456}
+        sink.add(
+            value=value,
+            key="key",
+            timestamp=1,
+            headers=[],
+            topic=topic,
+            partition=0,
+            offset=1,
+        )
+        with pytest.raises(ValueError) as e:
+            sink.flush()
+
+        error_str = str(e)
+        assert precision in error_str
+        assert "got 16" in error_str
