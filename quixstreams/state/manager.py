@@ -166,8 +166,8 @@ class StateStoreManager:
         self,
         stream_id: Optional[str],
         store_name: str = DEFAULT_STATE_STORE_NAME,
-        changelog_config: Optional[TopicConfig] = None,
         store_type: Optional[StoreTypes] = None,
+        changelog_config: Optional[TopicConfig] = None,
     ) -> None:
         """
         Register a state store to be managed by StateStoreManager.
