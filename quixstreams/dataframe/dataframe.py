@@ -1665,7 +1665,6 @@ class StreamingDataFrame:
         self,
         *topics: Topic,
         stream: Optional[Stream] = None,
-        stream_id: Optional[str] = None,
     ) -> Self:
         """
         Clone the StreamingDataFrame with a new `stream`, `topics`,
@@ -1673,7 +1672,6 @@ class StreamingDataFrame:
 
         :param topics: one or more `Topic` objects
         :param stream: instance of `Stream`, optional.
-        :param stream_id: an identifier of the data stream, optional
         :return: a new `StreamingDataFrame`.
         """
 
