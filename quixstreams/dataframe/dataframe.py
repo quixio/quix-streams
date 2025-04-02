@@ -1599,8 +1599,9 @@ class StreamingDataFrame:
 
         """
         merged_stream = self.stream.merge(other.stream)
-        topics = set(self.topics) | set(other.topics)
-        return self.__dataframe_clone__(*topics, stream=merged_stream)
+        return self.__dataframe_clone__(
+            *self.topics, *other.topics, stream=merged_stream
+        )
 
     def ensure_topics_copartitioned(self):
         partitions_counts = set(t.broker_config.num_partitions for t in self._topics)
