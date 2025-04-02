@@ -1,7 +1,7 @@
 import logging
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Callable, Iterable, Literal, Mapping, Optional, Union, get_args
 
 from quixstreams.models import HeadersTuples
@@ -350,7 +350,7 @@ def _ts_min_default(timestamp: Union[int, str, datetime]):
     elif isinstance(timestamp, str):
         return "~"  # lexicographically largest ASCII char
     elif isinstance(timestamp, datetime):
-        return datetime.max
+        return datetime.max.replace(tzinfo=timezone.utc)
 
 
 def _ts_max_default(timestamp: Union[int, str, datetime]):
@@ -359,4 +359,4 @@ def _ts_max_default(timestamp: Union[int, str, datetime]):
     elif isinstance(timestamp, str):
         return ""
     elif isinstance(timestamp, datetime):
-        return datetime.min
+        return datetime.min.replace(tzinfo=timezone.utc)

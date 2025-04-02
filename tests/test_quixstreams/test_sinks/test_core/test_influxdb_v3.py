@@ -406,7 +406,9 @@ class TestInfluxDB3Sink:
         (
             1625140800123,
             "2021-07-01T00:00:00Z",
-            datetime.datetime(2021, 7, 1, 0, 0, 0, 123456),
+            datetime.datetime(
+                2021, 7, 1, 0, 0, 0, 123456, tzinfo=datetime.timezone.utc
+            ),
         ),
     )
     def test_valid_timestamps(self, influxdb3_sink_factory, time, caplog):
