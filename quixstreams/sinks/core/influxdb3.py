@@ -308,7 +308,8 @@ class InfluxDB3Sink(BatchingSink):
                     if time_len != expected:
                         raise ValueError(
                             f'`time_precision` of "{self._write_precision}" '
-                            f"expects a {expected}-digit integer epoch, got {time_len}"
+                            f"expects a {expected}-digit integer epoch, "
+                            f"got {time_len} (timestamp: {ts})."
                         )
 
                 record = {

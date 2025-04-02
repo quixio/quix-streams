@@ -452,7 +452,7 @@ class TestInfluxDB3Sink:
 
     def test_invalid_int_timestamp(self, influxdb3_sink_factory):
         """
-        Valid timestamps are accepted and correctly recognize as mins/maxes.
+        Integer timestamps must match the precision length else raise an error.
         """
         precision = "ms"
         client_mock = MagicMock(spec_set=InfluxDBClient3)
