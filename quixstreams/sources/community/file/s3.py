@@ -26,7 +26,10 @@ except ImportError as exc:
 
 logger = logging.getLogger(__name__)
 
-__all__ = ("S3FileSource",)
+__all__ = (
+    "S3FileSource",
+    "MissingS3Bucket",
+)
 
 
 class MissingS3Bucket(Exception): ...
@@ -121,15 +124,6 @@ class S3FileSource(FileSource):
         }
         self._client: Optional[S3Client] = None
 
-    def _close_client(self):
-        logger.debug("Closing S3 client session...")
-        if self._client:
-            try:
-                self._client.close()
-            except Exception as e:
-                logger.error(f"Azure client session exited non-gracefully: {e}")
-        self._client = None
-
     def setup(self):
         if self._client is None:
             self._client = boto_client("s3", **self._credentials)
@@ -146,8 +140,8 @@ class S3FileSource(FileSource):
             Prefix=str(filepath),
             Delimiter="/",
         )
-        for _folder in resp.get("CommonPrefixes", []):
-            yield from self.get_file_list(_folder["Prefix"])
+        for folder in resp.get("CommonPrefixes", []):
+            yield from self.get_file_list(folder["Prefix"])
 
         for file in resp.get("Contents", []):
             yield Path(file["Key"])
@@ -169,3 +163,12 @@ class S3FileSource(FileSource):
     def stop(self):
         self._close_client()
         super().stop()
+
+    def _close_client(self):
+        logger.debug("Closing S3 client session...")
+        if self._client:
+            try:
+                self._client.close()
+            except Exception as e:
+                logger.error(f"S3 client session exited non-gracefully: {e}")
+            self._client = None

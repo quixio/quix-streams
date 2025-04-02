@@ -94,4 +94,4 @@ class LocalFileSource(FileSource):
         return BytesIO(filepath.read_bytes())
 
     def file_partition_counter(self) -> int:
-        return len([f for f in self._filepath.iterdir()])
+        return len(list(self._filepath.iterdir()))

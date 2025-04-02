@@ -21,7 +21,10 @@ except ImportError as exc:
         'run "pip install quixstreams[azure-file]" to use AzureFileOrigin'
     ) from exc
 
-__all__ = ("AzureFileSource",)
+__all__ = (
+    "AzureFileSource",
+    "MissingAzureContainer",
+)
 
 
 logger = logging.getLogger(__name__)
@@ -104,15 +107,6 @@ class AzureFileSource(FileSource):
         self._auth = connection_string
         self._client: Optional[ContainerClient] = None
 
-    def _close_client(self):
-        logger.debug("Closing Azure client session...")
-        if self._client:
-            try:
-                self._client.close()
-            except Exception as e:
-                logger.error(f"Azure client session exited non-gracefully: {e}")
-        self._client = None
-
     def setup(self):
         if self._client is None:
             self._client = ContainerClient.from_connection_string(
@@ -155,3 +149,12 @@ class AzureFileSource(FileSource):
     def stop(self):
         self._close_client()
         super().stop()
+
+    def _close_client(self):
+        logger.debug("Closing Azure client session...")
+        if self._client:
+            try:
+                self._client.close()
+            except Exception as e:
+                logger.error(f"Azure client session exited non-gracefully: {e}")
+            self._client = None
