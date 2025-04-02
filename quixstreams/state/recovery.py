@@ -349,7 +349,7 @@ class RecoveryManager:
 
         :param stream_id: stream id
         :param store_name: name of the store
-        :param topic_config: a TopicConfig to use, optional.
+        :param topic_config: a TopicConfig to use
         """
         return self._topic_manager.changelog_topic(
             stream_id=stream_id,
