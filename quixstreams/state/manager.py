@@ -80,7 +80,7 @@ class StateStoreManager:
     def stores(self) -> Dict[Optional[str], Dict[str, Store]]:
         """
         Map of registered state stores
-        :return: dict in format {topic: {store_name: store}}
+        :return: dict in format {stream_id: {store_name: store}}
         """
         return self._stores
 
@@ -175,8 +175,6 @@ class StateStoreManager:
         During processing, the StateStoreManager will react to rebalancing callbacks
         and assign/revoke the partitions for registered stores.
 
-        Each store can be registered only once for each topic.
-
         :param stream_id: stream id
         :param store_name: store name
         :param store_type: the storage type used for this store.
@@ -221,7 +219,7 @@ class StateStoreManager:
         During processing, the StateStoreManager will react to rebalancing callbacks
         and assign/revoke the partitions for registered stores.
 
-        Each window store can be registered only once for each topic.
+        Each window store can be registered only once for each stream_id.
 
         :param stream_id: stream id
         :param store_name: store name
@@ -253,8 +251,8 @@ class StateStoreManager:
         """
         if any(
             store.partitions
-            for topic_stores in self._stores.values()
-            for store in topic_stores.values()
+            for stream_stores in self._stores.values()
+            for store in stream_stores.values()
         ):
             raise PartitionStoreIsUsed(
                 "Cannot clear stores with active partitions assigned"
@@ -271,11 +269,11 @@ class StateStoreManager:
         committed_offsets: dict[str, int],
     ) -> Dict[str, StorePartition]:
         """
-        Assign store partitions for each registered store for the given `TopicPartition`
-        and return a list of assigned `StorePartition` objects.
+        Assign store partitions for each registered store for the given stream_id
+         and partition number, and return a list of assigned `StorePartition` objects.
 
         :param stream_id: stream id
-        :param partition: Kafka topic partition
+        :param partition: Kafka topic partition number
         :param committed_offsets: a dict with latest committed offsets
             of all assigned topics for this partition number.
         :return: list of assigned `StorePartition`
@@ -299,7 +297,8 @@ class StateStoreManager:
         partition: int,
     ) -> None:
         """
-        Revoke store partitions for each registered store for the given `TopicPartition`
+        Revoke store partitions for each registered store
+        for the given stream_id and partition number.
 
         :param stream_id: stream id
         :param partition: partition number
@@ -321,8 +320,8 @@ class StateStoreManager:
         """
         Close all registered stores
         """
-        for topic_stores in self._stores.values():
-            for store in topic_stores.values():
+        for stream_stores in self._stores.values():
+            for store in stream_stores.values():
                 store.close()
 
     def __enter__(self):
