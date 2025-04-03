@@ -1,3 +1,4 @@
+import datetime
 from typing import Iterable, Optional
 from unittest.mock import MagicMock
 
@@ -30,7 +31,7 @@ def influxdb3_sink_factory():
             measurement=measurement,
             fields_keys=fields_keys,
             tags_keys=tags_keys,
-            time_key=time_key,
+            time_setter=time_key,
             time_precision=time_precision,
             include_metadata_tags=include_metadata_tags,
             convert_ints_to_floats=convert_ints_to_floats,
@@ -49,7 +50,7 @@ class TestInfluxDB3Sink:
         sink = influxdb3_sink_factory(client_mock=client_mock, measurement=measurement)
         topic = "test-topic"
 
-        value, timestamp = {"key": "value"}, 1
+        value, timestamp = {"key": "value"}, 1234567890123
         for partition in (0, 1):
             sink.add(
                 value=value,
@@ -86,7 +87,7 @@ class TestInfluxDB3Sink:
         )
         topic = "test-topic"
 
-        value, timestamp = {"key1": 1, "key2": 2}, 1
+        value, timestamp = {"key1": 1, "key2": 2}, 1234567890123
         sink.add(
             value=value,
             key="key",
@@ -120,7 +121,7 @@ class TestInfluxDB3Sink:
         )
         topic = "test-topic"
 
-        value, timestamp = {"key1": 1, "tag1": 1}, 1
+        value, timestamp = {"key1": 1, "tag1": 1}, 1234567890123
         sink.add(
             value=value,
             key="key",
@@ -172,7 +173,7 @@ class TestInfluxDB3Sink:
         )
         topic = "test-topic"
 
-        value, timestamp = {"a": 1, "b": 2}, 1
+        value, timestamp = {"a": 1, "b": 2}, 1234567890123
         sink.add(
             value=value,
             key="key",
@@ -219,7 +220,7 @@ class TestInfluxDB3Sink:
         )
         topic = "test-topic"
 
-        key, value, timestamp = "key", {"key1": 1, "tag1": 1}, 1
+        key, value, timestamp = "key", {"key1": 1, "tag1": 1}, 1234567890123
         sink.add(
             value=value,
             key=key,
@@ -253,7 +254,7 @@ class TestInfluxDB3Sink:
         topic = "test-topic"
 
         value1, value2 = {"key": "value1"}, {"key": "value2"}
-        timestamp = 1
+        timestamp = 1234567890123
         sink.add(
             value=value1,
             key="key",
@@ -317,7 +318,7 @@ class TestInfluxDB3Sink:
         topic = "test-topic"
 
         value1 = {"key": "value1"}
-        timestamp = 1
+        timestamp = 1234567890123
         sink.add(
             value=value1,
             key="key",
@@ -345,7 +346,7 @@ class TestInfluxDB3Sink:
         topic = "test-topic"
 
         value1 = {"key": "value1"}
-        timestamp = 1
+        timestamp = 1234567890123
         sink.add(
             value=value1,
             key="key",
@@ -376,7 +377,8 @@ class TestInfluxDB3Sink:
         )
         topic = "test-topic"
 
-        value, timestamp = {"str_key": "value", "int_key": 0, "float_key": 1.1}, 1
+        value = {"str_key": "value", "int_key": 0, "float_key": 1.1}
+        timestamp = 1234567890123
         sink.add(
             value=value,
             key="key",
@@ -399,3 +401,90 @@ class TestInfluxDB3Sink:
             ],
             write_precision="ms",
         )
+
+    @pytest.mark.parametrize(
+        "time",
+        (
+            1625140800123,
+            "2021-07-01T00:00:00Z",
+            datetime.datetime(
+                2021, 7, 1, 0, 0, 0, 123456, tzinfo=datetime.timezone.utc
+            ),
+        ),
+    )
+    def test_valid_timestamps(self, influxdb3_sink_factory, time, caplog):
+        """
+        Valid timestamps are accepted and correctly recognize as mins/maxes.
+        """
+        client_mock = MagicMock(spec_set=InfluxDBClient3)
+        measurement = "measurement"
+        sink = influxdb3_sink_factory(
+            client_mock=client_mock,
+            measurement=measurement,
+            convert_ints_to_floats=True,
+            time_key="time",
+        )
+        topic = "test-topic"
+
+        value = {"str_key": "value", "int_key": 10, "time": time}
+        sink.add(
+            value=value,
+            key="key",
+            timestamp=1234567890123,
+            headers=[],
+            topic=topic,
+            partition=0,
+            offset=1,
+        )
+        with caplog.at_level("INFO"):
+            sink.flush()
+            assert f"min_timestamp={str(time)}" in caplog.text
+            assert f"max_timestamp={str(time)}" in caplog.text
+
+        client_mock.write.assert_called_once_with(
+            record=[
+                {
+                    "measurement": measurement,
+                    "tags": {},
+                    "fields": value,
+                    "time": time,
+                }
+            ],
+            write_precision="ms",
+        )
+
+    def test_invalid_int_timestamp(self, influxdb3_sink_factory):
+        """
+        Integer timestamps must match the precision length else raise an error.
+        """
+        precision = "ms"
+        client_mock = MagicMock(spec_set=InfluxDBClient3)
+        measurement = "measurement"
+        sink = influxdb3_sink_factory(
+            client_mock=client_mock,
+            measurement=measurement,
+            convert_ints_to_floats=True,
+            time_key="time",
+            time_precision=precision,
+        )
+        topic = "test-topic"
+
+        value = {"str_key": "value", "int_key": 10, "time": 1234567890123456}
+        sink.add(
+            value=value,
+            key="key",
+            timestamp=1234567890123,
+            headers=[],
+            topic=topic,
+            partition=0,
+            offset=1,
+        )
+        with pytest.raises(ValueError) as e:
+            sink.flush()
+
+        error_str = str(e)
+        assert precision in error_str
+        assert "got 16" in error_str
+
+
+# TODO: add tests for all the different passable callables.
