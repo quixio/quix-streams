@@ -7,6 +7,7 @@ import pprint
 import typing
 import warnings
 from datetime import timedelta
+from operator import attrgetter
 from typing import (
     Any,
     Callable,
@@ -141,7 +142,10 @@ class StreamingDataFrame:
             raise ValueError("At least one Topic must be passed")
 
         self._stream: Stream = stream or Stream()
-        self._topics = frozenset(topics)
+        # Implicitly deduplicate Topic objects into a tuple and sort them by name
+        self._topics: tuple[Topic, ...] = tuple(
+            sorted({t.name: t for t in topics}.values(), key=attrgetter("name"))
+        )
         self._topic_manager = topic_manager
         self._registry = registry
         self._processing_context = processing_context
@@ -175,8 +179,8 @@ class StreamingDataFrame:
         return self._topic_manager.stream_id_from_topics(self.topics)
 
     @property
-    def topics(self) -> list[Topic]:
-        return sorted(self._topics, key=lambda t: t.name)
+    def topics(self) -> tuple[Topic, ...]:
+        return self._topics
 
     @overload
     def apply(
@@ -1580,8 +1584,10 @@ class StreamingDataFrame:
         # uses apply without returning to make this operation terminal
         self.apply(_sink_callback, metadata=True)
 
-    def concat(self, other: Self) -> Self:
-        """
+    def concat(
+        self,
+        other: Self,
+        frame_="""
         Concatenate two StreamingDataFrames together and return a new one.
         The transformations applied on this new StreamingDataFrame will update data
         from both origins.
@@ -1597,7 +1603,9 @@ class StreamingDataFrame:
         :param other: other StreamingDataFrame
         :return: a new StreamingDataFrame
 
-        """
+        """,
+    ) -> Self:
+        frame_
         merged_stream = self.stream.merge(other.stream)
         return self.__dataframe_clone__(
             *self.topics, *other.topics, stream=merged_stream

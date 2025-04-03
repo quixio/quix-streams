@@ -362,7 +362,3 @@ class Topic:
 
     def __repr__(self):
         return f'<{self.__class__.__name__} name="{self.name}">'
-
-    def __hash__(self):
-        # TODO: Think again if we need "hash" because it can backfire in weird ways
-        return hash(self.name)

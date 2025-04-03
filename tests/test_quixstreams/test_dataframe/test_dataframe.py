@@ -2437,6 +2437,7 @@ class TestStreamingDataFrameConcat:
         # Branching is not exclusive, and it duplicates data in this case.
         # Check that we receive the results from both branches
         sdf_concatenated = sdf_branch1.concat(sdf_branch2)
+        assert sdf_concatenated.stream_id == sdf.stream_id
         assert sdf_concatenated.test(value=1, key=b"key1", timestamp=1) == [
             (2, b"key1", 1, None),
             (3, b"key1", 1, None),
@@ -2453,7 +2454,7 @@ class TestStreamingDataFrameConcat:
         topic1 = topic_manager.topic(str(uuid.uuid4()))
         topic2 = topic_manager.topic(str(uuid.uuid4()))
 
-        def accumulate(value: dict, state: State) -> []:
+        def accumulate(value: dict, state: State):
             items = state.get("items", [])
             items.append(value)
             state.set("items", items)
