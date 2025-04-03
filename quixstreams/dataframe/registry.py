@@ -39,9 +39,12 @@ class DataFrameRegistry:
         dataframe: "StreamingDataFrame",
     ):
         """
-        Register a "root" SDF, or the start of a topic's processing.
+        Register a StreamingDataFrame to process data from the topic.
 
-        :param dataframe: the new SDF.
+        The provided SDF must belong to exactly one topic.
+        Only one SDF can be registered for the given topic.
+
+        :param dataframe: StreamingDataFrame instance
         """
         topics = dataframe.topics
         if len(topics) > 1:
