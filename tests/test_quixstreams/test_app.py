@@ -1081,14 +1081,14 @@ class TestApplicationWithState:
     def _validate_state(
         self,
         stores,
-        topic,
+        stream_id,
         partition_index,
         state_manager_factory,
         consumer_group,
         state_dir,
         validator,
     ):
-        store = stores[topic.name]
+        store = stores[stream_id]
         partition = store.partitions[partition_index]
         with partition.begin() as tx:
             validator(tx)
@@ -1100,13 +1100,13 @@ class TestApplicationWithState:
             state_manager = state_manager_factory(
                 group_id=consumer_group, state_dir=state_dir
             )
-            state_manager.register_store(topic.name, "default")
+            state_manager.register_store(stream_id, "default")
             state_manager.on_partition_assign(
-                stream_id=topic.name,
+                stream_id=stream_id,
                 partition=partition_index,
-                committed_offsets={topic.name: -1001},
+                committed_offsets={stream_id: -1001},
             )
-            store = state_manager.get_store(stream_id=topic.name, store_name="default")
+            store = state_manager.get_store(stream_id=stream_id, store_name="default")
             with store.start_partition_transaction(partition=partition_index) as tx:
                 validator(tx)
 
@@ -1175,7 +1175,7 @@ class TestApplicationWithState:
 
         self._validate_state(
             stores,
-            topic_in,
+            sdf.stream_id,
             partition_num,
             state_manager_factory,
             consumer_group,
@@ -1232,13 +1232,13 @@ class TestApplicationWithState:
         state_manager = state_manager_factory(
             group_id=consumer_group, state_dir=state_dir
         )
-        state_manager.register_store(topic_in.name, "default")
+        state_manager.register_store(sdf.stream_id, "default")
         state_manager.on_partition_assign(
-            stream_id=topic_in.name,
+            stream_id=sdf.stream_id,
             partition=0,
-            committed_offsets={topic_in.name: -1001},
+            committed_offsets={},
         )
-        store = state_manager.get_store(stream_id=topic_in.name, store_name="default")
+        store = state_manager.get_store(stream_id=sdf.stream_id, store_name="default")
         with store.start_partition_transaction(partition=0) as tx:
             assert tx.get("total", prefix=key) is None
 
@@ -1311,7 +1311,7 @@ class TestApplicationWithState:
 
         self._validate_state(
             stores,
-            topic_in,
+            sdf.stream_id,
             partition_num,
             state_manager_factory,
             consumer_group,
@@ -1445,7 +1445,7 @@ class TestApplicationRecovery:
 
         def validate_state(stores):
             for p_num, count in partition_msg_count.items():
-                store = stores[topic.name]
+                store = stores[sdf.stream_id]
                 partition = store.partitions[p_num]
                 assert partition.get_changelog_offset() == count - 1
                 with partition.begin() as tx:
@@ -1457,15 +1457,15 @@ class TestApplicationRecovery:
                     group_id=consumer_group,
                     state_dir=state_dir,
                 ) as state_manager:
-                    state_manager.register_store(topic.name, store_name)
+                    state_manager.register_store(sdf.stream_id, store_name)
                     for p_num, count in partition_msg_count.items():
                         state_manager.on_partition_assign(
-                            stream_id=topic.name,
+                            stream_id=sdf.stream_id,
                             partition=p_num,
                             committed_offsets={topic.name: -1001},
                         )
                         store = state_manager.get_store(
-                            stream_id=topic.name, store_name=store_name
+                            stream_id=sdf.stream_id, store_name=store_name
                         )
                         partition = store.partitions[p_num]
                         assert partition.get_changelog_offset() == count - 1
@@ -1593,7 +1593,7 @@ class TestApplicationRecovery:
                 ),
             )
             # Create a streaming dataframe with a hopping window
-            (
+            sdf = (
                 app.dataframe(topic)
                 .apply(lambda row: row["my_value"])
                 .hopping_window(
@@ -1604,7 +1604,7 @@ class TestApplicationRecovery:
                 .sum()
                 .final()
             )
-            return app, topic
+            return app, sdf, topic
 
         def validate_state():
             actual_store_name = (
@@ -1613,15 +1613,15 @@ class TestApplicationRecovery:
             with state_manager_factory(
                 group_id=consumer_group, state_dir=state_dir
             ) as state_manager:
-                state_manager.register_windowed_store(topic.name, actual_store_name)
+                state_manager.register_windowed_store(sdf.stream_id, actual_store_name)
                 for p_num, windows in expected_window_updates.items():
                     state_manager.on_partition_assign(
-                        stream_id=topic.name,
+                        stream_id=sdf.stream_id,
                         partition=p_num,
                         committed_offsets={topic.name: -1001},
                     )
                     store = state_manager.get_store(
-                        stream_id=topic.name,
+                        stream_id=sdf.stream_id,
                         store_name=actual_store_name,
                     )
 
@@ -1660,7 +1660,7 @@ class TestApplicationRecovery:
                                 expected *= msg_int_value
                             assert tx.get_window(*window, prefix=prefix) == expected
 
-        app, topic = get_app()
+        app, sdf, topic = get_app()
         # Produce messages to the topic and flush
         with app.get_producer() as producer:
             for p_num, timestamps in partition_timestamps.items():
@@ -1686,7 +1686,7 @@ class TestApplicationRecovery:
 
         # run the app again and validate the recovered state
         processed_count = {0: 0, 1: 0}
-        app, topic = get_app()
+        app, sdf, topic = get_app()
         app.clear_state()
         done = Future()
         executor.submit(_stop_app_on_future, app, done, 10.0)
@@ -1776,7 +1776,7 @@ class TestApplicationRecovery:
                 assert state.get("latest") == value
 
         def validate_state(stores):
-            store = stores[topic.name]
+            store = stores[sdf.stream_id]
             partition = store.partitions[0]
             with partition.begin() as tx:
                 _validate_transaction_state(tx)
@@ -1794,11 +1794,11 @@ class TestApplicationRecovery:
                     committed_offset = consumer.committed(
                         [TopicPartition(topic=topic_name, partition=0)]
                     )[0].offset
-                    state_manager.register_store(topic.name, store_name)
+                    state_manager.register_store(sdf.stream_id, store_name)
                     partition = state_manager.on_partition_assign(
-                        stream_id=topic.name,
+                        stream_id=sdf.stream_id,
                         partition=0,
-                        committed_offsets={topic.name: committed_offset},
+                        committed_offsets={topic_name: committed_offset},
                     )["default"]
                     with partition.begin() as tx:
                         _validate_transaction_state(tx)
@@ -2474,7 +2474,7 @@ class TestApplicationMultipleSdf:
 
     def _validate_state(
         self,
-        input_topics,
+        stream_ids,
         stores,
         partition_num,
         message_key,
@@ -2483,8 +2483,8 @@ class TestApplicationMultipleSdf:
         consumer_group,
         state_dir,
     ):
-        for topic in input_topics:
-            store = stores[topic.name]
+        for stream_id in stream_ids:
+            store = stores[stream_id]
             partition = store.partitions[partition_num]
             with partition.begin() as tx:
                 assert tx.get("total", prefix=message_key) == messages_per_topic
@@ -2496,14 +2496,14 @@ class TestApplicationMultipleSdf:
                 state_manager = state_manager_factory(
                     group_id=consumer_group, state_dir=state_dir
                 )
-                state_manager.register_store(topic.name, "default")
+                state_manager.register_store(stream_id, "default")
                 state_manager.on_partition_assign(
-                    stream_id=topic.name,
+                    stream_id=stream_id,
                     partition=partition_num,
-                    committed_offsets={topic.name: -1001},
+                    committed_offsets={},
                 )
                 store = state_manager.get_store(
-                    stream_id=topic.name, store_name="default"
+                    stream_id=stream_id, store_name="default"
                 )
                 with store.start_partition_transaction(partition=partition_num) as tx:
                     # All keys in state must be prefixed with the message key
@@ -2593,7 +2593,7 @@ class TestApplicationMultipleSdf:
 
         assert processed_count == total_messages
         self._validate_state(
-            input_topics,
+            [sdf_a.stream_id, sdf_b.stream_id],
             stores,
             partition_num,
             message_key,
@@ -2671,10 +2671,10 @@ class TestApplicationMultipleSdf:
             sdf_b = app.dataframe(input_topic_b)
             sdf_b.update(count, stateful=True)
 
-            return app, input_topics
+            return app, [sdf_a, sdf_b], input_topics
 
         # produce messages, then run app until all are processed else timeout
-        app, input_topics = get_app()
+        app, sdf, input_topics = get_app()
         produce_messages(app, input_topics)
 
         done = Future()
@@ -2685,7 +2685,7 @@ class TestApplicationMultipleSdf:
         # Clear state, repeat the same produce/run process
         # Should result in 2x the original expected count
         processed_count = 0
-        app, input_topics = get_app()
+        app, sdfs, input_topics = get_app()
         app.clear_state()
         produce_messages(app, input_topics)
 
@@ -2703,7 +2703,7 @@ class TestApplicationMultipleSdf:
         assert processed_count == total_messages
 
         self._validate_state(
-            input_topics,
+            [sdf.stream_id for sdf in sdfs],
             stores,
             partition_num,
             message_key,
