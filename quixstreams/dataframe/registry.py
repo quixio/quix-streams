@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING, Optional
 
 from quixstreams.core.stream import Stream, VoidExecutor
 from quixstreams.models import Topic
@@ -28,7 +28,7 @@ class DataFrameRegistry:
         self._stream_ids_to_topics: dict[str, set[str]] = {}
 
     @property
-    def consumer_topics(self) -> List[Topic]:
+    def consumer_topics(self) -> list[Topic]:
         """
         :return: a list of Topics a consumer should subscribe to.
         """
@@ -81,7 +81,7 @@ class DataFrameRegistry:
 
     def compose_all(
         self, sink: Optional[VoidExecutor] = None
-    ) -> Dict[str, VoidExecutor]:
+    ) -> dict[str, VoidExecutor]:
         """
         Composes all the Streams and returns a dict of format {<topic>: <VoidExecutor>}
         :param sink: callable to accumulate the results of the execution, optional.
