@@ -1026,23 +1026,8 @@ class Application:
         else:
             self._processing_context.commit_checkpoint(force=True)
 
-        non_changelog_topics = self._topic_manager.non_changelog_topics
-        non_changelog_tps = [
-            tp for tp in topic_partitions if tp.topic in non_changelog_topics
-        ]
-        for tp in non_changelog_tps:
-            if self._state_manager.stores:
-                stream_ids = self._dataframe_registry.get_stream_ids(
-                    topic_name=tp.topic
-                )
-                # Revoke store partitions for the given stream ids
-                for stream_id in stream_ids:
-                    self._state_manager.on_partition_revoke(
-                        stream_id=stream_id, partition=tp.partition
-                    )
-            self._processing_context.on_partition_revoke(
-                topic=tp.topic, partition=tp.partition
-            )
+        self._revoke_state_partitions(topic_partitions=topic_partitions)
+        self._processing_context.on_partition_revoke()
 
     def _on_lost(self, _, topic_partitions: List[TopicPartition]):
         """
@@ -1050,6 +1035,10 @@ class Application:
         """
         logger.debug("Rebalancing: dropping lost partitions")
 
+        self._revoke_state_partitions(topic_partitions=topic_partitions)
+        self._processing_context.on_partition_revoke()
+
+    def _revoke_state_partitions(self, topic_partitions: List[TopicPartition]):
         non_changelog_topics = self._topic_manager.non_changelog_topics
         non_changelog_tps = [
             tp for tp in topic_partitions if tp.topic in non_changelog_topics
@@ -1063,9 +1052,6 @@ class Application:
                     self._state_manager.on_partition_revoke(
                         stream_id=stream_id, partition=tp.partition
                     )
-            self._processing_context.on_partition_revoke(
-                topic=tp.topic, partition=tp.partition
-            )
 
     def _setup_signal_handlers(self):
         signal.signal(signal.SIGINT, self._on_sigint)
