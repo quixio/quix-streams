@@ -380,6 +380,11 @@ class RecoveryManager:
             )
             self._consumer.seek(tp)
             self._consumer.resume([tp])
+            _, hwm = self._consumer.get_watermark_offsets(tp)
+
+            logger.debug(
+                f"Schedule recovery from changelog topic topic={tp.topic} partition={tp.partition} total_to_recover={hwm - rp.offset}"
+            )
 
         self._recovery_loop()
         if self._running:
@@ -550,6 +555,9 @@ class RecoveryManager:
             else:
                 msg = raise_for_msg_error(msg)
                 rp = self._recovery_partitions[msg.partition()][msg.topic()]
+                logger.debug(
+                    f"Recovering from the changelog message topic={msg.topic()} partition={msg.partition()} offset={msg.offset()} "
+                )
                 rp.recover_from_changelog_message(changelog_message=msg)
 
     def stop_recovery(self):
