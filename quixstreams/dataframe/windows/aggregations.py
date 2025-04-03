@@ -227,7 +227,7 @@ class Min(Aggregator):
 
 class Earliest(Aggregator):
     """
-    Use `Earliest()` to get the earliest event, or a column of the event, within each window period.
+    Use `Earliest()` to get the event (or its column) with the smallest timestamp within each window period.
 
     :param column: The column to aggregate. Use `None` to earliest the whole message.
         Default - `None`
@@ -290,6 +290,7 @@ class Latest(Aggregator):
 class First(Aggregator):
     """
     Use `First()` to get the first event, or a column of the event, within each window period.
+    This aggregation works based on the processing order.
 
     :param column: The column to aggregate. Use `None` to first the whole message.
         Default - `None`
@@ -313,6 +314,7 @@ class First(Aggregator):
 class Last(Aggregator):
     """
     Use `Last()` to get the last event, or a column of the event, within each window period.
+    This aggregation works based on the processing order.
 
     :param column: The column to aggregate. Use `None` to last the whole message.
         Default - `None`

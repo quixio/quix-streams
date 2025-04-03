@@ -212,8 +212,8 @@ sdf = (
 - [`Max()`](api-reference/quixstreams.md#max) - to get a maximum value within a window.
 - [`Mean()`](api-reference/quixstreams.md#mean) - to get a mean value within a window.
 - [`Sum()`](api-reference/quixstreams.md#sum) - to sum values within a window.
-- [`Earliest`](api-reference/quixstreams.md#earliest) - to get the earliest value within a window.
-- [`Latest`](api-reference/quixstreams.md#latest) - to get the latest value within a window.
+- [`Earliest`](api-reference/quixstreams.md#earliest) - to get the value with the smallest timestamp within a window.
+- [`Latest`](api-reference/quixstreams.md#latest) - to get the value with the largest timestamp within a window.
 - [`First`](api-reference/quixstreams.md#first) - to get the first value within a window.
 - [`Last`](api-reference/quixstreams.md#last) - to get the last value within a window.
 - [`Reduce()`](api-reference/quixstreams.md#reduce) - to write a custom aggregation (deprecated, use [custom aggregator](#custom-aggregator) instead).
