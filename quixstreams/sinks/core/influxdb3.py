@@ -294,7 +294,7 @@ class InfluxDB3Sink(BatchingSink):
 
                 if self._convert_ints_to_floats:
                     fields = {
-                        k: float(v) if isinstance(v, int) else v
+                        k: float(v) if type(v) is int else v  # avoids bool matching
                         for k, v in fields.items()
                     }
 
