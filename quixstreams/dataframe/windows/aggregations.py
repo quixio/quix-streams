@@ -258,7 +258,7 @@ class Earliest(Aggregator):
 
 class Latest(Aggregator):
     """
-    Use `Latest()` to get the latest event, or a column of the event, within each window period.
+    Use `Latest()` to get the event (or its column) with the latest timestamp within each window period.
 
     :param column: The column to aggregate. Use `None` to latest the whole message.
         Default - `None`
