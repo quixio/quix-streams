@@ -40,10 +40,10 @@ class DataFrameRegistry:
     ):
         """
         Register a "root" SDF, or the start of a topic's processing.
+
         :param dataframe: the new SDF.
         """
         topics = dataframe.topics
-        # TODO: Test
         if len(topics) > 1:
             raise ValueError(
                 f"Expected a StreamingDataFrame with one topic, got {len(topics)}"
