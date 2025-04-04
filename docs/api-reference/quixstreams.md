@@ -2968,7 +2968,7 @@ a list of (<start>, <end>) tuples
 class BaseAggregator(ABC, Generic[S])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L30)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L34)
 
 Base class for window aggregation.
 
@@ -2989,7 +2989,7 @@ To store all incoming items without reducing them use a `Collector`.
 def state_suffix() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L44)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L48)
 
 The state suffix is used to store the aggregation state in the window.
 
@@ -3008,7 +3008,7 @@ conflicts with previous state values.
 def initialize() -> S
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L57)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L61)
 
 This method is triggered once to build the aggregation starting value.
 It should return the initial value for the aggregation.
@@ -3022,7 +3022,7 @@ It should return the initial value for the aggregation.
 def agg(old: S, new: Any, timestamp: int) -> S
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L65)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L69)
 
 This method is trigged when a window is updated with a new value.
 It should return the updated aggregated value.
@@ -3036,7 +3036,7 @@ It should return the updated aggregated value.
 def result(value: S) -> Any
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L73)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L77)
 
 This method is triggered when a window is closed.
 It should return the final aggregation result.
@@ -3049,7 +3049,7 @@ It should return the final aggregation result.
 class Aggregator(BaseAggregator)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L81)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L85)
 
 Implementation of the `BaseAggregator` interface.
 
@@ -3063,7 +3063,7 @@ Provides default implementations for the `state_suffix` property.
 class Count(Aggregator)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L98)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L102)
 
 Use `Count()` to aggregate the total number of events  within each window period..
 
@@ -3075,7 +3075,7 @@ Use `Count()` to aggregate the total number of events  within each window period
 class Sum(Aggregator)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L122)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L126)
 
 Use `Sum()` to aggregate the sum of the events, or a column of the events, within each window period.
 
@@ -3092,7 +3092,7 @@ Default - `None`
 class Mean(Aggregator)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L146)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L150)
 
 Use `Mean()` to aggregate the mean of the events, or a column of the events, within each window period.
 
@@ -3109,7 +3109,7 @@ Default - `None`
 class Max(Aggregator)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L174)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L178)
 
 Use `Max()` to aggregate the max of the events, or a column of the events, within each window period.
 
@@ -3126,13 +3126,85 @@ Default - `None`
 class Min(Aggregator)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L199)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L203)
 
 Use `Min()` to aggregate the min of the events, or a column of the events, within each window period.
 
 **Arguments**:
 
 - `column`: The column to min. Use `None` to min the whole message.
+Default - `None`
+
+<a id="quixstreams.dataframe.windows.aggregations.Earliest"></a>
+
+### Earliest
+
+```python
+class Earliest(Aggregator)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L228)
+
+Use `Earliest()` to get the event (or its column) with the smallest timestamp within each window period.
+
+**Arguments**:
+
+- `column`: The column to aggregate. Use `None` to earliest the whole message.
+Default - `None`
+
+<a id="quixstreams.dataframe.windows.aggregations.Latest"></a>
+
+### Latest
+
+```python
+class Latest(Aggregator)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L259)
+
+Use `Latest()` to get the event (or its column) with the latest timestamp within each window period.
+
+**Arguments**:
+
+- `column`: The column to aggregate. Use `None` to latest the whole message.
+Default - `None`
+
+<a id="quixstreams.dataframe.windows.aggregations.First"></a>
+
+### First
+
+```python
+class First(Aggregator)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L290)
+
+Use `First()` to get the first event, or a column of the event, within each window period.
+
+This aggregation works based on the processing order.
+
+**Arguments**:
+
+- `column`: The column to aggregate. Use `None` to first the whole message.
+Default - `None`
+
+<a id="quixstreams.dataframe.windows.aggregations.Last"></a>
+
+### Last
+
+```python
+class Last(Aggregator)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L314)
+
+Use `Last()` to get the last event, or a column of the event, within each window period.
+
+This aggregation works based on the processing order.
+
+**Arguments**:
+
+- `column`: The column to aggregate. Use `None` to last the whole message.
 Default - `None`
 
 <a id="quixstreams.dataframe.windows.aggregations.Reduce"></a>
@@ -3143,7 +3215,7 @@ Default - `None`
 class Reduce(Aggregator, Generic[R])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L227)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L341)
 
 `Reduce()` allows you to perform complex aggregations using custom "reducer" and "initializer" functions.
 
@@ -3155,7 +3227,7 @@ class Reduce(Aggregator, Generic[R])
 class BaseCollector(ABC, Generic[I])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L253)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L367)
 
 Base class for window collections.
 
@@ -3175,7 +3247,7 @@ To reduce incoming items as they come in use an `Aggregator`.
 def column() -> Optional[str]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L266)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L380)
 
 The column to collect.
 
@@ -3190,7 +3262,7 @@ Use `None` to collect the whole message.
 def result(items: Iterable[I]) -> Any
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L275)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L389)
 
 This method is triggered when a window is closed.
 It should return the final collection result.
@@ -3203,7 +3275,7 @@ It should return the final collection result.
 class Collector(BaseCollector)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L283)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L397)
 
 Implementation of the `BaseCollector` interface.
 
@@ -3217,7 +3289,7 @@ Provides a default implementation for the `column` property.
 class Collect(Collector)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L298)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L412)
 
 Use `Collect()` to gather all events within each window period. into a list.
 
@@ -13110,102 +13182,38 @@ The iterable should output dicts with the following data/naming structure:
 
 - `filestream`: a filelike byte stream (such as `f` from `f = open(file)`)
 
-<a id="quixstreams.sources.community.file"></a>
+<a id="quixstreams.sources.community.file.local"></a>
 
-## quixstreams.sources.community.file
+## quixstreams.sources.community.file.local
 
-<a id="quixstreams.sources.community.file.file"></a>
+<a id="quixstreams.sources.community.file.local.LocalFileSource"></a>
 
-## quixstreams.sources.community.file.file
-
-<a id="quixstreams.sources.community.file.file.FileFetcher"></a>
-
-### FileFetcher
+### LocalFileSource
 
 ```python
-class FileFetcher()
+class LocalFileSource(FileSource)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/file.py#L26)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/local.py#L20)
 
-Serves individual files while downloading another in the background.
+A source for extracting records stored within files in a local filesystem.
 
-<a id="quixstreams.sources.community.file.file.FileSource"></a>
+It recursively iterates from the provided path (file or folder) and
+processes all found files by parsing and producing the given records contained
+in each file as individual messages to a kafka topic (same topic for all).
 
-### FileSource
+<a id="quixstreams.sources.community.file.local.LocalFileSource.__init__"></a>
+
+#### LocalFileSource.\_\_init\_\_
 
 ```python
-class FileSource(Source)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/file.py#L74)
-
-Ingest a set of files from a desired origin into Kafka by iterating through the
-provided folder and processing all nested files within it.
-
-Origins include a local filestore, AWS S3, or Microsoft Azure.
-
-FileSource defaults to a local filestore (LocalOrigin) + JSON format.
-
-Expects folder and file structures as generated by the related FileSink connector:
-
-```
-my_topics/
-├── topic_a/
-│   ├── 0/
-│   │   ├── 0000.ext
-│   │   └── 0011.ext
-│   └── 1/
-│       ├── 0003.ext
-│       └── 0016.ext
-└── topic_b/
-    └── etc...
-```
-
-Intended to be used with a single topic (ex: topic_a), but will recursively read
-from whatever entrypoint is passed to it.
-
-File format structure depends on the file format.
-
-See the `.formats` and `.compressions` modules to see what is supported.
-
-Example Usage:
-
-```python
-from quixstreams import Application
-from quixstreams.sources.community.file import FileSource
-from quixstreams.sources.community.file.origins import S3Origin
-
-app = Application(broker_address="localhost:9092", auto_offset_reset="earliest")
-
-origin = S3Origin(
-    bucket="<YOUR BUCKET>",
-    aws_access_key_id="<YOUR KEY ID>",
-    aws_secret_access_key="<YOUR SECRET KEY>",
-    aws_region="<YOUR REGION>",
-)
-source = FileSource(
-    directory="path/to/your/topic_folder/",
-    origin=origin,
-    format="json",
-    compression="gzip",
-)
-sdf = app.dataframe(source=source).print(metadata=True)
-# YOUR LOGIC HERE!
-
-if __name__ == "__main__":
-    app.run()
-```
-
-<a id="quixstreams.sources.community.file.file.FileSource.__init__"></a>
-
-#### FileSource.\_\_init\_\_
-
-```python
-def __init__(directory: Union[str, Path],
-             format: Union[Format, FormatName] = "json",
-             origin: Origin = LocalOrigin(),
+def __init__(filepath: Union[str, Path],
+             key_setter: Optional[Callable[[object], object]] = None,
+             value_setter: Optional[Callable[[object], object]] = None,
+             timestamp_setter: Optional[Callable[[object], int]] = None,
+             file_format: Union[Format, FormatName] = "json",
              compression: Optional[CompressionName] = None,
+             has_partition_folders: bool = False,
              replay_speed: float = 1.0,
              name: Optional[str] = None,
              shutdown_timeout: float = 30,
@@ -13215,24 +13223,29 @@ def __init__(directory: Union[str, Path],
                  ClientConnectFailureCallback] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/file.py#L134)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/local.py#L29)
 
 **Arguments**:
 
-- `directory`: a directory to recursively read through; it is recommended to
-provide the path to a given topic folder (ex: `/path/to/topic_a`).
-- `format`: what format the message files are in (ex: json, parquet).
-Optionally, can provide a `Format` instance if more than compression
-is necessary to define (compression will then be ignored).
-- `origin`: an Origin type (defaults to reading local files).
-- `compression`: what compression is used on the given files, if any.
-- `replay_speed`: Produce the messages with this speed multiplier, which
+- `filepath`: folder to recursively iterate from (a file will be used directly).
+- `key_setter`: sets the kafka message key for a record in the file.
+- `value_setter`: sets the kafka message value for a record in the file.
+- `timestamp_setter`: sets the kafka message timestamp for a record in the file.
+- `file_format`: what format the files are stored as (ex: "json").
+- `compression`: what compression was used on the files, if any (ex. "gzip").
+- `has_partition_folders`: whether files are nested within partition folders.
+If True, FileSource will match the output topic partition count with it.
+Set this flag to True if Quix Streams FileSink was used to dump data.
+Note: messages will only align with these partitions if original key is used.
+Example structure - a 2 partition topic (0, 1):
+[/topic/0/file_0.ext, /topic/0/file_1.ext, /topic/1/file_0.ext]
+- `replay_speed`: Produce messages with this speed multiplier, which
 roughly reflects the time "delay" between the original message producing.
 Use any float >= 0, where 0 is no delay, and 1 is the original speed.
 NOTE: Time delay will only be accurate per partition, NOT overall.
 - `name`: The name of the Source application (Default: last folder name).
 - `shutdown_timeout`: Time in seconds the application waits for the source
-to gracefully shutdown
+to gracefully shut down.
 - `on_client_connect_success`: An optional callback made after successful
 client authentication, primarily for additional logging.
 - `on_client_connect_failure`: An optional callback made after failed
@@ -13240,107 +13253,189 @@ client authentication (which should raise an Exception).
 Callback should accept the raised Exception as an argument.
 Callback must resolve (or propagate/re-raise) the Exception.
 
-<a id="quixstreams.sources.community.file.file.FileSource.default_topic"></a>
+<a id="quixstreams.sources.community.file.azure"></a>
 
-#### FileSource.default\_topic
+## quixstreams.sources.community.file.azure
 
-```python
-def default_topic() -> Topic
-```
+<a id="quixstreams.sources.community.file.azure.AzureFileSource"></a>
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/file.py#L220)
-
-Uses the file structure to generate the desired partition count for the
-
-internal topic.
-
-**Returns**:
-
-the original default topic, with updated partition count
-
-<a id="quixstreams.sources.community.file.origins.local"></a>
-
-## quixstreams.sources.community.file.origins.local
-
-<a id="quixstreams.sources.community.file.origins.azure"></a>
-
-## quixstreams.sources.community.file.origins.azure
-
-<a id="quixstreams.sources.community.file.origins.azure.AzureFileOrigin"></a>
-
-### AzureFileOrigin
+### AzureFileSource
 
 ```python
-class AzureFileOrigin(Origin)
+class AzureFileSource(FileSource)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/origins/azure.py#L26)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/azure.py#L36)
 
-<a id="quixstreams.sources.community.file.origins.azure.AzureFileOrigin.__init__"></a>
+A source for extracting records stored within files in an Azure Filestore container.
 
-#### AzureFileOrigin.\_\_init\_\_
+It recursively iterates from the provided path (file or folder) and
+processes all found files by parsing and producing the given records contained
+in each file as individual messages to a kafka topic (same topic for all).
+
+<a id="quixstreams.sources.community.file.azure.AzureFileSource.__init__"></a>
+
+#### AzureFileSource.\_\_init\_\_
 
 ```python
-def __init__(connection_string: str, container: str)
+def __init__(connection_string: str,
+             container: str,
+             filepath: Union[str, Path],
+             key_setter: Optional[Callable[[object], object]] = None,
+             value_setter: Optional[Callable[[object], object]] = None,
+             timestamp_setter: Optional[Callable[[object], int]] = None,
+             file_format: Union[Format, FormatName] = "json",
+             compression: Optional[CompressionName] = None,
+             has_partition_folders: bool = False,
+             replay_speed: float = 1.0,
+             name: Optional[str] = None,
+             shutdown_timeout: float = 30,
+             on_client_connect_success: Optional[
+                 ClientConnectSuccessCallback] = None,
+             on_client_connect_failure: Optional[
+                 ClientConnectFailureCallback] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/origins/azure.py#L27)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/azure.py#L45)
 
 **Arguments**:
 
 - `connection_string`: Azure client authentication string.
 - `container`: Azure container name.
+- `filepath`: folder to recursively iterate from (a file will be used directly).
+- `key_setter`: sets the kafka message key for a record in the file.
+- `value_setter`: sets the kafka message value for a record in the file.
+- `timestamp_setter`: sets the kafka message timestamp for a record in the file.
+- `file_format`: what format the files are stored as (ex: "json").
+- `compression`: what compression was used on the files, if any (ex. "gzip").
+- `has_partition_folders`: whether files are nested within partition folders.
+If True, FileSource will match the output topic partition count with it.
+Set this flag to True if Quix Streams FileSink was used to dump data.
+Note: messages will only align with these partitions if original key is used.
+Example structure - a 2 partition topic (0, 1):
+[/topic/0/file_0.ext, /topic/0/file_1.ext, /topic/1/file_0.ext]
+- `replay_speed`: Produce messages with this speed multiplier, which
+roughly reflects the time "delay" between the original message producing.
+Use any float >= 0, where 0 is no delay, and 1 is the original speed.
+NOTE: Time delay will only be accurate per partition, NOT overall.
+- `name`: The name of the Source application (Default: last folder name).
+- `shutdown_timeout`: Time in seconds the application waits for the source
+to gracefully shut down.
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
 
-<a id="quixstreams.sources.community.file.origins.azure.AzureFileOrigin.get_folder_count"></a>
+<a id="quixstreams.sources.community.file.azure.AzureFileSource.file_partition_counter"></a>
 
-#### AzureFileOrigin.get\_folder\_count
+#### AzureFileSource.file\_partition\_counter
 
 ```python
-def get_folder_count(directory: Path) -> int
+def file_partition_counter() -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/origins/azure.py#L57)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/azure.py#L135)
 
 This is a simplified version of the recommended way to retrieve folder
 names based on the azure SDK docs examples.
 
-<a id="quixstreams.sources.community.file.origins"></a>
+<a id="quixstreams.sources.community.file"></a>
 
-## quixstreams.sources.community.file.origins
+## quixstreams.sources.community.file
 
-<a id="quixstreams.sources.community.file.origins.s3"></a>
+<a id="quixstreams.sources.community.file.components"></a>
 
-## quixstreams.sources.community.file.origins.s3
+## quixstreams.sources.community.file.components
 
-<a id="quixstreams.sources.community.file.origins.s3.S3Origin"></a>
+<a id="quixstreams.sources.community.file.components.file_deserializer"></a>
 
-### S3Origin
+## quixstreams.sources.community.file.components.file\_deserializer
+
+<a id="quixstreams.sources.community.file.components.file_deserializer.raw_filestream_deserializer"></a>
+
+#### raw\_filestream\_deserializer
 
 ```python
-class S3Origin(Origin)
+def raw_filestream_deserializer(
+    formatter: Union[Format,
+                     FormatName], compression: Optional[CompressionName]
+) -> Callable[[BinaryIO], Iterable[object]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/origins/s3.py#L23)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/components/file_deserializer.py#L9)
 
-<a id="quixstreams.sources.community.file.origins.s3.S3Origin.__init__"></a>
+Returns a Callable that can deserialize a filestream into some form of iterable.
 
-#### S3Origin.\_\_init\_\_
+<a id="quixstreams.sources.community.file.components.file_fetcher"></a>
+
+## quixstreams.sources.community.file.components.file\_fetcher
+
+<a id="quixstreams.sources.community.file.components.file_fetcher.FileFetcher"></a>
+
+### FileFetcher
+
+```python
+class FileFetcher()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/components/file_fetcher.py#L13)
+
+Serves a file's content as a stream while downloading another in the background.
+
+<a id="quixstreams.sources.community.file.s3"></a>
+
+## quixstreams.sources.community.file.s3
+
+<a id="quixstreams.sources.community.file.s3.S3FileSource"></a>
+
+### S3FileSource
+
+```python
+class S3FileSource(FileSource)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/s3.py#L38)
+
+A source for extracting records stored within files in an S3 bucket location.
+
+It recursively iterates from the provided path (file or folder) and
+processes all found files by parsing and producing the given records contained
+in each file as individual messages to a kafka topic (same topic for all).
+
+<a id="quixstreams.sources.community.file.s3.S3FileSource.__init__"></a>
+
+#### S3FileSource.\_\_init\_\_
 
 ```python
 def __init__(
-    bucket: str,
-    region_name: Optional[str] = getenv("AWS_REGION"),
-    aws_access_key_id: Optional[str] = getenv("AWS_ACCESS_KEY_ID"),
-    aws_secret_access_key: Optional[str] = getenv("AWS_SECRET_ACCESS_KEY"),
-    endpoint_url: Optional[str] = getenv("AWS_ENDPOINT_URL_S3"))
+        filepath: Union[str, Path],
+        bucket: str,
+        region_name: Optional[str] = getenv("AWS_REGION"),
+        aws_access_key_id: Optional[str] = getenv("AWS_ACCESS_KEY_ID"),
+        aws_secret_access_key: Optional[str] = getenv("AWS_SECRET_ACCESS_KEY"),
+        endpoint_url: Optional[str] = getenv("AWS_ENDPOINT_URL_S3"),
+        key_setter: Optional[Callable[[object], object]] = None,
+        value_setter: Optional[Callable[[object], object]] = None,
+        timestamp_setter: Optional[Callable[[object], int]] = None,
+        has_partition_folders: bool = False,
+        file_format: Union[Format, FormatName] = "json",
+        compression: Optional[CompressionName] = None,
+        replay_speed: float = 1.0,
+        name: Optional[str] = None,
+        shutdown_timeout: float = 30,
+        on_client_connect_success: Optional[
+            ClientConnectSuccessCallback] = None,
+        on_client_connect_failure: Optional[
+            ClientConnectFailureCallback] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/origins/s3.py#L24)
-
-Configure IcebergSink to work with AWS Glue.
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/s3.py#L47)
 
 **Arguments**:
 
+- `filepath`: folder to recursively iterate from (a file will be used directly).
 - `bucket`: The S3 bucket name only (ex: 'your-bucket').
 - `region_name`: The AWS region.
 NOTE: can alternatively set the AWS_REGION environment variable
@@ -13351,24 +13446,30 @@ NOTE: can alternatively set the AWS_SECRET_ACCESS_KEY environment variable
 - `endpoint_url`: the endpoint URL to use; only required for connecting
 to a locally hosted S3.
 NOTE: can alternatively set the AWS_ENDPOINT_URL_S3 environment variable
-
-<a id="quixstreams.sources.community.file.origins.base"></a>
-
-## quixstreams.sources.community.file.origins.base
-
-<a id="quixstreams.sources.community.file.origins.base.Origin"></a>
-
-### Origin
-
-```python
-class Origin(ABC)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/origins/base.py#L10)
-
-An interface for interacting with a file-based client.
-
-Provides methods for navigating folders and retrieving/opening raw files.
+- `key_setter`: sets the kafka message key for a record in the file.
+- `value_setter`: sets the kafka message value for a record in the file.
+- `timestamp_setter`: sets the kafka message timestamp for a record in the file.
+- `file_format`: what format the files are stored as (ex: "json").
+- `compression`: what compression was used on the files, if any (ex. "gzip").
+- `has_partition_folders`: whether files are nested within partition folders.
+If True, FileSource will match the output topic partition count with it.
+Set this flag to True if Quix Streams FileSink was used to dump data.
+Note: messages will only align with these partitions if original key is used.
+Example structure - a 2 partition topic (0, 1):
+[/topic/0/file_0.ext, /topic/0/file_1.ext, /topic/1/file_0.ext]
+- `replay_speed`: Produce messages with this speed multiplier, which
+roughly reflects the time "delay" between the original message producing.
+Use any float >= 0, where 0 is no delay, and 1 is the original speed.
+NOTE: Time delay will only be accurate per partition, NOT overall.
+- `name`: The name of the Source application (Default: last folder name).
+- `shutdown_timeout`: Time in seconds the application waits for the source
+to gracefully shut down.
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
 
 <a id="quixstreams.sources.community.file.compressions.gzip"></a>
 
@@ -13381,6 +13482,185 @@ Provides methods for navigating folders and retrieving/opening raw files.
 <a id="quixstreams.sources.community.file.compressions.base"></a>
 
 ## quixstreams.sources.community.file.compressions.base
+
+<a id="quixstreams.sources.community.file.base"></a>
+
+## quixstreams.sources.community.file.base
+
+<a id="quixstreams.sources.community.file.base.FileSource"></a>
+
+### FileSource
+
+```python
+class FileSource(Source)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/base.py#L23)
+
+An interface for extracting records using a file-based client.
+
+It recursively iterates from a provided path (file or folder) and
+processes all found files by parsing and producing the given records contained
+in each file as individual messages to a kafka topic.
+
+Requires defining methods for navigating folders and retrieving/opening raw
+files for the respective client.
+
+When these abstract methods are defined, a FileSource will be able to:
+1. Prepare a list of files to download, and retrieve them sequentially
+2. Retrieve file contents asynchronously by downloading the upcoming one in the
+    background
+3. Decompress and deserialize the current file to loop through its records
+4. Apply a replay delay for each contained record based on previous record
+5. Serialize and produce respective messages to Kafka based on provided `setters`
+
+<a id="quixstreams.sources.community.file.base.FileSource.__init__"></a>
+
+#### FileSource.\_\_init\_\_
+
+```python
+def __init__(filepath: Union[str, Path],
+             key_setter: Optional[Callable[[object], object]] = None,
+             value_setter: Optional[Callable[[object], object]] = None,
+             timestamp_setter: Optional[Callable[[object], int]] = None,
+             file_format: Union[Format, FormatName] = "json",
+             compression: Optional[CompressionName] = None,
+             has_partition_folders: bool = False,
+             replay_speed: float = 1.0,
+             name: Optional[str] = None,
+             shutdown_timeout: float = 30,
+             on_client_connect_success: Optional[
+                 ClientConnectSuccessCallback] = None,
+             on_client_connect_failure: Optional[
+                 ClientConnectFailureCallback] = None)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/base.py#L43)
+
+**Arguments**:
+
+- `filepath`: folder to recursively iterate from (a file will be used directly).
+- `key_setter`: sets the kafka message key for a record in the file.
+- `value_setter`: sets the kafka message value for a record in the file.
+- `timestamp_setter`: sets the kafka message timestamp for a record in the file.
+- `file_format`: what format the files are stored as (ex: "json").
+- `compression`: what compression was used on the files, if any (ex. "gzip").
+- `has_partition_folders`: whether files are nested within partition folders.
+If True, FileSource will match the output topic partition count with it.
+Set this flag to True if Quix Streams FileSink was used to dump data.
+Note: messages will only align with these partitions if original key is used.
+Example structure - a 2 partition topic (0, 1):
+[/topic/0/file_0.ext, /topic/0/file_1.ext, /topic/1/file_0.ext]
+- `replay_speed`: Produce messages with this speed multiplier, which
+roughly reflects the time "delay" between the original message producing.
+Use any float >= 0, where 0 is no delay, and 1 is the original speed.
+NOTE: Time delay will only be accurate per partition, NOT overall.
+- `name`: The name of the Source application (Default: last folder name).
+- `shutdown_timeout`: Time in seconds the application waits for the source
+to gracefully shut down.
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
+
+<a id="quixstreams.sources.community.file.base.FileSource.get_file_list"></a>
+
+#### FileSource.get\_file\_list
+
+```python
+@abstractmethod
+def get_file_list(filepath: Path) -> Iterable[Path]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/base.py#L106)
+
+Find all files/"blobs" starting from a root folder.
+
+Each item in the iterable should be a resolvable filepath.
+
+**Arguments**:
+
+- `filepath`: a starting filepath
+
+**Returns**:
+
+an iterable will all desired files in their desired processing order
+
+<a id="quixstreams.sources.community.file.base.FileSource.read_file"></a>
+
+#### FileSource.read\_file
+
+```python
+@abstractmethod
+def read_file(filepath: Path) -> BinaryIO
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/base.py#L117)
+
+Returns a filepath as an unaltered, open filestream.
+
+Result should be ready for deserialization (and/or decompression).
+
+<a id="quixstreams.sources.community.file.base.FileSource.process_record"></a>
+
+#### FileSource.process\_record
+
+```python
+def process_record(record: object)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/base.py#L124)
+
+Applies replay delay, serializes the record, and produces it to Kafka.
+
+<a id="quixstreams.sources.community.file.base.FileSource.file_partition_counter"></a>
+
+#### FileSource.file\_partition\_counter
+
+```python
+def file_partition_counter() -> int
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/base.py#L166)
+
+Can optionally define a way of counting folders to intelligently
+set the "default_topic" partition count to match partition folder count.
+
+If defined, class flag "has_partition_folders" can then be set to employ it.
+
+It is not required since this operation may not be easy to implement, and the
+file structure may not be used outside Quix Streams FileSink.
+
+Example structure with 2 partitions (0,1):
+```
+topic_name/
+├── 0/               # partition 0
+│   ├── file_a.ext
+│   └── file_b.ext
+└── 1/               # partition 1
+    ├── file_x.ext
+    └── file_y.ext
+```
+
+<a id="quixstreams.sources.community.file.base.FileSource.default_topic"></a>
+
+#### FileSource.default\_topic
+
+```python
+def default_topic() -> Topic
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/base.py#L192)
+
+Optionally allows the file structure to define the partition count for the
+
+internal topic with file_partition_counter (instead of the default of 1).
+
+**Returns**:
+
+the default topic with optionally altered partition count
 
 <a id="quixstreams.sources.community"></a>
 

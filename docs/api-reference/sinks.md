@@ -477,239 +477,6 @@ Default - `str`.
 - `value_serializer`: a callable to convert values to strings.
 Default - `json.dumps`.
 
-<a id="quixstreams.sinks.community.iceberg"></a>
-
-## quixstreams.sinks.community.iceberg
-
-<a id="quixstreams.sinks.community.iceberg.AWSIcebergConfig"></a>
-
-### AWSIcebergConfig
-
-```python
-class AWSIcebergConfig(BaseIcebergConfig)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/iceberg.py#L49)
-
-<a id="quixstreams.sinks.community.iceberg.AWSIcebergConfig.__init__"></a>
-
-<br><br>
-
-#### AWSIcebergConfig.\_\_init\_\_
-
-```python
-def __init__(aws_s3_uri: str,
-             aws_region: Optional[str] = None,
-             aws_access_key_id: Optional[str] = None,
-             aws_secret_access_key: Optional[str] = None,
-             aws_session_token: Optional[str] = None)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/iceberg.py#L50)
-
-Configure IcebergSink to work with AWS Glue.
-
-
-<br>
-***Arguments:***
-
-- `aws_s3_uri`: The S3 URI where the table data will be stored
-(e.g., 's3://your-bucket/warehouse/').
-- `aws_region`: The AWS region for the S3 bucket and Glue catalog.
-- `aws_access_key_id`: the AWS access key ID.
-NOTE: can alternatively set the AWS_ACCESS_KEY_ID environment variable
-when using AWS Glue.
-- `aws_secret_access_key`: the AWS secret access key.
-NOTE: can alternatively set the AWS_SECRET_ACCESS_KEY environment variable
-when using AWS Glue.
-- `aws_session_token`: a session token (or will be generated for you).
-NOTE: can alternatively set the AWS_SESSION_TOKEN environment variable when
-using AWS Glue.
-
-<a id="quixstreams.sinks.community.iceberg.IcebergSink"></a>
-
-### IcebergSink
-
-```python
-class IcebergSink(BatchingSink)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/iceberg.py#L83)
-
-IcebergSink writes batches of data to an Apache Iceberg table.
-
-The data will by default include the kafka message key, value, and timestamp.
-
-It serializes incoming data batches into Parquet format and appends them to the
-Iceberg table, updating the table schema as necessary.
-
-Currently, supports Apache Iceberg hosted in:
-
-- AWS
-
-Supported data catalogs:
-
-- AWS Glue
-
-
-<br>
-***Arguments:***
-
-- `table_name`: The name of the Iceberg table.
-- `config`: An IcebergConfig with all the various connection parameters.
-- `data_catalog_spec`: data cataloger to use (ex. for AWS Glue, "aws_glue").
-- `schema`: The Iceberg table schema. If None, a default schema is used.
-- `partition_spec`: The partition specification for the table.
-If None, a default is used.
-- `on_client_connect_success`: An optional callback made after successful
-client authentication, primarily for additional logging.
-- `on_client_connect_failure`: An optional callback made after failed
-client authentication (which should raise an Exception).
-    Callback should accept the raised Exception as an argument.
-    Callback must resolve (or propagate/re-raise) the Exception.
-
-Example setup using an AWS-hosted Iceberg with AWS Glue:
-
-```
-from quixstreams import Application
-from quixstreams.sinks.community.iceberg import IcebergSink, AWSIcebergConfig
-
-# Configure S3 bucket credentials
-iceberg_config = AWSIcebergConfig(
-    aws_s3_uri="", aws_region="", aws_access_key_id="", aws_secret_access_key=""
-)
-
-# Configure the sink to write data to S3 with the AWS Glue catalog spec
-iceberg_sink = IcebergSink(
-    table_name="glue.sink-test",
-    config=iceberg_config,
-    data_catalog_spec="aws_glue",
-)
-
-app = Application(broker_address='localhost:9092', auto_offset_reset="earliest")
-topic = app.topic('sink_topic')
-
-# Do some processing here
-sdf = app.dataframe(topic=topic).print(metadata=True)
-
-# Sink results to the IcebergSink
-sdf.sink(iceberg_sink)
-
-
-if __name__ == "__main__":
-    # Start the application
-    app.run()
-```
-
-<a id="quixstreams.sinks.community.iceberg.IcebergSink.write"></a>
-
-<br><br>
-
-#### IcebergSink.write
-
-```python
-def write(batch: SinkBatch)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/iceberg.py#L199)
-
-Writes a batch of data to the Iceberg table.
-
-Implements retry logic to handle concurrent write conflicts.
-
-
-<br>
-***Arguments:***
-
-- `batch`: The batch of data to write.
-
-<a id="quixstreams.sinks.community.bigquery"></a>
-
-## quixstreams.sinks.community.bigquery
-
-<a id="quixstreams.sinks.community.bigquery.BigQuerySink"></a>
-
-### BigQuerySink
-
-```python
-class BigQuerySink(BatchingSink)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/bigquery.py#L56)
-
-<a id="quixstreams.sinks.community.bigquery.BigQuerySink.__init__"></a>
-
-<br><br>
-
-#### BigQuerySink.\_\_init\_\_
-
-```python
-def __init__(project_id: str,
-             location: str,
-             dataset_id: str,
-             table_name: str,
-             service_account_json: Optional[str] = None,
-             schema_auto_update: bool = True,
-             ddl_timeout: float = 10.0,
-             insert_timeout: float = 10.0,
-             retry_timeout: float = 30.0,
-             on_client_connect_success: Optional[
-                 ClientConnectSuccessCallback] = None,
-             on_client_connect_failure: Optional[
-                 ClientConnectFailureCallback] = None,
-             **kwargs)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/bigquery.py#L57)
-
-A connector to sink processed data to Google Cloud BigQuery.
-
-It batches the processed records in memory per topic partition, and flushes them to BigQuery at the checkpoint.
-
->***NOTE***: BigQuerySink can accept only dictionaries.
-> If the record values are not dicts, you need to convert them to dicts before
-> sinking.
-
-The column names and types are inferred from individual records.
-Each key in the record's dictionary will be inserted as a column to the resulting BigQuery table.
-
-If the column is not present in the schema, the sink will try to add new nullable columns on the fly with types inferred from individual values.
-The existing columns will not be affected.
-To disable this behavior, pass `schema_auto_update=False` and define the necessary schema upfront.
-The minimal schema must define two columns: "timestamp" of type TIMESTAMP, and "__key" with a type of the expected message key.
-
-
-<br>
-***Arguments:***
-
-- `project_id`: a Google project id.
-- `location`: a BigQuery location.
-- `dataset_id`: a BigQuery dataset id.
-If the dataset does not exist, the sink will try to create it.
-- `table_name`: BigQuery table name.
-If the table does not exist, the sink will try to create it with a default schema.
-- `service_account_json`: an optional JSON string with service account credentials
-to connect to BigQuery.
-The internal `google.cloud.bigquery.Client` will use the Application Default Credentials if not provided.
-See https://cloud.google.com/docs/authentication/provide-credentials-adc for more info.
-Default - `None`.
-- `schema_auto_update`: if True, the sink will try to create a dataset and a table if they don't exist.
-It will also add missing columns on the fly with types inferred from individual values.
-- `ddl_timeout`: a timeout for a single DDL operation (adding tables, columns, etc.).
-Default - 10s.
-- `insert_timeout`: a timeout for a single INSERT operation.
-Default - 10s.
-- `retry_timeout`: a total timeout for each request to BigQuery API.
-During this timeout, a request can be retried according
-to the client's default retrying policy.
-- `on_client_connect_success`: An optional callback made after successful
-client authentication, primarily for additional logging.
-- `on_client_connect_failure`: An optional callback made after failed
-client authentication (which should raise an Exception).
-Callback should accept the raised Exception as an argument.
-Callback must resolve (or propagate/re-raise) the Exception.
-- `kwargs`: Additional keyword arguments passed to `bigquery.Client`.
-
 <a id="quixstreams.sinks.community.file.sink"></a>
 
 ## quixstreams.sinks.community.file.sink
@@ -1485,140 +1252,36 @@ have the same columns.
 
 The serialized batch as bytes in Parquet format.
 
-<a id="quixstreams.sinks.community.pubsub"></a>
+<a id="quixstreams.sinks.community.bigquery"></a>
 
-## quixstreams.sinks.community.pubsub
+## quixstreams.sinks.community.bigquery
 
-<a id="quixstreams.sinks.community.pubsub.PubSubTopicNotFoundError"></a>
+<a id="quixstreams.sinks.community.bigquery.BigQuerySink"></a>
 
-### PubSubTopicNotFoundError
-
-```python
-class PubSubTopicNotFoundError(Exception)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/pubsub.py#L30)
-
-Raised when the specified topic does not exist.
-
-<a id="quixstreams.sinks.community.pubsub.PubSubSink"></a>
-
-### PubSubSink
+### BigQuerySink
 
 ```python
-class PubSubSink(BaseSink)
+class BigQuerySink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/pubsub.py#L34)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/bigquery.py#L56)
 
-A sink that publishes messages to Google Cloud Pub/Sub.
-
-<a id="quixstreams.sinks.community.pubsub.PubSubSink.__init__"></a>
+<a id="quixstreams.sinks.community.bigquery.BigQuerySink.__init__"></a>
 
 <br><br>
 
-#### PubSubSink.\_\_init\_\_
+#### BigQuerySink.\_\_init\_\_
 
 ```python
 def __init__(project_id: str,
-             topic_id: str,
-             service_account_json: Optional[str] = None,
-             value_serializer: Callable[[Any], Union[bytes, str]] = json.dumps,
-             key_serializer: Callable[[Any], str] = bytes.decode,
-             flush_timeout: int = 5,
-             on_client_connect_success: Optional[
-                 ClientConnectSuccessCallback] = None,
-             on_client_connect_failure: Optional[
-                 ClientConnectFailureCallback] = None,
-             **kwargs) -> None
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/pubsub.py#L37)
-
-Initialize the PubSubSink.
-
-
-<br>
-***Arguments:***
-
-- `project_id`: GCP project ID.
-- `topic_id`: Pub/Sub topic ID.
-- `service_account_json`: an optional JSON string with service account credentials
-to connect to Pub/Sub.
-The internal `PublisherClient` will use the Application Default Credentials if not provided.
-See https://cloud.google.com/docs/authentication/provide-credentials-adc for more info.
-Default - `None`.
-- `value_serializer`: Function to serialize the value to string or bytes
-(defaults to json.dumps).
-- `key_serializer`: Function to serialize the key to string
-(defaults to bytes.decode).
-- `on_client_connect_success`: An optional callback made after successful
-client authentication, primarily for additional logging.
-- `on_client_connect_failure`: An optional callback made after failed
-client authentication (which should raise an Exception).
-Callback should accept the raised Exception as an argument.
-Callback must resolve (or propagate/re-raise) the Exception.
-- `kwargs`: Additional keyword arguments passed to PublisherClient.
-
-<a id="quixstreams.sinks.community.pubsub.PubSubSink.add"></a>
-
-<br><br>
-
-#### PubSubSink.add
-
-```python
-def add(value: Any, key: Any, timestamp: int, headers: HeadersTuples,
-        topic: str, partition: int, offset: int) -> None
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/pubsub.py#L104)
-
-Publish a message to Pub/Sub.
-
-<a id="quixstreams.sinks.community.pubsub.PubSubSink.flush"></a>
-
-<br><br>
-
-#### PubSubSink.flush
-
-```python
-def flush() -> None
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/pubsub.py#L137)
-
-Wait for all publish operations to complete successfully.
-
-<a id="quixstreams.sinks.community.postgresql"></a>
-
-## quixstreams.sinks.community.postgresql
-
-<a id="quixstreams.sinks.community.postgresql.PostgreSQLSink"></a>
-
-### PostgreSQLSink
-
-```python
-class PostgreSQLSink(BatchingSink)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/postgresql.py#L53)
-
-<a id="quixstreams.sinks.community.postgresql.PostgreSQLSink.__init__"></a>
-
-<br><br>
-
-#### PostgreSQLSink.\_\_init\_\_
-
-```python
-def __init__(host: str,
-             port: int,
-             dbname: str,
-             user: str,
-             password: str,
+             location: str,
+             dataset_id: str,
              table_name: str,
+             service_account_json: Optional[str] = None,
              schema_auto_update: bool = True,
-             connection_timeout_seconds: int = 30,
-             statement_timeout_seconds: int = 30,
+             ddl_timeout: float = 10.0,
+             insert_timeout: float = 10.0,
+             retry_timeout: float = 30.0,
              on_client_connect_success: Optional[
                  ClientConnectSuccessCallback] = None,
              on_client_connect_failure: Optional[
@@ -1626,31 +1289,269 @@ def __init__(host: str,
              **kwargs)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/postgresql.py#L54)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/bigquery.py#L57)
 
-A connector to sink topic data to PostgreSQL.
+A connector to sink processed data to Google Cloud BigQuery.
+
+It batches the processed records in memory per topic partition, and flushes them to BigQuery at the checkpoint.
+
+>***NOTE***: BigQuerySink can accept only dictionaries.
+> If the record values are not dicts, you need to convert them to dicts before
+> sinking.
+
+The column names and types are inferred from individual records.
+Each key in the record's dictionary will be inserted as a column to the resulting BigQuery table.
+
+If the column is not present in the schema, the sink will try to add new nullable columns on the fly with types inferred from individual values.
+The existing columns will not be affected.
+To disable this behavior, pass `schema_auto_update=False` and define the necessary schema upfront.
+The minimal schema must define two columns: "timestamp" of type TIMESTAMP, and "__key" with a type of the expected message key.
 
 
 <br>
 ***Arguments:***
 
-- `host`: PostgreSQL server address.
-- `port`: PostgreSQL server port.
-- `dbname`: PostgreSQL database name.
-- `user`: Database user name.
-- `password`: Database user password.
-- `table_name`: PostgreSQL table name.
-- `schema_auto_update`: Automatically update the schema when new columns are detected.
-- `connection_timeout_seconds`: Timeout for connection.
-- `statement_timeout_seconds`: Timeout for DDL operations such as table
-creation or schema updates.
+- `project_id`: a Google project id.
+- `location`: a BigQuery location.
+- `dataset_id`: a BigQuery dataset id.
+If the dataset does not exist, the sink will try to create it.
+- `table_name`: BigQuery table name.
+If the table does not exist, the sink will try to create it with a default schema.
+- `service_account_json`: an optional JSON string with service account credentials
+to connect to BigQuery.
+The internal `google.cloud.bigquery.Client` will use the Application Default Credentials if not provided.
+See https://cloud.google.com/docs/authentication/provide-credentials-adc for more info.
+Default - `None`.
+- `schema_auto_update`: if True, the sink will try to create a dataset and a table if they don't exist.
+It will also add missing columns on the fly with types inferred from individual values.
+- `ddl_timeout`: a timeout for a single DDL operation (adding tables, columns, etc.).
+Default - 10s.
+- `insert_timeout`: a timeout for a single INSERT operation.
+Default - 10s.
+- `retry_timeout`: a total timeout for each request to BigQuery API.
+During this timeout, a request can be retried according
+to the client's default retrying policy.
 - `on_client_connect_success`: An optional callback made after successful
 client authentication, primarily for additional logging.
 - `on_client_connect_failure`: An optional callback made after failed
 client authentication (which should raise an Exception).
 Callback should accept the raised Exception as an argument.
 Callback must resolve (or propagate/re-raise) the Exception.
-- `kwargs`: Additional parameters for `psycopg2.connect`.
+- `kwargs`: Additional keyword arguments passed to `bigquery.Client`.
+
+<a id="quixstreams.sinks.community.elasticsearch"></a>
+
+## quixstreams.sinks.community.elasticsearch
+
+<a id="quixstreams.sinks.community.elasticsearch.ElasticsearchSink"></a>
+
+### ElasticsearchSink
+
+```python
+class ElasticsearchSink(BatchingSink)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/elasticsearch.py#L38)
+
+Pushes data to an ElasticSearch index.
+
+By default, uses the kafka message key as the document ID, and dynamically generates
+the field types.
+
+You can pass your own type mapping or document ID setter for custom behavior.
+
+<a id="quixstreams.sinks.community.elasticsearch.ElasticsearchSink.__init__"></a>
+
+<br><br>
+
+#### ElasticsearchSink.\_\_init\_\_
+
+```python
+def __init__(url: str,
+             index: str,
+             mapping: Optional[dict] = None,
+             document_id_setter: Optional[Callable[
+                 [SinkItem], Optional[str]]] = _default_document_id_setter,
+             batch_size: int = 500,
+             max_bulk_retries: int = 3,
+             ignore_bulk_upload_errors: bool = False,
+             add_message_metadata: bool = False,
+             add_topic_metadata: bool = False,
+             on_client_connect_success: Optional[
+                 ClientConnectSuccessCallback] = None,
+             on_client_connect_failure: Optional[
+                 ClientConnectFailureCallback] = None,
+             **kwargs)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/elasticsearch.py#L48)
+
+
+<br>
+***Arguments:***
+
+- `url`: the ElasticSearch host url
+- `index`: the ElasticSearch index name
+- `mapping`: a custom mapping; the default dynamically maps all field types
+- `document_id_setter`: how to select the document id; the default is the Kafka message key
+- `batch_size`: how large each chunk size is with bulk
+- `max_bulk_retries`: number of retry attempts for each bulk batch
+- `ignore_bulk_upload_errors`: ignore any errors that occur when attempting an upload
+- `add_message_metadata`: add key, timestamp, and headers as `__{field}`
+- `add_topic_metadata`: add topic, partition, and offset as `__{field}`
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
+- `kwargs`: additional kwargs that are passed to the ElasticSearch client
+
+<a id="quixstreams.sinks.community.iceberg"></a>
+
+## quixstreams.sinks.community.iceberg
+
+<a id="quixstreams.sinks.community.iceberg.AWSIcebergConfig"></a>
+
+### AWSIcebergConfig
+
+```python
+class AWSIcebergConfig(BaseIcebergConfig)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/iceberg.py#L49)
+
+<a id="quixstreams.sinks.community.iceberg.AWSIcebergConfig.__init__"></a>
+
+<br><br>
+
+#### AWSIcebergConfig.\_\_init\_\_
+
+```python
+def __init__(aws_s3_uri: str,
+             aws_region: Optional[str] = None,
+             aws_access_key_id: Optional[str] = None,
+             aws_secret_access_key: Optional[str] = None,
+             aws_session_token: Optional[str] = None)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/iceberg.py#L50)
+
+Configure IcebergSink to work with AWS Glue.
+
+
+<br>
+***Arguments:***
+
+- `aws_s3_uri`: The S3 URI where the table data will be stored
+(e.g., 's3://your-bucket/warehouse/').
+- `aws_region`: The AWS region for the S3 bucket and Glue catalog.
+- `aws_access_key_id`: the AWS access key ID.
+NOTE: can alternatively set the AWS_ACCESS_KEY_ID environment variable
+when using AWS Glue.
+- `aws_secret_access_key`: the AWS secret access key.
+NOTE: can alternatively set the AWS_SECRET_ACCESS_KEY environment variable
+when using AWS Glue.
+- `aws_session_token`: a session token (or will be generated for you).
+NOTE: can alternatively set the AWS_SESSION_TOKEN environment variable when
+using AWS Glue.
+
+<a id="quixstreams.sinks.community.iceberg.IcebergSink"></a>
+
+### IcebergSink
+
+```python
+class IcebergSink(BatchingSink)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/iceberg.py#L83)
+
+IcebergSink writes batches of data to an Apache Iceberg table.
+
+The data will by default include the kafka message key, value, and timestamp.
+
+It serializes incoming data batches into Parquet format and appends them to the
+Iceberg table, updating the table schema as necessary.
+
+Currently, supports Apache Iceberg hosted in:
+
+- AWS
+
+Supported data catalogs:
+
+- AWS Glue
+
+
+<br>
+***Arguments:***
+
+- `table_name`: The name of the Iceberg table.
+- `config`: An IcebergConfig with all the various connection parameters.
+- `data_catalog_spec`: data cataloger to use (ex. for AWS Glue, "aws_glue").
+- `schema`: The Iceberg table schema. If None, a default schema is used.
+- `partition_spec`: The partition specification for the table.
+If None, a default is used.
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+    Callback should accept the raised Exception as an argument.
+    Callback must resolve (or propagate/re-raise) the Exception.
+
+Example setup using an AWS-hosted Iceberg with AWS Glue:
+
+```
+from quixstreams import Application
+from quixstreams.sinks.community.iceberg import IcebergSink, AWSIcebergConfig
+
+# Configure S3 bucket credentials
+iceberg_config = AWSIcebergConfig(
+    aws_s3_uri="", aws_region="", aws_access_key_id="", aws_secret_access_key=""
+)
+
+# Configure the sink to write data to S3 with the AWS Glue catalog spec
+iceberg_sink = IcebergSink(
+    table_name="glue.sink-test",
+    config=iceberg_config,
+    data_catalog_spec="aws_glue",
+)
+
+app = Application(broker_address='localhost:9092', auto_offset_reset="earliest")
+topic = app.topic('sink_topic')
+
+# Do some processing here
+sdf = app.dataframe(topic=topic).print(metadata=True)
+
+# Sink results to the IcebergSink
+sdf.sink(iceberg_sink)
+
+
+if __name__ == "__main__":
+    # Start the application
+    app.run()
+```
+
+<a id="quixstreams.sinks.community.iceberg.IcebergSink.write"></a>
+
+<br><br>
+
+#### IcebergSink.write
+
+```python
+def write(batch: SinkBatch)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/iceberg.py#L199)
+
+Writes a batch of data to the Iceberg table.
+
+Implements retry logic to handle concurrent write conflicts.
+
+
+<br>
+***Arguments:***
+
+- `batch`: The batch of data to write.
 
 <a id="quixstreams.sinks.community.kinesis"></a>
 
@@ -1763,69 +1664,91 @@ because the batch size was less than 500. It waits for all futures to
 complete, ensuring that all records are successfully sent to the Kinesis
 stream.
 
-<a id="quixstreams.sinks.community.redis"></a>
+<a id="quixstreams.sinks.community.mongodb"></a>
 
-## quixstreams.sinks.community.redis
+## quixstreams.sinks.community.mongodb
 
-<a id="quixstreams.sinks.community.redis.RedisSink"></a>
+<a id="quixstreams.sinks.community.mongodb.MongoDBSink"></a>
 
-### RedisSink
+### MongoDBSink
 
 ```python
-class RedisSink(BatchingSink)
+class MongoDBSink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/redis.py#L26)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/mongodb.py#L65)
 
-<a id="quixstreams.sinks.community.redis.RedisSink.__init__"></a>
+<a id="quixstreams.sinks.community.mongodb.MongoDBSink.__init__"></a>
 
 <br><br>
 
-#### RedisSink.\_\_init\_\_
+#### MongoDBSink.\_\_init\_\_
 
 ```python
-def __init__(host: str,
-             port: int,
-             db: int,
-             value_serializer: Callable[[Any], Union[bytes, str]] = json.dumps,
-             key_serializer: Optional[Callable[[Any, Any], Union[bytes,
-                                                                 str]]] = None,
-             password: Optional[str] = None,
-             socket_timeout: float = 30.0,
-             on_client_connect_success: Optional[
-                 ClientConnectSuccessCallback] = None,
-             on_client_connect_failure: Optional[
-                 ClientConnectFailureCallback] = None,
+def __init__(url: str,
+             db: str,
+             collection: str,
+             document_matcher: Callable[
+                 [SinkItem], MongoQueryFilter] = _default_document_matcher,
+             update_method: Literal["UpdateOne", "UpdateMany",
+                                    "ReplaceOne"] = "UpdateOne",
+             upsert: bool = True,
+             add_message_metadata: bool = False,
+             add_topic_metadata: bool = False,
+             authentication_timeout_ms: int = 15000,
+             value_selector: Optional[Callable[[MongoValue],
+                                               MongoValue]] = None,
              **kwargs) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/redis.py#L27)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/mongodb.py#L66)
 
-A connector to sink processed data to Redis.
-
-It batches the processed records in memory per topic partition, and flushes them to Redis at the checkpoint.
+A connector to sink processed data to MongoDB in batches.
 
 
 <br>
 ***Arguments:***
 
-- `host`: Redis host.
-- `port`: Redis port.
-- `db`: Redis DB number.
-- `value_serializer`: a callable to serialize the value to string or bytes
-(defaults to json.dumps).
-- `key_serializer`: an optional callable to serialize the key to string or bytes.
-If not provided, the Kafka message key will be used as is.
-- `password`: Redis password, optional.
-- `socket_timeout`: Redis socket timeout.
-Default - 30s.
-- `on_client_connect_success`: An optional callback made after successful
-client authentication, primarily for additional logging.
-- `on_client_connect_failure`: An optional callback made after failed
-client authentication (which should raise an Exception).
-Callback should accept the raised Exception as an argument.
-Callback must resolve (or propagate/re-raise) the Exception.
-- `kwargs`: Additional keyword arguments passed to the `redis.Redis` instance.
+- `url`: MongoDB url; most commonly `mongodb://username:password@host:port`
+- `db`: MongoDB database name
+- `collection`: MongoDB collection name
+- `document_matcher`: How documents are selected to update.
+A callable that accepts a `BatchItem` and returns a MongoDB "query filter".
+If no match, will insert if `upsert=True`, where `_id` will be either the
+included value if specified, else a random `ObjectId`.
+- Default: matches on `_id`, with `_id` assumed to be the kafka key.
+- `upsert`: Create documents if no matches with `document_matcher`.
+- `update_method`: How documents found with `document_matcher` are updated.
+'Update*' options will only update fields included in the kafka message.
+'Replace*' option fully replaces the document with the contents of kafka message.
+"UpdateOne": Updates the first matching document (usually based on `_id`).
+"UpdateMany": Updates ALL matching documents (usually NOT based on `_id`).
+"ReplaceOne": Replaces the first matching document (usually based on `_id`).
+Default: "UpdateOne".
+- `add_message_metadata`: add key, timestamp, and headers as `__{field}`
+- `add_topic_metadata`: add topic, partition, and offset as `__{field}`
+- `value_selector`: An optional callable that allows final editing of the
+outgoing document (right before submitting it).
+Largely used when a field is necessary for `document_matcher`,
+but not otherwise.
+NOTE: metadata is added before this step, so don't accidentally
+exclude it here!
+
+<a id="quixstreams.sinks.community.mongodb.MongoDBSink.write"></a>
+
+<br><br>
+
+#### MongoDBSink.write
+
+```python
+def write(batch: SinkBatch) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/mongodb.py#L153)
+
+Note: Transactions could be an option here, but then each record requires a
+network call, and the transaction has size limits...so `bulk_write` is used
+instead, with the downside that duplicate writes may occur if errors arise.
 
 <a id="quixstreams.sinks.community.neo4j"></a>
 
@@ -1920,89 +1843,234 @@ if __name__ == "__main__":
     app.run()
 ```
 
-<a id="quixstreams.sinks.community.mongodb"></a>
+<a id="quixstreams.sinks.community.postgresql"></a>
 
-## quixstreams.sinks.community.mongodb
+## quixstreams.sinks.community.postgresql
 
-<a id="quixstreams.sinks.community.mongodb.MongoDBSink"></a>
+<a id="quixstreams.sinks.community.postgresql.PostgreSQLSink"></a>
 
-### MongoDBSink
+### PostgreSQLSink
 
 ```python
-class MongoDBSink(BatchingSink)
+class PostgreSQLSink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/mongodb.py#L65)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/postgresql.py#L53)
 
-<a id="quixstreams.sinks.community.mongodb.MongoDBSink.__init__"></a>
+<a id="quixstreams.sinks.community.postgresql.PostgreSQLSink.__init__"></a>
 
 <br><br>
 
-#### MongoDBSink.\_\_init\_\_
+#### PostgreSQLSink.\_\_init\_\_
 
 ```python
-def __init__(url: str,
-             db: str,
-             collection: str,
-             document_matcher: Callable[
-                 [SinkItem], MongoQueryFilter] = _default_document_matcher,
-             update_method: Literal["UpdateOne", "UpdateMany",
-                                    "ReplaceOne"] = "UpdateOne",
-             upsert: bool = True,
-             add_message_metadata: bool = False,
-             add_topic_metadata: bool = False,
-             authentication_timeout_ms: int = 15000,
-             value_selector: Optional[Callable[[MongoValue],
-                                               MongoValue]] = None,
-             **kwargs) -> None
+def __init__(host: str,
+             port: int,
+             dbname: str,
+             user: str,
+             password: str,
+             table_name: str,
+             schema_auto_update: bool = True,
+             connection_timeout_seconds: int = 30,
+             statement_timeout_seconds: int = 30,
+             on_client_connect_success: Optional[
+                 ClientConnectSuccessCallback] = None,
+             on_client_connect_failure: Optional[
+                 ClientConnectFailureCallback] = None,
+             **kwargs)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/mongodb.py#L66)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/postgresql.py#L54)
 
-A connector to sink processed data to MongoDB in batches.
+A connector to sink topic data to PostgreSQL.
 
 
 <br>
 ***Arguments:***
 
-- `url`: MongoDB url; most commonly `mongodb://username:password@host:port`
-- `db`: MongoDB database name
-- `collection`: MongoDB collection name
-- `document_matcher`: How documents are selected to update.
-A callable that accepts a `BatchItem` and returns a MongoDB "query filter".
-If no match, will insert if `upsert=True`, where `_id` will be either the
-included value if specified, else a random `ObjectId`.
-- Default: matches on `_id`, with `_id` assumed to be the kafka key.
-- `upsert`: Create documents if no matches with `document_matcher`.
-- `update_method`: How documents found with `document_matcher` are updated.
-'Update*' options will only update fields included in the kafka message.
-'Replace*' option fully replaces the document with the contents of kafka message.
-"UpdateOne": Updates the first matching document (usually based on `_id`).
-"UpdateMany": Updates ALL matching documents (usually NOT based on `_id`).
-"ReplaceOne": Replaces the first matching document (usually based on `_id`).
-Default: "UpdateOne".
-- `add_message_metadata`: add key, timestamp, and headers as `__{field}`
-- `add_topic_metadata`: add topic, partition, and offset as `__{field}`
-- `value_selector`: An optional callable that allows final editing of the
-outgoing document (right before submitting it).
-Largely used when a field is necessary for `document_matcher`,
-but not otherwise.
-NOTE: metadata is added before this step, so don't accidentally
-exclude it here!
+- `host`: PostgreSQL server address.
+- `port`: PostgreSQL server port.
+- `dbname`: PostgreSQL database name.
+- `user`: Database user name.
+- `password`: Database user password.
+- `table_name`: PostgreSQL table name.
+- `schema_auto_update`: Automatically update the schema when new columns are detected.
+- `connection_timeout_seconds`: Timeout for connection.
+- `statement_timeout_seconds`: Timeout for DDL operations such as table
+creation or schema updates.
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
+- `kwargs`: Additional parameters for `psycopg2.connect`.
 
-<a id="quixstreams.sinks.community.mongodb.MongoDBSink.write"></a>
+<a id="quixstreams.sinks.community.pubsub"></a>
+
+## quixstreams.sinks.community.pubsub
+
+<a id="quixstreams.sinks.community.pubsub.PubSubTopicNotFoundError"></a>
+
+### PubSubTopicNotFoundError
+
+```python
+class PubSubTopicNotFoundError(Exception)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/pubsub.py#L30)
+
+Raised when the specified topic does not exist.
+
+<a id="quixstreams.sinks.community.pubsub.PubSubSink"></a>
+
+### PubSubSink
+
+```python
+class PubSubSink(BaseSink)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/pubsub.py#L34)
+
+A sink that publishes messages to Google Cloud Pub/Sub.
+
+<a id="quixstreams.sinks.community.pubsub.PubSubSink.__init__"></a>
 
 <br><br>
 
-#### MongoDBSink.write
+#### PubSubSink.\_\_init\_\_
 
 ```python
-def write(batch: SinkBatch) -> None
+def __init__(project_id: str,
+             topic_id: str,
+             service_account_json: Optional[str] = None,
+             value_serializer: Callable[[Any], Union[bytes, str]] = json.dumps,
+             key_serializer: Callable[[Any], str] = bytes.decode,
+             flush_timeout: int = 5,
+             on_client_connect_success: Optional[
+                 ClientConnectSuccessCallback] = None,
+             on_client_connect_failure: Optional[
+                 ClientConnectFailureCallback] = None,
+             **kwargs) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/mongodb.py#L153)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/pubsub.py#L37)
 
-Note: Transactions could be an option here, but then each record requires a
-network call, and the transaction has size limits...so `bulk_write` is used
-instead, with the downside that duplicate writes may occur if errors arise.
+Initialize the PubSubSink.
+
+
+<br>
+***Arguments:***
+
+- `project_id`: GCP project ID.
+- `topic_id`: Pub/Sub topic ID.
+- `service_account_json`: an optional JSON string with service account credentials
+to connect to Pub/Sub.
+The internal `PublisherClient` will use the Application Default Credentials if not provided.
+See https://cloud.google.com/docs/authentication/provide-credentials-adc for more info.
+Default - `None`.
+- `value_serializer`: Function to serialize the value to string or bytes
+(defaults to json.dumps).
+- `key_serializer`: Function to serialize the key to string
+(defaults to bytes.decode).
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
+- `kwargs`: Additional keyword arguments passed to PublisherClient.
+
+<a id="quixstreams.sinks.community.pubsub.PubSubSink.add"></a>
+
+<br><br>
+
+#### PubSubSink.add
+
+```python
+def add(value: Any, key: Any, timestamp: int, headers: HeadersTuples,
+        topic: str, partition: int, offset: int) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/pubsub.py#L104)
+
+Publish a message to Pub/Sub.
+
+<a id="quixstreams.sinks.community.pubsub.PubSubSink.flush"></a>
+
+<br><br>
+
+#### PubSubSink.flush
+
+```python
+def flush() -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/pubsub.py#L137)
+
+Wait for all publish operations to complete successfully.
+
+<a id="quixstreams.sinks.community.redis"></a>
+
+## quixstreams.sinks.community.redis
+
+<a id="quixstreams.sinks.community.redis.RedisSink"></a>
+
+### RedisSink
+
+```python
+class RedisSink(BatchingSink)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/redis.py#L26)
+
+<a id="quixstreams.sinks.community.redis.RedisSink.__init__"></a>
+
+<br><br>
+
+#### RedisSink.\_\_init\_\_
+
+```python
+def __init__(host: str,
+             port: int,
+             db: int,
+             value_serializer: Callable[[Any], Union[bytes, str]] = json.dumps,
+             key_serializer: Optional[Callable[[Any, Any], Union[bytes,
+                                                                 str]]] = None,
+             password: Optional[str] = None,
+             socket_timeout: float = 30.0,
+             on_client_connect_success: Optional[
+                 ClientConnectSuccessCallback] = None,
+             on_client_connect_failure: Optional[
+                 ClientConnectFailureCallback] = None,
+             **kwargs) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/redis.py#L27)
+
+A connector to sink processed data to Redis.
+
+It batches the processed records in memory per topic partition, and flushes them to Redis at the checkpoint.
+
+
+<br>
+***Arguments:***
+
+- `host`: Redis host.
+- `port`: Redis port.
+- `db`: Redis DB number.
+- `value_serializer`: a callable to serialize the value to string or bytes
+(defaults to json.dumps).
+- `key_serializer`: an optional callable to serialize the key to string or bytes.
+If not provided, the Kafka message key will be used as is.
+- `password`: Redis password, optional.
+- `socket_timeout`: Redis socket timeout.
+Default - 30s.
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
+- `kwargs`: Additional keyword arguments passed to the `redis.Redis` instance.
 
