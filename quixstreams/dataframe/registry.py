@@ -107,7 +107,6 @@ class DataFrameRegistry:
         during assignment and commits.
 
         The same stream id can be registered multiple times.
-         # TODO: Test
         :param stream_id: stream id of StreamingDataFrame
         :param topic_names: list of topics to map the stream id with
         """
@@ -118,7 +117,6 @@ class DataFrameRegistry:
     def get_stream_ids(self, topic_name: str) -> list[str]:
         """
         Get a list of stream ids for the given topic name
-        # TODO: Test
 
         :param topic_name: a name of the topic
         :return: a list of stream ids
@@ -128,8 +126,6 @@ class DataFrameRegistry:
     def get_topics_for_stream_id(self, stream_id: str) -> list[str]:
         """
         Get a list of topics for the given stream id.
-
-        # TODO: Test
 
         :param stream_id: stream id
         :return: a list of topic names
