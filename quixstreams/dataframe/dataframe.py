@@ -1584,10 +1584,8 @@ class StreamingDataFrame:
         # uses apply without returning to make this operation terminal
         self.apply(_sink_callback, metadata=True)
 
-    def concat(
-        self,
-        other: Self,
-        frame_="""
+    def concat(self, other: Self) -> Self:
+        """
         Concatenate two StreamingDataFrames together and return a new one.
         The transformations applied on this new StreamingDataFrame will update data
         from both origins.
@@ -1602,10 +1600,8 @@ class StreamingDataFrame:
 
         :param other: other StreamingDataFrame
         :return: a new StreamingDataFrame
+        """
 
-        """,
-    ) -> Self:
-        frame_
         merged_stream = self.stream.merge(other.stream)
         return self.__dataframe_clone__(
             *self.topics, *other.topics, stream=merged_stream
