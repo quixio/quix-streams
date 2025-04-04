@@ -25,7 +25,7 @@ from pydantic_settings import PydanticBaseSettingsSource, SettingsConfigDict
 from typing_extensions import Self
 
 from .context import copy_context, set_message_context
-from .dataframe import DataframeRegistry, StreamingDataFrame
+from .dataframe import DataFrameRegistry, StreamingDataFrame
 from .error_callbacks import (
     ConsumerErrorCallback,
     ProcessingErrorCallback,
@@ -350,6 +350,7 @@ class Application:
         self._pausing_manager = PausingManager(
             consumer=self._consumer, topic_manager=self._topic_manager
         )
+        self._dataframe_registry = DataFrameRegistry()
         self._processing_context = ProcessingContext(
             commit_interval=self._config.commit_interval,
             commit_every=self._config.commit_every,
@@ -359,8 +360,8 @@ class Application:
             exactly_once=self._config.exactly_once,
             sink_manager=self._sink_manager,
             pausing_manager=self._pausing_manager,
+            dataframe_registry=self._dataframe_registry,
         )
-        self._dataframe_registry = DataframeRegistry()
         self._run_tracker = RunTracker(processing_context=self._processing_context)
 
     @property
@@ -531,7 +532,7 @@ class Application:
             raise ValueError("one of `source` or `topic` is required")
 
         sdf = StreamingDataFrame(
-            topic=topic,
+            topic,
             topic_manager=self._topic_manager,
             processing_context=self._processing_context,
             registry=self._dataframe_registry,
@@ -608,7 +609,6 @@ class Application:
                 producer.produce(topic=topic.name, key=b"key", value=b"value")
         ```
         """
-        self.setup_topics()
 
         return Producer(
             broker_address=self._config.broker_address,
@@ -680,7 +680,6 @@ class Application:
         :param auto_commit_enable: Enable or disable auto commit
             Default - True
         """
-        self.setup_topics()
 
         return Consumer(
             broker_address=self._config.broker_address,
@@ -832,8 +831,6 @@ class Application:
         if self.is_quix_app:
             self._quix_runtime_init()
 
-        self.setup_topics()
-
         exit_stack = contextlib.ExitStack()
         exit_stack.enter_context(self._processing_context)
         exit_stack.enter_context(self._state_manager)
@@ -906,12 +903,6 @@ class Application:
         # Ensure that state management is enabled if application is stateful
         if self._state_manager.stores:
             check_state_management_enabled()
-
-    def setup_topics(self):
-        """
-        Validate the application topics
-        """
-        self._topic_manager.validate_all_topics()
 
     def _process_message(self, dataframe_composed):
         # Serve producer callbacks
@@ -1004,13 +995,18 @@ class Application:
                     )
                 committed_offsets[tp.partition][tp.topic] = tp.offset
 
+            # Match the assigned TP with a stream ID via DataFrameRegistry
             for tp in non_changelog_tps:
-                # Assign store partitions
-                self._state_manager.on_partition_assign(
-                    topic=tp.topic,
-                    partition=tp.partition,
-                    committed_offsets=committed_offsets[tp.partition],
+                stream_ids = self._dataframe_registry.get_stream_ids(
+                    topic_name=tp.topic
                 )
+                # Assign store partitions for the given stream ids
+                for stream_id in stream_ids:
+                    self._state_manager.on_partition_assign(
+                        stream_id=stream_id,
+                        partition=tp.partition,
+                        committed_offsets=committed_offsets[tp.partition],
+                    )
         self._run_tracker.timeout_refresh()
 
     def _on_revoke(self, _, topic_partitions: List[TopicPartition]):
@@ -1030,18 +1026,8 @@ class Application:
         else:
             self._processing_context.commit_checkpoint(force=True)
 
-        non_changelog_topics = self._topic_manager.non_changelog_topics
-        non_changelog_tps = [
-            tp for tp in topic_partitions if tp.topic in non_changelog_topics
-        ]
-        for tp in non_changelog_tps:
-            if self._state_manager.stores:
-                self._state_manager.on_partition_revoke(
-                    topic=tp.topic, partition=tp.partition
-                )
-            self._processing_context.on_partition_revoke(
-                topic=tp.topic, partition=tp.partition
-            )
+        self._revoke_state_partitions(topic_partitions=topic_partitions)
+        self._processing_context.on_partition_revoke()
 
     def _on_lost(self, _, topic_partitions: List[TopicPartition]):
         """
@@ -1049,18 +1035,23 @@ class Application:
         """
         logger.debug("Rebalancing: dropping lost partitions")
 
+        self._revoke_state_partitions(topic_partitions=topic_partitions)
+        self._processing_context.on_partition_revoke()
+
+    def _revoke_state_partitions(self, topic_partitions: List[TopicPartition]):
         non_changelog_topics = self._topic_manager.non_changelog_topics
         non_changelog_tps = [
             tp for tp in topic_partitions if tp.topic in non_changelog_topics
         ]
         for tp in non_changelog_tps:
             if self._state_manager.stores:
-                self._state_manager.on_partition_revoke(
-                    topic=tp.topic, partition=tp.partition
+                stream_ids = self._dataframe_registry.get_stream_ids(
+                    topic_name=tp.topic
                 )
-            self._processing_context.on_partition_revoke(
-                topic=tp.topic, partition=tp.partition
-            )
+                for stream_id in stream_ids:
+                    self._state_manager.on_partition_revoke(
+                        stream_id=stream_id, partition=tp.partition
+                    )
 
     def _setup_signal_handlers(self):
         signal.signal(signal.SIGINT, self._on_sigint)

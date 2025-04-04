@@ -19,6 +19,7 @@ from .rocksdb.windowed.store import WindowedRocksDBStore
 
 __all__ = ("StateStoreManager", "DEFAULT_STATE_STORE_NAME", "StoreTypes")
 
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_STATE_STORE_NAME = "default"
@@ -79,7 +80,7 @@ class StateStoreManager:
     def stores(self) -> Dict[Optional[str], Dict[str, Store]]:
         """
         Map of registered state stores
-        :return: dict in format {topic: {store_name: store}}
+        :return: dict in format {stream_id: {store_name: store}}
         """
         return self._stores
 
@@ -124,36 +125,37 @@ class StateStoreManager:
         return self._recovery_manager.stop_recovery()
 
     def get_store(
-        self, topic: str, store_name: str = DEFAULT_STATE_STORE_NAME
+        self, stream_id: str, store_name: str = DEFAULT_STATE_STORE_NAME
     ) -> Store:
         """
-        Get a store for given name and topic
-        :param topic: topic name
+        Get a store for given name and stream id
+
+        :param stream_id: stream id
         :param store_name: store name
         :return: instance of `Store`
         """
-        store = self._stores.get(topic, {}).get(store_name)
+        store = self._stores.get(stream_id, {}).get(store_name)
         if store is None:
             raise StoreNotRegisteredError(
-                f'Store "{store_name}" (topic "{topic}") is not registered'
+                f'Store "{store_name}" (stream_id "{stream_id}") is not registered'
             )
         return store
 
     def _setup_changelogs(
         self,
-        topic_name: Optional[str],
+        stream_id: Optional[str],
         store_name: str,
-        topic_config: Optional[TopicConfig] = None,
+        topic_config: Optional[TopicConfig],
     ) -> Optional[ChangelogProducerFactory]:
-        if self._recovery_manager is None or self._producer is None:
+        if (
+            self._recovery_manager is None
+            or self._producer is None
+            or topic_config is None
+        ):
             return None
 
-        logger.debug(
-            f'State Manager: registering changelog for store "{store_name}" '
-            f'(topic "{topic_name}")'
-        )
         changelog_topic = self._recovery_manager.register_changelog(
-            topic_name=topic_name, store_name=store_name, topic_config=topic_config
+            stream_id=stream_id, store_name=store_name, topic_config=topic_config
         )
         return ChangelogProducerFactory(
             changelog_name=changelog_topic.name,
@@ -162,10 +164,10 @@ class StateStoreManager:
 
     def register_store(
         self,
-        topic_name: Optional[str],
+        stream_id: Optional[str],
         store_name: str = DEFAULT_STATE_STORE_NAME,
         store_type: Optional[StoreTypes] = None,
-        topic_config: Optional[TopicConfig] = None,
+        changelog_config: Optional[TopicConfig] = None,
     ) -> None:
         """
         Register a state store to be managed by StateStoreManager.
@@ -173,23 +175,23 @@ class StateStoreManager:
         During processing, the StateStoreManager will react to rebalancing callbacks
         and assign/revoke the partitions for registered stores.
 
-        Each store can be registered only once for each topic.
-
-        :param topic_name: topic name
+        :param stream_id: stream id
         :param store_name: store name
         :param store_type: the storage type used for this store.
             Default to StateStoreManager `default_store_type`
+        :param changelog_config: changelog topic config.
+            Note: the compaction will be enabled for the changelog topic.
         """
-        if self._stores.get(topic_name, {}).get(store_name) is None:
+        if self._stores.get(stream_id, {}).get(store_name) is None:
             changelog_producer_factory = self._setup_changelogs(
-                topic_name, store_name, topic_config=topic_config
+                stream_id, store_name, topic_config=changelog_config
             )
 
             store_type = store_type or self.default_store_type
             if store_type == RocksDBStore:
                 factory: Store = RocksDBStore(
                     name=store_name,
-                    topic=topic_name,
+                    stream_id=stream_id,
                     base_dir=str(self._state_dir),
                     changelog_producer_factory=changelog_producer_factory,
                     options=self._rocksdb_options,
@@ -197,37 +199,49 @@ class StateStoreManager:
             elif store_type == MemoryStore:
                 factory = MemoryStore(
                     name=store_name,
-                    topic=topic_name,
+                    stream_id=stream_id,
                     changelog_producer_factory=changelog_producer_factory,
                 )
             else:
                 raise ValueError(f"invalid store type: {store_type}")
 
-            self._stores.setdefault(topic_name, {})[store_name] = factory
+            self._stores.setdefault(stream_id, {})[store_name] = factory
 
-    def register_windowed_store(self, topic_name: str, store_name: str) -> None:
+    def register_windowed_store(
+        self,
+        stream_id: str,
+        store_name: str,
+        changelog_config: Optional[TopicConfig] = None,
+    ) -> None:
         """
         Register a windowed state store to be managed by StateStoreManager.
 
         During processing, the StateStoreManager will react to rebalancing callbacks
         and assign/revoke the partitions for registered stores.
 
-        Each window store can be registered only once for each topic.
+        Each window store can be registered only once for each stream_id.
 
-        :param topic_name: topic name
+        :param stream_id: stream id
         :param store_name: store name
+        :param changelog_config: changelog topic config
         """
-        store = self._stores.get(topic_name, {}).get(store_name)
+
+        store = self._stores.get(stream_id, {}).get(store_name)
         if store:
             raise WindowedStoreAlreadyRegisteredError(
                 "This window range and type combination already exists; "
                 "to use this window, provide a unique name via the `name` parameter."
             )
-        self._stores.setdefault(topic_name, {})[store_name] = WindowedRocksDBStore(
+
+        self._stores.setdefault(stream_id, {})[store_name] = WindowedRocksDBStore(
             name=store_name,
-            topic=topic_name,
+            stream_id=stream_id,
             base_dir=str(self._state_dir),
-            changelog_producer_factory=self._setup_changelogs(topic_name, store_name),
+            changelog_producer_factory=self._setup_changelogs(
+                stream_id=stream_id,
+                store_name=store_name,
+                topic_config=changelog_config,
+            ),
             options=self._rocksdb_options,
         )
 
@@ -237,8 +251,8 @@ class StateStoreManager:
         """
         if any(
             store.partitions
-            for topic_stores in self._stores.values()
-            for store in topic_stores.values()
+            for stream_stores in self._stores.values()
+            for store in stream_stores.values()
         ):
             raise PartitionStoreIsUsed(
                 "Cannot clear stores with active partitions assigned"
@@ -250,42 +264,46 @@ class StateStoreManager:
 
     def on_partition_assign(
         self,
-        topic: Optional[str],
+        stream_id: Optional[str],
         partition: int,
         committed_offsets: dict[str, int],
     ) -> Dict[str, StorePartition]:
         """
-        Assign store partitions for each registered store for the given `TopicPartition`
-        and return a list of assigned `StorePartition` objects.
+        Assign store partitions for each registered store for the given stream_id
+         and partition number, and return a list of assigned `StorePartition` objects.
 
-        :param topic: Kafka topic name
-        :param partition: Kafka topic partition
+        :param stream_id: stream id
+        :param partition: Kafka topic partition number
         :param committed_offsets: a dict with latest committed offsets
             of all assigned topics for this partition number.
         :return: list of assigned `StorePartition`
         """
-
         store_partitions = {}
-        for name, store in self._stores.get(topic, {}).items():
+        for name, store in self._stores.get(stream_id, {}).items():
             store_partition = store.assign_partition(partition)
             store_partitions[name] = store_partition
         if self._recovery_manager and store_partitions:
             self._recovery_manager.assign_partition(
-                topic=topic,
+                topic=stream_id,
                 partition=partition,
                 committed_offsets=committed_offsets,
                 store_partitions=store_partitions,
             )
         return store_partitions
 
-    def on_partition_revoke(self, topic: str, partition: int) -> None:
+    def on_partition_revoke(
+        self,
+        stream_id: str,
+        partition: int,
+    ) -> None:
         """
-        Revoke store partitions for each registered store for the given `TopicPartition`
+        Revoke store partitions for each registered store
+        for the given stream_id and partition number.
 
-        :param topic: Kafka topic name
-        :param partition: Kafka topic partition
+        :param stream_id: stream id
+        :param partition: partition number
         """
-        if stores := self._stores.get(topic, {}).values():
+        if stores := self._stores.get(stream_id, {}).values():
             if self._recovery_manager:
                 self._recovery_manager.revoke_partition(partition_num=partition)
             for store in stores:
@@ -302,8 +320,8 @@ class StateStoreManager:
         """
         Close all registered stores
         """
-        for topic_stores in self._stores.values():
-            for store in topic_stores.values():
+        for stream_stores in self._stores.values():
+            for store in stream_stores.values():
                 store.close()
 
     def __enter__(self):

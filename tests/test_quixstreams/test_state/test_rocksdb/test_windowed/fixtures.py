@@ -19,7 +19,7 @@ def windowed_rocksdb_store_factory(tmp_path):
     ) -> WindowedRocksDBStore:
         topic = topic or str(uuid.uuid4())
         return WindowedRocksDBStore(
-            topic=topic,
+            stream_id=topic,
             name=name,
             base_dir=str(tmp_path),
         )
@@ -59,7 +59,7 @@ def windowed_rocksdb_store_factory_changelog(tmp_path, changelog_producer_mock):
     ) -> WindowedRocksDBStore:
         topic = topic or str(uuid.uuid4())
         return WindowedRocksDBStore(
-            topic=topic,
+            stream_id=topic,
             name=name,
             base_dir=str(tmp_path),
             changelog_producer_factory=ChangelogProducerFactory(

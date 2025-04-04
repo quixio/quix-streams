@@ -4,8 +4,10 @@ import contextvars
 import functools
 import operator
 import pprint
+import typing
 import warnings
 from datetime import timedelta
+from operator import attrgetter
 from typing import (
     Any,
     Callable,
@@ -46,7 +48,6 @@ from quixstreams.models import (
     TopicManager,
 )
 from quixstreams.models.serializers import DeserializerType, SerializerType
-from quixstreams.processing import ProcessingContext
 from quixstreams.sinks import BaseSink
 from quixstreams.state.base import State
 from quixstreams.utils.printing import (
@@ -55,8 +56,8 @@ from quixstreams.utils.printing import (
     DEFAULT_LIVE_SLOWDOWN,
 )
 
-from .exceptions import InvalidOperation
-from .registry import DataframeRegistry
+from .exceptions import InvalidOperation, TopicPartitionsMismatch
+from .registry import DataFrameRegistry
 from .series import StreamingSeries
 from .utils import ensure_milliseconds
 from .windows import (
@@ -68,6 +69,11 @@ from .windows import (
     TumblingTimeWindowDefinition,
 )
 from .windows.base import WindowOnLateCallback
+
+if typing.TYPE_CHECKING:
+    from quixstreams.processing import ProcessingContext
+
+T = TypeVar("T")
 
 ApplyCallbackStateful = Callable[[Any, State], Any]
 ApplyWithMetadataCallbackStateful = Callable[[Any, Any, int, Any, State], Any]
@@ -126,19 +132,27 @@ class StreamingDataFrame:
 
     def __init__(
         self,
-        topic: Topic,
+        *topics: Topic,
         topic_manager: TopicManager,
-        registry: DataframeRegistry,
+        registry: DataFrameRegistry,
         processing_context: ProcessingContext,
         stream: Optional[Stream] = None,
     ):
+        if not topics:
+            raise ValueError("At least one Topic must be passed")
+
         self._stream: Stream = stream or Stream()
-        self._topic = topic
+        # Implicitly deduplicate Topic objects into a tuple and sort them by name
+        self._topics: tuple[Topic, ...] = tuple(
+            sorted({t.name: t for t in topics}.values(), key=attrgetter("name"))
+        )
         self._topic_manager = topic_manager
         self._registry = registry
         self._processing_context = processing_context
         self._producer = processing_context.producer
-        self._locked = False
+        self._registry.register_stream_id(
+            stream_id=self.stream_id, topic_names=[t.name for t in self._topics]
+        )
 
     @property
     def processing_context(self) -> ProcessingContext:
@@ -149,8 +163,24 @@ class StreamingDataFrame:
         return self._stream
 
     @property
-    def topic(self) -> Topic:
-        return self._topic
+    def stream_id(self) -> str:
+        """
+        An identifier of the data stream this StreamingDataFrame
+        manipulates in the application.
+
+        It is used as a common prefix for state stores and group-by topics.
+        A new `stream_id` is set when StreamingDataFrames are merged via `.merge()`
+        or grouped via `.group_by()`.
+
+        StreamingDataFrames with different `stream_id` cannot access the same state stores.
+
+        By default, a topic name or a combination of topic names are used as `stream_id`.
+        """
+        return self._topic_manager.stream_id_from_topics(self.topics)
+
+    @property
+    def topics(self) -> tuple[Topic, ...]:
+        return self._topics
 
     @overload
     def apply(
@@ -253,6 +283,7 @@ class StreamingDataFrame:
             stateful_func = _as_stateful(
                 func=with_metadata_func,
                 processing_context=self._processing_context,
+                stream_id=self.stream_id,
             )
             stream = self.stream.add_apply(stateful_func, expand=expand, metadata=True)  # type: ignore[call-overload]
         else:
@@ -361,6 +392,7 @@ class StreamingDataFrame:
             stateful_func = _as_stateful(
                 func=with_metadata_func,
                 processing_context=self._processing_context,
+                stream_id=self.stream_id,
             )
             return self._add_update(stateful_func, metadata=True)
         else:
@@ -462,6 +494,7 @@ class StreamingDataFrame:
             stateful_func = _as_stateful(
                 func=with_metadata_func,
                 processing_context=self._processing_context,
+                stream_id=self.stream_id,
             )
             stream = self.stream.add_filter(stateful_func, metadata=True)
         else:
@@ -513,7 +546,8 @@ class StreamingDataFrame:
 
         `.groupby()` can only be performed once per `StreamingDataFrame` instance.
 
-        >**NOTE:** group_by generates a topic that copies the original topic's settings.
+        >**NOTE:** group_by generates a new topic with the `"repartition__"` prefix
+            that copies the settings of original topics.
 
         Example Snippet:
 
@@ -532,7 +566,6 @@ class StreamingDataFrame:
         sdf = sdf.group_by("customer_account_id")
         sdf = sdf.apply(func, stateful=True)
         ```
-
 
         :param key: how the new key should be generated from the message value;
             requires a column name (string) or a callable that takes the message value.
@@ -557,9 +590,13 @@ class StreamingDataFrame:
                 'group_by requires "name" parameter when "key" is a function'
             )
 
+        # Generate a config for the new repartition topic based on the underlying topics
+        repartition_config = self._topic_manager.derive_topic_config(self._topics)
+
         groupby_topic = self._topic_manager.repartition_topic(
             operation=operation,
-            topic_name=self._topic.name,
+            stream_id=self.stream_id,
+            config=repartition_config,
             key_serializer=key_serializer,
             value_serializer=value_serializer,
             key_deserializer=key_deserializer,
@@ -567,7 +604,7 @@ class StreamingDataFrame:
         )
 
         self.to_topic(topic=groupby_topic, key=self._groupby_key(key))
-        groupby_sdf = self.__dataframe_clone__(topic=groupby_topic)
+        groupby_sdf = self.__dataframe_clone__(groupby_topic)
         self._registry.register_groupby(source_sdf=self, new_sdf=groupby_sdf)
         return groupby_sdf
 
@@ -952,7 +989,9 @@ class StreamingDataFrame:
         :return: result of `StreamingDataFrame`
         """
         if not topic:
-            topic = self._topic
+            if len(self.topics) > 1:
+                raise ValueError("Topic must be provided for the multi-topic SDF")
+            topic = self.topics[0]
         context = contextvars.copy_context()
         context.run(set_message_context, ctx)
         result = []
@@ -1545,6 +1584,40 @@ class StreamingDataFrame:
         # uses apply without returning to make this operation terminal
         self.apply(_sink_callback, metadata=True)
 
+    def concat(self, other: Self) -> Self:
+        """
+        Concatenate two StreamingDataFrames together and return a new one.
+        The transformations applied on this new StreamingDataFrame will update data
+        from both origins.
+
+        Use it to concatenate dataframes belonging to different topics as well as to merge the branches
+        of the same original dataframe.
+
+        If concatenated dataframes belong to different topics, the stateful operations
+        on the new dataframe will create different state stores
+        unrelated to the original dataframes and topics.
+        The same is true for the repartition topics created by `.group_by()`.
+
+        :param other: other StreamingDataFrame
+        :return: a new StreamingDataFrame
+        """
+
+        merged_stream = self.stream.merge(other.stream)
+        return self.__dataframe_clone__(
+            *self.topics, *other.topics, stream=merged_stream
+        )
+
+    def ensure_topics_copartitioned(self):
+        partitions_counts = set(t.broker_config.num_partitions for t in self._topics)
+        if len(partitions_counts) > 1:
+            msg = ", ".join(
+                f'"{t.name}" ({t.broker_config.num_partitions} partitions)'
+                for t in self._topics
+            )
+            raise TopicPartitionsMismatch(
+                f"The underlying topics must have the same number of partitions to use State; got {msg}"
+            )
+
     def _produce(
         self,
         topic: Topic,
@@ -1569,10 +1642,15 @@ class StreamingDataFrame:
 
     def _register_store(self):
         """
-        Register the default store for input topic in StateStoreManager
+        Register the default store for the current stream_id in StateStoreManager.
         """
+        self.ensure_topics_copartitioned()
+
+        # Generate a changelog topic config based on the underlying topics.
+        changelog_topic_config = self._topic_manager.derive_topic_config(self._topics)
+
         self._processing_context.state_manager.register_store(
-            topic_name=self._topic.name
+            stream_id=self.stream_id, changelog_config=changelog_topic_config
         )
 
     def _groupby_key(
@@ -1590,19 +1668,21 @@ class StreamingDataFrame:
 
     def __dataframe_clone__(
         self,
+        *topics: Topic,
         stream: Optional[Stream] = None,
-        topic: Optional[Topic] = None,
     ) -> Self:
         """
-        Clone the StreamingDataFrame with a new `stream` and `topic` parameters.
+        Clone the StreamingDataFrame with a new `stream`, `topics`,
+        and optional `stream_id` parameters.
 
+        :param topics: one or more `Topic` objects
         :param stream: instance of `Stream`, optional.
-        :param topic: instance of `Topic`, optional.
         :return: a new `StreamingDataFrame`.
         """
+
         clone = self.__class__(
+            *(topics or self._topics),
             stream=stream,
-            topic=topic or self._topic,
             processing_context=self._processing_context,
             topic_manager=self._topic_manager,
             registry=self._registry,
@@ -1700,9 +1780,6 @@ def _drop(value: Dict, columns: List[str], ignore_missing: bool = False):
                 raise
 
 
-T = TypeVar("T")
-
-
 def _as_metadata_func(
     func: Callable[[Any, State], T],
 ) -> Callable[[Any, Any, int, Any, State], T]:
@@ -1718,12 +1795,14 @@ def _as_metadata_func(
 def _as_stateful(
     func: Callable[[Any, Any, int, Any, State], T],
     processing_context: ProcessingContext,
+    stream_id: str,
 ) -> Callable[[Any, Any, int, Any], T]:
     @functools.wraps(func)
     def wrapper(value: Any, key: Any, timestamp: int, headers: Any) -> Any:
         ctx = message_context()
         transaction = processing_context.checkpoint.get_store_transaction(
-            topic=ctx.topic, partition=ctx.partition
+            stream_id=stream_id,
+            partition=ctx.partition,
         )
         # Pass a State object with an interface limited to the key updates only
         # and prefix all the state keys by the message key

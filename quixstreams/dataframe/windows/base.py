@@ -19,13 +19,14 @@ from typing_extensions import TypeAlias
 from quixstreams.context import message_context
 from quixstreams.core.stream import TransformExpandedCallback
 from quixstreams.dataframe.exceptions import InvalidOperation
-from quixstreams.processing import ProcessingContext
+from quixstreams.models.topics.manager import TopicManager
 from quixstreams.state import WindowedPartitionTransaction
 
 from .aggregations import BaseAggregator, BaseCollector
 
 if TYPE_CHECKING:
     from quixstreams.dataframe.dataframe import StreamingDataFrame
+    from quixstreams.processing import ProcessingContext
 
 logger = logging.getLogger(__name__)
 
@@ -69,8 +70,13 @@ class Window(abc.ABC):
         pass
 
     def register_store(self) -> None:
+        self._dataframe.ensure_topics_copartitioned()
+        # Create a config for the changelog topic based on the underlying SDF topics
+        changelog_config = TopicManager.derive_topic_config(self._dataframe.topics)
         self._dataframe.processing_context.state_manager.register_windowed_store(
-            topic_name=self._dataframe.topic.name, store_name=self._name
+            stream_id=self._dataframe.stream_id,
+            store_name=self._name,
+            changelog_config=changelog_config,
         )
 
     def _apply_window(
@@ -82,6 +88,7 @@ class Window(abc.ABC):
 
         windowed_func = _as_windowed(
             func=func,
+            stream_id=self._dataframe.stream_id,
             processing_context=self._dataframe.processing_context,
             store_name=name,
         )
@@ -391,8 +398,9 @@ def _noop() -> Any:
 
 def _as_windowed(
     func: TransformRecordCallbackExpandedWindowed,
-    processing_context: ProcessingContext,
+    processing_context: "ProcessingContext",
     store_name: str,
+    stream_id: str,
 ) -> TransformExpandedCallback:
     @functools.wraps(func)
     def wrapper(
@@ -402,7 +410,7 @@ def _as_windowed(
         transaction = cast(
             WindowedPartitionTransaction,
             processing_context.checkpoint.get_store_transaction(
-                topic=ctx.topic, partition=ctx.partition, store_name=store_name
+                stream_id=stream_id, partition=ctx.partition, store_name=store_name
             ),
         )
         if key is None:
