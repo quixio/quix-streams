@@ -21,6 +21,10 @@ __all__ = [
     "BaseAggregator",
     "Collector",
     "BaseCollector",
+    "Earliest",
+    "Latest",
+    "First",
+    "Last",
 ]
 
 
@@ -218,6 +222,116 @@ class Min(Aggregator):
         return min(old, new)
 
     def result(self, value: V) -> V:
+        return value
+
+
+class Earliest(Aggregator):
+    """
+    Use `Earliest()` to get the event (or its column) with the smallest timestamp within each window period.
+
+    :param column: The column to aggregate. Use `None` to earliest the whole message.
+        Default - `None`
+    """
+
+    def initialize(self) -> None:
+        return None
+
+    def agg(self, old: Any, new: Any, timestamp: int) -> Any:
+        if self.column is not None:
+            new = new.get(self.column)
+
+        if new is None:
+            return old
+        if old is None:
+            return (new, timestamp)
+
+        old_value, old_timestamp = old
+        if timestamp < old_timestamp:
+            return (new, timestamp)
+        return old
+
+    def result(self, value: Optional[tuple[Any, int]]) -> Any:
+        if value is None:
+            return value
+        return value[0]
+
+
+class Latest(Aggregator):
+    """
+    Use `Latest()` to get the event (or its column) with the latest timestamp within each window period.
+
+    :param column: The column to aggregate. Use `None` to latest the whole message.
+        Default - `None`
+    """
+
+    def initialize(self) -> None:
+        return None
+
+    def agg(self, old: Any, new: Any, timestamp: int) -> tuple[Any, int]:
+        if self.column is not None:
+            new = new.get(self.column)
+
+        if new is None:
+            return old
+        if old is None:
+            return (new, timestamp)
+
+        old_value, old_timestamp = old
+        if timestamp >= old_timestamp:
+            return (new, timestamp)
+        return old
+
+    def result(self, value: Optional[tuple[Any, int]]) -> Any:
+        if value is None:
+            return value
+        return value[0]
+
+
+class First(Aggregator):
+    """
+    Use `First()` to get the first event, or a column of the event, within each window period.
+    This aggregation works based on the processing order.
+
+    :param column: The column to aggregate. Use `None` to first the whole message.
+        Default - `None`
+    """
+
+    def initialize(self) -> None:
+        return None
+
+    def agg(self, old: Any, new: Any, timestamp: int) -> Any:
+        if self.column is not None:
+            new = new.get(self.column)
+
+        if old is None:
+            return new
+        return old
+
+    def result(self, value: Any) -> Any:
+        return value
+
+
+class Last(Aggregator):
+    """
+    Use `Last()` to get the last event, or a column of the event, within each window period.
+    This aggregation works based on the processing order.
+
+    :param column: The column to aggregate. Use `None` to last the whole message.
+        Default - `None`
+    """
+
+    def initialize(self) -> None:
+        return None
+
+    def agg(self, old: Any, new: Any, timestamp: int) -> Any:
+        if self.column is not None:
+            new = new.get(self.column)
+
+        if new is None:
+            return old
+        return new
+
+    def result(self, value: Any) -> Any:
         return value
 
 
