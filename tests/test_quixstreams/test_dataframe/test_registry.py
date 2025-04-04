@@ -9,10 +9,7 @@ from quixstreams.models import Topic
 class TestDataFrameRegistry:
     def test_register_root_multi_topic_sdf_fails(self):
         registry = DataFrameRegistry()
-        sdf_mock = MagicMock(spec_set=StreamingDataFrame)
-        type(sdf_mock).topics = PropertyMock(
-            return_value=[Topic("test-1"), Topic("test-1")]
-        )
+        sdf_mock = mock.Mock(topics=[Topic("test-1"), Topic("test-1")])
         with pytest.raises(
             ValueError, match="Expected a StreamingDataFrame with one topic"
         ):
