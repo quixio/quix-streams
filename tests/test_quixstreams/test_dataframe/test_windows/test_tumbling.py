@@ -1,6 +1,7 @@
 import pytest
 
 import quixstreams.dataframe.windows.aggregations as agg
+from quixstreams.dataframe import DataFrameRegistry
 from quixstreams.dataframe.windows import (
     TumblingCountWindowDefinition,
     TumblingTimeWindowDefinition,
@@ -11,7 +12,9 @@ from quixstreams.dataframe.windows.time_based import ClosingStrategy
 @pytest.fixture()
 def tumbling_window_definition_factory(state_manager, dataframe_factory):
     def factory(duration_ms: int, grace_ms: int = 0) -> TumblingTimeWindowDefinition:
-        sdf = dataframe_factory(state_manager=state_manager)
+        sdf = dataframe_factory(
+            state_manager=state_manager, registry=DataFrameRegistry()
+        )
         window_def = TumblingTimeWindowDefinition(
             duration_ms=duration_ms, grace_ms=grace_ms, dataframe=sdf
         )
@@ -70,7 +73,7 @@ class TestTumblingWindow:
         window.final(closing_strategy="key")
         assert window.name == "tumbling_window_10"
 
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         key = b"key"
         with store.start_partition_transaction(0) as tx:
@@ -564,7 +567,9 @@ class TestTumblingWindow:
 @pytest.fixture()
 def count_tumbling_window_definition_factory(state_manager, dataframe_factory):
     def factory(count: int) -> TumblingCountWindowDefinition:
-        sdf = dataframe_factory(state_manager=state_manager)
+        sdf = dataframe_factory(
+            state_manager=state_manager, registry=DataFrameRegistry()
+        )
         window_def = TumblingCountWindowDefinition(dataframe=sdf, count=count)
         return window_def
 
@@ -604,7 +609,7 @@ class TestCountTumblingWindow:
         window.final()
         assert window.name == "tumbling_count_window"
 
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         key = b"key"
         with store.start_partition_transaction(0) as tx:
@@ -874,7 +879,7 @@ class TestCountTumblingWindow:
         assert window.name == "tumbling_count_window_collect"
 
         window.final()
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             process(window, key="", value=1, transaction=tx, timestamp_ms=100)

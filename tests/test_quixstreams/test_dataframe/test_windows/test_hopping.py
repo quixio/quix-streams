@@ -1,6 +1,7 @@
 import pytest
 
 import quixstreams.dataframe.windows.aggregations as agg
+from quixstreams.dataframe import DataFrameRegistry
 from quixstreams.dataframe.windows import (
     HoppingCountWindowDefinition,
     HoppingTimeWindowDefinition,
@@ -13,7 +14,9 @@ def hopping_window_definition_factory(state_manager, dataframe_factory):
     def factory(
         duration_ms: int, step_ms: int, grace_ms: int = 0
     ) -> HoppingTimeWindowDefinition:
-        sdf = dataframe_factory(state_manager=state_manager)
+        sdf = dataframe_factory(
+            state_manager=state_manager, registry=DataFrameRegistry()
+        )
         window_def = HoppingTimeWindowDefinition(
             duration_ms=duration_ms, step_ms=step_ms, grace_ms=grace_ms, dataframe=sdf
         )
@@ -74,7 +77,7 @@ class TestHoppingWindow:
         window.final()
         assert window.name == "hopping_window_10_5"
 
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         key = b"key"
         with store.start_partition_transaction(0) as tx:
@@ -653,7 +656,9 @@ class TestHoppingWindow:
 @pytest.fixture()
 def count_hopping_window_definition_factory(state_manager, dataframe_factory):
     def factory(count: int, step: int) -> HoppingCountWindowDefinition:
-        sdf = dataframe_factory(state_manager=state_manager)
+        sdf = dataframe_factory(
+            state_manager=state_manager, registry=DataFrameRegistry()
+        )
         window_def = HoppingCountWindowDefinition(dataframe=sdf, count=count, step=step)
         return window_def
 
@@ -696,7 +701,7 @@ class TestCountHoppingWindow:
         window.final()
         assert window.name == "hopping_count_window"
 
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         key = b"key"
         with store.start_partition_transaction(0) as tx:
