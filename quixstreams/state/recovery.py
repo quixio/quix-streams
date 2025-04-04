@@ -380,10 +380,10 @@ class RecoveryManager:
             )
             self._consumer.seek(tp)
             self._consumer.resume([tp])
-            _, hwm = self._consumer.get_watermark_offsets(tp)
+            lwm, hwm = self._consumer.get_watermark_offsets(tp)
 
             logger.debug(
-                f"Schedule recovery from changelog topic topic={tp.topic} partition={tp.partition} total_to_recover={hwm - rp.offset}"
+                f"Schedule recovery from changelog topic topic={tp.topic} partition={tp.partition} state_offset={rp.offset} changelog_lowwater={lwm} changelog_highwater={hwm} total_to_recover={hwm - rp.offset} "
             )
 
         self._recovery_loop()
