@@ -198,6 +198,16 @@ You can then interact with it once the `Application` stops:
 > **NOTE:** Though the result is actually a `ListSink`, it behaves like a list...you can even pass it 
 to `Pandas.DataFrame()` and it will work as expected!
 
+#### Including Message Metadata
+
+To include Kafka message data beyond fields contained in `value`, do `ListSink(metadata=True)`, 
+which will include all the Kafka message parameters like `key`, `timestamp`, etc. 
+as additional fields as `_{param}`, like so:
+
+```shell
+> list_sink[0]
+{"thing": "x", "_key": "id-123", "_timestamp": 1234567890, "_topic": "some-topic", ... }
+```
 
 #### ListSink Limitations
 
