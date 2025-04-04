@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock
 
 import pytest
+from confluent_kafka import OFFSET_BEGINNING
 
 from quixstreams.state.exceptions import ColumnFamilyHeaderMissing
 from quixstreams.state.metadata import (
@@ -53,6 +54,23 @@ class TestRecoveryPartition:
 
         assert recovery_partition.needs_recovery_check == needs_check
         assert recovery_partition.has_invalid_offset == invalid_offset
+
+    @pytest.mark.parametrize(
+        "stored_offset, initial_offset",
+        [
+            (None, OFFSET_BEGINNING),
+            (0, 0),
+            (1, 1),
+        ],
+    )
+    def test_initial_offset(
+        self, stored_offset, initial_offset, recovery_partition_factory
+    ):
+        store_partition = MagicMock(RocksDBStorePartition)
+        store_partition.get_changelog_offset.return_value = stored_offset
+
+        recovery_partition = recovery_partition_factory(store_partition=store_partition)
+        assert recovery_partition.offset == initial_offset
 
 
 class TestRecoverFromChangelogMessage:
