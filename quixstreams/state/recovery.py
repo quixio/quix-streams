@@ -1,6 +1,7 @@
 import logging
 from typing import Dict, List, Optional
 
+from confluent_kafka import OFFSET_BEGINNING
 from confluent_kafka import TopicPartition as ConfluentPartition
 
 from quixstreams.kafka import BaseConsumer
@@ -81,7 +82,10 @@ class RecoveryPartition:
 
         :return: changelog offset (int)
         """
-        offset = self._store_partition.get_changelog_offset() or -1001
+        offset = self._store_partition.get_changelog_offset()
+        if offset is None:
+            offset = OFFSET_BEGINNING
+
         if self._initial_offset is None:
             self._initial_offset = offset
         return offset
