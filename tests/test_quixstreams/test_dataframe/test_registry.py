@@ -1,8 +1,8 @@
-from unittest.mock import MagicMock, PropertyMock
+from unittest import mock
 
 import pytest
 
-from quixstreams.dataframe import DataFrameRegistry, StreamingDataFrame
+from quixstreams.dataframe import DataFrameRegistry
 from quixstreams.models import Topic
 
 
