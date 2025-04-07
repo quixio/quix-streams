@@ -100,6 +100,7 @@ class Topic:
         value_serializer: Optional[SerializerType] = None,
         key_serializer: Optional[SerializerType] = BytesSerializer(),
         timestamp_extractor: Optional[TimestampExtractor] = None,
+        quix_name: str = "",
     ):
         """
         :param name: topic name
@@ -110,8 +111,11 @@ class Topic:
         :param key_serializer: a serializer type for keys
         :param timestamp_extractor: a callable that returns a timestamp in
             milliseconds from a deserialized message.
+        :param quix_name: a name of the topic in the Quix Cloud.
+            It is set only by `QuixTopicManager`.
         """
         self.name = name
+        self.quix_name = quix_name or name
         self._create_config = copy.deepcopy(create_config)
         self._broker_config: Optional[TopicConfig] = None
         self._value_deserializer = _get_deserializer(value_deserializer)
@@ -127,6 +131,7 @@ class Topic:
     ):
         return self.__class__(
             name=name,
+            quix_name=self.quix_name,
             create_config=create_config or self._create_config,
             value_deserializer=self._value_deserializer,
             key_deserializer=self._key_deserializer,

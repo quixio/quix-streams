@@ -17,14 +17,14 @@ class WindowedRocksDBStore(RocksDBStore):
     def __init__(
         self,
         name: str,
-        topic: str,
+        stream_id: str,
         base_dir: str,
         changelog_producer_factory: Optional[ChangelogProducerFactory] = None,
         options: Optional[RocksDBOptionsType] = None,
     ):
         """
         :param name: a unique store name
-        :param topic: a topic name for this store
+        :param stream_id: a topic name for this store
         :param base_dir: path to a directory with the state
         :param changelog_producer_factory: a ChangelogProducerFactory instance
             if using changelogs
@@ -32,7 +32,7 @@ class WindowedRocksDBStore(RocksDBStore):
         """
         super().__init__(
             name=name,
-            topic=topic,
+            stream_id=stream_id,
             base_dir=base_dir,
             changelog_producer_factory=changelog_producer_factory,
             options=options,

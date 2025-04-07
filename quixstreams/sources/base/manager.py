@@ -137,16 +137,14 @@ class SourceProcess(process):
         )
 
         state_manager.register_store(
-            topic_name=None,
+            stream_id=None,
             store_name=source.store_name,
             store_type=MemoryStore,
-            topic_config=TopicConfig(
+            changelog_config=TopicConfig(
                 num_partitions=source.store_partitions_count,
                 replication_factor=self._topic_manager.default_replication_factor,
             ),
         )
-
-        self._topic_manager.validate_all_topics()
 
         # Manually assign the changelog topic-partition for recovery
         changelog_topics = list(
@@ -158,7 +156,7 @@ class SourceProcess(process):
         self._consumer.assign([changelog_tp])
 
         store_partitions = state_manager.on_partition_assign(
-            topic=None,
+            stream_id=None,
             partition=source.assigned_store_partition,
             committed_offsets={},
         )

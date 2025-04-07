@@ -1,7 +1,6 @@
-import copy
 import logging
 from itertools import chain
-from typing import Dict, List, Literal, Optional, Set
+from typing import Dict, Iterable, List, Literal, Optional, Sequence
 
 from quixstreams.models.serializers import DeserializerType, SerializerType
 
@@ -35,9 +34,11 @@ class TopicManager:
     # Max topic name length for the new topics
     _max_topic_name_len = 255
 
-    _groupby_extra_config_imports_defaults = {"retention.bytes", "retention.ms"}
-    _changelog_extra_config_override = {"cleanup.policy": "compact"}
-    _changelog_extra_config_imports_defaults = {"retention.bytes", "retention.ms"}
+    _extra_config_imports = {
+        "retention.bytes",
+        "retention.ms",
+        "cleanup.policy",
+    }
 
     def __init__(
         self,
@@ -202,37 +203,33 @@ class TopicManager:
     def repartition_topic(
         self,
         operation: str,
-        topic_name: str,
+        stream_id: str,
+        config: TopicConfig,
         value_deserializer: Optional[DeserializerType] = "json",
         key_deserializer: Optional[DeserializerType] = "json",
         value_serializer: Optional[SerializerType] = "json",
         key_serializer: Optional[SerializerType] = "json",
-        timeout: Optional[float] = None,
     ) -> Topic:
         """
         Create an internal repartition topic.
 
         :param operation: name of the GroupBy operation (column name or user-defined).
-        :param topic_name: name of the topic the GroupBy is sourced from.
+        :param stream_id: stream id.
+        :param config: a config for the repartition topic.
         :param value_deserializer: a deserializer type for values; default - JSON
         :param key_deserializer: a deserializer type for keys; default - JSON
         :param value_serializer: a serializer type for values; default - JSON
         :param key_serializer: a serializer type for keys; default - JSON
-        :param timeout: config lookup timeout (seconds); Default 30
 
         :return: `Topic` object (which is also stored on the TopicManager)
         """
         topic = Topic(
-            name=self._internal_name("repartition", topic_name, operation),
+            name=self._internal_name("repartition", stream_id, operation),
             value_deserializer=value_deserializer,
             key_deserializer=key_deserializer,
             value_serializer=value_serializer,
             key_serializer=key_serializer,
-            create_config=self._get_source_topic_config(
-                topic_name,
-                extras_imports=self._groupby_extra_config_imports_defaults,
-                timeout=timeout if timeout is not None else self._timeout,
-            ),
+            create_config=config,
         )
         broker_topic = self._get_or_create_broker_topic(topic)
         topic = self._configure_topic(topic, broker_topic)
@@ -241,62 +238,32 @@ class TopicManager:
 
     def changelog_topic(
         self,
-        topic_name: Optional[str],
+        stream_id: Optional[str],
         store_name: str,
-        config: Optional[TopicConfig] = None,
-        timeout: Optional[float] = None,
+        config: TopicConfig,
     ) -> Topic:
         """
-        Performs all the logic necessary to generate a changelog topic based on an
-        optional "source topic" (aka input/consumed topic).
+        Create and register a changelog topic for the given "stream_id" and store name.
 
-        Its main goal is to ensure partition counts of the to-be generated changelog
-        match the source topic, and ensure the changelog topic is compacted. Also
-        enforces the serialization type. All `Topic` objects generated with this are
-        stored on the TopicManager.
-
-        If source topic already exists, defers to the existing topic settings, else
-        uses the settings as defined by the `Topic` (and its defaults) as generated
-        by the `TopicManager`.
+        If the topic already exists, validate that the partition count
+        is the same as requested.
 
         In general, users should NOT need this; an Application knows when/how to
         generate changelog topics. To turn off changelogs, init an Application with
         "use_changelog_topics"=`False`.
 
-        :param topic_name: name of consumed topic (app input topic)
-            > NOTE: normally contain any prefixes added by TopicManager.topic()
+        :param stream_id: stream id
         :param store_name: name of the store this changelog belongs to
             (default, rolling10s, etc.)
-        :param config: the changelog topic configuration. Default to `topic_name` configuration or TopicManager default
-        :param timeout: config lookup timeout (seconds); Default 30
+        :param config: the changelog topic configuration
 
         :return: `Topic` object (which is also stored on the TopicManager)
         """
-        if config is None:
-            if topic_name is None:
-                config = self.topic_config(
-                    num_partitions=self.default_num_partitions,
-                    replication_factor=self.default_replication_factor,
-                )
-            else:
-                source_topic_config = self._get_source_topic_config(
-                    topic_name,
-                    extras_imports=self._changelog_extra_config_imports_defaults,
-                    timeout=timeout if timeout is not None else self._timeout,
-                )
-
-                config = self.topic_config(
-                    num_partitions=source_topic_config.num_partitions,
-                    replication_factor=source_topic_config.replication_factor,
-                    # copy the extra_config to ensure we don't mutate the source topic extra config
-                    extra_config=source_topic_config.extra_config.copy(),
-                )
-
-        # always override some default configuration
-        config.extra_config.update(self._changelog_extra_config_override)
+        # Always enable compaction for changelog topics
+        config.extra_config.update({"cleanup.policy": "compact"})
 
         topic = Topic(
-            name=self._internal_name("changelog", topic_name, store_name),
+            name=self._internal_name("changelog", stream_id, store_name),
             key_serializer="bytes",
             value_serializer="bytes",
             key_deserializer="bytes",
@@ -305,44 +272,75 @@ class TopicManager:
         )
         broker_topic = self._get_or_create_broker_topic(topic)
         topic = self._configure_topic(topic, broker_topic)
-        self._changelog_topics.setdefault(topic_name, {})[store_name] = topic
+        if topic.broker_config.num_partitions != config.num_partitions:
+            raise TopicConfigurationMismatch(
+                f'Invalid partition count for the changelog topic "{topic.name}": '
+                f"expected {config.num_partitions}, "
+                f'got {topic.broker_config.num_partitions}"'
+            )
+
+        self._changelog_topics.setdefault(stream_id, {})[store_name] = topic
         return topic
 
-    def validate_all_topics(self):
+    @classmethod
+    def derive_topic_config(cls, topics: Iterable[Topic]) -> TopicConfig:
         """
-        Validates that all topics have ".broker_config" set
-        and changelog topics have correct numbers of partitions and replication factors.
+        Derive a topic config based on one or more input Topic configs.
+        To be used for generating the internal changelogs and repartition topics.
 
-        Issues are pooled and raised as an Exception once inspections are complete.
+        This method expects that Topics contain "retention.ms" and "retention.bytes"
+        config values.
+
+        Multiple topics are expected for merged and joins streams.
         """
-        logger.info("Validating Kafka topics are configured correctly")
-        for source_topic in self.non_changelog_topics.values():
-            # For any changelog topics, validate the amount of partitions and
-            # replication factor match with the source topic
-            source_config = source_topic.broker_config
-            for changelog_topic in self.changelog_topics.get(
-                source_topic.name, {}
-            ).values():
-                changelog_config = changelog_topic.broker_config
-                if changelog_config.num_partitions != source_config.num_partitions:
-                    raise TopicConfigurationMismatch(
-                        f'changelog topic "{changelog_topic.name}" partition count '
-                        f'does not match its source topic "{source_topic.name}": '
-                        f"expected {source_config.num_partitions}, "
-                        f'got {changelog_config.num_partitions}"'
-                    )
-                if (
-                    changelog_config.replication_factor
-                    != source_config.replication_factor
-                ):
-                    raise TopicConfigurationMismatch(
-                        f'changelog topic "{changelog_topic.name}" replication factor '
-                        f'does not match its source topic "{source_topic.name}": '
-                        f"expected {source_config.replication_factor}, "
-                        f'got {changelog_config.replication_factor}"'
-                    )
+        if not topics:
+            raise ValueError("At least one Topic must be passed")
 
-        logger.info("Kafka topics validation complete")
+        # Pick the maximum number of partitions across topics
+        num_partitions = max(
+            t.broker_config.num_partitions
+            for t in topics
+            if t.broker_config.num_partitions is not None
+        )
+
+        # Pick the maximum replication factor
+        replication_factor = max(
+            t.broker_config.replication_factor
+            for t in topics
+            if t.broker_config.replication_factor is not None
+        )
+
+        # Pick the maximum "retention.bytes" value across topics. -1 means infinity
+        retention_bytes_values = [
+            int(t.broker_config.extra_config["retention.bytes"]) for t in topics
+        ]
+        retention_bytes = (
+            -1 if -1 in retention_bytes_values else max(retention_bytes_values)
+        )
+
+        # Pick maximum "retention.ms" value across topics. -1 means infinity
+        retention_ms_values = [
+            int(t.broker_config.extra_config["retention.ms"]) for t in topics
+        ]
+        retention_ms = -1 if -1 in retention_ms_values else max(retention_ms_values)
+
+        return TopicConfig(
+            num_partitions=num_partitions,
+            replication_factor=replication_factor,
+            extra_config={
+                "retention.bytes": str(retention_bytes),
+                "retention.ms": str(retention_ms),
+            },
+        )
+
+    def stream_id_from_topics(self, topics: Sequence[Topic]) -> str:
+        """
+        Generate a stream_id by combining names of the provided topics.
+        """
+        if not topics:
+            raise ValueError("At least one Topic must be passed")
+
+        return "--".join(sorted(t.name for t in topics))
 
     def _validate_topic_name(self, name: str) -> None:
         """
@@ -390,11 +388,6 @@ class TopicManager:
         """
         broker_config = broker_topic.broker_config
 
-        extra_config_imports = (
-            self._groupby_extra_config_imports_defaults
-            | self._changelog_extra_config_imports_defaults
-        )
-
         # Set a broker config for the topic
         broker_config = TopicConfig(
             num_partitions=broker_config.num_partitions,
@@ -402,7 +395,7 @@ class TopicManager:
             extra_config={
                 k: v
                 for k, v in broker_config.extra_config.items()
-                if k in extra_config_imports
+                if k in self._extra_config_imports
             },
         )
         topic.broker_config = broker_config
@@ -466,46 +459,3 @@ class TopicManager:
         self._admin.create_topics(
             [topic], timeout=timeout, finalize_timeout=create_timeout
         )
-
-    def _get_source_topic_config(
-        self,
-        topic_name: str,
-        timeout: float,
-        extras_imports: Optional[Set[str]] = None,
-    ) -> TopicConfig:
-        """
-        Retrieve configs for a topic, defaulting to stored Topic objects if topic does
-        not exist in Kafka.
-
-        :param topic_name: name of the topic to get configs from
-        :param timeout: config lookup timeout (seconds); Default 30
-        :param extras_imports: set of extra configs that should be imported from topic
-
-        :return: a TopicConfig
-        """
-        topic_config = self._admin.inspect_topics([topic_name], timeout=timeout)[
-            topic_name
-        ]
-        # If the source topic is not created yet, take its "create_config" instead
-        if topic_config is None and topic_name in self.non_changelog_topics:
-            topic_config = copy.deepcopy(
-                self.non_changelog_topics[topic_name].create_config
-            )
-
-        if topic_config is None:
-            raise RuntimeError(f"No configuration can be found for topic {topic_name}")
-
-        # If "extra_imports" is present, copy the specified config values
-        # from the original topic
-        if extras_imports:
-            extra_config = {
-                k: v
-                for k, v in topic_config.extra_config.items()
-                if k in extras_imports
-            }
-            topic_config = TopicConfig(
-                num_partitions=topic_config.num_partitions,
-                replication_factor=topic_config.replication_factor,
-                extra_config=extra_config,
-            )
-        return topic_config

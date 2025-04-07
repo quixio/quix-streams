@@ -188,8 +188,24 @@ class TestRecoverFromChangelogMessage:
             assert tx.get(user_store_key, prefix=kafka_key) == 10
         assert store_partition.get_changelog_offset() == changelog_msg.offset()
 
+    @pytest.mark.parametrize(
+        "processed_offsets, committed_offsets",
+        # Processed offsets should be strictly lower than committed offsets for
+        # the change to be applied
+        [
+            ({"topic1": 2}, {"topic1": 1}),
+            ({"topic1": 2}, {"topic1": 2}),
+            ({"topic1": 2, "topic2": 2}, {"topic1": 3, "topic2": 2}),
+            ({"topic1": 2, "topic2": 2}, {"topic1": 1, "topic2": 3}),
+            ({"topic1": 2, "topic2": 2}, {"topic1": 1, "topic2": 1}),
+        ],
+    )
     def test_recover_from_changelog_message_with_processed_offset_ahead_committed(
-        self, store_partition, recovery_partition_factory
+        self,
+        store_partition,
+        recovery_partition_factory,
+        processed_offsets,
+        committed_offsets,
     ):
         """
         Test that changes from the changelog topic are NOT applied if the
@@ -203,11 +219,6 @@ class TestRecoverFromChangelogMessage:
         """
         kafka_key = b"my_key"
         user_store_key = "count"
-
-        # Processed offset should be strictly lower than committed offset for
-        # the change to be applied
-        processed_offsets = {"topic": 2}
-        committed_offsets = {"topic": 2}
 
         recovery_partition = recovery_partition_factory(
             store_partition=store_partition, committed_offsets=committed_offsets

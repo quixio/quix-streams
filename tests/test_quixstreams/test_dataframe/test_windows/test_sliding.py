@@ -7,6 +7,7 @@ from unittest import mock
 import pytest
 
 import quixstreams.dataframe.windows.aggregations as agg
+from quixstreams.dataframe import DataFrameRegistry
 from quixstreams.dataframe.windows import SlidingTimeWindowDefinition
 
 A, B, C, D = "A", "B", "C", "D"
@@ -752,7 +753,9 @@ def sliding_window_definition_factory(
 ):
     def factory(duration_ms: int, grace_ms: int) -> SlidingTimeWindowDefinition:
         topic = topic_manager_topic_factory("topic")
-        sdf = dataframe_factory(topic=topic, state_manager=state_manager)
+        sdf = dataframe_factory(
+            topic=topic, state_manager=state_manager, registry=DataFrameRegistry()
+        )
         return SlidingTimeWindowDefinition(
             duration_ms=duration_ms, grace_ms=grace_ms, dataframe=sdf
         )
@@ -782,7 +785,7 @@ def transaction_factory(state_manager):
     def factory(window):
         nonlocal store
         if store is None:
-            store = state_manager.get_store(topic="topic", store_name=window.name)
+            store = state_manager.get_store(stream_id="topic", store_name=window.name)
             store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             yield tx

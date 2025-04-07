@@ -1,6 +1,7 @@
 import pytest
 
 import quixstreams.dataframe.windows.aggregations as agg
+from quixstreams.dataframe import DataFrameRegistry
 from quixstreams.dataframe.windows import (
     HoppingCountWindowDefinition,
     HoppingTimeWindowDefinition,
@@ -13,7 +14,9 @@ def hopping_window_definition_factory(state_manager, dataframe_factory):
     def factory(
         duration_ms: int, step_ms: int, grace_ms: int = 0
     ) -> HoppingTimeWindowDefinition:
-        sdf = dataframe_factory(state_manager=state_manager)
+        sdf = dataframe_factory(
+            state_manager=state_manager, registry=DataFrameRegistry()
+        )
         window_def = HoppingTimeWindowDefinition(
             duration_ms=duration_ms, step_ms=step_ms, grace_ms=grace_ms, dataframe=sdf
         )
@@ -74,7 +77,7 @@ class TestHoppingWindow:
         window.final()
         assert window.name == "hopping_window_10_5"
 
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         key = b"key"
         with store.start_partition_transaction(0) as tx:
@@ -261,7 +264,7 @@ class TestHoppingWindow:
         assert window.name == "hopping_window_10_5_count"
 
         window.final(closing_strategy=expiration)
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             key = b"key"
@@ -288,7 +291,7 @@ class TestHoppingWindow:
         assert window.name == "hopping_window_10_5_sum"
 
         window.final(closing_strategy=expiration)
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             key = b"key"
@@ -315,7 +318,7 @@ class TestHoppingWindow:
         assert window.name == "hopping_window_10_5_mean"
 
         window.final(closing_strategy=expiration)
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             key = b"key"
@@ -345,7 +348,7 @@ class TestHoppingWindow:
         assert window.name == "hopping_window_10_5_reduce"
 
         window.final(closing_strategy=expiration)
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             key = b"key"
@@ -371,7 +374,7 @@ class TestHoppingWindow:
         assert window.name == "hopping_window_10_5_max"
 
         window.final(closing_strategy=expiration)
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             key = b"key"
@@ -397,7 +400,7 @@ class TestHoppingWindow:
         assert window.name == "hopping_window_10_5_min"
 
         window.final(closing_strategy=expiration)
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             key = b"key"
@@ -423,7 +426,7 @@ class TestHoppingWindow:
         assert window.name == "hopping_window_10_5_collect"
 
         window.final(closing_strategy=expiration)
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             key = b"key"
@@ -475,7 +478,7 @@ class TestHoppingWindow:
         )
         window = window_def.sum()
         window.final(closing_strategy=expiration)
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         key = b"key"
         with store.start_partition_transaction(0) as tx:
@@ -516,7 +519,7 @@ class TestHoppingWindow:
         )
         window = window_def.sum()
         window.final(closing_strategy="partition")
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             key1 = b"key1"
@@ -572,7 +575,7 @@ class TestHoppingWindow:
         )
         window = window_def.sum()
         window.final(closing_strategy="key")
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             key1 = b"key1"
@@ -610,7 +613,7 @@ class TestHoppingWindow:
         )
         window = window_def.sum()
         window.final(closing_strategy="partition")
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             key1 = b"key1"
@@ -653,7 +656,9 @@ class TestHoppingWindow:
 @pytest.fixture()
 def count_hopping_window_definition_factory(state_manager, dataframe_factory):
     def factory(count: int, step: int) -> HoppingCountWindowDefinition:
-        sdf = dataframe_factory(state_manager=state_manager)
+        sdf = dataframe_factory(
+            state_manager=state_manager, registry=DataFrameRegistry()
+        )
         window_def = HoppingCountWindowDefinition(dataframe=sdf, count=count, step=step)
         return window_def
 
@@ -696,7 +701,7 @@ class TestCountHoppingWindow:
         window.final()
         assert window.name == "hopping_count_window"
 
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         key = b"key"
         with store.start_partition_transaction(0) as tx:
@@ -888,7 +893,7 @@ class TestCountHoppingWindow:
         assert window.name == "hopping_count_window_count"
 
         window.final()
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             updated, expired = process(
@@ -945,7 +950,7 @@ class TestCountHoppingWindow:
         assert window.name == "hopping_count_window_sum"
 
         window.final()
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             updated, expired = process(
@@ -1002,7 +1007,7 @@ class TestCountHoppingWindow:
         assert window.name == "hopping_count_window_mean"
 
         window.final()
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             updated, expired = process(
@@ -1063,7 +1068,7 @@ class TestCountHoppingWindow:
         assert window.name == "hopping_count_window_reduce"
 
         window.final()
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             updated, expired = process(
@@ -1120,7 +1125,7 @@ class TestCountHoppingWindow:
         assert window.name == "hopping_count_window_max"
 
         window.final()
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             updated, expired = process(
@@ -1177,7 +1182,7 @@ class TestCountHoppingWindow:
         assert window.name == "hopping_count_window_min"
 
         window.final()
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             updated, expired = process(
@@ -1234,7 +1239,7 @@ class TestCountHoppingWindow:
         assert window.name == "hopping_count_window_collect"
 
         window.final()
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             updated, expired = process(
@@ -1282,7 +1287,7 @@ class TestCountHoppingWindow:
         window_def = count_hopping_window_definition_factory(count=5, step=2)
         window = window_def.collect()
         window.register_store()
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             updated, expired = process(
@@ -1359,7 +1364,7 @@ class TestCountHoppingWindow:
         window_def = count_hopping_window_definition_factory(count=3, step=1)
         window = window_def.sum()
         window.register_store()
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
 
         with store.start_partition_transaction(0) as tx:
@@ -1452,7 +1457,7 @@ class TestCountHoppingWindow:
         window_def = count_hopping_window_definition_factory(count=3, step=1)
         window = window_def.collect()
         window.register_store()
-        store = state_manager.get_store(topic="test", store_name=window.name)
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
         store.assign_partition(0)
 
         with store.start_partition_transaction(0) as tx:

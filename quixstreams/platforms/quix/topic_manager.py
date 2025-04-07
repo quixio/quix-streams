@@ -1,5 +1,5 @@
 import logging
-from typing import Literal, Optional
+from typing import Literal, Optional, Sequence
 
 from quixstreams.models.topics import Topic, TopicAdmin, TopicConfig, TopicManager
 from quixstreams.models.topics.exceptions import TopicNotFoundError
@@ -59,7 +59,21 @@ class QuixTopicManager(TopicManager):
             auto_create_topics=auto_create_topics,
         )
         self._quix_config_builder = quix_config_builder
-        self._topic_id_to_name: dict[str, str] = {}
+
+    def stream_id_from_topics(self, topics: Sequence[Topic]) -> str:
+        """
+        Generate a stream_id by combining names of the provided topics.
+        """
+        if not topics:
+            raise ValueError("At least one Topic must be passed")
+        elif len(topics) == 1:
+            # If only one topic is passed, return its full name
+            # for backwards compatibility
+            return topics[0].name
+
+        # Use the "quix_name" to generate stream_id.
+        # In Quix Cloud, the "quix_name" can differ from the actual broker topic name
+        return "--".join(sorted(t.quix_name for t in topics))
 
     def _fetch_topic(self, topic: Topic) -> Topic:
         try:
@@ -81,14 +95,6 @@ class QuixTopicManager(TopicManager):
         """
         broker_config = broker_topic.broker_config
 
-        # A hack to pass extra info back from Quix cloud
-        quix_topic_name = broker_config.extra_config.pop("__quix_topic_name__")
-        topic_out = topic.__clone__(name=broker_topic.name)
-
-        extra_config_imports = (
-            self._groupby_extra_config_imports_defaults
-            | self._changelog_extra_config_imports_defaults
-        )
         # Set a broker config for the topic
         broker_config = TopicConfig(
             num_partitions=broker_config.num_partitions,
@@ -96,11 +102,11 @@ class QuixTopicManager(TopicManager):
             extra_config={
                 k: v
                 for k, v in broker_config.extra_config.items()
-                if k in extra_config_imports
+                if k in self._extra_config_imports
             },
         )
+        topic_out = topic.__clone__(name=broker_topic.name)
         topic_out.broker_config = broker_config
-        self._topic_id_to_name[topic_out.name] = quix_topic_name
         self._quix_config_builder.wait_for_topic_ready_statuses([topic_out])
         return topic_out
 
@@ -141,8 +147,13 @@ class QuixTopicManager(TopicManager):
 
         :return: formatted topic name
         """
-        return super()._internal_name(
-            topic_type,
-            self._topic_id_to_name[topic_name] if topic_name else None,
-            suffix,
-        )
+
+        # Map the full topic name to the shorter "quix_name" and use
+        # it for internal topics.
+        # "quix_name" is not prefixed with the workspace id.
+        if topic_name is not None:
+            topic = self.non_changelog_topics.get(topic_name)
+            if topic is not None:
+                topic_name = topic.quix_name
+
+        return super()._internal_name(topic_type, topic_name, suffix)
