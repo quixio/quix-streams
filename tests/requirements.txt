@@ -1,4 +1,4 @@
-testcontainers==4.8.2
+testcontainers==4.10.0
 pytest
 requests>=2.32
 docker>=7.1.0 # Required to use requests>=2.32
