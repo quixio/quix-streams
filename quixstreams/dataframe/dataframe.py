@@ -49,6 +49,7 @@ from quixstreams.models import (
 from quixstreams.models.serializers import DeserializerType, SerializerType
 from quixstreams.sinks import BaseSink
 from quixstreams.state.base import State
+from quixstreams.state.base.transaction import PartitionTransaction
 from quixstreams.utils.printing import (
     DEFAULT_COLUMN_NAME,
     DEFAULT_LIVE,
@@ -1852,14 +1853,19 @@ def _as_stateful(
 ) -> Callable[[Any, Any, int, Any], T]:
     @functools.wraps(func)
     def wrapper(value: Any, key: Any, timestamp: int, headers: Any) -> Any:
-        ctx = message_context()
-        transaction = processing_context.checkpoint.get_store_transaction(
-            stream_id=stream_id,
-            partition=ctx.partition,
-        )
         # Pass a State object with an interface limited to the key updates only
         # and prefix all the state keys by the message key
+        transaction = _get_transaction(processing_context, stream_id)
         state = transaction.as_state(prefix=key)
         return func(value, key, timestamp, headers, state)
 
     return wrapper
+
+
+def _get_transaction(
+    processing_context: ProcessingContext, stream_id: str
+) -> PartitionTransaction:
+    return processing_context.checkpoint.get_store_transaction(
+        stream_id=stream_id,
+        partition=message_context().partition,
+    )
