@@ -178,7 +178,8 @@ def __init__(
         key_deserializer: Optional[DeserializerType] = BytesDeserializer(),
         value_serializer: Optional[SerializerType] = None,
         key_serializer: Optional[SerializerType] = BytesSerializer(),
-        timestamp_extractor: Optional[TimestampExtractor] = None)
+        timestamp_extractor: Optional[TimestampExtractor] = None,
+        quix_name: str = "")
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L94)
@@ -195,6 +196,8 @@ def __init__(
 - `key_serializer`: a serializer type for keys
 - `timestamp_extractor`: a callable that returns a timestamp in
 milliseconds from a deserialized message.
+- `quix_name`: a name of the topic in the Quix Cloud.
+It is set only by `QuixTopicManager`.
 
 <a id="quixstreams.models.topics.topic.Topic.create_config"></a>
 
@@ -207,7 +210,7 @@ milliseconds from a deserialized message.
 def create_config() -> Optional[TopicConfig]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L139)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L144)
 
 A config to create the topic
 
@@ -222,7 +225,7 @@ A config to create the topic
 def broker_config() -> TopicConfig
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L150)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L155)
 
 A topic config obtained from the Kafka broker
 
@@ -236,7 +239,7 @@ A topic config obtained from the Kafka broker
 def row_serialize(row: Row, key: Any) -> KafkaMessage
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L164)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L169)
 
 Serialize Row to a Kafka message structure
 
@@ -265,7 +268,7 @@ def row_deserialize(
 ) -> Union[Row, List[Row], None]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L204)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L209)
 
 Deserialize incoming Kafka message to a Row.
 
@@ -293,7 +296,7 @@ Row, list of Rows or None if the message is ignored.
 class TopicManager()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L21)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L20)
 
 The source of all topic management for a Quix Streams Application.
 
@@ -315,7 +318,7 @@ def __init__(topic_admin: TopicAdmin,
              auto_create_topics: bool = True)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L42)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L43)
 
 
 <br>
@@ -337,7 +340,7 @@ def __init__(topic_admin: TopicAdmin,
 def changelog_topics() -> Dict[Optional[str], Dict[str, Topic]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L82)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L83)
 
 Note: `Topic`s are the changelogs.
 
@@ -354,7 +357,7 @@ returns: the changelog topic dict, {topic_name: {suffix: Topic}}
 def changelog_topics_list() -> List[Topic]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L91)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L92)
 
 Returns a list of changelog topics
 
@@ -371,7 +374,7 @@ returns: the changelog topic dict, {topic_name: {suffix: Topic}}
 def non_changelog_topics() -> Dict[str, Topic]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L100)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L101)
 
 Returns a dict with normal and repartition topics
 
@@ -386,7 +389,7 @@ Returns a dict with normal and repartition topics
 def all_topics() -> Dict[str, Topic]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L107)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L108)
 
 Every registered topic name mapped to its respective `Topic`.
 
@@ -404,7 +407,7 @@ def topic_config(num_partitions: Optional[int] = None,
                  extra_config: Optional[dict] = None) -> TopicConfig
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L115)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L116)
 
 Convenience method for generating a `TopicConfig` with default settings
 
@@ -438,7 +441,7 @@ def topic(name: str,
           timestamp_extractor: Optional[TimestampExtractor] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L137)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L138)
 
 A convenience method for generating a `Topic`. Will use default config options
 
@@ -473,7 +476,7 @@ Topic object with creation configs
 def register(topic: Topic) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L183)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L184)
 
 Register an already generated :class:`quixstreams.models.topics.Topic` to the topic manager.
 
@@ -492,16 +495,17 @@ The topic name and config can be updated by the topic manager.
 #### TopicManager.repartition\_topic
 
 ```python
-def repartition_topic(operation: str,
-                      topic_name: str,
-                      value_deserializer: Optional[DeserializerType] = "json",
-                      key_deserializer: Optional[DeserializerType] = "json",
-                      value_serializer: Optional[SerializerType] = "json",
-                      key_serializer: Optional[SerializerType] = "json",
-                      timeout: Optional[float] = None) -> Topic
+def repartition_topic(
+        operation: str,
+        stream_id: str,
+        config: TopicConfig,
+        value_deserializer: Optional[DeserializerType] = "json",
+        key_deserializer: Optional[DeserializerType] = "json",
+        value_serializer: Optional[SerializerType] = "json",
+        key_serializer: Optional[SerializerType] = "json") -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L202)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L203)
 
 Create an internal repartition topic.
 
@@ -510,12 +514,12 @@ Create an internal repartition topic.
 ***Arguments:***
 
 - `operation`: name of the GroupBy operation (column name or user-defined).
-- `topic_name`: name of the topic the GroupBy is sourced from.
+- `stream_id`: stream id.
+- `config`: a config for the repartition topic.
 - `value_deserializer`: a deserializer type for values; default - JSON
 - `key_deserializer`: a deserializer type for keys; default - JSON
 - `value_serializer`: a serializer type for values; default - JSON
 - `key_serializer`: a serializer type for keys; default - JSON
-- `timeout`: config lookup timeout (seconds); Default 30
 
 
 <br>
@@ -530,26 +534,16 @@ Create an internal repartition topic.
 #### TopicManager.changelog\_topic
 
 ```python
-def changelog_topic(topic_name: Optional[str],
-                    store_name: str,
-                    config: Optional[TopicConfig] = None,
-                    timeout: Optional[float] = None) -> Topic
+def changelog_topic(stream_id: Optional[str], store_name: str,
+                    config: TopicConfig) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L242)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L239)
 
-Performs all the logic necessary to generate a changelog topic based on an
+Create and register a changelog topic for the given "stream_id" and store name.
 
-optional "source topic" (aka input/consumed topic).
-
-Its main goal is to ensure partition counts of the to-be generated changelog
-match the source topic, and ensure the changelog topic is compacted. Also
-enforces the serialization type. All `Topic` objects generated with this are
-stored on the TopicManager.
-
-If source topic already exists, defers to the existing topic settings, else
-uses the settings as defined by the `Topic` (and its defaults) as generated
-by the `TopicManager`.
+If the topic already exists, validate that the partition count
+is the same as requested.
 
 In general, users should NOT need this; an Application knows when/how to
 generate changelog topics. To turn off changelogs, init an Application with
@@ -559,12 +553,10 @@ generate changelog topics. To turn off changelogs, init an Application with
 <br>
 ***Arguments:***
 
-- `topic_name`: name of consumed topic (app input topic)
-> NOTE: normally contain any prefixes added by TopicManager.topic()
+- `stream_id`: stream id
 - `store_name`: name of the store this changelog belongs to
 (default, rolling10s, etc.)
-- `config`: the changelog topic configuration. Default to `topic_name` configuration or TopicManager default
-- `timeout`: config lookup timeout (seconds); Default 30
+- `config`: the changelog topic configuration
 
 
 <br>
@@ -572,22 +564,40 @@ generate changelog topics. To turn off changelogs, init an Application with
 
 `Topic` object (which is also stored on the TopicManager)
 
-<a id="quixstreams.models.topics.manager.TopicManager.validate_all_topics"></a>
+<a id="quixstreams.models.topics.manager.TopicManager.derive_topic_config"></a>
 
 <br><br>
 
-#### TopicManager.validate\_all\_topics
+#### TopicManager.derive\_topic\_config
 
 ```python
-def validate_all_topics()
+@classmethod
+def derive_topic_config(cls, topics: Iterable[Topic]) -> TopicConfig
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L311)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L286)
 
-Validates that all topics have ".broker_config" set
-and changelog topics have correct numbers of partitions and replication factors.
+Derive a topic config based on one or more input Topic configs.
+To be used for generating the internal changelogs and repartition topics.
 
-Issues are pooled and raised as an Exception once inspections are complete.
+This method expects that Topics contain "retention.ms" and "retention.bytes"
+config values.
+
+Multiple topics are expected for merged and joins streams.
+
+<a id="quixstreams.models.topics.manager.TopicManager.stream_id_from_topics"></a>
+
+<br><br>
+
+#### TopicManager.stream\_id\_from\_topics
+
+```python
+def stream_id_from_topics(topics: Sequence[Topic]) -> str
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L336)
+
+Generate a stream_id by combining names of the provided topics.
 
 <a id="quixstreams.models.topics.exceptions"></a>
 
