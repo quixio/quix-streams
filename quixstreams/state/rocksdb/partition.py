@@ -140,14 +140,18 @@ class RocksDBStorePartition(StorePartition):
         return cast(Union[bytes, Literal[Marker.UNDEFINED]], result)
 
     def iter_items(
-        self, from_key: bytes, read_opt: ReadOptions, cf_name: str = "default"
+        self,
+        from_key: bytes,
+        read_opt: ReadOptions,
+        backwards: bool = False,
+        cf_name: str = "default",
     ) -> Iterator[tuple[bytes, bytes]]:
         cf = self.get_column_family(cf_name=cf_name)
 
         # RDict accept Any type as value but we only write bytes so we should only get bytes back.
         return cast(
             Iterator[tuple[bytes, bytes]],
-            cf.items(from_key=from_key, read_opt=read_opt),
+            cf.items(from_key=from_key, read_opt=read_opt, backwards=backwards),
         )
 
     def exists(self, key: bytes, cf_name: str = "default") -> bool:
