@@ -1,4 +1,4 @@
-confluent-kafka[avro,json,protobuf,schemaregistry]>=2.8.2,<2.9
+confluent-kafka[avro,json,protobuf,schemaregistry]>=2.8.2,<2.10
 requests>=2.32
 rocksdict>=0.3,<0.4
 typing_extensions>=4.8
