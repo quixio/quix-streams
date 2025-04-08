@@ -142,7 +142,7 @@ class MongoDBSink(BatchingSink):
             value["__key"] = (
                 str(record.key) if isinstance(record.key, tuple) else record.key
             )
-            value["__headers"] = dict(record.headers)
+            value["__headers"] = dict(record.headers or {})
             value["__timestamp"] = record.timestamp
         if self._add_topic_metadata:
             value["__topic"] = topic
