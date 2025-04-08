@@ -279,11 +279,7 @@ class StreamingDataFrame:
                     cast(ApplyCallbackStateful, func)
                 )
 
-            stateful_func = _as_stateful(
-                func=with_metadata_func,
-                processing_context=self._processing_context,
-                stream_id=self.stream_id,
-            )
+            stateful_func = _as_stateful(with_metadata_func, self)
             stream = self.stream.add_apply(stateful_func, expand=expand, metadata=True)  # type: ignore[call-overload]
         else:
             stream = self.stream.add_apply(
@@ -388,11 +384,7 @@ class StreamingDataFrame:
                     cast(UpdateCallbackStateful, func)
                 )
 
-            stateful_func = _as_stateful(
-                func=with_metadata_func,
-                processing_context=self._processing_context,
-                stream_id=self.stream_id,
-            )
+            stateful_func = _as_stateful(with_metadata_func, self)
             return self._add_update(stateful_func, metadata=True)
         else:
             return self._add_update(
@@ -490,11 +482,7 @@ class StreamingDataFrame:
                     cast(FilterCallbackStateful, func)
                 )
 
-            stateful_func = _as_stateful(
-                func=with_metadata_func,
-                processing_context=self._processing_context,
-                stream_id=self.stream_id,
-            )
+            stateful_func = _as_stateful(with_metadata_func, self)
             stream = self.stream.add_filter(stateful_func, metadata=True)
         else:
             stream = self.stream.add_filter(  # type: ignore[call-overload]
@@ -1805,24 +1793,20 @@ def _as_metadata_func(
 
 def _as_stateful(
     func: Callable[[Any, Any, int, Any, State], T],
-    processing_context: ProcessingContext,
-    stream_id: str,
+    sdf: StreamingDataFrame,
 ) -> Callable[[Any, Any, int, Any], T]:
     @functools.wraps(func)
     def wrapper(value: Any, key: Any, timestamp: int, headers: Any) -> Any:
         # Pass a State object with an interface limited to the key updates only
         # and prefix all the state keys by the message key
-        transaction = _get_transaction(processing_context, stream_id)
-        state = transaction.as_state(prefix=key)
+        state = _get_transaction(sdf).as_state(prefix=key)
         return func(value, key, timestamp, headers, state)
 
     return wrapper
 
 
-def _get_transaction(
-    processing_context: ProcessingContext, stream_id: str
-) -> PartitionTransaction:
-    return processing_context.checkpoint.get_store_transaction(
-        stream_id=stream_id,
+def _get_transaction(sdf: StreamingDataFrame) -> PartitionTransaction:
+    return sdf.processing_context.checkpoint.get_store_transaction(
+        stream_id=sdf.stream_id,
         partition=message_context().partition,
     )
