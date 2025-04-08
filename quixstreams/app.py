@@ -22,7 +22,6 @@ from confluent_kafka import TopicPartition
 from pydantic import AliasGenerator, Field
 from pydantic_settings import BaseSettings as PydanticBaseSettings
 from pydantic_settings import PydanticBaseSettingsSource, SettingsConfigDict
-from typing_extensions import Self
 
 from .context import copy_context, set_message_context
 from .dataframe import DataFrameRegistry, StreamingDataFrame
@@ -1117,7 +1116,7 @@ class ApplicationConfig(BaseSettings):
         """
         return (init_settings,)
 
-    def copy(self, **kwargs) -> Self:
+    def copy(self, **kwargs) -> "ApplicationConfig":
         """
         Update the application config and return a copy
         """

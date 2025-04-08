@@ -3,8 +3,6 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import BinaryIO, Callable, Iterable, Optional
 
-from typing_extensions import Self
-
 __all__ = ("FileFetcher",)
 
 logger = logging.getLogger(__name__)
@@ -26,7 +24,7 @@ class FileFetcher:
         self._downloading_file_content: Optional[Future] = None
         self._download_next_file()
 
-    def __iter__(self) -> Self:
+    def __iter__(self) -> "FileFetcher":
         return self
 
     def __next__(self) -> tuple[Path, BinaryIO]:

@@ -13,8 +13,6 @@ from typing import (
     overload,
 )
 
-from typing_extensions import Self
-
 from quixstreams.dataframe.exceptions import InvalidOperation
 
 from .exceptions import InvalidTopology
@@ -48,7 +46,7 @@ class Stream:
     def __init__(
         self,
         func: Optional[StreamFunction] = None,
-        parents: Optional[List[Self]] = None,
+        parents: Optional[List["Stream"]] = None,
     ):
         """
         A base class for all streaming operations.
@@ -93,7 +91,7 @@ class Stream:
 
         self.func = func if func is not None else ApplyFunction(lambda value: value)
         self.parents = parents or []
-        self.children: list[Self] = []
+        self.children: list["Stream"] = []
         self.pruned = False
 
     def __repr__(self) -> str:
@@ -123,7 +121,7 @@ class Stream:
         func: Union[FilterCallback, FilterWithMetadataCallback],
         *,
         metadata: bool = False,
-    ) -> Self:
+    ) -> "Stream":
         """
         Add a function to filter values from the Stream.
 
@@ -196,7 +194,7 @@ class Stream:
         *,
         expand: bool = False,
         metadata: bool = False,
-    ) -> Self:
+    ) -> "Stream":
         """
         Add an "apply" function to the Stream.
 
@@ -231,7 +229,7 @@ class Stream:
         func: Union[UpdateCallback, UpdateWithMetadataCallback],
         *,
         metadata: bool = False,
-    ) -> Self:
+    ) -> "Stream":
         """
         Add an "update" function to the Stream, that will mutate the input value.
 
@@ -265,7 +263,7 @@ class Stream:
         func: Union[TransformCallback, TransformExpandedCallback],
         *,
         expand: bool = False,
-    ) -> Self:
+    ) -> "Stream":
         """
         Add a "transform" function to the Stream, that will mutate the input value.
 
@@ -284,7 +282,7 @@ class Stream:
         """
         return self._add(TransformFunction(func, expand=expand))  # type: ignore[call-overload]
 
-    def merge(self, other: Self) -> Self:
+    def merge(self, other: "Stream") -> "Stream":
         """
         Merge two Streams together and return a new Stream with two parents
 
@@ -305,7 +303,7 @@ class Stream:
         other.children.append(merged_stream)
         return merged_stream
 
-    def diff(self, other: Self) -> Self:
+    def diff(self, other: "Stream") -> "Stream":
         """
         Takes the difference between Streams `self` and `other` based on their last
         common parent, and returns a new, independent `Stream` that includes only
@@ -322,7 +320,7 @@ class Stream:
         :return: a new independent `Stream` instance whose root begins at the diff
         """
         # Traverse the children of "self" and look for the "other" Stream among then
-        diff: Deque[Self] = deque()
+        diff: Deque["Stream"] = deque()
         self_found = False
 
         for stream in other.root_path():
@@ -379,7 +377,7 @@ class Stream:
             parents = [stream]
         return diff_head
 
-    def full_tree(self) -> List[Self]:
+    def full_tree(self) -> List["Stream"]:
         """
         Find every related Stream in the tree across all children and parents and return
         them in a topologically sorted order.
@@ -388,10 +386,10 @@ class Stream:
         # Topological sorting resolves all dependencies in the graph, and child nodes
         # always come after all the parents
         sorter: TopologicalSorter = TopologicalSorter()
-        visited: set[Self] = set()
+        visited: set["Stream"] = set()
 
         # Add all the nodes to the TopologicalSorter
-        to_traverse: Deque[Self] = collections.deque()
+        to_traverse: Deque["Stream"] = collections.deque()
         to_traverse.append(self)
         while to_traverse:
             node = to_traverse.popleft()
@@ -412,7 +410,7 @@ class Stream:
         allow_updates=True,
         allow_transforms=True,
         sink: Optional[VoidExecutor] = None,
-    ) -> dict[Self, VoidExecutor]:
+    ) -> dict["Stream", VoidExecutor]:
         """
         Generate an "executor" closure by mapping all relatives of this `Stream` and
         composing their functions together.
@@ -435,7 +433,7 @@ class Stream:
 
         """
         sink = sink or self._default_sink
-        executors: dict[Self, VoidExecutor] = {}
+        executors: dict["Stream", VoidExecutor] = {}
 
         for stream in reversed(self.full_tree()):
             func = stream.func
@@ -543,7 +541,7 @@ class Stream:
     def is_branched(self) -> bool:
         return len(self.children) > 1
 
-    def root_path(self) -> List[Self]:
+    def root_path(self) -> List["Stream"]:
         """
         Start from self and collect all parents until reaching the root nodes
         """
@@ -556,7 +554,7 @@ class Stream:
                 to_traverse.append(parent)
         return nodes
 
-    def _add(self, func: StreamFunction) -> Self:
+    def _add(self, func: StreamFunction) -> "Stream":
         new_node = self.__class__(func=func, parents=[self])
         self.children.append(new_node)
         return new_node

@@ -2,8 +2,6 @@ import logging
 import time
 from typing import Callable, Generator, Literal, Optional, TypedDict
 
-from typing_extensions import Self
-
 from quixstreams.sources import StatefulSource
 
 try:
@@ -107,7 +105,7 @@ class KinesisConsumer:
         """
         self._checkpointer.commit(force=force)
 
-    def __enter__(self) -> Self:
+    def __enter__(self) -> "KinesisConsumer":
         if not self._client:
             self._client = boto3.client("kinesis", **self._credentials)
             self._init_shards()
