@@ -3,7 +3,7 @@ pytest
 requests>=2.32
 docker>=7.1.0 # Required to use requests>=2.32
 fastavro>=1.8,<2.0
-protobuf>=5.27.2,<6.0
+protobuf>=5.27.2,<7.0
 influxdb3-python>=0.7.0,<1.0
 pyiceberg[pyarrow,glue]>=0.7,<0.8
 redis[hiredis]>=5.2.0,<6
