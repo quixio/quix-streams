@@ -43,7 +43,6 @@ all = [
     "pymongo>=4.11,<5",
     "pandas>=1.0.0,<3.0",
     "elasticsearch>=8.17,<9",
-    "confluent-kafka[avro,json,protobuf,schemaregistry]>=2.8.2,<2.9",
 ]
 
 avro = ["fastavro>=1.8,<2.0"]
@@ -60,7 +59,6 @@ neo4j = ["neo4j>=5.27.0,<6"]
 mongodb = ["pymongo>=4.11,<5"]
 pandas = ["pandas>=1.0.0,<3.0"]
 elasticsearch = ["elasticsearch>=8.17,<9"]
-schema_registry = ["confluent-kafka[avro,json,protobuf,schemaregistry]>=2.8.2,<2.9"]
 
 # AWS dependencies are separated by service to support
 # different requirements in the future.
