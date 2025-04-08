@@ -6,4 +6,4 @@ $PREFIX/bin/pip install \
 'influxdb3-python>=0.7,<1.0' \
 'pyiceberg[pyarrow,glue]>=0.7,<0.8' \
 'redis[hiredis]>=5.2.0,<6' \
-'confluent-kafka[avro,json,protobuf,schemaregistry]>=2.8.2,<2.9'
+'confluent-kafka[avro,json,protobuf,schemaregistry]>=2.8.2,<2.10'
