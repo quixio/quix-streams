@@ -118,7 +118,7 @@ class CountWindow(Window):
             )
 
         if collect:
-            if collection_start_id is -1:
+            if collection_start_id == -1:
                 collection_start_id = (
                     self._get_collection_start_id(data["windows"][0])
                     + data["windows"][0]["count"]
