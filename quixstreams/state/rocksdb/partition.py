@@ -1,8 +1,8 @@
 import logging
 import time
-from typing import Dict, List, Literal, Optional, Union, cast
+from typing import Dict, Iterator, List, Literal, Optional, Union, cast
 
-from rocksdict import AccessType, ColumnFamily, Rdict, WriteBatch
+from rocksdict import AccessType, ColumnFamily, Rdict, ReadOptions, WriteBatch
 
 from quixstreams.state.base import PartitionTransactionCache, StorePartition
 from quixstreams.state.exceptions import ColumnFamilyDoesNotExist
@@ -138,6 +138,17 @@ class RocksDBStorePartition(StorePartition):
 
         # RDict accept Any type as value but we only write bytes so we should only get bytes back.
         return cast(Union[bytes, Literal[Marker.UNDEFINED]], result)
+
+    def iter_items(
+        self, from_key: bytes, read_opt: ReadOptions, cf_name: str = "default"
+    ) -> Iterator[tuple[bytes, bytes]]:
+        cf = self.get_column_family(cf_name=cf_name)
+
+        # RDict accept Any type as value but we only write bytes so we should only get bytes back.
+        return cast(
+            Iterator[tuple[bytes, bytes]],
+            cf.items(from_key=from_key, read_opt=read_opt),
+        )
 
     def exists(self, key: bytes, cf_name: str = "default") -> bool:
         """
