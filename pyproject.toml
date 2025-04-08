@@ -29,7 +29,7 @@ Homepage = "https://github.com/quixio/quix-streams"
 [project.optional-dependencies]
 all = [
     "fastavro>=1.8,<2.0",
-    "protobuf>=5.27.2,<6.0",
+    "protobuf>=5.27.2,<7.0",
     "influxdb3-python>=0.7,<1.0",
     "pyiceberg[pyarrow,glue]>=0.7,<0.8",
     "google-cloud-bigquery>=3.26.0,<3.27",
@@ -47,7 +47,7 @@ all = [
 ]
 
 avro = ["fastavro>=1.8,<2.0"]
-protobuf = ["protobuf>=5.27.2,<6.0"]
+protobuf = ["protobuf>=5.27.2,<7.0"]
 influxdb3 = ["influxdb3-python>=0.7,<1.0"]
 iceberg = ["pyiceberg[pyarrow]>=0.7,<0.8"]
 iceberg_aws = ["pyiceberg[pyarrow,glue]>=0.7,<0.8"]
