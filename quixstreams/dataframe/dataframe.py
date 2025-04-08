@@ -22,8 +22,6 @@ from typing import (
     overload,
 )
 
-from typing_extensions import Self
-
 from quixstreams.context import (
     message_context,
     set_message_context,
@@ -190,7 +188,7 @@ class StreamingDataFrame:
         stateful: Literal[False] = False,
         expand: Union[Literal[False], Literal[True]] = False,
         metadata: Literal[False] = False,
-    ) -> Self: ...
+    ) -> "StreamingDataFrame": ...
 
     @overload
     def apply(
@@ -200,7 +198,7 @@ class StreamingDataFrame:
         stateful: Literal[True],
         expand: Union[Literal[False], Literal[True]] = False,
         metadata: Literal[False] = False,
-    ) -> Self: ...
+    ) -> "StreamingDataFrame": ...
 
     @overload
     def apply(
@@ -210,7 +208,7 @@ class StreamingDataFrame:
         stateful: Literal[False] = False,
         expand: Union[Literal[False], Literal[True]] = False,
         metadata: Literal[True],
-    ) -> Self: ...
+    ) -> "StreamingDataFrame": ...
 
     @overload
     def apply(
@@ -220,7 +218,7 @@ class StreamingDataFrame:
         stateful: Literal[True],
         expand: Union[Literal[False], Literal[True]] = False,
         metadata: Literal[True],
-    ) -> Self: ...
+    ) -> "StreamingDataFrame": ...
 
     def apply(
         self,
@@ -236,7 +234,7 @@ class StreamingDataFrame:
         stateful: bool = False,
         expand: bool = False,
         metadata: bool = False,
-    ) -> Self:
+    ) -> "StreamingDataFrame":
         """
         Apply a function to transform the value and return a new value.
 
@@ -301,7 +299,7 @@ class StreamingDataFrame:
         *,
         stateful: Literal[False] = False,
         metadata: Literal[False] = False,
-    ) -> Self: ...
+    ) -> "StreamingDataFrame": ...
 
     @overload
     def update(
@@ -310,7 +308,7 @@ class StreamingDataFrame:
         *,
         stateful: Literal[True],
         metadata: Literal[False] = False,
-    ) -> Self: ...
+    ) -> "StreamingDataFrame": ...
 
     @overload
     def update(
@@ -319,7 +317,7 @@ class StreamingDataFrame:
         *,
         stateful: Literal[False] = False,
         metadata: Literal[True],
-    ) -> Self: ...
+    ) -> "StreamingDataFrame": ...
 
     @overload
     def update(
@@ -328,7 +326,7 @@ class StreamingDataFrame:
         *,
         stateful: Literal[True],
         metadata: Literal[True],
-    ) -> Self: ...
+    ) -> "StreamingDataFrame": ...
 
     def update(
         self,
@@ -341,7 +339,7 @@ class StreamingDataFrame:
         *,
         stateful: bool = False,
         metadata: bool = False,
-    ) -> Self:
+    ) -> "StreamingDataFrame":
         """
         Apply a function to mutate value in-place or to perform a side effect
         (e.g., printing a value to the console).
@@ -408,7 +406,7 @@ class StreamingDataFrame:
         *,
         stateful: Literal[False] = False,
         metadata: Literal[False] = False,
-    ) -> Self: ...
+    ) -> "StreamingDataFrame": ...
 
     @overload
     def filter(
@@ -417,7 +415,7 @@ class StreamingDataFrame:
         *,
         stateful: Literal[True],
         metadata: Literal[False] = False,
-    ) -> Self: ...
+    ) -> "StreamingDataFrame": ...
 
     @overload
     def filter(
@@ -426,7 +424,7 @@ class StreamingDataFrame:
         *,
         stateful: Literal[False] = False,
         metadata: Literal[True],
-    ) -> Self: ...
+    ) -> "StreamingDataFrame": ...
 
     @overload
     def filter(
@@ -435,7 +433,7 @@ class StreamingDataFrame:
         *,
         stateful: Literal[True],
         metadata: Literal[True],
-    ) -> Self: ...
+    ) -> "StreamingDataFrame": ...
 
     def filter(
         self,
@@ -448,7 +446,7 @@ class StreamingDataFrame:
         *,
         stateful: bool = False,
         metadata: bool = False,
-    ) -> Self:
+    ) -> "StreamingDataFrame":
         """
         Filter value using provided function.
 
@@ -513,7 +511,7 @@ class StreamingDataFrame:
         key_deserializer: Optional[DeserializerType] = ...,
         value_serializer: Optional[SerializerType] = ...,
         key_serializer: Optional[SerializerType] = ...,
-    ) -> Self: ...
+    ) -> "StreamingDataFrame": ...
 
     @overload
     def group_by(
@@ -524,7 +522,7 @@ class StreamingDataFrame:
         key_deserializer: Optional[DeserializerType] = ...,
         value_serializer: Optional[SerializerType] = ...,
         key_serializer: Optional[SerializerType] = ...,
-    ) -> Self: ...
+    ) -> "StreamingDataFrame": ...
 
     def group_by(
         self,
@@ -534,7 +532,7 @@ class StreamingDataFrame:
         key_deserializer: Optional[DeserializerType] = "json",
         value_serializer: Optional[SerializerType] = "json",
         key_serializer: Optional[SerializerType] = "json",
-    ) -> Self:
+    ) -> "StreamingDataFrame":
         """
         "Groups" messages by re-keying them via the provided group_by operation
         on their message values.
@@ -635,7 +633,7 @@ class StreamingDataFrame:
 
     def to_topic(
         self, topic: Topic, key: Optional[Callable[[Any], Any]] = None
-    ) -> Self:
+    ) -> "StreamingDataFrame":
         """
         Produce current value to a topic. You can optionally specify a new key.
 
@@ -678,7 +676,9 @@ class StreamingDataFrame:
             metadata=True,
         )
 
-    def set_timestamp(self, func: Callable[[Any, Any, int, Any], int]) -> Self:
+    def set_timestamp(
+        self, func: Callable[[Any, Any, int, Any], int]
+    ) -> "StreamingDataFrame":
         """
         Set a new timestamp based on the current message value and its metadata.
 
@@ -725,7 +725,7 @@ class StreamingDataFrame:
             [Any, Any, int, HeadersTuples],
             HeadersTuples,
         ],
-    ) -> Self:
+    ) -> "StreamingDataFrame":
         """
         Set new message headers based on the current message value and metadata.
 
@@ -770,7 +770,9 @@ class StreamingDataFrame:
         stream = self.stream.add_transform(func=_set_headers_callback, expand=False)
         return self.__dataframe_clone__(stream=stream)
 
-    def print(self, pretty: bool = True, metadata: bool = False) -> Self:
+    def print(
+        self, pretty: bool = True, metadata: bool = False
+    ) -> "StreamingDataFrame":
         """
         Print out the current message value (and optionally, the message metadata) to
         stdout (console) (like the built-in `print` function).
@@ -824,7 +826,7 @@ class StreamingDataFrame:
         live_slowdown: float = DEFAULT_LIVE_SLOWDOWN,
         columns: Optional[List[str]] = None,
         column_widths: Optional[dict[str, int]] = None,
-    ) -> Self:
+    ) -> "StreamingDataFrame":
         """
         Print a table with the most recent records.
 
@@ -1450,7 +1452,7 @@ class StreamingDataFrame:
             name=name,
         )
 
-    def fill(self, *columns: str, **mapping: Any) -> Self:
+    def fill(self, *columns: str, **mapping: Any) -> "StreamingDataFrame":
         """
         Fill missing values in the message value with a constant value.
 
@@ -1506,7 +1508,7 @@ class StreamingDataFrame:
         self,
         columns: Union[str, List[str]],
         errors: Literal["ignore", "raise"] = "raise",
-    ) -> Self:
+    ) -> "StreamingDataFrame":
         """
         Drop column(s) from the message value (value must support `del`, like a dict).
 
@@ -1584,7 +1586,7 @@ class StreamingDataFrame:
         # uses apply without returning to make this operation terminal
         self.apply(_sink_callback, metadata=True)
 
-    def concat(self, other: Self) -> Self:
+    def concat(self, other: "StreamingDataFrame") -> "StreamingDataFrame":
         """
         Concatenate two StreamingDataFrames together and return a new one.
         The transformations applied on this new StreamingDataFrame will update data
@@ -1670,7 +1672,7 @@ class StreamingDataFrame:
         self,
         *topics: Topic,
         stream: Optional[Stream] = None,
-    ) -> Self:
+    ) -> "StreamingDataFrame":
         """
         Clone the StreamingDataFrame with a new `stream`, `topics`,
         and optional `stream_id` parameters.
@@ -1689,7 +1691,7 @@ class StreamingDataFrame:
         )
         return clone
 
-    def __setitem__(self, item_key: Any, item: Union[Self, object]):
+    def __setitem__(self, item_key: Any, item: Union["StreamingDataFrame", object]):
         if isinstance(item, self.__class__):
             # Update an item key with a result of another sdf.apply()
             diff = self.stream.diff(item.stream)
@@ -1725,11 +1727,13 @@ class StreamingDataFrame:
     def __getitem__(self, item: str) -> StreamingSeries: ...
 
     @overload
-    def __getitem__(self, item: Union[StreamingSeries, List[str], Self]) -> Self: ...
+    def __getitem__(
+        self, item: Union[StreamingSeries, List[str], "StreamingDataFrame"]
+    ) -> "StreamingDataFrame": ...
 
     def __getitem__(
-        self, item: Union[str, List[str], StreamingSeries, Self]
-    ) -> Union[Self, StreamingSeries]:
+        self, item: Union[str, List[str], StreamingSeries, "StreamingDataFrame"]
+    ) -> Union["StreamingDataFrame", StreamingSeries]:
         if isinstance(item, StreamingSeries):
             # Filter SDF based on StreamingSeries
             series_composed = item.compose_returning()

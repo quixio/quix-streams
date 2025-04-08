@@ -294,7 +294,9 @@ class PartitionTransaction(ABC, Generic[K, V]):
         )
 
     @overload
-    def get(self, key: K, prefix: bytes, cf_name: str = "default") -> Optional[V]: ...
+    def get(
+        self, key: K, prefix: bytes, *, cf_name: str = "default"
+    ) -> Optional[V]: ...
 
     @overload
     def get(self, key: K, prefix: bytes, default: V, cf_name: str = "default") -> V: ...

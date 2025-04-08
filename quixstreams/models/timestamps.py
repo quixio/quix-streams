@@ -1,7 +1,5 @@
 import enum
 
-from typing_extensions import Self
-
 __all__ = ("TimestampType", "MessageTimestamp")
 
 
@@ -38,7 +36,7 @@ class MessageTimestamp:
         return self._type
 
     @classmethod
-    def create(cls, timestamp_type: int, milliseconds: int) -> Self:
+    def create(cls, timestamp_type: int, milliseconds: int) -> "MessageTimestamp":
         """
         Create a Timestamp object based on data
         from `confluent_kafka.Message.timestamp()`.

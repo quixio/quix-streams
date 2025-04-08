@@ -4,8 +4,6 @@ import time
 from concurrent.futures import TimeoutError
 from typing import Callable, Optional
 
-from typing_extensions import Self
-
 try:
     from google.api_core.exceptions import NotFound
     from google.cloud.pubsub_v1 import SubscriberClient
@@ -178,7 +176,7 @@ class PubSubConsumer:
         )
         self._message_ack_ids = []
 
-    def __enter__(self) -> Self:
+    def __enter__(self) -> "PubSubConsumer":
         self.start()
         return self
 

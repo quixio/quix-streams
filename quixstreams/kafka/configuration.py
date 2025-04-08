@@ -9,7 +9,7 @@ from pydantic_settings import (
 from pydantic_settings import (
     PydanticBaseSettingsSource,
 )
-from typing_extensions import Annotated, Self
+from typing_extensions import Annotated
 
 from quixstreams.utils.settings import BaseSettings
 
@@ -112,7 +112,9 @@ class ConnectionConfig(BaseSettings):
         return (init_settings,)
 
     @classmethod
-    def from_librdkafka_dict(cls, config: dict, ignore_extras: bool = False) -> Self:
+    def from_librdkafka_dict(
+        cls, config: dict, ignore_extras: bool = False
+    ) -> "ConnectionConfig":
         """
         Create a `ConnectionConfig` from a librdkafka config dictionary.
 

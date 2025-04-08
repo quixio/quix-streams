@@ -10,7 +10,7 @@ from typing import (
     Union,
 )
 
-from typing_extensions import ParamSpec, Self
+from typing_extensions import ParamSpec
 
 from quixstreams.context import set_message_context
 from quixstreams.core.stream.functions import (
@@ -121,7 +121,9 @@ class StreamingSeries:
         self._sdf_id = sdf_id
 
     @classmethod
-    def from_apply_callback(cls, func: ApplyWithMetadataCallback, sdf_id: int) -> Self:
+    def from_apply_callback(
+        cls, func: ApplyWithMetadataCallback, sdf_id: int
+    ) -> "StreamingSeries":
         """
         Create a StreamingSeries from a function.
 
@@ -132,7 +134,9 @@ class StreamingSeries:
         """
         return cls(stream=Stream(ApplyWithMetadataFunction(func)), sdf_id=sdf_id)
 
-    def _from_apply_callback(self, func: ApplyWithMetadataCallback) -> Self:
+    def _from_apply_callback(
+        self, func: ApplyWithMetadataCallback
+    ) -> "StreamingSeries":
         # TODO - maybe there's a better patten for this? (_method calling classmethod)
         return self.from_apply_callback(func, self._sdf_id)
 
@@ -144,7 +148,7 @@ class StreamingSeries:
     def sdf_id(self) -> Optional[int]:
         return self._sdf_id
 
-    def apply(self, func: ApplyCallback) -> Self:
+    def apply(self, func: ApplyCallback) -> "StreamingSeries":
         """
         Add a callable to the execution list for this series.
 
@@ -233,9 +237,9 @@ class StreamingSeries:
         other: _O,
         operator_: Callable[
             [Any, _O],
-            Union[bool, Self],
+            Union[bool, "StreamingSeries"],
         ],
-    ) -> Self:
+    ) -> "StreamingSeries":
         self._validate_other_series(other)
 
         self_composed = self.compose_returning()
@@ -258,7 +262,7 @@ class StreamingSeries:
 
             return self._from_apply_callback(func=f)
 
-    def isin(self, other: Container) -> Self:
+    def isin(self, other: Container) -> "StreamingSeries":
         """
         Check if series value is in "other".
         Same as "StreamingSeries in other".
@@ -289,7 +293,7 @@ class StreamingSeries:
 
         return self._operation(other, f)
 
-    def contains(self, other: Union[Self, object]) -> Self:
+    def contains(self, other: Union["StreamingSeries", object]) -> "StreamingSeries":
         """
         Check if series value contains "other"
         Same as "other in StreamingSeries".
@@ -314,7 +318,7 @@ class StreamingSeries:
         """
         return self._operation(other, operator.contains)
 
-    def is_(self, other: Union[Self, object]) -> Self:
+    def is_(self, other: Union["StreamingSeries", object]) -> "StreamingSeries":
         """
         Check if series value refers to the same object as `other`
 
@@ -337,7 +341,7 @@ class StreamingSeries:
         """
         return self._operation(other, operator.is_)
 
-    def isnot(self, other: Union[Self, object]) -> Self:
+    def isnot(self, other: Union["StreamingSeries", object]) -> "StreamingSeries":
         """
         Check if series value does not refer to the same object as `other`
 
@@ -361,7 +365,7 @@ class StreamingSeries:
         """
         return self._operation(other, operator.is_not)
 
-    def isnull(self) -> Self:
+    def isnull(self) -> "StreamingSeries":
         """
         Check if series value is None.
 
@@ -384,7 +388,7 @@ class StreamingSeries:
         """
         return self._operation(None, operator.is_)
 
-    def notnull(self) -> Self:
+    def notnull(self) -> "StreamingSeries":
         """
         Check if series value is not None.
 
@@ -407,7 +411,7 @@ class StreamingSeries:
         """
         return self._operation(None, operator.is_not)
 
-    def abs(self) -> Self:
+    def abs(self) -> "StreamingSeries":
         """
         Get absolute value of the series value.
 
@@ -435,43 +439,43 @@ class StreamingSeries:
             f"use '&' or '|' for logical and/or comparisons"
         )
 
-    def __getitem__(self, item: Union[str, int]) -> Self:
+    def __getitem__(self, item: Union[str, int]) -> "StreamingSeries":
         return self._operation(item, operator.getitem)
 
-    def __mod__(self, other: Union[Self, Any]) -> Self:
+    def __mod__(self, other: Union["StreamingSeries", Any]) -> "StreamingSeries":
         return self._operation(other, operator.mod)
 
-    def __add__(self, other: Union[Self, Any]) -> Self:
+    def __add__(self, other: Union["StreamingSeries", Any]) -> "StreamingSeries":
         return self._operation(other, operator.add)
 
-    def __sub__(self, other: Union[Self, Any]) -> Self:
+    def __sub__(self, other: Union["StreamingSeries", Any]) -> "StreamingSeries":
         return self._operation(other, operator.sub)
 
-    def __mul__(self, other: Union[Self, Any]) -> Self:
+    def __mul__(self, other: Union["StreamingSeries", Any]) -> "StreamingSeries":
         return self._operation(other, operator.mul)
 
-    def __truediv__(self, other: Union[Self, Any]) -> Self:
+    def __truediv__(self, other: Union["StreamingSeries", Any]) -> "StreamingSeries":
         return self._operation(other, operator.truediv)
 
-    def __eq__(self, other: Union[Self, Any]) -> Self:  # type: ignore[override]
+    def __eq__(self, other: Union["StreamingSeries", Any]) -> "StreamingSeries":  # type: ignore[override]
         return self._operation(other, operator.eq)
 
-    def __ne__(self, other: Union[Self, Any]) -> Self:  # type: ignore[override]
+    def __ne__(self, other: Union["StreamingSeries", Any]) -> "StreamingSeries":  # type: ignore[override]
         return self._operation(other, operator.ne)
 
-    def __lt__(self, other: Union[Self, Any]) -> Self:
+    def __lt__(self, other: Union["StreamingSeries", Any]) -> "StreamingSeries":
         return self._operation(other, operator.lt)
 
-    def __le__(self, other: Union[Self, Any]) -> Self:
+    def __le__(self, other: Union["StreamingSeries", Any]) -> "StreamingSeries":
         return self._operation(other, operator.le)
 
-    def __gt__(self, other: Union[Self, Any]) -> Self:
+    def __gt__(self, other: Union["StreamingSeries", Any]) -> "StreamingSeries":
         return self._operation(other, operator.gt)
 
-    def __ge__(self, other: Union[Self, Any]) -> Self:
+    def __ge__(self, other: Union["StreamingSeries", Any]) -> "StreamingSeries":
         return self._operation(other, operator.ge)
 
-    def __and__(self, other: Union[Self, Any]) -> Self:
+    def __and__(self, other: Union["StreamingSeries", Any]) -> "StreamingSeries":
         """
         Do a logical "and" comparison.
 
@@ -504,7 +508,7 @@ class StreamingSeries:
                 and other
             )
 
-    def __or__(self, other: Union[Self, object]) -> Self:
+    def __or__(self, other: Union["StreamingSeries", object]) -> "StreamingSeries":
         """
         Do a logical "or" comparison.
 
@@ -536,7 +540,7 @@ class StreamingSeries:
                 or other
             )
 
-    def __invert__(self) -> Self:
+    def __invert__(self) -> "StreamingSeries":
         """
         Do a logical "not".
 
