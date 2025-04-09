@@ -17,7 +17,7 @@ def _default_on_client_connect_success():
 
 
 def _default_on_client_connect_failure(exception: Exception):
-    logger.error(f"ERROR: Failed while connecting to client: {exception}")
+    logger.error(f"ERROR! - Failed while connecting to client: {exception}")
     raise exception
 
 
