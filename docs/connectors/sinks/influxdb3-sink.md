@@ -96,16 +96,27 @@ InfluxDB3Sink accepts the following configuration parameters:
 
 - `measurement` - a measurement name, required.
   
-- `fields_keys` - a list of keys to be used as "fields" when writing to InfluxDB.  
+- `fields_keys` - an iterable (list) of strings used as InfluxDB "fields".  
+  Also accepts a single-argument callable that receives the current message data as a dict and returns an iterable of strings.
+  - If present, it must not overlap with "tags_keys".
+  - If empty, the whole record value will be used.  
 See the [What data can be sent to InfluxDB](#what-data-can-be-sent-to-influxdb) for more info.
 
-- `tags_keys` - a list of keys to be used as "tags" when writing to InfluxDB.  
+- `tags_keys` - an iterable (list) of strings used as InfluxDB "tags".  
+  Also accepts a single-argument callable that receives the current message data as a 
+  dict and returns an iterable of strings.
+  - If present, it must not overlap with "fields_keys".
+  - Given keys are popped from the value dictionary since the same key
+    cannot be both a tag and field.
+  - If empty, no tags will be sent.  
 See the [What data can be sent to InfluxDB](#what-data-can-be-sent-to-influxdb) for more info.
 
-            
-- `time_key` - a key to be used as "time" when writing to InfluxDB.  
-By default, the record timestamp will be used with millisecond time precision.
-When using a custom key, you may need to adjust the `time_precision` setting to match.
+- `time_setter` - an optional column name to use as "time" for InfluxDB.  
+  Also accepts a callable which receives the current message data and
+  returns either the desired time or `None` (use default).  
+  - The time can be an `int`, `string` (RFC3339 format), or `datetime`.
+  - The time must match the `time_precision` argument if not a `datetime` object, else raises.
+  - By default, a record's kafka timestamp with `"ms"` time precision is used.
 
 - `time_precision` - a time precision to use when writing to InfluxDB.  
 Default - `ms`.

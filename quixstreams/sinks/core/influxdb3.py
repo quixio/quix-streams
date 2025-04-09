@@ -116,10 +116,12 @@ class InfluxDB3Sink(BatchingSink):
             - If empty, no tags will be sent.
             >***NOTE***: InfluxDB client always converts tag values to strings.
             Default - `()`.
-        :param time_setter: a key to be used as "time" when writing to InfluxDB.
-            By default, the record timestamp will be used with "ms" time precision.
-            When using a custom key, you may need to adjust the `time_precision` setting
-            to match.
+        :param time_setter: an optional column name to use as "time" for InfluxDB.
+            Also accepts a callable which receives the current message data and
+            returns either the desired time or `None` (use default).
+            The time can be an `int`, `string` (RFC3339 format), or `datetime`.
+            The time must match the `time_precision` argument if not a `datetime` object, else raises.
+            By default, a record's kafka timestamp with "ms" time precision is used.
         :param time_precision: a time precision to use when writing to InfluxDB.
             Possible values: "ms", "ns", "us", "s".
             Default - `"ms"`.

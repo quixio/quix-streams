@@ -1,5 +1,5 @@
 import datetime
-from typing import Iterable, Optional
+from typing import Optional
 from unittest.mock import MagicMock
 
 import influxdb_client_3
@@ -7,7 +7,13 @@ import pytest
 from influxdb_client_3 import InfluxDBClient3
 
 from quixstreams.sinks import SinkBackpressureError
-from quixstreams.sinks.core.influxdb3 import InfluxDB3Sink, TimePrecision
+from quixstreams.sinks.core.influxdb3 import (
+    FieldsSetter,
+    InfluxDB3Sink,
+    TagsSetter,
+    TimePrecision,
+    TimeSetter,
+)
 
 
 @pytest.fixture()
@@ -15,9 +21,9 @@ def influxdb3_sink_factory():
     def factory(
         client_mock: MagicMock,
         measurement: str,
-        fields_keys: Iterable[str] = (),
-        tags_keys: Iterable[str] = (),
-        time_key: Optional[str] = None,
+        fields_keys: FieldsSetter = (),
+        tags_keys: TagsSetter = (),
+        time_setter: Optional[TimeSetter] = None,
         batch_size: int = 1000,
         time_precision: TimePrecision = "ms",
         convert_ints_to_floats: bool = False,
@@ -31,7 +37,7 @@ def influxdb3_sink_factory():
             measurement=measurement,
             fields_keys=fields_keys,
             tags_keys=tags_keys,
-            time_setter=time_key,
+            time_setter=time_setter,
             time_precision=time_precision,
             include_metadata_tags=include_metadata_tags,
             convert_ints_to_floats=convert_ints_to_floats,
@@ -44,9 +50,15 @@ def influxdb3_sink_factory():
 
 
 class TestInfluxDB3Sink:
-    def test_write_success(self, influxdb3_sink_factory):
+    @pytest.mark.parametrize(
+        "measurement",
+        (
+            "my_default",
+            lambda row: row["table_name"] if "table_name" in row else "my_default",
+        ),
+    )
+    def test_measurement_write_success(self, influxdb3_sink_factory, measurement):
         client_mock = MagicMock(spec_set=InfluxDBClient3)
-        measurement = "measurement"
         sink = influxdb3_sink_factory(client_mock=client_mock, measurement=measurement)
         topic = "test-topic"
 
@@ -68,7 +80,7 @@ class TestInfluxDB3Sink:
         assert first_call.kwargs == {
             "record": [
                 {
-                    "measurement": measurement,
+                    "measurement": "my_default",
                     "tags": {},
                     "fields": value,
                     "time": timestamp,
@@ -77,10 +89,16 @@ class TestInfluxDB3Sink:
             "write_precision": "ms",
         }
 
-    def test_write_fields_keys(self, influxdb3_sink_factory):
+    @pytest.mark.parametrize(
+        "fields_keys",
+        (
+            ["key1"],
+            lambda row: ["key1"] if "key1" in row else ["key2"],
+        ),
+    )
+    def test_write_fields_keys(self, influxdb3_sink_factory, fields_keys):
         client_mock = MagicMock(spec_set=InfluxDBClient3)
         measurement = "measurement"
-        fields_keys = ["key1"]
 
         sink = influxdb3_sink_factory(
             client_mock=client_mock, measurement=measurement, fields_keys=fields_keys
@@ -111,10 +129,16 @@ class TestInfluxDB3Sink:
             write_precision="ms",
         )
 
-    def test_write_tags_keys(self, influxdb3_sink_factory):
+    @pytest.mark.parametrize(
+        "tags_keys",
+        (
+            ["tag1"],
+            lambda row: ["tag1"] if "tag1" in row else ["tag2"],
+        ),
+    )
+    def test_write_tags_keys(self, influxdb3_sink_factory, tags_keys):
         client_mock = MagicMock(spec_set=InfluxDBClient3)
         measurement = "measurement"
-        tags_keys = ["tag1"]
 
         sink = influxdb3_sink_factory(
             client_mock=client_mock, measurement=measurement, tags_keys=tags_keys
@@ -403,6 +427,48 @@ class TestInfluxDB3Sink:
         )
 
     @pytest.mark.parametrize(
+        "time_setter,expected",
+        (
+            [None, 1234567890123],
+            ["time", "2021-07-01T00:00:00Z"],
+            [lambda row: row["alt_time"] if "alt_time" in row else None, 1234567890123],
+            [lambda row: row["time"], "2021-07-01T00:00:00Z"],
+        ),
+    )
+    def test_write_time(self, influxdb3_sink_factory, time_setter, expected):
+        client_mock = MagicMock(spec_set=InfluxDBClient3)
+        measurement = "measurement"
+
+        sink = influxdb3_sink_factory(
+            client_mock=client_mock, measurement=measurement, time_setter=time_setter
+        )
+        topic = "test-topic"
+
+        value, timestamp = {"key1": 1, "time": "2021-07-01T00:00:00Z"}, 1234567890123
+        sink.add(
+            value=value,
+            key="key",
+            timestamp=timestamp,
+            headers=[],
+            topic=topic,
+            partition=0,
+            offset=1,
+        )
+        sink.flush()
+
+        client_mock.write.assert_called_once_with(
+            record=[
+                {
+                    "measurement": measurement,
+                    "tags": {},
+                    "fields": value,
+                    "time": expected,
+                }
+            ],
+            write_precision="ms",
+        )
+
+    @pytest.mark.parametrize(
         "time",
         (
             1625140800123,
@@ -422,7 +488,7 @@ class TestInfluxDB3Sink:
             client_mock=client_mock,
             measurement=measurement,
             convert_ints_to_floats=True,
-            time_key="time",
+            time_setter="time",
         )
         topic = "test-topic"
 
@@ -464,7 +530,7 @@ class TestInfluxDB3Sink:
             client_mock=client_mock,
             measurement=measurement,
             convert_ints_to_floats=True,
-            time_key="time",
+            time_setter="time",
             time_precision=precision,
         )
         topic = "test-topic"
@@ -485,6 +551,3 @@ class TestInfluxDB3Sink:
         error_str = str(e)
         assert precision in error_str
         assert "got 16" in error_str
-
-
-# TODO: add tests for all the different passable callables.
