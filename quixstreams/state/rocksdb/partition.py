@@ -141,12 +141,19 @@ class RocksDBStorePartition(StorePartition):
 
     def iter_items(
         self,
-        from_key: bytes,
-        read_opt: ReadOptions,
+        lower_bound: bytes,
+        upper_bound: bytes,
         backwards: bool = False,
         cf_name: str = "default",
     ) -> Iterator[tuple[bytes, bytes]]:
         cf = self.get_column_family(cf_name=cf_name)
+
+        # Set iterator bounds to reduce IO by limiting the range of keys fetched
+        read_opt = ReadOptions()
+        read_opt.set_iterate_lower_bound(lower_bound)
+        read_opt.set_iterate_upper_bound(upper_bound)
+
+        from_key = upper_bound if backwards else lower_bound
 
         # RDict accept Any type as value but we only write bytes so we should only get bytes back.
         return cast(

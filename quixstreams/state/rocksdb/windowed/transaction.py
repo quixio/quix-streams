@@ -2,8 +2,6 @@ import itertools
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Iterable, Optional, cast
 
-from rocksdict import ReadOptions
-
 from quixstreams.state.base.transaction import (
     PartitionTransaction,
     PartitionTransactionStatus,
@@ -520,12 +518,10 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         seek_to_key = append_integer(base_bytes=prefix, integer=end)
 
         # Create an iterator over the state store
-        # Set iterator bounds to reduce IO by limiting the range of keys fetched
-        read_opt = ReadOptions()
-        read_opt.set_iterate_lower_bound(seek_from_key)
-        read_opt.set_iterate_upper_bound(seek_to_key)
         db_items = self._partition.iter_items(
-            read_opt=read_opt, from_key=seek_from_key, cf_name=cf_name
+            lower_bound=seek_from_key,
+            upper_bound=seek_to_key,
+            cf_name=cf_name,
         )
 
         cache = self._update_cache
