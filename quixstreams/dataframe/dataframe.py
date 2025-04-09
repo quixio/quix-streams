@@ -50,6 +50,7 @@ from quixstreams.models.serializers import DeserializerType, SerializerType
 from quixstreams.sinks import BaseSink
 from quixstreams.state.base import State
 from quixstreams.state.base.transaction import PartitionTransaction
+from quixstreams.state.rocksdb.timestamped import TimestampedStore
 from quixstreams.utils.printing import (
     DEFAULT_COLUMN_NAME,
     DEFAULT_LIVE,
@@ -1644,6 +1645,27 @@ class StreamingDataFrame:
         return self.__dataframe_clone__(
             *self.topics, *other.topics, stream=merged_stream
         )
+
+    def join(self, right: "StreamingDataFrame") -> "StreamingDataFrame":
+        # TODO: ensure copartitioning of left and right?
+        right.processing_context.state_manager.register_store(
+            stream_id=right.stream_id,
+            store_type=TimestampedStore,
+            changelog_config=self._topic_manager.derive_topic_config(right.topics),
+        )
+
+        def left_func(value, key, timestamp, headers):
+            right_tx = _get_transaction(right)
+            right_value = right_tx.get_last(timestamp=timestamp, prefix=key)
+            return {**value, **(right_value or {})}
+
+        def right_func(value, key, timestamp, headers):
+            right_tx = _get_transaction(right)
+            right_tx.set(timestamp=timestamp, value=value, prefix=key)
+
+        left = self.apply(left_func, metadata=True)
+        right = right.update(right_func, metadata=True).filter(lambda value: False)
+        return left.concat(right)
 
     def ensure_topics_copartitioned(self):
         partitions_counts = set(t.broker_config.num_partitions for t in self._topics)
