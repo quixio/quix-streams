@@ -15,6 +15,7 @@ from .exceptions import (
 from .memory import MemoryStore
 from .recovery import ChangelogProducerFactory, RecoveryManager
 from .rocksdb import RocksDBOptionsType, RocksDBStore
+from .rocksdb.timestamped import TimestampedStore
 from .rocksdb.windowed.store import WindowedRocksDBStore
 
 __all__ = ("StateStoreManager", "DEFAULT_STATE_STORE_NAME", "StoreTypes")
@@ -24,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_STATE_STORE_NAME = "default"
 
-StoreTypes = Union[Type[RocksDBStore], Type[MemoryStore]]
+StoreTypes = Union[Type[RocksDBStore], Type[MemoryStore], Type[TimestampedStore]]
 SUPPORTED_STORES = [RocksDBStore, MemoryStore]
 
 
@@ -190,6 +191,14 @@ class StateStoreManager:
             store_type = store_type or self.default_store_type
             if store_type == RocksDBStore:
                 store: Store = RocksDBStore(
+                    name=store_name,
+                    stream_id=stream_id,
+                    base_dir=str(self._state_dir),
+                    changelog_producer_factory=changelog_producer_factory,
+                    options=self._rocksdb_options,
+                )
+            elif store_type == TimestampedStore:
+                store = TimestampedStore(
                     name=store_name,
                     stream_id=stream_id,
                     base_dir=str(self._state_dir),
