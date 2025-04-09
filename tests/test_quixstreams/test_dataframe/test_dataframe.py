@@ -323,6 +323,26 @@ class TestStreamingDataFrame:
             0
         ] == (expected, key, timestamp, headers)
 
+    def test_contains_multi_columns(self, dataframe_factory):
+        sdf = dataframe_factory()
+        sdf["has_column"] = sdf.contains(["x", "y"])
+        value = {"x": 1, "y": 2}
+        expected = {"x": 1, "y": 2, "has_column": True}
+        key, timestamp, headers = b"key", 0, []
+        assert sdf.test(value=value, key=key, timestamp=timestamp, headers=headers)[
+            0
+        ] == (expected, key, timestamp, headers)
+
+    def test_contains_multi_columns_missing(self, dataframe_factory):
+        sdf = dataframe_factory()
+        sdf["has_column"] = sdf.contains(["x", "missing_columns"])
+        value = {"x": 1}
+        expected = {"x": 1, "has_column": False}
+        key, timestamp, headers = b"key", 0, []
+        assert sdf.test(value=value, key=key, timestamp=timestamp, headers=headers)[
+            0
+        ] == (expected, key, timestamp, headers)
+
     def test_contains_as_filter(self, dataframe_factory):
         sdf = dataframe_factory()
         sdf = sdf[sdf.contains("x")]

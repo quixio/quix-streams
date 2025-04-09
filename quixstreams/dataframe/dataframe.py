@@ -606,30 +606,36 @@ class StreamingDataFrame:
         self._registry.register_groupby(source_sdf=self, new_sdf=groupby_sdf)
         return groupby_sdf
 
-    def contains(self, key: str) -> StreamingSeries:
+    def contains(self, keys: Union[str, list[str]]) -> StreamingSeries:
         """
-        Check if the key is present in the Row value.
+        Check if keys are present in the Row value.
 
 
         Example Snippet:
 
         ```python
         # Add new column 'has_column' which contains a boolean indicating
-        # the presence of 'column_x'
+        # the presence of 'column_x' and `column_y`
 
         sdf = StreamingDataFrame()
-        sdf['has_column'] = sdf.contains('column_x')
+        sdf['has_column_A'] = sdf.contains('column_a')
+        sdf['has_column_X_Y'] = sdf.contains(['column_x', 'column_y'])
         ```
 
 
-        :param key: a column name to check.
-        :return: a Column object that evaluates to True if the key is present
+        :param key: column names to check.
+        :return: a Column object that evaluates to True if the keys are present
             or False otherwise.
         """
+        if isinstance(keys, str):
+            _keys = [keys]
+        else:
+            _keys = keys
 
-        return StreamingSeries.from_apply_callback(
-            lambda value, key_, timestamp, headers: key in value, sdf_id=id(self)
-        )
+        def callback(value, *_):
+            return all(k in value for k in _keys)
+
+        return StreamingSeries.from_apply_callback(callback, sdf_id=id(self))
 
     def to_topic(
         self, topic: Topic, key: Optional[Callable[[Any], Any]] = None
