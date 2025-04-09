@@ -25,6 +25,8 @@ class StorePartition(ABC):
     the persistent storage).
     """
 
+    partition_transaction_class = PartitionTransaction
+
     def __init__(
         self,
         dumps: DumpsFunc,
@@ -112,7 +114,7 @@ class StorePartition(ABC):
 
         Using `PartitionTransaction` is a recommended way for accessing the data.
         """
-        return PartitionTransaction(
+        return self.partition_transaction_class(
             partition=self,
             dumps=self._dumps,
             loads=self._loads,
