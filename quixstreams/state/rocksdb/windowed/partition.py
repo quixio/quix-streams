@@ -31,6 +31,8 @@ class WindowedRocksDBStorePartition(RocksDBStorePartition):
     :param options: RocksDB options. If `None`, the default options will be used.
     """
 
+    partition_transaction_class = WindowedRocksDBPartitionTransaction
+
     def __init__(
         self,
         path: str,
@@ -58,14 +60,6 @@ class WindowedRocksDBStorePartition(RocksDBStorePartition):
         """
         cf_dict = self.get_column_family(cf_name)
         return cast(Iterator[bytes], cf_dict.keys())
-
-    def begin(self) -> "WindowedRocksDBPartitionTransaction":
-        return WindowedRocksDBPartitionTransaction(
-            partition=self,
-            dumps=self._dumps,
-            loads=self._loads,
-            changelog_producer=self._changelog_producer,
-        )
 
     def _ensure_column_family(self, cf_name: str):
         try:
