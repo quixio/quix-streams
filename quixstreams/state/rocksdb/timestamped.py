@@ -5,6 +5,7 @@ from quixstreams.state.base.transaction import (
     PartitionTransactionStatus,
     validate_transaction_status,
 )
+from quixstreams.state.serialization import serialize
 
 from .partition import RocksDBStorePartition
 from .store import RocksDBStore
@@ -36,7 +37,7 @@ class TimestampedPartitionTransaction(PartitionTransaction):
     def get_last(
         self,
         timestamp: int,
-        prefix: bytes,
+        prefix: Any,
         cf_name: str = "default",
     ) -> Optional[Any]:
         """Get the latest value for a prefix up to a given timestamp.
@@ -53,6 +54,9 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         :param cf_name: The column family name.
         :return: The deserialized value if found, otherwise None.
         """
+        if not isinstance(prefix, bytes):
+            prefix = serialize(prefix, dumps=self._dumps)
+
         # Add +1 because the storage `.iter_items()` is exclusive on the upper bound
         key = self._serialize_key(timestamp + 1, prefix=prefix)
         value: Optional[bytes] = None
@@ -83,7 +87,7 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         return self._deserialize_value(value) if value is not None else None
 
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
-    def set(self, timestamp: int, value: Any, prefix: bytes, cf_name: str = "default"):
+    def set(self, timestamp: int, value: Any, prefix: Any, cf_name: str = "default"):
         """Set a value associated with a prefix and timestamp.
 
         This method acts as a proxy, passing the provided `timestamp` and `prefix`
@@ -95,6 +99,9 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         :param prefix: The key prefix.
         :param cf_name: Column family name.
         """
+        if not isinstance(prefix, bytes):
+            prefix = serialize(prefix, dumps=self._dumps)
+
         super().set(timestamp, value, prefix, cf_name)
 
 
