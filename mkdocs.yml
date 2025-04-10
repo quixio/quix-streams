@@ -3,6 +3,9 @@ site_description: Quix Streams Documentation
 repo_url: https://github.com/quixio/quix-streams/
 edit_uri: tree/main
 
+validation:
+  anchors: warn
+
 theme:
   name: material
   features:

@@ -32,6 +32,7 @@ jobs:
       - uses: pre-commit/action@v3.0.1
 
   test:
+    if: github.head_ref != 'auto/update-documentation'
     needs: lint
     permissions:
       contents: read # to fetch code (actions/checkout)
@@ -55,3 +56,24 @@ jobs:
       - name: Run tests
         run: |
           python -m pytest -v --log-cli-level=ERROR
+
+  docs:
+    if: github.head_ref == 'auto/update-documentation'
+    permissions:
+      contents: read
+    name: Check docs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.12
+      - name: Install requirements
+        run: |
+          python -m pip install -U pip
+          python -m pip install mkdocs mkdocs-material mkdocs-material-extensions
+      - name: Build docs
+        run: |
+          mkdocs build --strict

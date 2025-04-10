@@ -320,7 +320,7 @@ operations by default.
 
 To get visual outputs around message processing, you can either:
 
-- use [recommended way of printing/logging with SDF](../../processing.md#debugging)
+- use [recommended way of printing/logging with SDF](../../debugging.md)
 
 - use `DEBUG` mode via `Application(loglevel="DEBUG")`
 
