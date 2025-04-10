@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Generic, Optional, TypeVar, overload
+from typing import TYPE_CHECKING, Generic, Literal, Optional, TypeVar, overload
 
 if TYPE_CHECKING:
     from .transaction import PartitionTransaction
@@ -20,7 +20,7 @@ class State(ABC, Generic[K, V]):
     """
 
     @overload
-    def get(self, key: K) -> Optional[V]: ...
+    def get(self, key: K, default: Literal[None] = None) -> Optional[V]: ...
 
     @overload
     def get(self, key: K, default: V) -> V: ...
@@ -36,8 +36,32 @@ class State(ABC, Generic[K, V]):
         """
         ...
 
+    @overload
+    def get_bytes(self, key: K, default: Literal[None] = None) -> Optional[bytes]: ...
+
+    @overload
+    def get_bytes(self, key: K, default: bytes) -> bytes: ...
+
+    def get_bytes(self, key: K, default: Optional[bytes] = None) -> Optional[bytes]:
+        """
+        Get the value for key if key is present in the state, else default
+
+        :param key: key
+        :param default: default value to return if the key is not found
+        :return: value as bytes or None if the key is not found and `default` is not provided
+        """
+
     @abstractmethod
-    def set(self, key: K, value: V):
+    def set(self, key: K, value: V) -> None:
+        """
+        Set value for the key.
+        :param key: key
+        :param value: value
+        """
+        ...
+
+    @abstractmethod
+    def set_bytes(self, key: K, value: bytes) -> None:
         """
         Set value for the key.
         :param key: key
@@ -81,7 +105,7 @@ class TransactionState(State):
         self._transaction = transaction
 
     @overload
-    def get(self, key: K) -> Optional[V]: ...
+    def get(self, key: K, default: Literal[None] = None) -> Optional[V]: ...
 
     @overload
     def get(self, key: K, default: V) -> V: ...
@@ -96,13 +120,39 @@ class TransactionState(State):
         """
         return self._transaction.get(key=key, prefix=self._prefix, default=default)
 
-    def set(self, key: K, value: V):
+    @overload
+    def get_bytes(self, key: K, default: Literal[None] = None) -> Optional[bytes]: ...
+
+    @overload
+    def get_bytes(self, key: K, default: bytes) -> bytes: ...
+
+    def get_bytes(self, key: K, default: Optional[bytes] = None) -> Optional[bytes]:
+        """
+        Get the bytes value for key if key is present in the state, else default
+
+        :param key: key
+        :param default: default value to return if the key is not found
+        :return: value or None if the key is not found and `default` is not provided
+        """
+        return self._transaction.get_bytes(
+            key=key, prefix=self._prefix, default=default
+        )
+
+    def set(self, key: K, value: V) -> None:
         """
         Set value for the key.
         :param key: key
         :param value: value
         """
         return self._transaction.set(key=key, value=value, prefix=self._prefix)
+
+    def set_bytes(self, key: K, value: bytes) -> None:
+        """
+        Set value for the key.
+        :param key: key
+        :param value: value
+        """
+        return self._transaction.set_bytes(key=key, value=value, prefix=self._prefix)
 
     def delete(self, key: K):
         """
