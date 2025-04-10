@@ -1615,7 +1615,7 @@ class StreamingDataFrame:
 
         def left_func(value, key, timestamp, headers):
             right_tx = _get_transaction(right)
-            right_value = right_tx.get(timestamp=timestamp, prefix=key)
+            right_value = right_tx.get_last(timestamp=timestamp, prefix=key)
             return {**value, **(right_value or {})}
 
         def right_func(value, key, timestamp, headers):
