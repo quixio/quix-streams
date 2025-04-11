@@ -6,7 +6,7 @@ import pytest
 
 from quixstreams.internal_consumer import InternalConsumer
 from quixstreams.models import TopicManager
-from quixstreams.state.base import StorePartition
+from quixstreams.state.base import PartitionTransactionCache, StorePartition
 from quixstreams.state.memory import MemoryStore, MemoryStorePartition
 from quixstreams.state.recovery import (
     ChangelogProducer,
@@ -172,3 +172,8 @@ def changelog_producer_mock():
     type(producer).changelog_name = PropertyMock(return_value="test-changelog-topic")
     type(producer).partition = PropertyMock(return_value=0)
     return producer
+
+
+@pytest.fixture()
+def cache() -> PartitionTransactionCache:
+    return PartitionTransactionCache()
