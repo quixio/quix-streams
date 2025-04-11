@@ -56,11 +56,6 @@ TEST_PREFIXES = [
 ]
 
 
-@pytest.fixture()
-def cache() -> PartitionTransactionCache:
-    return PartitionTransactionCache()
-
-
 @pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
 class TestPartitionTransaction:
     def test_transaction_complete(self, store_partition):
