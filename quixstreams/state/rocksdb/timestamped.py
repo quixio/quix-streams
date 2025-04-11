@@ -54,9 +54,7 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         :param cf_name: The column family name.
         :return: The deserialized value if found, otherwise None.
         """
-        if not isinstance(prefix, bytes):
-            prefix = serialize(prefix, dumps=self._dumps)
-
+        prefix = self._ensure_bytes(prefix)
         # Add +1 because the storage `.iter_items()` is exclusive on the upper bound
         key = self._serialize_key(timestamp + 1, prefix=prefix)
         value: Optional[bytes] = None
@@ -99,10 +97,13 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         :param prefix: The key prefix.
         :param cf_name: Column family name.
         """
-        if not isinstance(prefix, bytes):
-            prefix = serialize(prefix, dumps=self._dumps)
-
+        prefix = self._ensure_bytes(prefix)
         super().set(timestamp, value, prefix, cf_name)
+
+    def _ensure_bytes(self, prefix: Any) -> bytes:
+        if isinstance(prefix, bytes):
+            return prefix
+        return serialize(prefix, dumps=self._dumps)
 
 
 class TimestampedStorePartition(RocksDBStorePartition):
