@@ -85,3 +85,9 @@ def test_get_last_stored_key_greater_than_cached_key(
     with transaction() as tx:
         tx.set(timestamp=set_timestamp_cached, value="cached", prefix=b"key")
         assert tx.get_last(timestamp=get_timestamp, prefix=b"key") == expected
+
+
+def test_get_last_prefix_not_bytes(transaction: TimestampedPartitionTransaction):
+    with transaction() as tx:
+        tx.set(timestamp=10, value="value", prefix="key")
+        assert tx.get_last(timestamp=10, prefix="key") == "value"
