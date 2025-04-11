@@ -41,3 +41,6 @@ __pycache__/
 # direnv
 .direnv/
 .envrc
+
+# mkdocs
+site/

@@ -216,7 +216,7 @@ sdf = (
 - [`Latest`](api-reference/quixstreams.md#latest) - to get the value with the largest timestamp within a window.
 - [`First`](api-reference/quixstreams.md#first) - to get the first value within a window.
 - [`Last`](api-reference/quixstreams.md#last) - to get the last value within a window.
-- [`Reduce()`](api-reference/quixstreams.md#reduce) - to write a custom aggregation (deprecated, use [custom aggregator](#custom-aggregator) instead).
+- [`Reduce()`](api-reference/quixstreams.md#reduce) - to write a custom aggregation (deprecated, use [custom aggregator](#custom-aggregators) instead).
 
 **Collectors:**
 

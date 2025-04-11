@@ -28,7 +28,7 @@ It is a recommended way to create a `Consumer`.
 2. Create an instance of `quixstreams.kafka.Consumer`.  
 This way you will need to configure the instance yourself.
 
-See the **[Consumer API Docs](../api-reference/kafka.md#consumer)** for more details and methods.
+See the **[Consumer API Docs](../api-reference/kafka.md#baseconsumer)** for more details and methods.
 
 ### Differences from `confluent_kafka.Consumer`
 
