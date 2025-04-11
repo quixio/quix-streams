@@ -619,3 +619,25 @@ class TestPartitionTransactionCache:
     def test_empty(self, action, expected, cache):
         action(cache)
         assert cache.is_empty() == expected
+
+    def test_iter_items(self, cache: PartitionTransactionCache):
+        cache.set(key=b"key1", value=b"value1", prefix=b"prefix")
+        cache.set(key=b"key2", value=b"value2", prefix=b"prefix")
+        cache.set(key=b"key3", value=b"value3", prefix=b"prefix")
+        cache.set(key=b"key4", value=b"value4", prefix=b"prefix", cf_name="other")
+
+        assert cache.iter_items(prefix=b"prefix") == [
+            (b"key1", b"value1"),
+            (b"key2", b"value2"),
+            (b"key3", b"value3"),
+        ]
+
+        assert cache.iter_items(prefix=b"prefix", backwards=True) == [
+            (b"key3", b"value3"),
+            (b"key2", b"value2"),
+            (b"key1", b"value1"),
+        ]
+
+        assert cache.iter_items(prefix=b"prefix", cf_name="other") == [
+            (b"key4", b"value4"),
+        ]
