@@ -1646,6 +1646,7 @@ class TestStreamingDataFrameSlidingWindow:
         ]
 
 
+@pytest.mark.parametrize("num_partitions", [1, 2])
 class TestStreamingDataFrameGroupBy:
     def test_group_by_column(
         self,
@@ -1654,10 +1655,16 @@ class TestStreamingDataFrameGroupBy:
         row_producer_factory,
         row_consumer_factory,
         message_context_factory,
+        num_partitions,
     ):
         """GroupBy can accept a string (column name) as its grouping method."""
         topic_manager = topic_manager_factory()
-        topic = topic_manager.topic(str(uuid.uuid4()))
+        topic = topic_manager.topic(
+            str(uuid.uuid4()),
+            create_config=TopicConfig(
+                num_partitions=num_partitions, replication_factor=1
+            ),
+        )
         producer = row_producer_factory()
 
         col = "column_A"
@@ -1676,8 +1683,11 @@ class TestStreamingDataFrameGroupBy:
         sdf[col] = col_update
 
         groupby_topic = sdf.topics[0]
-        assert sdf_registry.consumer_topics == [topic, groupby_topic]
-        assert groupby_topic.name.startswith("repartition__")
+        if num_partitions == 1:
+            assert sdf_registry.consumer_topics == [topic]
+        else:
+            assert sdf_registry.consumer_topics == [topic, groupby_topic]
+            assert groupby_topic.name.startswith("repartition__")
 
         with producer:
             pre_groupby_branch_result = sdf.test(
@@ -1689,31 +1699,35 @@ class TestStreamingDataFrameGroupBy:
                 ctx=message_context_factory(topic=topic.name),
             )
 
-        with row_consumer_factory(auto_offset_reset="earliest") as consumer:
-            consumer.subscribe([groupby_topic])
-            consumed_row = consumer.poll_row(timeout=5.0)
+        if num_partitions == 1:
+            post_groupby_branch_result = pre_groupby_branch_result
+        else:
+            with row_consumer_factory(auto_offset_reset="earliest") as consumer:
+                consumer.subscribe([groupby_topic])
+                consumed_row = consumer.poll_row(timeout=5.0)
 
-        assert consumed_row
-        assert consumed_row.topic == groupby_topic.name
-        assert consumed_row.key == new_key
-        assert consumed_row.timestamp == orig_timestamp_ms
-        assert consumed_row.value == value
-        assert consumed_row.headers == headers
-        assert pre_groupby_branch_result[0] == (
-            value,
-            orig_key,
-            orig_timestamp_ms,
-            headers,
-        )
+            assert consumed_row
+            assert consumed_row.topic == groupby_topic.name
+            assert consumed_row.key == new_key
+            assert consumed_row.timestamp == orig_timestamp_ms
+            assert consumed_row.value == value
+            assert consumed_row.headers == headers
+            assert pre_groupby_branch_result[0] == (
+                value,
+                orig_key,
+                orig_timestamp_ms,
+                headers,
+            )
 
-        # Check that the value is updated after record passed the groupby
-        post_groupby_branch_result = sdf.test(
-            value=value,
-            key=new_key,
-            timestamp=orig_timestamp_ms,
-            headers=headers,
-            ctx=message_context_factory(topic=groupby_topic.name),
-        )
+            # Check that the value is updated after record passed the groupby
+            post_groupby_branch_result = sdf.test(
+                value=value,
+                key=new_key,
+                timestamp=orig_timestamp_ms,
+                headers=headers,
+                ctx=message_context_factory(topic=groupby_topic.name),
+            )
+
         assert post_groupby_branch_result[0] == (
             {col: col_update},
             new_key,
@@ -1728,13 +1742,19 @@ class TestStreamingDataFrameGroupBy:
         row_producer_factory,
         row_consumer_factory,
         message_context_factory,
+        num_partitions,
     ):
         """
         GroupBy can accept a string (column name) as its grouping method and use
         a custom name for it (instead of the column name)
         """
         topic_manager = topic_manager_factory()
-        topic = topic_manager.topic(str(uuid.uuid4()))
+        topic = topic_manager.topic(
+            str(uuid.uuid4()),
+            create_config=TopicConfig(
+                num_partitions=num_partitions, replication_factor=1
+            ),
+        )
         producer = row_producer_factory()
 
         col = "column_A"
@@ -1754,8 +1774,11 @@ class TestStreamingDataFrameGroupBy:
         sdf[col] = col_update
 
         groupby_topic = sdf.topics[0]
-        assert sdf_registry.consumer_topics == [topic, groupby_topic]
-        assert groupby_topic.name.startswith("repartition__")
+        if num_partitions == 1:
+            assert sdf_registry.consumer_topics == [topic]
+        else:
+            assert sdf_registry.consumer_topics == [topic, groupby_topic]
+            assert groupby_topic.name.startswith("repartition__")
 
         with producer:
             pre_groupby_branch_result = sdf.test(
@@ -1767,31 +1790,35 @@ class TestStreamingDataFrameGroupBy:
                 ctx=message_context_factory(topic=topic.name),
             )
 
-        with row_consumer_factory(auto_offset_reset="earliest") as consumer:
-            consumer.subscribe([groupby_topic])
-            consumed_row = consumer.poll_row(timeout=5.0)
+        if num_partitions == 1:
+            post_groupby_branch_result = pre_groupby_branch_result
+        else:
+            with row_consumer_factory(auto_offset_reset="earliest") as consumer:
+                consumer.subscribe([groupby_topic])
+                consumed_row = consumer.poll_row(timeout=5.0)
 
-        assert consumed_row
-        assert consumed_row.topic == groupby_topic.name
-        assert consumed_row.key == new_key
-        assert consumed_row.timestamp == orig_timestamp_ms
-        assert consumed_row.value == value
-        assert consumed_row.headers == headers
-        assert pre_groupby_branch_result[0] == (
-            value,
-            orig_key,
-            orig_timestamp_ms,
-            headers,
-        )
+            assert consumed_row
+            assert consumed_row.topic == groupby_topic.name
+            assert consumed_row.key == new_key
+            assert consumed_row.timestamp == orig_timestamp_ms
+            assert consumed_row.value == value
+            assert consumed_row.headers == headers
+            assert pre_groupby_branch_result[0] == (
+                value,
+                orig_key,
+                orig_timestamp_ms,
+                headers,
+            )
 
-        # Check that the value is updated after record passed the groupby
-        post_groupby_branch_result = sdf.test(
-            value=value,
-            key=new_key,
-            timestamp=orig_timestamp_ms,
-            headers=headers,
-            ctx=message_context_factory(topic=groupby_topic.name),
-        )
+            # Check that the value is updated after record passed the groupby
+            post_groupby_branch_result = sdf.test(
+                value=value,
+                key=new_key,
+                timestamp=orig_timestamp_ms,
+                headers=headers,
+                ctx=message_context_factory(topic=groupby_topic.name),
+            )
+
         assert post_groupby_branch_result[0] == (
             {col: col_update},
             new_key,
@@ -1806,12 +1833,18 @@ class TestStreamingDataFrameGroupBy:
         row_producer_factory,
         row_consumer_factory,
         message_context_factory,
+        num_partitions,
     ):
         """
         GroupBy can accept a Callable as its grouping method (requires a name too).
         """
         topic_manager = topic_manager_factory()
-        topic = topic_manager.topic(str(uuid.uuid4()))
+        topic = topic_manager.topic(
+            str(uuid.uuid4()),
+            create_config=TopicConfig(
+                num_partitions=num_partitions, replication_factor=1
+            ),
+        )
         producer = row_producer_factory()
 
         col = "column_A"
@@ -1832,7 +1865,11 @@ class TestStreamingDataFrameGroupBy:
         sdf[col] = col_update
 
         groupby_topic = sdf.topics[0]
-        assert sdf_registry.consumer_topics == [topic, groupby_topic]
+        if num_partitions == 1:
+            assert sdf_registry.consumer_topics == [topic]
+        else:
+            assert sdf_registry.consumer_topics == [topic, groupby_topic]
+            assert groupby_topic.name.startswith("repartition__")
 
         with producer:
             pre_groupby_branch_result = sdf.test(
@@ -1844,31 +1881,35 @@ class TestStreamingDataFrameGroupBy:
                 ctx=message_context_factory(topic=topic.name),
             )
 
-        with row_consumer_factory(auto_offset_reset="earliest") as consumer:
-            consumer.subscribe([groupby_topic])
-            consumed_row = consumer.poll_row(timeout=5.0)
+        if num_partitions == 1:
+            post_groupby_branch_result = pre_groupby_branch_result
+        else:
+            with row_consumer_factory(auto_offset_reset="earliest") as consumer:
+                consumer.subscribe([groupby_topic])
+                consumed_row = consumer.poll_row(timeout=5.0)
 
-        assert consumed_row
-        assert consumed_row.topic == groupby_topic.name
-        assert consumed_row.key == new_key
-        assert consumed_row.timestamp == orig_timestamp_ms
-        assert consumed_row.value == value
-        assert consumed_row.headers == headers
-        assert pre_groupby_branch_result[0] == (
-            value,
-            orig_key,
-            orig_timestamp_ms,
-            headers,
-        )
+            assert consumed_row
+            assert consumed_row.topic == groupby_topic.name
+            assert consumed_row.key == new_key
+            assert consumed_row.timestamp == orig_timestamp_ms
+            assert consumed_row.value == value
+            assert consumed_row.headers == headers
+            assert pre_groupby_branch_result[0] == (
+                value,
+                orig_key,
+                orig_timestamp_ms,
+                headers,
+            )
 
-        # Check that the value is updated after record passed the groupby
-        post_groupby_branch_result = sdf.test(
-            value=value,
-            key=new_key,
-            timestamp=orig_timestamp_ms,
-            headers=headers,
-            ctx=message_context_factory(topic=groupby_topic.name),
-        )
+            # Check that the value is updated after record passed the groupby
+            post_groupby_branch_result = sdf.test(
+                value=value,
+                key=new_key,
+                timestamp=orig_timestamp_ms,
+                headers=headers,
+                ctx=message_context_factory(topic=groupby_topic.name),
+            )
+
         assert post_groupby_branch_result[0] == (
             {col: col_update},
             new_key,
@@ -1876,46 +1917,93 @@ class TestStreamingDataFrameGroupBy:
             headers,
         )
 
-    def test_group_by_func_name_missing(self, dataframe_factory, topic_manager_factory):
+    def test_group_by_func_name_missing(
+        self, dataframe_factory, topic_manager_factory, num_partitions
+    ):
         """Using a Callable for groupby requires giving a name"""
         topic_manager = topic_manager_factory()
-        topic = topic_manager.topic(str(uuid.uuid4()))
+        topic = topic_manager.topic(
+            str(uuid.uuid4()),
+            create_config=TopicConfig(
+                num_partitions=num_partitions, replication_factor=1
+            ),
+        )
         sdf = dataframe_factory(topic, topic_manager=topic_manager)
 
         with pytest.raises(ValueError):
             sdf.group_by(lambda v: "do_stuff")
 
-    def test_group_by_key_empty_fails(self, dataframe_factory, topic_manager_factory):
+    def test_group_by_key_empty_fails(
+        self, dataframe_factory, topic_manager_factory, num_partitions
+    ):
         """Using a Callable for groupby requires giving a name"""
         topic_manager = topic_manager_factory()
-        topic = topic_manager.topic(str(uuid.uuid4()))
+        topic = topic_manager.topic(
+            str(uuid.uuid4()),
+            create_config=TopicConfig(
+                num_partitions=num_partitions, replication_factor=1
+            ),
+        )
         sdf = dataframe_factory(topic, topic_manager=topic_manager)
 
         with pytest.raises(ValueError, match='Parameter "key" cannot be empty'):
             sdf.group_by(key="")
 
-    def test_group_by_invalid_key_func(self, dataframe_factory, topic_manager_factory):
+    def test_group_by_invalid_key_func(
+        self, dataframe_factory, topic_manager_factory, num_partitions
+    ):
         """GroupBy can only use a string (column name) or Callable to group with"""
         topic_manager = topic_manager_factory()
-        topic = topic_manager.topic(str(uuid.uuid4()))
+        topic = topic_manager.topic(
+            str(uuid.uuid4()),
+            create_config=TopicConfig(
+                num_partitions=num_partitions, replication_factor=1
+            ),
+        )
         sdf = dataframe_factory(topic, topic_manager=topic_manager)
 
         with pytest.raises(ValueError):
             sdf.group_by({"um": "what is this"})
 
-    def test_group_by_limit_exceeded(self, dataframe_factory, topic_manager_factory):
+    def test_group_by_limit_exceeded(
+        self, dataframe_factory, topic_manager_factory, num_partitions
+    ):
         """
         Only 1 GroupBy depth per SDF (no nesting of them).
         """
         topic_manager = topic_manager_factory()
-        topic = topic_manager.topic(str(uuid.uuid4()))
+        topic = topic_manager.topic(
+            str(uuid.uuid4()),
+            create_config=TopicConfig(
+                num_partitions=num_partitions, replication_factor=1
+            ),
+        )
         sdf = dataframe_factory(topic, topic_manager=topic_manager)
         sdf = sdf.group_by("col_a")
 
         with pytest.raises(GroupByNestingLimit):
             sdf.group_by("col_b")
 
-    def test_group_by_name_clash(self, dataframe_factory, topic_manager_factory):
+    def test_group_by_branching(
+        self, dataframe_factory, topic_manager_factory, num_partitions
+    ):
+        """
+        GroupBy can be branched.
+        """
+        topic_manager = topic_manager_factory()
+        topic = topic_manager.topic(
+            str(uuid.uuid4()),
+            create_config=TopicConfig(
+                num_partitions=num_partitions, replication_factor=1
+            ),
+        )
+        sdf = dataframe_factory(topic, topic_manager=topic_manager)
+        sdf.group_by("col_a")
+        sdf.group_by("col_b")
+
+    def test_group_by_name_clash(
+        self, dataframe_factory, topic_manager_factory, num_partitions
+    ):
         """
         Each groupby operation per SDF instance (or, what appears to end users
         as a "single" SDF instance) should be uniquely named.
@@ -1923,19 +2011,31 @@ class TestStreamingDataFrameGroupBy:
         Most likely to encounter this if group by is used with the same column name.
         """
         topic_manager = topic_manager_factory()
-        topic = topic_manager.topic(str(uuid.uuid4()))
+        topic = topic_manager.topic(
+            str(uuid.uuid4()),
+            create_config=TopicConfig(
+                num_partitions=num_partitions, replication_factor=1
+            ),
+        )
         sdf = dataframe_factory(topic, topic_manager=topic_manager)
         sdf.group_by("col_a")
 
         with pytest.raises(GroupByDuplicate):
             sdf.group_by("col_a")
 
-    def test_sink_cannot_be_added_to(self, dataframe_factory, topic_manager_factory):
+    def test_sink_cannot_be_added_to(
+        self, dataframe_factory, topic_manager_factory, num_partitions
+    ):
         """
         A sink cannot be added to or branched.
         """
         topic_manager = topic_manager_factory()
-        topic = topic_manager.topic(str(uuid.uuid4()))
+        topic = topic_manager.topic(
+            str(uuid.uuid4()),
+            create_config=TopicConfig(
+                num_partitions=num_partitions, replication_factor=1
+            ),
+        )
         sdf = dataframe_factory(topic, topic_manager=topic_manager)
         assert len(sdf.stream.children) == 0
         sdf.sink(DummySink())

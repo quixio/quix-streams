@@ -61,7 +61,10 @@ class DataFrameRegistry:
         self._registry[topic.name] = dataframe.stream
 
     def register_groupby(
-        self, source_sdf: "StreamingDataFrame", new_sdf: "StreamingDataFrame"
+        self,
+        source_sdf: "StreamingDataFrame",
+        new_sdf: "StreamingDataFrame",
+        register_new_root: bool = True,
     ):
         """
         Register a "groupby" SDF, which is one generated with `SDF.group_by()`.
@@ -72,15 +75,25 @@ class DataFrameRegistry:
             raise GroupByNestingLimit(
                 "Subsequent (nested) `SDF.group_by()` operations are not allowed."
             )
-        try:
-            self.register_root(new_sdf)
-        except StreamingDataFrameDuplicate:
+
+        if new_sdf.stream_id in self._repartition_origins:
             raise GroupByDuplicate(
                 "A `SDF.group_by()` operation appears to be the same as another, "
                 "either from using the same column or name parameter; "
                 "adjust by setting a unique name with `SDF.group_by(name=<NAME>)` "
             )
+
         self._repartition_origins.add(new_sdf.stream_id)
+
+        if register_new_root:
+            try:
+                self.register_root(new_sdf)
+            except StreamingDataFrameDuplicate:
+                raise GroupByDuplicate(
+                    "A `SDF.group_by()` operation appears to be the same as another, "
+                    "either from using the same column or name parameter; "
+                    "adjust by setting a unique name with `SDF.group_by(name=<NAME>)` "
+                )
 
     def compose_all(
         self, sink: Optional[VoidExecutor] = None
