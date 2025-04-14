@@ -92,7 +92,7 @@ class StreamingDataFrame:
     What it Does:
 
     - Builds a data processing pipeline, declaratively (not executed immediately)
-        - Executes this pipeline on inputs at runtime (Kafka message values)
+    - Executes this pipeline on inputs at runtime (Kafka message values)
     - Provides functions/interface similar to Pandas Dataframes/Series
     - Enables stateful processing (and manages everything related to it)
 
@@ -135,14 +135,19 @@ class StreamingDataFrame:
         registry: DataFrameRegistry,
         processing_context: ProcessingContext,
         stream: Optional[Stream] = None,
+        stream_id: Optional[str] = None,
     ):
         if not topics:
             raise ValueError("At least one Topic must be passed")
 
-        self._stream: Stream = stream or Stream()
         # Implicitly deduplicate Topic objects into a tuple and sort them by name
         self._topics: tuple[Topic, ...] = tuple(
             sorted({t.name: t for t in topics}.values(), key=attrgetter("name"))
+        )
+
+        self._stream: Stream = stream or Stream()
+        self._stream_id: str = stream_id or topic_manager.stream_id_from_topics(
+            self.topics
         )
         self._topic_manager = topic_manager
         self._registry = registry
@@ -174,7 +179,7 @@ class StreamingDataFrame:
 
         By default, a topic name or a combination of topic names are used as `stream_id`.
         """
-        return self._topic_manager.stream_id_from_topics(self.topics)
+        return self._stream_id
 
     @property
     def topics(self) -> tuple[Topic, ...]:
@@ -591,6 +596,11 @@ class StreamingDataFrame:
         # Generate a config for the new repartition topic based on the underlying topics
         repartition_config = self._topic_manager.derive_topic_config(self._topics)
 
+        # If the topic has only one partition, we don't need a repartition topic
+        # we can directly change the messages key as they all go to the same partition.
+        if repartition_config.num_partitions == 1:
+            return self._single_partition_groupby(operation, key)
+
         groupby_topic = self._topic_manager.repartition_topic(
             operation=operation,
             stream_id=self.stream_id,
@@ -604,6 +614,29 @@ class StreamingDataFrame:
         self.to_topic(topic=groupby_topic, key=self._groupby_key(key))
         groupby_sdf = self.__dataframe_clone__(groupby_topic)
         self._registry.register_groupby(source_sdf=self, new_sdf=groupby_sdf)
+        return groupby_sdf
+
+    def _single_partition_groupby(
+        self, operation: str, key: Union[str, Callable[[Any], Any]]
+    ) -> "StreamingDataFrame":
+        if isinstance(key, str):
+
+            def _callback(value, _, timestamp, headers):
+                return value, value[key], timestamp, headers
+        else:
+
+            def _callback(value, _, timestamp, headers):
+                return value, key(value), timestamp, headers
+
+        stream = self.stream.add_transform(_callback, expand=False)
+
+        groupby_sdf = self.__dataframe_clone__(
+            stream=stream, stream_id=f"{self.stream_id}--groupby--{operation}"
+        )
+        self._registry.register_groupby(
+            source_sdf=self, new_sdf=groupby_sdf, register_new_root=False
+        )
+
         return groupby_sdf
 
     def contains(self, keys: Union[str, list[str]]) -> StreamingSeries:
@@ -1679,6 +1712,7 @@ class StreamingDataFrame:
         self,
         *topics: Topic,
         stream: Optional[Stream] = None,
+        stream_id: Optional[str] = None,
     ) -> "StreamingDataFrame":
         """
         Clone the StreamingDataFrame with a new `stream`, `topics`,
@@ -1692,6 +1726,7 @@ class StreamingDataFrame:
         clone = self.__class__(
             *(topics or self._topics),
             stream=stream,
+            stream_id=stream_id,
             processing_context=self._processing_context,
             topic_manager=self._topic_manager,
             registry=self._registry,
