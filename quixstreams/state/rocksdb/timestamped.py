@@ -5,7 +5,8 @@ from quixstreams.state.base.transaction import (
     PartitionTransactionStatus,
     validate_transaction_status,
 )
-from quixstreams.state.serialization import serialize
+from quixstreams.state.metadata import SEPARATOR
+from quixstreams.state.serialization import int_to_int64_bytes, serialize
 
 from .partition import RocksDBStorePartition
 from .store import RocksDBStore
@@ -56,7 +57,7 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         """
         prefix = self._ensure_bytes(prefix)
         # Add +1 because the storage `.iter_items()` is exclusive on the upper bound
-        key = self._serialize_key(timestamp + 1, prefix=prefix)
+        key = self._serialize_key(timestamp + 1, prefix)
         value: Optional[bytes] = None
 
         cached = self._update_cache.iter_items(
@@ -98,12 +99,15 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         :param cf_name: Column family name.
         """
         prefix = self._ensure_bytes(prefix)
-        super().set(timestamp, value, prefix, cf_name)
+        super().set(timestamp, value, prefix, cf_name=cf_name)
 
     def _ensure_bytes(self, prefix: Any) -> bytes:
         if isinstance(prefix, bytes):
             return prefix
         return serialize(prefix, dumps=self._dumps)
+
+    def _serialize_key(self, timestamp: int, prefix: bytes) -> bytes:
+        return prefix + SEPARATOR + int_to_int64_bytes(timestamp)
 
 
 class TimestampedStorePartition(RocksDBStorePartition):
