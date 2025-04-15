@@ -15,12 +15,12 @@ class TestDataFrameRegistry:
         ):
             registry.register_root(sdf_mock)
 
-    def test_register_stream_id_success(self):
+    def test_register_state_id_success(self):
         registry = DataFrameRegistry()
-        registry.register_stream_id(stream_id="id", topic_names=["topic1", "topic2"])
+        registry.register_state_id(state_id="id", topic_names=["topic1", "topic2"])
 
-        assert sorted(registry.get_topics_for_stream_id("id")) == sorted(
+        assert sorted(registry.get_topics_for_state_id("id")) == sorted(
             ["topic1", "topic2"]
         )
-        assert registry.get_stream_ids("topic1") == ["id"]
-        assert registry.get_stream_ids("topic2") == ["id"]
+        assert registry.get_state_ids("topic1") == ["id"]
+        assert registry.get_state_ids("topic2") == ["id"]

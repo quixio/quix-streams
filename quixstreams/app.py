@@ -994,15 +994,13 @@ class Application:
                     )
                 committed_offsets[tp.partition][tp.topic] = tp.offset
 
-            # Match the assigned TP with a stream ID via DataFrameRegistry
+            # Match the assigned TP with a state ID via DataFrameRegistry
             for tp in non_changelog_tps:
-                stream_ids = self._dataframe_registry.get_stream_ids(
-                    topic_name=tp.topic
-                )
-                # Assign store partitions for the given stream ids
-                for stream_id in stream_ids:
+                state_ids = self._dataframe_registry.get_state_ids(topic_name=tp.topic)
+                # Assign store partitions for the given state ids
+                for state_id in state_ids:
                     self._state_manager.on_partition_assign(
-                        stream_id=stream_id,
+                        state_id=state_id,
                         partition=tp.partition,
                         committed_offsets=committed_offsets[tp.partition],
                     )
@@ -1044,12 +1042,10 @@ class Application:
         ]
         for tp in non_changelog_tps:
             if self._state_manager.stores:
-                stream_ids = self._dataframe_registry.get_stream_ids(
-                    topic_name=tp.topic
-                )
-                for stream_id in stream_ids:
+                state_ids = self._dataframe_registry.get_state_ids(topic_name=tp.topic)
+                for state_id in state_ids:
                     self._state_manager.on_partition_revoke(
-                        stream_id=stream_id, partition=tp.partition
+                        state_id=state_id, partition=tp.partition
                     )
 
     def _setup_signal_handlers(self):

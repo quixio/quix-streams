@@ -1098,14 +1098,14 @@ class TestApplicationWithState:
     def _validate_state(
         self,
         stores,
-        stream_id,
+        state_id,
         partition_index,
         state_manager_factory,
         consumer_group,
         state_dir,
         validator,
     ):
-        store = stores[stream_id]
+        store = stores[state_id]
         partition = store.partitions[partition_index]
         with partition.begin() as tx:
             validator(tx)
@@ -1117,13 +1117,13 @@ class TestApplicationWithState:
             state_manager = state_manager_factory(
                 group_id=consumer_group, state_dir=state_dir
             )
-            state_manager.register_store(stream_id, "default")
+            state_manager.register_store(state_id, "default")
             state_manager.on_partition_assign(
-                stream_id=stream_id,
+                state_id=state_id,
                 partition=partition_index,
-                committed_offsets={stream_id: -1001},
+                committed_offsets={state_id: -1001},
             )
-            store = state_manager.get_store(stream_id=stream_id, store_name="default")
+            store = state_manager.get_store(state_id=state_id, store_name="default")
             with store.start_partition_transaction(partition=partition_index) as tx:
                 validator(tx)
 
@@ -1178,7 +1178,7 @@ class TestApplicationWithState:
         stores = {}
 
         def revoke_partition(store, partition):
-            stores[store.stream_id] = store
+            stores[store.state_id] = store
 
         # Stop app when the future is resolved
         executor.submit(_stop_app_on_future, app, total_consumed, 15.0)
@@ -1192,7 +1192,7 @@ class TestApplicationWithState:
 
         self._validate_state(
             stores,
-            sdf.stream_id,
+            sdf.state_id,
             partition_num,
             state_manager_factory,
             consumer_group,
@@ -1249,13 +1249,13 @@ class TestApplicationWithState:
         state_manager = state_manager_factory(
             group_id=consumer_group, state_dir=state_dir
         )
-        state_manager.register_store(sdf.stream_id, "default")
+        state_manager.register_store(sdf.state_id, "default")
         state_manager.on_partition_assign(
-            stream_id=sdf.stream_id,
+            state_id=sdf.state_id,
             partition=0,
             committed_offsets={},
         )
-        store = state_manager.get_store(stream_id=sdf.stream_id, store_name="default")
+        store = state_manager.get_store(state_id=sdf.state_id, store_name="default")
         with store.start_partition_transaction(partition=0) as tx:
             assert tx.get("total", prefix=key) is None
 
@@ -1313,7 +1313,7 @@ class TestApplicationWithState:
         stores = {}
 
         def revoke_partition(store, partition):
-            stores[store.stream_id] = store
+            stores[store.state_id] = store
 
         # Stop app when the future is resolved
         executor.submit(_stop_app_on_future, app, total_consumed, 10.0)
@@ -1328,7 +1328,7 @@ class TestApplicationWithState:
 
         self._validate_state(
             stores,
-            sdf.stream_id,
+            sdf.state_id,
             partition_num,
             state_manager_factory,
             consumer_group,
@@ -1368,12 +1368,12 @@ class TestApplicationWithState:
         with state_manager:
             state_manager.register_store(topic_in_name, "default")
             state_manager.on_partition_assign(
-                stream_id=topic_in_name,
+                state_id=topic_in_name,
                 partition=0,
                 committed_offsets={topic_in_name: -1001},
             )
             store = state_manager.get_store(
-                stream_id=topic_in_name, store_name="default"
+                state_id=topic_in_name, store_name="default"
             )
             with store.start_partition_transaction(partition=0) as tx:
                 # All keys in state must be prefixed with the message key
@@ -1386,12 +1386,12 @@ class TestApplicationWithState:
         with state_manager:
             state_manager.register_store(topic_in_name, "default")
             state_manager.on_partition_assign(
-                stream_id=topic_in_name,
+                state_id=topic_in_name,
                 partition=0,
                 committed_offsets={topic_in_name: -1001},
             )
             store = state_manager.get_store(
-                stream_id=topic_in_name, store_name="default"
+                state_id=topic_in_name, store_name="default"
             )
             with store.start_partition_transaction(partition=0) as tx:
                 assert tx.get("my_state", prefix=prefix) is None
@@ -1462,7 +1462,7 @@ class TestApplicationRecovery:
 
         def validate_state(stores):
             for p_num, count in partition_msg_count.items():
-                store = stores[sdf.stream_id]
+                store = stores[sdf.state_id]
                 partition = store.partitions[p_num]
                 assert partition.get_changelog_offset() == count - 1
                 with partition.begin() as tx:
@@ -1474,15 +1474,15 @@ class TestApplicationRecovery:
                     group_id=consumer_group,
                     state_dir=state_dir,
                 ) as state_manager:
-                    state_manager.register_store(sdf.stream_id, store_name)
+                    state_manager.register_store(sdf.state_id, store_name)
                     for p_num, count in partition_msg_count.items():
                         state_manager.on_partition_assign(
-                            stream_id=sdf.stream_id,
+                            state_id=sdf.state_id,
                             partition=p_num,
                             committed_offsets={topic.name: -1001},
                         )
                         store = state_manager.get_store(
-                            stream_id=sdf.stream_id, store_name=store_name
+                            state_id=sdf.state_id, store_name=store_name
                         )
                         partition = store.partitions[p_num]
                         assert partition.get_changelog_offset() == count - 1
@@ -1507,7 +1507,7 @@ class TestApplicationRecovery:
         stores = {}
 
         def revoke_partition(store, partition):
-            stores[store.stream_id] = store
+            stores[store.state_id] = store
 
         # run app to populate state with data
         done = Future()
@@ -1630,15 +1630,15 @@ class TestApplicationRecovery:
             with state_manager_factory(
                 group_id=consumer_group, state_dir=state_dir
             ) as state_manager:
-                state_manager.register_windowed_store(sdf.stream_id, actual_store_name)
+                state_manager.register_windowed_store(sdf.state_id, actual_store_name)
                 for p_num, windows in expected_window_updates.items():
                     state_manager.on_partition_assign(
-                        stream_id=sdf.stream_id,
+                        state_id=sdf.state_id,
                         partition=p_num,
                         committed_offsets={topic.name: -1001},
                     )
                     store = state_manager.get_store(
-                        stream_id=sdf.stream_id,
+                        state_id=sdf.state_id,
                         store_name=actual_store_name,
                     )
 
@@ -1793,7 +1793,7 @@ class TestApplicationRecovery:
                 assert state.get("latest") == value
 
         def validate_state(stores):
-            store = stores[sdf.stream_id]
+            store = stores[sdf.state_id]
             partition = store.partitions[0]
             with partition.begin() as tx:
                 _validate_transaction_state(tx)
@@ -1811,9 +1811,9 @@ class TestApplicationRecovery:
                     committed_offset = consumer.committed(
                         [TopicPartition(topic=topic_name, partition=0)]
                     )[0].offset
-                    state_manager.register_store(sdf.stream_id, store_name)
+                    state_manager.register_store(sdf.state_id, store_name)
                     partition = state_manager.on_partition_assign(
-                        stream_id=sdf.stream_id,
+                        state_id=sdf.state_id,
                         partition=0,
                         committed_offsets={topic_name: committed_offset},
                     )["default"]
@@ -1830,7 +1830,7 @@ class TestApplicationRecovery:
         stores = {}
 
         def revoke_partition(store, partition):
-            stores[store.stream_id] = store
+            stores[store.state_id] = store
 
         # Run the application to apply changes to state
         done = Future()
@@ -2501,7 +2501,7 @@ class TestApplicationMultipleSdf:
 
     def _validate_state(
         self,
-        stream_ids,
+        state_ids,
         stores,
         partition_num,
         message_key,
@@ -2510,8 +2510,8 @@ class TestApplicationMultipleSdf:
         consumer_group,
         state_dir,
     ):
-        for stream_id in stream_ids:
-            store = stores[stream_id]
+        for state_id in state_ids:
+            store = stores[state_id]
             partition = store.partitions[partition_num]
             with partition.begin() as tx:
                 assert tx.get("total", prefix=message_key) == messages_per_topic
@@ -2523,15 +2523,13 @@ class TestApplicationMultipleSdf:
                 state_manager = state_manager_factory(
                     group_id=consumer_group, state_dir=state_dir
                 )
-                state_manager.register_store(stream_id, "default")
+                state_manager.register_store(state_id, "default")
                 state_manager.on_partition_assign(
-                    stream_id=stream_id,
+                    state_id=state_id,
                     partition=partition_num,
                     committed_offsets={},
                 )
-                store = state_manager.get_store(
-                    stream_id=stream_id, store_name="default"
-                )
+                store = state_manager.get_store(state_id=state_id, store_name="default")
                 with store.start_partition_transaction(partition=partition_num) as tx:
                     # All keys in state must be prefixed with the message key
                     assert tx.get("total", prefix=message_key) == messages_per_topic
@@ -2609,7 +2607,7 @@ class TestApplicationMultipleSdf:
         stores = {}
 
         def revoke_partition(store, partition):
-            stores[store.stream_id] = store
+            stores[store.state_id] = store
 
         done = Future()
         # Stop app when the future is resolved
@@ -2620,7 +2618,7 @@ class TestApplicationMultipleSdf:
 
         assert processed_count == total_messages
         self._validate_state(
-            [sdf_a.stream_id, sdf_b.stream_id],
+            [sdf_a.state_id, sdf_b.state_id],
             stores,
             partition_num,
             message_key,
@@ -2722,7 +2720,7 @@ class TestApplicationMultipleSdf:
         stores = {}
 
         def revoke_partition(store, partition):
-            stores[store.stream_id] = store
+            stores[store.state_id] = store
 
         with patch("quixstreams.state.base.Store.revoke_partition", revoke_partition):
             app.run()
@@ -2730,7 +2728,7 @@ class TestApplicationMultipleSdf:
         assert processed_count == total_messages
 
         self._validate_state(
-            [sdf.stream_id for sdf in sdfs],
+            [sdf.state_id for sdf in sdfs],
             stores,
             partition_num,
             message_key,
@@ -2812,14 +2810,14 @@ class TestApplicationMultipleSdf:
         stores = {}
 
         def revoke_partition(store_, partition):
-            stores[store_.stream_id] = store_
+            stores[store_.state_id] = store_
 
         with patch("quixstreams.state.base.Store.revoke_partition", revoke_partition):
             app.run()
 
         assert processed_count == total_messages
 
-        store = stores[sdf_concat.stream_id]
+        store = stores[sdf_concat.state_id]
         partition = store.partitions[partition_num]
         with partition.begin() as tx:
             assert tx.get("total", prefix=message_key) == total_messages

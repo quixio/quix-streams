@@ -148,28 +148,26 @@ class Checkpoint(BaseCheckpoint):
             self._producer.begin_transaction()
 
     def get_store_transaction(
-        self, stream_id: str, partition: int, store_name: str = DEFAULT_STATE_STORE_NAME
+        self, state_id: str, partition: int, store_name: str = DEFAULT_STATE_STORE_NAME
     ) -> PartitionTransaction:
         """
         Get a PartitionTransaction for the given store, topic and partition.
 
         It will return already started transaction if there's one.
 
-        :param stream_id: stream id
+        :param state_id: state id
         :param partition: partition number
         :param store_name: store name
         :return: instance of `PartitionTransaction`
         """
-        transaction = self._store_transactions.get((stream_id, partition, store_name))
+        transaction = self._store_transactions.get((state_id, partition, store_name))
         if transaction is not None:
             return transaction
 
-        store = self._state_manager.get_store(
-            stream_id=stream_id, store_name=store_name
-        )
+        store = self._state_manager.get_store(state_id=state_id, store_name=store_name)
         transaction = store.start_partition_transaction(partition=partition)
 
-        self._store_transactions[(stream_id, partition, store_name)] = transaction
+        self._store_transactions[(state_id, partition, store_name)] = transaction
         return transaction
 
     def close(self):
@@ -227,13 +225,11 @@ class Checkpoint(BaseCheckpoint):
 
         # Step 2. Produce the changelogs
         for (
-            stream_id,
+            state_id,
             partition,
             store_name,
         ), transaction in self._store_transactions.items():
-            topics = self._dataframe_registry.get_topics_for_stream_id(
-                stream_id=stream_id
-            )
+            topics = self._dataframe_registry.get_topics_for_state_id(state_id=state_id)
             processed_offsets = {
                 topic: offset
                 for (topic, partition_), offset in self._tp_offsets.items()

@@ -148,7 +148,7 @@ class TestCheckpoint:
         topic_name, _ = topic_factory()
 
         dataframe_registry = DataFrameRegistry()
-        dataframe_registry.register_stream_id(topic_name, [topic_name])
+        dataframe_registry.register_state_id(topic_name, [topic_name])
         state_manager = state_manager_factory(producer=rowproducer_mock)
         checkpoint = checkpoint_factory(
             consumer_=consumer,
@@ -200,7 +200,7 @@ class TestCheckpoint:
             producer=row_producer, recovery_manager=recovery_manager
         )
         dataframe_registry = DataFrameRegistry()
-        dataframe_registry.register_stream_id(topic_name, [topic_name])
+        dataframe_registry.register_state_id(topic_name, [topic_name])
 
         checkpoint = checkpoint_factory(
             consumer_=consumer,
@@ -253,7 +253,7 @@ class TestCheckpoint:
             producer=row_producer, recovery_manager=recovery_manager
         )
         dataframe_registry = DataFrameRegistry()
-        dataframe_registry.register_stream_id(topic_name, [topic_name])
+        dataframe_registry.register_state_id(topic_name, [topic_name])
 
         checkpoint = checkpoint_factory(
             consumer_=consumer,
@@ -322,7 +322,7 @@ class TestCheckpoint:
         state_manager = state_manager_factory(producer=rowproducer_mock)
         dataframe_registry = DataFrameRegistry()
         topic_name = "topic"
-        dataframe_registry.register_stream_id(topic_name, [topic_name])
+        dataframe_registry.register_state_id(topic_name, [topic_name])
         checkpoint = checkpoint_factory(
             consumer_=consumer_mock,
             state_manager_=state_manager,
@@ -377,7 +377,7 @@ class TestCheckpoint:
         state_manager = state_manager_factory(producer=rowproducer_mock)
         topic_name = "topic"
         dataframe_registry = DataFrameRegistry()
-        dataframe_registry.register_stream_id(topic_name, [topic_name])
+        dataframe_registry.register_state_id(topic_name, [topic_name])
         checkpoint = checkpoint_factory(
             consumer_=consumer_mock,
             state_manager_=state_manager,
@@ -415,7 +415,7 @@ class TestCheckpoint:
         state_manager = state_manager_factory(producer=rowproducer_mock)
         topic_name = "topic"
         dataframe_registry = DataFrameRegistry()
-        dataframe_registry.register_stream_id(topic_name, [topic_name])
+        dataframe_registry.register_state_id(topic_name, [topic_name])
 
         checkpoint = checkpoint_factory(
             consumer_=consumer_mock,

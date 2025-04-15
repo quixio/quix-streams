@@ -24,16 +24,16 @@ class MemoryStore(Store):
     def __init__(
         self,
         name: str,
-        stream_id: Optional[str],
+        state_id: Optional[str],
         changelog_producer_factory: Optional[ChangelogProducerFactory] = None,
     ) -> None:
         """
         :param name: a unique store name
-        :param stream_id: a topic name for this store
+        :param state_id: a state ID for this store
         :param changelog_producer_factory: a ChangelogProducerFactory instance
             if using changelogs topics.
         """
-        super().__init__(name, stream_id)
+        super().__init__(name, state_id)
 
         self._changelog_producer_factory = changelog_producer_factory
 

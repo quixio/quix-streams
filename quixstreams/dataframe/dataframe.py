@@ -135,7 +135,7 @@ class StreamingDataFrame:
         registry: DataFrameRegistry,
         processing_context: ProcessingContext,
         stream: Optional[Stream] = None,
-        stream_id: Optional[str] = None,
+        state_id: Optional[str] = None,
     ):
         if not topics:
             raise ValueError("At least one Topic must be passed")
@@ -146,15 +146,15 @@ class StreamingDataFrame:
         )
 
         self._stream: Stream = stream or Stream()
-        self._stream_id: str = stream_id or topic_manager.stream_id_from_topics(
+        self._state_id: str = state_id or topic_manager.state_id_from_topics(
             self.topics
         )
         self._topic_manager = topic_manager
         self._registry = registry
         self._processing_context = processing_context
         self._producer = processing_context.producer
-        self._registry.register_stream_id(
-            stream_id=self.stream_id, topic_names=[t.name for t in self._topics]
+        self._registry.register_state_id(
+            state_id=self.state_id, topic_names=[t.name for t in self._topics]
         )
 
     @property
@@ -166,20 +166,20 @@ class StreamingDataFrame:
         return self._stream
 
     @property
-    def stream_id(self) -> str:
+    def state_id(self) -> str:
         """
         An identifier of the data stream this StreamingDataFrame
         manipulates in the application.
 
         It is used as a common prefix for state stores and group-by topics.
-        A new `stream_id` is set when StreamingDataFrames are merged via `.merge()`
+        A new `state_id` is set when StreamingDataFrames are merged via `.merge()`
         or grouped via `.group_by()`.
 
-        StreamingDataFrames with different `stream_id` cannot access the same state stores.
+        StreamingDataFrames with different `state_id` cannot access the same state stores.
 
-        By default, a topic name or a combination of topic names are used as `stream_id`.
+        By default, a topic name or a combination of topic names are used as `state_id`.
         """
-        return self._stream_id
+        return self._state_id
 
     @property
     def topics(self) -> tuple[Topic, ...]:
@@ -286,7 +286,7 @@ class StreamingDataFrame:
             stateful_func = _as_stateful(
                 func=with_metadata_func,
                 processing_context=self._processing_context,
-                stream_id=self.stream_id,
+                state_id=self.state_id,
             )
             stream = self.stream.add_apply(stateful_func, expand=expand, metadata=True)  # type: ignore[call-overload]
         else:
@@ -395,7 +395,7 @@ class StreamingDataFrame:
             stateful_func = _as_stateful(
                 func=with_metadata_func,
                 processing_context=self._processing_context,
-                stream_id=self.stream_id,
+                state_id=self.state_id,
             )
             return self._add_update(stateful_func, metadata=True)
         else:
@@ -497,7 +497,7 @@ class StreamingDataFrame:
             stateful_func = _as_stateful(
                 func=with_metadata_func,
                 processing_context=self._processing_context,
-                stream_id=self.stream_id,
+                state_id=self.state_id,
             )
             stream = self.stream.add_filter(stateful_func, metadata=True)
         else:
@@ -603,7 +603,7 @@ class StreamingDataFrame:
 
         groupby_topic = self._topic_manager.repartition_topic(
             operation=operation,
-            stream_id=self.stream_id,
+            state_id=self.state_id,
             config=repartition_config,
             key_serializer=key_serializer,
             value_serializer=value_serializer,
@@ -631,7 +631,7 @@ class StreamingDataFrame:
         stream = self.stream.add_transform(_callback, expand=False)
 
         groupby_sdf = self.__dataframe_clone__(
-            stream=stream, stream_id=f"{self.stream_id}--groupby--{operation}"
+            stream=stream, state_id=f"{self.state_id}--groupby--{operation}"
         )
         self._registry.register_groupby(
             source_sdf=self, new_sdf=groupby_sdf, register_new_root=False
@@ -1683,7 +1683,7 @@ class StreamingDataFrame:
 
     def _register_store(self):
         """
-        Register the default store for the current stream_id in StateStoreManager.
+        Register the default store for the current state_id in StateStoreManager.
         """
         self.ensure_topics_copartitioned()
 
@@ -1691,7 +1691,7 @@ class StreamingDataFrame:
         changelog_topic_config = self._topic_manager.derive_topic_config(self._topics)
 
         self._processing_context.state_manager.register_store(
-            stream_id=self.stream_id, changelog_config=changelog_topic_config
+            state_id=self.state_id, changelog_config=changelog_topic_config
         )
 
     def _groupby_key(
@@ -1711,21 +1711,22 @@ class StreamingDataFrame:
         self,
         *topics: Topic,
         stream: Optional[Stream] = None,
-        stream_id: Optional[str] = None,
+        state_id: Optional[str] = None,
     ) -> "StreamingDataFrame":
         """
         Clone the StreamingDataFrame with a new `stream`, `topics`,
-        and optional `stream_id` parameters.
+        and optional `state_id` parameters.
 
         :param topics: one or more `Topic` objects
         :param stream: instance of `Stream`, optional.
+        :param state_id: str, optional.
         :return: a new `StreamingDataFrame`.
         """
 
         clone = self.__class__(
             *(topics or self._topics),
             stream=stream,
-            stream_id=stream_id,
+            state_id=state_id,
             processing_context=self._processing_context,
             topic_manager=self._topic_manager,
             registry=self._registry,
@@ -1840,13 +1841,13 @@ def _as_metadata_func(
 def _as_stateful(
     func: Callable[[Any, Any, int, Any, State], T],
     processing_context: ProcessingContext,
-    stream_id: str,
+    state_id: str,
 ) -> Callable[[Any, Any, int, Any], T]:
     @functools.wraps(func)
     def wrapper(value: Any, key: Any, timestamp: int, headers: Any) -> Any:
         ctx = message_context()
         transaction = processing_context.checkpoint.get_store_transaction(
-            stream_id=stream_id,
+            state_id=state_id,
             partition=ctx.partition,
         )
         # Pass a State object with an interface limited to the key updates only

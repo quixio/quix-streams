@@ -60,9 +60,9 @@ class QuixTopicManager(TopicManager):
         )
         self._quix_config_builder = quix_config_builder
 
-    def stream_id_from_topics(self, topics: Sequence[Topic]) -> str:
+    def state_id_from_topics(self, topics: Sequence[Topic]) -> str:
         """
-        Generate a stream_id by combining names of the provided topics.
+        Generate a state_id by combining names of the provided topics.
         """
         if not topics:
             raise ValueError("At least one Topic must be passed")
@@ -71,7 +71,7 @@ class QuixTopicManager(TopicManager):
             # for backwards compatibility
             return topics[0].name
 
-        # Use the "quix_name" to generate stream_id.
+        # Use the "quix_name" to generate state_id.
         # In Quix Cloud, the "quix_name" can differ from the actual broker topic name
         return "--".join(sorted(t.quix_name for t in topics))
 

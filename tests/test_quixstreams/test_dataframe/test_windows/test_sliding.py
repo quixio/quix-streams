@@ -785,7 +785,7 @@ def transaction_factory(state_manager):
     def factory(window):
         nonlocal store
         if store is None:
-            store = state_manager.get_store(stream_id="topic", store_name=window.name)
+            store = state_manager.get_store(state_id="topic", store_name=window.name)
             store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             yield tx

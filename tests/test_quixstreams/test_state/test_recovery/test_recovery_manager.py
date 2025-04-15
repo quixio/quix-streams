@@ -25,13 +25,13 @@ class TestRecoveryManager:
         config = TopicConfig(num_partitions=1, replication_factor=1)
         with patch.object(TopicManager, "changelog_topic") as make_changelog:
             recovery_manager.register_changelog(
-                stream_id=topic,
+                state_id=topic,
                 store_name=store_name,
                 topic_config=config,
             )
 
         make_changelog.assert_called_with(
-            stream_id=topic, store_name=store_name, config=config
+            state_id=topic, store_name=store_name, config=config
         )
 
     def test_assign_partition_invalid_offset(
@@ -53,7 +53,7 @@ class TestRecoveryManager:
         # Register a source topic and a changelog topic with one partition
         topic_manager = topic_manager_factory()
         topic_manager.changelog_topic(
-            stream_id=topic_name,
+            state_id=topic_name,
             store_name=store_name,
             config=topic_manager.topic_config(),
         )
@@ -108,7 +108,7 @@ class TestRecoveryManager:
         # make topics
         topic_manager = topic_manager_factory()
         changelog_topic = topic_manager.changelog_topic(
-            stream_id=topic_name,
+            state_id=topic_name,
             store_name=store_name,
             config=topic_manager.topic_config(),
         )
@@ -160,7 +160,7 @@ class TestRecoveryManager:
         topic_manager = topic_manager_factory()
 
         changelog_topic = topic_manager.changelog_topic(
-            stream_id=topic_name,
+            state_id=topic_name,
             store_name=store_name,
             config=TopicConfig(num_partitions=2, replication_factor=1),
         )
@@ -237,7 +237,7 @@ class TestRecoveryManager:
         # Register a source topic and a changelog topic with 2 partitions
         topic_manager = topic_manager_factory()
         changelog_topic = topic_manager.changelog_topic(
-            stream_id=topic_name,
+            state_id=topic_name,
             store_name=store_name,
             config=TopicConfig(num_partitions=2, replication_factor=1),
         )
@@ -278,7 +278,7 @@ class TestRecoveryManager:
         # Register a source topic and a changelog topic with two partitions
         topic_manager = topic_manager_factory()
         changelog_topic = topic_manager.changelog_topic(
-            stream_id=topic_name,
+            state_id=topic_name,
             store_name=store_name,
             config=TopicConfig(num_partitions=2, replication_factor=1),
         )
@@ -389,11 +389,11 @@ class TestRecoveryManagerRecover:
         # Create Store and assign a StorePartition (which also sets up changelog topics)
         store_partitions = {}
         state_manager.register_store(
-            stream_id=topic_name,
+            state_id=topic_name,
             store_name=store_name,
             changelog_config=TopicConfig(num_partitions=1, replication_factor=1),
         )
-        store = state_manager.get_store(stream_id=topic_name, store_name=store_name)
+        store = state_manager.get_store(state_id=topic_name, store_name=store_name)
 
         # Mock the Consumer assignment with changelog topic-partition
         changelog_topic = topic_manager.changelog_topics[topic_name][store_name]
@@ -448,7 +448,7 @@ class TestRecoveryManagerRecover:
         topic_manager = topic_manager_factory()
         data_topic = topic_manager.topic(topic_name)
         changelog_topic = topic_manager.changelog_topic(
-            stream_id=topic_name, store_name=store_name, config=data_topic.broker_config
+            state_id=topic_name, store_name=store_name, config=data_topic.broker_config
         )
 
         data_tp = TopicPartition(topic=data_topic.name, partition=0)
