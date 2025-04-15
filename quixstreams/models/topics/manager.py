@@ -203,7 +203,7 @@ class TopicManager:
     def repartition_topic(
         self,
         operation: str,
-        stream_id: str,
+        state_id: str,
         config: TopicConfig,
         value_deserializer: Optional[DeserializerType] = "json",
         key_deserializer: Optional[DeserializerType] = "json",
@@ -214,7 +214,7 @@ class TopicManager:
         Create an internal repartition topic.
 
         :param operation: name of the GroupBy operation (column name or user-defined).
-        :param stream_id: stream id.
+        :param state_id: state id.
         :param config: a config for the repartition topic.
         :param value_deserializer: a deserializer type for values; default - JSON
         :param key_deserializer: a deserializer type for keys; default - JSON
@@ -224,7 +224,7 @@ class TopicManager:
         :return: `Topic` object (which is also stored on the TopicManager)
         """
         topic = Topic(
-            name=self._internal_name("repartition", stream_id, operation),
+            name=self._internal_name("repartition", state_id, operation),
             value_deserializer=value_deserializer,
             key_deserializer=key_deserializer,
             value_serializer=value_serializer,
@@ -238,12 +238,12 @@ class TopicManager:
 
     def changelog_topic(
         self,
-        stream_id: Optional[str],
+        state_id: Optional[str],
         store_name: str,
         config: TopicConfig,
     ) -> Topic:
         """
-        Create and register a changelog topic for the given "stream_id" and store name.
+        Create and register a changelog topic for the given "state_id" and store name.
 
         If the topic already exists, validate that the partition count
         is the same as requested.
@@ -252,7 +252,7 @@ class TopicManager:
         generate changelog topics. To turn off changelogs, init an Application with
         "use_changelog_topics"=`False`.
 
-        :param stream_id: stream id
+        :param state_id: state id
         :param store_name: name of the store this changelog belongs to
             (default, rolling10s, etc.)
         :param config: the changelog topic configuration
@@ -263,7 +263,7 @@ class TopicManager:
         config.extra_config.update({"cleanup.policy": "compact"})
 
         topic = Topic(
-            name=self._internal_name("changelog", stream_id, store_name),
+            name=self._internal_name("changelog", state_id, store_name),
             key_serializer="bytes",
             value_serializer="bytes",
             key_deserializer="bytes",
@@ -279,7 +279,7 @@ class TopicManager:
                 f'got {topic.broker_config.num_partitions}"'
             )
 
-        self._changelog_topics.setdefault(stream_id, {})[store_name] = topic
+        self._changelog_topics.setdefault(state_id, {})[store_name] = topic
         return topic
 
     @classmethod
@@ -333,9 +333,9 @@ class TopicManager:
             },
         )
 
-    def stream_id_from_topics(self, topics: Sequence[Topic]) -> str:
+    def state_id_from_topics(self, topics: Sequence[Topic]) -> str:
         """
-        Generate a stream_id by combining names of the provided topics.
+        Generate a state_id by combining names of the provided topics.
         """
         if not topics:
             raise ValueError("At least one Topic must be passed")

@@ -166,16 +166,16 @@ class TestTopicManager:
         group = "my_consumer_group"
         topic_manager = topic_manager_factory(consumer_group=group)
         store_name = "default"
-        stream_id = str(uuid.uuid4())
+        state_id = str(uuid.uuid4())
         changelog = topic_manager.changelog_topic(
-            stream_id=stream_id,
+            state_id=state_id,
             store_name=store_name,
             config=TopicConfig(num_partitions=1, replication_factor=1),
         )
 
-        assert topic_manager.changelog_topics[stream_id][store_name] == changelog
+        assert topic_manager.changelog_topics[state_id][store_name] == changelog
 
-        assert changelog.name == f"changelog__{group}--{stream_id}--{store_name}"
+        assert changelog.name == f"changelog__{group}--{state_id}--{store_name}"
 
         for attr in [
             "_key_serializer",
@@ -198,10 +198,10 @@ class TestTopicManager:
         """
         topic_manager = topic_manager_factory()
 
-        stream_id = str(uuid.uuid4())
+        state_id = str(uuid.uuid4())
         # Create a new changelog topic with 1 partition
         topic_manager.changelog_topic(
-            stream_id=stream_id,
+            state_id=state_id,
             store_name="store",
             config=TopicConfig(num_partitions=1, replication_factor=1),
         )
@@ -211,7 +211,7 @@ class TestTopicManager:
         # and has only 1 partition
         with pytest.raises(TopicConfigurationMismatch, match="partition count"):
             topic_manager.changelog_topic(
-                stream_id=stream_id,
+                state_id=state_id,
                 store_name="store",
                 config=TopicConfig(num_partitions=2, replication_factor=1),
             )
@@ -227,7 +227,7 @@ class TestTopicManager:
         topic_manager = topic_manager_factory()
         with pytest.raises(TopicNameLengthExceeded):
             topic_manager.changelog_topic(
-                stream_id=str(uuid.uuid4()),
+                state_id=str(uuid.uuid4()),
                 store_name="store" * 100,
                 config=TopicConfig(num_partitions=1, replication_factor=1),
             )
@@ -241,10 +241,10 @@ class TestTopicManager:
         topic_manager = topic_manager_factory(consumer_group=group)
 
         operation = "my_op"
-        stream_id = str(uuid.uuid4())
+        state_id = str(uuid.uuid4())
         repartition = topic_manager.repartition_topic(
             operation=operation,
-            stream_id=stream_id,
+            state_id=state_id,
             key_serializer="bytes",
             value_serializer="bytes",
             config=TopicConfig(
@@ -255,7 +255,7 @@ class TestTopicManager:
         )
 
         assert topic_manager.repartition_topics[repartition.name] == repartition
-        assert repartition.name == f"repartition__{group}--{stream_id}--{operation}"
+        assert repartition.name == f"repartition__{group}--{state_id}--{operation}"
         assert repartition.broker_config.num_partitions == 1
         assert repartition.broker_config.replication_factor == 1
         assert repartition.broker_config.extra_config["retention.ms"] == "1000"
@@ -270,11 +270,11 @@ class TestTopicManager:
         group = "my_consumer_group"
         topic_manager = topic_manager_factory(consumer_group=group)
 
-        stream_id = str(uuid.uuid4())
+        state_id = str(uuid.uuid4())
         operation = "my_op"
         repartition_topic = topic_manager.repartition_topic(
             operation=operation,
-            stream_id=stream_id,
+            state_id=state_id,
             key_serializer="bytes",
             value_serializer="bytes",
             config=TopicConfig(
@@ -283,7 +283,7 @@ class TestTopicManager:
             ),
         )
         changelog = topic_manager.changelog_topic(
-            stream_id=repartition_topic.name,
+            state_id=repartition_topic.name,
             store_name=store_name,
             config=TopicConfig(
                 num_partitions=1,
@@ -293,7 +293,7 @@ class TestTopicManager:
 
         assert (
             changelog.name
-            == f"changelog__{group}--repartition.{stream_id}.{operation}--{store_name}"
+            == f"changelog__{group}--repartition.{state_id}.{operation}--{store_name}"
         )
 
     def test_non_changelog_topics(self, topic_manager_factory):
@@ -307,14 +307,14 @@ class TestTopicManager:
         operation = "my_op"
         repartition_topic = topic_manager.repartition_topic(
             operation=operation,
-            stream_id=data_topic.name,
+            state_id=data_topic.name,
             key_serializer="bytes",
             value_serializer="bytes",
             config=TopicConfig(num_partitions=1, replication_factor=1),
         )
 
         changelog_topic = topic_manager.changelog_topic(
-            stream_id=data_topic.name,
+            state_id=data_topic.name,
             store_name="default",
             config=TopicConfig(num_partitions=1, replication_factor=1),
         )
@@ -323,24 +323,24 @@ class TestTopicManager:
         assert repartition_topic.name in topic_manager.non_changelog_topics
         assert changelog_topic.name not in topic_manager.non_changelog_topics
 
-    def test_stream_id_from_topics_success(self, topic_manager_factory):
+    def test_state_id_from_topics_success(self, topic_manager_factory):
         topic_manager = topic_manager_factory()
         topic1 = topic_manager.topic("test1")
         topic2 = topic_manager.topic("test2")
-        stream_id = topic_manager.stream_id_from_topics([topic1, topic2])
+        state_id = topic_manager.state_id_from_topics([topic1, topic2])
 
-        assert stream_id == "test1--test2"
+        assert state_id == "test1--test2"
 
-    def test_stream_id_from_topics_sorted(self, topic_manager_factory):
+    def test_state_id_from_topics_sorted(self, topic_manager_factory):
         topic_manager = topic_manager_factory()
         topic1 = topic_manager.topic("test1")
         topic2 = topic_manager.topic("test2")
 
-        assert topic_manager.stream_id_from_topics(
+        assert topic_manager.state_id_from_topics(
             [topic1, topic2]
-        ) == topic_manager.stream_id_from_topics([topic2, topic1])
+        ) == topic_manager.state_id_from_topics([topic2, topic1])
 
-    def test_stream_id_from_topics_no_topics_fails(self, topic_manager_factory):
+    def test_state_id_from_topics_no_topics_fails(self, topic_manager_factory):
         topic_manager = topic_manager_factory()
         with pytest.raises(ValueError):
-            topic_manager.stream_id_from_topics([])
+            topic_manager.state_id_from_topics([])

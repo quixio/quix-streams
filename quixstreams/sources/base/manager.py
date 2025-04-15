@@ -137,7 +137,7 @@ class SourceProcess(process):
         )
 
         state_manager.register_store(
-            stream_id=None,
+            state_id=None,
             store_name=source.store_name,
             store_type=MemoryStore,
             changelog_config=TopicConfig(
@@ -156,7 +156,7 @@ class SourceProcess(process):
         self._consumer.assign([changelog_tp])
 
         store_partitions = state_manager.on_partition_assign(
-            stream_id=None,
+            state_id=None,
             partition=source.assigned_store_partition,
             committed_offsets={},
         )
