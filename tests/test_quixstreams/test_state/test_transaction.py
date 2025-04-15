@@ -239,6 +239,12 @@ class TestPartitionTransaction:
             with pytest.raises(StateSerializationError):
                 tx.set(key, value, prefix=prefix)
 
+    def test_set_bytes_no_bytes(self, store_partition):
+        prefix = b"__key__"
+        with store_partition.begin() as tx:
+            with pytest.raises(StateSerializationError):
+                tx.set_bytes(key="key", value="value", prefix=prefix)
+
     @pytest.mark.parametrize(
         "key", [object(), b"somebytes", datetime.now(timezone.utc)]
     )

@@ -18,7 +18,11 @@ from typing import (
 )
 
 from quixstreams.models import Headers
-from quixstreams.state.exceptions import InvalidChangelogOffset, StateTransactionError
+from quixstreams.state.exceptions import (
+    InvalidChangelogOffset,
+    StateSerializationError,
+    StateTransactionError,
+)
 from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER,
@@ -413,6 +417,9 @@ class PartitionTransaction(ABC, Generic[K, V]):
         :param cf_name: column family name
         """
         try:
+            if not isinstance(value, bytes):
+                raise StateSerializationError("Value must be bytes")
+
             key_serialized = self._serialize_key(key, prefix=prefix)
             self._update_cache.set(
                 key=key_serialized,
