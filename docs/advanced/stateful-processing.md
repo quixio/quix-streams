@@ -194,7 +194,7 @@ def apply(value, state):
     if old is not None:
         old = pickle.loads(old)
     state.set_bytes('key', pickle.dumps(value))
-    return {"old": old, "new": new}
+    return {"old": old, "new": value}
     
 sdf = sdf.apply(apply, stateful=True)
 ```
