@@ -92,7 +92,7 @@ def test_get_last_from_store(
         pytest.param(2, 3, 5, "cached", id="cached-greater-than-stored"),
     ],
 )
-def test_get_last_stored_key_greater_than_cached_key(
+def test_get_last_returns_value_for_greater_timestamp(
     transaction: TimestampedPartitionTransaction,
     set_timestamp_stored: int,
     set_timestamp_cached: int,
