@@ -111,6 +111,7 @@ def test_get_last_prefix_not_bytes(transaction: TimestampedPartitionTransaction)
     with transaction() as tx:
         tx.set(timestamp=10, value="value", prefix="key")
         assert tx.get_last(timestamp=10, prefix="key") == "value"
+        assert tx.get_last(timestamp=10, prefix=b'"key"') == "value"
 
 
 def test_expire_cached(transaction: TimestampedPartitionTransaction):
