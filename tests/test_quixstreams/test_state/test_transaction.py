@@ -581,6 +581,29 @@ class TestPartitionTransactionCache:
         cache.delete(key=b"key", prefix=b"prefix", cf_name="cf_name")
         assert cache.get_updates(cf_name="cf_name") == {b"prefix": {}}
 
+    def test_get_updates_for_prefix_empty(self, cache: PartitionTransactionCache):
+        assert cache.get_updates_for_prefix(prefix=b"prefix", cf_name="cf_name") == {}
+
+        # Delete an item and make sure it's not in "updates"
+        cache.delete(key=b"key", prefix=b"prefix", cf_name="cf_name")
+        assert cache.get_updates_for_prefix(prefix=b"prefix", cf_name="cf_name") == {}
+
+    def test_get_updates_for_prefix_present(self, cache: PartitionTransactionCache):
+        cache.set(key=b"key", value=b"value", prefix=b"prefix", cf_name="cf_name")
+        cache.set(key=b"key", value=b"value", prefix=b"other_prefix", cf_name="cf_name")
+        cache.set(key=b"key", value=b"value", prefix=b"other", cf_name="other_cf_name")
+
+        assert cache.get_updates_for_prefix(prefix=b"prefix", cf_name="cf_name") == {
+            b"key": b"value"
+        }
+
+    def test_get_updates_for_prefix_after_delete(
+        self, cache: PartitionTransactionCache
+    ):
+        cache.set(key=b"key", value=b"value", prefix=b"prefix", cf_name="cf_name")
+        cache.delete(key=b"key", prefix=b"prefix", cf_name="cf_name")
+        assert cache.get_updates_for_prefix(prefix=b"prefix", cf_name="cf_name") == {}
+
     def test_get_deletes_empty(self, cache: PartitionTransactionCache):
         assert cache.get_deletes(cf_name="cf_name") == set()
 
@@ -614,25 +637,3 @@ class TestPartitionTransactionCache:
     def test_empty(self, action, expected, cache):
         action(cache)
         assert cache.is_empty() == expected
-
-    def test_iter_items(self, cache: PartitionTransactionCache):
-        cache.set(key=b"key1", value=b"value1", prefix=b"prefix")
-        cache.set(key=b"key2", value=b"value2", prefix=b"prefix")
-        cache.set(key=b"key3", value=b"value3", prefix=b"prefix")
-        cache.set(key=b"key4", value=b"value4", prefix=b"prefix", cf_name="other")
-
-        assert cache.iter_items(prefix=b"prefix") == [
-            (b"key1", b"value1"),
-            (b"key2", b"value2"),
-            (b"key3", b"value3"),
-        ]
-
-        assert cache.iter_items(prefix=b"prefix", backwards=True) == [
-            (b"key3", b"value3"),
-            (b"key2", b"value2"),
-            (b"key1", b"value1"),
-        ]
-
-        assert cache.iter_items(prefix=b"prefix", cf_name="other") == [
-            (b"key4", b"value4"),
-        ]
