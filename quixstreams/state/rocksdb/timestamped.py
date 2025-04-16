@@ -60,13 +60,15 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         key = self._serialize_key(timestamp + 1, prefix)
         value: Optional[bytes] = None
 
+        deletes = self._update_cache.get_deletes(cf_name=cf_name)
+
         cached = self._update_cache.iter_items(
             prefix=prefix,
             backwards=True,
             cf_name=cf_name,
         )
         for cached_key, cached_value in cached:
-            if prefix < cached_key < key:
+            if prefix < cached_key < key and cached_key not in deletes:
                 value = cached_value
                 break
 
@@ -77,10 +79,14 @@ class TimestampedPartitionTransaction(PartitionTransaction):
             cf_name=cf_name,
         )
         for stored_key, stored_value in stored:
+            if stored_key in deletes:
+                continue
+
             if value is None or cached_key < stored_key:
                 value = stored_value
-            # We only care about the first item found when iterating backwards
-            # from the upper bound, hence the break.
+
+            # We only care about the first not deleted item when
+            # iterating backwards from the upper bound.
             break
 
         return self._deserialize_value(value) if value is not None else None

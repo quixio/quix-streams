@@ -44,6 +44,23 @@ def test_get_last_from_cache(
         assert tx.get_last(timestamp=get_timestamp, prefix=b"key") == expected
 
 
+def test_get_last_ignore_deleted(
+    transaction: TimestampedPartitionTransaction,
+):
+    with transaction() as tx:
+        tx.set(timestamp=9, value="value9-stored", prefix=b"key")
+
+    with transaction() as tx:
+        tx.expire(timestamp=9, prefix=b"key")
+
+        # Message with timestamp 8 comes out of order after later messages
+        # got expired in the same transaction.
+        # TODO: Should we in this case "unexpire" the timestamp 9 message?
+        tx.set(timestamp=8, value="value8-cached", prefix=b"key")
+
+        assert tx.get_last(timestamp=10, prefix=b"key") == "value8-cached"
+
+
 @pytest.mark.parametrize(
     ["set_timestamp", "get_timestamp", "expected"],
     [

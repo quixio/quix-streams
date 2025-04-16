@@ -103,19 +103,17 @@ class PartitionTransactionCache:
         return self._updated[cf_name][prefix].get(key, Marker.UNDEFINED)
 
     def iter_items(
-        self, prefix: bytes, backwards: bool = False, cf_name: str = "default"
+        self,
+        prefix: bytes,
+        backwards: bool = False,
+        cf_name: str = "default",
     ) -> list[tuple[bytes, bytes]]:
         """
-        Iterate over sorted, non-deleted items in the cache
+        Iterate over sorted items in the cache
         for the given prefix and column family.
         """
-        deleted = self._deleted[cf_name]
         return sorted(
-            (
-                (key, value)
-                for key, value in self._updated[cf_name][prefix].items()
-                if key not in deleted
-            ),
+            self._updated[cf_name][prefix].items(),
             reverse=backwards,
         )
 
