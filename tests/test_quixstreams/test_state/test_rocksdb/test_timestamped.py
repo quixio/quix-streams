@@ -11,6 +11,9 @@ from quixstreams.state.rocksdb.timestamped import (
 
 @pytest.fixture
 def store_type():
+    # This fixture is used by the `store_factory` fixture.
+    # Full dependency chain is:
+    # `store_type` -> `store_factory` -> `store` -> `transaction`
     return TimestampedStore
 
 
