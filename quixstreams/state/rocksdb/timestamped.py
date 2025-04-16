@@ -61,12 +61,11 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         value: Optional[bytes] = None
 
         deletes = self._update_cache.get_deletes(cf_name=cf_name)
-
-        cached = self._update_cache.iter_items(
-            prefix=prefix,
-            backwards=True,
-            cf_name=cf_name,
+        updates = self._update_cache.get_updates_for_prefix(
+            cf_name=cf_name, prefix=prefix
         )
+
+        cached = sorted(updates.items(), reverse=True)
         for cached_key, cached_value in cached:
             if prefix < cached_key < key and cached_key not in deletes:
                 value = cached_value
@@ -110,8 +109,12 @@ class TimestampedPartitionTransaction(PartitionTransaction):
     def expire(self, timestamp: int, prefix: bytes, cf_name: str = "default"):
         key = self._serialize_key(timestamp + 1, prefix)
 
-        cached = self._update_cache.iter_items(prefix=prefix, cf_name=cf_name)
-        for cached_key, _ in cached:
+        cached = self._update_cache.get_updates_for_prefix(
+            prefix=prefix,
+            cf_name=cf_name,
+        )
+        # Cast to list to avoid RuntimeError: dictionary changed size during iteration
+        for cached_key in list(cached):
             if cached_key < key:
                 self._update_cache.delete(cached_key, prefix, cf_name=cf_name)
 
