@@ -1,2 +1,2 @@
-pre-commit>=3.4,<4.1
+pre-commit>=3.4,<4.3
 -r requirements-mypy.txt
