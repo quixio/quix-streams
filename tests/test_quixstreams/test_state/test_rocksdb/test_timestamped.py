@@ -91,3 +91,41 @@ def test_get_last_prefix_not_bytes(transaction: TimestampedPartitionTransaction)
     with transaction() as tx:
         tx.set(timestamp=10, value="value", prefix="key")
         assert tx.get_last(timestamp=10, prefix="key") == "value"
+
+
+def test_expire_cached(transaction: TimestampedPartitionTransaction):
+    with transaction() as tx:
+        tx.set(timestamp=1, value="value1", prefix=b"key")
+        tx.set(timestamp=10, value="value10", prefix=b"key")
+        tx.set(timestamp=11, value="value11", prefix=b"key")
+
+        tx.expire(timestamp=10, prefix=b"key")
+
+        assert tx.get_last(timestamp=10, prefix=b"key") == None
+        assert tx.get_last(timestamp=11, prefix=b"key") == "value11"
+
+
+def test_expire_stored(transaction: TimestampedPartitionTransaction):
+    with transaction() as tx:
+        tx.set(timestamp=1, value="value1", prefix=b"key")
+        tx.set(timestamp=10, value="value10", prefix=b"key")
+        tx.set(timestamp=11, value="value11", prefix=b"key")
+
+    with transaction() as tx:
+        tx.expire(timestamp=10, prefix=b"key")
+
+        assert tx.get_last(timestamp=10, prefix=b"key") == None
+        assert tx.get_last(timestamp=11, prefix=b"key") == "value11"
+
+
+def test_expire_idempotent(transaction: TimestampedPartitionTransaction):
+    with transaction() as tx:
+        tx.set(timestamp=1, value="value1", prefix=b"key")
+
+    with transaction() as tx:
+        tx.set(timestamp=10, value="value10", prefix=b"key")
+
+        tx.expire(timestamp=10, prefix=b"key")
+        tx.expire(timestamp=10, prefix=b"key")
+
+        assert tx.get_last(timestamp=10, prefix=b"key") == None

@@ -101,6 +101,22 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         prefix = self._ensure_bytes(prefix)
         super().set(timestamp, value, prefix, cf_name=cf_name)
 
+    def expire(self, timestamp: int, prefix: bytes, cf_name: str = "default"):
+        key = self._serialize_key(timestamp + 1, prefix)
+
+        cached = self._update_cache.iter_items(prefix=prefix, cf_name=cf_name)
+        for cached_key, _ in cached:
+            if cached_key < key:
+                self._update_cache.delete(cached_key, prefix, cf_name=cf_name)
+
+        stored = self._partition.iter_items(
+            lower_bound=prefix,
+            upper_bound=key,
+            cf_name=cf_name,
+        )
+        for stored_key, _ in stored:
+            self._update_cache.delete(stored_key, prefix, cf_name=cf_name)
+
     def _ensure_bytes(self, prefix: Any) -> bytes:
         if isinstance(prefix, bytes):
             return prefix
