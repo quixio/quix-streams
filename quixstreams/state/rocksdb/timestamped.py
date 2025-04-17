@@ -62,7 +62,8 @@ class TimestampedPartitionTransaction(PartitionTransaction):
 
         deletes = self._update_cache.get_deletes(cf_name=cf_name)
         updates = self._update_cache.get_updates_for_prefix(
-            cf_name=cf_name, prefix=prefix
+            prefix=prefix,
+            cf_name=cf_name,
         )
 
         cached = sorted(updates.items(), reverse=True)
