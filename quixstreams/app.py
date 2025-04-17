@@ -168,7 +168,7 @@ class Application:
               >***NOTE:*** the environment variable is set for you in the Quix Cloud
         :param consumer_group: Kafka consumer group.
             Passed as `group.id` to `confluent_kafka.Consumer`.
-            Linked Environment Variable: `Quix__Consumer__Group`.
+            Linked Environment Variable: `Quix__Consumer_Group`.
             Default - "quixstreams-default" (set during init)
               >***NOTE:*** Quix Applications will prefix it with the Quix workspace id.
         :param commit_interval: How often to commit the processed messages in seconds.
@@ -188,6 +188,7 @@ class Application:
         :param producer_extra_config: A dictionary with additional options that
             will be passed to `confluent_kafka.Producer` as is.
         :param state_dir: path to the application state directory.
+            Linked Environment Variable: `Quix__State__Dir`.
             Default - `"state"`.
         :param rocksdb_options: RocksDB options.
             If `None`, the default options will be used.
@@ -232,7 +233,9 @@ class Application:
         consumer_extra_config = consumer_extra_config or {}
 
         if state_dir is None:
-            state_dir = "/app/state" if is_quix_deployment() else "state"
+            state_dir = os.getenv(
+                "Quix__State__Dir", "/app/state" if is_quix_deployment() else "state"
+            )
         state_dir = Path(state_dir)
 
         # We can't use os.getenv as defaults (and have testing work nicely)

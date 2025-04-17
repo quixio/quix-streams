@@ -479,12 +479,13 @@ class TestApplication:
         """
         Sanity check consumer_group gets set from the environment via getenv.
         """
-        consumer_group = "my_group"
-        with patch.dict(os.environ, {"Quix__Consumer__group": consumer_group}):
-            app = Application(
-                broker_address="my_address", consumer_group=consumer_group
-            )
-        assert app.config.consumer_group == consumer_group
+        with patch.dict(os.environ, {"Quix__Consumer_Group": "environ_group"}):
+            app = Application(broker_address="my_address")
+        assert app.config.consumer_group == "environ_group"
+
+        with patch.dict(os.environ, {"Quix__Consumer_Group": "environ_group"}):
+            app = Application(broker_address="my_address", consumer_group="app_group")
+        assert app.config.consumer_group == "app_group"
 
     def test_consumer_group_default(self):
         """
@@ -493,6 +494,21 @@ class TestApplication:
         with patch.dict(os.environ, {}, clear=True):
             app = Application(broker_address="my_address")
         assert app.config.consumer_group == "quixstreams-default"
+
+    def test_state_dir_env(self):
+        """
+        Sanity check state_dir gets set from the environment via getenv.
+        """
+        app = Application(broker_address="my_address")
+        assert app.config.state_dir == Path("state")
+
+        with patch.dict(os.environ, {"Quix__State__Dir": "/path/to/state"}):
+            app = Application(broker_address="my_address")
+        assert app.config.state_dir == Path("/path/to/state")
+
+        with patch.dict(os.environ, {"Quix__State__Dir": "/path/to/state"}):
+            app = Application(broker_address="my_address", state_dir="/path/to/other")
+        assert app.config.state_dir == Path("/path/to/other")
 
 
 class TestAppGroupBy:
