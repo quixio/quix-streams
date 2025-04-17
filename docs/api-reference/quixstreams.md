@@ -10532,7 +10532,7 @@ Using `PartitionTransaction` is a recommended way for accessing the data.
 class PartitionTransactionCache()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L47)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L52)
 
 A cache with the data updated in the current PartitionTransaction.
 It is used to read-your-own-writes before the transaction is committed to the Store.
@@ -10550,7 +10550,7 @@ def get(key: bytes,
         cf_name: str = "default") -> Union[bytes, Marker]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L70)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L75)
 
 Get a value for the key.
 
@@ -10574,7 +10574,7 @@ If the key is not present in the cache, returns "UNDEFINED sentinel
 def set(key: bytes, value: bytes, prefix: bytes, cf_name: str = "default")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L100)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L105)
 
 Set a value for the key.
 
@@ -10592,7 +10592,7 @@ Set a value for the key.
 def delete(key: Any, prefix: bytes, cf_name: str = "default")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L113)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L118)
 
 Delete a key.
 
@@ -10609,7 +10609,7 @@ Delete a key.
 def is_empty() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L125)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L130)
 
 Return True if any changes have been made (updates or deletes), otherwise
 return False.
@@ -10622,7 +10622,7 @@ return False.
 def get_column_families() -> Set[str]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L132)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L137)
 
 Get all update column families.
 
@@ -10634,7 +10634,7 @@ Get all update column families.
 def get_updates(cf_name: str = "default") -> Dict[bytes, Dict[bytes, bytes]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L138)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L143)
 
 Get all updated keys (excluding deleted)
 
@@ -10651,7 +10651,7 @@ in the format "{<prefix>: {<key>: <value>}}".
 def get_deletes(cf_name: str = "default") -> Set[bytes]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L147)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L152)
 
 Get all deleted keys (excluding updated) as a set.
 
@@ -10663,7 +10663,7 @@ Get all deleted keys (excluding updated) as a set.
 class PartitionTransactionStatus(enum.Enum)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L154)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L159)
 
 <a id="quixstreams.state.base.transaction.PartitionTransactionStatus.STARTED"></a>
 
@@ -10697,7 +10697,7 @@ Transaction is failed, it cannot be used anymore
 def validate_transaction_status(*allowed: PartitionTransactionStatus)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L165)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L170)
 
 Check that the status of `RocksDBTransaction` is valid before calling a method
 
@@ -10709,7 +10709,7 @@ Check that the status of `RocksDBTransaction` is valid before calling a method
 class PartitionTransaction(ABC, Generic[K, V])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L189)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L194)
 
 A transaction class to perform simple key-value operations like
 "get", "set", "delete" and "exists" on a single storage partition.
@@ -10723,7 +10723,7 @@ A transaction class to perform simple key-value operations like
 def failed() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L221)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L226)
 
 Return `True` if transaction failed to update data at some point.
 
@@ -10742,7 +10742,7 @@ bool
 def completed() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L231)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L236)
 
 Return `True` if transaction is successfully completed.
 
@@ -10761,7 +10761,7 @@ bool
 def prepared() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L241)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L246)
 
 Return `True` if transaction is prepared completed.
 
@@ -10780,7 +10780,7 @@ bool
 def changelog_topic_partition() -> Optional[Tuple[str, int]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L251)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L256)
 
 Return the changelog topic-partition for the StorePartition of this transaction.
 
@@ -10798,7 +10798,7 @@ Returns `None` if changelog_producer is not provided.
 def as_state(prefix: Any = DEFAULT_PREFIX) -> State[K, V]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L278)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L283)
 
 Create an instance implementing the `State` protocol to be provided
 
@@ -10815,14 +10815,13 @@ an instance implementing the `State` protocol
 #### PartitionTransaction.get
 
 ```python
-@validate_transaction_status(PartitionTransactionStatus.STARTED)
 def get(key: K,
         prefix: bytes,
         default: Optional[V] = None,
         cf_name: str = "default") -> Optional[V]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L305)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L309)
 
 Get a key from the store.
 
@@ -10839,18 +10838,69 @@ It returns `None` if the key is not found and `default` is not provided.
 
 value or None if the key is not found and `default` is not provided
 
+<a id="quixstreams.state.base.transaction.PartitionTransaction.get_bytes"></a>
+
+#### PartitionTransaction.get\_bytes
+
+```python
+def get_bytes(key: K,
+              prefix: bytes,
+              default: Optional[bytes] = None,
+              cf_name: str = "default") -> Optional[bytes]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L348)
+
+Get a key from the store.
+
+It returns `None` if the key is not found and `default` is not provided.
+
+**Arguments**:
+
+- `key`: key
+- `prefix`: a key prefix
+- `default`: default value to return if the key is not found
+- `cf_name`: column family name
+
+**Returns**:
+
+value as bytes or None if the key is not found and `default` is not provided
+
 <a id="quixstreams.state.base.transaction.PartitionTransaction.set"></a>
 
 #### PartitionTransaction.set
 
 ```python
 @validate_transaction_status(PartitionTransactionStatus.STARTED)
-def set(key: K, value: V, prefix: bytes, cf_name: str = "default")
+def set(key: K, value: V, prefix: bytes, cf_name: str = "default") -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L341)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L391)
 
 Set value for the key.
+
+**Arguments**:
+
+- `key`: key
+- `prefix`: a key prefix
+- `value`: value
+- `cf_name`: column family name
+
+<a id="quixstreams.state.base.transaction.PartitionTransaction.set_bytes"></a>
+
+#### PartitionTransaction.set\_bytes
+
+```python
+@validate_transaction_status(PartitionTransactionStatus.STARTED)
+def set_bytes(key: K,
+              value: bytes,
+              prefix: bytes,
+              cf_name: str = "default") -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L409)
+
+Set bytes value for the key.
 
 **Arguments**:
 
@@ -10868,7 +10918,7 @@ Set value for the key.
 def delete(key: K, prefix: bytes, cf_name: str = "default")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L364)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L435)
 
 Delete value for the key.
 
@@ -10889,7 +10939,7 @@ This function always returns `None`, even if value is not found.
 def exists(key: K, prefix: bytes, cf_name: str = "default") -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L383)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L454)
 
 Check if the key exists in state.
 
@@ -10912,7 +10962,7 @@ True if key exists, False otherwise
 def prepare(processed_offsets: Optional[dict[str, int]])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L403)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L474)
 
 Produce changelog messages to the changelog topic for all changes accumulated
 
@@ -10939,7 +10989,7 @@ to the changelog topic.
 def flush(changelog_offset: Optional[int] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L463)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L534)
 
 Flush the recent updates to the database.
 
@@ -11000,16 +11050,55 @@ Get the value for key if key is present in the state, else default
 
 value or None if the key is not found and `default` is not provided
 
+<a id="quixstreams.state.base.state.State.get_bytes"></a>
+
+#### State.get\_bytes
+
+```python
+def get_bytes(key: K, default: Optional[bytes] = None) -> Optional[bytes]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L45)
+
+Get the value for key if key is present in the state, else default
+
+**Arguments**:
+
+- `key`: key
+- `default`: default value to return if the key is not found
+
+**Returns**:
+
+value as bytes or None if the key is not found and `default` is not provided
+
 <a id="quixstreams.state.base.state.State.set"></a>
 
 #### State.set
 
 ```python
 @abstractmethod
-def set(key: K, value: V)
+def set(key: K, value: V) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L40)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L55)
+
+Set value for the key.
+
+**Arguments**:
+
+- `key`: key
+- `value`: value
+
+<a id="quixstreams.state.base.state.State.set_bytes"></a>
+
+#### State.set\_bytes
+
+```python
+@abstractmethod
+def set_bytes(key: K, value: bytes) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L64)
 
 Set value for the key.
 
@@ -11027,7 +11116,7 @@ Set value for the key.
 def delete(key: K)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L49)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L73)
 
 Delete value for the key.
 
@@ -11046,7 +11135,7 @@ This function always returns `None`, even if value is not found.
 def exists(key: K) -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L59)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L83)
 
 Check if the key exists in state.
 
@@ -11066,7 +11155,7 @@ True if key exists, False otherwise
 class TransactionState(State)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L68)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L92)
 
 <a id="quixstreams.state.base.state.TransactionState.__init__"></a>
 
@@ -11076,7 +11165,7 @@ class TransactionState(State)
 def __init__(prefix: bytes, transaction: "PartitionTransaction")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L74)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L98)
 
 Simple key-value state to be provided into `StreamingDataFrame` functions
 
@@ -11092,9 +11181,30 @@ Simple key-value state to be provided into `StreamingDataFrame` functions
 def get(key: K, default: Optional[V] = None) -> Optional[V]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L89)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L113)
 
 Get the value for key if key is present in the state, else default
+
+**Arguments**:
+
+- `key`: key
+- `default`: default value to return if the key is not found
+
+**Returns**:
+
+value or None if the key is not found and `default` is not provided
+
+<a id="quixstreams.state.base.state.TransactionState.get_bytes"></a>
+
+#### TransactionState.get\_bytes
+
+```python
+def get_bytes(key: K, default: Optional[bytes] = None) -> Optional[bytes]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L129)
+
+Get the bytes value for key if key is present in the state, else default
 
 **Arguments**:
 
@@ -11110,10 +11220,27 @@ value or None if the key is not found and `default` is not provided
 #### TransactionState.set
 
 ```python
-def set(key: K, value: V)
+def set(key: K, value: V) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L99)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L141)
+
+Set value for the key.
+
+**Arguments**:
+
+- `key`: key
+- `value`: value
+
+<a id="quixstreams.state.base.state.TransactionState.set_bytes"></a>
+
+#### TransactionState.set\_bytes
+
+```python
+def set_bytes(key: K, value: bytes) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L149)
 
 Set value for the key.
 
@@ -11130,7 +11257,7 @@ Set value for the key.
 def delete(key: K)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L107)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L157)
 
 Delete value for the key.
 
@@ -11148,7 +11275,7 @@ This function always returns `None`, even if value is not found.
 def exists(key: K) -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L116)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L166)
 
 Check if the key exists in state.
 
