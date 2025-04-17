@@ -50,6 +50,7 @@ class TestTopicManager:
 
         assert topic.name == topic_name
         assert topic.quix_name == topic_name
+        assert topic.is_regular
         assert topic.create_config.num_partitions == create_config.num_partitions
         assert (
             topic.create_config.replication_factor == create_config.replication_factor
@@ -187,6 +188,7 @@ class TestTopicManager:
         assert changelog.broker_config.num_partitions == 1
         assert changelog.broker_config.replication_factor == 1
         assert changelog.broker_config.extra_config["cleanup.policy"] == "compact"
+        assert changelog.is_changelog
 
     def test_changelog_topic_partition_count_mismatch(
         self, topic_manager_factory, kafka_admin_client
@@ -260,6 +262,7 @@ class TestTopicManager:
         assert repartition.broker_config.replication_factor == 1
         assert repartition.broker_config.extra_config["retention.ms"] == "1000"
         assert repartition.broker_config.extra_config["retention.bytes"] == "1000"
+        assert repartition.is_repartition
 
     def test_changelog_nested_internal_topic_naming(self, topic_manager_factory):
         """

@@ -1,5 +1,6 @@
 import copy
 import dataclasses
+import enum
 import logging
 from typing import Any, Callable, List, Optional, Union
 
@@ -30,7 +31,7 @@ from quixstreams.models.types import (
     SuccessfulConfluentKafkaMessageProto,
 )
 
-__all__ = ("Topic", "TopicConfig", "TimestampExtractor")
+__all__ = ("Topic", "TopicConfig", "TimestampExtractor", "TopicType")
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +83,12 @@ def _get_deserializer(
     return deserializer
 
 
+class TopicType(enum.Enum):
+    REGULAR = 1
+    REPARTITION = 2
+    CHANGELOG = 3
+
+
 class Topic:
     """
     A definition of a Kafka topic.
@@ -94,6 +101,7 @@ class Topic:
     def __init__(
         self,
         name: str,
+        topic_type: TopicType = TopicType.REGULAR,
         create_config: Optional[TopicConfig] = None,
         value_deserializer: Optional[DeserializerType] = None,
         key_deserializer: Optional[DeserializerType] = BytesDeserializer(),
@@ -104,6 +112,13 @@ class Topic:
     ):
         """
         :param name: topic name
+        :param topic_type: a type of the topic, can be one of:
+            - `TopicType.REGULAR` - the regular input and output topics
+            - `TopicType.REPARTITION` - a repartition topic used for re-keying the data
+            - `TopicType.CHANGELOG` - a changelog topic to back up the state stores.
+
+            Default - `TopicType.REGULAR`.
+
         :param create_config: a `TopicConfig` to create a new topic if it does not exist
         :param value_deserializer: a deserializer type for values
         :param key_deserializer: a deserializer type for keys
@@ -123,6 +138,7 @@ class Topic:
         self._value_serializer = _get_serializer(value_serializer)
         self._key_serializer = _get_serializer(key_serializer)
         self._timestamp_extractor = timestamp_extractor
+        self._type = topic_type
 
     def __clone__(
         self,
@@ -138,6 +154,7 @@ class Topic:
             value_serializer=self._value_serializer,
             key_serializer=self._key_serializer,
             timestamp_extractor=self._timestamp_extractor,
+            topic_type=self._type,
         )
 
     @property
@@ -165,6 +182,18 @@ class Topic:
     @broker_config.setter
     def broker_config(self, config: TopicConfig):
         self._broker_config = copy.deepcopy(config)
+
+    @property
+    def is_changelog(self) -> bool:
+        return self._type == TopicType.CHANGELOG
+
+    @property
+    def is_regular(self) -> bool:
+        return self._type == TopicType.REGULAR
+
+    @property
+    def is_repartition(self) -> bool:
+        return self._type == TopicType.REPARTITION
 
     def row_serialize(self, row: Row, key: Any) -> KafkaMessage:
         """
