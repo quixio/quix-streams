@@ -10,7 +10,7 @@ from .exceptions import (
     TopicNameLengthExceeded,
     TopicNotFoundError,
 )
-from .topic import TimestampExtractor, Topic, TopicConfig
+from .topic import TimestampExtractor, Topic, TopicConfig, TopicType
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +56,7 @@ class TopicManager:
         """
         self._admin = topic_admin
         self._consumer_group = consumer_group
-        self._topics: Dict[str, Topic] = {}
+        self._regular_topics: Dict[str, Topic] = {}
         self._repartition_topics: Dict[str, Topic] = {}
         self._changelog_topics: Dict[Optional[str], Dict[str, Topic]] = {}
         self._timeout = timeout
@@ -64,16 +64,8 @@ class TopicManager:
         self._auto_create_topics = auto_create_topics
 
     @property
-    def _all_topics_list(self) -> List[Topic]:
-        return (
-            list(self._topics.values())
-            + list(self._repartition_topics.values())
-            + self.changelog_topics_list
-        )
-
-    @property
     def topics(self) -> Dict[str, Topic]:
-        return self._topics
+        return self._regular_topics
 
     @property
     def repartition_topics(self) -> Dict[str, Topic]:
@@ -102,7 +94,7 @@ class TopicManager:
         """
         Returns a dict with normal and repartition topics
         """
-        return {**self._topics, **self._repartition_topics}
+        return {**self._regular_topics, **self._repartition_topics}
 
     @property
     def all_topics(self) -> Dict[str, Topic]:
@@ -111,7 +103,12 @@ class TopicManager:
 
         returns: full topic dict, {topic_name: Topic}
         """
-        return {topic.name: topic for topic in self._all_topics_list}
+        all_topics_list = (
+            list(self._regular_topics.values())
+            + list(self._repartition_topics.values())
+            + self.changelog_topics_list
+        )
+        return {topic.name: topic for topic in all_topics_list}
 
     def topic_config(
         self,
@@ -175,10 +172,11 @@ class TopicManager:
             key_deserializer=key_deserializer,
             create_config=create_config,
             timestamp_extractor=timestamp_extractor,
+            topic_type=TopicType.REGULAR,
         )
         broker_topic = self._get_or_create_broker_topic(topic)
         topic = self._configure_topic(topic, broker_topic)
-        self._topics[topic.name] = topic
+        self._regular_topics[topic.name] = topic
         return topic
 
     def register(self, topic: Topic) -> Topic:
@@ -197,7 +195,7 @@ class TopicManager:
             )
         broker_topic = self._get_or_create_broker_topic(topic)
         topic = self._configure_topic(topic, broker_topic)
-        self._topics[topic.name] = topic
+        self._regular_topics[topic.name] = topic
         return topic
 
     def repartition_topic(
@@ -230,6 +228,7 @@ class TopicManager:
             value_serializer=value_serializer,
             key_serializer=key_serializer,
             create_config=config,
+            topic_type=TopicType.REPARTITION,
         )
         broker_topic = self._get_or_create_broker_topic(topic)
         topic = self._configure_topic(topic, broker_topic)
@@ -269,6 +268,7 @@ class TopicManager:
             key_deserializer="bytes",
             value_deserializer="bytes",
             create_config=config,
+            topic_type=TopicType.CHANGELOG,
         )
         broker_topic = self._get_or_create_broker_topic(topic)
         topic = self._configure_topic(topic, broker_topic)
