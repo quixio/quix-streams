@@ -51,7 +51,7 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         more recent than those found in the store.
 
         :param timestamp: The upper bound timestamp (inclusive) in milliseconds.
-        :param prefix: The key prefix to search for.
+        :param prefix: The key prefix.
         :param cf_name: The column family name.
         :return: The deserialized value if found, otherwise None.
         """
