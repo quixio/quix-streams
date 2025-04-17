@@ -18,6 +18,7 @@ __all__ = (
 )
 
 DAYS_7 = 7 * 24 * 60 * 60 * 1000
+EXPIRATION_COUNTER = 0
 
 
 class TimestampedPartitionTransaction(PartitionTransaction):
@@ -55,13 +56,17 @@ class TimestampedPartitionTransaction(PartitionTransaction):
 
         :param timestamp: The upper bound timestamp (inclusive) in milliseconds.
         :param prefix: The key prefix.
+        :param retention: The retention period in milliseconds.
         :param cf_name: The column family name.
         :return: The deserialized value if found, otherwise None.
         """
+        global EXPIRATION_COUNTER
+
         prefix = self._ensure_bytes(prefix)
 
         # Negative retention is not allowed
-        lower_bound = self._serialize_key(max(timestamp - retention, 0), prefix)
+        lower_bound_timestamp = max(timestamp - retention, 0)
+        lower_bound = self._serialize_key(lower_bound_timestamp, prefix)
         # +1 because upper bound is exclusive
         upper_bound = self._serialize_key(timestamp + 1, prefix)
 
@@ -96,6 +101,10 @@ class TimestampedPartitionTransaction(PartitionTransaction):
             # iterating backwards from the upper bound.
             break
 
+        if not EXPIRATION_COUNTER % 1000:
+            self._expire(lower_bound_timestamp, prefix, cf_name=cf_name)
+        EXPIRATION_COUNTER += 1
+
         return self._deserialize_value(value) if value is not None else None
 
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
@@ -114,7 +123,7 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         prefix = self._ensure_bytes(prefix)
         super().set(timestamp, value, prefix, cf_name=cf_name)
 
-    def expire(self, timestamp: int, prefix: bytes, cf_name: str = "default"):
+    def _expire(self, timestamp: int, prefix: bytes, cf_name: str = "default"):
         """
         Delete all entries for a given prefix with timestamps less than the
         provided timestamp.

@@ -1,8 +1,10 @@
 from contextlib import contextmanager
 from typing import Any
+from unittest import mock
 
 import pytest
 
+from quixstreams.state.rocksdb.partition import Marker
 from quixstreams.state.rocksdb.timestamped import (
     TimestampedPartitionTransaction,
     TimestampedStore,
@@ -54,13 +56,8 @@ def test_get_last_ignore_deleted(
         tx.set(timestamp=9, value="value9-stored", prefix=b"key")
 
     with transaction() as tx:
-        tx.expire(timestamp=10, prefix=b"key")
-
-        # Message with timestamp 8 comes out of order after later messages
-        # got expired in the same transaction.
-        # TODO: Should we in this case "unexpire" the timestamp 9 message?
+        tx._expire(timestamp=10, prefix=b"key")
         tx.set(timestamp=8, value="value8-cached", prefix=b"key")
-
         assert tx.get_last(timestamp=10, prefix=b"key") == "value8-cached"
 
 
@@ -136,13 +133,53 @@ def test_get_last_from_store_with_retention(
         assert tx.get_last(timestamp=10, prefix=b"key", retention=4) == None
 
 
+@mock.patch("quixstreams.state.rocksdb.timestamped.EXPIRATION_COUNTER", 1000)
+def test_get_last_from_cache_with_expire_call(
+    transaction: TimestampedPartitionTransaction,
+):
+    with transaction() as tx:
+        tx.set(timestamp=5, value="value1", prefix=b"key")
+        assert tx._update_cache.get_updates_for_prefix(prefix=b"key") == {
+            b"key|\x00\x00\x00\x00\x00\x00\x00\x05": b'"value1"',
+        }
+
+        # Expiration counter is exhausted for this `get_last` call
+        # `_expire` method is called with `lower_bound_timestamp` = 10 - 4 = 6
+        # Everything below timestamp 6 gets expired.
+        assert tx.get_last(timestamp=10, prefix=b"key", retention=4) == None
+        assert tx._update_cache.get_updates_for_prefix(prefix=b"key") == {}
+
+
+@mock.patch("quixstreams.state.rocksdb.timestamped.EXPIRATION_COUNTER", 1000)
+def test_get_last_from_store_with_expire_call(
+    transaction: TimestampedPartitionTransaction,
+):
+    key = b"key|\x00\x00\x00\x00\x00\x00\x00\x05"
+
+    with transaction() as tx:
+        tx.set(timestamp=5, value="value1", prefix=b"key")
+
+    with transaction() as tx:
+        assert tx._partition.get(key) == b'"value1"'
+        assert not tx._update_cache.get_deletes()
+
+        # Expiration counter is exhausted for this `get_last` call
+        # `_expire` method is called with `lower_bound_timestamp` = 10 - 4 = 6
+        # Everything belowe timestamp 6 gets expired.
+        assert tx.get_last(timestamp=10, prefix=b"key", retention=4) == None
+        assert key in tx._update_cache.get_deletes()
+
+    with transaction() as tx:
+        assert tx._partition.get(key) is Marker.UNDEFINED
+
+
 def test_expire_cached(transaction: TimestampedPartitionTransaction):
     with transaction() as tx:
         tx.set(timestamp=1, value="value1", prefix=b"key")
         tx.set(timestamp=10, value="value10", prefix=b"key")
         tx.set(timestamp=11, value="value11", prefix=b"key")
 
-        tx.expire(timestamp=11, prefix=b"key")
+        tx._expire(timestamp=11, prefix=b"key")
 
         assert tx.get_last(timestamp=10, prefix=b"key") == None
         assert tx.get_last(timestamp=11, prefix=b"key") == "value11"
@@ -155,7 +192,7 @@ def test_expire_stored(transaction: TimestampedPartitionTransaction):
         tx.set(timestamp=11, value="value11", prefix=b"key")
 
     with transaction() as tx:
-        tx.expire(timestamp=11, prefix=b"key")
+        tx._expire(timestamp=11, prefix=b"key")
 
         assert tx.get_last(timestamp=10, prefix=b"key") == None
         assert tx.get_last(timestamp=11, prefix=b"key") == "value11"
@@ -168,7 +205,7 @@ def test_expire_idempotent(transaction: TimestampedPartitionTransaction):
     with transaction() as tx:
         tx.set(timestamp=10, value="value10", prefix=b"key")
 
-        tx.expire(timestamp=11, prefix=b"key")
-        tx.expire(timestamp=11, prefix=b"key")
+        tx._expire(timestamp=11, prefix=b"key")
+        tx._expire(timestamp=11, prefix=b"key")
 
         assert tx.get_last(timestamp=10, prefix=b"key") == None
