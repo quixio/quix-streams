@@ -54,7 +54,7 @@ def test_get_last_ignore_deleted(
         tx.set(timestamp=9, value="value9-stored", prefix=b"key")
 
     with transaction() as tx:
-        tx.expire(timestamp=9, prefix=b"key")
+        tx.expire(timestamp=10, prefix=b"key")
 
         # Message with timestamp 8 comes out of order after later messages
         # got expired in the same transaction.
@@ -114,13 +114,35 @@ def test_get_last_prefix_not_bytes(transaction: TimestampedPartitionTransaction)
         assert tx.get_last(timestamp=10, prefix=b'"key"') == "value"
 
 
+def test_get_last_from_cache_with_retention(
+    transaction: TimestampedPartitionTransaction,
+):
+    with transaction() as tx:
+        tx.set(timestamp=5, value="value", prefix=b"key")
+        assert tx.get_last(timestamp=10, prefix=b"key") == "value"
+        assert tx.get_last(timestamp=10, prefix=b"key", retention=5) == "value"
+        assert tx.get_last(timestamp=10, prefix=b"key", retention=4) == None
+
+
+def test_get_last_from_store_with_retention(
+    transaction: TimestampedPartitionTransaction,
+):
+    with transaction() as tx:
+        tx.set(timestamp=5, value="value", prefix=b"key")
+
+    with transaction() as tx:
+        assert tx.get_last(timestamp=10, prefix=b"key") == "value"
+        assert tx.get_last(timestamp=10, prefix=b"key", retention=5) == "value"
+        assert tx.get_last(timestamp=10, prefix=b"key", retention=4) == None
+
+
 def test_expire_cached(transaction: TimestampedPartitionTransaction):
     with transaction() as tx:
         tx.set(timestamp=1, value="value1", prefix=b"key")
         tx.set(timestamp=10, value="value10", prefix=b"key")
         tx.set(timestamp=11, value="value11", prefix=b"key")
 
-        tx.expire(timestamp=10, prefix=b"key")
+        tx.expire(timestamp=11, prefix=b"key")
 
         assert tx.get_last(timestamp=10, prefix=b"key") == None
         assert tx.get_last(timestamp=11, prefix=b"key") == "value11"
@@ -133,7 +155,7 @@ def test_expire_stored(transaction: TimestampedPartitionTransaction):
         tx.set(timestamp=11, value="value11", prefix=b"key")
 
     with transaction() as tx:
-        tx.expire(timestamp=10, prefix=b"key")
+        tx.expire(timestamp=11, prefix=b"key")
 
         assert tx.get_last(timestamp=10, prefix=b"key") == None
         assert tx.get_last(timestamp=11, prefix=b"key") == "value11"
@@ -146,7 +168,7 @@ def test_expire_idempotent(transaction: TimestampedPartitionTransaction):
     with transaction() as tx:
         tx.set(timestamp=10, value="value10", prefix=b"key")
 
-        tx.expire(timestamp=10, prefix=b"key")
-        tx.expire(timestamp=10, prefix=b"key")
+        tx.expire(timestamp=11, prefix=b"key")
+        tx.expire(timestamp=11, prefix=b"key")
 
         assert tx.get_last(timestamp=10, prefix=b"key") == None
