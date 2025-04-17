@@ -1682,10 +1682,11 @@ class TestStreamingDataFrameGroupBy:
         sdf = sdf.group_by(col)
         sdf[col] = col_update
 
-        groupby_topic = sdf.topics[0]
         if num_partitions == 1:
+            groupby_topic = topic
             assert sdf_registry.consumer_topics == [topic]
         else:
+            groupby_topic = sdf.topics[0]
             assert sdf_registry.consumer_topics == [topic, groupby_topic]
             assert groupby_topic.name.startswith("repartition__")
 
@@ -1702,7 +1703,7 @@ class TestStreamingDataFrameGroupBy:
         if num_partitions == 1:
             post_groupby_branch_result = pre_groupby_branch_result
         else:
-            with internal_producer_factory(auto_offset_reset="earliest") as consumer:
+            with internal_consumer_factory(auto_offset_reset="earliest") as consumer:
                 consumer.subscribe([groupby_topic])
                 consumed_row = consumer.poll_row(timeout=5.0)
 
@@ -1773,10 +1774,11 @@ class TestStreamingDataFrameGroupBy:
         sdf = sdf.group_by(col, name=op_name)
         sdf[col] = col_update
 
-        groupby_topic = sdf.topics[0]
         if num_partitions == 1:
+            groupby_topic = topic
             assert sdf_registry.consumer_topics == [topic]
         else:
+            groupby_topic = sdf.topics[0]
             assert sdf_registry.consumer_topics == [topic, groupby_topic]
             assert groupby_topic.name.startswith("repartition__")
 
@@ -1864,10 +1866,11 @@ class TestStreamingDataFrameGroupBy:
         sdf = sdf.group_by(lambda v: v[col], name=op_name)
         sdf[col] = col_update
 
-        groupby_topic = sdf.topics[0]
         if num_partitions == 1:
+            groupby_topic = topic
             assert sdf_registry.consumer_topics == [topic]
         else:
+            groupby_topic = sdf.topics[0]
             assert sdf_registry.consumer_topics == [topic, groupby_topic]
             assert groupby_topic.name.startswith("repartition__")
 
