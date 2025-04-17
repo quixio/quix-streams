@@ -37,6 +37,15 @@ TEST_VALUES = [
     [123, 456],
 ]
 
+TEST_BYTES_VALUES = [
+    b"null",
+    b'"string"',
+    b"123",
+    b"123.123",
+    b'{"key":"value","mapping":{"key":"value"}}',
+    b"[123, 456]",
+]
+
 TEST_PREFIXES = [
     b"some_bytes",
     "string",
@@ -89,29 +98,40 @@ class TestPartitionTransaction:
             tx.delete("key", prefix=prefix)
 
     @pytest.mark.parametrize(
-        "key",
-        TEST_KEYS,
+        "key,value,bytes_value",
+        zip(TEST_KEYS, TEST_VALUES, TEST_BYTES_VALUES),
     )
-    @pytest.mark.parametrize(
-        "value",
-        TEST_VALUES,
-    )
-    def test_get_key_exists_cached(self, key, value, store_partition):
+    def test_get_key_exists_cached(self, key, value, bytes_value, store_partition):
         prefix = b"__key__"
         with store_partition.begin() as tx:
             tx.set(key, value, prefix=prefix)
             stored = tx.get(key, prefix=prefix)
             assert stored == value
 
+            stored_bytes = tx.get_bytes(key, prefix=prefix)
+            assert stored_bytes == bytes_value
+
     @pytest.mark.parametrize(
-        "key",
-        TEST_KEYS,
+        "key,value,bytes_value",
+        zip(TEST_KEYS, TEST_VALUES, TEST_BYTES_VALUES),
     )
+    def test_bytes_get_key_exists_cached(
+        self, key, value, bytes_value, store_partition
+    ):
+        prefix = b"__key__"
+        with store_partition.begin() as tx:
+            tx.set_bytes(key, bytes_value, prefix=prefix)
+            stored = tx.get(key, prefix=prefix)
+            assert stored == value
+
+            stored_bytes = tx.get_bytes(key, prefix=prefix)
+            assert stored_bytes == bytes_value
+
     @pytest.mark.parametrize(
-        "value",
-        TEST_VALUES,
+        "key,value,bytes_value",
+        zip(TEST_KEYS, TEST_VALUES, TEST_BYTES_VALUES),
     )
-    def test_get_key_exists_no_cache(self, key, value, store_partition):
+    def test_get_key_exists_no_cache(self, key, value, bytes_value, store_partition):
         prefix = b"__key__"
         with store_partition.begin() as tx:
             tx.set(key, value, prefix=prefix)
@@ -119,6 +139,27 @@ class TestPartitionTransaction:
         with store_partition.begin() as tx:
             stored = tx.get(key, prefix=prefix)
             assert stored == value
+
+            stored_bytes = tx.get_bytes(key, prefix=prefix)
+            assert stored_bytes == bytes_value
+
+    @pytest.mark.parametrize(
+        "key,value,bytes_value",
+        zip(TEST_KEYS, TEST_VALUES, TEST_BYTES_VALUES),
+    )
+    def test_bytes_get_key_exists_no_cache(
+        self, key, value, bytes_value, store_partition
+    ):
+        prefix = b"__key__"
+        with store_partition.begin() as tx:
+            tx.set_bytes(key, bytes_value, prefix=prefix)
+
+        with store_partition.begin() as tx:
+            stored = tx.get(key, prefix=prefix)
+            assert stored == value
+
+            stored_bytes = tx.get_bytes(key, prefix=prefix)
+            assert stored_bytes == bytes_value
 
     def test_get_key_doesnt_exist_default(self, store_partition):
         prefix = b"__key__"
@@ -197,6 +238,12 @@ class TestPartitionTransaction:
         with store_partition.begin() as tx:
             with pytest.raises(StateSerializationError):
                 tx.set(key, value, prefix=prefix)
+
+    def test_set_bytes_no_bytes(self, store_partition):
+        prefix = b"__key__"
+        with store_partition.begin() as tx:
+            with pytest.raises(StateSerializationError):
+                tx.set_bytes(key="key", value="value", prefix=prefix)
 
     @pytest.mark.parametrize(
         "key", [object(), b"somebytes", datetime.now(timezone.utc)]

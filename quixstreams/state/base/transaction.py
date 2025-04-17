@@ -8,6 +8,7 @@ from typing import (
     Any,
     Dict,
     Generic,
+    Literal,
     Optional,
     Set,
     Tuple,
@@ -17,7 +18,11 @@ from typing import (
 )
 
 from quixstreams.models import Headers
-from quixstreams.state.exceptions import InvalidChangelogOffset, StateTransactionError
+from quixstreams.state.exceptions import (
+    InvalidChangelogOffset,
+    StateSerializationError,
+    StateTransactionError,
+)
 from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER,
@@ -301,7 +306,6 @@ class PartitionTransaction(ABC, Generic[K, V]):
     @overload
     def get(self, key: K, prefix: bytes, default: V, cf_name: str = "default") -> V: ...
 
-    @validate_transaction_status(PartitionTransactionStatus.STARTED)
     def get(
         self,
         key: K,
@@ -320,25 +324,71 @@ class PartitionTransaction(ABC, Generic[K, V]):
         :param cf_name: column family name
         :return: value or None if the key is not found and `default` is not provided
         """
+
+        data = self._get_bytes(key, prefix, cf_name)
+        if data is Marker.DELETED or data is Marker.UNDEFINED:
+            return default
+
+        return self._deserialize_value(data)
+
+    @overload
+    def get_bytes(
+        self,
+        key: K,
+        prefix: bytes,
+        default: Literal[None] = None,
+        cf_name: str = "default",
+    ) -> Optional[bytes]: ...
+
+    @overload
+    def get_bytes(
+        self, key: K, prefix: bytes, default: bytes, cf_name: str = "default"
+    ) -> bytes: ...
+
+    def get_bytes(
+        self,
+        key: K,
+        prefix: bytes,
+        default: Optional[bytes] = None,
+        cf_name: str = "default",
+    ) -> Optional[bytes]:
+        """
+        Get a key from the store.
+
+        It returns `None` if the key is not found and `default` is not provided.
+
+        :param key: key
+        :param prefix: a key prefix
+        :param default: default value to return if the key is not found
+        :param cf_name: column family name
+        :return: value as bytes or None if the key is not found and `default` is not provided
+        """
+        data = self._get_bytes(key, prefix, cf_name)
+        if data is Marker.DELETED or data is Marker.UNDEFINED:
+            return default
+
+        return data
+
+    @validate_transaction_status(PartitionTransactionStatus.STARTED)
+    def _get_bytes(
+        self,
+        key: K,
+        prefix: bytes,
+        cf_name: str = "default",
+    ) -> Union[bytes, Literal[Marker.DELETED, Marker.UNDEFINED]]:
         key_serialized = self._serialize_key(key, prefix=prefix)
 
         cached = self._update_cache.get(
             key=key_serialized, prefix=prefix, cf_name=cf_name
         )
-        if cached is Marker.DELETED:
-            return default
 
-        if cached is not Marker.UNDEFINED:
-            return self._deserialize_value(cached)
+        if cached is Marker.UNDEFINED:
+            return self._partition.get(key_serialized, cf_name)
 
-        stored = self._partition.get(key_serialized, cf_name)
-        if stored is Marker.UNDEFINED:
-            return default
-
-        return self._deserialize_value(stored)
+        return cached
 
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
-    def set(self, key: K, value: V, prefix: bytes, cf_name: str = "default"):
+    def set(self, key: K, value: V, prefix: bytes, cf_name: str = "default") -> None:
         """
         Set value for the key.
         :param key: key
@@ -348,11 +398,32 @@ class PartitionTransaction(ABC, Generic[K, V]):
         """
 
         try:
-            key_serialized = self._serialize_key(key, prefix=prefix)
             value_serialized = self._serialize_value(value)
+        except Exception:
+            self._status = PartitionTransactionStatus.FAILED
+            raise
+
+        self.set_bytes(key, value_serialized, prefix, cf_name=cf_name)
+
+    @validate_transaction_status(PartitionTransactionStatus.STARTED)
+    def set_bytes(
+        self, key: K, value: bytes, prefix: bytes, cf_name: str = "default"
+    ) -> None:
+        """
+        Set bytes value for the key.
+        :param key: key
+        :param prefix: a key prefix
+        :param value: value
+        :param cf_name: column family name
+        """
+        try:
+            if not isinstance(value, bytes):
+                raise StateSerializationError("Value must be bytes")
+
+            key_serialized = self._serialize_key(key, prefix=prefix)
             self._update_cache.set(
                 key=key_serialized,
-                value=value_serialized,
+                value=value,
                 prefix=prefix,
                 cf_name=cf_name,
             )

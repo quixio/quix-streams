@@ -158,3 +158,43 @@ for the state to become slightly out of sync with a topic in between shutdowns a
 While the impact of this is generally minimal and only for a small amount of messages, be aware this could cause side effects where the same message may be reprocessed differently, if it depended on certain state conditionals.
 
 "Exactly Once" delivery guarantees avoid this. You can learn more about delivery/processing guarantees [here](https://quix.io/docs/quix-streams/configuration.html?h=#processing-guarantees).
+
+## Serialization
+
+By default, the keys and values are serialized to JSON for storage. If you need to change the serialization format, you can do so using the `rocksdb_options` parameter when creating the `Application` object. This change will apply to all state stores created by the application and existing state will be un-readable.
+
+For example, you can use [python `pickle` module](https://docs.python.org/3/library/pickle.html) to serialize and deserialize all stores data.
+
+```python
+import pickle
+
+from quixstreams import Application
+app = Application(
+    broker_address='localhost:9092', 
+    rocksdb_options=RocksDBOptions(dumps=pickle.dumps, loads=pickle.loads) 
+)
+```
+
+You can also handle the serialization and deserialization yourself by using the [`State.get_bytes`](../api-reference/state.md#stateget_bytes) and [`State.set_bytes`](../api-reference/state.md#stateset_bytes) methods. This allows you to store any type of values in the state store, as long as you can convert it to bytes and back.
+
+```python
+import pickle
+
+from quixstreams import Application, State
+app = Application(
+    broker_address='localhost:9092', 
+    consumer_group='consumer', 
+)
+topic = app.topic('topic')
+
+sdf = app.dataframe(topic)
+
+def apply(value, state):
+    old = state.get_bytes('key', default=None)
+    if old is not None:
+        old = pickle.loads(old)
+    state.set_bytes('key', pickle.dumps(value))
+    return {"old": old, "new": value}
+    
+sdf = sdf.apply(apply, stateful=True)
+```
