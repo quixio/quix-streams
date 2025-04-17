@@ -17,6 +17,8 @@ __all__ = (
     "TimestampedPartitionTransaction",
 )
 
+DAYS_7 = 7 * 24 * 60 * 60 * 1000
+
 
 class TimestampedPartitionTransaction(PartitionTransaction):
     """
@@ -39,6 +41,7 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         self,
         timestamp: int,
         prefix: Any,
+        retention: int = DAYS_7,
         cf_name: str = "default",
     ) -> Optional[Any]:
         """Get the latest value for a prefix up to a given timestamp.
@@ -56,8 +59,12 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         :return: The deserialized value if found, otherwise None.
         """
         prefix = self._ensure_bytes(prefix)
-        # Add +1 because the storage `.iter_items()` is exclusive on the upper bound
-        key = self._serialize_key(timestamp + 1, prefix)
+
+        # Negative retention is not allowed
+        lower_bound = self._serialize_key(max(timestamp - retention, 0), prefix)
+        # +1 because upper bound is exclusive
+        upper_bound = self._serialize_key(timestamp + 1, prefix)
+
         value: Optional[bytes] = None
 
         deletes = self._update_cache.get_deletes(cf_name=cf_name)
@@ -68,13 +75,13 @@ class TimestampedPartitionTransaction(PartitionTransaction):
 
         cached = sorted(updates.items(), reverse=True)
         for cached_key, cached_value in cached:
-            if prefix < cached_key < key and cached_key not in deletes:
+            if lower_bound <= cached_key < upper_bound and cached_key not in deletes:
                 value = cached_value
                 break
 
         stored = self._partition.iter_items(
-            lower_bound=prefix,
-            upper_bound=key,
+            lower_bound=lower_bound,
+            upper_bound=upper_bound,
             backwards=True,
             cf_name=cf_name,
         )
@@ -108,7 +115,19 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         super().set(timestamp, value, prefix, cf_name=cf_name)
 
     def expire(self, timestamp: int, prefix: bytes, cf_name: str = "default"):
-        key = self._serialize_key(timestamp + 1, prefix)
+        """
+        Delete all entries for a given prefix with timestamps less than the
+        provided timestamp.
+
+        This applies to both the in-memory update cache and the underlying
+        RocksDB store within the current transaction.
+
+        :param timestamp: The upper bound timestamp (exclusive) in milliseconds.
+            Entries with timestamps strictly less than this will be deleted.
+        :param prefix: The key prefix.
+        :param cf_name: Column family name.
+        """
+        key = self._serialize_key(timestamp, prefix)
 
         cached = self._update_cache.get_updates_for_prefix(
             prefix=prefix,
