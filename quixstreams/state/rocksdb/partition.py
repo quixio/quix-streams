@@ -184,7 +184,7 @@ class RocksDBStorePartition(StorePartition):
             # filter it here.
             for key, value in items:
                 if lower_bound <= key:
-                    yield (key, value)
+                    yield key, value
 
     def exists(self, key: bytes, cf_name: str = "default") -> bool:
         """
