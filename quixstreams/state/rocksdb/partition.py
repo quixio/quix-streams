@@ -174,12 +174,17 @@ class RocksDBStorePartition(StorePartition):
 
         if not backwards:
             # NOTE: Forward iteration respects bounds correctly.
-            return items
+            # Also, we need to use yield from notation to replace RdictItems
+            # with Python-native generator or else garbage collection
+            # will make the result unpredictable.
+            yield from items
         else:
             # NOTE: When iterating backwards, the `read_opt` lower bound
             # is not respected by Rdict for some reason. We need to manually
             # filter it here.
-            return ((key, value) for key, value in items if lower_bound <= key)
+            for key, value in items:
+                if lower_bound <= key:
+                    yield (key, value)
 
     def exists(self, key: bytes, cf_name: str = "default") -> bool:
         """
