@@ -18,7 +18,11 @@ from quixstreams.state.serialization import (
     deserialize,
     serialize,
 )
-from quixstreams.state.types import ExpiredWindowDetail, WindowDetail
+from quixstreams.state.types import (
+    ExpiredWindowDetail,
+    ExpiredWindowDetailWithKey,
+    WindowDetail,
+)
 
 from .metadata import (
     GLOBAL_COUNTER_CF_NAME,
@@ -299,7 +303,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
 
         # Collect values into windows
         if collect:
-            for (start, end), aggregated, key in windows:
+            for (start, end), aggregated, _ in windows:
                 collected = self.get_from_collection(
                     start=start,
                     # Sliding windows are inclusive on both ends
@@ -309,11 +313,11 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
                     end=end + 1 if end_inclusive else end,
                     prefix=prefix,
                 )
-                yield ((start, end), aggregated, collected, key)
+                yield (start, end), aggregated, collected
 
         else:
-            for window, aggregated, key in windows:
-                yield (window, aggregated, [], key)
+            for window, aggregated, _ in windows:
+                yield window, aggregated, []
 
         # Delete expired windows from the state
         if delete:
@@ -328,7 +332,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         step_ms: int,
         delete: bool = True,
         collect: bool = False,
-    ) -> Iterable[ExpiredWindowDetail]:
+    ) -> Iterable[ExpiredWindowDetailWithKey]:
         """
         Get all expired windows for all prefix from RocksDB up to the specified `max_end_time` timestamp.
 

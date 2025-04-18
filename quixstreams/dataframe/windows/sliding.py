@@ -296,7 +296,7 @@ class SlidingWindow(TimeWindow):
             collect=collect,
             end_inclusive=True,
         ):
-            (start, end), (max_timestamp, aggregated), collected, _ = window
+            (start, end), (max_timestamp, aggregated), collected = window
             if end == max_timestamp:
                 yield key, self._results(aggregated, collected, start, end)
 
