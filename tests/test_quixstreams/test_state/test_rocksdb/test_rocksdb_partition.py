@@ -11,6 +11,7 @@ from quixstreams.state.rocksdb import (
     RocksDBOptions,
     RocksDBStorePartition,
 )
+from quixstreams.state.rocksdb.windowed.serialization import append_integer
 
 
 class TestRocksdbStorePartition:
@@ -131,3 +132,59 @@ class TestRocksdbStorePartition:
 
     def test_ensure_metadata_cf(self, store_partition):
         assert store_partition.get_column_family("__metadata__")
+
+    @pytest.mark.parametrize(
+        ["backwards", "expected"],
+        [
+            (
+                False,
+                [
+                    (append_integer(b"prefix", 1), b"value1"),
+                    (append_integer(b"prefix", 2), b"value2"),
+                    (append_integer(b"prefix", 10), b"value10"),
+                ],
+            ),
+            (
+                True,
+                [
+                    (append_integer(b"prefix", 10), b"value10"),
+                    (append_integer(b"prefix", 2), b"value2"),
+                    (append_integer(b"prefix", 1), b"value1"),
+                ],
+            ),
+        ],
+    )
+    def test_iter_items_returns_ordered_items(
+        self, store_partition, cache, backwards, expected
+    ):
+        for key, value in expected:
+            cache.set(key=key, value=value, prefix=b"prefix")
+
+        key_too_low = b"prefi"
+        key_too_high = append_integer(b"prefix", 11)
+        cache.set(key=key_too_low, value=b"too-low", prefix=b"prefix")
+        cache.set(key=key_too_high, value=b"too-high", prefix=b"prefix")
+        store_partition.write(cache=cache, changelog_offset=None)
+
+        assert (
+            list(
+                store_partition.iter_items(
+                    lower_bound=b"prefix",
+                    upper_bound=append_integer(b"prefix", 11),
+                    backwards=backwards,
+                )
+            )
+            == expected
+        )
+
+    def test_iter_items_exclusive_upper_bound(self, store_partition, cache):
+        cache.set(key=b"prefix|1", value=b"value1", prefix=b"prefix")
+        cache.set(key=b"prefix|2", value=b"value2", prefix=b"prefix")
+        store_partition.write(cache=cache, changelog_offset=None)
+
+        assert list(
+            store_partition.iter_items(
+                lower_bound=b"prefix",
+                upper_bound=b"prefix|2",
+            )
+        ) == [(b"prefix|1", b"value1")]

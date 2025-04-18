@@ -1,0 +1,186 @@
+from typing import Any, Optional
+
+from quixstreams.state.base.transaction import (
+    PartitionTransaction,
+    PartitionTransactionStatus,
+    validate_transaction_status,
+)
+from quixstreams.state.metadata import SEPARATOR
+from quixstreams.state.serialization import int_to_int64_bytes, serialize
+
+from .partition import RocksDBStorePartition
+from .store import RocksDBStore
+
+__all__ = (
+    "TimestampedStore",
+    "TimestampedStorePartition",
+    "TimestampedPartitionTransaction",
+)
+
+DAYS_7 = 7 * 24 * 60 * 60 * 1000
+EXPIRATION_COUNTER = 0
+
+
+class TimestampedPartitionTransaction(PartitionTransaction):
+    """
+    A partition-specific transaction handler for the `TimestampedStore`.
+
+    Provides timestamp-aware methods for querying key-value pairs
+    based on a timestamp, alongside standard transaction operations.
+    It interacts with both an in-memory update cache and the persistent RocksDB store.
+    """
+
+    # Override the type hint from the parent class (`PartitionTransaction`).
+    # This informs type checkers like mypy that in this specific subclass,
+    # `_partition` is a `TimestampedStorePartition` (defined below),
+    # which has methods like `.iter_items()` that the base type might lack.
+    # The string quotes are necessary for the forward reference.
+    _partition: "TimestampedStorePartition"
+
+    @validate_transaction_status(PartitionTransactionStatus.STARTED)
+    def get_last(
+        self,
+        timestamp: int,
+        prefix: Any,
+        retention: int = DAYS_7,
+        cf_name: str = "default",
+    ) -> Optional[Any]:
+        """Get the latest value for a prefix up to a given timestamp.
+
+        Searches both the transaction's update cache and the underlying RocksDB store
+        to find the value associated with the given `prefix` that has the highest
+        timestamp less than or equal to the provided `timestamp`.
+
+        The search prioritizes values from the update cache if their timestamps are
+        more recent than those found in the store.
+
+        :param timestamp: The upper bound timestamp (inclusive) in milliseconds.
+        :param prefix: The key prefix.
+        :param retention: The retention period in milliseconds.
+        :param cf_name: The column family name.
+        :return: The deserialized value if found, otherwise None.
+        """
+        global EXPIRATION_COUNTER
+
+        prefix = self._ensure_bytes(prefix)
+
+        # Negative retention is not allowed
+        lower_bound_timestamp = max(timestamp - retention, 0)
+        lower_bound = self._serialize_key(lower_bound_timestamp, prefix)
+        # +1 because upper bound is exclusive
+        upper_bound = self._serialize_key(timestamp + 1, prefix)
+
+        value: Optional[bytes] = None
+
+        deletes = self._update_cache.get_deletes(cf_name=cf_name)
+        updates = self._update_cache.get_updates_for_prefix(
+            prefix=prefix,
+            cf_name=cf_name,
+        )
+
+        cached = sorted(updates.items(), reverse=True)
+        for cached_key, cached_value in cached:
+            if lower_bound <= cached_key < upper_bound and cached_key not in deletes:
+                value = cached_value
+                break
+
+        stored = self._partition.iter_items(
+            lower_bound=lower_bound,
+            upper_bound=upper_bound,
+            backwards=True,
+            cf_name=cf_name,
+        )
+        for stored_key, stored_value in stored:
+            if stored_key in deletes:
+                continue
+
+            if value is None or cached_key < stored_key:
+                value = stored_value
+
+            # We only care about the first not deleted item when
+            # iterating backwards from the upper bound.
+            break
+
+        if not EXPIRATION_COUNTER % 1000:
+            self._expire(lower_bound_timestamp, prefix, cf_name=cf_name)
+        EXPIRATION_COUNTER += 1
+
+        return self._deserialize_value(value) if value is not None else None
+
+    @validate_transaction_status(PartitionTransactionStatus.STARTED)
+    def set(self, timestamp: int, value: Any, prefix: Any, cf_name: str = "default"):
+        """Set a value associated with a prefix and timestamp.
+
+        This method acts as a proxy, passing the provided `timestamp` and `prefix`
+        to the parent `set` method. The parent method internally serializes these
+        into a combined key before storing the value in the update cache.
+
+        :param timestamp: Timestamp associated with the value in milliseconds.
+        :param value: The value to store.
+        :param prefix: The key prefix.
+        :param cf_name: Column family name.
+        """
+        prefix = self._ensure_bytes(prefix)
+        super().set(timestamp, value, prefix, cf_name=cf_name)
+
+    def _expire(self, timestamp: int, prefix: bytes, cf_name: str = "default"):
+        """
+        Delete all entries for a given prefix with timestamps less than the
+        provided timestamp.
+
+        This applies to both the in-memory update cache and the underlying
+        RocksDB store within the current transaction.
+
+        :param timestamp: The upper bound timestamp (exclusive) in milliseconds.
+            Entries with timestamps strictly less than this will be deleted.
+        :param prefix: The key prefix.
+        :param cf_name: Column family name.
+        """
+        key = self._serialize_key(timestamp, prefix)
+
+        cached = self._update_cache.get_updates_for_prefix(
+            prefix=prefix,
+            cf_name=cf_name,
+        )
+        # Cast to list to avoid RuntimeError: dictionary changed size during iteration
+        for cached_key in list(cached):
+            if cached_key < key:
+                self._update_cache.delete(cached_key, prefix, cf_name=cf_name)
+
+        stored = self._partition.iter_items(
+            lower_bound=prefix,
+            upper_bound=key,
+            cf_name=cf_name,
+        )
+        for stored_key, _ in stored:
+            self._update_cache.delete(stored_key, prefix, cf_name=cf_name)
+
+    def _ensure_bytes(self, prefix: Any) -> bytes:
+        if isinstance(prefix, bytes):
+            return prefix
+        return serialize(prefix, dumps=self._dumps)
+
+    def _serialize_key(self, timestamp: int, prefix: bytes) -> bytes:
+        return prefix + SEPARATOR + int_to_int64_bytes(timestamp)
+
+
+class TimestampedStorePartition(RocksDBStorePartition):
+    """
+    Represents a single partition within a `TimestampedStore`.
+
+    This class is responsible for managing the state of one partition and creating
+    `TimestampedPartitionTransaction` instances to handle atomic operations for that partition.
+    """
+
+    partition_transaction_class = TimestampedPartitionTransaction
+
+
+class TimestampedStore(RocksDBStore):
+    """
+    A RocksDB-backed state store implementation that manages key-value pairs
+    associated with timestamps.
+
+    Uses `TimestampedStorePartition` to manage individual partitions.
+    """
+
+    store_partition_class = TimestampedStorePartition

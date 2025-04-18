@@ -1,7 +1,5 @@
 import logging
-from typing import Iterator, Optional, Tuple, cast
-
-from rocksdict import ReadOptions
+from typing import Iterator, Optional, cast
 
 from quixstreams.state.exceptions import ColumnFamilyDoesNotExist
 from quixstreams.state.recovery import ChangelogProducer
@@ -33,6 +31,8 @@ class WindowedRocksDBStorePartition(RocksDBStorePartition):
     :param options: RocksDB options. If `None`, the default options will be used.
     """
 
+    partition_transaction_class = WindowedRocksDBPartitionTransaction
+
     def __init__(
         self,
         path: str,
@@ -49,17 +49,6 @@ class WindowedRocksDBStorePartition(RocksDBStorePartition):
         self._ensure_column_family(GLOBAL_COUNTER_CF_NAME)
         self._ensure_column_family(VALUES_CF_NAME)
 
-    def iter_items(
-        self, from_key: bytes, read_opt: ReadOptions, cf_name: str = "default"
-    ) -> Iterator[Tuple[bytes, bytes]]:
-        cf = self.get_column_family(cf_name=cf_name)
-
-        # RDict accept Any type as value but we only write bytes so we should only get bytes back.
-        return cast(
-            Iterator[Tuple[bytes, bytes]],
-            cf.items(from_key=from_key, read_opt=read_opt),
-        )
-
     def iter_keys(self, cf_name: str = "default") -> Iterator[bytes]:
         """
         Iterate over all keys in the DB.
@@ -71,14 +60,6 @@ class WindowedRocksDBStorePartition(RocksDBStorePartition):
         """
         cf_dict = self.get_column_family(cf_name)
         return cast(Iterator[bytes], cf_dict.keys())
-
-    def begin(self) -> "WindowedRocksDBPartitionTransaction":
-        return WindowedRocksDBPartitionTransaction(
-            partition=self,
-            dumps=self._dumps,
-            loads=self._loads,
-            changelog_producer=self._changelog_producer,
-        )
 
     def _ensure_column_family(self, cf_name: str):
         try:
