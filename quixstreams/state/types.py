@@ -12,7 +12,7 @@ WindowDetail: TypeAlias = tuple[
     tuple[int, int], V, bytes
 ]  # (start, end), aggregated, key
 ExpiredWindowDetail: TypeAlias = tuple[
-    tuple[int, int], V, list[V], bytes
+    tuple[int, int], V, list[V], Any
 ]  # (start, end), aggregated, collected, key
 
 
