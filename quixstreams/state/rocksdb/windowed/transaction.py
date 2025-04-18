@@ -403,6 +403,26 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         )
 
     def _deserialize_prefix(self, prefix: bytes) -> Any:
+        """
+        Attempt to deserialize a window prefix.
+
+        Window prefixes can be provided either as raw bytes or as other types
+        (e.g., dict). The `as_state()` method conditionally serializes these
+        prefixes to bytes only if they are not already bytes before storing.
+
+        When retrieving a prefix during partition-level windows expiration, we
+        don't know its original type due to this conditional serialization.
+        Therefore, we must first *try* to deserialize it using the configured
+        `loads` function.
+
+        If deserialization succeeds, it means the prefix was originally a
+        non-bytes type, and we return the deserialized object.
+        If deserialization fails with a `StateSerializationError`, it indicates
+        that the prefix was likely provided as raw bytes initially, so we
+        return the original `prefix` bytes.
+
+        :param prefix: The prefix bytes retrieved from storage.
+        """
         try:
             return deserialize(prefix, loads=self._loads)
         except StateSerializationError:
