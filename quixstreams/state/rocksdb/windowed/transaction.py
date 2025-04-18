@@ -9,11 +9,13 @@ from quixstreams.state.base.transaction import (
     PartitionTransactionStatus,
     validate_transaction_status,
 )
+from quixstreams.state.exceptions import StateSerializationError
 from quixstreams.state.metadata import DEFAULT_PREFIX, SEPARATOR
 from quixstreams.state.recovery import ChangelogProducer
 from quixstreams.state.serialization import (
     DumpsFunc,
     LoadsFunc,
+    deserialize,
     serialize,
 )
 from quixstreams.state.types import ExpiredWindowDetail, WindowDetail
@@ -360,7 +362,8 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
                             end=end,
                             prefix=prefix,
                         )
-                    yield (start, end), aggregated, collected, prefix
+                    deserialized_prefix = self._deserialize_prefix(prefix)
+                    yield (start, end), aggregated, collected, deserialized_prefix
 
         else:
             # If we don't have a saved last_expired value it means one of two cases
@@ -382,7 +385,8 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
                             prefix=prefix,
                         )
 
-                    yield (start, end), aggregated, collected, prefix
+                    deserialized_prefix = self._deserialize_prefix(prefix)
+                    yield (start, end), aggregated, collected, deserialized_prefix
 
         if delete:
             for prefix, start, end in to_delete:
@@ -393,6 +397,12 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         self._set_timestamp(
             prefix=b"", cache=self._last_expired_timestamps, timestamp_ms=last_expired
         )
+
+    def _deserialize_prefix(self, prefix: bytes) -> Any:
+        try:
+            return deserialize(prefix, loads=self._loads)
+        except StateSerializationError:
+            return prefix
 
     def delete_windows(
         self, max_start_time: int, delete_values: bool, prefix: bytes
