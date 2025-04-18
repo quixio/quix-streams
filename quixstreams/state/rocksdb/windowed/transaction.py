@@ -9,14 +9,20 @@ from quixstreams.state.base.transaction import (
     PartitionTransactionStatus,
     validate_transaction_status,
 )
+from quixstreams.state.exceptions import StateSerializationError
 from quixstreams.state.metadata import DEFAULT_PREFIX, SEPARATOR
 from quixstreams.state.recovery import ChangelogProducer
 from quixstreams.state.serialization import (
     DumpsFunc,
     LoadsFunc,
+    deserialize,
     serialize,
 )
-from quixstreams.state.types import ExpiredWindowDetail, WindowDetail
+from quixstreams.state.types import (
+    ExpiredWindowDetail,
+    ExpiredWindowDetailWithKey,
+    WindowDetail,
+)
 
 from .metadata import (
     GLOBAL_COUNTER_CF_NAME,
@@ -297,7 +303,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
 
         # Collect values into windows
         if collect:
-            for (start, end), aggregated, key in windows:
+            for (start, end), aggregated, _ in windows:
                 collected = self.get_from_collection(
                     start=start,
                     # Sliding windows are inclusive on both ends
@@ -307,11 +313,11 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
                     end=end + 1 if end_inclusive else end,
                     prefix=prefix,
                 )
-                yield ((start, end), aggregated, collected, key)
+                yield (start, end), aggregated, collected
 
         else:
-            for window, aggregated, key in windows:
-                yield (window, aggregated, [], key)
+            for window, aggregated, _ in windows:
+                yield window, aggregated, []
 
         # Delete expired windows from the state
         if delete:
@@ -326,7 +332,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         step_ms: int,
         delete: bool = True,
         collect: bool = False,
-    ) -> Iterable[ExpiredWindowDetail]:
+    ) -> Iterable[ExpiredWindowDetailWithKey]:
         """
         Get all expired windows for all prefix from RocksDB up to the specified `max_end_time` timestamp.
 
@@ -360,7 +366,8 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
                             end=end,
                             prefix=prefix,
                         )
-                    yield (start, end), aggregated, collected, prefix
+                    deserialized_prefix = self._deserialize_prefix(prefix)
+                    yield (start, end), aggregated, collected, deserialized_prefix
 
         else:
             # If we don't have a saved last_expired value it means one of two cases
@@ -382,7 +389,8 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
                             prefix=prefix,
                         )
 
-                    yield (start, end), aggregated, collected, prefix
+                    deserialized_prefix = self._deserialize_prefix(prefix)
+                    yield (start, end), aggregated, collected, deserialized_prefix
 
         if delete:
             for prefix, start, end in to_delete:
@@ -393,6 +401,32 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         self._set_timestamp(
             prefix=b"", cache=self._last_expired_timestamps, timestamp_ms=last_expired
         )
+
+    def _deserialize_prefix(self, prefix: bytes) -> Any:
+        """
+        Attempt to deserialize a window prefix.
+
+        Window prefixes can be provided either as raw bytes or as other types
+        (e.g., dict). The `as_state()` method conditionally serializes these
+        prefixes to bytes only if they are not already bytes before storing.
+
+        When retrieving a prefix during partition-level windows expiration, we
+        don't know its original type due to this conditional serialization.
+        Therefore, we must first *try* to deserialize it using the configured
+        `loads` function.
+
+        If deserialization succeeds, it means the prefix was originally a
+        non-bytes type, and we return the deserialized object.
+        If deserialization fails with a `StateSerializationError`, it indicates
+        that the prefix was likely provided as raw bytes initially, so we
+        return the original `prefix` bytes.
+
+        :param prefix: The prefix bytes retrieved from storage.
+        """
+        try:
+            return deserialize(prefix, loads=self._loads)
+        except StateSerializationError:
+            return prefix
 
     def delete_windows(
         self, max_start_time: int, delete_values: bool, prefix: bytes

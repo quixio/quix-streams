@@ -229,7 +229,7 @@ class TimeWindow(Window):
 
     def expire_by_key(
         self,
-        key: bytes,
+        key: Any,
         state: WindowedState,
         max_expired_start: int,
         collect: bool,
@@ -237,10 +237,7 @@ class TimeWindow(Window):
         start = time.monotonic()
         count = 0
 
-        for (
-            window_start,
-            window_end,
-        ), aggregated, collected, _ in state.expire_windows(
+        for (window_start, window_end), aggregated, collected in state.expire_windows(
             max_start_time=max_expired_start,
             collect=collect,
         ):
