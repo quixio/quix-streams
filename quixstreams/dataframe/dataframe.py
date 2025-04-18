@@ -48,6 +48,8 @@ from quixstreams.models import (
 from quixstreams.models.serializers import DeserializerType, SerializerType
 from quixstreams.sinks import BaseSink
 from quixstreams.state.base import State
+from quixstreams.state.base.transaction import PartitionTransaction
+from quixstreams.state.rocksdb.timestamped import TimestampedStore
 from quixstreams.utils.printing import (
     DEFAULT_COLUMN_NAME,
     DEFAULT_LIVE,
@@ -278,11 +280,7 @@ class StreamingDataFrame:
                     cast(ApplyCallbackStateful, func)
                 )
 
-            stateful_func = _as_stateful(
-                func=with_metadata_func,
-                processing_context=self._processing_context,
-                stream_id=self.stream_id,
-            )
+            stateful_func = _as_stateful(with_metadata_func, self)
             stream = self.stream.add_apply(stateful_func, expand=expand, metadata=True)  # type: ignore[call-overload]
         else:
             stream = self.stream.add_apply(
@@ -387,11 +385,7 @@ class StreamingDataFrame:
                     cast(UpdateCallbackStateful, func)
                 )
 
-            stateful_func = _as_stateful(
-                func=with_metadata_func,
-                processing_context=self._processing_context,
-                stream_id=self.stream_id,
-            )
+            stateful_func = _as_stateful(with_metadata_func, self)
             return self._add_update(stateful_func, metadata=True)
         else:
             return self._add_update(
@@ -489,11 +483,7 @@ class StreamingDataFrame:
                     cast(FilterCallbackStateful, func)
                 )
 
-            stateful_func = _as_stateful(
-                func=with_metadata_func,
-                processing_context=self._processing_context,
-                stream_id=self.stream_id,
-            )
+            stateful_func = _as_stateful(with_metadata_func, self)
             stream = self.stream.add_filter(stateful_func, metadata=True)
         else:
             stream = self.stream.add_filter(  # type: ignore[call-overload]
@@ -1615,6 +1605,27 @@ class StreamingDataFrame:
             *self.topics, *other.topics, stream=merged_stream
         )
 
+    def join(self, right: "StreamingDataFrame") -> "StreamingDataFrame":
+        # TODO: ensure copartitioning of left and right?
+        right.processing_context.state_manager.register_store(
+            stream_id=right.stream_id,
+            store_type=TimestampedStore,
+            changelog_config=self._topic_manager.derive_topic_config(right.topics),
+        )
+
+        def left_func(value, key, timestamp, headers):
+            right_tx = _get_transaction(right)
+            right_value = right_tx.get_last(timestamp=timestamp, prefix=key)
+            return {**value, **(right_value or {})}
+
+        def right_func(value, key, timestamp, headers):
+            right_tx = _get_transaction(right)
+            right_tx.set(timestamp=timestamp, value=value, prefix=key)
+
+        left = self.apply(left_func, metadata=True)
+        right = right.update(right_func, metadata=True).filter(lambda value: False)
+        return left.concat(right)
+
     def ensure_topics_copartitioned(self):
         partitions_counts = set(t.broker_config.num_partitions for t in self._topics)
         if len(partitions_counts) > 1:
@@ -1804,19 +1815,20 @@ def _as_metadata_func(
 
 def _as_stateful(
     func: Callable[[Any, Any, int, Any, State], T],
-    processing_context: ProcessingContext,
-    stream_id: str,
+    sdf: StreamingDataFrame,
 ) -> Callable[[Any, Any, int, Any], T]:
     @functools.wraps(func)
     def wrapper(value: Any, key: Any, timestamp: int, headers: Any) -> Any:
-        ctx = message_context()
-        transaction = processing_context.checkpoint.get_store_transaction(
-            stream_id=stream_id,
-            partition=ctx.partition,
-        )
         # Pass a State object with an interface limited to the key updates only
         # and prefix all the state keys by the message key
-        state = transaction.as_state(prefix=key)
+        state = _get_transaction(sdf).as_state(prefix=key)
         return func(value, key, timestamp, headers, state)
 
     return wrapper
+
+
+def _get_transaction(sdf: StreamingDataFrame) -> PartitionTransaction:
+    return sdf.processing_context.checkpoint.get_store_transaction(
+        stream_id=sdf.stream_id,
+        partition=message_context().partition,
+    )
