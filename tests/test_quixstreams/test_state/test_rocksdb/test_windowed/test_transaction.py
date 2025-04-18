@@ -78,8 +78,8 @@ class TestWindowedRocksDBPartitionTransaction:
 
         assert len(expired) == 2
         assert expired == [
-            ((0, 10), 1, [], prefix),
-            ((10, 20), 2, [], prefix),
+            ((0, 10), 1, []),
+            ((10, 20), 2, []),
         ]
 
         with store.start_partition_transaction(0) as tx:
@@ -131,8 +131,8 @@ class TestWindowedRocksDBPartitionTransaction:
             )
             assert len(expired) == 2
             assert expired == [
-                ((0, 10), 1, [], prefix),
-                ((10, 20), 2, [], prefix),
+                ((0, 10), 1, []),
+                ((10, 20), 2, []),
             ]
             assert (
                 tx.get_window(start_ms=0, end_ms=10, prefix=prefix) == None
@@ -193,7 +193,7 @@ class TestWindowedRocksDBPartitionTransaction:
             )
 
         assert len(expired) == 1
-        assert expired == [((0, 10), 1, [], prefix)]
+        assert expired == [((0, 10), 1, [])]
 
     def test_expire_windows_with_grace_empty(self, windowed_rocksdb_store_factory):
         store = windowed_rocksdb_store_factory()
@@ -328,9 +328,9 @@ class TestWindowedRocksDBPartitionTransaction:
             )
 
         assert len(expired) == 3
-        assert expired[0] == ((0, 10), 1, [], prefix)
-        assert expired[1] == ((10, 20), 1, [], prefix)
-        assert expired[2] == ((20, 30), 1, [], prefix)
+        assert expired[0] == ((0, 10), 1, [])
+        assert expired[1] == ((10, 20), 1, [])
+        assert expired[2] == ((20, 30), 1, [])
 
     def test_get_latest_timestamp_update(self, windowed_rocksdb_store_factory):
         store = windowed_rocksdb_store_factory()

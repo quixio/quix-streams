@@ -71,8 +71,8 @@ def test_expire_windows(transaction_state, delete):
 
     assert len(expired) == 2
     assert expired == [
-        ((0, 10), 1, [], b"__key__"),
-        ((10, 20), 2, [], b"__key__"),
+        ((0, 10), 1, []),
+        ((10, 20), 2, []),
     ]
 
     with transaction_state() as state:
@@ -112,8 +112,8 @@ def test_expire_windows_with_collect(transaction_state, end_inclusive):
     window_1_value = ["a", "b"] if end_inclusive else ["a"]
     window_2_value = ["b", "c"] if end_inclusive else ["b"]
     assert expired == [
-        ((0, 10), None, window_1_value, b"__key__"),
-        ((10, 20), [777, None], window_2_value, b"__key__"),
+        ((0, 10), None, window_1_value),
+        ((10, 20), [777, None], window_2_value),
     ]
 
 
@@ -132,7 +132,7 @@ def test_same_keys_in_db_and_update_cache(transaction_state):
         expired = list(state.expire_windows(max_start_time=max_start_time))
 
         # Value from the cache takes precedence over the value in the db
-        assert expired == [((0, 10), 3, [], b"__key__")]
+        assert expired == [((0, 10), 3, [])]
 
 
 def test_get_latest_timestamp(windowed_rocksdb_store_factory):
