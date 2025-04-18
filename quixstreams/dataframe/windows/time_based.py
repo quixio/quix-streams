@@ -237,10 +237,7 @@ class TimeWindow(Window):
         start = time.monotonic()
         count = 0
 
-        for (
-            window_start,
-            window_end,
-        ), aggregated, collected, _ in state.expire_windows(
+        for (window_start, window_end), aggregated, collected in state.expire_windows(
             max_start_time=max_expired_start,
             collect=collect,
         ):

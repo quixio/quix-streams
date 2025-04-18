@@ -12,6 +12,9 @@ WindowDetail: TypeAlias = tuple[
     tuple[int, int], V, bytes
 ]  # (start, end), aggregated, key
 ExpiredWindowDetail: TypeAlias = tuple[
+    tuple[int, int], V, list[V]
+]  # (start, end), aggregated, collected
+ExpiredWindowDetailWithKey: TypeAlias = tuple[
     tuple[int, int], V, list[V], Any
 ]  # (start, end), aggregated, collected, key
 
@@ -378,7 +381,7 @@ class WindowedPartitionTransaction(Protocol[K, V]):
         step_ms: int,
         delete: bool = True,
         collect: bool = False,
-    ) -> Iterable[ExpiredWindowDetail[V]]:
+    ) -> Iterable[ExpiredWindowDetailWithKey[V]]:
         """
         Get all expired windows for all prefix from RocksDB up to the specified `max_start_time` timestamp.
 
