@@ -279,7 +279,7 @@ class SlidingWindow(TimeWindow):
         # build a complete list otherwise expired windows could be deleted
         # in state.delete_windows() and never be fetched.
         expired_windows = list(
-            self._expired_windows(state, max_expired_window_start, collect)
+            self._expired_windows(key, state, max_expired_window_start, collect)
         )
 
         state.delete_windows(
@@ -289,14 +289,14 @@ class SlidingWindow(TimeWindow):
 
         return reversed(updated_windows), expired_windows
 
-    def _expired_windows(self, state, max_expired_window_start, collect):
+    def _expired_windows(self, key, state, max_expired_window_start, collect):
         for window in state.expire_windows(
             max_start_time=max_expired_window_start,
             delete=False,
             collect=collect,
             end_inclusive=True,
         ):
-            (start, end), (max_timestamp, aggregated), collected, key = window
+            (start, end), (max_timestamp, aggregated), collected, _ = window
             if end == max_timestamp:
                 yield key, self._results(aggregated, collected, start, end)
 
