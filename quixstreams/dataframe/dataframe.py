@@ -50,6 +50,7 @@ from quixstreams.models.serializers import DeserializerType, SerializerType
 from quixstreams.sinks import BaseSink
 from quixstreams.state.base import State
 from quixstreams.state.base.transaction import PartitionTransaction
+from quixstreams.state.manager import StoreTypes
 from quixstreams.state.rocksdb.timestamped import TimestampedStore
 from quixstreams.utils.printing import (
     DEFAULT_COLUMN_NAME,
@@ -277,7 +278,7 @@ class StreamingDataFrame:
             Default - `False`.
         """
         if stateful:
-            self._register_store()
+            self.register_store()
             # Force the callback to accept metadata
             if metadata:
                 with_metadata_func = cast(ApplyWithMetadataCallbackStateful, func)
@@ -382,7 +383,7 @@ class StreamingDataFrame:
         :return: the updated StreamingDataFrame instance (reassignment NOT required).
         """
         if stateful:
-            self._register_store()
+            self.register_store()
             # Force the callback to accept metadata
             if metadata:
                 with_metadata_func = cast(UpdateWithMetadataCallbackStateful, func)
@@ -480,7 +481,7 @@ class StreamingDataFrame:
         """
 
         if stateful:
-            self._register_store()
+            self.register_store()
             # Force the callback to accept metadata
             if metadata:
                 with_metadata_func = cast(FilterWithMetadataCallbackStateful, func)
@@ -1648,11 +1649,7 @@ class StreamingDataFrame:
 
     def join(self, right: "StreamingDataFrame") -> "StreamingDataFrame":
         # TODO: ensure copartitioning of left and right?
-        right.processing_context.state_manager.register_store(
-            stream_id=right.stream_id,
-            store_type=TimestampedStore,
-            changelog_config=self._topic_manager.derive_topic_config(right.topics),
-        )
+        right.register_store(store_type=TimestampedStore)
 
         def left_func(value, key, timestamp, headers):
             right_tx = _get_transaction(right)
@@ -1700,7 +1697,7 @@ class StreamingDataFrame:
         self._stream = self._stream.add_update(func, metadata=metadata)  # type: ignore[call-overload]
         return self
 
-    def _register_store(self):
+    def register_store(self, store_type: Optional[StoreTypes] = None):
         """
         Register the default store for the current stream_id in StateStoreManager.
         """
@@ -1710,7 +1707,9 @@ class StreamingDataFrame:
         changelog_topic_config = self._topic_manager.derive_topic_config(self._topics)
 
         self._processing_context.state_manager.register_store(
-            stream_id=self.stream_id, changelog_config=changelog_topic_config
+            stream_id=self.stream_id,
+            store_type=store_type,
+            changelog_config=changelog_topic_config,
         )
 
     def _groupby_key(
