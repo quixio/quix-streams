@@ -2644,38 +2644,62 @@ class TestStreamingDataFrameConcat:
 
 
 class TestStreamingDataFrameJoin:
-    def test_join(
-        self,
-        topic_manager_factory,
-        dataframe_factory,
-        state_manager,
-        message_context_factory,
-    ):
-        topic_manager = topic_manager_factory()
-        left_topic = topic_manager.topic(str(uuid.uuid4()))
-        right_topic = topic_manager.topic(str(uuid.uuid4()))
+    @pytest.fixture
+    def topic_manager(self, topic_manager_factory):
+        return topic_manager_factory()
 
-        left_sdf = dataframe_factory(topic=left_topic, state_manager=state_manager)
-        right_sdf = dataframe_factory(topic=right_topic, state_manager=state_manager)
-        sdf_joined = left_sdf.join(right_sdf)
+    @pytest.fixture
+    def create_topic(self, topic_manager):
+        def _create_topic(num_partitions=1):
+            return topic_manager.topic(
+                str(uuid.uuid4()),
+                create_config=TopicConfig(
+                    num_partitions=num_partitions,
+                    replication_factor=1,
+                ),
+            )
 
-        state_manager.on_partition_assign(
-            stream_id=right_sdf.stream_id,
-            partition=0,
-            committed_offsets={},
+        return _create_topic
+
+    @pytest.fixture
+    def create_sdf(self, dataframe_factory, state_manager):
+        def _create_sdf(topic):
+            return dataframe_factory(topic=topic, state_manager=state_manager)
+
+        return _create_sdf
+
+    @pytest.fixture
+    def assign_partition(self, state_manager):
+        def _assign_partition(sdf):
+            state_manager.on_partition_assign(
+                stream_id=sdf.stream_id,
+                partition=0,
+                committed_offsets={},
+            )
+
+        return _assign_partition
+
+    @pytest.fixture
+    def publish(self, message_context_factory):
+        def _publish(sdf, topic, value, key, timestamp):
+            return sdf.test(
+                value=value,
+                key=key,
+                timestamp=timestamp,
+                topic=topic,
+                ctx=message_context_factory(topic=topic.name),
+            )
+
+        return _publish
+
+    def test_join(self, create_topic, create_sdf, assign_partition, publish):
+        left_topic, right_topic = create_topic(), create_topic()
+        left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
+        joined_sdf = left_sdf.join(right_sdf)
+        assign_partition(right_sdf)
+
+        publish(joined_sdf, right_topic, value={"right": 1}, key=b"key", timestamp=1)
+        joined_value = publish(
+            joined_sdf, left_topic, value={"left": 2}, key=b"key", timestamp=2
         )
-
-        sdf_joined.test(
-            value={"right": 1},
-            key=b"key",
-            timestamp=1,
-            topic=right_topic,
-            ctx=message_context_factory(topic=right_topic.name),
-        )
-        assert sdf_joined.test(
-            value={"left": 2},
-            key=b"key",
-            timestamp=2,
-            topic=left_topic,
-            ctx=message_context_factory(topic=left_topic.name),
-        ) == [({"left": 2, "right": 1}, b"key", 2, None)]
+        assert joined_value == [({"left": 2, "right": 1}, b"key", 2, None)]
