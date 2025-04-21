@@ -74,7 +74,7 @@ class Window(abc.ABC):
         # Create a config for the changelog topic based on the underlying SDF topics
         changelog_config = TopicManager.derive_topic_config(self._dataframe.topics)
         self._dataframe.processing_context.state_manager.register_windowed_store(
-            stream_id=self._dataframe.stream_id,
+            state_id=self._dataframe.state_id,
             store_name=self._name,
             changelog_config=changelog_config,
         )
@@ -88,7 +88,7 @@ class Window(abc.ABC):
 
         windowed_func = _as_windowed(
             func=func,
-            stream_id=self._dataframe.stream_id,
+            state_id=self._dataframe.state_id,
             processing_context=self._dataframe.processing_context,
             store_name=name,
         )
@@ -400,7 +400,7 @@ def _as_windowed(
     func: TransformRecordCallbackExpandedWindowed,
     processing_context: "ProcessingContext",
     store_name: str,
-    stream_id: str,
+    state_id: str,
 ) -> TransformExpandedCallback:
     @functools.wraps(func)
     def wrapper(
@@ -410,7 +410,7 @@ def _as_windowed(
         transaction = cast(
             WindowedPartitionTransaction,
             processing_context.checkpoint.get_store_transaction(
-                stream_id=stream_id, partition=ctx.partition, store_name=store_name
+                state_id=state_id, partition=ctx.partition, store_name=store_name
             ),
         )
         if key is None:

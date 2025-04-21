@@ -26,24 +26,24 @@ class RocksDBStore(Store):
     def __init__(
         self,
         name: str,
-        stream_id: Optional[str],
+        state_id: Optional[str],
         base_dir: str,
         changelog_producer_factory: Optional[ChangelogProducerFactory] = None,
         options: Optional[RocksDBOptionsType] = None,
     ):
         """
         :param name: a unique store name
-        :param stream_id: a topic name for this store
+        :param state_id: a state ID for this store
         :param base_dir: path to a directory with the state
         :param changelog_producer_factory: a ChangelogProducerFactory instance
             if using changelogs
         :param options: RocksDB options. If `None`, the default options will be used.
         """
-        super().__init__(name, stream_id)
+        super().__init__(name, state_id)
 
         partitions_dir = Path(base_dir).absolute() / self._name
-        if self._stream_id:
-            partitions_dir = partitions_dir / self._stream_id
+        if self._state_id:
+            partitions_dir = partitions_dir / self._state_id
 
         self._partitions_dir = partitions_dir
         self._changelog_producer_factory = changelog_producer_factory
