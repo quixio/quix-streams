@@ -33,7 +33,7 @@ requirements:
     - pymongo >=4.11,<5
     - pandas >=1.0.0,<3.0
     - elasticsearch >=8.17,<9
-    - rich >=13,<14
+    - rich >=13,<15
 
 test:
   imports:
