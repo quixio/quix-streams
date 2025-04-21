@@ -2641,3 +2641,41 @@ class TestStreamingDataFrameConcat:
             match="The underlying topics must have the same number of partitions to use State",
         ):
             sdf1.concat(sdf2).update(lambda v, state: None, stateful=True)
+
+
+class TestStreamingDataFrameJoin:
+    def test_join(
+        self,
+        topic_manager_factory,
+        dataframe_factory,
+        state_manager,
+        message_context_factory,
+    ):
+        topic_manager = topic_manager_factory()
+        left_topic = topic_manager.topic(str(uuid.uuid4()))
+        right_topic = topic_manager.topic(str(uuid.uuid4()))
+
+        left_sdf = dataframe_factory(topic=left_topic, state_manager=state_manager)
+        right_sdf = dataframe_factory(topic=right_topic, state_manager=state_manager)
+        sdf_joined = left_sdf.join(right_sdf)
+
+        state_manager.on_partition_assign(
+            stream_id=right_sdf.stream_id,
+            partition=0,
+            committed_offsets={},
+        )
+
+        sdf_joined.test(
+            value={"right": 1},
+            key=b"key",
+            timestamp=1,
+            topic=right_topic,
+            ctx=message_context_factory(topic=right_topic.name),
+        )
+        assert sdf_joined.test(
+            value={"left": 2},
+            key=b"key",
+            timestamp=2,
+            topic=left_topic,
+            ctx=message_context_factory(topic=left_topic.name),
+        ) == [({"left": 2, "right": 1}, b"key", 2, None)]
