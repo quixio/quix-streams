@@ -1648,7 +1648,7 @@ class StreamingDataFrame:
         )
 
     def join(self, right: "StreamingDataFrame") -> "StreamingDataFrame":
-        # TODO: ensure copartitioning of left and right?
+        self.ensure_topics_copartitioned(*self.topics, *right.topics)
         right.register_store(store_type=TimestampedStore)
 
         def left_func(value, key, timestamp, headers):
@@ -1664,12 +1664,13 @@ class StreamingDataFrame:
         right = right.update(right_func, metadata=True).filter(lambda value: False)
         return left.concat(right)
 
-    def ensure_topics_copartitioned(self):
-        partitions_counts = set(t.broker_config.num_partitions for t in self._topics)
+    def ensure_topics_copartitioned(self, *topics: Topic):
+        topics = topics or self._topics
+        partitions_counts = set(t.broker_config.num_partitions for t in topics)
         if len(partitions_counts) > 1:
             msg = ", ".join(
                 f'"{t.name}" ({t.broker_config.num_partitions} partitions)'
-                for t in self._topics
+                for t in topics
             )
             raise TopicPartitionsMismatch(
                 f"The underlying topics must have the same number of partitions to use State; got {msg}"

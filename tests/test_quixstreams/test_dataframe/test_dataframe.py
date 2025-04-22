@@ -2703,3 +2703,10 @@ class TestStreamingDataFrameJoin:
             joined_sdf, left_topic, value={"left": 2}, key=b"key", timestamp=2
         )
         assert joined_value == [({"left": 2, "right": 1}, b"key", 2, None)]
+
+    def test_mismatching_partitions_fails(self, create_topic, create_sdf):
+        left_topic, right_topic = create_topic(), create_topic(num_partitions=2)
+        left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
+
+        with pytest.raises(TopicPartitionsMismatch):
+            left_sdf.join(right_sdf)
