@@ -20,6 +20,7 @@ from typing import (
     TypeVar,
     Union,
     cast,
+    get_args,
     overload,
 )
 
@@ -83,6 +84,8 @@ UpdateCallbackStateful = Callable[[Any, State], None]
 UpdateWithMetadataCallbackStateful = Callable[[Any, Any, int, Any, State], None]
 FilterCallbackStateful = Callable[[Any, State], bool]
 FilterWithMetadataCallbackStateful = Callable[[Any, Any, int, Any, State], bool]
+
+JoinOnOverlap = Literal["keep-left", "keep-right", "raise"]
 
 
 class StreamingDataFrame:
@@ -1647,14 +1650,56 @@ class StreamingDataFrame:
             *self.topics, *other.topics, stream=merged_stream
         )
 
-    def join(self, right: "StreamingDataFrame") -> "StreamingDataFrame":
+    def join(
+        self,
+        right: "StreamingDataFrame",
+        on_overlap: JoinOnOverlap = "raise",
+        merger: Optional[Callable[[Any, Any], Any]] = None,
+    ) -> "StreamingDataFrame":
+        if on_overlap not in get_args(JoinOnOverlap):
+            raise ValueError(
+                f"Invalid on_overlap value: {on_overlap}. "
+                f"Valid values are: {', '.join(get_args(JoinOnOverlap))}."
+            )
         self.ensure_topics_copartitioned(*self.topics, *right.topics)
         right.register_store(store_type=TimestampedStore)
+
+        if merger is None:
+            if on_overlap == "keep-left":
+
+                def merger(left_value, right_value):
+                    """
+                    Merge two dictionaries, preferring values from the left dictionary
+                    and preserving order with left columns coming first.
+                    """
+                    right_value = {
+                        key: value
+                        for key, value in (right_value or {}).items()
+                        if key not in left_value
+                    }
+                    return {**left_value, **right_value}
+
+            elif on_overlap == "keep-right":
+
+                def merger(left_value, right_value):
+                    return {**left_value, **(right_value or {})}
+            elif on_overlap == "raise":
+
+                def merger(left_value, right_value):
+                    right_value = right_value or {}
+                    if overlapping_columns := left_value.keys() & right_value.keys():
+                        overlapping_columns_str = ", ".join(sorted(overlapping_columns))
+                        raise ValueError(
+                            f"Overlapping columns: {overlapping_columns_str}."
+                            "You need to provide either an on_overlap value of "
+                            "'keep-left' or 'keep-right' or a custom merger function."
+                        )
+                    return {**left_value, **right_value}
 
         def left_func(value, key, timestamp, headers):
             right_tx = _get_transaction(right)
             right_value = right_tx.get_last(timestamp=timestamp, prefix=key)
-            return {**value, **(right_value or {})}
+            return merger(value, right_value)
 
         def right_func(value, key, timestamp, headers):
             right_tx = _get_transaction(right)

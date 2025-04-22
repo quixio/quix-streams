@@ -4,12 +4,13 @@ import uuid
 import warnings
 from collections import namedtuple
 from datetime import timedelta
-from typing import Any
+from typing import Any, get_args
 from unittest import mock
 
 import pytest
 
 from quixstreams import State
+from quixstreams.dataframe.dataframe import JoinOnOverlap
 from quixstreams.dataframe.exceptions import (
     GroupByDuplicate,
     GroupByNestingLimit,
@@ -2710,3 +2711,102 @@ class TestStreamingDataFrameJoin:
 
         with pytest.raises(TopicPartitionsMismatch):
             left_sdf.join(right_sdf)
+
+    @pytest.mark.parametrize(
+        "on_overlap, left, right, expected",
+        [
+            (
+                "keep-left",
+                {"A": 1},
+                None,
+                {"A": 1},
+            ),
+            (
+                "keep-left",
+                {"A": 1, "B": "left"},
+                {"B": "right", "C": 2},
+                {"A": 1, "B": "left", "C": 2},
+            ),
+            (
+                "keep-right",
+                {"A": 1},
+                None,
+                {"A": 1},
+            ),
+            (
+                "keep-right",
+                {"A": 1, "B": "left"},
+                {"B": "right", "C": 2},
+                {"A": 1, "B": "right", "C": 2},
+            ),
+            (
+                "raise",
+                {"A": 1},
+                None,
+                {"A": 1},
+            ),
+            (
+                "raise",
+                {"A": 1},
+                {"B": 2},
+                {"A": 1, "B": 2},
+            ),
+            (
+                "raise",
+                {"A": 1, "B": "left B", "C": "left C"},
+                {"B": "right B", "C": "right C"},
+                ValueError("Overlapping columns: B, C."),
+            ),
+        ],
+    )
+    def test_on_overlap(
+        self,
+        create_topic,
+        create_sdf,
+        assign_partition,
+        publish,
+        on_overlap,
+        left,
+        right,
+        expected,
+    ):
+        left_topic, right_topic = create_topic(), create_topic()
+        left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
+        joined_sdf = left_sdf.join(right_sdf, on_overlap=on_overlap)
+        assign_partition(right_sdf)
+
+        publish(joined_sdf, right_topic, value=right, key=b"key", timestamp=1)
+
+        if isinstance(expected, Exception):
+            with pytest.raises(expected.__class__, match=expected.args[0]):
+                publish(joined_sdf, left_topic, value=left, key=b"key", timestamp=2)
+        else:
+            joined_value = publish(
+                joined_sdf, left_topic, value=left, key=b"key", timestamp=2
+            )
+            assert joined_value == [(expected, b"key", 2, None)]
+
+    def test_on_overlap_invalid_value(self, create_topic, create_sdf):
+        left_topic, right_topic = create_topic(), create_topic()
+        left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
+
+        match = (
+            "Invalid on_overlap value: invalid. "
+            f"Valid values are: {', '.join(get_args(JoinOnOverlap))}."
+        )
+        with pytest.raises(ValueError, match=match):
+            left_sdf.join(right_sdf, on_overlap="invalid")
+
+    def test_custom_merger(self, create_topic, create_sdf, assign_partition, publish):
+        left_topic, right_topic = create_topic(), create_topic()
+        left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
+
+        def merger(left, right):
+            return {"left": left, "right": right}
+
+        joined_sdf = left_sdf.join(right_sdf, merger=merger)
+        assign_partition(right_sdf)
+
+        publish(joined_sdf, right_topic, value=1, key=b"key", timestamp=1)
+        joined_value = publish(joined_sdf, left_topic, value=2, key=b"key", timestamp=2)
+        assert joined_value == [({"left": 2, "right": 1}, b"key", 2, None)]
