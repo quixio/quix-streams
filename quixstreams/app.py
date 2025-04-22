@@ -49,7 +49,7 @@ from .platforms.quix import (
     check_state_management_enabled,
     is_quix_deployment,
 )
-from .processing import PausingManager, ProcessingContext
+from .processing import ProcessingContext
 from .rowconsumer import RowConsumer
 from .rowproducer import RowProducer
 from .runtracker import RunTracker
@@ -349,9 +349,6 @@ class Application:
 
         self._source_manager = SourceManager()
         self._sink_manager = SinkManager()
-        self._pausing_manager = PausingManager(
-            consumer=self._consumer, topic_manager=self._topic_manager
-        )
         self._dataframe_registry = DataFrameRegistry()
         self._processing_context = ProcessingContext(
             commit_interval=self._config.commit_interval,
@@ -361,7 +358,6 @@ class Application:
             state_manager=self._state_manager,
             exactly_once=self._config.exactly_once,
             sink_manager=self._sink_manager,
-            pausing_manager=self._pausing_manager,
             dataframe_registry=self._dataframe_registry,
         )
         self._run_tracker = RunTracker(processing_context=self._processing_context)
@@ -876,7 +872,7 @@ class Application:
             else:
                 process_message(dataframes_composed)
                 processing_context.commit_checkpoint()
-                processing_context.resume_ready_partitions()
+                self._consumer.resume_backpressured()
                 source_manager.raise_for_error()
                 printer.print()
                 run_tracker.update_status()
@@ -1029,7 +1025,8 @@ class Application:
             self._processing_context.commit_checkpoint(force=True)
 
         self._revoke_state_partitions(topic_partitions=topic_partitions)
-        self._processing_context.on_partition_revoke()
+        self._consumer.reset_backpressure()
+        # self._processing_context.on_partition_revoke()
 
     def _on_lost(self, _, topic_partitions: List[TopicPartition]):
         """
@@ -1038,7 +1035,8 @@ class Application:
         logger.debug("Rebalancing: dropping lost partitions")
 
         self._revoke_state_partitions(topic_partitions=topic_partitions)
-        self._processing_context.on_partition_revoke()
+        # self._processing_context.on_partition_revoke()
+        self._consumer.reset_backpressure()
 
     def _revoke_state_partitions(self, topic_partitions: List[TopicPartition]):
         non_changelog_topics = self._topic_manager.non_changelog_topics

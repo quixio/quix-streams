@@ -5,7 +5,7 @@ from quixstreams.state import ChangelogProducer, ChangelogProducerFactory
 
 class TestChangelogProducer:
     def test_produce(
-        self, topic_manager_factory, row_producer_factory, consumer_factory
+        self, topic_manager_factory, row_producer_factory, row_consumer_factory
     ):
         p_num = 2
         cf_header = "my_cf_header"
@@ -35,8 +35,8 @@ class TestChangelogProducer:
         )
         producer.flush()
 
-        consumer = consumer_factory(auto_offset_reset="earliest")
-        consumer.subscribe([changelog.name])
+        consumer = row_consumer_factory(auto_offset_reset="earliest")
+        consumer.subscribe([changelog])
         message = consumer.poll(10)
 
         for k in expected:

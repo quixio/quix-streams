@@ -1720,7 +1720,7 @@ class TestApplicationRecovery:
         executor,
         tmp_path,
         state_manager_factory,
-        consumer_factory,
+        row_consumer_factory,
         processing_guarantee,
     ):
         """
@@ -1805,7 +1805,7 @@ class TestApplicationRecovery:
                         group_id=consumer_group,
                         state_dir=state_dir,
                     ) as state_manager,
-                    consumer_factory(consumer_group=consumer_group) as consumer,
+                    row_consumer_factory(consumer_group=consumer_group) as consumer,
                 ):
                     committed_offset = consumer.committed(
                         [TopicPartition(topic=topic_name, partition=0)]

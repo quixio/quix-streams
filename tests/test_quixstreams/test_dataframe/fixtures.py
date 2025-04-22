@@ -6,7 +6,7 @@ import pytest
 from quixstreams.dataframe.dataframe import StreamingDataFrame
 from quixstreams.dataframe.registry import DataFrameRegistry
 from quixstreams.models.topics import Topic, TopicManager
-from quixstreams.processing import PausingManager, ProcessingContext
+from quixstreams.processing import ProcessingContext
 from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
 from quixstreams.sinks import SinkManager
@@ -32,7 +32,6 @@ def dataframe_factory(topic_manager_topic_factory, topic_manager_factory):
             "test", topic_manager=topic_manager
         )
         consumer = MagicMock(spec_set=RowConsumer)
-        pausing_manager = PausingManager(consumer=consumer, topic_manager=topic_manager)
         sink_manager = SinkManager()
         registry = registry or default_registry
 
@@ -41,7 +40,6 @@ def dataframe_factory(topic_manager_topic_factory, topic_manager_factory):
             consumer=consumer,
             commit_interval=0,
             state_manager=state_manager,
-            pausing_manager=pausing_manager,
             sink_manager=sink_manager,
             dataframe_registry=registry,
         )

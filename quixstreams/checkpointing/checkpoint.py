@@ -6,8 +6,7 @@ from typing import Dict, Tuple
 from confluent_kafka import KafkaException, TopicPartition
 
 from quixstreams.dataframe import DataFrameRegistry
-from quixstreams.kafka import BaseConsumer
-from quixstreams.processing.pausing import PausingManager
+from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
 from quixstreams.sinks import SinkManager
 from quixstreams.sinks.base import SinkBackpressureError
@@ -124,10 +123,9 @@ class Checkpoint(BaseCheckpoint):
         self,
         commit_interval: float,
         producer: RowProducer,
-        consumer: BaseConsumer,
+        consumer: RowConsumer,
         state_manager: StateStoreManager,
         sink_manager: SinkManager,
-        pausing_manager: PausingManager,
         dataframe_registry: DataFrameRegistry,
         exactly_once: bool = False,
         commit_every: int = 0,
@@ -141,7 +139,6 @@ class Checkpoint(BaseCheckpoint):
         self._consumer = consumer
         self._producer = producer
         self._sink_manager = sink_manager
-        self._pausing_manager = pausing_manager
         self._dataframe_registry = dataframe_registry
         self._exactly_once = exactly_once
         if self._exactly_once:
@@ -216,7 +213,7 @@ class Checkpoint(BaseCheckpoint):
                 # Pause the assignment to let it cool down and seek it back to
                 # the first processed offsets of this Checkpoint (it must be equal
                 # to the last committed offset).
-                self._pausing_manager.pause(
+                self._consumer.trigger_backpressure(
                     resume_after=exc.retry_after,
                     offsets_to_seek=self._starting_tp_offsets.copy(),
                 )

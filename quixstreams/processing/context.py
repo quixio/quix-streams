@@ -6,7 +6,6 @@ from typing import Optional
 from quixstreams.checkpointing import Checkpoint
 from quixstreams.dataframe import DataFrameRegistry
 from quixstreams.exceptions import QuixException
-from quixstreams.processing.pausing import PausingManager
 from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
 from quixstreams.sinks import SinkManager
@@ -33,7 +32,6 @@ class ProcessingContext:
     consumer: RowConsumer
     state_manager: StateStoreManager
     sink_manager: SinkManager
-    pausing_manager: PausingManager
     dataframe_registry: DataFrameRegistry
     commit_every: int = 0
     exactly_once: bool = False
@@ -70,7 +68,6 @@ class ProcessingContext:
             producer=self.producer,
             consumer=self.consumer,
             sink_manager=self.sink_manager,
-            pausing_manager=self.pausing_manager,
             dataframe_registry=self.dataframe_registry,
             exactly_once=self.exactly_once,
         )
@@ -97,12 +94,6 @@ class ProcessingContext:
                     f"Committed a checkpoint; forced={force}, time_elapsed={elapsed}s"
                 )
             self.init_checkpoint()
-
-    def resume_ready_partitions(self):
-        self.pausing_manager.resume_if_ready()
-
-    def on_partition_revoke(self):
-        self.pausing_manager.reset()
 
     def __enter__(self):
         self.sink_manager.start_sinks()

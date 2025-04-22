@@ -27,6 +27,7 @@ __all__ = (
     "Consumer",
     "AutoOffsetReset",
     "RebalancingCallback",
+    "raise_for_msg_error",
 )
 
 RebalancingCallback = Callable[[ConfluentConsumer, List[TopicPartition]], None]

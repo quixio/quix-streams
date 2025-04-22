@@ -1,5 +1,7 @@
 import logging
-from typing import Callable, List, Mapping, Optional, Union
+import sys
+from time import monotonic
+from typing import Callable, List, Optional, Union
 
 from confluent_kafka import KafkaError, TopicPartition
 
@@ -14,8 +16,12 @@ logger = logging.getLogger(__name__)
 
 __all__ = ("RowConsumer",)
 
+_MAX_FLOAT = sys.float_info.max
+
 
 class RowConsumer(BaseConsumer):
+    _backpressure_resume_at: float
+
     def __init__(
         self,
         broker_address: Union[str, ConnectionConfig],
@@ -29,6 +35,7 @@ class RowConsumer(BaseConsumer):
         on_error: Optional[ConsumerErrorCallback] = None,
     ):
         """
+
         A consumer class that is capable of deserializing Kafka messages to Rows
         according to the Topics deserialization settings.
 
@@ -66,7 +73,9 @@ class RowConsumer(BaseConsumer):
             extra_config=extra_config,
         )
         self._on_error: ConsumerErrorCallback = on_error or default_on_consumer_error
-        self._topics: Mapping[str, Topic] = {}
+        self._topics: dict[str, Topic] = {}
+        self._backpressurred_tps: set[TopicPartition] = set()
+        self.reset_backpressure()
 
     def subscribe(
         self,
@@ -149,4 +158,77 @@ class RowConsumer(BaseConsumer):
 
     def close(self):
         super().close()
+        self.reset_backpressure()
         self._inner_consumer = None
+
+    @property
+    def backpressured_tps(self) -> set[TopicPartition]:
+        return self._backpressurred_tps
+
+    def trigger_backpressure(
+        self,
+        offsets_to_seek: dict[tuple[str, int], int],
+        resume_after: float,
+    ):
+        """
+        Pause all partitions for the certain period of time and seek the partitions
+        provided in the `offsets_to_seek` dict.
+
+        This method is supposed to be called in case of backpressure from Sinks.
+        """
+        resume_at = monotonic() + resume_after
+        self._backpressure_resume_at = min(self._backpressure_resume_at, resume_at)
+
+        # Pause only data TPs excluding changelog TPs
+        non_changelog_topics = {
+            k: v for k, v in self._topics.items() if not v.is_changelog
+        }
+        non_changelog_tps = [
+            tp for tp in self.assignment() if tp.topic in non_changelog_topics
+        ]
+
+        for tp in non_changelog_tps:
+            position, *_ = self.position([tp])
+            logger.debug(
+                f'Pausing topic partition "{tp.topic}[{tp.partition}]" for {resume_after}s; '
+                f"position={position.offset}"
+            )
+            self.pause(partitions=[tp])
+
+            # Seek the TP back to the "offset_to_seek" to start from it on resume.
+            # The "offset_to_seek" is provided by the Checkpoint and is expected to be the
+            # first offset processed in the checkpoint.
+            # There may be no offset for the TP if no message has been processed yet.
+            seek_offset = offsets_to_seek.get((tp.topic, tp.partition))
+            if seek_offset is not None:
+                logger.debug(
+                    f'Seek the paused partition "{tp.topic}[{tp.partition}]" back to '
+                    f"offset {seek_offset}"
+                )
+                self.seek(
+                    partition=TopicPartition(
+                        topic=tp.topic, partition=tp.partition, offset=seek_offset
+                    )
+                )
+
+            self._backpressurred_tps.add(tp)
+
+    def resume_backpressured(self):
+        """
+        Resume consuming from assigned data partitions after the wait period has elapsed.
+        """
+        if self._backpressure_resume_at > monotonic():
+            return
+
+        # Resume the previously backpressured TPs
+        for tp in self._backpressurred_tps:
+            logger.debug(f'Resuming topic partition "{tp.topic}[{tp.partition}]"')
+            self.resume(
+                partitions=[TopicPartition(topic=tp.topic, partition=tp.partition)]
+            )
+        self.reset_backpressure()
+
+    def reset_backpressure(self):
+        # Reset the timeout back to its initial state
+        self._backpressure_resume_at = _MAX_FLOAT
+        self._backpressurred_tps.clear()
