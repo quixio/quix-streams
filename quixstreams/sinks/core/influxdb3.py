@@ -263,12 +263,11 @@ class InfluxDB3Sink(BatchingSink):
 
                 if ts is None:
                     ts = item.timestamp
-                else:
-                    # Note: currently NOT validating the timestamp itself is valid
-                    if not isinstance(ts, valid := (str, int, datetime)):
-                        raise TypeError(
-                            f'InfluxDB3 "time" field expects: {valid}, got {type(ts)}'
-                        )
+                # Note: currently NOT validating the timestamp itself is valid
+                elif not isinstance(ts, valid := (str, int, datetime)):
+                    raise TypeError(
+                        f'InfluxDB3 "time" field expects: {valid}, got {type(ts)}'
+                    )
 
                 if isinstance(ts, int):
                     time_len = len(str(ts))
