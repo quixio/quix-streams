@@ -2694,42 +2694,42 @@ class TestStreamingDataFrameJoin:
         return _publish
 
     @pytest.mark.parametrize(
-        "how, left, right, expected",
+        "how, right, left, expected",
         [
             (
                 "inner",
-                {"left": 1},
                 {"right": 2},
+                {"left": 1},
                 [({"left": 1, "right": 2}, b"key", 2, None)],
             ),
             (
                 "inner",
-                {"left": 1},
                 None,
+                {"left": 1},
                 [],
             ),
             (
                 "inner",
-                {"left": 1},
                 {},
+                {"left": 1},
                 [],
             ),
             (
                 "left",
-                {"left": 1},
                 {"right": 2},
+                {"left": 1},
                 [({"left": 1, "right": 2}, b"key", 2, None)],
             ),
             (
                 "left",
-                {"left": 1},
                 None,
+                {"left": 1},
                 [({"left": 1}, b"key", 2, None)],
             ),
             (
                 "left",
-                {"left": 1},
                 {},
+                {"left": 1},
                 [({"left": 1}, b"key", 2, None)],
             ),
         ],
@@ -2741,8 +2741,8 @@ class TestStreamingDataFrameJoin:
         assign_partition,
         publish,
         how,
-        left,
         right,
+        left,
         expected,
     ):
         left_topic, right_topic = create_topic(), create_topic()
@@ -2775,48 +2775,48 @@ class TestStreamingDataFrameJoin:
             left_sdf.join(right_sdf)
 
     @pytest.mark.parametrize(
-        "on_overlap, left, right, expected",
+        "on_overlap, right, left, expected",
         [
             (
                 "keep-left",
-                {"A": 1},
                 None,
+                {"A": 1},
                 {"A": 1},
             ),
             (
                 "keep-left",
-                {"A": 1, "B": "left"},
                 {"B": "right", "C": 2},
+                {"A": 1, "B": "left"},
                 {"A": 1, "B": "left", "C": 2},
             ),
             (
                 "keep-right",
-                {"A": 1},
                 None,
+                {"A": 1},
                 {"A": 1},
             ),
             (
                 "keep-right",
-                {"A": 1, "B": "left"},
                 {"B": "right", "C": 2},
+                {"A": 1, "B": "left"},
                 {"A": 1, "B": "right", "C": 2},
             ),
             (
                 "raise",
-                {"A": 1},
                 None,
+                {"A": 1},
                 {"A": 1},
             ),
             (
                 "raise",
-                {"A": 1},
                 {"B": 2},
+                {"A": 1},
                 {"A": 1, "B": 2},
             ),
             (
                 "raise",
-                {"A": 1, "B": "left B", "C": "left C"},
                 {"B": "right B", "C": "right C"},
+                {"A": 1, "B": "left B", "C": "left C"},
                 ValueError("Overlapping columns: B, C."),
             ),
         ],
@@ -2828,8 +2828,8 @@ class TestStreamingDataFrameJoin:
         assign_partition,
         publish,
         on_overlap,
-        left,
         right,
+        left,
         expected,
     ):
         left_topic, right_topic = create_topic(), create_topic()
