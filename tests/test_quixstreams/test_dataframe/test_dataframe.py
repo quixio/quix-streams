@@ -10,7 +10,7 @@ from unittest import mock
 import pytest
 
 from quixstreams import State
-from quixstreams.dataframe.dataframe import JoinOnOverlap
+from quixstreams.dataframe.dataframe import JoinHow, JoinOnOverlap
 from quixstreams.dataframe.exceptions import (
     GroupByDuplicate,
     GroupByNestingLimit,
@@ -2693,17 +2693,79 @@ class TestStreamingDataFrameJoin:
 
         return _publish
 
-    def test_join(self, create_topic, create_sdf, assign_partition, publish):
+    @pytest.mark.parametrize(
+        "how, left, right, expected",
+        [
+            (
+                "inner",
+                {"left": 1},
+                {"right": 2},
+                [({"left": 1, "right": 2}, b"key", 2, None)],
+            ),
+            (
+                "inner",
+                {"left": 1},
+                None,
+                [],
+            ),
+            (
+                "inner",
+                {"left": 1},
+                {},
+                [],
+            ),
+            (
+                "left",
+                {"left": 1},
+                {"right": 2},
+                [({"left": 1, "right": 2}, b"key", 2, None)],
+            ),
+            (
+                "left",
+                {"left": 1},
+                None,
+                [({"left": 1}, b"key", 2, None)],
+            ),
+            (
+                "left",
+                {"left": 1},
+                {},
+                [({"left": 1}, b"key", 2, None)],
+            ),
+        ],
+    )
+    def test_how(
+        self,
+        create_topic,
+        create_sdf,
+        assign_partition,
+        publish,
+        how,
+        left,
+        right,
+        expected,
+    ):
         left_topic, right_topic = create_topic(), create_topic()
         left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
-        joined_sdf = left_sdf.join(right_sdf)
+        joined_sdf = left_sdf.join(right_sdf, how=how)
         assign_partition(right_sdf)
 
-        publish(joined_sdf, right_topic, value={"right": 1}, key=b"key", timestamp=1)
+        publish(joined_sdf, right_topic, value=right, key=b"key", timestamp=1)
         joined_value = publish(
-            joined_sdf, left_topic, value={"left": 2}, key=b"key", timestamp=2
+            joined_sdf, left_topic, value=left, key=b"key", timestamp=2
         )
-        assert joined_value == [({"left": 2, "right": 1}, b"key", 2, None)]
+        assert joined_value == expected
+
+    def test_how_invalid_value(self, create_topic, create_sdf):
+        left_topic, right_topic = create_topic(), create_topic()
+        left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
+
+        match = (
+            "Invalid how value: invalid. "
+            f"Valid values are: {', '.join(get_args(JoinHow))}."
+        )
+        with pytest.raises(ValueError, match=match):
+            left_sdf.join(right_sdf, how="invalid")
 
     def test_mismatching_partitions_fails(self, create_topic, create_sdf):
         left_topic, right_topic = create_topic(), create_topic(num_partitions=2)
@@ -2772,7 +2834,7 @@ class TestStreamingDataFrameJoin:
     ):
         left_topic, right_topic = create_topic(), create_topic()
         left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
-        joined_sdf = left_sdf.join(right_sdf, on_overlap=on_overlap)
+        joined_sdf = left_sdf.join(right_sdf, how="left", on_overlap=on_overlap)
         assign_partition(right_sdf)
 
         publish(joined_sdf, right_topic, value=right, key=b"key", timestamp=1)
