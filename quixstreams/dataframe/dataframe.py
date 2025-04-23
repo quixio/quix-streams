@@ -85,6 +85,9 @@ UpdateWithMetadataCallbackStateful = Callable[[Any, Any, int, Any, State], None]
 FilterCallbackStateful = Callable[[Any, State], bool]
 FilterWithMetadataCallbackStateful = Callable[[Any, Any, int, Any, State], bool]
 
+# Constants related to join
+DISCARDED = object()
+JoinHow = Literal["inner", "left"]
 JoinOnOverlap = Literal["keep-left", "keep-right", "raise"]
 
 
@@ -1653,16 +1656,25 @@ class StreamingDataFrame:
     def join(
         self,
         right: "StreamingDataFrame",
+        how: JoinHow = "inner",
         on_overlap: JoinOnOverlap = "raise",
         merger: Optional[Callable[[Any, Any], Any]] = None,
     ) -> "StreamingDataFrame":
+        if how not in get_args(JoinHow):
+            raise ValueError(
+                f"Invalid how value: {how}. "
+                f"Valid values are: {', '.join(get_args(JoinHow))}."
+            )
         if on_overlap not in get_args(JoinOnOverlap):
             raise ValueError(
                 f"Invalid on_overlap value: {on_overlap}. "
                 f"Valid values are: {', '.join(get_args(JoinOnOverlap))}."
             )
+
         self.ensure_topics_copartitioned(*self.topics, *right.topics)
         right.register_store(store_type=TimestampedStore)
+
+        is_inner_join = how == "inner"
 
         if merger is None:
             if on_overlap == "keep-left":
@@ -1699,13 +1711,17 @@ class StreamingDataFrame:
         def left_func(value, key, timestamp, headers):
             right_tx = _get_transaction(right)
             right_value = right_tx.get_last(timestamp=timestamp, prefix=key)
+            if is_inner_join and not right_value:
+                return DISCARDED
             return merger(value, right_value)
 
         def right_func(value, key, timestamp, headers):
             right_tx = _get_transaction(right)
             right_tx.set(timestamp=timestamp, value=value, prefix=key)
 
-        left = self.apply(left_func, metadata=True)
+        left = self.apply(left_func, metadata=True).filter(
+            lambda value: value is not DISCARDED
+        )
         right = right.update(right_func, metadata=True).filter(lambda value: False)
         return left.concat(right)
 
