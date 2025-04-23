@@ -42,7 +42,7 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         self,
         timestamp: int,
         prefix: Any,
-        retention: int = DAYS_7,
+        retention_ms: int = DAYS_7,
         cf_name: str = "default",
     ) -> Optional[Any]:
         """Get the latest value for a prefix up to a given timestamp.
@@ -56,7 +56,7 @@ class TimestampedPartitionTransaction(PartitionTransaction):
 
         :param timestamp: The upper bound timestamp (inclusive) in milliseconds.
         :param prefix: The key prefix.
-        :param retention: The retention period in milliseconds.
+        :param retention_ms: The retention period in milliseconds.
         :param cf_name: The column family name.
         :return: The deserialized value if found, otherwise None.
         """
@@ -65,7 +65,7 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         prefix = self._ensure_bytes(prefix)
 
         # Negative retention is not allowed
-        lower_bound_timestamp = max(timestamp - retention, 0)
+        lower_bound_timestamp = max(timestamp - retention_ms, 0)
         lower_bound = self._serialize_key(lower_bound_timestamp, prefix)
         # +1 because upper bound is exclusive
         upper_bound = self._serialize_key(timestamp + 1, prefix)

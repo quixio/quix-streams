@@ -117,8 +117,8 @@ def test_get_last_from_cache_with_retention(
     with transaction() as tx:
         tx.set(timestamp=5, value="value", prefix=b"key")
         assert tx.get_last(timestamp=10, prefix=b"key") == "value"
-        assert tx.get_last(timestamp=10, prefix=b"key", retention=5) == "value"
-        assert tx.get_last(timestamp=10, prefix=b"key", retention=4) == None
+        assert tx.get_last(timestamp=10, prefix=b"key", retention_ms=5) == "value"
+        assert tx.get_last(timestamp=10, prefix=b"key", retention_ms=4) == None
 
 
 def test_get_last_from_store_with_retention(
@@ -129,8 +129,8 @@ def test_get_last_from_store_with_retention(
 
     with transaction() as tx:
         assert tx.get_last(timestamp=10, prefix=b"key") == "value"
-        assert tx.get_last(timestamp=10, prefix=b"key", retention=5) == "value"
-        assert tx.get_last(timestamp=10, prefix=b"key", retention=4) == None
+        assert tx.get_last(timestamp=10, prefix=b"key", retention_ms=5) == "value"
+        assert tx.get_last(timestamp=10, prefix=b"key", retention_ms=4) == None
 
 
 @mock.patch("quixstreams.state.rocksdb.timestamped.EXPIRATION_COUNTER", 1000)
@@ -146,7 +146,7 @@ def test_get_last_from_cache_with_expire_call(
         # Expiration counter is exhausted for this `get_last` call
         # `_expire` method is called with `lower_bound_timestamp` = 10 - 4 = 6
         # Everything below timestamp 6 gets expired.
-        assert tx.get_last(timestamp=10, prefix=b"key", retention=4) == None
+        assert tx.get_last(timestamp=10, prefix=b"key", retention_ms=4) == None
         assert tx._update_cache.get_updates_for_prefix(prefix=b"key") == {}
 
 
@@ -166,7 +166,7 @@ def test_get_last_from_store_with_expire_call(
         # Expiration counter is exhausted for this `get_last` call
         # `_expire` method is called with `lower_bound_timestamp` = 10 - 4 = 6
         # Everything belowe timestamp 6 gets expired.
-        assert tx.get_last(timestamp=10, prefix=b"key", retention=4) == None
+        assert tx.get_last(timestamp=10, prefix=b"key", retention_ms=4) == None
         assert key in tx._update_cache.get_deletes()
 
     with transaction() as tx:
