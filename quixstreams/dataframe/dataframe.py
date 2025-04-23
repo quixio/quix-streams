@@ -1659,6 +1659,7 @@ class StreamingDataFrame:
         how: JoinHow = "inner",
         on_overlap: JoinOnOverlap = "raise",
         merger: Optional[Callable[[Any, Any], Any]] = None,
+        retention_ms: Union[int, timedelta] = timedelta(days=7),
     ) -> "StreamingDataFrame":
         if how not in get_args(JoinHow):
             raise ValueError(
@@ -1675,6 +1676,7 @@ class StreamingDataFrame:
         right.register_store(store_type=TimestampedStore)
 
         is_inner_join = how == "inner"
+        retention_ms = ensure_milliseconds(retention_ms)
 
         if merger is None:
             if on_overlap == "keep-left":
@@ -1710,7 +1712,11 @@ class StreamingDataFrame:
 
         def left_func(value, key, timestamp, headers):
             right_tx = _get_transaction(right)
-            right_value = right_tx.get_last(timestamp=timestamp, prefix=key)
+            right_value = right_tx.get_last(
+                timestamp=timestamp,
+                prefix=key,
+                retention_ms=retention_ms,
+            )
             if is_inner_join and not right_value:
                 return DISCARDED
             return merger(value, right_value)
