@@ -1026,7 +1026,6 @@ class Application:
 
         self._revoke_state_partitions(topic_partitions=topic_partitions)
         self._consumer.reset_backpressure()
-        # self._processing_context.on_partition_revoke()
 
     def _on_lost(self, _, topic_partitions: List[TopicPartition]):
         """
@@ -1035,7 +1034,6 @@ class Application:
         logger.debug("Rebalancing: dropping lost partitions")
 
         self._revoke_state_partitions(topic_partitions=topic_partitions)
-        # self._processing_context.on_partition_revoke()
         self._consumer.reset_backpressure()
 
     def _revoke_state_partitions(self, topic_partitions: List[TopicPartition]):
