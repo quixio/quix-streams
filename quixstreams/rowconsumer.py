@@ -184,7 +184,7 @@ class RowConsumer(BaseConsumer):
             # Pause only data TPs excluding changelog TPs
             if tp.topic in changelog_topics:
                 continue
-                
+
             position, *_ = self.position([tp])
             logger.debug(
                 f'Pausing topic partition "{tp.topic}[{tp.partition}]" for {resume_after}s; '
@@ -220,9 +220,7 @@ class RowConsumer(BaseConsumer):
         # Resume the previously backpressured TPs
         for tp in self._backpressurred_tps:
             logger.debug(f'Resuming topic partition "{tp.topic}[{tp.partition}]"')
-            self.resume(
-                partitions=[TopicPartition(topic=tp.topic, partition=tp.partition)]
-            )
+            self.resume(partitions=[tp])
         self.reset_backpressure()
 
     def reset_backpressure(self):
