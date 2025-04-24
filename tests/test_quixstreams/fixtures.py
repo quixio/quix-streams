@@ -77,7 +77,7 @@ def consumer_factory(kafka_container, random_consumer_group):
         consumer_group: Optional[str] = None,
         auto_offset_reset: AutoOffsetReset = "latest",
         auto_commit_enable: bool = True,
-        extra_config: dict = None,
+        extra_config: Optional[dict] = None,
     ) -> Consumer:
         extras = CONSUMER_EXTRAS_DEFAULT.copy()
         extras.update((extra_config or {}))
