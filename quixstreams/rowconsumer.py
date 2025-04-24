@@ -179,15 +179,12 @@ class RowConsumer(BaseConsumer):
         resume_at = monotonic() + resume_after
         self._backpressure_resume_at = min(self._backpressure_resume_at, resume_at)
 
-        # Pause only data TPs excluding changelog TPs
-        non_changelog_topics = {
-            k: v for k, v in self._topics.items() if not v.is_changelog
-        }
-        non_changelog_tps = [
-            tp for tp in self.assignment() if tp.topic in non_changelog_topics
-        ]
-
-        for tp in non_changelog_tps:
+        changelog_topics = {k for k, v in self._topics.items() if v.is_changelog}
+        for tp in self.assignment():
+            # Pause only data TPs excluding changelog TPs
+            if tp.topic in changelog_topics:
+                continue
+                
             position, *_ = self.position([tp])
             logger.debug(
                 f'Pausing topic partition "{tp.topic}[{tp.partition}]" for {resume_after}s; '
