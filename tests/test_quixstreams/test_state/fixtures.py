@@ -4,8 +4,8 @@ from unittest.mock import MagicMock, PropertyMock
 
 import pytest
 
-from quixstreams.kafka import Consumer
 from quixstreams.models import TopicManager
+from quixstreams.rowconsumer import RowConsumer
 from quixstreams.state.base import StorePartition
 from quixstreams.state.memory import MemoryStore, MemoryStorePartition
 from quixstreams.state.recovery import (
@@ -25,10 +25,10 @@ from quixstreams.state.rocksdb import (
 def recovery_manager_factory(topic_manager_factory):
     def factory(
         topic_manager: Optional[TopicManager] = None,
-        consumer: Optional[Consumer] = None,
+        consumer: Optional[RowConsumer] = None,
     ) -> RecoveryManager:
         topic_manager = topic_manager or topic_manager_factory()
-        consumer = consumer or MagicMock(Consumer)
+        consumer = consumer or MagicMock(RowConsumer)
         return RecoveryManager(topic_manager=topic_manager, consumer=consumer)
 
     return factory

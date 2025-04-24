@@ -52,6 +52,13 @@ from quixstreams.state import StateStoreManager
 from quixstreams.state.manager import StoreTypes
 from quixstreams.state.recovery import RecoveryManager
 
+CONSUMER_EXTRAS_DEFAULT = {
+    # Make consumers to refresh cluster metadata often
+    # to react on re-assignment changes faster
+    "topic.metadata.refresh.interval.ms": 3000,
+    "partition.assignment.strategy": "range",
+}
+
 
 @pytest.fixture()
 def kafka_admin_client(kafka_container) -> AdminClient:
@@ -70,21 +77,14 @@ def consumer_factory(kafka_container, random_consumer_group):
         consumer_group: Optional[str] = None,
         auto_offset_reset: AutoOffsetReset = "latest",
         auto_commit_enable: bool = True,
-        extra_config: dict = None,
+        extra_config: Optional[dict] = None,
     ) -> Consumer:
-        consumer_group = consumer_group or random_consumer_group
-        extras = {
-            # Make consumers to refresh cluster metadata often
-            # to react on re-assignment changes faster
-            "topic.metadata.refresh.interval.ms": 3000,
-            # Keep rebalances as simple as possible for testing
-            "partition.assignment.strategy": "range",
-        }
+        extras = CONSUMER_EXTRAS_DEFAULT.copy()
         extras.update((extra_config or {}))
 
         return Consumer(
             broker_address=broker_address,
-            consumer_group=consumer_group,
+            consumer_group=consumer_group or random_consumer_group,
             auto_commit_enable=auto_commit_enable,
             auto_offset_reset=auto_offset_reset,
             extra_config=extras,
@@ -96,6 +96,35 @@ def consumer_factory(kafka_container, random_consumer_group):
 @pytest.fixture()
 def consumer(consumer_factory) -> Consumer:
     return consumer_factory()
+
+
+@pytest.fixture()
+def row_consumer_factory(kafka_container, random_consumer_group):
+    def factory(
+        broker_address: str = kafka_container.broker_address,
+        consumer_group: Optional[str] = None,
+        auto_offset_reset: AutoOffsetReset = "latest",
+        auto_commit_enable: bool = False,
+        extra_config: dict = None,
+        on_error: Optional[ConsumerErrorCallback] = None,
+    ) -> RowConsumer:
+        extras = CONSUMER_EXTRAS_DEFAULT.copy()
+        extras.update((extra_config or {}))
+        return RowConsumer(
+            broker_address=broker_address,
+            consumer_group=consumer_group or random_consumer_group,
+            auto_commit_enable=auto_commit_enable,
+            auto_offset_reset=auto_offset_reset,
+            extra_config=extras,
+            on_error=on_error,
+        )
+
+    return factory
+
+
+@pytest.fixture()
+def row_consumer(row_consumer_factory) -> RowConsumer:
+    return row_consumer_factory()
 
 
 @pytest.fixture()
@@ -194,34 +223,6 @@ def set_topic_partitions(kafka_admin_client):
         return topic, num_partitions
 
     return func
-
-
-@pytest.fixture()
-def row_consumer_factory(kafka_container, random_consumer_group):
-    def factory(
-        broker_address: str = kafka_container.broker_address,
-        consumer_group: Optional[str] = None,
-        auto_offset_reset: AutoOffsetReset = "latest",
-        auto_commit_enable: bool = True,
-        extra_config: dict = None,
-        on_error: Optional[ConsumerErrorCallback] = None,
-    ) -> RowConsumer:
-        extra_config = extra_config or {}
-        consumer_group = consumer_group or random_consumer_group
-
-        # Make consumers to refresh cluster metadata often
-        # to react on re-assignment changes faster
-        extra_config["topic.metadata.refresh.interval.ms"] = 3000
-        return RowConsumer(
-            broker_address=broker_address,
-            consumer_group=consumer_group,
-            auto_commit_enable=auto_commit_enable,
-            auto_offset_reset=auto_offset_reset,
-            extra_config=extra_config,
-            on_error=on_error,
-        )
-
-    return factory
 
 
 @pytest.fixture()
