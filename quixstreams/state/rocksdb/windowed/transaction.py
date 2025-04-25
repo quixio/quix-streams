@@ -9,6 +9,10 @@ from quixstreams.state.base.transaction import (
 from quixstreams.state.metadata import DEFAULT_PREFIX, SEPARATOR
 from quixstreams.state.recovery import ChangelogProducer
 from quixstreams.state.rocksdb.cache import CounterCache, TimestampsCache
+from quixstreams.state.rocksdb.metadata import (
+    LATEST_TIMESTAMP_KEY,
+    LATEST_TIMESTAMPS_CF_NAME,
+)
 from quixstreams.state.serialization import (
     DumpsFunc,
     LoadsFunc,
@@ -25,8 +29,6 @@ from .metadata import (
     LATEST_DELETED_WINDOW_TIMESTAMP_KEY,
     LATEST_EXPIRED_WINDOW_CF_NAME,
     LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY,
-    LATEST_TIMESTAMP_KEY,
-    LATEST_TIMESTAMPS_CF_NAME,
     VALUES_CF_NAME,
 )
 from .serialization import (

@@ -3,6 +3,7 @@ from typing import Iterator, Optional, cast
 
 from quixstreams.state.recovery import ChangelogProducer
 
+from ..metadata import LATEST_TIMESTAMPS_CF_NAME
 from ..partition import RocksDBStorePartition
 from ..types import RocksDBOptionsType
 from .metadata import (
@@ -10,7 +11,6 @@ from .metadata import (
     LATEST_DELETED_VALUE_CF_NAME,
     LATEST_DELETED_WINDOW_CF_NAME,
     LATEST_EXPIRED_WINDOW_CF_NAME,
-    LATEST_TIMESTAMPS_CF_NAME,
     VALUES_CF_NAME,
 )
 from .transaction import WindowedRocksDBPartitionTransaction

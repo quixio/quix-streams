@@ -144,6 +144,8 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         to the parent `set` method. The parent method internally serializes these
         into a combined key before storing the value in the update cache.
 
+        Additionally, it triggers the expiration logic.
+
         :param timestamp: Timestamp associated with the value in milliseconds.
         :param value: The value to store.
         :param prefix: The key prefix.
