@@ -7,12 +7,12 @@ from quixstreams.state.base.transaction import (
 )
 from quixstreams.state.metadata import SEPARATOR
 from quixstreams.state.recovery import ChangelogProducer
+from quixstreams.state.rocksdb.cache import TimestampsCache
 from quixstreams.state.rocksdb.metadata import (
     LATEST_TIMESTAMP_KEY,
     LATEST_TIMESTAMPS_CF_NAME,
 )
 from quixstreams.state.rocksdb.types import RocksDBOptionsType
-from quixstreams.state.rocksdb.windowed.transaction import TimestampsCache
 from quixstreams.state.serialization import (
     DumpsFunc,
     LoadsFunc,

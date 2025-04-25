@@ -1,5 +1,4 @@
 import itertools
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Iterable, Optional, cast
 
 from quixstreams.state.base.transaction import (
@@ -9,6 +8,7 @@ from quixstreams.state.base.transaction import (
 )
 from quixstreams.state.metadata import DEFAULT_PREFIX, SEPARATOR
 from quixstreams.state.recovery import ChangelogProducer
+from quixstreams.state.rocksdb.cache import CounterCache, TimestampsCache
 from quixstreams.state.serialization import (
     DumpsFunc,
     LoadsFunc,
@@ -39,20 +39,6 @@ from .state import WindowedTransactionState
 
 if TYPE_CHECKING:
     from .partition import WindowedRocksDBStorePartition
-
-
-@dataclass
-class TimestampsCache:
-    key: bytes
-    cf_name: str
-    timestamps: dict[bytes, Optional[int]] = field(default_factory=dict)
-
-
-@dataclass
-class CounterCache:
-    key: bytes
-    cf_name: str
-    counter: Optional[int] = None
 
 
 class WindowedRocksDBPartitionTransaction(PartitionTransaction):
