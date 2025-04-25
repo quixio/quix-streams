@@ -1,10 +1,8 @@
 from contextlib import contextmanager
 from typing import Any
-from unittest import mock
 
 import pytest
 
-from quixstreams.state.rocksdb.partition import Marker
 from quixstreams.state.rocksdb.timestamped import (
     TimestampedPartitionTransaction,
     TimestampedStore,
@@ -33,9 +31,9 @@ def transaction(store: TimestampedStore):
 @pytest.mark.parametrize(
     ["set_timestamp", "get_timestamp", "expected"],
     [
-        (10, 10, "value"),
-        (10, 11, "value"),
-        (10, 9, None),
+        pytest.param(10, 10, "value", id="set_timestamp_equal_to_get_timestamp"),
+        pytest.param(10, 11, "value", id="set_timestamp_less_than_get_timestamp"),
+        pytest.param(10, 9, None, id="set_timestamp_greater_than_get_timestamp"),
     ],
 )
 def test_get_last_from_cache(
@@ -45,28 +43,16 @@ def test_get_last_from_cache(
     expected: Any,
 ):
     with transaction() as tx:
-        tx.set(timestamp=set_timestamp, value="value", prefix=b"key")
+        tx.set_for_timestamp(timestamp=set_timestamp, value="value", prefix=b"key")
         assert tx.get_last(timestamp=get_timestamp, prefix=b"key") == expected
-
-
-def test_get_last_ignore_deleted(
-    transaction: TimestampedPartitionTransaction,
-):
-    with transaction() as tx:
-        tx.set(timestamp=9, value="value9-stored", prefix=b"key")
-
-    with transaction() as tx:
-        tx._expire(timestamp=10, prefix=b"key")
-        tx.set(timestamp=8, value="value8-cached", prefix=b"key")
-        assert tx.get_last(timestamp=10, prefix=b"key") == "value8-cached"
 
 
 @pytest.mark.parametrize(
     ["set_timestamp", "get_timestamp", "expected"],
     [
-        (10, 10, "value"),
-        (10, 11, "value"),
-        (10, 9, None),
+        pytest.param(10, 10, "value", id="set_timestamp_equal_to_get_timestamp"),
+        pytest.param(10, 11, "value", id="set_timestamp_less_than_get_timestamp"),
+        pytest.param(10, 9, None, id="set_timestamp_greater_than_get_timestamp"),
     ],
 )
 def test_get_last_from_store(
@@ -76,7 +62,7 @@ def test_get_last_from_store(
     expected: Any,
 ):
     with transaction() as tx:
-        tx.set(timestamp=set_timestamp, value="value", prefix=b"key")
+        tx.set_for_timestamp(timestamp=set_timestamp, value="value", prefix=b"key")
 
     with transaction() as tx:
         assert tx.get_last(timestamp=get_timestamp, prefix=b"key") == expected
@@ -97,16 +83,20 @@ def test_get_last_returns_value_for_greater_timestamp(
     expected: Any,
 ):
     with transaction() as tx:
-        tx.set(timestamp=set_timestamp_stored, value="stored", prefix=b"key")
+        tx.set_for_timestamp(
+            timestamp=set_timestamp_stored, value="stored", prefix=b"key"
+        )
 
     with transaction() as tx:
-        tx.set(timestamp=set_timestamp_cached, value="cached", prefix=b"key")
+        tx.set_for_timestamp(
+            timestamp=set_timestamp_cached, value="cached", prefix=b"key"
+        )
         assert tx.get_last(timestamp=get_timestamp, prefix=b"key") == expected
 
 
 def test_get_last_prefix_not_bytes(transaction: TimestampedPartitionTransaction):
     with transaction() as tx:
-        tx.set(timestamp=10, value="value", prefix="key")
+        tx.set_for_timestamp(timestamp=10, value="value", prefix="key")
         assert tx.get_last(timestamp=10, prefix="key") == "value"
         assert tx.get_last(timestamp=10, prefix=b'"key"') == "value"
 
@@ -115,7 +105,7 @@ def test_get_last_from_cache_with_retention(
     transaction: TimestampedPartitionTransaction,
 ):
     with transaction() as tx:
-        tx.set(timestamp=5, value="value", prefix=b"key")
+        tx.set_for_timestamp(timestamp=5, value="value", prefix=b"key")
         assert tx.get_last(timestamp=10, prefix=b"key") == "value"
         assert tx.get_last(timestamp=10, prefix=b"key", retention_ms=5) == "value"
         assert tx.get_last(timestamp=10, prefix=b"key", retention_ms=4) == None
@@ -125,7 +115,7 @@ def test_get_last_from_store_with_retention(
     transaction: TimestampedPartitionTransaction,
 ):
     with transaction() as tx:
-        tx.set(timestamp=5, value="value", prefix=b"key")
+        tx.set_for_timestamp(timestamp=5, value="value", prefix=b"key")
 
     with transaction() as tx:
         assert tx.get_last(timestamp=10, prefix=b"key") == "value"
@@ -133,79 +123,50 @@ def test_get_last_from_store_with_retention(
         assert tx.get_last(timestamp=10, prefix=b"key", retention_ms=4) == None
 
 
-@mock.patch("quixstreams.state.rocksdb.timestamped.EXPIRATION_COUNTER", 1000)
-def test_get_last_from_cache_with_expire_call(
+def test_get_last_for_out_of_order_timestamp(
     transaction: TimestampedPartitionTransaction,
 ):
     with transaction() as tx:
-        tx.set(timestamp=5, value="value1", prefix=b"key")
-        assert tx._update_cache.get_updates_for_prefix(prefix=b"key") == {
-            b"key|\x00\x00\x00\x00\x00\x00\x00\x05": b'"value1"',
-        }
+        tx.set_for_timestamp(
+            timestamp=10, value="value10", prefix=b"key", retention_ms=5
+        )
+        assert tx.get_last(timestamp=10, prefix=b"key", retention_ms=5) == "value10"
+        tx.set_for_timestamp(timestamp=5, value="value5", prefix=b"key", retention_ms=5)
+        tx.set_for_timestamp(timestamp=4, value="value4", prefix=b"key", retention_ms=5)
 
-        # Expiration counter is exhausted for this `get_last` call
-        # `_expire` method is called with `lower_bound_timestamp` = 10 - 4 = 6
-        # Everything below timestamp 6 gets expired.
-        assert tx.get_last(timestamp=10, prefix=b"key", retention_ms=4) == None
-        assert tx._update_cache.get_updates_for_prefix(prefix=b"key") == {}
+    with transaction() as tx:
+        assert tx.get_last(timestamp=5, prefix=b"key", retention_ms=5) == "value5"
+
+        # Retention watermark is 10 - 5 = 5 so everything lower is ignored
+        assert tx.get_last(timestamp=4, prefix=b"key", retention_ms=5) is None
 
 
-@mock.patch("quixstreams.state.rocksdb.timestamped.EXPIRATION_COUNTER", 1000)
-def test_get_last_from_store_with_expire_call(
+def test_set_for_timestamp_with_prefix_not_bytes(
     transaction: TimestampedPartitionTransaction,
 ):
-    key = b"key|\x00\x00\x00\x00\x00\x00\x00\x05"
+    with transaction() as tx:
+        tx.set_for_timestamp(timestamp=10, value="value", prefix="key")
+        assert tx.get_last(timestamp=10, prefix="key") == "value"
+        assert tx.get_last(timestamp=10, prefix=b'"key"') == "value"
+
+
+def test_set_for_timestamp_with_retention_cached(
+    transaction: TimestampedPartitionTransaction,
+):
+    with transaction() as tx:
+        tx.set_for_timestamp(timestamp=2, value="v2", prefix=b"key", retention_ms=2)
+        tx.set_for_timestamp(timestamp=5, value="v5", prefix=b"key", retention_ms=2)
+        assert tx.get_last(timestamp=2, prefix=b"key", retention_ms=3) == None
+        assert tx.get_last(timestamp=5, prefix=b"key", retention_ms=3) == "v5"
+
+
+def test_set_for_timestamp_with_retention_stored(
+    transaction: TimestampedPartitionTransaction,
+):
+    with transaction() as tx:
+        tx.set_for_timestamp(timestamp=2, value="v2", prefix=b"key", retention_ms=2)
+        tx.set_for_timestamp(timestamp=5, value="v5", prefix=b"key", retention_ms=2)
 
     with transaction() as tx:
-        tx.set(timestamp=5, value="value1", prefix=b"key")
-
-    with transaction() as tx:
-        assert tx._partition.get(key) == b'"value1"'
-        assert not tx._update_cache.get_deletes()
-
-        # Expiration counter is exhausted for this `get_last` call
-        # `_expire` method is called with `lower_bound_timestamp` = 10 - 4 = 6
-        # Everything belowe timestamp 6 gets expired.
-        assert tx.get_last(timestamp=10, prefix=b"key", retention_ms=4) == None
-        assert key in tx._update_cache.get_deletes()
-
-    with transaction() as tx:
-        assert tx._partition.get(key) is Marker.UNDEFINED
-
-
-def test_expire_cached(transaction: TimestampedPartitionTransaction):
-    with transaction() as tx:
-        tx.set(timestamp=1, value="value1", prefix=b"key")
-        tx.set(timestamp=10, value="value10", prefix=b"key")
-        tx.set(timestamp=11, value="value11", prefix=b"key")
-
-        tx._expire(timestamp=11, prefix=b"key")
-
-        assert tx.get_last(timestamp=10, prefix=b"key") == None
-        assert tx.get_last(timestamp=11, prefix=b"key") == "value11"
-
-
-def test_expire_stored(transaction: TimestampedPartitionTransaction):
-    with transaction() as tx:
-        tx.set(timestamp=1, value="value1", prefix=b"key")
-        tx.set(timestamp=10, value="value10", prefix=b"key")
-        tx.set(timestamp=11, value="value11", prefix=b"key")
-
-    with transaction() as tx:
-        tx._expire(timestamp=11, prefix=b"key")
-
-        assert tx.get_last(timestamp=10, prefix=b"key") == None
-        assert tx.get_last(timestamp=11, prefix=b"key") == "value11"
-
-
-def test_expire_idempotent(transaction: TimestampedPartitionTransaction):
-    with transaction() as tx:
-        tx.set(timestamp=1, value="value1", prefix=b"key")
-
-    with transaction() as tx:
-        tx.set(timestamp=10, value="value10", prefix=b"key")
-
-        tx._expire(timestamp=11, prefix=b"key")
-        tx._expire(timestamp=11, prefix=b"key")
-
-        assert tx.get_last(timestamp=10, prefix=b"key") == None
+        assert tx.get_last(timestamp=2, prefix=b"key", retention_ms=3) == None
+        assert tx.get_last(timestamp=5, prefix=b"key", retention_ms=3) == "v5"

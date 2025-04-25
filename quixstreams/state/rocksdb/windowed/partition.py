@@ -1,7 +1,6 @@
 import logging
 from typing import Iterator, Optional, cast
 
-from quixstreams.state.exceptions import ColumnFamilyDoesNotExist
 from quixstreams.state.recovery import ChangelogProducer
 
 from ..partition import RocksDBStorePartition
@@ -60,9 +59,3 @@ class WindowedRocksDBStorePartition(RocksDBStorePartition):
         """
         cf_dict = self.get_column_family(cf_name)
         return cast(Iterator[bytes], cf_dict.keys())
-
-    def _ensure_column_family(self, cf_name: str):
-        try:
-            self.get_column_family(cf_name)
-        except ColumnFamilyDoesNotExist:
-            self.create_column_family(cf_name)

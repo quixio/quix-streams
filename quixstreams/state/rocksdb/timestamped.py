@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any, Optional, Union, cast
 
 from quixstreams.state.base.transaction import (
     PartitionTransaction,
@@ -6,7 +6,19 @@ from quixstreams.state.base.transaction import (
     validate_transaction_status,
 )
 from quixstreams.state.metadata import SEPARATOR
-from quixstreams.state.serialization import int_to_int64_bytes, serialize
+from quixstreams.state.recovery import ChangelogProducer
+from quixstreams.state.rocksdb.metadata import (
+    LATEST_TIMESTAMP_KEY,
+    LATEST_TIMESTAMPS_CF_NAME,
+)
+from quixstreams.state.rocksdb.types import RocksDBOptionsType
+from quixstreams.state.rocksdb.windowed.transaction import TimestampsCache
+from quixstreams.state.serialization import (
+    DumpsFunc,
+    LoadsFunc,
+    int_to_int64_bytes,
+    serialize,
+)
 
 from .partition import RocksDBStorePartition
 from .store import RocksDBStore
@@ -18,7 +30,6 @@ __all__ = (
 )
 
 DAYS_7 = 7 * 24 * 60 * 60 * 1000
-EXPIRATION_COUNTER = 0
 
 
 class TimestampedPartitionTransaction(PartitionTransaction):
@@ -30,12 +41,26 @@ class TimestampedPartitionTransaction(PartitionTransaction):
     It interacts with both an in-memory update cache and the persistent RocksDB store.
     """
 
-    # Override the type hint from the parent class (`PartitionTransaction`).
-    # This informs type checkers like mypy that in this specific subclass,
-    # `_partition` is a `TimestampedStorePartition` (defined below),
-    # which has methods like `.iter_items()` that the base type might lack.
-    # The string quotes are necessary for the forward reference.
-    _partition: "TimestampedStorePartition"
+    def __init__(
+        self,
+        partition: "TimestampedStorePartition",
+        dumps: DumpsFunc,
+        loads: LoadsFunc,
+        changelog_producer: Optional[ChangelogProducer] = None,
+    ):
+        super().__init__(
+            partition=partition,
+            dumps=dumps,
+            loads=loads,
+            changelog_producer=changelog_producer,
+        )
+        self._partition: TimestampedStorePartition = cast(
+            "TimestampedStorePartition", self._partition
+        )
+        self._latest_timestamps: TimestampsCache = TimestampsCache(
+            key=LATEST_TIMESTAMP_KEY,
+            cf_name=LATEST_TIMESTAMPS_CF_NAME,
+        )
 
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
     def get_last(
@@ -60,13 +85,20 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         :param cf_name: The column family name.
         :return: The deserialized value if found, otherwise None.
         """
-        global EXPIRATION_COUNTER
 
         prefix = self._ensure_bytes(prefix)
 
+        latest_timestamp = max(
+            self._get_timestamp(
+                prefix=prefix, cache=self._latest_timestamps, default=0
+            ),
+            timestamp,
+        )
+
         # Negative retention is not allowed
-        lower_bound_timestamp = max(timestamp - retention_ms, 0)
-        lower_bound = self._serialize_key(lower_bound_timestamp, prefix)
+        lower_bound = self._serialize_key(
+            max(latest_timestamp - retention_ms, 0), prefix
+        )
         # +1 because upper bound is exclusive
         upper_bound = self._serialize_key(timestamp + 1, prefix)
 
@@ -101,15 +133,18 @@ class TimestampedPartitionTransaction(PartitionTransaction):
             # iterating backwards from the upper bound.
             break
 
-        if not EXPIRATION_COUNTER % 1000:
-            self._expire(lower_bound_timestamp, prefix, cf_name=cf_name)
-        EXPIRATION_COUNTER += 1
-
         return self._deserialize_value(value) if value is not None else None
 
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
-    def set(self, timestamp: int, value: Any, prefix: Any, cf_name: str = "default"):
-        """Set a value associated with a prefix and timestamp.
+    def set_for_timestamp(
+        self,
+        timestamp: int,
+        value: Any,
+        prefix: Any,
+        retention_ms: int = DAYS_7,
+        cf_name: str = "default",
+    ):
+        """Set a value for the timestamp.
 
         This method acts as a proxy, passing the provided `timestamp` and `prefix`
         to the parent `set` method. The parent method internally serializes these
@@ -122,8 +157,16 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         """
         prefix = self._ensure_bytes(prefix)
         super().set(timestamp, value, prefix, cf_name=cf_name)
+        self._expire(
+            timestamp=timestamp,
+            prefix=prefix,
+            retention_ms=retention_ms,
+            cf_name=cf_name,
+        )
 
-    def _expire(self, timestamp: int, prefix: bytes, cf_name: str = "default"):
+    def _expire(
+        self, timestamp: int, prefix: bytes, retention_ms: int, cf_name: str = "default"
+    ):
         """
         Delete all entries for a given prefix with timestamps less than the
         provided timestamp.
@@ -136,11 +179,23 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         :param prefix: The key prefix.
         :param cf_name: Column family name.
         """
-        key = self._serialize_key(timestamp, prefix)
+
+        latest_timestamp = max(
+            self._get_timestamp(
+                prefix=prefix, cache=self._latest_timestamps, default=0
+            ),
+            timestamp,
+        )
+        self._set_timestamp(
+            cache=self._latest_timestamps,
+            prefix=prefix,
+            timestamp_ms=latest_timestamp,
+        )
+
+        key = self._serialize_key(max(timestamp - retention_ms, 0), prefix)
 
         cached = self._update_cache.get_updates_for_prefix(
-            prefix=prefix,
-            cf_name=cf_name,
+            prefix=prefix, cf_name=cf_name
         )
         # Cast to list to avoid RuntimeError: dictionary changed size during iteration
         for cached_key in list(cached):
@@ -160,8 +215,42 @@ class TimestampedPartitionTransaction(PartitionTransaction):
             return prefix
         return serialize(prefix, dumps=self._dumps)
 
-    def _serialize_key(self, timestamp: int, prefix: bytes) -> bytes:
-        return prefix + SEPARATOR + int_to_int64_bytes(timestamp)
+    def _serialize_key(self, key: Union[int, bytes], prefix: bytes) -> bytes:
+        match key:
+            case int():
+                return prefix + SEPARATOR + int_to_int64_bytes(key)
+            case bytes():
+                return prefix + SEPARATOR + key
+            case _:
+                raise ValueError(f"Invalid key type: {type(key)}")
+
+    def _get_timestamp(
+        self, cache: TimestampsCache, prefix: bytes, default: Any = None
+    ) -> Any:
+        cached_ts = cache.timestamps.get(prefix)
+        if cached_ts is not None:
+            return cached_ts
+
+        stored_ts = self.get(
+            key=cache.key,
+            prefix=prefix,
+            cf_name=cache.cf_name,
+            default=default,
+        )
+        if stored_ts is not None and not isinstance(stored_ts, int):
+            raise ValueError(f"invalid timestamp {stored_ts}")
+
+        cache.timestamps[prefix] = stored_ts or default
+        return stored_ts
+
+    def _set_timestamp(self, cache: TimestampsCache, prefix: bytes, timestamp_ms: int):
+        cache.timestamps[prefix] = timestamp_ms
+        self.set(
+            key=cache.key,
+            value=timestamp_ms,
+            prefix=prefix,
+            cf_name=cache.cf_name,
+        )
 
 
 class TimestampedStorePartition(RocksDBStorePartition):
@@ -173,6 +262,15 @@ class TimestampedStorePartition(RocksDBStorePartition):
     """
 
     partition_transaction_class = TimestampedPartitionTransaction
+
+    def __init__(
+        self,
+        path: str,
+        options: Optional[RocksDBOptionsType] = None,
+        changelog_producer: Optional[ChangelogProducer] = None,
+    ) -> None:
+        super().__init__(path, options=options, changelog_producer=changelog_producer)
+        self._ensure_column_family(LATEST_TIMESTAMPS_CF_NAME)
 
 
 class TimestampedStore(RocksDBStore):

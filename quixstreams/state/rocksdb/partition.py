@@ -375,3 +375,9 @@ class RocksDBStorePartition(StorePartition):
             int_to_int64_bytes(offset),
             self.get_column_family_handle(METADATA_CF_NAME),
         )
+
+    def _ensure_column_family(self, cf_name: str) -> None:
+        try:
+            self.get_column_family(cf_name)
+        except ColumnFamilyDoesNotExist:
+            self.create_column_family(cf_name)
