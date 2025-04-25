@@ -47,7 +47,7 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         dumps: DumpsFunc,
         loads: LoadsFunc,
         changelog_producer: Optional[ChangelogProducer] = None,
-    ):
+    ) -> None:
         super().__init__(
             partition=partition,
             dumps=dumps,
@@ -87,13 +87,7 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         """
 
         prefix = self._ensure_bytes(prefix)
-
-        latest_timestamp = max(
-            self._get_timestamp(
-                prefix=prefix, cache=self._latest_timestamps, default=0
-            ),
-            timestamp,
-        )
+        latest_timestamp = self._get_latest_timestamp(prefix, timestamp)
 
         # Negative retention is not allowed
         lower_bound = self._serialize_key(
@@ -143,7 +137,7 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         prefix: Any,
         retention_ms: int = DAYS_7,
         cf_name: str = "default",
-    ):
+    ) -> None:
         """Set a value for the timestamp.
 
         This method acts as a proxy, passing the provided `timestamp` and `prefix`
@@ -166,7 +160,7 @@ class TimestampedPartitionTransaction(PartitionTransaction):
 
     def _expire(
         self, timestamp: int, prefix: bytes, retention_ms: int, cf_name: str = "default"
-    ):
+    ) -> None:
         """
         Delete all entries for a given prefix with timestamps less than the
         provided timestamp.
@@ -180,17 +174,8 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         :param cf_name: Column family name.
         """
 
-        latest_timestamp = max(
-            self._get_timestamp(
-                prefix=prefix, cache=self._latest_timestamps, default=0
-            ),
-            timestamp,
-        )
-        self._set_timestamp(
-            cache=self._latest_timestamps,
-            prefix=prefix,
-            timestamp_ms=latest_timestamp,
-        )
+        latest_timestamp = self._get_latest_timestamp(prefix, timestamp)
+        self._set_timestamp(prefix, latest_timestamp)
 
         key = self._serialize_key(max(timestamp - retention_ms, 0), prefix)
 
@@ -224,33 +209,25 @@ class TimestampedPartitionTransaction(PartitionTransaction):
             case _:
                 raise ValueError(f"Invalid key type: {type(key)}")
 
-    def _get_timestamp(
-        self, cache: TimestampsCache, prefix: bytes, default: Any = None
-    ) -> Any:
-        cached_ts = cache.timestamps.get(prefix)
-        if cached_ts is not None:
-            return cached_ts
+    def _get_latest_timestamp(self, prefix: bytes, timestamp: int) -> Any:
+        """
+        Get the latest timestamp for a given prefix.
 
-        stored_ts = self.get(
-            key=cache.key,
-            prefix=prefix,
-            cf_name=cache.cf_name,
-            default=default,
+        If the timestamp is not found in the cache, it is fetched from the store.
+        """
+        cache = self._latest_timestamps
+        ts = (
+            cache.timestamps.get(prefix)
+            or self.get(key=cache.key, prefix=prefix, cf_name=cache.cf_name)
+            or 0
         )
-        if stored_ts is not None and not isinstance(stored_ts, int):
-            raise ValueError(f"invalid timestamp {stored_ts}")
+        cache.timestamps[prefix] = latest_timestamp = max(ts, timestamp)
+        return latest_timestamp
 
-        cache.timestamps[prefix] = stored_ts or default
-        return stored_ts
-
-    def _set_timestamp(self, cache: TimestampsCache, prefix: bytes, timestamp_ms: int):
-        cache.timestamps[prefix] = timestamp_ms
-        self.set(
-            key=cache.key,
-            value=timestamp_ms,
-            prefix=prefix,
-            cf_name=cache.cf_name,
-        )
+    def _set_timestamp(self, prefix: bytes, timestamp: int) -> None:
+        cache = self._latest_timestamps
+        cache.timestamps[prefix] = timestamp
+        self.set(key=cache.key, value=timestamp, prefix=prefix, cf_name=cache.cf_name)
 
 
 class TimestampedStorePartition(RocksDBStorePartition):
