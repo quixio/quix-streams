@@ -203,13 +203,11 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         return serialize(prefix, dumps=self._dumps)
 
     def _serialize_key(self, key: Union[int, bytes], prefix: bytes) -> bytes:
-        match key:
-            case int():
-                return prefix + SEPARATOR + int_to_int64_bytes(key)
-            case bytes():
-                return prefix + SEPARATOR + key
-            case _:
-                raise ValueError(f"Invalid key type: {type(key)}")
+        if isinstance(key, int):
+            return prefix + SEPARATOR + int_to_int64_bytes(key)
+        elif isinstance(key, bytes):
+            return prefix + SEPARATOR + key
+        raise ValueError(f"Invalid key type: {type(key)}")
 
     def _get_latest_timestamp(self, prefix: bytes, timestamp: int) -> Any:
         """
