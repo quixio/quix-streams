@@ -99,10 +99,7 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         value: Optional[bytes] = None
 
         deletes = self._update_cache.get_deletes(cf_name=cf_name)
-        updates = self._update_cache.get_updates_for_prefix(
-            prefix=prefix,
-            cf_name=cf_name,
-        )
+        updates = self._update_cache.get_updates(cf_name=cf_name).get(prefix, {})
 
         cached = sorted(updates.items(), reverse=True)
         for cached_key, cached_value in cached:
@@ -181,9 +178,7 @@ class TimestampedPartitionTransaction(PartitionTransaction):
 
         key = self._serialize_key(max(timestamp - retention_ms, 0), prefix)
 
-        cached = self._update_cache.get_updates_for_prefix(
-            prefix=prefix, cf_name=cf_name
-        )
+        cached = self._update_cache.get_updates(cf_name=cf_name).get(prefix, {})
         # Cast to list to avoid RuntimeError: dictionary changed size during iteration
         for cached_key in list(cached):
             if cached_key < key:

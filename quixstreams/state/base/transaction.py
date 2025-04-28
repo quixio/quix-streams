@@ -6,6 +6,7 @@ from collections import defaultdict
 from typing import (
     TYPE_CHECKING,
     Any,
+    Dict,
     Generic,
     Literal,
     Optional,
@@ -139,28 +140,14 @@ class PartitionTransactionCache:
         """
         return set(self._updated.keys()) | set(self._deleted.keys())
 
-    def get_updates(self, cf_name: str = "default") -> dict[bytes, dict[bytes, bytes]]:
+    def get_updates(self, cf_name: str = "default") -> Dict[bytes, Dict[bytes, bytes]]:
         """
         Get all updated keys (excluding deleted)
-        in the format "{<prefix>: {<key>: <value>, ...}, ...}".
+        in the format "{<prefix>: {<key>: <value>}}".
 
         :param: cf_name: column family name
         """
         return self._updated.get(cf_name, {})
-
-    def get_updates_for_prefix(
-        self,
-        prefix: bytes,
-        cf_name: str = "default",
-    ) -> dict[bytes, bytes]:
-        """
-        Get all updated keys (excluding deleted)
-        in the format "{<key>: <value>, ...}".
-
-        :param: prefix: key prefix
-        :param: cf_name: column family name
-        """
-        return self._updated.get(cf_name, {}).get(prefix, {})
 
     def get_deletes(self, cf_name: str = "default") -> Set[bytes]:
         """
