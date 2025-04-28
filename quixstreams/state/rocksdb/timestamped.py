@@ -65,7 +65,6 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         self,
         timestamp: int,
         prefix: Any,
-        retention_ms: int = DAYS_7,
         cf_name: str = "default",
     ) -> Optional[Any]:
         """Get the latest value for a prefix up to a given timestamp.
@@ -79,15 +78,12 @@ class TimestampedPartitionTransaction(PartitionTransaction):
 
         :param timestamp: The upper bound timestamp (inclusive) in milliseconds.
         :param prefix: The key prefix.
-        :param retention_ms: The retention period in milliseconds.
         :param cf_name: The column family name.
         :return: The deserialized value if found, otherwise None.
         """
 
         prefix = self._ensure_bytes(prefix)
-        min_eligible_timestamp = self._get_min_eligible_timestamp(
-            prefix, timestamp, retention_ms
-        )
+        min_eligible_timestamp = self._get_min_eligible_timestamp(prefix)
 
         lower_bound = self._serialize_key(min_eligible_timestamp, prefix)
         # +1 because upper bound is exclusive
@@ -147,16 +143,14 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         """
         prefix = self._ensure_bytes(prefix)
         super().set(timestamp, value, prefix, cf_name=cf_name)
-        self._expire(
-            timestamp=timestamp,
-            prefix=prefix,
-            retention_ms=retention_ms,
-            cf_name=cf_name,
+        min_eligible_timestamp = max(
+            self._get_min_eligible_timestamp(prefix),
+            timestamp - retention_ms,
         )
+        self._set_min_eligible_timestamp(prefix, min_eligible_timestamp)
+        self._expire(prefix=prefix, cf_name=cf_name)
 
-    def _expire(
-        self, timestamp: int, prefix: bytes, retention_ms: int, cf_name: str = "default"
-    ) -> None:
+    def _expire(self, prefix: bytes, cf_name: str = "default") -> None:
         """
         Delete all entries for a given prefix with timestamps less than the
         provided timestamp.
@@ -164,16 +158,11 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         This applies to both the in-memory update cache and the underlying
         RocksDB store within the current transaction.
 
-        :param timestamp: The upper bound timestamp (exclusive) in milliseconds.
-            Entries with timestamps strictly less than this will be deleted.
         :param prefix: The key prefix.
         :param cf_name: Column family name.
         """
 
-        min_eligible_timestamp = self._get_min_eligible_timestamp(
-            prefix, timestamp, retention_ms
-        )
-        self._set_min_eligible_timestamp(prefix, min_eligible_timestamp)
+        min_eligible_timestamp = self._get_min_eligible_timestamp(prefix)
 
         key = self._serialize_key(min_eligible_timestamp, prefix)
 
@@ -203,16 +192,13 @@ class TimestampedPartitionTransaction(PartitionTransaction):
             return prefix + SEPARATOR + key
         raise ValueError(f"Invalid key type: {type(key)}")
 
-    def _get_min_eligible_timestamp(
-        self, prefix: bytes, timestamp: int, retention_ms: int
-    ) -> Any:
+    def _get_min_eligible_timestamp(self, prefix: bytes) -> int:
         cache = self._min_eligible_timestamps
-        ts = (
+        return (
             cache.timestamps.get(prefix)
             or self.get(key=cache.key, prefix=prefix, cf_name=cache.cf_name)
             or 0
         )
-        return max(ts, timestamp - retention_ms)
 
     def _set_min_eligible_timestamp(self, prefix: bytes, timestamp: int) -> None:
         cache = self._min_eligible_timestamps

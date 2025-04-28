@@ -101,28 +101,6 @@ def test_get_last_prefix_not_bytes(transaction: TimestampedPartitionTransaction)
         assert tx.get_last(timestamp=10, prefix=b'"key"') == "value"
 
 
-def test_get_last_from_cache_with_retention(
-    transaction: TimestampedPartitionTransaction,
-):
-    with transaction() as tx:
-        tx.set_for_timestamp(timestamp=5, value="value", prefix=b"key")
-        assert tx.get_last(timestamp=10, prefix=b"key") == "value"
-        assert tx.get_last(timestamp=10, prefix=b"key", retention_ms=5) == "value"
-        assert tx.get_last(timestamp=10, prefix=b"key", retention_ms=4) == None
-
-
-def test_get_last_from_store_with_retention(
-    transaction: TimestampedPartitionTransaction,
-):
-    with transaction() as tx:
-        tx.set_for_timestamp(timestamp=5, value="value", prefix=b"key")
-
-    with transaction() as tx:
-        assert tx.get_last(timestamp=10, prefix=b"key") == "value"
-        assert tx.get_last(timestamp=10, prefix=b"key", retention_ms=5) == "value"
-        assert tx.get_last(timestamp=10, prefix=b"key", retention_ms=4) == None
-
-
 def test_get_last_for_out_of_order_timestamp(
     transaction: TimestampedPartitionTransaction,
 ):
@@ -130,15 +108,15 @@ def test_get_last_for_out_of_order_timestamp(
         tx.set_for_timestamp(
             timestamp=10, value="value10", prefix=b"key", retention_ms=5
         )
-        assert tx.get_last(timestamp=10, prefix=b"key", retention_ms=5) == "value10"
+        assert tx.get_last(timestamp=10, prefix=b"key") == "value10"
         tx.set_for_timestamp(timestamp=5, value="value5", prefix=b"key", retention_ms=5)
         tx.set_for_timestamp(timestamp=4, value="value4", prefix=b"key", retention_ms=5)
 
     with transaction() as tx:
-        assert tx.get_last(timestamp=5, prefix=b"key", retention_ms=5) == "value5"
+        assert tx.get_last(timestamp=5, prefix=b"key") == "value5"
 
         # Retention watermark is 10 - 5 = 5 so everything lower is ignored
-        assert tx.get_last(timestamp=4, prefix=b"key", retention_ms=5) is None
+        assert tx.get_last(timestamp=4, prefix=b"key") is None
 
 
 def test_set_for_timestamp_with_prefix_not_bytes(
@@ -156,8 +134,8 @@ def test_set_for_timestamp_with_retention_cached(
     with transaction() as tx:
         tx.set_for_timestamp(timestamp=2, value="v2", prefix=b"key", retention_ms=2)
         tx.set_for_timestamp(timestamp=5, value="v5", prefix=b"key", retention_ms=2)
-        assert tx.get_last(timestamp=2, prefix=b"key", retention_ms=3) == None
-        assert tx.get_last(timestamp=5, prefix=b"key", retention_ms=3) == "v5"
+        assert tx.get_last(timestamp=2, prefix=b"key") == None
+        assert tx.get_last(timestamp=5, prefix=b"key") == "v5"
 
 
 def test_set_for_timestamp_with_retention_stored(
@@ -168,5 +146,5 @@ def test_set_for_timestamp_with_retention_stored(
         tx.set_for_timestamp(timestamp=5, value="v5", prefix=b"key", retention_ms=2)
 
     with transaction() as tx:
-        assert tx.get_last(timestamp=2, prefix=b"key", retention_ms=3) == None
-        assert tx.get_last(timestamp=5, prefix=b"key", retention_ms=3) == "v5"
+        assert tx.get_last(timestamp=2, prefix=b"key") == None
+        assert tx.get_last(timestamp=5, prefix=b"key") == "v5"
