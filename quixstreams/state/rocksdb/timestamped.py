@@ -143,32 +143,34 @@ class TimestampedPartitionTransaction(PartitionTransaction):
             timestamp - retention_ms,
         )
         self._set_min_eligible_timestamp(prefix, min_eligible_timestamp)
-        self._expire(prefix=prefix)
 
-    def _expire(self, prefix: bytes) -> None:
+    def _flush(self, changelog_offset: Optional[int]):
+        self._expire()
+        super()._flush(changelog_offset=changelog_offset)
+
+    def _expire(self) -> None:
         """
-        Delete all entries for a given prefix with timestamps less than the
-        provided timestamp.
+        Delete all entries with timestamps less than the minimum
+        eligible timestamp for the given prefix.
 
         This applies to both the in-memory update cache and the underlying
         RocksDB store within the current transaction.
-
-        :param prefix: The key prefix.
         """
 
-        min_eligible_timestamp = self._get_min_eligible_timestamp(prefix)
+        updates = self._update_cache.get_updates()
+        for prefix, cached in updates.items():
+            min_eligible_timestamp = self._get_min_eligible_timestamp(prefix)
 
-        key = self._serialize_key(min_eligible_timestamp, prefix)
+            key = self._serialize_key(min_eligible_timestamp, prefix)
 
-        cached = self._update_cache.get_updates().get(prefix, {})
-        # Cast to list to avoid RuntimeError: dictionary changed size during iteration
-        for cached_key in list(cached):
-            if cached_key < key:
-                self._update_cache.delete(cached_key, prefix)
+            # Cast to list to avoid RuntimeError: dictionary changed size during iteration
+            for cached_key in list(cached):
+                if cached_key < key:
+                    self._update_cache.delete(cached_key, prefix)
 
-        stored = self._partition.iter_items(lower_bound=prefix, upper_bound=key)
-        for stored_key, _ in stored:
-            self._update_cache.delete(stored_key, prefix)
+            stored = self._partition.iter_items(lower_bound=prefix, upper_bound=key)
+            for stored_key, _ in stored:
+                self._update_cache.delete(stored_key, prefix)
 
     def _ensure_bytes(self, prefix: Any) -> bytes:
         if isinstance(prefix, bytes):
@@ -185,9 +187,7 @@ class TimestampedPartitionTransaction(PartitionTransaction):
     def _get_min_eligible_timestamp(self, prefix: bytes) -> int:
         cache = self._min_eligible_timestamps
         return (
-            cache.timestamps.get(prefix)
-            or self.get(key=cache.key, prefix=prefix, cf_name=cache.cf_name)
-            or 0
+            cache.timestamps.get(prefix) or self.get(key=cache.key, prefix=prefix) or 0
         )
 
     def _set_min_eligible_timestamp(self, prefix: bytes, timestamp: int) -> None:
