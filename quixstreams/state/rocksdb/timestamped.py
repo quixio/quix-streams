@@ -12,7 +12,6 @@ from quixstreams.state.rocksdb.metadata import (
     LATEST_TIMESTAMP_KEY,
     LATEST_TIMESTAMPS_CF_NAME,
 )
-from quixstreams.state.rocksdb.types import RocksDBOptionsType
 from quixstreams.state.serialization import (
     DumpsFunc,
     LoadsFunc,
@@ -234,15 +233,7 @@ class TimestampedStorePartition(RocksDBStorePartition):
     """
 
     partition_transaction_class = TimestampedPartitionTransaction
-
-    def __init__(
-        self,
-        path: str,
-        options: Optional[RocksDBOptionsType] = None,
-        changelog_producer: Optional[ChangelogProducer] = None,
-    ) -> None:
-        super().__init__(path, options=options, changelog_producer=changelog_producer)
-        self._ensure_column_family(LATEST_TIMESTAMPS_CF_NAME)
+    additional_column_families = (LATEST_TIMESTAMPS_CF_NAME,)
 
 
 class TimestampedStore(RocksDBStore):

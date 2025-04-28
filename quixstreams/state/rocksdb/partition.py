@@ -42,6 +42,8 @@ class RocksDBStorePartition(StorePartition):
     :param options: RocksDB options. If `None`, the default options will be used.
     """
 
+    additional_column_families: tuple[str, ...] = ()
+
     def __init__(
         self,
         path: str,
@@ -60,6 +62,8 @@ class RocksDBStorePartition(StorePartition):
         self._db = self._init_rocksdb()
         self._cf_cache: Dict[str, Rdict] = {}
         self._cf_handle_cache: Dict[str, ColumnFamily] = {}
+        for cf_name in self.additional_column_families:
+            self._ensure_column_family(cf_name)
 
     def recover_from_changelog_message(
         self, key: bytes, value: Optional[bytes], cf_name: str, offset: int
