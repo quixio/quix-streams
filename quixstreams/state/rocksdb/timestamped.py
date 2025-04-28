@@ -65,7 +65,6 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         self,
         timestamp: int,
         prefix: Any,
-        cf_name: str = "default",
     ) -> Optional[Any]:
         """Get the latest value for a prefix up to a given timestamp.
 
@@ -78,7 +77,6 @@ class TimestampedPartitionTransaction(PartitionTransaction):
 
         :param timestamp: The upper bound timestamp (inclusive) in milliseconds.
         :param prefix: The key prefix.
-        :param cf_name: The column family name.
         :return: The deserialized value if found, otherwise None.
         """
 
@@ -91,8 +89,8 @@ class TimestampedPartitionTransaction(PartitionTransaction):
 
         value: Optional[bytes] = None
 
-        deletes = self._update_cache.get_deletes(cf_name=cf_name)
-        updates = self._update_cache.get_updates(cf_name=cf_name).get(prefix, {})
+        deletes = self._update_cache.get_deletes()
+        updates = self._update_cache.get_updates().get(prefix, {})
 
         cached = sorted(updates.items(), reverse=True)
         for cached_key, cached_value in cached:
@@ -104,7 +102,6 @@ class TimestampedPartitionTransaction(PartitionTransaction):
             lower_bound=lower_bound,
             upper_bound=upper_bound,
             backwards=True,
-            cf_name=cf_name,
         )
         for stored_key, stored_value in stored:
             if stored_key in deletes:
@@ -126,7 +123,6 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         value: Any,
         prefix: Any,
         retention_ms: int = DAYS_7,
-        cf_name: str = "default",
     ) -> None:
         """Set a value for the timestamp.
 
@@ -139,18 +135,17 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         :param timestamp: Timestamp associated with the value in milliseconds.
         :param value: The value to store.
         :param prefix: The key prefix.
-        :param cf_name: Column family name.
         """
         prefix = self._ensure_bytes(prefix)
-        super().set(timestamp, value, prefix, cf_name=cf_name)
+        super().set(timestamp, value, prefix)
         min_eligible_timestamp = max(
             self._get_min_eligible_timestamp(prefix),
             timestamp - retention_ms,
         )
         self._set_min_eligible_timestamp(prefix, min_eligible_timestamp)
-        self._expire(prefix=prefix, cf_name=cf_name)
+        self._expire(prefix=prefix)
 
-    def _expire(self, prefix: bytes, cf_name: str = "default") -> None:
+    def _expire(self, prefix: bytes) -> None:
         """
         Delete all entries for a given prefix with timestamps less than the
         provided timestamp.
@@ -159,26 +154,21 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         RocksDB store within the current transaction.
 
         :param prefix: The key prefix.
-        :param cf_name: Column family name.
         """
 
         min_eligible_timestamp = self._get_min_eligible_timestamp(prefix)
 
         key = self._serialize_key(min_eligible_timestamp, prefix)
 
-        cached = self._update_cache.get_updates(cf_name=cf_name).get(prefix, {})
+        cached = self._update_cache.get_updates().get(prefix, {})
         # Cast to list to avoid RuntimeError: dictionary changed size during iteration
         for cached_key in list(cached):
             if cached_key < key:
-                self._update_cache.delete(cached_key, prefix, cf_name=cf_name)
+                self._update_cache.delete(cached_key, prefix)
 
-        stored = self._partition.iter_items(
-            lower_bound=prefix,
-            upper_bound=key,
-            cf_name=cf_name,
-        )
+        stored = self._partition.iter_items(lower_bound=prefix, upper_bound=key)
         for stored_key, _ in stored:
-            self._update_cache.delete(stored_key, prefix, cf_name=cf_name)
+            self._update_cache.delete(stored_key, prefix)
 
     def _ensure_bytes(self, prefix: Any) -> bytes:
         if isinstance(prefix, bytes):
