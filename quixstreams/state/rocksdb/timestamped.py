@@ -8,10 +8,6 @@ from quixstreams.state.base.transaction import (
 from quixstreams.state.metadata import SEPARATOR
 from quixstreams.state.recovery import ChangelogProducer
 from quixstreams.state.rocksdb.cache import TimestampsCache
-from quixstreams.state.rocksdb.metadata import (
-    LATEST_TIMESTAMP_KEY,
-    LATEST_TIMESTAMPS_CF_NAME,
-)
 from quixstreams.state.serialization import (
     DumpsFunc,
     LoadsFunc,
@@ -29,6 +25,9 @@ __all__ = (
 )
 
 DAYS_7 = 7 * 24 * 60 * 60 * 1000
+
+MIN_ELIGIBLE_TIMESTAMPS_CF_NAME = "__min-eligible-timestamps__"
+MIN_ELIGIBLE_TIMESTAMPS_KEY = b"__min_eligible_timestamps__"
 
 
 class TimestampedPartitionTransaction(PartitionTransaction):
@@ -56,9 +55,9 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         self._partition: TimestampedStorePartition = cast(
             "TimestampedStorePartition", self._partition
         )
-        self._latest_timestamps: TimestampsCache = TimestampsCache(
-            key=LATEST_TIMESTAMP_KEY,
-            cf_name=LATEST_TIMESTAMPS_CF_NAME,
+        self._min_eligible_timestamps: TimestampsCache = TimestampsCache(
+            key=MIN_ELIGIBLE_TIMESTAMPS_KEY,
+            cf_name=MIN_ELIGIBLE_TIMESTAMPS_CF_NAME,
         )
 
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
@@ -86,12 +85,11 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         """
 
         prefix = self._ensure_bytes(prefix)
-        latest_timestamp = self._get_latest_timestamp(prefix, timestamp)
-
-        # Negative retention is not allowed
-        lower_bound = self._serialize_key(
-            max(latest_timestamp - retention_ms, 0), prefix
+        min_eligible_timestamp = self._get_min_eligible_timestamp(
+            prefix, timestamp, retention_ms
         )
+
+        lower_bound = self._serialize_key(min_eligible_timestamp, prefix)
         # +1 because upper bound is exclusive
         upper_bound = self._serialize_key(timestamp + 1, prefix)
 
@@ -172,10 +170,12 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         :param cf_name: Column family name.
         """
 
-        latest_timestamp = self._get_latest_timestamp(prefix, timestamp)
-        self._set_timestamp(prefix, latest_timestamp)
+        min_eligible_timestamp = self._get_min_eligible_timestamp(
+            prefix, timestamp, retention_ms
+        )
+        self._set_min_eligible_timestamp(prefix, min_eligible_timestamp)
 
-        key = self._serialize_key(max(timestamp - retention_ms, 0), prefix)
+        key = self._serialize_key(min_eligible_timestamp, prefix)
 
         cached = self._update_cache.get_updates(cf_name=cf_name).get(prefix, {})
         # Cast to list to avoid RuntimeError: dictionary changed size during iteration
@@ -203,23 +203,19 @@ class TimestampedPartitionTransaction(PartitionTransaction):
             return prefix + SEPARATOR + key
         raise ValueError(f"Invalid key type: {type(key)}")
 
-    def _get_latest_timestamp(self, prefix: bytes, timestamp: int) -> Any:
-        """
-        Get the latest timestamp for a given prefix.
-
-        If the timestamp is not found in the cache, it is fetched from the store.
-        """
-        cache = self._latest_timestamps
+    def _get_min_eligible_timestamp(
+        self, prefix: bytes, timestamp: int, retention_ms: int
+    ) -> Any:
+        cache = self._min_eligible_timestamps
         ts = (
             cache.timestamps.get(prefix)
             or self.get(key=cache.key, prefix=prefix, cf_name=cache.cf_name)
             or 0
         )
-        cache.timestamps[prefix] = latest_timestamp = max(ts, timestamp)
-        return latest_timestamp
+        return max(ts, timestamp - retention_ms)
 
-    def _set_timestamp(self, prefix: bytes, timestamp: int) -> None:
-        cache = self._latest_timestamps
+    def _set_min_eligible_timestamp(self, prefix: bytes, timestamp: int) -> None:
+        cache = self._min_eligible_timestamps
         cache.timestamps[prefix] = timestamp
         self.set(key=cache.key, value=timestamp, prefix=prefix, cf_name=cache.cf_name)
 
@@ -233,7 +229,7 @@ class TimestampedStorePartition(RocksDBStorePartition):
     """
 
     partition_transaction_class = TimestampedPartitionTransaction
-    additional_column_families = (LATEST_TIMESTAMPS_CF_NAME,)
+    additional_column_families = (MIN_ELIGIBLE_TIMESTAMPS_CF_NAME,)
 
 
 class TimestampedStore(RocksDBStore):
