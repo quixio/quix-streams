@@ -69,6 +69,11 @@ MessageProcessedCallback = Callable[[str, int, int], None]
 # Enforce idempotent producing for the internal RowProducer
 _default_producer_extra_config = {"enable.idempotence": True}
 
+# Default config for the internal consumer
+_default_consumer_extra_config = {
+    "fetch.queue.backoff.ms": 100,  # Make the consumer to fetch data more often
+}
+
 # Force assignment strategy to be "range" for co-partitioning in internal Consumers
 consumer_extra_config_overrides = {"partition.assignment.strategy": "range"}
 
@@ -151,6 +156,7 @@ class Application:
         request_timeout: float = 30,
         topic_create_timeout: float = 60,
         processing_guarantee: ProcessingGuarantee = "at-least-once",
+        max_partition_buffer_size: int = 10000,
     ):
         """
         :param broker_address: Connection settings for Kafka.
@@ -210,6 +216,11 @@ class Application:
         :param request_timeout: timeout (seconds) for REST-based requests
         :param topic_create_timeout: timeout (seconds) for topic create finalization
         :param processing_guarantee: Use "exactly-once" or "at-least-once" processing.
+        :param max_partition_buffer_size:  the maximum number of messages to buffer per topic partition to consider it full.
+            The buffering is used to consume messages in-order between multiple partitions with the same number.
+            It is a soft limit, and the actual number of buffered messages can be up to x2 higher.
+            Lower value decreases the memory use, but increases the latency.
+            Default - `10000`.
 
         <br><br>***Error Handlers***<br>
         To handle errors, `Application` accepts callbacks triggered when
@@ -305,7 +316,10 @@ class Application:
                 **_default_producer_extra_config,
                 **producer_extra_config,
             },
-            consumer_extra_config=consumer_extra_config,
+            consumer_extra_config={
+                **_default_consumer_extra_config,
+                **consumer_extra_config,
+            },
             processing_guarantee=processing_guarantee,
             consumer_poll_timeout=consumer_poll_timeout,
             producer_poll_timeout=producer_poll_timeout,
@@ -315,6 +329,7 @@ class Application:
             state_dir=state_dir,
             rocksdb_options=rocksdb_options,
             use_changelog_topics=use_changelog_topics,
+            max_partition_buffer_size=max_partition_buffer_size,
         )
 
         self._on_message_processed = on_message_processed
@@ -634,6 +649,7 @@ class Application:
             consumer_group=self._config.consumer_group,
             auto_offset_reset=self._config.auto_offset_reset,
             auto_commit_enable=False,  # Disable auto commit and manage commits manually
+            max_partition_buffer_size=self._config.max_partition_buffer_size,
             extra_config=extra_config,
             on_error=on_error,
         )
@@ -1100,6 +1116,7 @@ class ApplicationConfig(BaseSettings):
     state_dir: Path = Path("state")
     rocksdb_options: Optional[RocksDBOptionsType] = None
     use_changelog_topics: bool = True
+    max_partition_buffer_size: int = 10000
 
     @classmethod
     def settings_customise_sources(

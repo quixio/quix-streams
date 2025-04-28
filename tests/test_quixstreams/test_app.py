@@ -283,7 +283,7 @@ class TestApplication:
         topic = app.topic(str(uuid.uuid4()))
         sdf = app.dataframe(topic)
 
-        with patch.object(RowConsumer, "poll") as mocked:
+        with patch.object(RowConsumer, "consume") as mocked:
             # Patch RowConsumer.poll to simulate failures
             mocked.side_effect = ValueError("test")
             # Stop app when the future is resolved
@@ -813,6 +813,7 @@ class TestQuixApplication:
         expected_consumer_extra_config = {
             **extra_config,
             **quix_extras,
+            "fetch.queue.backoff.ms": 100,
             "partition.assignment.strategy": "range",
         }
 
@@ -878,6 +879,7 @@ class TestQuixApplication:
         expected_consumer_extra_config = {
             **extra_config,
             **quix_extras,
+            "fetch.queue.backoff.ms": 100,
             "partition.assignment.strategy": "range",
         }
 
@@ -941,6 +943,7 @@ class TestQuixApplication:
         expected_consumer_extra_config = {
             **extra_config,
             **quix_extras,
+            "fetch.queue.backoff.ms": 100,
             "partition.assignment.strategy": "range",
         }
 

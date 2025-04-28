@@ -1,4 +1,5 @@
 import uuid
+from collections import namedtuple
 from unittest.mock import patch
 from uuid import uuid4
 
@@ -326,3 +327,43 @@ class TestRowConsumer:
         resume_mock.assert_any_call(
             partitions=[TopicPartition(topic=topic.name, partition=1)]
         )
+
+    def test_poll_row_multiple_topics_in_order(
+        self, row_consumer_factory, topic_json_serdes_factory, producer
+    ):
+        """
+        Test that "poll_row()" consumes messages in timestamp order
+        from two co-partitioned topics
+        """
+        topic1 = topic_json_serdes_factory()
+        topic2 = topic_json_serdes_factory()
+
+        Message = namedtuple("Message", ("topic", "timestamp"))
+        messages = [
+            Message(topic=topic1.name, timestamp=10),
+            Message(topic=topic1.name, timestamp=13),
+            Message(topic=topic2.name, timestamp=11),
+            Message(topic=topic2.name, timestamp=12),
+        ]
+
+        with producer:
+            for message in messages:
+                producer.produce(topic=message.topic, key=b"key", value=None)
+
+        with row_consumer_factory(
+            auto_offset_reset="earliest",
+        ) as consumer:
+            consumer.subscribe([topic1, topic2])
+
+            rows = []
+            while Timeout():
+                row = consumer.poll_row(0.1)
+                if row is not None:
+                    rows.append(row)
+                    if len(rows) == len(messages):
+                        return
+
+        assert rows[0].timestamp == messages[0].timestamp
+        assert rows[1].timestamp == messages[2].timestamp
+        assert rows[2].timestamp == messages[3].timestamp
+        assert rows[3].timestamp == messages[1].timestamp

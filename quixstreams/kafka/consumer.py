@@ -580,6 +580,22 @@ class BaseConsumer:
         """
         return self._consumer.consumer_group_metadata()
 
+    def consume(
+        self, num_messages: int = 1, timeout: Optional[float] = None
+    ) -> list[RawConfluentKafkaMessageProto]:
+        """
+        Consumes a list of messages (possibly empty on timeout).
+        Callbacks may be executed as a side effect of calling this method.
+
+        :param num_messages: The maximum number of messages to return.
+            Default: `1`.
+        :param timeout: The maximum time in seconds to block waiting for message, event or callback.
+            Default: `None` (infinite).
+        """
+        return self._consumer.consume(
+            num_messages=num_messages, timeout=timeout if timeout is not None else -1
+        )
+
     @property
     def _consumer(self) -> ConfluentConsumer:
         """

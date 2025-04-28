@@ -1,27 +1,46 @@
 import logging
-import sys
 from time import monotonic
-from typing import Callable, List, Optional, Union
+from typing import Callable, Iterator, Optional, Union
 
-from confluent_kafka import KafkaError, TopicPartition
+from confluent_kafka import Consumer, KafkaError, TopicPartition
 
-from .error_callbacks import ConsumerErrorCallback, default_on_consumer_error
-from .exceptions import PartitionAssignmentError
-from .kafka import AutoOffsetReset, BaseConsumer, ConnectionConfig
-from .kafka.consumer import RebalancingCallback, raise_for_msg_error
-from .models import Row, Topic
-from .models.serializers.exceptions import IgnoreMessage
+from quixstreams.error_callbacks import ConsumerErrorCallback, default_on_consumer_error
+from quixstreams.exceptions import PartitionAssignmentError
+from quixstreams.kafka import AutoOffsetReset, BaseConsumer, ConnectionConfig
+from quixstreams.kafka.consumer import RebalancingCallback, raise_for_msg_error
+from quixstreams.models import (
+    RawConfluentKafkaMessageProto,
+    Row,
+    SuccessfulConfluentKafkaMessageProto,
+    Topic,
+)
+from quixstreams.models.serializers.exceptions import IgnoreMessage
+
+from .buffering import InternalConsumerBuffer
 
 logger = logging.getLogger(__name__)
 
 __all__ = ("RowConsumer",)
 
-_MAX_FLOAT = sys.float_info.max
+
+def _validate_message_batch(
+    messages: list[RawConfluentKafkaMessageProto], on_error: ConsumerErrorCallback
+) -> Iterator[SuccessfulConfluentKafkaMessageProto]:
+    for message in messages:
+        try:
+            message = raise_for_msg_error(message)
+            yield message
+        except Exception as exc:
+            to_suppress = on_error(exc, message, logger)
+            if to_suppress:
+                continue
+            raise
 
 
 class RowConsumer(BaseConsumer):
     _backpressure_resume_at: float
 
+    # TODO: Rename it to "InternalConsumer"? Or "InternalBufferedConsumer"?
     def __init__(
         self,
         broker_address: Union[str, ConnectionConfig],
@@ -29,10 +48,11 @@ class RowConsumer(BaseConsumer):
         auto_offset_reset: AutoOffsetReset,
         auto_commit_enable: bool = True,
         on_commit: Optional[
-            Callable[[Optional[KafkaError], List[TopicPartition]], None]
+            Callable[[Optional[KafkaError], list[TopicPartition]], None]
         ] = None,
         extra_config: Optional[dict] = None,
         on_error: Optional[ConsumerErrorCallback] = None,
+        max_partition_buffer_size: int = 10000,
     ):
         """
 
@@ -63,6 +83,10 @@ class RowConsumer(BaseConsumer):
             If consumer fails and the callback returns `True`, the exception
             will be logged but not propagated.
             The default callback logs an exception and returns `False`.
+        :param max_partition_buffer_size: the maximum number of messages to buffer per topic partition to consider it full.
+            The buffering is used to consume messages in-order between different topics.
+            Note that the actual number of buffered messages can be higher
+            Default - `10000`.
         """
         super().__init__(
             broker_address=broker_address,
@@ -75,11 +99,15 @@ class RowConsumer(BaseConsumer):
         self._on_error: ConsumerErrorCallback = on_error or default_on_consumer_error
         self._topics: dict[str, Topic] = {}
         self._backpressurred_tps: set[TopicPartition] = set()
+        self._max_partition_buffer_size = max_partition_buffer_size
+        self._buffer = InternalConsumerBuffer(
+            max_partition_buffer_size=self._max_partition_buffer_size
+        )
         self.reset_backpressure()
 
     def subscribe(
         self,
-        topics: List[Topic],
+        topics: list[Topic],
         on_assign: Optional[RebalancingCallback] = None,
         on_revoke: Optional[RebalancingCallback] = None,
         on_lost: Optional[RebalancingCallback] = None,
@@ -103,11 +131,36 @@ class RowConsumer(BaseConsumer):
         """
         topics_map = {t.name: t for t in topics}
         topics_names = list(topics_map.keys())
+
+        def _on_assign(consumer: Consumer, partitions: list[TopicPartition]):
+            buffer_partitions = [
+                tp for tp in partitions if not self._topics[tp.topic].is_changelog
+            ]
+            self._buffer.on_assign(buffer_partitions)
+            if on_assign is not None:
+                on_assign(consumer, partitions)
+
+        def _on_revoke(consumer: Consumer, partitions: list[TopicPartition]):
+            buffer_partitions = [
+                tp for tp in partitions if not self._topics[tp.topic].is_changelog
+            ]
+            self._buffer.on_revoke(buffer_partitions)
+            if on_revoke is not None:
+                on_revoke(consumer, partitions)
+
+        def _on_lost(consumer: Consumer, partitions: list[TopicPartition]):
+            buffer_partitions = [
+                tp for tp in partitions if not self._topics[tp.topic].is_changelog
+            ]
+            self._buffer.on_revoke(buffer_partitions)
+            if on_lost is not None:
+                on_lost(consumer, partitions)
+
         super()._subscribe(
             topics=topics_names,
-            on_assign=on_assign,
-            on_revoke=on_revoke,
-            on_lost=on_lost,
+            on_assign=_on_assign,
+            on_revoke=_on_revoke,
+            on_lost=_on_lost,
         )
         self._topics = topics_map
 
@@ -115,7 +168,7 @@ class RowConsumer(BaseConsumer):
     def consumer_exists(self) -> bool:
         return self._inner_consumer is not None
 
-    def poll_row(self, timeout: Optional[float] = None) -> Union[Row, List[Row], None]:
+    def poll_row(self, timeout: Optional[float] = None) -> Union[Row, list[Row], None]:
         """
         Consumes a single message and deserialize it to Row or a list of Rows.
 
@@ -123,11 +176,14 @@ class RowConsumer(BaseConsumer):
         If deserializer raises `IgnoreValue` exception, this method will return None.
         If Kafka returns an error, it will be raised as exception.
 
+        Under the hood, this method consumes messages in batches and buffers them to
+        return them in-order across multiple topic partitions with the same number.
+
         :param timeout: poll timeout seconds
         :return: single Row, list of Rows or None
         """
         try:
-            msg = self.poll(timeout=timeout)
+            msg = self.poll_buffered(timeout=timeout)
         except PartitionAssignmentError:
             # Always propagate errors happened during assignment
             raise
@@ -159,6 +215,7 @@ class RowConsumer(BaseConsumer):
     def close(self):
         super().close()
         self.reset_backpressure()
+        self._buffer.close()
         self._inner_consumer = None
 
     @property
@@ -191,6 +248,7 @@ class RowConsumer(BaseConsumer):
                 f"position={position.offset}"
             )
             self.pause(partitions=[tp])
+            self._buffer.clear(topic=tp.topic, partition=tp.partition)
 
             # Seek the TP back to the "offset_to_seek" to start from it on resume.
             # The "offset_to_seek" is provided by the Checkpoint and is expected to be the
@@ -225,5 +283,68 @@ class RowConsumer(BaseConsumer):
 
     def reset_backpressure(self):
         # Reset the timeout back to its initial state
-        self._backpressure_resume_at = _MAX_FLOAT
+        self._backpressure_resume_at = float("inf")
         self._backpressurred_tps.clear()
+
+    def poll_buffered(
+        self, timeout: Optional[float] = None
+    ) -> Optional[SuccessfulConfluentKafkaMessageProto]:
+        """
+        Poll messages in a buffered way to provide in-order reads across multiple
+        topic partitions with the same partition number.
+        """
+
+        # Probe the buffer and return immediately if there's data available
+        msg = self._buffer.pop()
+        if msg is None:
+            # If the buffer is empty, feed it and try the probing again
+            self._feed_buffer(timeout=timeout)
+            msg = self._buffer.pop()
+
+        return msg
+
+    def _feed_buffer(self, timeout: Optional[float] = None):
+        """
+        Feed the internal buffer and pause or resume the assigned partitions for the
+        balanced consumption.
+
+        :param timeout: the maximum time in seconds to wait for the next batch of messages.
+        """
+        try:
+            messages = self.consume(
+                num_messages=self._max_partition_buffer_size, timeout=timeout
+            )
+        except PartitionAssignmentError:
+            # Always propagate errors happened during assignment
+            raise
+        except Exception as exc:
+            to_suppress = self._on_error(exc, None, logger)
+            if not to_suppress:
+                raise
+            messages = []
+
+        # Get the recent cached high watermarks
+        high_watermarks: dict[tuple[str, int], int] = {}
+        for tp in self.assignment():
+            topic_obj = self._topics[tp.topic]
+            if not topic_obj.is_changelog:
+                _, high = self.get_watermark_offsets(partition=tp, cached=True)
+                high_watermarks[(tp.topic, tp.partition)] = high
+
+        # Create a generator to validate messages
+        valid_messages = _validate_message_batch(messages, on_error=self._on_error)
+
+        # Feed the batch and the watermarks to the buffer
+        self._buffer.feed(messages=valid_messages, high_watermarks=high_watermarks)
+
+        # Resume partitions with empty buffers
+        for topic, partition in self._buffer.resume_empty():
+            tp = TopicPartition(topic=topic, partition=partition)
+            # Make sure we don't resume partitions if they're backpressured
+            if not tp in self._backpressurred_tps:
+                self.resume([tp])
+
+        # Pause partitions with full buffers to consume data
+        # from other partitions on the next call
+        for topic, partition in self._buffer.pause_full():
+            self.pause([TopicPartition(topic=topic, partition=partition)])
