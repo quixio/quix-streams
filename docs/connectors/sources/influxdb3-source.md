@@ -131,7 +131,8 @@ application using a local instance of Influxdb3 using Docker:
         host="http://localhost:8181",   # be sure to add http
         organization_id="local",        # unused, but required
         token="local",                  # unused, but required
+        database="<YOUR DB>",
     )
     ```
 
-The `database` you provide will be auto-created for you.
+Note: the database must exist for this to successfully run.
