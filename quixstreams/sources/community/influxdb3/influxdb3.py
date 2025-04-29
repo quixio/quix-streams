@@ -5,7 +5,13 @@ from datetime import datetime, timedelta, timezone
 from functools import wraps
 from typing import Callable, Optional, Union
 
-from influxdb_client_3 import InfluxDBClient3
+try:
+    from influxdb_client_3 import InfluxDBClient3
+except ImportError as exc:
+    raise ImportError(
+        'Package "influxdb3-python" is missing: '
+        "run pip install quixstreams[influxdb3] to fix it"
+    ) from exc
 
 from quixstreams.models.topics import Topic
 from quixstreams.sources import (
