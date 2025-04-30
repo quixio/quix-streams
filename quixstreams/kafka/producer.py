@@ -1,3 +1,4 @@
+import functools
 import logging
 import uuid
 from typing import Callable, List, Optional, Union
@@ -20,8 +21,9 @@ __all__ = (
     "Producer",
     "PRODUCER_ON_ERROR_RETRIES",
     "PRODUCER_POLL_TIMEOUT",
-    "TransactionalProducer",
 )
+
+from .exceptions import InvalidProducerConfigError
 
 DeliveryCallback = Callable[[Optional[KafkaError], Message], None]
 
@@ -47,6 +49,19 @@ def _default_error_cb(error: KafkaError):
     logger.error(f'Kafka producer error: {error.str()} code="{error_code}"')
 
 
+def ensure_transactional(func):
+    @functools.wraps(func)
+    def wrapper(producer: "Producer", *args, **kwargs):
+        if not producer.transactional:
+            raise InvalidProducerConfigError(
+                "Producer must be initialized"
+                " with `transactional=True` to use Kafka Transactions API"
+            )
+        return func(producer, *args, **kwargs)
+
+    return wrapper
+
+
 class Producer:
     def __init__(
         self,
@@ -55,6 +70,7 @@ class Producer:
         error_callback: Callable[[KafkaError], None] = _default_error_cb,
         extra_config: Optional[dict] = None,
         flush_timeout: Optional[float] = None,
+        transactional: bool = False,
     ):
         """
         A wrapper around `confluent_kafka.Producer`.
@@ -83,8 +99,20 @@ class Producer:
             **broker_address.as_librdkafka_dict(),
             **{"logger": logger, "error_cb": error_callback},
         }
+        # Provide additional config if producer uses transactions
+        if transactional:
+            self._producer_config.update(
+                {
+                    "enable.idempotence": True,
+                    # Respect the transactional.id if it's passed
+                    "transactional.id": self._producer_config.get(
+                        "transcational.id", str(uuid.uuid4())
+                    ),
+                }
+            )
         self._inner_producer: Optional[ConfluentProducer] = None
         self._flush_timeout = flush_timeout or -1
+        self._transactional = transactional
 
     def produce(
         self,
@@ -155,6 +183,33 @@ class Producer:
         """
         return self._producer.poll(timeout=timeout)
 
+    @property
+    def transactional(self) -> bool:
+        return self._transactional
+
+    @ensure_transactional
+    def begin_transaction(self):
+        self._producer.begin_transaction()
+
+    @ensure_transactional
+    def send_offsets_to_transaction(
+        self,
+        positions: List[TopicPartition],
+        group_metadata: GroupMetadata,
+        timeout: Optional[float] = None,
+    ):
+        self._producer.send_offsets_to_transaction(
+            positions, group_metadata, timeout if timeout is not None else -1
+        )
+
+    @ensure_transactional
+    def abort_transaction(self, timeout: Optional[float] = None):
+        self._producer.abort_transaction(timeout if timeout is not None else -1)
+
+    @ensure_transactional
+    def commit_transaction(self, timeout: Optional[float] = None):
+        self._producer.commit_transaction(timeout if timeout is not None else -1)
+
     def flush(self, timeout: Optional[float] = None) -> int:
         """
         Wait for all messages in the Producer queue to be delivered.
@@ -172,6 +227,8 @@ class Producer:
     def _producer(self) -> ConfluentProducer:
         if not self._inner_producer:
             self._inner_producer = ConfluentProducer(self._producer_config)
+            if self._transactional:
+                self._inner_producer.init_transactions()
         return self._inner_producer
 
     def __len__(self):
@@ -184,59 +241,3 @@ class Producer:
         logger.debug("Flushing kafka producer")
         self.flush()
         logger.debug("Kafka producer flushed")
-
-
-class TransactionalProducer(Producer):
-    """
-    A separate producer class used only internally for transactions
-    (transactions are only needed when using a consumer).
-    """
-
-    def __init__(
-        self,
-        broker_address: Union[str, ConnectionConfig],
-        logger: logging.Logger = logger,
-        error_callback: Callable[[KafkaError], None] = _default_error_cb,
-        extra_config: Optional[dict] = None,
-        flush_timeout: Optional[float] = None,
-    ):
-        super().__init__(
-            broker_address=broker_address,
-            logger=logger,
-            error_callback=error_callback,
-            extra_config=extra_config,
-            flush_timeout=flush_timeout,
-        )
-        # remake config to avoid overriding anything in the Application's
-        # producer config, which is used in Application.get_producer().
-        self._producer_config = {
-            **self._producer_config,
-            "enable.idempotence": True,
-            "transactional.id": str(uuid.uuid4()),
-        }
-
-    @property
-    def _producer(self) -> ConfluentProducer:
-        if not self._inner_producer:
-            self._inner_producer = super()._producer
-            self._inner_producer.init_transactions()
-        return self._inner_producer
-
-    def begin_transaction(self):
-        self._producer.begin_transaction()
-
-    def send_offsets_to_transaction(
-        self,
-        positions: List[TopicPartition],
-        group_metadata: GroupMetadata,
-        timeout: Optional[float] = None,
-    ):
-        self._producer.send_offsets_to_transaction(
-            positions, group_metadata, timeout if timeout is not None else -1
-        )
-
-    def abort_transaction(self, timeout: Optional[float] = None):
-        self._producer.abort_transaction(timeout if timeout is not None else -1)
-
-    def commit_transaction(self, timeout: Optional[float] = None):
-        self._producer.commit_transaction(timeout if timeout is not None else -1)

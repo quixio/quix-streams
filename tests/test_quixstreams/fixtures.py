@@ -132,12 +132,14 @@ def producer_factory(kafka_container):
     def factory(
         broker_address: str = kafka_container.broker_address,
         extra_config: dict = None,
+        transactional: bool = False,
     ) -> Producer:
         extra_config = extra_config or {}
 
         return Producer(
             broker_address=broker_address,
             extra_config=extra_config,
+            transactional=transactional,
         )
 
     return factory

@@ -13,8 +13,8 @@ from confluent_kafka import (
 from confluent_kafka import TopicPartition
 
 from quixstreams.internal_producer import InternalProducer
+from quixstreams.kafka import Producer
 from quixstreams.kafka.exceptions import KafkaProducerDeliveryError
-from quixstreams.kafka.producer import TransactionalProducer
 from quixstreams.models import (
     JSONSerializer,
     SerializationError,
@@ -458,12 +458,12 @@ class TestTransactionalInternalProducer:
         call_args = [["my", "offsets"], "consumer_metadata", 1]
         error = ConfluentKafkaException(MockKafkaError())
 
-        mock_producer = create_autospec(TransactionalProducer)
+        mock_producer = create_autospec(Producer)
         mock_producer.send_offsets_to_transaction.__name__ = "send_offsets"
         mock_producer.commit_transaction.__name__ = "commit"
         mock_producer.send_offsets_to_transaction.side_effect = [error, None]
         with patch(
-            "quixstreams.internal_producer.TransactionalProducer",
+            "quixstreams.internal_producer.Producer",
             return_value=mock_producer,
         ):
             producer = InternalProducer(broker_address="xyz", transactional=True)

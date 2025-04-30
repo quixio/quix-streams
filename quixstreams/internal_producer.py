@@ -15,7 +15,6 @@ from .kafka.producer import (
     PRODUCER_ON_ERROR_RETRIES,
     PRODUCER_POLL_TIMEOUT,
     Producer,
-    TransactionalProducer,
 )
 from .models import Headers, Row, Topic
 
@@ -103,18 +102,12 @@ class InternalProducer:
         flush_timeout: Optional[float] = None,
         transactional: bool = False,
     ):
-        if transactional:
-            self._producer: Producer = TransactionalProducer(
-                broker_address=broker_address,
-                extra_config=extra_config,
-                flush_timeout=flush_timeout,
-            )
-        else:
-            self._producer = Producer(
-                broker_address=broker_address,
-                extra_config=extra_config,
-                flush_timeout=flush_timeout,
-            )
+        self._producer = Producer(
+            broker_address=broker_address,
+            extra_config=extra_config,
+            flush_timeout=flush_timeout,
+            transactional=transactional,
+        )
 
         self._on_error: ProducerErrorCallback = on_error or default_on_producer_error
         self._tp_offsets: Dict[Tuple[str, int], int] = {}
