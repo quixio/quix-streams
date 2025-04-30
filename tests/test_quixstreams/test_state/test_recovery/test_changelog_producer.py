@@ -5,7 +5,10 @@ from quixstreams.state import ChangelogProducer, ChangelogProducerFactory
 
 class TestChangelogProducer:
     def test_produce(
-        self, topic_manager_factory, row_producer_factory, internal_consumer_factory
+        self,
+        topic_manager_factory,
+        internal_producer_factory,
+        internal_consumer_factory,
     ):
         p_num = 2
         cf_header = "my_cf_header"
@@ -27,7 +30,7 @@ class TestChangelogProducer:
         producer = ChangelogProducer(
             changelog_name=changelog.name,
             partition=p_num,
-            producer=row_producer_factory(),
+            producer=internal_producer_factory(),
         )
         producer.produce(
             **{k: v for k, v in expected.items() if k in ["key", "value"]},
@@ -44,9 +47,9 @@ class TestChangelogProducer:
 
 
 class TestChangelogProducerFactory:
-    def test_get_partition_producer(self, row_producer_factory):
+    def test_get_partition_producer(self, internal_producer_factory):
         changelog_name = "changelog__topic"
-        producer = row_producer_factory()
+        producer = internal_producer_factory()
 
         p_num = 1
 

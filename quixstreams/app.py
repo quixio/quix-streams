@@ -32,6 +32,7 @@ from .error_callbacks import (
     default_on_processing_error,
 )
 from .internal_consumer import InternalConsumer
+from .internal_producer import InternalProducer
 from .kafka import AutoOffsetReset, ConnectionConfig, Consumer, Producer
 from .logging import LogLevel, configure_logging
 from .models import (
@@ -51,7 +52,6 @@ from .platforms.quix import (
     is_quix_deployment,
 )
 from .processing import ProcessingContext
-from .rowproducer import RowProducer
 from .runtracker import RunTracker
 from .sinks import SinkManager
 from .sources import BaseSource, SourceException, SourceManager
@@ -66,7 +66,7 @@ logger = logging.getLogger(__name__)
 ProcessingGuarantee = Literal["at-least-once", "exactly-once"]
 MessageProcessedCallback = Callable[[str, int, int], None]
 
-# Enforce idempotent producing for the internal RowProducer
+# Enforce idempotent producing for InternalProducer
 _default_producer_extra_config = {"enable.idempotence": True}
 
 # Default config for the internal consumer
@@ -199,7 +199,7 @@ class Application:
         :param rocksdb_options: RocksDB options.
             If `None`, the default options will be used.
         :param consumer_poll_timeout: timeout for `InternalConsumer.poll()`. Default - `1.0`s
-        :param producer_poll_timeout: timeout for `RowProducer.poll()`. Default - `0`s.
+        :param producer_poll_timeout: timeout for `InternalProducer.poll()`. Default - `0`s.
         :param on_message_processed: a callback triggered when message is successfully
             processed.
         :param loglevel: a log level for "quixstreams" logger.
@@ -231,7 +231,7 @@ class Application:
             to poll Kafka or cannot deserialize a message.
         :param on_processing_error: triggered when exception is raised within
             `StreamingDataFrame.process()`.
-        :param on_producer_error: triggered when `RowProducer` fails to serialize
+        :param on_producer_error: triggered when `InternalProducer` fails to serialize
             or to produce a message to Kafka.
         <br><br>***Quix Cloud Parameters***<br>
         :param quix_config_builder: instance of `QuixKafkaConfigsBuilder` to be used
@@ -339,7 +339,7 @@ class Application:
             on_error=on_consumer_error,
             extra_config_overrides=consumer_extra_config_overrides,
         )
-        self._producer = self._get_rowproducer(on_error=on_producer_error)
+        self._producer = self._get_internal_producer(on_error=on_producer_error)
         self._running = False
         self._failed = False
 
@@ -577,13 +577,13 @@ class Application:
         if self._state_manager.using_changelogs:
             self._state_manager.stop_recovery()
 
-    def _get_rowproducer(
+    def _get_internal_producer(
         self,
         on_error: Optional[ProducerErrorCallback] = None,
         transactional: Optional[bool] = None,
-    ) -> RowProducer:
+    ) -> InternalProducer:
         """
-        Create a RowProducer using the application config
+        Create InternalProducer using the application config
 
         Used to create the application producer as well as the sources producers
         """
@@ -591,7 +591,7 @@ class Application:
         if transactional is None:
             transactional = self._config.exactly_once
 
-        return RowProducer(
+        return InternalProducer(
             broker_address=self._config.broker_address,
             extra_config=self._config.producer_extra_config,
             flush_timeout=self._config.flush_timeout,
@@ -734,7 +734,7 @@ class Application:
         self._source_manager.register(
             source,
             topic,
-            self._get_rowproducer(transactional=False),
+            self._get_internal_producer(transactional=False),
             self._get_internal_consumer(
                 extra_config_overrides=consumer_extra_config_overrides
             ),

@@ -8,14 +8,14 @@ from typing import TYPE_CHECKING, List
 
 from confluent_kafka import OFFSET_BEGINNING, TopicPartition
 
+from quixstreams.internal_consumer import InternalConsumer
+from quixstreams.internal_producer import InternalProducer
 from quixstreams.logging import LOGGER_NAME, configure_logging
 from quixstreams.models import Topic, TopicManager
 from quixstreams.models.topics import TopicConfig
-from quixstreams.rowproducer import RowProducer
 from quixstreams.state import RecoveryManager, StateStoreManager, StorePartition
 from quixstreams.state.memory import MemoryStore
 
-from ...internal_consumer import InternalConsumer
 from .exceptions import SourceException
 from .multiprocessing import multiprocessing
 from .source import BaseSource, StatefulSource
@@ -42,7 +42,7 @@ class SourceProcess(process):
         self,
         source: BaseSource,
         topic: Topic,
-        producer: RowProducer,
+        producer: InternalProducer,
         consumer: InternalConsumer,
         topic_manager: TopicManager,
     ) -> None:

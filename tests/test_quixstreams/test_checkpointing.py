@@ -12,9 +12,9 @@ from quixstreams.checkpointing.exceptions import (
 )
 from quixstreams.dataframe import DataFrameRegistry
 from quixstreams.internal_consumer import InternalConsumer
+from quixstreams.internal_producer import InternalProducer
 from quixstreams.kafka import Consumer
 from quixstreams.models import TopicConfig
-from quixstreams.rowproducer import RowProducer
 from quixstreams.sinks import BatchingSink, SinkBackpressureError, SinkManager
 from quixstreams.sinks.base import SinkBatch
 from quixstreams.state import StateStoreManager
@@ -26,13 +26,13 @@ from tests.utils import DummySink
 
 @pytest.fixture()
 def checkpoint_factory(
-    state_manager, internal_consumer, row_producer_factory, topic_manager_factory
+    state_manager, internal_consumer, internal_producer_factory, topic_manager_factory
 ):
     def factory(
         commit_interval: float = 1,
         commit_every: int = 0,
         consumer_: Optional[InternalConsumer] = None,
-        producer_: Optional[RowProducer] = None,
+        producer_: Optional[InternalProducer] = None,
         state_manager_: Optional[StateStoreManager] = None,
         sink_manager_: Optional[SinkManager] = None,
         dataframe_registry_: Optional[DataFrameRegistry] = None,
@@ -40,7 +40,7 @@ def checkpoint_factory(
     ):
         consumer_ = consumer_ or internal_consumer
         sink_manager_ = sink_manager_ or SinkManager()
-        producer_ = producer_ or row_producer_factory(transactional=exactly_once)
+        producer_ = producer_ or internal_producer_factory(transactional=exactly_once)
         state_manager_ = state_manager_ or state_manager
         dataframe_registry_ = dataframe_registry_ or DataFrameRegistry()
         return Checkpoint(
@@ -58,8 +58,8 @@ def checkpoint_factory(
 
 
 @pytest.fixture()
-def rowproducer_mock(request):
-    p = MagicMock(spec_set=RowProducer)
+def internal_producer_mock(request):
+    p = MagicMock(spec_set=InternalProducer)
     p.flush.return_value = getattr(request, "param", 0)
     return p
 
@@ -147,17 +147,17 @@ class TestCheckpoint:
         internal_consumer,
         state_manager_factory,
         topic_factory,
-        rowproducer_mock,
+        internal_producer_mock,
     ):
         topic_name, _ = topic_factory()
 
         dataframe_registry = DataFrameRegistry()
         dataframe_registry.register_stream_id(topic_name, [topic_name])
-        state_manager = state_manager_factory(producer=rowproducer_mock)
+        state_manager = state_manager_factory(producer=internal_producer_mock)
         checkpoint = checkpoint_factory(
             consumer_=internal_consumer,
             state_manager_=state_manager,
-            producer_=rowproducer_mock,
+            producer_=internal_producer_mock,
             dataframe_registry_=dataframe_registry,
         )
         processed_offset = 999
@@ -181,7 +181,7 @@ class TestCheckpoint:
         assert tp.offset == processed_offset + 1
 
         # Check the producer is flushed
-        assert rowproducer_mock.flush.call_count == 1
+        assert internal_producer_mock.flush.call_count == 1
 
         # Check the state is flushed
         assert tx.completed
@@ -194,7 +194,7 @@ class TestCheckpoint:
     def test_commit_with_state_with_changelog_success(
         self,
         checkpoint_factory,
-        row_producer,
+        internal_producer,
         internal_consumer,
         state_manager_factory,
         recovery_manager_factory,
@@ -203,7 +203,7 @@ class TestCheckpoint:
         topic_name, _ = topic_factory()
         recovery_manager = recovery_manager_factory(consumer=internal_consumer)
         state_manager = state_manager_factory(
-            producer=row_producer, recovery_manager=recovery_manager
+            producer=internal_producer, recovery_manager=recovery_manager
         )
         dataframe_registry = DataFrameRegistry()
         dataframe_registry.register_stream_id(topic_name, [topic_name])
@@ -211,7 +211,7 @@ class TestCheckpoint:
         checkpoint = checkpoint_factory(
             consumer_=internal_consumer,
             state_manager_=state_manager,
-            producer_=row_producer,
+            producer_=internal_producer,
             dataframe_registry_=dataframe_registry,
         )
         processed_offset = 999
@@ -245,7 +245,7 @@ class TestCheckpoint:
     def test_commit_with_state_and_changelog_no_updates_success(
         self,
         checkpoint_factory,
-        row_producer_factory,
+        internal_producer_factory,
         internal_consumer,
         state_manager_factory,
         recovery_manager_factory,
@@ -253,10 +253,10 @@ class TestCheckpoint:
         exactly_once,
     ):
         topic_name, _ = topic_factory()
-        row_producer = row_producer_factory(transactional=exactly_once)
+        internal_producer = internal_producer_factory(transactional=exactly_once)
         recovery_manager = recovery_manager_factory(consumer=internal_consumer)
         state_manager = state_manager_factory(
-            producer=row_producer, recovery_manager=recovery_manager
+            producer=internal_producer, recovery_manager=recovery_manager
         )
         dataframe_registry = DataFrameRegistry()
         dataframe_registry.register_stream_id(topic_name, [topic_name])
@@ -264,7 +264,7 @@ class TestCheckpoint:
         checkpoint = checkpoint_factory(
             consumer_=internal_consumer,
             state_manager_=state_manager,
-            producer_=row_producer,
+            producer_=internal_producer,
             dataframe_registry_=dataframe_registry,
             exactly_once=exactly_once,
         )
@@ -295,7 +295,7 @@ class TestCheckpoint:
     def test_close_no_offsets(
         self,
         checkpoint_factory,
-        rowproducer_mock,
+        internal_producer_mock,
         exactly_once,
     ):
         consumer_mock = MagicMock(spec_set=Consumer)
@@ -303,7 +303,7 @@ class TestCheckpoint:
         checkpoint = checkpoint_factory(
             consumer_=consumer_mock,
             state_manager_=state_manager,
-            producer_=rowproducer_mock,
+            producer_=internal_producer_mock,
             exactly_once=exactly_once,
         )
         # Commit the checkpoint without processing any messages
@@ -311,9 +311,9 @@ class TestCheckpoint:
 
         if exactly_once:
             # transaction should also be aborted
-            assert rowproducer_mock.abort_transaction.call_count
+            assert internal_producer_mock.abort_transaction.call_count
         else:
-            assert not rowproducer_mock.abort_transaction.call_count
+            assert not internal_producer_mock.abort_transaction.call_count
 
     @pytest.mark.parametrize("exactly_once", [False, True])
     def test_commit_has_failed_transactions_fails(
@@ -321,18 +321,18 @@ class TestCheckpoint:
         checkpoint_factory,
         state_manager_factory,
         topic_factory,
-        rowproducer_mock,
+        internal_producer_mock,
         exactly_once,
     ):
         consumer_mock = MagicMock(spec_set=Consumer)
-        state_manager = state_manager_factory(producer=rowproducer_mock)
+        state_manager = state_manager_factory(producer=internal_producer_mock)
         dataframe_registry = DataFrameRegistry()
         topic_name = "topic"
         dataframe_registry.register_stream_id(topic_name, [topic_name])
         checkpoint = checkpoint_factory(
             consumer_=consumer_mock,
             state_manager_=state_manager,
-            producer_=rowproducer_mock,
+            producer_=internal_producer_mock,
             dataframe_registry_=dataframe_registry,
             exactly_once=exactly_once,
         )
@@ -364,10 +364,10 @@ class TestCheckpoint:
             checkpoint.commit()
 
         # The producer should not flush
-        assert not rowproducer_mock.flush.call_count
+        assert not internal_producer_mock.flush.call_count
 
         # Check nothing is committed
-        assert not rowproducer_mock.commit_transaction.call_count
+        assert not internal_producer_mock.commit_transaction.call_count
         assert not consumer_mock.commit.call_count
 
     @pytest.mark.parametrize("exactly_once", [False, True])
@@ -376,18 +376,18 @@ class TestCheckpoint:
         checkpoint_factory,
         state_manager_factory,
         topic_factory,
-        rowproducer_mock,
+        internal_producer_mock,
         exactly_once,
     ):
         consumer_mock = MagicMock(spec_set=Consumer)
-        state_manager = state_manager_factory(producer=rowproducer_mock)
+        state_manager = state_manager_factory(producer=internal_producer_mock)
         topic_name = "topic"
         dataframe_registry = DataFrameRegistry()
         dataframe_registry.register_stream_id(topic_name, [topic_name])
         checkpoint = checkpoint_factory(
             consumer_=consumer_mock,
             state_manager_=state_manager,
-            producer_=rowproducer_mock,
+            producer_=internal_producer_mock,
             exactly_once=exactly_once,
             dataframe_registry_=dataframe_registry,
         )
@@ -402,23 +402,27 @@ class TestCheckpoint:
         tx.set(key=key, value=value, prefix=prefix)
         checkpoint.store_offset(topic_name, 0, processed_offset)
 
-        rowproducer_mock.flush.side_effect = ValueError("Flush failure")
+        internal_producer_mock.flush.side_effect = ValueError("Flush failure")
         # Checkpoint commit should fail if producer failed to flush
         with pytest.raises(ValueError):
             checkpoint.commit()
 
         # Nothing should commit
-        assert not rowproducer_mock.commit_transaction.call_count
+        assert not internal_producer_mock.commit_transaction.call_count
         assert not consumer_mock.commit.call_count
         # The transaction should remain prepared, but not completed
         assert tx.prepared
         assert not tx.completed
 
     def test_commit_consumer_commit_fails(
-        self, checkpoint_factory, state_manager_factory, topic_factory, rowproducer_mock
+        self,
+        checkpoint_factory,
+        state_manager_factory,
+        topic_factory,
+        internal_producer_mock,
     ):
         consumer_mock = MagicMock(spec_set=Consumer)
-        state_manager = state_manager_factory(producer=rowproducer_mock)
+        state_manager = state_manager_factory(producer=internal_producer_mock)
         topic_name = "topic"
         dataframe_registry = DataFrameRegistry()
         dataframe_registry.register_stream_id(topic_name, [topic_name])
@@ -427,7 +431,7 @@ class TestCheckpoint:
             consumer_=consumer_mock,
             state_manager_=state_manager,
             dataframe_registry_=dataframe_registry,
-            producer_=rowproducer_mock,
+            producer_=internal_producer_mock,
         )
         processed_offset = 999
         key, value, prefix = "key", "value", b"__key__"
@@ -446,7 +450,7 @@ class TestCheckpoint:
             checkpoint.commit()
 
         # Producer should flush
-        assert rowproducer_mock.flush.call_count
+        assert internal_producer_mock.flush.call_count
         # The transaction should remain prepared, but not completed
         assert tx.prepared
         assert not tx.completed
@@ -469,19 +473,19 @@ class TestCheckpoint:
         tx2 = checkpoint.get_store_transaction(topic_name, 0, "default")
         assert tx2 is tx
 
-    @pytest.mark.parametrize("rowproducer_mock", [1], indirect=True)
+    @pytest.mark.parametrize("internal_producer_mock", [1], indirect=True)
     def test_incomplete_flush(
         self,
         checkpoint_factory,
         internal_consumer,
         state_manager_factory,
-        rowproducer_mock,
+        internal_producer_mock,
     ):
-        state_manager = state_manager_factory(producer=rowproducer_mock)
+        state_manager = state_manager_factory(producer=internal_producer_mock)
         checkpoint = checkpoint_factory(
             consumer_=internal_consumer,
             state_manager_=state_manager,
-            producer_=rowproducer_mock,
+            producer_=internal_producer_mock,
         )
         checkpoint.store_offset("topic", 0, 0)
 
@@ -494,16 +498,16 @@ class TestCheckpoint:
         )
 
     def test_failed_commit(
-        self, checkpoint_factory, state_manager_factory, rowproducer_mock
+        self, checkpoint_factory, state_manager_factory, internal_producer_mock
     ):
         consumer_mock = MagicMock(spec_set=Consumer)
         consumer_mock.commit.side_effect = KafkaException(KafkaError(1, "test error"))
 
-        state_manager = state_manager_factory(producer=rowproducer_mock)
+        state_manager = state_manager_factory(producer=internal_producer_mock)
         checkpoint = checkpoint_factory(
             consumer_=consumer_mock,
             state_manager_=state_manager,
-            producer_=rowproducer_mock,
+            producer_=internal_producer_mock,
         )
         checkpoint.store_offset("topic", 0, 0)
 
@@ -516,7 +520,7 @@ class TestCheckpoint:
         )
 
     def test_failed_commit_partition(
-        self, checkpoint_factory, state_manager_factory, rowproducer_mock
+        self, checkpoint_factory, state_manager_factory, internal_producer_mock
     ):
         consumer_mock = MagicMock(spec_set=Consumer)
 
@@ -524,11 +528,11 @@ class TestCheckpoint:
         topic_partition.error = KafkaError(1, "test error")
 
         consumer_mock.commit.return_value = [topic_partition]
-        state_manager = state_manager_factory(producer=rowproducer_mock)
+        state_manager = state_manager_factory(producer=internal_producer_mock)
         checkpoint = checkpoint_factory(
             consumer_=consumer_mock,
             state_manager_=state_manager,
-            producer_=rowproducer_mock,
+            producer_=internal_producer_mock,
         )
         checkpoint.store_offset("topic", 0, 0)
 
@@ -547,7 +551,7 @@ class TestCheckpoint:
         state_manager,
         checkpoint_factory,
         state_manager_factory,
-        rowproducer_mock,
+        internal_producer_mock,
     ):
         topic_name, _ = topic_factory()
         sink_manager = SinkManager()
@@ -595,7 +599,7 @@ class TestCheckpoint:
         state_manager,
         checkpoint_factory,
         state_manager_factory,
-        rowproducer_mock,
+        internal_producer_mock,
     ):
         topic_name, _ = topic_factory()
         sink_manager = SinkManager()
@@ -640,7 +644,7 @@ class TestCheckpoint:
         state_manager,
         checkpoint_factory,
         state_manager_factory,
-        rowproducer_mock,
+        internal_producer_mock,
         topic_manager_topic_factory,
     ):
         topic = topic_manager_topic_factory()

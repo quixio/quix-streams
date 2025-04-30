@@ -3,14 +3,14 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from quixstreams.rowproducer import RowProducer
+from quixstreams.internal_producer import InternalProducer
 from quixstreams.sources import CSVSource
 
 
 class TestCSVSource:
     @pytest.fixture
     def producer(self):
-        producer = MagicMock(spec=RowProducer)
+        producer = MagicMock(spec=InternalProducer)
         producer.flush.return_value = 0
         return producer
 

@@ -74,7 +74,7 @@ def _retriable_transaction_op(attempts: int, backoff_seconds: float):
 class KafkaProducerTransactionCommitFailed(QuixException): ...
 
 
-class RowProducer:
+class InternalProducer:
     """
     A producer class that is capable of serializing Rows to bytes and send them to Kafka.
     The serialization is performed according to the Topic serialization settings.
@@ -85,8 +85,8 @@ class RowProducer:
     :param extra_config: A dictionary with additional options that
         will be passed to `confluent_kafka.Producer` as is.
         Note: values passed as arguments override values in `extra_config`.
-    :param on_error: a callback triggered when `RowProducer.produce_row()`
-        or `RowProducer.poll()` fail`.
+    :param on_error: a callback triggered when `InternalProducer.produce_row()`
+        or `InternalProducer.poll()` fail`.
         If producer fails and the callback returns `True`, the exception
         will be logged but not propagated.
         The default callback logs an exception and returns `False`.

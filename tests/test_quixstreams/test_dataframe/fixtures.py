@@ -6,9 +6,9 @@ import pytest
 from quixstreams.dataframe.dataframe import StreamingDataFrame
 from quixstreams.dataframe.registry import DataFrameRegistry
 from quixstreams.internal_consumer import InternalConsumer
+from quixstreams.internal_producer import InternalProducer
 from quixstreams.models.topics import Topic, TopicManager
 from quixstreams.processing import ProcessingContext
-from quixstreams.rowproducer import RowProducer
 from quixstreams.sinks import SinkManager
 from quixstreams.state import StateStoreManager
 
@@ -22,10 +22,12 @@ def dataframe_factory(topic_manager_topic_factory, topic_manager_factory):
         topic: Optional[Topic] = None,
         topic_manager: Optional[TopicManager] = None,
         state_manager: Optional[StateStoreManager] = None,
-        producer: Optional[RowProducer] = None,
+        producer: Optional[InternalProducer] = None,
         registry: Optional[DataFrameRegistry] = None,
     ) -> StreamingDataFrame:
-        producer = producer if producer is not None else MagicMock(spec_set=RowProducer)
+        producer = (
+            producer if producer is not None else MagicMock(spec_set=InternalProducer)
+        )
         topic_manager = topic_manager or topic_manager_factory()
         state_manager = state_manager or MagicMock(spec=StateStoreManager)
         topic = topic or topic_manager_topic_factory(

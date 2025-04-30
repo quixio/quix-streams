@@ -7,7 +7,7 @@ from confluent_kafka import KafkaException, TopicPartition
 
 from quixstreams.dataframe import DataFrameRegistry
 from quixstreams.internal_consumer import InternalConsumer
-from quixstreams.rowproducer import RowProducer
+from quixstreams.internal_producer import InternalProducer
 from quixstreams.sinks import SinkManager
 from quixstreams.sinks.base import SinkBackpressureError
 from quixstreams.state import (
@@ -122,7 +122,7 @@ class Checkpoint(BaseCheckpoint):
     def __init__(
         self,
         commit_interval: float,
-        producer: RowProducer,
+        producer: InternalProducer,
         consumer: InternalConsumer,
         state_manager: StateStoreManager,
         sink_manager: SinkManager,

@@ -3,11 +3,11 @@ from abc import ABC, abstractmethod
 from typing import Callable, Optional, Union
 
 from quixstreams.checkpointing.exceptions import CheckpointProducerTimeout
+from quixstreams.internal_producer import InternalProducer
 from quixstreams.kafka.producer import PRODUCER_ON_ERROR_RETRIES, PRODUCER_POLL_TIMEOUT
 from quixstreams.models.messages import KafkaMessage
 from quixstreams.models.topics import Topic
 from quixstreams.models.types import Headers
-from quixstreams.rowproducer import RowProducer
 from quixstreams.state import PartitionTransaction, State, StorePartition
 
 logger = logging.getLogger(__name__)
@@ -97,7 +97,7 @@ class BaseSource(ABC):
         on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
         on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
     ) -> None:
-        self._producer: Optional[RowProducer] = None
+        self._producer: Optional[InternalProducer] = None
         self._producer_topic: Optional[Topic] = None
         self._on_client_connect_success = (
             on_client_connect_success or _default_on_client_connect_success
@@ -113,7 +113,7 @@ class BaseSource(ABC):
         except Exception as e:
             self._on_client_connect_failure(e)
 
-    def configure(self, topic: Topic, producer: RowProducer, **kwargs) -> None:
+    def configure(self, topic: Topic, producer: InternalProducer, **kwargs) -> None:
         """
         This method is triggered before the source is started.
 
@@ -130,7 +130,7 @@ class BaseSource(ABC):
         return
 
     @property
-    def producer(self) -> RowProducer:
+    def producer(self) -> InternalProducer:
         if self._producer is None:
             raise RuntimeError("source not configured")
         return self._producer
@@ -458,7 +458,7 @@ class StatefulSource(Source):
     def configure(
         self,
         topic: Topic,
-        producer: RowProducer,
+        producer: InternalProducer,
         *,
         store_partition: Optional[StorePartition] = None,
         **kwargs,

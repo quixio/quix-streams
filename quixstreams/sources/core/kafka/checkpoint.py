@@ -7,9 +7,9 @@ from quixstreams.checkpointing.exceptions import (
     CheckpointConsumerCommitError,
     CheckpointProducerTimeout,
 )
+from quixstreams.internal_producer import InternalProducer
 from quixstreams.kafka.consumer import BaseConsumer
 from quixstreams.models.topics import Topic
-from quixstreams.rowproducer import RowProducer
 
 
 class Checkpoint(BaseCheckpoint):
@@ -19,7 +19,7 @@ class Checkpoint(BaseCheckpoint):
 
     def __init__(
         self,
-        producer: RowProducer,
+        producer: InternalProducer,
         producer_topic: Topic,
         consumer: BaseConsumer,
         commit_interval: float,

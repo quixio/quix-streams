@@ -7,7 +7,7 @@ from quixstreams.checkpointing import Checkpoint
 from quixstreams.dataframe import DataFrameRegistry
 from quixstreams.exceptions import QuixException
 from quixstreams.internal_consumer import InternalConsumer
-from quixstreams.rowproducer import RowProducer
+from quixstreams.internal_producer import InternalProducer
 from quixstreams.sinks import SinkManager
 from quixstreams.state import StateStoreManager
 from quixstreams.utils.printing import Printer
@@ -28,7 +28,7 @@ class ProcessingContext:
     """
 
     commit_interval: float
-    producer: RowProducer
+    producer: InternalProducer
     consumer: InternalConsumer
     state_manager: StateStoreManager
     sink_manager: SinkManager

@@ -3,8 +3,8 @@ import shutil
 from pathlib import Path
 from typing import Dict, Optional, Type, Union
 
+from quixstreams.internal_producer import InternalProducer
 from quixstreams.models.topics import TopicConfig
-from quixstreams.rowproducer import RowProducer
 
 from .base import Store, StorePartition
 from .exceptions import (
@@ -43,7 +43,7 @@ class StateStoreManager:
         group_id: Optional[str] = None,
         state_dir: Optional[Union[str, Path]] = None,
         rocksdb_options: Optional[RocksDBOptionsType] = None,
-        producer: Optional[RowProducer] = None,
+        producer: Optional[InternalProducer] = None,
         recovery_manager: Optional[RecoveryManager] = None,
         default_store_type: StoreTypes = RocksDBStore,
     ):

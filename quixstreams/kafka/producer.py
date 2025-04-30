@@ -16,7 +16,12 @@ from quixstreams.models.types import Headers
 
 from .configuration import ConnectionConfig
 
-__all__ = ("Producer",)
+__all__ = (
+    "Producer",
+    "PRODUCER_ON_ERROR_RETRIES",
+    "PRODUCER_POLL_TIMEOUT",
+    "TransactionalProducer",
+)
 
 DeliveryCallback = Callable[[Optional[KafkaError], Message], None]
 

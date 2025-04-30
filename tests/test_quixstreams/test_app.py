@@ -15,6 +15,7 @@ from quixstreams.dataframe import StreamingDataFrame
 from quixstreams.dataframe.windows.base import get_window_ranges
 from quixstreams.exceptions import PartitionAssignmentError
 from quixstreams.internal_consumer import InternalConsumer
+from quixstreams.internal_producer import InternalProducer
 from quixstreams.kafka.configuration import ConnectionConfig
 from quixstreams.kafka.exceptions import KafkaConsumerException
 from quixstreams.models import (
@@ -28,7 +29,6 @@ from quixstreams.models import (
 from quixstreams.models.topics.exceptions import TopicNotFoundError
 from quixstreams.platforms.quix import QuixApplicationConfig, QuixKafkaConfigsBuilder
 from quixstreams.platforms.quix.env import QuixEnvironment
-from quixstreams.rowproducer import RowProducer
 from quixstreams.sinks import SinkBackpressureError, SinkBatch
 from quixstreams.sources import SourceException, multiprocessing
 from quixstreams.state import State
@@ -842,7 +842,7 @@ class TestQuixApplication:
         with (
             patch("quixstreams.app.QuixKafkaConfigsBuilder", get_cfg_builder),
             patch("quixstreams.app.InternalConsumer") as consumer_init_mock,
-            patch("quixstreams.app.RowProducer") as producer_init_mock,
+            patch("quixstreams.app.InternalProducer") as producer_init_mock,
         ):
             app = Application(
                 consumer_group=consumer_group,
@@ -908,7 +908,7 @@ class TestQuixApplication:
         with (
             patch("quixstreams.app.QuixKafkaConfigsBuilder", get_cfg_builder),
             patch("quixstreams.app.InternalConsumer") as consumer_init_mock,
-            patch("quixstreams.app.RowProducer") as producer_init_mock,
+            patch("quixstreams.app.InternalProducer") as producer_init_mock,
         ):
             Application(
                 consumer_group=consumer_group,
@@ -970,7 +970,7 @@ class TestQuixApplication:
 
         with (
             patch("quixstreams.app.InternalConsumer") as consumer_init_mock,
-            patch("quixstreams.app.RowProducer") as producer_init_mock,
+            patch("quixstreams.app.InternalProducer") as producer_init_mock,
         ):
             Application(
                 consumer_group=consumer_group,
@@ -1748,7 +1748,7 @@ class TestApplicationRecovery:
 
         if processing_guarantee == "exactly-once":
             commit_patch = patch.object(
-                RowProducer, "commit_transaction", side_effect=ValueError("Fail")
+                InternalProducer, "commit_transaction", side_effect=ValueError("Fail")
             )
         else:
             commit_patch = patch.object(

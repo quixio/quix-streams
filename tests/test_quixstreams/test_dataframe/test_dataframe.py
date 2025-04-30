@@ -594,7 +594,7 @@ class TestStreamingDataFrameToTopic:
         self,
         dataframe_factory,
         internal_consumer_factory,
-        row_producer_factory,
+        internal_producer_factory,
         topic_manager_topic_factory,
         message_context_factory,
         reassign,
@@ -605,7 +605,7 @@ class TestStreamingDataFrameToTopic:
             value_serializer="json",
             value_deserializer="json",
         )
-        producer = row_producer_factory()
+        producer = internal_producer_factory()
 
         sdf = dataframe_factory(producer=producer)
         if reassign:
@@ -634,7 +634,7 @@ class TestStreamingDataFrameToTopic:
         self,
         dataframe_factory,
         internal_consumer_factory,
-        row_producer_factory,
+        internal_producer_factory,
         topic_manager_topic_factory,
         message_context_factory,
     ):
@@ -644,7 +644,7 @@ class TestStreamingDataFrameToTopic:
             value_serializer="json",
             value_deserializer="json",
         )
-        producer = row_producer_factory()
+        producer = internal_producer_factory()
 
         sdf = dataframe_factory(producer=producer)
 
@@ -685,7 +685,7 @@ class TestStreamingDataFrameToTopic:
         expected_key,
         dataframe_factory,
         internal_consumer_factory,
-        row_producer_factory,
+        internal_producer_factory,
         topic_manager_topic_factory,
         message_context_factory,
     ):
@@ -695,7 +695,7 @@ class TestStreamingDataFrameToTopic:
             key_serializer="int",
             key_deserializer="int",
         )
-        producer = row_producer_factory()
+        producer = internal_producer_factory()
 
         sdf = dataframe_factory(producer=producer)
 
@@ -720,7 +720,7 @@ class TestStreamingDataFrameToTopic:
         self,
         dataframe_factory,
         internal_consumer_factory,
-        row_producer_factory,
+        internal_producer_factory,
         topic_manager_topic_factory,
         message_context_factory,
     ):
@@ -730,7 +730,7 @@ class TestStreamingDataFrameToTopic:
         topic_1 = topic_manager_topic_factory(
             value_serializer="json", value_deserializer="json"
         )
-        producer = row_producer_factory()
+        producer = internal_producer_factory()
 
         sdf = dataframe_factory(producer=producer)
         sdf = sdf.to_topic(topic_0).to_topic(topic_1)
@@ -1651,14 +1651,14 @@ class TestStreamingDataFrameGroupBy:
         self,
         dataframe_factory,
         topic_manager_factory,
-        row_producer_factory,
+        internal_producer_factory,
         internal_consumer_factory,
         message_context_factory,
     ):
         """GroupBy can accept a string (column name) as its grouping method."""
         topic_manager = topic_manager_factory()
         topic = topic_manager.topic(str(uuid.uuid4()))
-        producer = row_producer_factory()
+        producer = internal_producer_factory()
 
         col = "column_A"
         orig_key = "original_key"
@@ -1725,7 +1725,7 @@ class TestStreamingDataFrameGroupBy:
         self,
         dataframe_factory,
         topic_manager_factory,
-        row_producer_factory,
+        internal_producer_factory,
         internal_consumer_factory,
         message_context_factory,
     ):
@@ -1735,7 +1735,7 @@ class TestStreamingDataFrameGroupBy:
         """
         topic_manager = topic_manager_factory()
         topic = topic_manager.topic(str(uuid.uuid4()))
-        producer = row_producer_factory()
+        producer = internal_producer_factory()
 
         col = "column_A"
         op_name = "get_col_A"
@@ -1803,7 +1803,7 @@ class TestStreamingDataFrameGroupBy:
         self,
         dataframe_factory,
         topic_manager_factory,
-        row_producer_factory,
+        internal_producer_factory,
         internal_consumer_factory,
         message_context_factory,
     ):
@@ -1812,7 +1812,7 @@ class TestStreamingDataFrameGroupBy:
         """
         topic_manager = topic_manager_factory()
         topic = topic_manager.topic(str(uuid.uuid4()))
-        producer = row_producer_factory()
+        producer = internal_producer_factory()
 
         col = "column_A"
         op_name = "get_col_A"
