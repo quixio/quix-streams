@@ -1614,7 +1614,7 @@ class StreamingDataFrame:
         sdf = self.__dataframe_clone__(
             *self.topics, *other.topics, stream=merged_stream
         )
-        self._registry.require_copartitioning()
+        self._registry.require_time_alignment()
         return sdf
 
     def ensure_topics_copartitioned(self):

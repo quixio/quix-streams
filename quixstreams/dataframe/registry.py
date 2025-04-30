@@ -141,5 +141,12 @@ class DataFrameRegistry:
         """
         return list(self._stream_ids_to_topics[stream_id])
 
-    def require_copartitioning(self):
+    def require_time_alignment(self):
+        """
+        Require the time alignment for the topology.
+
+        This flag is set by individual StreamingDataFrames when certain operations like
+        .concat() or joins are triggered, and it will inform the application to consume
+        messages in the timestamp-aligned way for the correct processing.
+        """
         self._requires_time_alignment = True
