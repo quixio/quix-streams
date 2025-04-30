@@ -1,7 +1,8 @@
+import enum
 import logging
 from collections import deque
 from operator import attrgetter
-from typing import Iterable, Optional, Union
+from typing import Iterable, Optional
 
 from confluent_kafka import TopicPartition
 
@@ -12,6 +13,12 @@ logger = logging.getLogger(__name__)
 __all__ = ("InternalConsumerBuffer",)
 
 _next_timestamp_getter = attrgetter("next_timestamp")
+
+
+class Idleness(enum.Enum):
+    IDLE = 1  # The partition is idle and has no new messages to be consumed
+    ACTIVE = 2  # The partition has more messages to be consumed
+    UNKNOWN = 3  # The idleness is unknown
 
 
 class PartitionBuffer:
@@ -46,7 +53,7 @@ class PartitionBuffer:
         """
         self.high_watermark = offset
 
-    def idle(self) -> Union[bool, None]:
+    def idleness(self) -> Idleness:
         """
         Check if the partition is idle or has more data to be consumed from the broker.
 
@@ -58,9 +65,11 @@ class PartitionBuffer:
         high_watermark = self.high_watermark
         if high_watermark < 0:
             # There's no valid highwater for this partition yet, the idleness is unknown
-            return None
+            return Idleness.UNKNOWN
 
-        return self.max_offset + 1 >= high_watermark
+        return (
+            Idleness.IDLE if self.max_offset + 1 >= high_watermark else Idleness.ACTIVE
+        )
 
     def append(self, message: SuccessfulConfluentKafkaMessageProto):
         """
@@ -224,7 +233,7 @@ class PartitionBufferGroup:
             # but not idle.
             # Wait until new messages are fetched or the highwater is set.
             for buffer in buffers:
-                if buffer.empty() and buffer.idle() != True:
+                if buffer.empty() and buffer.idleness() != Idleness.IDLE:
                     return None
 
             buffer = min(buffers, key=_next_timestamp_getter)
@@ -247,7 +256,11 @@ class PartitionBufferGroup:
         for buffer in self._partition_buffers_values:
             # Pause consuming new messages for this partition
             # when the buffer is paused, full and not idle
-            if not buffer.paused and buffer.full() and buffer.idle() == False:
+            if (
+                not buffer.paused
+                and buffer.full()
+                and buffer.idleness() == Idleness.ACTIVE
+            ):
                 buffer.pause()
                 tps.append((buffer.topic, buffer.partition))
         return tps
@@ -262,7 +275,9 @@ class PartitionBufferGroup:
         for buffer in self._partition_buffers_values:
             # Resume consuming new messages for this partition
             # when the buffer is paused and either idle or not full
-            if buffer.paused and (buffer.idle() != False or not buffer.full()):
+            if buffer.paused and (
+                buffer.idleness() != Idleness.ACTIVE or not buffer.full()
+            ):
                 buffer.resume()
                 tps.append((buffer.topic, buffer.partition))
 
