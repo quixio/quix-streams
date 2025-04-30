@@ -283,7 +283,7 @@ class TestApplication:
         topic = app.topic(str(uuid.uuid4()))
         sdf = app.dataframe(topic)
 
-        with patch.object(RowConsumer, "consume") as mocked:
+        with patch.object(RowConsumer, "poll") as mocked:
             # Patch RowConsumer.poll to simulate failures
             mocked.side_effect = ValueError("test")
             # Stop app when the future is resolved
@@ -2747,7 +2747,7 @@ class TestApplicationMultipleSdf:
 
             processed_count += 1
             # Stop processing after consuming all the messages
-            if processed_count == total_messages:
+            if processed_count == len(messages):
                 done.set_result(True)
 
         processed_count = 0
@@ -2769,33 +2769,33 @@ class TestApplicationMultipleSdf:
         input_topic_b = app.topic(
             str(uuid.uuid4()), value_deserializer=JSONDeserializer()
         )
-        input_topics = [input_topic_a, input_topic_b]
-        messages_per_topic = 3
-        total_messages = messages_per_topic * len(input_topics)
+
+        # Produce messages to the topic and flush
+        message_key = b"key"
+        messages = [
+            (input_topic_a, 10),
+            (input_topic_a, 12),
+            (input_topic_a, 14),
+            (input_topic_b, 11),
+            (input_topic_b, 13),
+            (input_topic_b, 15),
+        ]
+
+        with app.get_producer() as producer:
+            for topic, timestamp in messages:
+                producer.produce(topic.name, timestamp=timestamp, key=message_key)
 
         # Define a function that counts incoming Rows using state
-        def count(_, state: State):
-            total = state.get("total", 0)
-            total += 1
-            state.set("total", total)
+        def count(value, key, timestamp, headers, state: State):
+            timestamps = state.get("timestamps", [])
+            timestamps.append(timestamp)
+            state.set("timestamps", timestamps)
 
         sdf_a = app.dataframe(input_topic_a)
         sdf_b = app.dataframe(input_topic_b)
 
         sdf_concat = sdf_a.concat(sdf_b)
-        sdf_concat.update(count, stateful=True)
-
-        # Produce messages to the topic and flush
-        message_key = b"key"
-        data = {
-            "key": message_key,
-            "value": dumps({"key": "value"}),
-            "partition": partition_num,
-        }
-        with app.get_producer() as producer:
-            for topic in input_topics:
-                for _ in range(messages_per_topic):
-                    producer.produce(topic.name, **data)
+        sdf_concat.update(count, stateful=True, metadata=True)
 
         done = Future()
         # Stop app when the future is resolved
@@ -2809,10 +2809,14 @@ class TestApplicationMultipleSdf:
         with patch("quixstreams.state.base.Store.revoke_partition", revoke_partition):
             app.run()
 
-        assert processed_count == total_messages
+        assert processed_count == len(messages)
 
         store = stores[sdf_concat.stream_id]
         partition = store.partitions[partition_num]
+
+        # Ensure that messages are processed in timestamp order
+        # from concatenated partitions
+        timestamps_sorted = sorted(m[1] for m in messages)
         with partition.begin() as tx:
-            assert tx.get("total", prefix=message_key) == total_messages
+            assert tx.get("timestamps", prefix=message_key) == timestamps_sorted
         store.revoke_partition(partition_num)

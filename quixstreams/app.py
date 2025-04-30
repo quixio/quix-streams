@@ -921,7 +921,10 @@ class Application:
     def _process_message(self, dataframe_composed):
         # Serve producer callbacks
         self._producer.poll(self._config.producer_poll_timeout)
-        rows = self._consumer.poll_row(timeout=self._config.consumer_poll_timeout)
+        rows = self._consumer.poll_row(
+            timeout=self._config.consumer_poll_timeout,
+            buffered=self._dataframe_registry.requires_time_alignment,
+        )
 
         if rows is None:
             self._run_tracker.set_current_message_tp(None)

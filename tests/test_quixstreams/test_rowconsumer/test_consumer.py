@@ -53,7 +53,7 @@ class TestRowConsumer:
                     assert row
                     assert row.key == b"key"
                     assert row.value == {"field": "value"}
-                    return
+                    break
 
     def test_poll_row_multiple_topics(
         self, row_consumer_factory, topic_json_serdes_factory, producer
@@ -78,7 +78,7 @@ class TestRowConsumer:
                 if row is not None:
                     rows.append(row)
                     if len(rows) == 2:
-                        return
+                        break
 
     def test_poll_row_kafka_error(self, row_consumer_factory, topic_manager_factory):
         topic_manager = topic_manager_factory()
@@ -328,7 +328,7 @@ class TestRowConsumer:
             partitions=[TopicPartition(topic=topic.name, partition=1)]
         )
 
-    def test_poll_row_multiple_topics_in_order(
+    def test_poll_row_buffered_multiple_topics_in_order(
         self, row_consumer_factory, topic_json_serdes_factory, producer
     ):
         """
@@ -348,7 +348,12 @@ class TestRowConsumer:
 
         with producer:
             for message in messages:
-                producer.produce(topic=message.topic, key=b"key", value=None)
+                producer.produce(
+                    topic=message.topic,
+                    key=b"key",
+                    value=None,
+                    timestamp=message.timestamp,
+                )
 
         with row_consumer_factory(
             auto_offset_reset="earliest",
@@ -357,11 +362,11 @@ class TestRowConsumer:
 
             rows = []
             while Timeout():
-                row = consumer.poll_row(0.1)
+                row = consumer.poll_row(0.1, buffered=True)
                 if row is not None:
                     rows.append(row)
                     if len(rows) == len(messages):
-                        return
+                        break
 
         assert rows[0].timestamp == messages[0].timestamp
         assert rows[1].timestamp == messages[2].timestamp

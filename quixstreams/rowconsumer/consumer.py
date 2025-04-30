@@ -168,7 +168,9 @@ class RowConsumer(BaseConsumer):
     def consumer_exists(self) -> bool:
         return self._inner_consumer is not None
 
-    def poll_row(self, timeout: Optional[float] = None) -> Union[Row, list[Row], None]:
+    def poll_row(
+        self, timeout: Optional[float] = None, buffered: bool = False
+    ) -> Union[Row, list[Row], None]:
         """
         Consumes a single message and deserialize it to Row or a list of Rows.
 
@@ -176,31 +178,39 @@ class RowConsumer(BaseConsumer):
         If deserializer raises `IgnoreValue` exception, this method will return None.
         If Kafka returns an error, it will be raised as exception.
 
-        Under the hood, this method consumes messages in batches and buffers them to
-        return them in-order across multiple topic partitions with the same number.
-
         :param timeout: poll timeout seconds
+        :param buffered: when `True`, the consumer will read messages in batches and buffer them for the timestamp-order processing
+            across multiple topic partitions with the same number.
+            Normally, it should be True if the application uses joins or concatenates topics.
+            Note: buffered and non-buffered calls should not be mixed within the same application.
+            Default - `False`.
         :return: single Row, list of Rows or None
         """
-        try:
+        if buffered:
+            # Poll messages the buffered way.
+            # Messages are already validated when they come through the buffer
             msg = self.poll_buffered(timeout=timeout)
-        except PartitionAssignmentError:
-            # Always propagate errors happened during assignment
-            raise
-        except Exception as exc:
-            to_suppress = self._on_error(exc, None, logger)
-            if to_suppress:
+            if msg is None:
                 return None
-            raise
-
-        if msg is None:
-            return None
+        else:
+            try:
+                # Poll messages the usual way and validate them
+                raw_msg = self.poll(timeout=timeout)
+                if raw_msg is None:
+                    return None
+                msg = raise_for_msg_error(raw_msg)
+            except PartitionAssignmentError:
+                # Always propagate errors happened during assignment
+                raise
+            except Exception as exc:
+                to_suppress = self._on_error(exc, None, logger)
+                if to_suppress:
+                    return None
+                raise
 
         topic_name = msg.topic()
         try:
-            msg = raise_for_msg_error(msg)
             topic = self._topics[topic_name]
-
             row_or_rows = topic.row_deserialize(message=msg)
             return row_or_rows
         except IgnoreMessage:

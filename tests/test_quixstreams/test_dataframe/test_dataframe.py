@@ -2432,8 +2432,9 @@ class TestStreamingDataFrameConcat:
             create_config=TopicConfig(num_partitions=2, replication_factor=1),
         )
 
-        sdf1 = dataframe_factory(topic=topic1)
-        sdf2 = dataframe_factory(topic=topic2)
+        registry = DataFrameRegistry()
+        sdf1 = dataframe_factory(topic=topic1, registry=registry)
+        sdf2 = dataframe_factory(topic=topic2, registry=registry)
 
         sdf_concatenated = sdf1.concat(sdf2).apply(lambda v: v + 1)
         assert sdf_concatenated.test(
@@ -2442,6 +2443,10 @@ class TestStreamingDataFrameConcat:
         assert sdf_concatenated.test(
             value=2, key=b"key2", timestamp=1, topic=topic2
         ) == [(3, b"key2", 1, None)]
+
+        # Concat must also update the flag in the registry telling that
+        # the topics must be co-partitioned
+        assert registry.requires_time_alignment
 
     def test_concat_same_topic_success(self, topic_manager_factory, dataframe_factory):
         """
