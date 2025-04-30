@@ -1611,11 +1611,10 @@ class StreamingDataFrame:
         """
 
         merged_stream = self.stream.merge(other.stream)
-        sdf = self.__dataframe_clone__(
+        self._registry.require_time_alignment()
+        return self.__dataframe_clone__(
             *self.topics, *other.topics, stream=merged_stream
         )
-        self._registry.require_time_alignment()
-        return sdf
 
     def ensure_topics_copartitioned(self):
         partitions_counts = set(t.broker_config.num_partitions for t in self._topics)
