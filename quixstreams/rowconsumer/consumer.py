@@ -136,7 +136,7 @@ class RowConsumer(BaseConsumer):
             buffer_partitions = [
                 tp for tp in partitions if not self._topics[tp.topic].is_changelog
             ]
-            self._buffer.on_assign(buffer_partitions)
+            self._buffer.assign_partitions(buffer_partitions)
             if on_assign is not None:
                 on_assign(consumer, partitions)
 
@@ -144,7 +144,7 @@ class RowConsumer(BaseConsumer):
             buffer_partitions = [
                 tp for tp in partitions if not self._topics[tp.topic].is_changelog
             ]
-            self._buffer.on_revoke(buffer_partitions)
+            self._buffer.revoke_partitions(buffer_partitions)
             if on_revoke is not None:
                 on_revoke(consumer, partitions)
 
@@ -152,7 +152,7 @@ class RowConsumer(BaseConsumer):
             buffer_partitions = [
                 tp for tp in partitions if not self._topics[tp.topic].is_changelog
             ]
-            self._buffer.on_revoke(buffer_partitions)
+            self._buffer.revoke_partitions(buffer_partitions)
             if on_lost is not None:
                 on_lost(consumer, partitions)
 

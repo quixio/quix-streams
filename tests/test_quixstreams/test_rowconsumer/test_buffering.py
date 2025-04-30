@@ -11,7 +11,7 @@ class TestInternalConsumerBuffer:
 
         assert buffer.pop() is None
 
-        buffer.on_assign([TopicPartition(topic="test", partition=0)])
+        buffer.assign_partitions([TopicPartition(topic="test", partition=0)])
         assert buffer.pop() is None
 
     def test_pop_item_single_topic_multiple_partitions(self):
@@ -20,7 +20,7 @@ class TestInternalConsumerBuffer:
         there's a single partition in the group (i.e. only one partition with the same number),
         """
         buffer = InternalConsumerBuffer()
-        buffer.on_assign(
+        buffer.assign_partitions(
             [
                 TopicPartition(topic="test", partition=0),
                 TopicPartition(topic="test", partition=1),
@@ -47,7 +47,7 @@ class TestInternalConsumerBuffer:
         """
 
         buffer = InternalConsumerBuffer()
-        buffer.on_assign(
+        buffer.assign_partitions(
             [
                 TopicPartition(topic="test", partition=0),
                 TopicPartition(topic="test1", partition=0),
@@ -90,7 +90,7 @@ class TestInternalConsumerBuffer:
         """
 
         buffer = InternalConsumerBuffer()
-        buffer.on_assign(
+        buffer.assign_partitions(
             [
                 TopicPartition(topic="test", partition=0),
                 TopicPartition(topic="test1", partition=0),
@@ -126,7 +126,7 @@ class TestInternalConsumerBuffer:
         """
 
         buffer = InternalConsumerBuffer()
-        buffer.on_assign(
+        buffer.assign_partitions(
             [
                 TopicPartition(topic="test", partition=0),
                 TopicPartition(topic="test1", partition=0),
@@ -170,7 +170,7 @@ class TestInternalConsumerBuffer:
         """
 
         buffer = InternalConsumerBuffer()
-        buffer.on_assign(
+        buffer.assign_partitions(
             [
                 TopicPartition(topic="test", partition=0),
                 TopicPartition(topic="test1", partition=0),
@@ -200,7 +200,7 @@ class TestInternalConsumerBuffer:
 
     def test_feed_invalid_offset(self):
         buffer = InternalConsumerBuffer()
-        buffer.on_assign([TopicPartition(topic="test", partition=0)])
+        buffer.assign_partitions([TopicPartition(topic="test", partition=0)])
 
         buffer.feed(
             [
@@ -226,7 +226,7 @@ class TestInternalConsumerBuffer:
 
     def test_pause_full(self):
         buffer = InternalConsumerBuffer(max_partition_buffer_size=2)
-        buffer.on_assign(
+        buffer.assign_partitions(
             [
                 TopicPartition(topic="test", partition=0),
                 TopicPartition(topic="test1", partition=0),
@@ -263,7 +263,7 @@ class TestInternalConsumerBuffer:
 
     def test_resume_empty(self):
         buffer = InternalConsumerBuffer(max_partition_buffer_size=1)
-        buffer.on_assign(
+        buffer.assign_partitions(
             [
                 TopicPartition(topic="test", partition=0),
                 TopicPartition(topic="test1", partition=0),
@@ -300,7 +300,7 @@ class TestInternalConsumerBuffer:
 
     def test_clear(self):
         buffer = InternalConsumerBuffer()
-        buffer.on_assign([TopicPartition(topic="test", partition=0)])
+        buffer.assign_partitions([TopicPartition(topic="test", partition=0)])
 
         buffer.feed(
             [
@@ -319,7 +319,7 @@ class TestInternalConsumerBuffer:
 
     def test_close(self):
         buffer = InternalConsumerBuffer()
-        buffer.on_assign([TopicPartition(topic="test", partition=0)])
+        buffer.assign_partitions([TopicPartition(topic="test", partition=0)])
 
         buffer.feed(
             [

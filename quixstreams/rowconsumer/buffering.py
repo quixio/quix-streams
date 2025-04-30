@@ -304,7 +304,7 @@ class InternalConsumerBuffer:
         self._partition_groups: dict[int, PartitionBufferGroup] = {}
         self._max_partition_buffer_size = max_partition_buffer_size
 
-    def on_assign(self, topic_partitions: list[TopicPartition]):
+    def assign_partitions(self, topic_partitions: list[TopicPartition]):
         """
         Assign new partitions to the buffer.
 
@@ -322,7 +322,7 @@ class InternalConsumerBuffer:
             )
             partition_group.assign_partition(topic=tp.topic)
 
-    def on_revoke(self, topic_partitions: list[TopicPartition]):
+    def revoke_partitions(self, topic_partitions: list[TopicPartition]):
         """
         Drop the partitions from the buffer.
 
