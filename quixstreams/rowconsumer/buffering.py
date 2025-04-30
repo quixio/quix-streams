@@ -285,7 +285,6 @@ class InternalConsumerBuffer:
         provides API to get the message with the smallest timestamp across all assigned
         topics with the same partition number.
 
-
         **Note**: messages are not guaranteed to be in-order 100% of the time,
           and they can be consumed out-of-order when the producer sends new messages with a delay,
           and they arrive to the broker later.
