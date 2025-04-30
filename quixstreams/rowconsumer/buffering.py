@@ -176,10 +176,9 @@ class PartitionBufferGroup:
         if topic in self._partition_buffers:
             return
         # New partition, need to create a new buffer and add it to the heap
-        partition_buffer = PartitionBuffer(
+        self._partition_buffers[topic] = PartitionBuffer(
             partition=self._partition, topic=topic, max_size=self._max_size
         )
-        self._partition_buffers[topic] = partition_buffer
 
     def revoke_partition(self, topic: str):
         """
