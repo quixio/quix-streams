@@ -38,11 +38,11 @@ class PartitionBuffer:
         """
         self.partition = partition
         self.topic = topic
-        self.max_size = max_size
-        self.high_watermark = -1001
-        self.max_offset = -1
-        self.paused = False
         self.next_timestamp = float("inf")
+        self._paused = False
+        self._max_size = max_size
+        self._max_offset = -1
+        self._high_watermark = -1001
         self._messages: deque[SuccessfulConfluentKafkaMessageProto] = deque()
 
     def set_high_watermark(self, offset: int):
@@ -51,7 +51,7 @@ class PartitionBuffer:
 
         :param offset: high watermark offset.
         """
-        self.high_watermark = offset
+        self._high_watermark = offset
 
     def idleness(self) -> Idleness:
         """
@@ -62,13 +62,13 @@ class PartitionBuffer:
          - `False` when the max offset is below the high watermark
          - `None` when the watermark is not known yet.
         """
-        high_watermark = self.high_watermark
+        high_watermark = self._high_watermark
         if high_watermark < 0:
             # There's no valid highwater for this partition yet, the idleness is unknown
             return Idleness.UNKNOWN
 
         return (
-            Idleness.IDLE if self.max_offset + 1 >= high_watermark else Idleness.ACTIVE
+            Idleness.IDLE if self._max_offset + 1 >= high_watermark else Idleness.ACTIVE
         )
 
     def append(self, message: SuccessfulConfluentKafkaMessageProto):
@@ -79,11 +79,11 @@ class PartitionBuffer:
         :param message: a successful Kafka message.
         """
         offset = message.offset()
-        if offset <= self.max_offset:
+        if offset <= self._max_offset:
             raise ValueError(
-                f"Invalid offset {offset} (max offset is {self.max_offset})"
+                f"Invalid offset {offset} (max offset is {self._max_offset})"
             )
-        self.max_offset = offset
+        self._max_offset = offset
         if self.next_timestamp == float("inf"):
             _, self.next_timestamp = message.timestamp()
         self._messages.append(message)
@@ -112,7 +112,7 @@ class PartitionBuffer:
             # until the consumer resumes it and tries to fetch the data from the broker.
             # More data may have been produced to the partition if it was paused.
             # Set high_watermark to "-1001" to mark it as "unknown".
-            self.high_watermark = -1001
+            self._high_watermark = -1001
         return item
 
     def empty(self) -> bool:
@@ -125,29 +125,33 @@ class PartitionBuffer:
         """
         Check if the buffer is full
         """
-        return len(self._messages) >= self.max_size
+        return len(self._messages) >= self._max_size
+
+    @property
+    def paused(self) -> bool:
+        return self._paused
 
     def pause(self):
         """
         Mark the buffer as paused
         """
-        self.paused = True
+        self._paused = True
 
     def resume(self):
         """
         Mark the buffer as resumed
         """
-        self.paused = False
+        self._paused = False
 
     def clear(self):
         """
         Clear the buffer and reset its state.
         """
-        self.max_offset = -1
         self.next_timestamp = float("inf")
-        self.high_watermark = -1001
+        self._max_offset = -1
+        self._high_watermark = -1001
         self._messages.clear()
-        self.paused = False
+        self._paused = False
 
 
 class PartitionBufferGroup:
