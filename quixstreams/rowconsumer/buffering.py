@@ -11,7 +11,6 @@ logger = logging.getLogger(__name__)
 
 __all__ = ("InternalConsumerBuffer",)
 
-
 _next_timestamp_getter = attrgetter("next_timestamp")
 
 
