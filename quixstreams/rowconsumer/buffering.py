@@ -318,6 +318,7 @@ class InternalConsumerBuffer:
             When individual buffer exceeds this limit, its TP can be paused to let other partitions to be consumed too.
         """
         self._partition_groups: dict[int, PartitionBufferGroup] = {}
+        self._partition_groups_values = self._partition_groups.values()
         self._max_partition_buffer_size = max_partition_buffer_size
 
     def assign_partitions(self, topic_partitions: list[TopicPartition]):
@@ -364,7 +365,7 @@ class InternalConsumerBuffer:
             partition_group = self._partition_groups[message.partition()]
             partition_group.append(message=message)
 
-        for partition_group in self._partition_groups.values():
+        for partition_group in self._partition_groups_values:
             group_watermarks = {
                 topic: watermark
                 for (topic, partition), watermark in high_watermarks.items()
@@ -379,7 +380,7 @@ class InternalConsumerBuffer:
         :returns: `None` if all the buffers are empty or if the
         """
         # Iterate over group buffers and return the first messages we find
-        for partition_group in self._partition_groups.values():
+        for partition_group in self._partition_groups_values:
             message = partition_group.pop()
             if message is not None:
                 return message
@@ -390,7 +391,7 @@ class InternalConsumerBuffer:
         Pause the full partition buffers and return them as a list.
         """
         tps = []
-        for partition_group in self._partition_groups.values():
+        for partition_group in self._partition_groups_values:
             tps += partition_group.pause_full()
         return tps
 
@@ -399,7 +400,7 @@ class InternalConsumerBuffer:
         Resume the empty partition buffers and return them as a list.
         """
         tps = []
-        for partition_group in self._partition_groups.values():
+        for partition_group in self._partition_groups_values:
             tps += partition_group.resume_empty()
         return tps
 
