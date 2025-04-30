@@ -38,7 +38,9 @@ Note that 'end_date' is optional; when not provided, it will run indefinitely fo
 
 ## How to Use
 
-To use Kinesis Source, hand `InfluxDB3Source` to `app.dataframe()`.
+Import and instantiate an `InfluxDB3Source` instance and hand it to an Application using
+`app.add_source(<InfluxDB3Source>)` or instead to a StreamingDataFrame with 
+`app.dataframe(source=<InfluxDB3Source>)` if further data manipulation is required.
 
 For more details around various settings, see [configuration](#configuration).
 
