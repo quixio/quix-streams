@@ -14,6 +14,7 @@ from quixstreams.app import Application
 from quixstreams.dataframe import StreamingDataFrame
 from quixstreams.dataframe.windows.base import get_window_ranges
 from quixstreams.exceptions import PartitionAssignmentError
+from quixstreams.internal_consumer import InternalConsumer
 from quixstreams.kafka.configuration import ConnectionConfig
 from quixstreams.kafka.exceptions import KafkaConsumerException
 from quixstreams.models import (
@@ -27,7 +28,6 @@ from quixstreams.models import (
 from quixstreams.models.topics.exceptions import TopicNotFoundError
 from quixstreams.platforms.quix import QuixApplicationConfig, QuixKafkaConfigsBuilder
 from quixstreams.platforms.quix.env import QuixEnvironment
-from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
 from quixstreams.sinks import SinkBackpressureError, SinkBatch
 from quixstreams.sources import SourceException, multiprocessing
@@ -103,7 +103,7 @@ class TestApplication:
     def test_run_success(
         self,
         app_factory,
-        row_consumer_factory,
+        internal_consumer_factory,
         executor,
     ):
         """
@@ -166,18 +166,20 @@ class TestApplication:
         assert processed_count == total_messages
 
         # Ensure that the right offset is committed
-        with row_consumer_factory(auto_offset_reset="latest") as row_consumer:
-            committed, *_ = row_consumer.committed(
+        with internal_consumer_factory(auto_offset_reset="latest") as internal_consumer:
+            committed, *_ = internal_consumer.committed(
                 [TopicPartition(topic_in.name, partition_num)]
             )
             assert committed.offset == total_messages
 
         # confirm messages actually ended up being produced by the app
         rows_out = []
-        with row_consumer_factory(auto_offset_reset="earliest") as row_consumer:
-            row_consumer.subscribe([topic_out])
+        with internal_consumer_factory(
+            auto_offset_reset="earliest"
+        ) as internal_consumer:
+            internal_consumer.subscribe([topic_out])
             while len(rows_out) < total_messages:
-                rows_out.append(row_consumer.poll_row(timeout=5))
+                rows_out.append(internal_consumer.poll_row(timeout=5))
 
         assert len(rows_out) == total_messages
         for row in rows_out:
@@ -190,7 +192,7 @@ class TestApplication:
     def test_run_fails_no_commit(
         self,
         app_factory,
-        row_consumer_factory,
+        internal_consumer_factory,
         executor,
     ):
         """
@@ -235,8 +237,8 @@ class TestApplication:
         assert processed_count == total_messages
 
         # Ensure the offset is not committed to Kafka
-        with row_consumer_factory() as row_consumer:
-            committed, *_ = row_consumer.committed(
+        with internal_consumer_factory() as internal_consumer:
+            committed, *_ = internal_consumer.committed(
                 [TopicPartition(topic_in.name, partition_num)]
             )
         assert committed.offset == -1001
@@ -283,8 +285,8 @@ class TestApplication:
         topic = app.topic(str(uuid.uuid4()))
         sdf = app.dataframe(topic)
 
-        with patch.object(RowConsumer, "poll") as mocked:
-            # Patch RowConsumer.poll to simulate failures
+        with patch.object(InternalConsumer, "poll") as mocked:
+            # Patch InternalConsumer.poll to simulate failures
             mocked.side_effect = ValueError("test")
             # Stop app when the future is resolved
             executor.submit(_stop_app_on_future, app, done, 10.0)
@@ -515,7 +517,7 @@ class TestAppGroupBy:
     def test_group_by(
         self,
         app_factory,
-        row_consumer_factory,
+        internal_consumer_factory,
         executor,
     ):
         """
@@ -583,9 +585,11 @@ class TestAppGroupBy:
         assert processed_count == total_messages
 
         # Consume the message from the output topic
-        with row_consumer_factory(auto_offset_reset="earliest") as row_consumer:
-            row_consumer.subscribe([app_topic_out])
-            row = row_consumer.poll_row(timeout=5)
+        with internal_consumer_factory(
+            auto_offset_reset="earliest"
+        ) as internal_consumer:
+            internal_consumer.subscribe([app_topic_out])
+            row = internal_consumer.poll_row(timeout=5)
 
         # Check that "user_id" is now used as a message key
         assert row.key.decode() == user_id
@@ -600,7 +604,7 @@ class TestAppGroupBy:
     def test_group_by_with_window(
         self,
         app_factory,
-        row_consumer_factory,
+        internal_consumer_factory,
         executor,
         processing_guarantee,
     ):
@@ -674,9 +678,11 @@ class TestAppGroupBy:
         assert processed_count == total_messages
 
         # Consume the message from the output topic
-        with row_consumer_factory(auto_offset_reset="earliest") as row_consumer:
-            row_consumer.subscribe([app_topic_out])
-            row = row_consumer.poll_row(timeout=5)
+        with internal_consumer_factory(
+            auto_offset_reset="earliest"
+        ) as internal_consumer:
+            internal_consumer.subscribe([app_topic_out])
+            row = internal_consumer.poll_row(timeout=5)
 
         # Check that "user_id" is now used as a message key
         assert row.key.decode() == user_id
@@ -693,7 +699,7 @@ class TestAppExactlyOnce:
         self,
         app_factory,
         topic_manager_factory,
-        row_consumer_factory,
+        internal_consumer_factory,
         executor,
     ):
         """
@@ -768,12 +774,14 @@ class TestAppExactlyOnce:
         app.run(sdf)
 
         # only committed messages are read by a downstream consumer
-        with row_consumer_factory(auto_offset_reset="earliest") as row_consumer:
-            row_consumer.subscribe([topic_out])
+        with internal_consumer_factory(
+            auto_offset_reset="earliest"
+        ) as internal_consumer:
+            internal_consumer.subscribe([topic_out])
             rows = []
-            while (row := row_consumer.poll_row(timeout=5)) is not None:
+            while (row := internal_consumer.poll_row(timeout=5)) is not None:
                 rows.append(row)
-            lowwater, highwater = row_consumer.get_watermark_offsets(
+            lowwater, highwater = internal_consumer.get_watermark_offsets(
                 TopicPartition(topic_out.name, 0), 3
             )
         assert len(rows) == total_messages
@@ -833,7 +841,7 @@ class TestQuixApplication:
         # Mock consumer and producer to check the init args
         with (
             patch("quixstreams.app.QuixKafkaConfigsBuilder", get_cfg_builder),
-            patch("quixstreams.app.RowConsumer") as consumer_init_mock,
+            patch("quixstreams.app.InternalConsumer") as consumer_init_mock,
             patch("quixstreams.app.RowProducer") as producer_init_mock,
         ):
             app = Application(
@@ -899,7 +907,7 @@ class TestQuixApplication:
         monkeypatch.setenv("Quix__Sdk__Token", quix_sdk_token)
         with (
             patch("quixstreams.app.QuixKafkaConfigsBuilder", get_cfg_builder),
-            patch("quixstreams.app.RowConsumer") as consumer_init_mock,
+            patch("quixstreams.app.InternalConsumer") as consumer_init_mock,
             patch("quixstreams.app.RowProducer") as producer_init_mock,
         ):
             Application(
@@ -961,7 +969,7 @@ class TestQuixApplication:
             return cfg_builder
 
         with (
-            patch("quixstreams.app.RowConsumer") as consumer_init_mock,
+            patch("quixstreams.app.InternalConsumer") as consumer_init_mock,
             patch("quixstreams.app.RowProducer") as producer_init_mock,
         ):
             Application(
@@ -1723,7 +1731,7 @@ class TestApplicationRecovery:
         executor,
         tmp_path,
         state_manager_factory,
-        row_consumer_factory,
+        internal_consumer_factory,
         processing_guarantee,
     ):
         """
@@ -1744,7 +1752,7 @@ class TestApplicationRecovery:
             )
         else:
             commit_patch = patch.object(
-                RowConsumer, "commit", side_effect=ValueError("Fail")
+                InternalConsumer, "commit", side_effect=ValueError("Fail")
             )
 
         # Messages to be processed successfully
@@ -1808,7 +1816,9 @@ class TestApplicationRecovery:
                         group_id=consumer_group,
                         state_dir=state_dir,
                     ) as state_manager,
-                    row_consumer_factory(consumer_group=consumer_group) as consumer,
+                    internal_consumer_factory(
+                        consumer_group=consumer_group
+                    ) as consumer,
                 ):
                     committed_offset = consumer.committed(
                         [TopicPartition(topic=topic_name, partition=0)]
@@ -2273,7 +2283,7 @@ class TestApplicationMultipleSdf:
     def test_multiple_sdfs(
         self,
         app_factory,
-        row_consumer_factory,
+        internal_consumer_factory,
         executor,
     ):
         """
@@ -2346,8 +2356,8 @@ class TestApplicationMultipleSdf:
         assert processed_count == total_messages
 
         # Ensure that the right offset is committed
-        with row_consumer_factory(auto_offset_reset="latest") as row_consumer:
-            committed = row_consumer.committed(
+        with internal_consumer_factory(auto_offset_reset="latest") as internal_consumer:
+            committed = internal_consumer.committed(
                 [TopicPartition(topic.name, partition_num) for topic in input_topics]
             )
             for topic in committed:
@@ -2355,10 +2365,12 @@ class TestApplicationMultipleSdf:
 
         # confirm messages actually ended up being produced by the app
         rows_out = []
-        with row_consumer_factory(auto_offset_reset="earliest") as row_consumer:
-            row_consumer.subscribe([topic_out])
+        with internal_consumer_factory(
+            auto_offset_reset="earliest"
+        ) as internal_consumer:
+            internal_consumer.subscribe([topic_out])
             while len(rows_out) < total_messages:
-                rows_out.append(row_consumer.poll_row(timeout=5))
+                rows_out.append(internal_consumer.poll_row(timeout=5))
 
         assert len(rows_out) == total_messages
         for row in rows_out:
@@ -2371,7 +2383,7 @@ class TestApplicationMultipleSdf:
     def test_group_by(
         self,
         app_factory,
-        row_consumer_factory,
+        internal_consumer_factory,
         executor,
     ):
         """
@@ -2475,9 +2487,11 @@ class TestApplicationMultipleSdf:
             (account_id, output_topic_account),
         ]:
             rows = []
-            with row_consumer_factory(auto_offset_reset="earliest") as row_consumer:
-                row_consumer.subscribe([output_topic])
-                while row := row_consumer.poll_row(timeout=5):
+            with internal_consumer_factory(
+                auto_offset_reset="earliest"
+            ) as internal_consumer:
+                internal_consumer.subscribe([output_topic])
+                while row := internal_consumer.poll_row(timeout=5):
                     rows.append(row)
 
             assert len(rows) == expected_output_topic_count

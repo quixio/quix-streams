@@ -7,6 +7,7 @@ import pytest
 from confluent_kafka import KafkaError, TopicPartition
 
 from quixstreams.exceptions import PartitionAssignmentError
+from quixstreams.internal_consumer import InternalConsumer
 from quixstreams.kafka.exceptions import KafkaConsumerException
 from quixstreams.models import (
     Deserializer,
@@ -15,17 +16,16 @@ from quixstreams.models import (
     Topic,
     TopicConfig,
 )
-from quixstreams.rowconsumer import RowConsumer
 from tests.utils import Timeout
 
 
-class TestRowConsumer:
-    def test_consumer_reuse(self, row_consumer_factory):
-        row_consumer = row_consumer_factory()
+class TestInternalConsumer:
+    def test_consumer_reuse(self, internal_consumer_factory):
+        internal_consumer = internal_consumer_factory()
         # just repeat the same thing twice, the consumer should be reusable
         for i in range(2):
-            assert not row_consumer.consumer_exists
-            with row_consumer as consumer:
+            assert not internal_consumer.consumer_exists
+            with internal_consumer as consumer:
                 metadata = consumer.list_topics()
                 assert consumer.consumer_exists
                 assert metadata
@@ -34,11 +34,11 @@ class TestRowConsumer:
                 assert broker_address
 
     def test_poll_row_success(
-        self, row_consumer_factory, topic_json_serdes_factory, producer
+        self, internal_consumer_factory, topic_json_serdes_factory, producer
     ):
         topic = topic_json_serdes_factory()
         with (
-            row_consumer_factory(
+            internal_consumer_factory(
                 auto_offset_reset="earliest",
             ) as consumer,
             producer,
@@ -56,11 +56,11 @@ class TestRowConsumer:
                     break
 
     def test_poll_row_multiple_topics(
-        self, row_consumer_factory, topic_json_serdes_factory, producer
+        self, internal_consumer_factory, topic_json_serdes_factory, producer
     ):
         topics = [topic_json_serdes_factory(), topic_json_serdes_factory()]
         with (
-            row_consumer_factory(
+            internal_consumer_factory(
                 auto_offset_reset="earliest",
             ) as consumer,
             producer,
@@ -80,11 +80,13 @@ class TestRowConsumer:
                     if len(rows) == 2:
                         break
 
-    def test_poll_row_kafka_error(self, row_consumer_factory, topic_manager_factory):
+    def test_poll_row_kafka_error(
+        self, internal_consumer_factory, topic_manager_factory
+    ):
         topic_manager = topic_manager_factory()
         topic = Topic(name=str(uuid4()), create_config=topic_manager.topic_config())
 
-        with row_consumer_factory(
+        with internal_consumer_factory(
             auto_offset_reset="earliest",
         ) as consumer:
             consumer.subscribe([topic])
@@ -94,7 +96,7 @@ class TestRowConsumer:
         assert exc.code == KafkaError.UNKNOWN_TOPIC_OR_PART
 
     def test_poll_row_ignore_message(
-        self, row_consumer_factory, topic_manager_topic_factory, producer
+        self, internal_consumer_factory, topic_manager_topic_factory, producer
     ):
         class _Deserializer(Deserializer):
             def __call__(self, *args, **kwargs):
@@ -102,7 +104,7 @@ class TestRowConsumer:
 
         topic = topic_manager_topic_factory(value_deserializer=_Deserializer())
         with (
-            row_consumer_factory(
+            internal_consumer_factory(
                 auto_offset_reset="earliest",
             ) as consumer,
             producer,
@@ -120,11 +122,11 @@ class TestRowConsumer:
         assert high == 1
 
     def test_poll_row_deserialization_error_raise(
-        self, row_consumer_factory, topic_json_serdes_factory, producer
+        self, internal_consumer_factory, topic_json_serdes_factory, producer
     ):
         topic = topic_json_serdes_factory()
         with (
-            row_consumer_factory(
+            internal_consumer_factory(
                 auto_offset_reset="earliest",
             ) as consumer,
             producer,
@@ -136,11 +138,11 @@ class TestRowConsumer:
                 consumer.poll_row(10.0)
 
     def test_poll_row_kafka_error_raise(
-        self, row_consumer_factory, topic_json_serdes_factory, producer
+        self, internal_consumer_factory, topic_json_serdes_factory, producer
     ):
         topic = topic_json_serdes_factory()
         with (
-            row_consumer_factory(
+            internal_consumer_factory(
                 auto_offset_reset="error",
             ) as consumer,
             producer,
@@ -152,7 +154,7 @@ class TestRowConsumer:
                 consumer.poll_row(10.0)
 
     def test_poll_row_deserialization_error_suppress(
-        self, row_consumer_factory, topic_json_serdes_factory, producer
+        self, internal_consumer_factory, topic_json_serdes_factory, producer
     ):
         topic = topic_json_serdes_factory()
 
@@ -165,7 +167,7 @@ class TestRowConsumer:
             return True
 
         with (
-            row_consumer_factory(
+            internal_consumer_factory(
                 auto_offset_reset="earliest",
                 on_error=on_error,
             ) as consumer,
@@ -179,7 +181,7 @@ class TestRowConsumer:
             assert suppressed
 
     def test_poll_row_kafka_error_suppress(
-        self, row_consumer_factory, topic_json_serdes_factory, producer
+        self, internal_consumer_factory, topic_json_serdes_factory, producer
     ):
         topic = topic_json_serdes_factory()
 
@@ -192,7 +194,7 @@ class TestRowConsumer:
             return True
 
         with (
-            row_consumer_factory(
+            internal_consumer_factory(
                 auto_offset_reset="error",
                 on_error=on_error,
             ) as consumer,
@@ -206,7 +208,7 @@ class TestRowConsumer:
             assert suppressed
 
     def test_poll_row_kafka_error_suppress_except_partition_assignment(
-        self, row_consumer_factory, topic_json_serdes_factory, producer
+        self, internal_consumer_factory, topic_json_serdes_factory, producer
     ):
         topic = topic_json_serdes_factory()
 
@@ -217,7 +219,7 @@ class TestRowConsumer:
             raise ValueError("Test")
 
         with (
-            row_consumer_factory(
+            internal_consumer_factory(
                 auto_offset_reset="error",
                 on_error=on_error,
             ) as consumer,
@@ -229,7 +231,7 @@ class TestRowConsumer:
             with pytest.raises(PartitionAssignmentError):
                 consumer.poll_row(10.0)
 
-    def test_trigger_backpressure(self, topic_manager_factory, row_consumer):
+    def test_trigger_backpressure(self, topic_manager_factory, internal_consumer):
         topic_manager = topic_manager_factory()
         topic = topic_manager.topic(
             name=str(uuid.uuid4()),
@@ -241,22 +243,22 @@ class TestRowConsumer:
         )
         offset_to_seek = 999
 
-        row_consumer.subscribe([topic, changelog])
-        while not row_consumer.assignment():
-            row_consumer.poll(0.1)
+        internal_consumer.subscribe([topic, changelog])
+        while not internal_consumer.assignment():
+            internal_consumer.poll(0.1)
 
         with (
-            patch.object(RowConsumer, "pause") as pause_mock,
-            patch.object(RowConsumer, "seek") as seek_mock,
+            patch.object(InternalConsumer, "pause") as pause_mock,
+            patch.object(InternalConsumer, "seek") as seek_mock,
         ):
-            row_consumer.trigger_backpressure(
+            internal_consumer.trigger_backpressure(
                 resume_after=1,
                 offsets_to_seek={(topic.name, 0): offset_to_seek},
             )
 
         assert (
             TopicPartition(topic=topic.name, partition=0)
-            in row_consumer.backpressured_tps
+            in internal_consumer.backpressured_tps
         )
         pause_mock.assert_called_once_with(
             partitions=[TopicPartition(topic=topic.name, partition=0, offset=-1000)]
@@ -268,7 +270,7 @@ class TestRowConsumer:
         )
 
     def test_resume_backpressured_nothing_paused(
-        self, row_consumer, topic_manager_factory
+        self, internal_consumer, topic_manager_factory
     ):
         topic_manager = topic_manager_factory()
         topic = topic_manager.topic(
@@ -276,15 +278,15 @@ class TestRowConsumer:
             create_config=TopicConfig(num_partitions=1, replication_factor=1),
         )
 
-        row_consumer.subscribe([topic])
-        while not row_consumer.assignment():
-            row_consumer.poll(0.1)
+        internal_consumer.subscribe([topic])
+        while not internal_consumer.assignment():
+            internal_consumer.poll(0.1)
 
-        with patch.object(RowConsumer, "resume") as resume_mock:
-            row_consumer.resume_backpressured()
+        with patch.object(InternalConsumer, "resume") as resume_mock:
+            internal_consumer.resume_backpressured()
         assert not resume_mock.called
 
-    def test_resume_backpressured(self, row_consumer, topic_manager_factory):
+    def test_resume_backpressured(self, internal_consumer, topic_manager_factory):
         topic_manager = topic_manager_factory()
         topic = topic_manager.topic(
             name=str(uuid.uuid4()),
@@ -298,25 +300,25 @@ class TestRowConsumer:
 
         offset_to_seek = 999
 
-        row_consumer.subscribe([topic, changelog])
-        while not row_consumer.assignment():
-            row_consumer.poll(0.1)
+        internal_consumer.subscribe([topic, changelog])
+        while not internal_consumer.assignment():
+            internal_consumer.poll(0.1)
 
         # Pause one partition that is ready to be resumed right now
-        row_consumer.trigger_backpressure(
+        internal_consumer.trigger_backpressure(
             resume_after=0,
             offsets_to_seek={
                 (topic.name, 0): offset_to_seek,
                 (topic.name, 1): offset_to_seek,
             },
         )
-        assert row_consumer.backpressured_tps
+        assert internal_consumer.backpressured_tps
 
-        with patch.object(RowConsumer, "resume") as resume_mock:
+        with patch.object(InternalConsumer, "resume") as resume_mock:
             # Resume partitions
-            row_consumer.resume_backpressured()
+            internal_consumer.resume_backpressured()
 
-        assert not row_consumer.backpressured_tps
+        assert not internal_consumer.backpressured_tps
 
         # Ensure that only previously backpressured partitions are resumed and
         # not changelog partitions
@@ -329,7 +331,7 @@ class TestRowConsumer:
         )
 
     def test_poll_row_buffered_multiple_topics_in_order(
-        self, row_consumer_factory, topic_json_serdes_factory, producer
+        self, internal_consumer_factory, topic_json_serdes_factory, producer
     ):
         """
         Test that "poll_row()" consumes messages in timestamp order
@@ -355,7 +357,7 @@ class TestRowConsumer:
                     timestamp=message.timestamp,
                 )
 
-        with row_consumer_factory(
+        with internal_consumer_factory(
             auto_offset_reset="earliest",
         ) as consumer:
             consumer.subscribe([topic1, topic2])

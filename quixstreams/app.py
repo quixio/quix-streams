@@ -31,6 +31,7 @@ from .error_callbacks import (
     ProducerErrorCallback,
     default_on_processing_error,
 )
+from .internal_consumer import InternalConsumer
 from .kafka import AutoOffsetReset, ConnectionConfig, Consumer, Producer
 from .logging import LogLevel, configure_logging
 from .models import (
@@ -50,7 +51,6 @@ from .platforms.quix import (
     is_quix_deployment,
 )
 from .processing import ProcessingContext
-from .rowconsumer import RowConsumer
 from .rowproducer import RowProducer
 from .runtracker import RunTracker
 from .sinks import SinkManager
@@ -198,7 +198,7 @@ class Application:
             Default - `"state"`.
         :param rocksdb_options: RocksDB options.
             If `None`, the default options will be used.
-        :param consumer_poll_timeout: timeout for `RowConsumer.poll()`. Default - `1.0`s
+        :param consumer_poll_timeout: timeout for `InternalConsumer.poll()`. Default - `1.0`s
         :param producer_poll_timeout: timeout for `RowProducer.poll()`. Default - `0`s.
         :param on_message_processed: a callback triggered when message is successfully
             processed.
@@ -227,7 +227,7 @@ class Application:
             exceptions occur on different stages of stream processing. If the callback
             returns `True`, the exception will be ignored. Otherwise, the exception
             will be propagated and the processing will eventually stop.
-        :param on_consumer_error: triggered when internal `RowConsumer` fails
+        :param on_consumer_error: triggered when internal `InternalConsumer` fails
             to poll Kafka or cannot deserialize a message.
         :param on_processing_error: triggered when exception is raised within
             `StreamingDataFrame.process()`.
@@ -335,7 +335,7 @@ class Application:
         self._on_message_processed = on_message_processed
         self._on_processing_error = on_processing_error or default_on_processing_error
 
-        self._consumer = self._get_rowconsumer(
+        self._consumer = self._get_internal_consumer(
             on_error=on_consumer_error,
             extra_config_overrides=consumer_extra_config_overrides,
         )
@@ -628,13 +628,13 @@ class Application:
             extra_config=self._config.producer_extra_config,
         )
 
-    def _get_rowconsumer(
+    def _get_internal_consumer(
         self,
         on_error: Optional[ConsumerErrorCallback] = None,
         extra_config_overrides: Optional[dict] = None,
-    ) -> RowConsumer:
+    ) -> InternalConsumer:
         """
-        Create a RowConsumer using the application config
+        Create an InternalConsumer using the application config
 
         Used to create the application consumer as well as the sources consumers
         """
@@ -644,7 +644,7 @@ class Application:
             **self._config.consumer_extra_config,
             **extra_config_overrides,
         }
-        return RowConsumer(
+        return InternalConsumer(
             broker_address=self._config.broker_address,
             consumer_group=self._config.consumer_group,
             auto_offset_reset=self._config.auto_offset_reset,
@@ -735,7 +735,7 @@ class Application:
             source,
             topic,
             self._get_rowproducer(transactional=False),
-            self._get_rowconsumer(
+            self._get_internal_consumer(
                 extra_config_overrides=consumer_extra_config_overrides
             ),
             self._get_topic_manager(),

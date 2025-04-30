@@ -11,11 +11,11 @@ from confluent_kafka import OFFSET_BEGINNING, TopicPartition
 from quixstreams.logging import LOGGER_NAME, configure_logging
 from quixstreams.models import Topic, TopicManager
 from quixstreams.models.topics import TopicConfig
-from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
 from quixstreams.state import RecoveryManager, StateStoreManager, StorePartition
 from quixstreams.state.memory import MemoryStore
 
+from ...internal_consumer import InternalConsumer
 from .exceptions import SourceException
 from .multiprocessing import multiprocessing
 from .source import BaseSource, StatefulSource
@@ -43,7 +43,7 @@ class SourceProcess(process):
         source: BaseSource,
         topic: Topic,
         producer: RowProducer,
-        consumer: RowConsumer,
+        consumer: InternalConsumer,
         topic_manager: TopicManager,
     ) -> None:
         super().__init__()

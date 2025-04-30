@@ -593,7 +593,7 @@ class TestStreamingDataFrameToTopic:
     def test_to_topic(
         self,
         dataframe_factory,
-        row_consumer_factory,
+        internal_consumer_factory,
         row_producer_factory,
         topic_manager_topic_factory,
         message_context_factory,
@@ -620,7 +620,7 @@ class TestStreamingDataFrameToTopic:
         with producer:
             sdf.test(value=value, key=key, timestamp=timestamp, ctx=ctx)
 
-        with row_consumer_factory(auto_offset_reset="earliest") as consumer:
+        with internal_consumer_factory(auto_offset_reset="earliest") as consumer:
             consumer.subscribe([topic])
             consumed_row = consumer.poll_row(timeout=5.0)
 
@@ -633,7 +633,7 @@ class TestStreamingDataFrameToTopic:
     def test_to_topic_apply_expand(
         self,
         dataframe_factory,
-        row_consumer_factory,
+        internal_consumer_factory,
         row_producer_factory,
         topic_manager_topic_factory,
         message_context_factory,
@@ -658,7 +658,7 @@ class TestStreamingDataFrameToTopic:
             sdf.test(value=value, key=key, timestamp=timestamp, ctx=ctx)
 
         consumed = []
-        with row_consumer_factory(auto_offset_reset="earliest") as consumer:
+        with internal_consumer_factory(auto_offset_reset="earliest") as consumer:
             consumer.subscribe([topic])
             for _ in range(2):
                 row = consumer.poll_row(timeout=5.0)
@@ -684,7 +684,7 @@ class TestStreamingDataFrameToTopic:
         key_func,
         expected_key,
         dataframe_factory,
-        row_consumer_factory,
+        internal_consumer_factory,
         row_producer_factory,
         topic_manager_topic_factory,
         message_context_factory,
@@ -707,7 +707,7 @@ class TestStreamingDataFrameToTopic:
         with producer:
             sdf.test(value=value, key=key, timestamp=timestamp, ctx=ctx)
 
-        with row_consumer_factory(auto_offset_reset="earliest") as consumer:
+        with internal_consumer_factory(auto_offset_reset="earliest") as consumer:
             consumer.subscribe([topic])
             consumed_row = consumer.poll_row(timeout=5.0)
 
@@ -719,7 +719,7 @@ class TestStreamingDataFrameToTopic:
     def test_to_topic_multiple_topics_out(
         self,
         dataframe_factory,
-        row_consumer_factory,
+        internal_consumer_factory,
         row_producer_factory,
         topic_manager_topic_factory,
         message_context_factory,
@@ -743,7 +743,7 @@ class TestStreamingDataFrameToTopic:
             sdf.test(value=value, key=key, timestamp=timestamp, ctx=ctx)
 
         consumed_rows = []
-        with row_consumer_factory(auto_offset_reset="earliest") as consumer:
+        with internal_consumer_factory(auto_offset_reset="earliest") as consumer:
             consumer.subscribe([topic_0, topic_1])
             while len(consumed_rows) < 2:
                 consumed_rows.append(consumer.poll_row(timeout=5.0))
@@ -1652,7 +1652,7 @@ class TestStreamingDataFrameGroupBy:
         dataframe_factory,
         topic_manager_factory,
         row_producer_factory,
-        row_consumer_factory,
+        internal_consumer_factory,
         message_context_factory,
     ):
         """GroupBy can accept a string (column name) as its grouping method."""
@@ -1689,7 +1689,7 @@ class TestStreamingDataFrameGroupBy:
                 ctx=message_context_factory(topic=topic.name),
             )
 
-        with row_consumer_factory(auto_offset_reset="earliest") as consumer:
+        with internal_consumer_factory(auto_offset_reset="earliest") as consumer:
             consumer.subscribe([groupby_topic])
             consumed_row = consumer.poll_row(timeout=5.0)
 
@@ -1726,7 +1726,7 @@ class TestStreamingDataFrameGroupBy:
         dataframe_factory,
         topic_manager_factory,
         row_producer_factory,
-        row_consumer_factory,
+        internal_consumer_factory,
         message_context_factory,
     ):
         """
@@ -1767,7 +1767,7 @@ class TestStreamingDataFrameGroupBy:
                 ctx=message_context_factory(topic=topic.name),
             )
 
-        with row_consumer_factory(auto_offset_reset="earliest") as consumer:
+        with internal_consumer_factory(auto_offset_reset="earliest") as consumer:
             consumer.subscribe([groupby_topic])
             consumed_row = consumer.poll_row(timeout=5.0)
 
@@ -1804,7 +1804,7 @@ class TestStreamingDataFrameGroupBy:
         dataframe_factory,
         topic_manager_factory,
         row_producer_factory,
-        row_consumer_factory,
+        internal_consumer_factory,
         message_context_factory,
     ):
         """
@@ -1844,7 +1844,7 @@ class TestStreamingDataFrameGroupBy:
                 ctx=message_context_factory(topic=topic.name),
             )
 
-        with row_consumer_factory(auto_offset_reset="earliest") as consumer:
+        with internal_consumer_factory(auto_offset_reset="earliest") as consumer:
             consumer.subscribe([groupby_topic])
             consumed_row = consumer.poll_row(timeout=5.0)
 

@@ -11,9 +11,9 @@ from quixstreams.checkpointing.exceptions import (
     CheckpointProducerTimeout,
 )
 from quixstreams.dataframe import DataFrameRegistry
+from quixstreams.internal_consumer import InternalConsumer
 from quixstreams.kafka import Consumer
 from quixstreams.models import TopicConfig
-from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
 from quixstreams.sinks import BatchingSink, SinkBackpressureError, SinkManager
 from quixstreams.sinks.base import SinkBatch
@@ -26,19 +26,19 @@ from tests.utils import DummySink
 
 @pytest.fixture()
 def checkpoint_factory(
-    state_manager, row_consumer, row_producer_factory, topic_manager_factory
+    state_manager, internal_consumer, row_producer_factory, topic_manager_factory
 ):
     def factory(
         commit_interval: float = 1,
         commit_every: int = 0,
-        consumer_: Optional[RowConsumer] = None,
+        consumer_: Optional[InternalConsumer] = None,
         producer_: Optional[RowProducer] = None,
         state_manager_: Optional[StateStoreManager] = None,
         sink_manager_: Optional[SinkManager] = None,
         dataframe_registry_: Optional[DataFrameRegistry] = None,
         exactly_once: bool = False,
     ):
-        consumer_ = consumer_ or row_consumer
+        consumer_ = consumer_ or internal_consumer
         sink_manager_ = sink_manager_ or SinkManager()
         producer_ = producer_ or row_producer_factory(transactional=exactly_once)
         state_manager_ = state_manager_ or state_manager
@@ -120,14 +120,14 @@ class TestCheckpoint:
     def test_commit_no_state_success(
         self,
         checkpoint_factory,
-        row_consumer,
+        internal_consumer,
         state_manager,
         topic_factory,
         exactly_once,
     ):
         topic_name, _ = topic_factory()
         checkpoint = checkpoint_factory(
-            consumer_=row_consumer,
+            consumer_=internal_consumer,
             state_manager_=state_manager,
             exactly_once=exactly_once,
         )
@@ -136,13 +136,15 @@ class TestCheckpoint:
         checkpoint.store_offset(topic_name, 0, processed_offset)
 
         checkpoint.commit()
-        tp, *_ = row_consumer.committed([TopicPartition(topic=topic_name, partition=0)])
+        tp, *_ = internal_consumer.committed(
+            [TopicPartition(topic=topic_name, partition=0)]
+        )
         assert tp.offset == processed_offset + 1
 
     def test_commit_with_state_no_changelog_success(
         self,
         checkpoint_factory,
-        row_consumer,
+        internal_consumer,
         state_manager_factory,
         topic_factory,
         rowproducer_mock,
@@ -153,7 +155,7 @@ class TestCheckpoint:
         dataframe_registry.register_stream_id(topic_name, [topic_name])
         state_manager = state_manager_factory(producer=rowproducer_mock)
         checkpoint = checkpoint_factory(
-            consumer_=row_consumer,
+            consumer_=internal_consumer,
             state_manager_=state_manager,
             producer_=rowproducer_mock,
             dataframe_registry_=dataframe_registry,
@@ -173,7 +175,9 @@ class TestCheckpoint:
         checkpoint.commit()
 
         # Check the offset is committed
-        tp, *_ = row_consumer.committed([TopicPartition(topic=topic_name, partition=0)])
+        tp, *_ = internal_consumer.committed(
+            [TopicPartition(topic=topic_name, partition=0)]
+        )
         assert tp.offset == processed_offset + 1
 
         # Check the producer is flushed
@@ -191,13 +195,13 @@ class TestCheckpoint:
         self,
         checkpoint_factory,
         row_producer,
-        row_consumer,
+        internal_consumer,
         state_manager_factory,
         recovery_manager_factory,
         topic_factory,
     ):
         topic_name, _ = topic_factory()
-        recovery_manager = recovery_manager_factory(consumer=row_consumer)
+        recovery_manager = recovery_manager_factory(consumer=internal_consumer)
         state_manager = state_manager_factory(
             producer=row_producer, recovery_manager=recovery_manager
         )
@@ -205,7 +209,7 @@ class TestCheckpoint:
         dataframe_registry.register_stream_id(topic_name, [topic_name])
 
         checkpoint = checkpoint_factory(
-            consumer_=row_consumer,
+            consumer_=internal_consumer,
             state_manager_=state_manager,
             producer_=row_producer,
             dataframe_registry_=dataframe_registry,
@@ -242,7 +246,7 @@ class TestCheckpoint:
         self,
         checkpoint_factory,
         row_producer_factory,
-        row_consumer,
+        internal_consumer,
         state_manager_factory,
         recovery_manager_factory,
         topic_factory,
@@ -250,7 +254,7 @@ class TestCheckpoint:
     ):
         topic_name, _ = topic_factory()
         row_producer = row_producer_factory(transactional=exactly_once)
-        recovery_manager = recovery_manager_factory(consumer=row_consumer)
+        recovery_manager = recovery_manager_factory(consumer=internal_consumer)
         state_manager = state_manager_factory(
             producer=row_producer, recovery_manager=recovery_manager
         )
@@ -258,7 +262,7 @@ class TestCheckpoint:
         dataframe_registry.register_stream_id(topic_name, [topic_name])
 
         checkpoint = checkpoint_factory(
-            consumer_=row_consumer,
+            consumer_=internal_consumer,
             state_manager_=state_manager,
             producer_=row_producer,
             dataframe_registry_=dataframe_registry,
@@ -467,11 +471,15 @@ class TestCheckpoint:
 
     @pytest.mark.parametrize("rowproducer_mock", [1], indirect=True)
     def test_incomplete_flush(
-        self, checkpoint_factory, row_consumer, state_manager_factory, rowproducer_mock
+        self,
+        checkpoint_factory,
+        internal_consumer,
+        state_manager_factory,
+        rowproducer_mock,
     ):
         state_manager = state_manager_factory(producer=rowproducer_mock)
         checkpoint = checkpoint_factory(
-            consumer_=row_consumer,
+            consumer_=internal_consumer,
             state_manager_=state_manager,
             producer_=rowproducer_mock,
         )
@@ -535,7 +543,7 @@ class TestCheckpoint:
     def test_commit_with_sink_success(
         self,
         topic_factory,
-        row_consumer,
+        internal_consumer,
         state_manager,
         checkpoint_factory,
         state_manager_factory,
@@ -544,7 +552,7 @@ class TestCheckpoint:
         topic_name, _ = topic_factory()
         sink_manager = SinkManager()
         checkpoint = checkpoint_factory(
-            consumer_=row_consumer,
+            consumer_=internal_consumer,
             state_manager_=state_manager,
             sink_manager_=sink_manager,
         )
@@ -583,7 +591,7 @@ class TestCheckpoint:
     def test_commit_with_sink_fails(
         self,
         topic_factory,
-        row_consumer,
+        internal_consumer,
         state_manager,
         checkpoint_factory,
         state_manager_factory,
@@ -592,7 +600,7 @@ class TestCheckpoint:
         topic_name, _ = topic_factory()
         sink_manager = SinkManager()
         checkpoint = checkpoint_factory(
-            consumer_=row_consumer,
+            consumer_=internal_consumer,
             state_manager_=state_manager,
             sink_manager_=sink_manager,
         )
@@ -621,14 +629,14 @@ class TestCheckpoint:
             checkpoint.commit()
 
         # Ensure that the offset has not been committed
-        committed, *_ = row_consumer.committed(
+        committed, *_ = internal_consumer.committed(
             [TopicPartition(topic=topic_name, partition=0)]
         )
         assert committed.offset == -1001
 
     def test_commit_with_sink_backpressured(
         self,
-        row_consumer,
+        internal_consumer,
         state_manager,
         checkpoint_factory,
         state_manager_factory,
@@ -638,15 +646,15 @@ class TestCheckpoint:
         topic = topic_manager_topic_factory()
         sink_manager = SinkManager()
         checkpoint = checkpoint_factory(
-            consumer_=row_consumer,
+            consumer_=internal_consumer,
             state_manager_=state_manager,
             sink_manager_=sink_manager,
         )
-        # First get some topic partitions assigned because the RowConsumer will be
+        # First get some topic partitions assigned because the InternalConsumer will be
         # seeking to the committed offsets
-        row_consumer.subscribe([topic])
-        while not row_consumer.assignment():
-            row_consumer.poll(0.1)
+        internal_consumer.subscribe([topic])
+        while not internal_consumer.assignment():
+            internal_consumer.poll(0.1)
 
         # Create sinks and register them
         backpressured_sink = BackpressuredSink()
@@ -677,7 +685,7 @@ class TestCheckpoint:
         checkpoint.commit()
 
         # Ensure that the offset has not been committed because of a backpressure
-        committed, *_ = row_consumer.committed(
+        committed, *_ = internal_consumer.committed(
             [TopicPartition(topic=topic.name, partition=0)]
         )
         assert committed.offset == -1001

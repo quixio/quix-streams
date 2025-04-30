@@ -1,7 +1,7 @@
 import pytest
 from confluent_kafka import TopicPartition
 
-from quixstreams.rowconsumer.buffering import InternalConsumerBuffer
+from quixstreams.internal_consumer.buffering import InternalConsumerBuffer
 from tests.utils import ConfluentKafkaMessageStub
 
 

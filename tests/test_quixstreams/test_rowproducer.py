@@ -24,7 +24,7 @@ from quixstreams.rowproducer import RowProducer
 class TestRowProducer:
     def test_produce_row_success(
         self,
-        row_consumer_factory,
+        internal_consumer_factory,
         row_producer_factory,
         topic_json_serdes_factory,
         row_factory,
@@ -43,7 +43,7 @@ class TestRowProducer:
             )
             producer.produce_row(topic=topic, row=row)
 
-        with row_consumer_factory(auto_offset_reset="earliest") as consumer:
+        with internal_consumer_factory(auto_offset_reset="earliest") as consumer:
             consumer.subscribe([topic])
             row = consumer.poll_row(timeout=5.0)
 
@@ -68,7 +68,7 @@ class TestRowProducer:
         init_key,
         new_key,
         expected_key,
-        row_consumer_factory,
+        internal_consumer_factory,
         row_producer_factory,
         topic_json_serdes_factory,
         row_factory,
@@ -79,7 +79,7 @@ class TestRowProducer:
         headers = [("header1", b"1")]
 
         with (
-            row_consumer_factory(auto_offset_reset="earliest") as consumer,
+            internal_consumer_factory(auto_offset_reset="earliest") as consumer,
             row_producer_factory() as producer,
         ):
             row = row_factory(
@@ -125,7 +125,7 @@ class TestRowProducer:
 
     def test_produce_row_serialization_error_suppress(
         self,
-        row_consumer_factory,
+        internal_consumer_factory,
         row_producer_factory,
         row_factory,
         topic_manager_topic_factory,
@@ -187,7 +187,7 @@ class TestTransactionalRowProducer:
         row_producer,
         transactional_row_producer,
         topic_manager_topic_factory,
-        row_consumer_factory,
+        internal_consumer_factory,
     ):
         """
         Simplest transactional consume + produce pattern
@@ -213,7 +213,7 @@ class TestTransactionalRowProducer:
 
         # consume + produce those same messages to new downstream topic, commit them
         producer = transactional_row_producer
-        with row_consumer_factory(
+        with internal_consumer_factory(
             auto_offset_reset="earliest", auto_commit_enable=False
         ) as consumer:
             consumer.subscribe([topic_in])
@@ -236,7 +236,7 @@ class TestTransactionalRowProducer:
 
         # downstream consumer gets the committed messages
         rows = []
-        with row_consumer_factory(auto_offset_reset="earliest") as consumer:
+        with internal_consumer_factory(auto_offset_reset="earliest") as consumer:
             consumer.subscribe([topic_out])
             while (row := consumer.poll_row(2)) is not None:
                 rows.append(row)
@@ -250,7 +250,7 @@ class TestTransactionalRowProducer:
         row_producer,
         transactional_row_producer,
         topic_manager_topic_factory,
-        row_consumer_factory,
+        internal_consumer_factory,
     ):
         """
         transactional consume + produce pattern, but we mimic a failed transaction by
@@ -296,7 +296,7 @@ class TestTransactionalRowProducer:
         # consume + produce those same messages to new downstream topic
         # will abort the transaction instead of committing
         producer = transactional_row_producer
-        with row_consumer_factory(
+        with internal_consumer_factory(
             auto_offset_reset="earliest",
             auto_commit_enable=False,
             consumer_group=consumer_group,
@@ -306,7 +306,7 @@ class TestTransactionalRowProducer:
         assert not producer.offsets
 
         # repeat, only this time we commit the transaction
-        with row_consumer_factory(
+        with internal_consumer_factory(
             auto_offset_reset="earliest",
             auto_commit_enable=False,
             consumer_group=consumer_group,
@@ -324,7 +324,7 @@ class TestTransactionalRowProducer:
 
         # downstream consumer should only get the committed messages
         rows = []
-        with row_consumer_factory(auto_offset_reset="earliest") as consumer:
+        with internal_consumer_factory(auto_offset_reset="earliest") as consumer:
             consumer.subscribe([topic_out])
             while (row := consumer.poll_row(2)) is not None:
                 rows.append(row)
@@ -358,7 +358,7 @@ class TestTransactionalRowProducer:
         row_producer,
         row_producer_factory,
         topic_manager_topic_factory,
-        row_consumer_factory,
+        internal_consumer_factory,
     ):
         """
         Validate the behavior around a transaction that times out via the producer
@@ -393,7 +393,7 @@ class TestTransactionalRowProducer:
             transactional=True,
             extra_config={"transaction.timeout.ms": timeout_seconds * 1000},
         )
-        with row_consumer_factory(
+        with internal_consumer_factory(
             auto_offset_reset="earliest",
             auto_commit_enable=False,
         ) as consumer:
@@ -427,7 +427,7 @@ class TestTransactionalRowProducer:
             )
 
         # downstream consumer should ignore failed transaction messages
-        with row_consumer_factory(auto_offset_reset="earliest") as consumer:
+        with internal_consumer_factory(auto_offset_reset="earliest") as consumer:
             consumer.subscribe([topic_out])
             assert consumer.poll_row(2) is None
             lowwater, highwater = consumer.get_watermark_offsets(

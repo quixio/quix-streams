@@ -17,6 +17,7 @@ from quixstreams.error_callbacks import (
     ProcessingErrorCallback,
     ProducerErrorCallback,
 )
+from quixstreams.internal_consumer import InternalConsumer
 from quixstreams.kafka import (
     AutoOffsetReset,
     Consumer,
@@ -46,7 +47,6 @@ from quixstreams.platforms.quix.config import (
     prepend_workspace_id,
     strip_workspace_id_prefix,
 )
-from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
 from quixstreams.state import StateStoreManager
 from quixstreams.state.manager import StoreTypes
@@ -99,7 +99,7 @@ def consumer(consumer_factory) -> Consumer:
 
 
 @pytest.fixture()
-def row_consumer_factory(kafka_container, random_consumer_group):
+def internal_consumer_factory(kafka_container, random_consumer_group):
     def factory(
         broker_address: str = kafka_container.broker_address,
         consumer_group: Optional[str] = None,
@@ -107,10 +107,10 @@ def row_consumer_factory(kafka_container, random_consumer_group):
         auto_commit_enable: bool = False,
         extra_config: dict = None,
         on_error: Optional[ConsumerErrorCallback] = None,
-    ) -> RowConsumer:
+    ) -> InternalConsumer:
         extras = CONSUMER_EXTRAS_DEFAULT.copy()
         extras.update((extra_config or {}))
-        return RowConsumer(
+        return InternalConsumer(
             broker_address=broker_address,
             consumer_group=consumer_group or random_consumer_group,
             auto_commit_enable=auto_commit_enable,
@@ -123,8 +123,8 @@ def row_consumer_factory(kafka_container, random_consumer_group):
 
 
 @pytest.fixture()
-def row_consumer(row_consumer_factory) -> RowConsumer:
-    return row_consumer_factory()
+def internal_consumer(internal_consumer_factory) -> InternalConsumer:
+    return internal_consumer_factory()
 
 
 @pytest.fixture()
