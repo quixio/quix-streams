@@ -6,6 +6,7 @@ import time
 import uuid
 from functools import partial
 from typing import Callable, Literal, Optional, Union
+from urllib.parse import quote_plus as qp
 
 import bson
 
@@ -65,9 +66,12 @@ def _default_document_matcher(record: SinkItem) -> MongoQueryFilter:
 class MongoDBSink(BatchingSink):
     def __init__(
         self,
-        url: str,
+        host: str,
         db: str,
         collection: str,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+        port: int = 27017,
         document_matcher: Callable[
             [SinkItem], MongoQueryFilter
         ] = _default_document_matcher,
@@ -82,9 +86,12 @@ class MongoDBSink(BatchingSink):
         """
         A connector to sink processed data to MongoDB in batches.
 
-        :param url: MongoDB url; most commonly `mongodb://username:password@host:port`
+        :param host: MongoDB hostname; example "localhost"
         :param db: MongoDB database name
         :param collection: MongoDB collection name
+        :param username: username, if authentication is required
+        :param password: password, if authentication is required
+        :param port: port used by MongoDB host if not using the default of 27017
         :param document_matcher: How documents are selected to update.
             A callable that accepts a `BatchItem` and returns a MongoDB "query filter".
             If no match, will insert if `upsert=True`, where `_id` will be either the
@@ -107,9 +114,13 @@ class MongoDBSink(BatchingSink):
             NOTE: metadata is added before this step, so don't accidentally
             exclude it here!
         """
-
         super().__init__()
-        self._url = url
+        auth_stub = f"{qp(username)}:{qp(password)}@" if username else ""
+        self._client_kwargs = {
+            "host": f"mongodb://{auth_stub}{host}",
+            "port": port,
+            **kwargs,
+        }
         self._db_name = db
         self._collection_name = collection
         self._document_matcher = document_matcher
@@ -119,13 +130,11 @@ class MongoDBSink(BatchingSink):
         self._add_topic_metadata = add_topic_metadata
         self._value_selector = value_selector
         self._auth_timeout_ms = authentication_timeout_ms
-        self._client_kwargs = kwargs
         self._client: Optional[MongoClient] = None
         self._collection: Optional[Collection] = None
 
     def setup(self):
         self._client = MongoClient(
-            self._url,
             serverSelectionTimeoutMS=self._auth_timeout_ms,
             **self._client_kwargs,
         )

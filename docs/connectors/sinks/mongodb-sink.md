@@ -190,7 +190,7 @@ this `product_category` ("Shirts") and update them to have these new `color_opti
 
 ```python
 mongodb_sink = MongoDBSink(
-    url="mongodb://localhost:27017",
+    host="localhost",
     db="my_mongodb",
     collection="clothing",
     
@@ -204,9 +204,12 @@ mongodb_sink = MongoDBSink(
 
 ## Configuration Options
 
-- `url`: MongoDB url; most commonly `mongodb://username:password@host:port`
+- `host`: MongoDB hostname; example "localhost"
 - `db`: MongoDB database name
 - `collection`: MongoDB collection name
+- `username`: username, if authentication is required
+- `password`: password, if authentication is required
+- `port`: port used by MongoDB host if not using the default of `27017`
 - `document_matcher`: How documents are selected to update.    
     A callable that accepts a `BatchItem` and returns a MongoDB "Filter Query".    
     If no match, will insert if `upsert=True`, where `_id` will be either the 
@@ -257,5 +260,11 @@ You can test your application using a local MongoDB host via Docker:
     mongodb/mongodb-community-server:latest
     ```
 
-2. Connect using the url:    
-   `mongodb://localhost:27017`
+2. Connect using `localhost` for the `host` argument to `MongoDBSink`:
+
+    ```python
+    MongoDBSink(
+        host="localhost",
+        # other required args here...
+    )
+    ```
