@@ -187,26 +187,12 @@ class RowConsumer(BaseConsumer):
         :return: single Row, list of Rows or None
         """
         if buffered:
-            # Poll messages the buffered way.
-            # Messages are already validated when they come through the buffer
-            msg = self.poll_buffered(timeout=timeout)
-            if msg is None:
-                return None
+            msg = self._poll_buffered(timeout=timeout)
         else:
-            try:
-                # Poll messages the usual way and validate them
-                raw_msg = self.poll(timeout=timeout)
-                if raw_msg is None:
-                    return None
-                msg = raise_for_msg_error(raw_msg)
-            except PartitionAssignmentError:
-                # Always propagate errors happened during assignment
-                raise
-            except Exception as exc:
-                to_suppress = self._on_error(exc, None, logger)
-                if to_suppress:
-                    return None
-                raise
+            msg = self._poll_unbuffered(timeout=timeout)
+
+        if msg is None:
+            return None
 
         topic_name = msg.topic()
         try:
@@ -296,7 +282,28 @@ class RowConsumer(BaseConsumer):
         self._backpressure_resume_at = float("inf")
         self._backpressurred_tps.clear()
 
-    def poll_buffered(
+    def _poll_unbuffered(
+        self, timeout: Optional[float] = None
+    ) -> Optional[SuccessfulConfluentKafkaMessageProto]:
+        """
+        Poll messages in a usual way and validate the errors
+        """
+        try:
+            # Poll messages the usual way and validate them
+            raw_msg = self.poll(timeout=timeout)
+            if raw_msg is None:
+                return None
+            return raise_for_msg_error(raw_msg)
+        except PartitionAssignmentError:
+            # Always propagate errors happened during assignment
+            raise
+        except Exception as exc:
+            to_suppress = self._on_error(exc, None, logger)
+            if to_suppress:
+                return None
+            raise
+
+    def _poll_buffered(
         self, timeout: Optional[float] = None
     ) -> Optional[SuccessfulConfluentKafkaMessageProto]:
         """
