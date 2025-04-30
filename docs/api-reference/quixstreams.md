@@ -706,6 +706,20 @@ class DataFrameRegistry()
 Helps manage multiple `StreamingDataFrames` (multi-topic `Applications`)
 and their respective repartitions.
 
+<a id="quixstreams.dataframe.registry.DataFrameRegistry.requires_time_alignment"></a>
+
+#### DataFrameRegistry.requires\_time\_alignment
+
+```python
+@property
+def requires_time_alignment() -> bool
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/registry.py#L32)
+
+Check if registered StreamingDataFrames require topics to be read in timestamp-aligned way.
+That's normally required for the operations like `.concat()` and joins.
+
 <a id="quixstreams.dataframe.registry.DataFrameRegistry.consumer_topics"></a>
 
 #### DataFrameRegistry.consumer\_topics
@@ -715,7 +729,7 @@ and their respective repartitions.
 def consumer_topics() -> list[Topic]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/registry.py#L31)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/registry.py#L40)
 
 **Returns**:
 
@@ -729,7 +743,7 @@ a list of Topics a consumer should subscribe to.
 def register_root(dataframe: "StreamingDataFrame")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/registry.py#L37)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/registry.py#L46)
 
 Register a StreamingDataFrame to process data from the topic.
 
@@ -749,7 +763,7 @@ def register_groupby(source_sdf: "StreamingDataFrame",
                      new_sdf: "StreamingDataFrame")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/registry.py#L63)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/registry.py#L72)
 
 Register a "groupby" SDF, which is one generated with `SDF.group_by()`.
 
@@ -767,7 +781,7 @@ def compose_all(
         sink: Optional[VoidExecutor] = None) -> dict[str, VoidExecutor]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/registry.py#L85)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/registry.py#L94)
 
 Composes all the Streams and returns a dict of format {<topic>: <VoidExecutor>}
 
@@ -787,7 +801,7 @@ a {topic_name: composed} dict, where composed is a callable
 def register_stream_id(stream_id: str, topic_names: list[str])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/registry.py#L103)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/registry.py#L112)
 
 Register a mapping between the stream_id and topic names.
 
@@ -809,7 +823,7 @@ The same stream id can be registered multiple times.
 def get_stream_ids(topic_name: str) -> list[str]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/registry.py#L117)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/registry.py#L126)
 
 Get a list of stream ids for the given topic name
 
@@ -829,7 +843,7 @@ a list of stream ids
 def get_topics_for_stream_id(stream_id: str) -> list[str]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/registry.py#L126)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/registry.py#L135)
 
 Get a list of topics for the given stream id.
 
@@ -840,6 +854,22 @@ Get a list of topics for the given stream id.
 **Returns**:
 
 a list of topic names
+
+<a id="quixstreams.dataframe.registry.DataFrameRegistry.require_time_alignment"></a>
+
+#### DataFrameRegistry.require\_time\_alignment
+
+```python
+def require_time_alignment()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/registry.py#L144)
+
+Require the time alignment for the topology.
+
+This flag is set by individual StreamingDataFrames when certain operations like
+.concat() or joins are triggered, and it will inform the application to consume
+messages in the timestamp-aligned way for the correct processing.
 
 <a id="quixstreams.dataframe.dataframe"></a>
 
@@ -12155,6 +12185,30 @@ def consumer_group_metadata() -> GroupMetadata
 
 Used by the producer during consumer offset sending for an EOS transaction.
 
+<a id="quixstreams.kafka.consumer.BaseConsumer.consume"></a>
+
+#### BaseConsumer.consume
+
+```python
+def consume(
+        num_messages: int = 1,
+        timeout: Optional[float] = None
+) -> list[RawConfluentKafkaMessageProto]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/consumer.py#L583)
+
+Consumes a list of messages (possibly empty on timeout).
+
+Callbacks may be executed as a side effect of calling this method.
+
+**Arguments**:
+
+- `num_messages`: The maximum number of messages to return.
+Default: `1`.
+- `timeout`: The maximum time in seconds to block waiting for message, event or callback.
+Default: `None` (infinite).
+
 <a id="quixstreams.kafka.exceptions"></a>
 
 ## quixstreams.kafka.exceptions
@@ -12171,7 +12225,7 @@ Used by the producer during consumer offset sending for an EOS transaction.
 class Application()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L89)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L94)
 
 The main Application class.
 
@@ -12237,10 +12291,11 @@ def __init__(broker_address: Optional[Union[str, ConnectionConfig]] = None,
              topic_manager: Optional[TopicManager] = None,
              request_timeout: float = 30,
              topic_create_timeout: float = 60,
-             processing_guarantee: ProcessingGuarantee = "at-least-once")
+             processing_guarantee: ProcessingGuarantee = "at-least-once",
+             max_partition_buffer_size: int = 10000)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L127)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L132)
 
 **Arguments**:
 
@@ -12301,6 +12356,12 @@ Default - `True`
 - `request_timeout`: timeout (seconds) for REST-based requests
 - `topic_create_timeout`: timeout (seconds) for topic create finalization
 - `processing_guarantee`: Use "exactly-once" or "at-least-once" processing.
+- `max_partition_buffer_size`: the maximum number of messages to buffer per topic partition to consider it full.
+The buffering is used to consume messages in-order between multiple partitions with the same number.
+    It is a soft limit, and the actual number of buffered messages can be up to x2 higher.
+    Lower value decreases the memory use, but increases the latency.
+    Default - `10000`.
+
 <br><br>***Error Handlers***<br>
 To handle errors, `Application` accepts callbacks triggered when
     exceptions occur on different stages of stream processing. If the callback
@@ -12326,7 +12387,7 @@ instead of the default one.
 def Quix(cls, *args, **kwargs)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L374)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L389)
 
 RAISES EXCEPTION: DEPRECATED.
 
@@ -12347,7 +12408,7 @@ def topic(name: str,
           timestamp_extractor: Optional[TimestampExtractor] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L406)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L421)
 
 Create a topic definition.
 
@@ -12419,7 +12480,7 @@ def dataframe(topic: Optional[Topic] = None,
               source: Optional[BaseSource] = None) -> StreamingDataFrame
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L486)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L501)
 
 A simple helper method that generates a `StreamingDataFrame`, which is used
 
@@ -12467,7 +12528,7 @@ to be used as an input topic.
 def stop(fail: bool = False)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L542)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L557)
 
 Stop the internal poll loop and the message processing.
 
@@ -12490,7 +12551,7 @@ to unhandled exception, and it shouldn't commit the current checkpoint.
 def get_producer() -> Producer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L587)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L602)
 
 Create and return a pre-configured Producer instance.
 The Producer is initialized with params passed to Application.
@@ -12521,7 +12582,7 @@ with app.get_producer() as producer:
 def get_consumer(auto_commit_enable: bool = True) -> Consumer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L641)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L657)
 
 Create and return a pre-configured Consumer instance.
 
@@ -12572,7 +12633,7 @@ Default - True
 def clear_state()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L690)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L706)
 
 Clear the state of the application.
 
@@ -12584,7 +12645,7 @@ Clear the state of the application.
 def add_source(source: BaseSource, topic: Optional[Topic] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L696)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L712)
 
 Add a source to the application.
 
@@ -12609,7 +12670,7 @@ def run(dataframe: Optional[StreamingDataFrame] = None,
         count: int = 0)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L729)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L745)
 
 Start processing data from Kafka using provided `StreamingDataFrame`
 
@@ -12672,7 +12733,7 @@ Default = 0 (infinite)
 class ApplicationConfig(BaseSettings)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1070)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1089)
 
 Immutable object holding the application configuration
 
@@ -12693,7 +12754,7 @@ def settings_customise_sources(
 ) -> Tuple[PydanticBaseSettingsSource, ...]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1105)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1125)
 
 Included to ignore reading/setting values from the environment
 
@@ -12705,7 +12766,7 @@ Included to ignore reading/setting values from the environment
 def copy(**kwargs) -> "ApplicationConfig"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1118)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1138)
 
 Update the application config and return a copy
 
@@ -14824,151 +14885,6 @@ True if at least one process is alive
 
 ## quixstreams.sources.base.multiprocessing
 
-<a id="quixstreams.rowconsumer"></a>
-
-## quixstreams.rowconsumer
-
-<a id="quixstreams.rowconsumer.RowConsumer"></a>
-
-### RowConsumer
-
-```python
-class RowConsumer(BaseConsumer)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer.py#L22)
-
-<a id="quixstreams.rowconsumer.RowConsumer.__init__"></a>
-
-#### RowConsumer.\_\_init\_\_
-
-```python
-def __init__(broker_address: Union[str, ConnectionConfig],
-             consumer_group: str,
-             auto_offset_reset: AutoOffsetReset,
-             auto_commit_enable: bool = True,
-             on_commit: Optional[Callable[
-                 [Optional[KafkaError], List[TopicPartition]], None]] = None,
-             extra_config: Optional[dict] = None,
-             on_error: Optional[ConsumerErrorCallback] = None)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer.py#L25)
-
-A consumer class that is capable of deserializing Kafka messages to Rows
-
-according to the Topics deserialization settings.
-
-It overrides `.subscribe()` method of Consumer class to accept `Topic`
-objects instead of strings.
-
-**Arguments**:
-
-- `broker_address`: Connection settings for Kafka.
-Accepts string with Kafka broker host and port formatted as `<host>:<port>`,
-or a ConnectionConfig object if authentication is required.
-- `consumer_group`: Kafka consumer group.
-Passed as `group.id` to `confluent_kafka.Consumer`
-- `auto_offset_reset`: Consumer `auto.offset.reset` setting.
-Available values:
-- "earliest" - automatically reset the offset to the smallest offset
-- "latest" - automatically reset the offset to the largest offset
-- `auto_commit_enable`: If true, periodically commit offset of
-the last message handed to the application. Default - `True`.
-- `on_commit`: Offset commit result propagation callback.
-Passed as "offset_commit_cb" to `confluent_kafka.Consumer`.
-- `extra_config`: A dictionary with additional options that
-will be passed to `confluent_kafka.Consumer` as is.
-Note: values passed as arguments override values in `extra_config`.
-- `on_error`: a callback triggered when `RowConsumer.poll_row` fails.
-If consumer fails and the callback returns `True`, the exception
-will be logged but not propagated.
-The default callback logs an exception and returns `False`.
-
-<a id="quixstreams.rowconsumer.RowConsumer.subscribe"></a>
-
-#### RowConsumer.subscribe
-
-```python
-def subscribe(topics: List[Topic],
-              on_assign: Optional[RebalancingCallback] = None,
-              on_revoke: Optional[RebalancingCallback] = None,
-              on_lost: Optional[RebalancingCallback] = None)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer.py#L80)
-
-Set subscription to supplied list of topics.
-
-This replaces a previous subscription.
-
-This method also updates the internal mapping with topics that is used
-to deserialize messages to Rows.
-
-**Arguments**:
-
-- `topics`: list of `Topic` instances to subscribe to.
-- `on_assign` (`callable`): callback to provide handling of customized offsets
-on completion of a successful partition re-assignment.
-- `on_revoke` (`callable`): callback to provide handling of offset commits to
-a customized store on the start of a rebalance operation.
-- `on_lost` (`callable`): callback to provide handling in the case the partition
-assignment has been lost. Partitions that have been lost may already be
-owned by other members in the group and therefore committing offsets,
-for example, may fail.
-
-<a id="quixstreams.rowconsumer.RowConsumer.poll_row"></a>
-
-#### RowConsumer.poll\_row
-
-```python
-def poll_row(timeout: Optional[float] = None) -> Union[Row, List[Row], None]
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer.py#L118)
-
-Consumes a single message and deserialize it to Row or a list of Rows.
-
-The message is deserialized according to the corresponding Topic.
-If deserializer raises `IgnoreValue` exception, this method will return None.
-If Kafka returns an error, it will be raised as exception.
-
-**Arguments**:
-
-- `timeout`: poll timeout seconds
-
-**Returns**:
-
-single Row, list of Rows or None
-
-<a id="quixstreams.rowconsumer.RowConsumer.trigger_backpressure"></a>
-
-#### RowConsumer.trigger\_backpressure
-
-```python
-def trigger_backpressure(offsets_to_seek: dict[tuple[str, int], int],
-                         resume_after: float)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer.py#L168)
-
-Pause all partitions for the certain period of time and seek the partitions
-provided in the `offsets_to_seek` dict.
-
-This method is supposed to be called in case of backpressure from Sinks.
-
-<a id="quixstreams.rowconsumer.RowConsumer.resume_backpressured"></a>
-
-#### RowConsumer.resume\_backpressured
-
-```python
-def resume_backpressured()
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer.py#L213)
-
-Resume consuming from assigned data partitions after the wait period has elapsed.
-
 <a id="quixstreams.checkpointing.checkpoint"></a>
 
 ## quixstreams.checkpointing.checkpoint
@@ -15142,4 +15058,657 @@ This method will:
 <a id="quixstreams.checkpointing.exceptions"></a>
 
 ## quixstreams.checkpointing.exceptions
+
+<a id="quixstreams.rowconsumer"></a>
+
+## quixstreams.rowconsumer
+
+<a id="quixstreams.rowconsumer.consumer"></a>
+
+## quixstreams.rowconsumer.consumer
+
+<a id="quixstreams.rowconsumer.consumer.RowConsumer"></a>
+
+### RowConsumer
+
+```python
+class RowConsumer(BaseConsumer)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/consumer.py#L40)
+
+<a id="quixstreams.rowconsumer.consumer.RowConsumer.__init__"></a>
+
+#### RowConsumer.\_\_init\_\_
+
+```python
+def __init__(broker_address: Union[str, ConnectionConfig],
+             consumer_group: str,
+             auto_offset_reset: AutoOffsetReset,
+             auto_commit_enable: bool = True,
+             on_commit: Optional[Callable[
+                 [Optional[KafkaError], list[TopicPartition]], None]] = None,
+             extra_config: Optional[dict] = None,
+             on_error: Optional[ConsumerErrorCallback] = None,
+             max_partition_buffer_size: int = 10000)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/consumer.py#L44)
+
+A consumer class that is capable of deserializing Kafka messages to Rows
+
+according to the Topics deserialization settings.
+
+It overrides `.subscribe()` method of Consumer class to accept `Topic`
+objects instead of strings.
+
+**Arguments**:
+
+- `broker_address`: Connection settings for Kafka.
+Accepts string with Kafka broker host and port formatted as `<host>:<port>`,
+or a ConnectionConfig object if authentication is required.
+- `consumer_group`: Kafka consumer group.
+Passed as `group.id` to `confluent_kafka.Consumer`
+- `auto_offset_reset`: Consumer `auto.offset.reset` setting.
+Available values:
+- "earliest" - automatically reset the offset to the smallest offset
+- "latest" - automatically reset the offset to the largest offset
+- `auto_commit_enable`: If true, periodically commit offset of
+the last message handed to the application. Default - `True`.
+- `on_commit`: Offset commit result propagation callback.
+Passed as "offset_commit_cb" to `confluent_kafka.Consumer`.
+- `extra_config`: A dictionary with additional options that
+will be passed to `confluent_kafka.Consumer` as is.
+Note: values passed as arguments override values in `extra_config`.
+- `on_error`: a callback triggered when `RowConsumer.poll_row` fails.
+If consumer fails and the callback returns `True`, the exception
+will be logged but not propagated.
+The default callback logs an exception and returns `False`.
+- `max_partition_buffer_size`: the maximum number of messages to buffer per topic partition to consider it full.
+The buffering is used to consume messages in-order between different topics.
+Note that the actual number of buffered messages can be higher
+Default - `10000`.
+
+<a id="quixstreams.rowconsumer.consumer.RowConsumer.subscribe"></a>
+
+#### RowConsumer.subscribe
+
+```python
+def subscribe(topics: list[Topic],
+              on_assign: Optional[RebalancingCallback] = None,
+              on_revoke: Optional[RebalancingCallback] = None,
+              on_lost: Optional[RebalancingCallback] = None)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/consumer.py#L108)
+
+Set subscription to supplied list of topics.
+
+This replaces a previous subscription.
+
+This method also updates the internal mapping with topics that is used
+to deserialize messages to Rows.
+
+**Arguments**:
+
+- `topics`: list of `Topic` instances to subscribe to.
+- `on_assign` (`callable`): callback to provide handling of customized offsets
+on completion of a successful partition re-assignment.
+- `on_revoke` (`callable`): callback to provide handling of offset commits to
+a customized store on the start of a rebalance operation.
+- `on_lost` (`callable`): callback to provide handling in the case the partition
+assignment has been lost. Partitions that have been lost may already be
+owned by other members in the group and therefore committing offsets,
+for example, may fail.
+
+<a id="quixstreams.rowconsumer.consumer.RowConsumer.poll_row"></a>
+
+#### RowConsumer.poll\_row
+
+```python
+def poll_row(timeout: Optional[float] = None,
+             buffered: bool = False) -> Union[Row, list[Row], None]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/consumer.py#L171)
+
+Consumes a single message and deserialize it to Row or a list of Rows.
+
+The message is deserialized according to the corresponding Topic.
+If deserializer raises `IgnoreValue` exception, this method will return None.
+If Kafka returns an error, it will be raised as exception.
+
+**Arguments**:
+
+- `timeout`: poll timeout seconds
+- `buffered`: when `True`, the consumer will read messages in batches and buffer them for the timestamp-order processing
+across multiple topic partitions with the same number.
+Normally, it should be True if the application uses joins or concatenates topics.
+Note: buffered and non-buffered calls should not be mixed within the same application.
+Default - `False`.
+
+**Returns**:
+
+single Row, list of Rows or None
+
+<a id="quixstreams.rowconsumer.consumer.RowConsumer.trigger_backpressure"></a>
+
+#### RowConsumer.trigger\_backpressure
+
+```python
+def trigger_backpressure(offsets_to_seek: dict[tuple[str, int], int],
+                         resume_after: float)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/consumer.py#L221)
+
+Pause all partitions for the certain period of time and seek the partitions
+provided in the `offsets_to_seek` dict.
+
+This method is supposed to be called in case of backpressure from Sinks.
+
+<a id="quixstreams.rowconsumer.consumer.RowConsumer.resume_backpressured"></a>
+
+#### RowConsumer.resume\_backpressured
+
+```python
+def resume_backpressured()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/consumer.py#L267)
+
+Resume consuming from assigned data partitions after the wait period has elapsed.
+
+<a id="quixstreams.rowconsumer.buffering"></a>
+
+## quixstreams.rowconsumer.buffering
+
+<a id="quixstreams.rowconsumer.buffering.Idleness"></a>
+
+### Idleness
+
+```python
+class Idleness(enum.Enum)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L18)
+
+<a id="quixstreams.rowconsumer.buffering.Idleness.IDLE"></a>
+
+#### IDLE
+
+The partition is idle and has no new messages to be consumed
+
+<a id="quixstreams.rowconsumer.buffering.Idleness.ACTIVE"></a>
+
+#### ACTIVE
+
+The partition has more messages to be consumed
+
+<a id="quixstreams.rowconsumer.buffering.Idleness.UNKNOWN"></a>
+
+#### UNKNOWN
+
+The idleness is unknown
+
+<a id="quixstreams.rowconsumer.buffering.PartitionBuffer"></a>
+
+### PartitionBuffer
+
+```python
+class PartitionBuffer()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L24)
+
+<a id="quixstreams.rowconsumer.buffering.PartitionBuffer.__init__"></a>
+
+#### PartitionBuffer.\_\_init\_\_
+
+```python
+def __init__(partition: int, topic: str, max_size: int)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L25)
+
+A buffer that holds data for a single topic partition.
+
+**Arguments**:
+
+- `partition`: partition number.
+- `topic`: topic name.
+- `max_size`: the maximum size of the buffer when the buffer is considered full.
+It is a soft limit, and it may be exceeded in some cases
+
+<a id="quixstreams.rowconsumer.buffering.PartitionBuffer.set_high_watermark"></a>
+
+#### PartitionBuffer.set\_high\_watermark
+
+```python
+def set_high_watermark(offset: int)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L48)
+
+Set high watermark offset of topic partition.
+
+**Arguments**:
+
+- `offset`: high watermark offset.
+
+<a id="quixstreams.rowconsumer.buffering.PartitionBuffer.idleness"></a>
+
+#### PartitionBuffer.idleness
+
+```python
+def idleness() -> Idleness
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L56)
+
+Check if the partition is idle or has more data to be consumed from the broker.
+
+**Returns**:
+
+- `True` when the max offset+1 equals to the high watermark
+- `False` when the max offset is below the high watermark
+- `None` when the watermark is not known yet.
+
+<a id="quixstreams.rowconsumer.buffering.PartitionBuffer.append"></a>
+
+#### PartitionBuffer.append
+
+```python
+def append(message: SuccessfulConfluentKafkaMessageProto)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L74)
+
+Append a new Kafka message to the buffer.
+
+The message is supposed to have `.error()` to be `None`.
+
+**Arguments**:
+
+- `message`: a successful Kafka message.
+
+<a id="quixstreams.rowconsumer.buffering.PartitionBuffer.popleft"></a>
+
+#### PartitionBuffer.popleft
+
+```python
+def popleft() -> Optional[SuccessfulConfluentKafkaMessageProto]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L91)
+
+Pop the message from the start of the buffer.
+
+**Returns**:
+
+`None` if the buffer is empty, otherwise a Kafka message
+
+<a id="quixstreams.rowconsumer.buffering.PartitionBuffer.empty"></a>
+
+#### PartitionBuffer.empty
+
+```python
+def empty() -> bool
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L118)
+
+Check if the buffer is empty
+
+<a id="quixstreams.rowconsumer.buffering.PartitionBuffer.full"></a>
+
+#### PartitionBuffer.full
+
+```python
+def full() -> bool
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L124)
+
+Check if the buffer is full
+
+<a id="quixstreams.rowconsumer.buffering.PartitionBuffer.pause"></a>
+
+#### PartitionBuffer.pause
+
+```python
+def pause()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L134)
+
+Mark the buffer as paused
+
+<a id="quixstreams.rowconsumer.buffering.PartitionBuffer.resume"></a>
+
+#### PartitionBuffer.resume
+
+```python
+def resume()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L140)
+
+Mark the buffer as resumed
+
+<a id="quixstreams.rowconsumer.buffering.PartitionBuffer.clear"></a>
+
+#### PartitionBuffer.clear
+
+```python
+def clear()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L146)
+
+Clear the buffer and reset its state.
+
+<a id="quixstreams.rowconsumer.buffering.PartitionBufferGroup"></a>
+
+### PartitionBufferGroup
+
+```python
+class PartitionBufferGroup()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L157)
+
+<a id="quixstreams.rowconsumer.buffering.PartitionBufferGroup.__init__"></a>
+
+#### PartitionBufferGroup.\_\_init\_\_
+
+```python
+def __init__(partition: int, max_size: int)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L158)
+
+A group of individual `PartitionBuffer`s by partition.
+
+**Arguments**:
+
+- `partition`: partition number.
+- `max_size`: the maximum size of the underlying `PartitionBuffer`s.
+
+<a id="quixstreams.rowconsumer.buffering.PartitionBufferGroup.assign_partition"></a>
+
+#### PartitionBufferGroup.assign\_partition
+
+```python
+def assign_partition(topic: str)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L174)
+
+Add a new partition to the buffer group.
+
+**Arguments**:
+
+- `topic`: topic name.
+
+<a id="quixstreams.rowconsumer.buffering.PartitionBufferGroup.revoke_partition"></a>
+
+#### PartitionBufferGroup.revoke\_partition
+
+```python
+def revoke_partition(topic: str)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L187)
+
+Remove partition from the buffer group.
+
+**Arguments**:
+
+- `topic`: topic name.
+
+<a id="quixstreams.rowconsumer.buffering.PartitionBufferGroup.set_high_watermarks"></a>
+
+#### PartitionBufferGroup.set\_high\_watermarks
+
+```python
+def set_high_watermarks(offsets: dict[str, int])
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L195)
+
+Set high watermarks for assigned partitions.
+
+**Arguments**:
+
+- `offsets`: a mapping of {<topic>: <offset>} with the high watermarks
+for this group.
+
+<a id="quixstreams.rowconsumer.buffering.PartitionBufferGroup.append"></a>
+
+#### PartitionBufferGroup.append
+
+```python
+def append(message: SuccessfulConfluentKafkaMessageProto)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L206)
+
+Add a new message to the buffer group.
+
+**Arguments**:
+
+- `message`: a successful Kafka message.
+
+<a id="quixstreams.rowconsumer.buffering.PartitionBufferGroup.pop"></a>
+
+#### PartitionBufferGroup.pop
+
+```python
+def pop() -> Optional[SuccessfulConfluentKafkaMessageProto]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L216)
+
+Pop a message from the partition buffer with the smallest next_timestamp
+and return it.
+
+How it works:
+
+- When the group has multiple partitions assigned, it will pop the message
+    from the partition with the smallest next timestamp.
+- When there's only one partition in the group, it will pop a message
+    from this partition buffer.
+
+<a id="quixstreams.rowconsumer.buffering.PartitionBufferGroup.pause_full"></a>
+
+#### PartitionBufferGroup.pause\_full
+
+```python
+def pause_full() -> list[tuple[str, int]]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L248)
+
+Pause the full `PartitionBuffer`s and return them as a list of tuples.
+
+If the group has only one topic partition, it will never be paused.
+
+<a id="quixstreams.rowconsumer.buffering.PartitionBufferGroup.resume_empty"></a>
+
+#### PartitionBufferGroup.resume\_empty
+
+```python
+def resume_empty() -> list[tuple[str, int]]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L271)
+
+Resume the empty `PartitionBuffer`s and return them as a list of tuples.
+
+Only previously paused partitions are resumed.
+
+<a id="quixstreams.rowconsumer.buffering.InternalConsumerBuffer"></a>
+
+### InternalConsumerBuffer
+
+```python
+class InternalConsumerBuffer()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L294)
+
+<a id="quixstreams.rowconsumer.buffering.InternalConsumerBuffer.__init__"></a>
+
+#### InternalConsumerBuffer.\_\_init\_\_
+
+```python
+def __init__(max_partition_buffer_size: int = 10000)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L295)
+
+A buffer to align messages across different topics by timestamps and consume them
+
+in-order across partitions.
+
+Under the hood, this class groups buffered messages by partition and
+provides API to get the message with the smallest timestamp across all assigned
+topics with the same partition number.
+
+**Note**: messages are not guaranteed to be in-order 100% of the time,
+  and they can be consumed out-of-order when the producer sends new messages with a delay,
+  and they arrive to the broker later.
+
+How it works:
+
+- The buffer gets partitions assigned.
+- The Consumer feeds messages to the buffer along with the high watermarks for all
+    assigned partitions.
+- The Consumer calls `.pop()` to get the next message to be processed.
+    If multiple partitions with the same number are assigned, the message will be
+    popped from the partition with the smallest next timestamp, providing in-order reads.
+- The Consumer calls `.pause_full()` and `.resume_empty()` methods to balance the reads
+    across all partitions.
+
+**Arguments**:
+
+- `max_partition_buffer_size`: the maximum size of the individual topic partition
+buffer when the buffer is considered full. It is a soft limit, and it may be exceeded
+in some cases. When individual buffer exceeds this limit, its TP can be paused
+to let other partitions to be consumed too.
+
+<a id="quixstreams.rowconsumer.buffering.InternalConsumerBuffer.assign_partitions"></a>
+
+#### InternalConsumerBuffer.assign\_partitions
+
+```python
+def assign_partitions(topic_partitions: list[TopicPartition])
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L327)
+
+Assign new partitions to the buffer.
+
+**Arguments**:
+
+- `topic_partitions`: list of `confluent_kafka.TopicPartition`.
+
+<a id="quixstreams.rowconsumer.buffering.InternalConsumerBuffer.revoke_partitions"></a>
+
+#### InternalConsumerBuffer.revoke\_partitions
+
+```python
+def revoke_partitions(topic_partitions: list[TopicPartition])
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L345)
+
+Drop the partitions from the buffer.
+
+**Arguments**:
+
+- `topic_partitions`: list of `confluent_kafka.TopicPartition`.
+
+<a id="quixstreams.rowconsumer.buffering.InternalConsumerBuffer.feed"></a>
+
+#### InternalConsumerBuffer.feed
+
+```python
+def feed(messages: Iterable[SuccessfulConfluentKafkaMessageProto],
+         high_watermarks: dict[tuple[str, int], int])
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L356)
+
+Feed new batch of messages to the buffer.
+
+**Arguments**:
+
+- `messages`: an iterable with successful `confluent_kafka.Message` objects (`.error()` is expected to be None).
+- `high_watermarks`: a dictionary with high watermarks for all assigned topic partitions.
+
+<a id="quixstreams.rowconsumer.buffering.InternalConsumerBuffer.pop"></a>
+
+#### InternalConsumerBuffer.pop
+
+```python
+def pop() -> Optional[SuccessfulConfluentKafkaMessageProto]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L379)
+
+Pop the next message from the buffer in the timestamp order.
+
+**Returns**:
+
+`None` if all the buffers are empty or if the
+
+<a id="quixstreams.rowconsumer.buffering.InternalConsumerBuffer.pause_full"></a>
+
+#### InternalConsumerBuffer.pause\_full
+
+```python
+def pause_full() -> list[tuple[str, int]]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L392)
+
+Pause the full partition buffers and return them as a list.
+
+<a id="quixstreams.rowconsumer.buffering.InternalConsumerBuffer.resume_empty"></a>
+
+#### InternalConsumerBuffer.resume\_empty
+
+```python
+def resume_empty() -> list[tuple[str, int]]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L401)
+
+Resume the empty partition buffers and return them as a list.
+
+<a id="quixstreams.rowconsumer.buffering.InternalConsumerBuffer.clear"></a>
+
+#### InternalConsumerBuffer.clear
+
+```python
+def clear(topic: str, partition: int)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L410)
+
+Clear the buffer for the given topic partition and keep it assigned.
+
+<a id="quixstreams.rowconsumer.buffering.InternalConsumerBuffer.close"></a>
+
+#### InternalConsumerBuffer.close
+
+```python
+def close()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L418)
+
+Drop all partition buffers.
 

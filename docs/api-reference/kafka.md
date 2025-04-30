@@ -819,3 +819,31 @@ def consumer_group_metadata() -> GroupMetadata
 
 Used by the producer during consumer offset sending for an EOS transaction.
 
+<a id="quixstreams.kafka.consumer.BaseConsumer.consume"></a>
+
+<br><br>
+
+#### BaseConsumer.consume
+
+```python
+def consume(
+        num_messages: int = 1,
+        timeout: Optional[float] = None
+) -> list[RawConfluentKafkaMessageProto]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/consumer.py#L583)
+
+Consumes a list of messages (possibly empty on timeout).
+
+Callbacks may be executed as a side effect of calling this method.
+
+
+<br>
+***Arguments:***
+
+- `num_messages`: The maximum number of messages to return.
+Default: `1`.
+- `timeout`: The maximum time in seconds to block waiting for message, event or callback.
+Default: `None` (infinite).
+
