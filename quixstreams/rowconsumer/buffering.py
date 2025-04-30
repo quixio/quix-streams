@@ -270,8 +270,7 @@ class PartitionBufferGroup:
         return tps
 
     def clear(self, topic: str):
-        buffer = self._partition_buffers.get(topic)
-        if buffer is not None:
+        if buffer := self._partition_buffers.get(topic):
             buffer.clear()
 
 
