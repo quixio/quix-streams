@@ -308,14 +308,18 @@ class InternalConsumerBuffer:
         How it works:
 
         - The buffer gets partitions assigned.
-        - The Consumer feeds messages to the buffer along with the high watermarks for all assigned partitions.
+        - The Consumer feeds messages to the buffer along with the high watermarks for all
+            assigned partitions.
         - The Consumer calls `.pop()` to get the next message to be processed.
-            If multiple partitions with the same number are assigned, the message will be popped from the partition with the smallest next timestamp, providing in-order reads.
-        - The Consumer calls `.pause_full()` and `.resume_empty()` methods to balance the reads across all partitions.
+            If multiple partitions with the same number are assigned, the message will be
+            popped from the partition with the smallest next timestamp, providing in-order reads.
+        - The Consumer calls `.pause_full()` and `.resume_empty()` methods to balance the reads
+            across all partitions.
 
-        :param max_partition_buffer_size: the maximum size of the individual topic partition buffer when the buffer is considered full.
-            It is a soft limit, and it may be exceeded in some cases.
-            When individual buffer exceeds this limit, its TP can be paused to let other partitions to be consumed too.
+        :param max_partition_buffer_size: the maximum size of the individual topic partition
+            buffer when the buffer is considered full. It is a soft limit, and it may be exceeded
+            in some cases. When individual buffer exceeds this limit, its TP can be paused
+            to let other partitions to be consumed too.
         """
         self._partition_groups: dict[int, PartitionBufferGroup] = {}
         self._partition_groups_values = self._partition_groups.values()
