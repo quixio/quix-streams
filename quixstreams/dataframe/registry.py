@@ -26,6 +26,15 @@ class DataFrameRegistry:
         self._repartition_origins: set[str] = set()
         self._topics_to_stream_ids: dict[str, set[str]] = {}
         self._stream_ids_to_topics: dict[str, set[str]] = {}
+        self._requires_time_alignment = False
+
+    @property
+    def requires_time_alignment(self) -> bool:
+        """
+        Check if registered StreamingDataFrames require topics to be read in timestamp-aligned way.
+        That's normally required for the operations like `.concat()` and joins.
+        """
+        return self._requires_time_alignment
 
     @property
     def consumer_topics(self) -> list[Topic]:
@@ -131,3 +140,13 @@ class DataFrameRegistry:
         :return: a list of topic names
         """
         return list(self._stream_ids_to_topics[stream_id])
+
+    def require_time_alignment(self):
+        """
+        Require the time alignment for the topology.
+
+        This flag is set by individual StreamingDataFrames when certain operations like
+        .concat() or joins are triggered, and it will inform the application to consume
+        messages in the timestamp-aligned way for the correct processing.
+        """
+        self._requires_time_alignment = True

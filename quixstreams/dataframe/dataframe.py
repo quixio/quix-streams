@@ -1611,6 +1611,7 @@ class StreamingDataFrame:
         """
 
         merged_stream = self.stream.merge(other.stream)
+        self._registry.require_time_alignment()
         return self.__dataframe_clone__(
             *self.topics, *other.topics, stream=merged_stream
         )
