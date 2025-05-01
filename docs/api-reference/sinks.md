@@ -1678,7 +1678,7 @@ stream.
 class MongoDBSink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/mongodb.py#L65)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/mongodb.py#L66)
 
 <a id="quixstreams.sinks.community.mongodb.MongoDBSink.__init__"></a>
 
@@ -1687,9 +1687,12 @@ class MongoDBSink(BatchingSink)
 #### MongoDBSink.\_\_init\_\_
 
 ```python
-def __init__(url: str,
+def __init__(host: str,
              db: str,
              collection: str,
+             username: Optional[str] = None,
+             password: Optional[str] = None,
+             port: int = 27017,
              document_matcher: Callable[
                  [SinkItem], MongoQueryFilter] = _default_document_matcher,
              update_method: Literal["UpdateOne", "UpdateMany",
@@ -1703,7 +1706,7 @@ def __init__(url: str,
              **kwargs) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/mongodb.py#L66)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/mongodb.py#L67)
 
 A connector to sink processed data to MongoDB in batches.
 
@@ -1711,9 +1714,12 @@ A connector to sink processed data to MongoDB in batches.
 <br>
 ***Arguments:***
 
-- `url`: MongoDB url; most commonly `mongodb://username:password@host:port`
+- `host`: MongoDB hostname; example "localhost"
 - `db`: MongoDB database name
 - `collection`: MongoDB collection name
+- `username`: username, if authentication is required
+- `password`: password, if authentication is required
+- `port`: port used by MongoDB host if not using the default of 27017
 - `document_matcher`: How documents are selected to update.
 A callable that accepts a `BatchItem` and returns a MongoDB "query filter".
 If no match, will insert if `upsert=True`, where `_id` will be either the
@@ -1746,7 +1752,7 @@ exclude it here!
 def write(batch: SinkBatch) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/mongodb.py#L153)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/mongodb.py#L162)
 
 Note: Transactions could be an option here, but then each record requires a
 network call, and the transaction has size limits...so `bulk_write` is used

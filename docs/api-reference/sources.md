@@ -80,7 +80,7 @@ if __name__ == "__main__":
 #### BaseSource.configure
 
 ```python
-def configure(topic: Topic, producer: RowProducer, **kwargs) -> None
+def configure(topic: Topic, producer: InternalProducer, **kwargs) -> None
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L116)
@@ -521,7 +521,7 @@ Callback must resolve (or propagate/re-raise) the Exception.
 
 ```python
 def configure(topic: Topic,
-              producer: RowProducer,
+              producer: InternalProducer,
               *,
               store_partition: Optional[StorePartition] = None,
               **kwargs) -> None
@@ -769,7 +769,7 @@ Default - Use the Application `auto_offset_reset` setting.
 - `consumer_extra_config`: A dictionary with additional options that
 will be passed to `confluent_kafka.Consumer` as is.
 Default - `None`
-- `consumer_poll_timeout`: timeout for `RowConsumer.poll()`
+- `consumer_poll_timeout`: timeout for `InternalConsumer.poll()`
 Default - Use the Application `consumer_poll_timeout` setting.
 - `shutdown_timeout`: Time in second the application waits for the source to gracefully shutdown.
 - `on_consumer_error`: Triggered when the source `Consumer` fails to poll Kafka.
