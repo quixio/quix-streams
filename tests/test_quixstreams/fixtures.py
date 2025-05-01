@@ -17,6 +17,8 @@ from quixstreams.error_callbacks import (
     ProcessingErrorCallback,
     ProducerErrorCallback,
 )
+from quixstreams.internal_consumer import InternalConsumer
+from quixstreams.internal_producer import InternalProducer
 from quixstreams.kafka import (
     AutoOffsetReset,
     Consumer,
@@ -46,8 +48,6 @@ from quixstreams.platforms.quix.config import (
     prepend_workspace_id,
     strip_workspace_id_prefix,
 )
-from quixstreams.rowconsumer import RowConsumer
-from quixstreams.rowproducer import RowProducer
 from quixstreams.state import StateStoreManager
 from quixstreams.state.manager import StoreTypes
 from quixstreams.state.recovery import RecoveryManager
@@ -99,7 +99,7 @@ def consumer(consumer_factory) -> Consumer:
 
 
 @pytest.fixture()
-def row_consumer_factory(kafka_container, random_consumer_group):
+def internal_consumer_factory(kafka_container, random_consumer_group):
     def factory(
         broker_address: str = kafka_container.broker_address,
         consumer_group: Optional[str] = None,
@@ -107,10 +107,10 @@ def row_consumer_factory(kafka_container, random_consumer_group):
         auto_commit_enable: bool = False,
         extra_config: dict = None,
         on_error: Optional[ConsumerErrorCallback] = None,
-    ) -> RowConsumer:
+    ) -> InternalConsumer:
         extras = CONSUMER_EXTRAS_DEFAULT.copy()
         extras.update((extra_config or {}))
-        return RowConsumer(
+        return InternalConsumer(
             broker_address=broker_address,
             consumer_group=consumer_group or random_consumer_group,
             auto_commit_enable=auto_commit_enable,
@@ -123,8 +123,8 @@ def row_consumer_factory(kafka_container, random_consumer_group):
 
 
 @pytest.fixture()
-def row_consumer(row_consumer_factory) -> RowConsumer:
-    return row_consumer_factory()
+def internal_consumer(internal_consumer_factory) -> InternalConsumer:
+    return internal_consumer_factory()
 
 
 @pytest.fixture()
@@ -132,12 +132,14 @@ def producer_factory(kafka_container):
     def factory(
         broker_address: str = kafka_container.broker_address,
         extra_config: dict = None,
+        transactional: bool = False,
     ) -> Producer:
         extra_config = extra_config or {}
 
         return Producer(
             broker_address=broker_address,
             extra_config=extra_config,
+            transactional=transactional,
         )
 
     return factory
@@ -226,14 +228,14 @@ def set_topic_partitions(kafka_admin_client):
 
 
 @pytest.fixture()
-def row_producer_factory(kafka_container):
+def internal_producer_factory(kafka_container):
     def factory(
         broker_address: str = kafka_container.broker_address,
         extra_config: dict = None,
         on_error: Optional[ProducerErrorCallback] = None,
         transactional: bool = False,
-    ) -> RowProducer:
-        return RowProducer(
+    ) -> InternalProducer:
+        return InternalProducer(
             broker_address=broker_address,
             extra_config=extra_config,
             on_error=on_error,
@@ -244,13 +246,13 @@ def row_producer_factory(kafka_container):
 
 
 @pytest.fixture()
-def row_producer(row_producer_factory):
-    return row_producer_factory()
+def internal_producer(internal_producer_factory):
+    return internal_producer_factory()
 
 
 @pytest.fixture()
-def transactional_row_producer(row_producer_factory):
-    return row_producer_factory(transactional=True)
+def transactional_internal_producer(internal_producer_factory):
+    return internal_producer_factory(transactional=True)
 
 
 @pytest.fixture()
@@ -341,7 +343,7 @@ def state_manager_factory(store_type, tmp_path):
     def factory(
         group_id: Optional[str] = None,
         state_dir: Optional[str] = None,
-        producer: Optional[RowProducer] = None,
+        producer: Optional[InternalProducer] = None,
         recovery_manager: Optional[RecoveryManager] = None,
         default_store_type: StoreTypes = store_type,
     ) -> StateStoreManager:

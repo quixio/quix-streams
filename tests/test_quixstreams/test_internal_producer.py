@@ -12,20 +12,20 @@ from confluent_kafka import (
 )
 from confluent_kafka import TopicPartition
 
+from quixstreams.internal_producer import InternalProducer
+from quixstreams.kafka import Producer
 from quixstreams.kafka.exceptions import KafkaProducerDeliveryError
-from quixstreams.kafka.producer import TransactionalProducer
 from quixstreams.models import (
     JSONSerializer,
     SerializationError,
 )
-from quixstreams.rowproducer import RowProducer
 
 
-class TestRowProducer:
+class TestInternalProducer:
     def test_produce_row_success(
         self,
-        row_consumer_factory,
-        row_producer_factory,
+        internal_consumer_factory,
+        internal_producer_factory,
         topic_json_serdes_factory,
         row_factory,
     ):
@@ -34,7 +34,7 @@ class TestRowProducer:
         value = {"field": "value"}
         headers = [("header1", b"1")]
 
-        with row_producer_factory() as producer:
+        with internal_producer_factory() as producer:
             row = row_factory(
                 topic=topic.name,
                 value=value,
@@ -43,7 +43,7 @@ class TestRowProducer:
             )
             producer.produce_row(topic=topic, row=row)
 
-        with row_consumer_factory(auto_offset_reset="earliest") as consumer:
+        with internal_consumer_factory(auto_offset_reset="earliest") as consumer:
             consumer.subscribe([topic])
             row = consumer.poll_row(timeout=5.0)
 
@@ -68,8 +68,8 @@ class TestRowProducer:
         init_key,
         new_key,
         expected_key,
-        row_consumer_factory,
-        row_producer_factory,
+        internal_consumer_factory,
+        internal_producer_factory,
         topic_json_serdes_factory,
         row_factory,
     ):
@@ -79,8 +79,8 @@ class TestRowProducer:
         headers = [("header1", b"1")]
 
         with (
-            row_consumer_factory(auto_offset_reset="earliest") as consumer,
-            row_producer_factory() as producer,
+            internal_consumer_factory(auto_offset_reset="earliest") as consumer,
+            internal_producer_factory() as producer,
         ):
             row = row_factory(
                 topic=topic.name,
@@ -98,11 +98,11 @@ class TestRowProducer:
         assert row.headers == headers
 
     def test_produce_row_serialization_error_raise(
-        self, row_producer_factory, row_factory, topic_manager_topic_factory
+        self, internal_producer_factory, row_factory, topic_manager_topic_factory
     ):
         topic = topic_manager_topic_factory(value_serializer=JSONSerializer())
 
-        with row_producer_factory() as producer:
+        with internal_producer_factory() as producer:
             row = row_factory(
                 topic=topic.name,
                 value=object(),
@@ -111,11 +111,13 @@ class TestRowProducer:
                 producer.produce_row(topic=topic, row=row)
 
     def test_produce_row_produce_error_raise(
-        self, row_producer_factory, row_factory, topic_manager_topic_factory
+        self, internal_producer_factory, row_factory, topic_manager_topic_factory
     ):
         topic = topic_manager_topic_factory(value_serializer=JSONSerializer())
 
-        with row_producer_factory(extra_config={"message.max.bytes": 1000}) as producer:
+        with internal_producer_factory(
+            extra_config={"message.max.bytes": 1000}
+        ) as producer:
             row = row_factory(
                 topic=topic.name,
                 value={"field": 1001 * "a"},
@@ -125,8 +127,8 @@ class TestRowProducer:
 
     def test_produce_row_serialization_error_suppress(
         self,
-        row_consumer_factory,
-        row_producer_factory,
+        internal_consumer_factory,
+        internal_producer_factory,
         row_factory,
         topic_manager_topic_factory,
     ):
@@ -139,7 +141,7 @@ class TestRowProducer:
             suppressed.set_result(True)
             return True
 
-        with row_producer_factory(on_error=on_error) as producer:
+        with internal_producer_factory(on_error=on_error) as producer:
             row = row_factory(
                 topic=topic.name,
                 value=object(),
@@ -147,13 +149,13 @@ class TestRowProducer:
             producer.produce_row(topic=topic, row=row)
 
     def test_produce_delivery_error_raised_on_produce(
-        self, row_producer_factory, topic_json_serdes_factory
+        self, internal_producer_factory, topic_json_serdes_factory
     ):
         topic = topic_json_serdes_factory(num_partitions=1)
         key = b"key"
         value = b"value"
 
-        producer = row_producer_factory()
+        producer = internal_producer_factory()
 
         # Send message to a non-existing partition to simulate error
         # in the delivery callback
@@ -165,13 +167,13 @@ class TestRowProducer:
             producer.produce(topic=topic.name, key=key, value=value)
 
     def test_produce_delivery_error_raised_on_flush(
-        self, row_producer_factory, topic_json_serdes_factory
+        self, internal_producer_factory, topic_json_serdes_factory
     ):
         topic = topic_json_serdes_factory(num_partitions=1)
         key = b"key"
         value = b"value"
 
-        producer = row_producer_factory()
+        producer = internal_producer_factory()
 
         # Send message to a non-existing partition to simulate error
         # in the delivery callback
@@ -181,13 +183,13 @@ class TestRowProducer:
             producer.flush()
 
 
-class TestTransactionalRowProducer:
+class TestTransactionalInternalProducer:
     def test_produce_and_commit(
         self,
-        row_producer,
-        transactional_row_producer,
+        internal_producer,
+        transactional_internal_producer,
         topic_manager_topic_factory,
-        row_consumer_factory,
+        internal_consumer_factory,
     ):
         """
         Simplest transactional consume + produce pattern
@@ -206,14 +208,14 @@ class TestTransactionalRowProducer:
         # produce our initial messages to consume (no EOS here)
         msg_in = topic_in.serialize(key=key, value=value)
         for _ in range(message_count):
-            row_producer.produce(
+            internal_producer.produce(
                 topic=topic_in.name, key=msg_in.key, value=msg_in.value
             )
-            row_producer.flush(2)
+            internal_producer.flush(2)
 
         # consume + produce those same messages to new downstream topic, commit them
-        producer = transactional_row_producer
-        with row_consumer_factory(
+        producer = transactional_internal_producer
+        with internal_consumer_factory(
             auto_offset_reset="earliest", auto_commit_enable=False
         ) as consumer:
             consumer.subscribe([topic_in])
@@ -236,7 +238,7 @@ class TestTransactionalRowProducer:
 
         # downstream consumer gets the committed messages
         rows = []
-        with row_consumer_factory(auto_offset_reset="earliest") as consumer:
+        with internal_consumer_factory(auto_offset_reset="earliest") as consumer:
             consumer.subscribe([topic_out])
             while (row := consumer.poll_row(2)) is not None:
                 rows.append(row)
@@ -247,10 +249,10 @@ class TestTransactionalRowProducer:
 
     def test_produce_after_aborted_transaction(
         self,
-        row_producer,
-        transactional_row_producer,
+        internal_producer,
+        transactional_internal_producer,
         topic_manager_topic_factory,
-        row_consumer_factory,
+        internal_consumer_factory,
     ):
         """
         transactional consume + produce pattern, but we mimic a failed transaction by
@@ -275,10 +277,10 @@ class TestTransactionalRowProducer:
         # produce our initial messages to consume (no EOS here)
         msg_in = topic_in.serialize(key=key, value=value)
         for _ in range(message_count):
-            row_producer.produce(
+            internal_producer.produce(
                 topic=topic_in.name, key=msg_in.key, value=msg_in.value
             )
-            row_producer.flush(2)
+            internal_producer.flush(2)
 
         def consume_and_produce(consumer, producer):
             consumer_end_offset = None
@@ -295,8 +297,8 @@ class TestTransactionalRowProducer:
 
         # consume + produce those same messages to new downstream topic
         # will abort the transaction instead of committing
-        producer = transactional_row_producer
-        with row_consumer_factory(
+        producer = transactional_internal_producer
+        with internal_consumer_factory(
             auto_offset_reset="earliest",
             auto_commit_enable=False,
             consumer_group=consumer_group,
@@ -306,7 +308,7 @@ class TestTransactionalRowProducer:
         assert not producer.offsets
 
         # repeat, only this time we commit the transaction
-        with row_consumer_factory(
+        with internal_consumer_factory(
             auto_offset_reset="earliest",
             auto_commit_enable=False,
             consumer_group=consumer_group,
@@ -324,7 +326,7 @@ class TestTransactionalRowProducer:
 
         # downstream consumer should only get the committed messages
         rows = []
-        with row_consumer_factory(auto_offset_reset="earliest") as consumer:
+        with internal_consumer_factory(auto_offset_reset="earliest") as consumer:
             consumer.subscribe([topic_out])
             while (row := consumer.poll_row(2)) is not None:
                 rows.append(row)
@@ -355,10 +357,10 @@ class TestTransactionalRowProducer:
 
     def test_produce_transaction_timeout_no_abort(
         self,
-        row_producer,
-        row_producer_factory,
+        internal_producer,
+        internal_producer_factory,
         topic_manager_topic_factory,
-        row_consumer_factory,
+        internal_consumer_factory,
     ):
         """
         Validate the behavior around a transaction that times out via the producer
@@ -381,19 +383,19 @@ class TestTransactionalRowProducer:
         # produce our initial messages to consume (no EOS here)
         msg_in = topic_in.serialize(key=key, value=value)
         for _ in range(message_count):
-            row_producer.produce(
+            internal_producer.produce(
                 topic=topic_in.name, key=msg_in.key, value=msg_in.value
             )
-            row_producer.flush(2)
+            internal_producer.flush(2)
 
         # consume + produce those same messages to new downstream topic
         # however, we will wait to commit the transaction
         timeout_seconds = 1
-        producer = row_producer_factory(
+        producer = internal_producer_factory(
             transactional=True,
             extra_config={"transaction.timeout.ms": timeout_seconds * 1000},
         )
-        with row_consumer_factory(
+        with internal_consumer_factory(
             auto_offset_reset="earliest",
             auto_commit_enable=False,
         ) as consumer:
@@ -427,7 +429,7 @@ class TestTransactionalRowProducer:
             )
 
         # downstream consumer should ignore failed transaction messages
-        with row_consumer_factory(auto_offset_reset="earliest") as consumer:
+        with internal_consumer_factory(auto_offset_reset="earliest") as consumer:
             consumer.subscribe([topic_out])
             assert consumer.poll_row(2) is None
             lowwater, highwater = consumer.get_watermark_offsets(
@@ -456,15 +458,16 @@ class TestTransactionalRowProducer:
         call_args = [["my", "offsets"], "consumer_metadata", 1]
         error = ConfluentKafkaException(MockKafkaError())
 
-        mock_producer = create_autospec(TransactionalProducer)
+        mock_producer = create_autospec(Producer)
         mock_producer.send_offsets_to_transaction.__name__ = "send_offsets"
         mock_producer.commit_transaction.__name__ = "commit"
         mock_producer.send_offsets_to_transaction.side_effect = [error, None]
         with patch(
-            "quixstreams.rowproducer.TransactionalProducer", return_value=mock_producer
+            "quixstreams.internal_producer.Producer",
+            return_value=mock_producer,
         ):
-            row_producer = RowProducer(broker_address="lol", transactional=True)
-            row_producer.commit_transaction(*call_args)
+            producer = InternalProducer(broker_address="xyz", transactional=True)
+            producer.commit_transaction(*call_args)
 
         mock_producer.send_offsets_to_transaction.assert_has_calls(
             [call(*call_args)] * 2

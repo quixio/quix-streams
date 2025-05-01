@@ -15,7 +15,6 @@ from .kafka.producer import (
     PRODUCER_ON_ERROR_RETRIES,
     PRODUCER_POLL_TIMEOUT,
     Producer,
-    TransactionalProducer,
 )
 from .models import Headers, Row, Topic
 
@@ -74,7 +73,7 @@ def _retriable_transaction_op(attempts: int, backoff_seconds: float):
 class KafkaProducerTransactionCommitFailed(QuixException): ...
 
 
-class RowProducer:
+class InternalProducer:
     """
     A producer class that is capable of serializing Rows to bytes and send them to Kafka.
     The serialization is performed according to the Topic serialization settings.
@@ -85,8 +84,8 @@ class RowProducer:
     :param extra_config: A dictionary with additional options that
         will be passed to `confluent_kafka.Producer` as is.
         Note: values passed as arguments override values in `extra_config`.
-    :param on_error: a callback triggered when `RowProducer.produce_row()`
-        or `RowProducer.poll()` fail`.
+    :param on_error: a callback triggered when `InternalProducer.produce_row()`
+        or `InternalProducer.poll()` fail`.
         If producer fails and the callback returns `True`, the exception
         will be logged but not propagated.
         The default callback logs an exception and returns `False`.
@@ -103,18 +102,12 @@ class RowProducer:
         flush_timeout: Optional[float] = None,
         transactional: bool = False,
     ):
-        if transactional:
-            self._producer: Producer = TransactionalProducer(
-                broker_address=broker_address,
-                extra_config=extra_config,
-                flush_timeout=flush_timeout,
-            )
-        else:
-            self._producer = Producer(
-                broker_address=broker_address,
-                extra_config=extra_config,
-                flush_timeout=flush_timeout,
-            )
+        self._producer = Producer(
+            broker_address=broker_address,
+            extra_config=extra_config,
+            flush_timeout=flush_timeout,
+            transactional=transactional,
+        )
 
         self._on_error: ProducerErrorCallback = on_error or default_on_producer_error
         self._tp_offsets: Dict[Tuple[str, int], int] = {}

@@ -8,11 +8,11 @@ from typing import TYPE_CHECKING, List
 
 from confluent_kafka import OFFSET_BEGINNING, TopicPartition
 
+from quixstreams.internal_consumer import InternalConsumer
+from quixstreams.internal_producer import InternalProducer
 from quixstreams.logging import LOGGER_NAME, configure_logging
 from quixstreams.models import Topic, TopicManager
 from quixstreams.models.topics import TopicConfig
-from quixstreams.rowconsumer import RowConsumer
-from quixstreams.rowproducer import RowProducer
 from quixstreams.state import RecoveryManager, StateStoreManager, StorePartition
 from quixstreams.state.memory import MemoryStore
 
@@ -42,8 +42,8 @@ class SourceProcess(process):
         self,
         source: BaseSource,
         topic: Topic,
-        producer: RowProducer,
-        consumer: RowConsumer,
+        producer: InternalProducer,
+        consumer: InternalConsumer,
         topic_manager: TopicManager,
     ) -> None:
         super().__init__()

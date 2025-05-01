@@ -1,4 +1,7 @@
 import pytest
+from confluent_kafka import TopicPartition
+
+from quixstreams.kafka.exceptions import InvalidProducerConfigError
 
 
 class TestProducer:
@@ -121,3 +124,24 @@ class TestProducer:
                         value=value,
                         buffer_error_max_tries=0,
                     )
+
+    def test_non_transactional_producer_use_transactional_api_fails(
+        self, producer_factory, consumer
+    ):
+        producer = producer_factory(transactional=False)
+
+        with pytest.raises(InvalidProducerConfigError):
+            producer.begin_transaction()
+
+        with pytest.raises(InvalidProducerConfigError):
+            producer.abort_transaction(timeout=1)
+
+        with pytest.raises(InvalidProducerConfigError):
+            producer.commit_transaction(timeout=1)
+
+        with pytest.raises(InvalidProducerConfigError):
+            producer.send_offsets_to_transaction(
+                positions=[TopicPartition(topic="test", partition=0, offset=0)],
+                group_metadata=consumer.consumer_group_metadata(),
+                timeout=1,
+            )

@@ -4,12 +4,12 @@ from typing import Dict, List, Optional
 from confluent_kafka import OFFSET_BEGINNING
 from confluent_kafka import TopicPartition as ConfluentPartition
 
+from quixstreams.internal_producer import InternalProducer
 from quixstreams.kafka import BaseConsumer
 from quixstreams.kafka.consumer import raise_for_msg_error
 from quixstreams.models import SuccessfulConfluentKafkaMessageProto, Topic
 from quixstreams.models.topics import TopicConfig, TopicManager
 from quixstreams.models.types import Headers
-from quixstreams.rowproducer import RowProducer
 from quixstreams.state.base import StorePartition
 from quixstreams.utils.dicts import dict_values
 from quixstreams.utils.json import loads as json_loads
@@ -220,10 +220,10 @@ class ChangelogProducerFactory:
     Generates ChangelogProducers, which produce changelog messages to a StorePartition.
     """
 
-    def __init__(self, changelog_name: str, producer: RowProducer):
+    def __init__(self, changelog_name: str, producer: InternalProducer):
         """
         :param changelog_name: changelog topic name
-        :param producer: a RowProducer (not shared with `Application` instance)
+        :param producer: a InternalProducer (not shared with `Application` instance)
 
         :return: a ChangelogWriter instance
         """
@@ -254,12 +254,12 @@ class ChangelogProducer:
         self,
         changelog_name: str,
         partition: int,
-        producer: RowProducer,
+        producer: InternalProducer,
     ):
         """
         :param changelog_name: A changelog topic name
         :param partition: source topic partition number
-        :param producer: a RowProducer (not shared with `Application` instance)
+        :param producer: an InternalProducer (not shared with `Application` instance)
         """
         self._changelog_name = changelog_name
         self._partition = partition

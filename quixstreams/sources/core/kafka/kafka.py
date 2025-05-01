@@ -82,7 +82,7 @@ class KafkaReplicatorSource(Source):
         :param consumer_extra_config: A dictionary with additional options that
             will be passed to `confluent_kafka.Consumer` as is.
             Default - `None`
-        :param consumer_poll_timeout: timeout for `RowConsumer.poll()`
+        :param consumer_poll_timeout: timeout for `InternalConsumer.poll()`
             Default - Use the Application `consumer_poll_timeout` setting.
         :param shutdown_timeout: Time in second the application waits for the source to gracefully shutdown.
         :param on_consumer_error: Triggered when the source `Consumer` fails to poll Kafka.

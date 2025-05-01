@@ -20,7 +20,7 @@ from .buffering import InternalConsumerBuffer
 
 logger = logging.getLogger(__name__)
 
-__all__ = ("RowConsumer",)
+__all__ = ("InternalConsumer",)
 
 
 def _validate_message_batch(
@@ -37,10 +37,9 @@ def _validate_message_batch(
             raise
 
 
-class RowConsumer(BaseConsumer):
+class InternalConsumer(BaseConsumer):
     _backpressure_resume_at: float
 
-    # TODO: Rename it to "InternalConsumer"? Or "InternalBufferedConsumer"?
     def __init__(
         self,
         broker_address: Union[str, ConnectionConfig],
@@ -55,13 +54,11 @@ class RowConsumer(BaseConsumer):
         max_partition_buffer_size: int = 10000,
     ):
         """
-
         A consumer class that is capable of deserializing Kafka messages to Rows
         according to the Topics deserialization settings.
 
         It overrides `.subscribe()` method of Consumer class to accept `Topic`
         objects instead of strings.
-
 
         :param broker_address: Connection settings for Kafka.
             Accepts string with Kafka broker host and port formatted as `<host>:<port>`,
@@ -79,7 +76,8 @@ class RowConsumer(BaseConsumer):
         :param extra_config: A dictionary with additional options that
             will be passed to `confluent_kafka.Consumer` as is.
             Note: values passed as arguments override values in `extra_config`.
-        :param on_error: a callback triggered when `RowConsumer.poll_row` fails.
+        :param on_error: a callback triggered when InternalConsumer fails
+            to get and deserialize a new message.
             If consumer fails and the callback returns `True`, the exception
             will be logged but not propagated.
             The default callback logs an exception and returns `False`.

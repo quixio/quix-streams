@@ -37,7 +37,7 @@ class TestRunTracker:
     def test_count(
         self,
         app_factory,
-        row_consumer_factory,
+        internal_consumer_factory,
     ):
         app = app_factory(
             auto_offset_reset="earliest",
@@ -70,7 +70,7 @@ class TestRunTracker:
     def test_timeout(
         self,
         app_factory,
-        row_consumer_factory,
+        internal_consumer_factory,
         caplog,
     ):
         """
@@ -110,7 +110,7 @@ class TestRunTracker:
     def test_timeout_or_count(
         self,
         app_factory,
-        row_consumer_factory,
+        internal_consumer_factory,
         caplog,
     ):
         """
@@ -163,7 +163,7 @@ class TestRunTracker:
     def test_count_excludes_repartition(
         self,
         app_factory,
-        row_consumer_factory,
+        internal_consumer_factory,
         executor,
         caplog,
     ):
@@ -210,7 +210,7 @@ class TestRunTracker:
     def test_count_flushes_repartition(
         self,
         app_factory,
-        row_consumer_factory,
+        internal_consumer_factory,
         executor,
         caplog,
     ):
@@ -256,7 +256,7 @@ class TestRunTracker:
     def test_timeout_resets_after_recovery(
         self,
         app_factory,
-        row_consumer_factory,
+        internal_consumer_factory,
         executor,
     ):
         """
