@@ -3466,19 +3466,19 @@ Use `Collect()` to gather all events within each window period. into a list.
 - `column`: The column to collect. Use `None` to collect the whole message.
 Default - `None`
 
-<a id="quixstreams.rowproducer"></a>
+<a id="quixstreams.internal_producer"></a>
 
-## quixstreams.rowproducer
+## quixstreams.internal\_producer
 
-<a id="quixstreams.rowproducer.RowProducer"></a>
+<a id="quixstreams.internal_producer.InternalProducer"></a>
 
-### RowProducer
+### InternalProducer
 
 ```python
-class RowProducer()
+class InternalProducer()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowproducer.py#L77)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_producer.py#L76)
 
 A producer class that is capable of serializing Rows to bytes and send them to Kafka.
 
@@ -3492,8 +3492,8 @@ or a ConnectionConfig object if authentication is required.
 - `extra_config`: A dictionary with additional options that
 will be passed to `confluent_kafka.Producer` as is.
 Note: values passed as arguments override values in `extra_config`.
-- `on_error`: a callback triggered when `RowProducer.produce_row()`
-or `RowProducer.poll()` fail`.
+- `on_error`: a callback triggered when `InternalProducer.produce_row()`
+or `InternalProducer.poll()` fail`.
 If producer fails and the callback returns `True`, the exception
 will be logged but not propagated.
 The default callback logs an exception and returns `False`.
@@ -3501,9 +3501,9 @@ The default callback logs an exception and returns `False`.
 - `transactional`: whether to use Kafka transactions or not.
 Note this changes which underlying `Producer` class is used.
 
-<a id="quixstreams.rowproducer.RowProducer.produce_row"></a>
+<a id="quixstreams.internal_producer.InternalProducer.produce_row"></a>
 
-#### RowProducer.produce\_row
+#### InternalProducer.produce\_row
 
 ```python
 def produce_row(row: Row,
@@ -3513,7 +3513,7 @@ def produce_row(row: Row,
                 timestamp: Optional[int] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowproducer.py#L124)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_producer.py#L117)
 
 Serialize Row to bytes according to the Topic serialization settings
 
@@ -3529,15 +3529,15 @@ If this method fails, it will trigger the provided "on_error" callback.
 - `partition`: partition number, optional
 - `timestamp`: timestamp in milliseconds, optional
 
-<a id="quixstreams.rowproducer.RowProducer.poll"></a>
+<a id="quixstreams.internal_producer.InternalProducer.poll"></a>
 
-#### RowProducer.poll
+#### InternalProducer.poll
 
 ```python
 def poll(timeout: float = 0)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowproducer.py#L164)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_producer.py#L157)
 
 Polls the producer for events and calls `on_delivery` callbacks.
 
@@ -3547,15 +3547,15 @@ If `poll()` fails, it will trigger the provided "on_error" callback
 
 - `timeout`: timeout in seconds
 
-<a id="quixstreams.rowproducer.RowProducer.abort_transaction"></a>
+<a id="quixstreams.internal_producer.InternalProducer.abort_transaction"></a>
 
-#### RowProducer.abort\_transaction
+#### InternalProducer.abort\_transaction
 
 ```python
 def abort_transaction(timeout: Optional[float] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowproducer.py#L235)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_producer.py#L228)
 
 Attempt an abort if an active transaction.
 
@@ -5293,16 +5293,19 @@ Set the file extension based on the format.
 class MongoDBSink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/mongodb.py#L65)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/mongodb.py#L66)
 
 <a id="quixstreams.sinks.community.mongodb.MongoDBSink.__init__"></a>
 
 #### MongoDBSink.\_\_init\_\_
 
 ```python
-def __init__(url: str,
+def __init__(host: str,
              db: str,
              collection: str,
+             username: Optional[str] = None,
+             password: Optional[str] = None,
+             port: int = 27017,
              document_matcher: Callable[
                  [SinkItem], MongoQueryFilter] = _default_document_matcher,
              update_method: Literal["UpdateOne", "UpdateMany",
@@ -5316,15 +5319,18 @@ def __init__(url: str,
              **kwargs) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/mongodb.py#L66)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/mongodb.py#L67)
 
 A connector to sink processed data to MongoDB in batches.
 
 **Arguments**:
 
-- `url`: MongoDB url; most commonly `mongodb://username:password@host:port`
+- `host`: MongoDB hostname; example "localhost"
 - `db`: MongoDB database name
 - `collection`: MongoDB collection name
+- `username`: username, if authentication is required
+- `password`: password, if authentication is required
+- `port`: port used by MongoDB host if not using the default of 27017
 - `document_matcher`: How documents are selected to update.
 A callable that accepts a `BatchItem` and returns a MongoDB "query filter".
 If no match, will insert if `upsert=True`, where `_id` will be either the
@@ -5355,7 +5361,7 @@ exclude it here!
 def write(batch: SinkBatch) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/mongodb.py#L153)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/mongodb.py#L162)
 
 Note: Transactions could be an option here, but then each record requires a
 network call, and the transaction has size limits...so `bulk_write` is used
@@ -8998,7 +9004,7 @@ Generates ChangelogProducers, which produce changelog messages to a StorePartiti
 #### ChangelogProducerFactory.\_\_init\_\_
 
 ```python
-def __init__(changelog_name: str, producer: RowProducer)
+def __init__(changelog_name: str, producer: InternalProducer)
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L223)
@@ -9006,7 +9012,7 @@ def __init__(changelog_name: str, producer: RowProducer)
 **Arguments**:
 
 - `changelog_name`: changelog topic name
-- `producer`: a RowProducer (not shared with `Application` instance)
+- `producer`: a InternalProducer (not shared with `Application` instance)
 
 **Returns**:
 
@@ -9048,7 +9054,7 @@ kafka changelog partition.
 #### ChangelogProducer.\_\_init\_\_
 
 ```python
-def __init__(changelog_name: str, partition: int, producer: RowProducer)
+def __init__(changelog_name: str, partition: int, producer: InternalProducer)
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L253)
@@ -9057,7 +9063,7 @@ def __init__(changelog_name: str, partition: int, producer: RowProducer)
 
 - `changelog_name`: A changelog topic name
 - `partition`: source topic partition number
-- `producer`: a RowProducer (not shared with `Application` instance)
+- `producer`: an InternalProducer (not shared with `Application` instance)
 
 <a id="quixstreams.state.recovery.ChangelogProducer.produce"></a>
 
@@ -11484,7 +11490,7 @@ a librdkafka-compatible dictionary
 class Producer()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L45)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L65)
 
 <a id="quixstreams.kafka.producer.Producer.__init__"></a>
 
@@ -11495,10 +11501,11 @@ def __init__(broker_address: Union[str, ConnectionConfig],
              logger: logging.Logger = logger,
              error_callback: Callable[[KafkaError], None] = _default_error_cb,
              extra_config: Optional[dict] = None,
-             flush_timeout: Optional[float] = None)
+             flush_timeout: Optional[float] = None,
+             transactional: bool = False)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L46)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L66)
 
 A wrapper around `confluent_kafka.Producer`.
 
@@ -11534,7 +11541,7 @@ def produce(topic: str,
             on_delivery: Optional[DeliveryCallback] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L84)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L117)
 
 Produce a message to a topic.
 
@@ -11565,7 +11572,7 @@ for the produced message.
 def poll(timeout: float = 0)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L145)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L178)
 
 Polls the producer for events and calls `on_delivery` callbacks.
 
@@ -11582,7 +11589,7 @@ Polls the producer for events and calls `on_delivery` callbacks.
 def flush(timeout: Optional[float] = None) -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L153)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L213)
 
 Wait for all messages in the Producer queue to be delivered.
 
@@ -11594,19 +11601,6 @@ None use producer default or -1 is infinite. Default: None
 **Returns**:
 
 number of messages remaining to flush
-
-<a id="quixstreams.kafka.producer.TransactionalProducer"></a>
-
-### TransactionalProducer
-
-```python
-class TransactionalProducer(Producer)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L184)
-
-A separate producer class used only internally for transactions
-(transactions are only needed when using a consumer).
 
 <a id="quixstreams.kafka.consumer"></a>
 
@@ -12338,8 +12332,8 @@ Linked Environment Variable: `Quix__State__Dir`.
 Default - `"state"`.
 - `rocksdb_options`: RocksDB options.
 If `None`, the default options will be used.
-- `consumer_poll_timeout`: timeout for `RowConsumer.poll()`. Default - `1.0`s
-- `producer_poll_timeout`: timeout for `RowProducer.poll()`. Default - `0`s.
+- `consumer_poll_timeout`: timeout for `InternalConsumer.poll()`. Default - `1.0`s
+- `producer_poll_timeout`: timeout for `InternalProducer.poll()`. Default - `0`s.
 - `on_message_processed`: a callback triggered when message is successfully
 processed.
 - `loglevel`: a log level for "quixstreams" logger.
@@ -12367,11 +12361,11 @@ To handle errors, `Application` accepts callbacks triggered when
     exceptions occur on different stages of stream processing. If the callback
     returns `True`, the exception will be ignored. Otherwise, the exception
     will be propagated and the processing will eventually stop.
-- `on_consumer_error`: triggered when internal `RowConsumer` fails
+- `on_consumer_error`: triggered when internal `InternalConsumer` fails
 to poll Kafka or cannot deserialize a message.
 - `on_processing_error`: triggered when exception is raised within
 `StreamingDataFrame.process()`.
-- `on_producer_error`: triggered when `RowProducer` fails to serialize
+- `on_producer_error`: triggered when `InternalProducer` fails to serialize
 or to produce a message to Kafka.
 <br><br>***Quix Cloud Parameters***<br>
 - `quix_config_builder`: instance of `QuixKafkaConfigsBuilder` to be used
@@ -13020,7 +13014,7 @@ Default - Use the Application `auto_offset_reset` setting.
 - `consumer_extra_config`: A dictionary with additional options that
 will be passed to `confluent_kafka.Consumer` as is.
 Default - `None`
-- `consumer_poll_timeout`: timeout for `RowConsumer.poll()`
+- `consumer_poll_timeout`: timeout for `InternalConsumer.poll()`
 Default - Use the Application `consumer_poll_timeout` setting.
 - `shutdown_timeout`: Time in second the application waits for the source to gracefully shutdown.
 - `on_consumer_error`: Triggered when the source `Consumer` fails to poll Kafka.
@@ -14265,7 +14259,7 @@ if __name__ == "__main__":
 #### BaseSource.configure
 
 ```python
-def configure(topic: Topic, producer: RowProducer, **kwargs) -> None
+def configure(topic: Topic, producer: InternalProducer, **kwargs) -> None
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L116)
@@ -14664,7 +14658,7 @@ Callback must resolve (or propagate/re-raise) the Exception.
 
 ```python
 def configure(topic: Topic,
-              producer: RowProducer,
+              producer: InternalProducer,
               *,
               store_partition: Optional[StorePartition] = None,
               **kwargs) -> None
@@ -15059,27 +15053,27 @@ This method will:
 
 ## quixstreams.checkpointing.exceptions
 
-<a id="quixstreams.rowconsumer"></a>
+<a id="quixstreams.internal_consumer"></a>
 
-## quixstreams.rowconsumer
+## quixstreams.internal\_consumer
 
-<a id="quixstreams.rowconsumer.consumer"></a>
+<a id="quixstreams.internal_consumer.consumer"></a>
 
-## quixstreams.rowconsumer.consumer
+## quixstreams.internal\_consumer.consumer
 
-<a id="quixstreams.rowconsumer.consumer.RowConsumer"></a>
+<a id="quixstreams.internal_consumer.consumer.InternalConsumer"></a>
 
-### RowConsumer
+### InternalConsumer
 
 ```python
-class RowConsumer(BaseConsumer)
+class InternalConsumer(BaseConsumer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/consumer.py#L40)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/consumer.py#L40)
 
-<a id="quixstreams.rowconsumer.consumer.RowConsumer.__init__"></a>
+<a id="quixstreams.internal_consumer.consumer.InternalConsumer.__init__"></a>
 
-#### RowConsumer.\_\_init\_\_
+#### InternalConsumer.\_\_init\_\_
 
 ```python
 def __init__(broker_address: Union[str, ConnectionConfig],
@@ -15093,7 +15087,7 @@ def __init__(broker_address: Union[str, ConnectionConfig],
              max_partition_buffer_size: int = 10000)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/consumer.py#L44)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/consumer.py#L43)
 
 A consumer class that is capable of deserializing Kafka messages to Rows
 
@@ -15120,7 +15114,8 @@ Passed as "offset_commit_cb" to `confluent_kafka.Consumer`.
 - `extra_config`: A dictionary with additional options that
 will be passed to `confluent_kafka.Consumer` as is.
 Note: values passed as arguments override values in `extra_config`.
-- `on_error`: a callback triggered when `RowConsumer.poll_row` fails.
+- `on_error`: a callback triggered when InternalConsumer fails
+to get and deserialize a new message.
 If consumer fails and the callback returns `True`, the exception
 will be logged but not propagated.
 The default callback logs an exception and returns `False`.
@@ -15129,9 +15124,9 @@ The buffering is used to consume messages in-order between different topics.
 Note that the actual number of buffered messages can be higher
 Default - `10000`.
 
-<a id="quixstreams.rowconsumer.consumer.RowConsumer.subscribe"></a>
+<a id="quixstreams.internal_consumer.consumer.InternalConsumer.subscribe"></a>
 
-#### RowConsumer.subscribe
+#### InternalConsumer.subscribe
 
 ```python
 def subscribe(topics: list[Topic],
@@ -15140,7 +15135,7 @@ def subscribe(topics: list[Topic],
               on_lost: Optional[RebalancingCallback] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/consumer.py#L108)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/consumer.py#L106)
 
 Set subscription to supplied list of topics.
 
@@ -15161,16 +15156,16 @@ assignment has been lost. Partitions that have been lost may already be
 owned by other members in the group and therefore committing offsets,
 for example, may fail.
 
-<a id="quixstreams.rowconsumer.consumer.RowConsumer.poll_row"></a>
+<a id="quixstreams.internal_consumer.consumer.InternalConsumer.poll_row"></a>
 
-#### RowConsumer.poll\_row
+#### InternalConsumer.poll\_row
 
 ```python
 def poll_row(timeout: Optional[float] = None,
              buffered: bool = False) -> Union[Row, list[Row], None]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/consumer.py#L171)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/consumer.py#L169)
 
 Consumes a single message and deserialize it to Row or a list of Rows.
 
@@ -15191,39 +15186,39 @@ Default - `False`.
 
 single Row, list of Rows or None
 
-<a id="quixstreams.rowconsumer.consumer.RowConsumer.trigger_backpressure"></a>
+<a id="quixstreams.internal_consumer.consumer.InternalConsumer.trigger_backpressure"></a>
 
-#### RowConsumer.trigger\_backpressure
+#### InternalConsumer.trigger\_backpressure
 
 ```python
 def trigger_backpressure(offsets_to_seek: dict[tuple[str, int], int],
                          resume_after: float)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/consumer.py#L221)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/consumer.py#L219)
 
 Pause all partitions for the certain period of time and seek the partitions
 provided in the `offsets_to_seek` dict.
 
 This method is supposed to be called in case of backpressure from Sinks.
 
-<a id="quixstreams.rowconsumer.consumer.RowConsumer.resume_backpressured"></a>
+<a id="quixstreams.internal_consumer.consumer.InternalConsumer.resume_backpressured"></a>
 
-#### RowConsumer.resume\_backpressured
+#### InternalConsumer.resume\_backpressured
 
 ```python
 def resume_backpressured()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/consumer.py#L267)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/consumer.py#L265)
 
 Resume consuming from assigned data partitions after the wait period has elapsed.
 
-<a id="quixstreams.rowconsumer.buffering"></a>
+<a id="quixstreams.internal_consumer.buffering"></a>
 
-## quixstreams.rowconsumer.buffering
+## quixstreams.internal\_consumer.buffering
 
-<a id="quixstreams.rowconsumer.buffering.Idleness"></a>
+<a id="quixstreams.internal_consumer.buffering.Idleness"></a>
 
 ### Idleness
 
@@ -15231,27 +15226,27 @@ Resume consuming from assigned data partitions after the wait period has elapsed
 class Idleness(enum.Enum)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L18)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L18)
 
-<a id="quixstreams.rowconsumer.buffering.Idleness.IDLE"></a>
+<a id="quixstreams.internal_consumer.buffering.Idleness.IDLE"></a>
 
 #### IDLE
 
 The partition is idle and has no new messages to be consumed
 
-<a id="quixstreams.rowconsumer.buffering.Idleness.ACTIVE"></a>
+<a id="quixstreams.internal_consumer.buffering.Idleness.ACTIVE"></a>
 
 #### ACTIVE
 
 The partition has more messages to be consumed
 
-<a id="quixstreams.rowconsumer.buffering.Idleness.UNKNOWN"></a>
+<a id="quixstreams.internal_consumer.buffering.Idleness.UNKNOWN"></a>
 
 #### UNKNOWN
 
 The idleness is unknown
 
-<a id="quixstreams.rowconsumer.buffering.PartitionBuffer"></a>
+<a id="quixstreams.internal_consumer.buffering.PartitionBuffer"></a>
 
 ### PartitionBuffer
 
@@ -15259,9 +15254,9 @@ The idleness is unknown
 class PartitionBuffer()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L24)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L24)
 
-<a id="quixstreams.rowconsumer.buffering.PartitionBuffer.__init__"></a>
+<a id="quixstreams.internal_consumer.buffering.PartitionBuffer.__init__"></a>
 
 #### PartitionBuffer.\_\_init\_\_
 
@@ -15269,7 +15264,7 @@ class PartitionBuffer()
 def __init__(partition: int, topic: str, max_size: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L25)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L25)
 
 A buffer that holds data for a single topic partition.
 
@@ -15280,7 +15275,7 @@ A buffer that holds data for a single topic partition.
 - `max_size`: the maximum size of the buffer when the buffer is considered full.
 It is a soft limit, and it may be exceeded in some cases
 
-<a id="quixstreams.rowconsumer.buffering.PartitionBuffer.set_high_watermark"></a>
+<a id="quixstreams.internal_consumer.buffering.PartitionBuffer.set_high_watermark"></a>
 
 #### PartitionBuffer.set\_high\_watermark
 
@@ -15288,7 +15283,7 @@ It is a soft limit, and it may be exceeded in some cases
 def set_high_watermark(offset: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L48)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L48)
 
 Set high watermark offset of topic partition.
 
@@ -15296,7 +15291,7 @@ Set high watermark offset of topic partition.
 
 - `offset`: high watermark offset.
 
-<a id="quixstreams.rowconsumer.buffering.PartitionBuffer.idleness"></a>
+<a id="quixstreams.internal_consumer.buffering.PartitionBuffer.idleness"></a>
 
 #### PartitionBuffer.idleness
 
@@ -15304,7 +15299,7 @@ Set high watermark offset of topic partition.
 def idleness() -> Idleness
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L56)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L56)
 
 Check if the partition is idle or has more data to be consumed from the broker.
 
@@ -15314,7 +15309,7 @@ Check if the partition is idle or has more data to be consumed from the broker.
 - `False` when the max offset is below the high watermark
 - `None` when the watermark is not known yet.
 
-<a id="quixstreams.rowconsumer.buffering.PartitionBuffer.append"></a>
+<a id="quixstreams.internal_consumer.buffering.PartitionBuffer.append"></a>
 
 #### PartitionBuffer.append
 
@@ -15322,7 +15317,7 @@ Check if the partition is idle or has more data to be consumed from the broker.
 def append(message: SuccessfulConfluentKafkaMessageProto)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L74)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L74)
 
 Append a new Kafka message to the buffer.
 
@@ -15332,7 +15327,7 @@ The message is supposed to have `.error()` to be `None`.
 
 - `message`: a successful Kafka message.
 
-<a id="quixstreams.rowconsumer.buffering.PartitionBuffer.popleft"></a>
+<a id="quixstreams.internal_consumer.buffering.PartitionBuffer.popleft"></a>
 
 #### PartitionBuffer.popleft
 
@@ -15340,7 +15335,7 @@ The message is supposed to have `.error()` to be `None`.
 def popleft() -> Optional[SuccessfulConfluentKafkaMessageProto]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L91)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L91)
 
 Pop the message from the start of the buffer.
 
@@ -15348,7 +15343,7 @@ Pop the message from the start of the buffer.
 
 `None` if the buffer is empty, otherwise a Kafka message
 
-<a id="quixstreams.rowconsumer.buffering.PartitionBuffer.empty"></a>
+<a id="quixstreams.internal_consumer.buffering.PartitionBuffer.empty"></a>
 
 #### PartitionBuffer.empty
 
@@ -15356,11 +15351,11 @@ Pop the message from the start of the buffer.
 def empty() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L118)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L118)
 
 Check if the buffer is empty
 
-<a id="quixstreams.rowconsumer.buffering.PartitionBuffer.full"></a>
+<a id="quixstreams.internal_consumer.buffering.PartitionBuffer.full"></a>
 
 #### PartitionBuffer.full
 
@@ -15368,11 +15363,11 @@ Check if the buffer is empty
 def full() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L124)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L124)
 
 Check if the buffer is full
 
-<a id="quixstreams.rowconsumer.buffering.PartitionBuffer.pause"></a>
+<a id="quixstreams.internal_consumer.buffering.PartitionBuffer.pause"></a>
 
 #### PartitionBuffer.pause
 
@@ -15380,11 +15375,11 @@ Check if the buffer is full
 def pause()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L134)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L134)
 
 Mark the buffer as paused
 
-<a id="quixstreams.rowconsumer.buffering.PartitionBuffer.resume"></a>
+<a id="quixstreams.internal_consumer.buffering.PartitionBuffer.resume"></a>
 
 #### PartitionBuffer.resume
 
@@ -15392,11 +15387,11 @@ Mark the buffer as paused
 def resume()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L140)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L140)
 
 Mark the buffer as resumed
 
-<a id="quixstreams.rowconsumer.buffering.PartitionBuffer.clear"></a>
+<a id="quixstreams.internal_consumer.buffering.PartitionBuffer.clear"></a>
 
 #### PartitionBuffer.clear
 
@@ -15404,11 +15399,11 @@ Mark the buffer as resumed
 def clear()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L146)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L146)
 
 Clear the buffer and reset its state.
 
-<a id="quixstreams.rowconsumer.buffering.PartitionBufferGroup"></a>
+<a id="quixstreams.internal_consumer.buffering.PartitionBufferGroup"></a>
 
 ### PartitionBufferGroup
 
@@ -15416,9 +15411,9 @@ Clear the buffer and reset its state.
 class PartitionBufferGroup()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L157)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L157)
 
-<a id="quixstreams.rowconsumer.buffering.PartitionBufferGroup.__init__"></a>
+<a id="quixstreams.internal_consumer.buffering.PartitionBufferGroup.__init__"></a>
 
 #### PartitionBufferGroup.\_\_init\_\_
 
@@ -15426,7 +15421,7 @@ class PartitionBufferGroup()
 def __init__(partition: int, max_size: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L158)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L158)
 
 A group of individual `PartitionBuffer`s by partition.
 
@@ -15435,7 +15430,7 @@ A group of individual `PartitionBuffer`s by partition.
 - `partition`: partition number.
 - `max_size`: the maximum size of the underlying `PartitionBuffer`s.
 
-<a id="quixstreams.rowconsumer.buffering.PartitionBufferGroup.assign_partition"></a>
+<a id="quixstreams.internal_consumer.buffering.PartitionBufferGroup.assign_partition"></a>
 
 #### PartitionBufferGroup.assign\_partition
 
@@ -15443,7 +15438,7 @@ A group of individual `PartitionBuffer`s by partition.
 def assign_partition(topic: str)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L174)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L174)
 
 Add a new partition to the buffer group.
 
@@ -15451,7 +15446,7 @@ Add a new partition to the buffer group.
 
 - `topic`: topic name.
 
-<a id="quixstreams.rowconsumer.buffering.PartitionBufferGroup.revoke_partition"></a>
+<a id="quixstreams.internal_consumer.buffering.PartitionBufferGroup.revoke_partition"></a>
 
 #### PartitionBufferGroup.revoke\_partition
 
@@ -15459,7 +15454,7 @@ Add a new partition to the buffer group.
 def revoke_partition(topic: str)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L187)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L187)
 
 Remove partition from the buffer group.
 
@@ -15467,7 +15462,7 @@ Remove partition from the buffer group.
 
 - `topic`: topic name.
 
-<a id="quixstreams.rowconsumer.buffering.PartitionBufferGroup.set_high_watermarks"></a>
+<a id="quixstreams.internal_consumer.buffering.PartitionBufferGroup.set_high_watermarks"></a>
 
 #### PartitionBufferGroup.set\_high\_watermarks
 
@@ -15475,7 +15470,7 @@ Remove partition from the buffer group.
 def set_high_watermarks(offsets: dict[str, int])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L195)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L195)
 
 Set high watermarks for assigned partitions.
 
@@ -15484,7 +15479,7 @@ Set high watermarks for assigned partitions.
 - `offsets`: a mapping of {<topic>: <offset>} with the high watermarks
 for this group.
 
-<a id="quixstreams.rowconsumer.buffering.PartitionBufferGroup.append"></a>
+<a id="quixstreams.internal_consumer.buffering.PartitionBufferGroup.append"></a>
 
 #### PartitionBufferGroup.append
 
@@ -15492,7 +15487,7 @@ for this group.
 def append(message: SuccessfulConfluentKafkaMessageProto)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L206)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L206)
 
 Add a new message to the buffer group.
 
@@ -15500,7 +15495,7 @@ Add a new message to the buffer group.
 
 - `message`: a successful Kafka message.
 
-<a id="quixstreams.rowconsumer.buffering.PartitionBufferGroup.pop"></a>
+<a id="quixstreams.internal_consumer.buffering.PartitionBufferGroup.pop"></a>
 
 #### PartitionBufferGroup.pop
 
@@ -15508,7 +15503,7 @@ Add a new message to the buffer group.
 def pop() -> Optional[SuccessfulConfluentKafkaMessageProto]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L216)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L216)
 
 Pop a message from the partition buffer with the smallest next_timestamp
 and return it.
@@ -15520,7 +15515,7 @@ How it works:
 - When there's only one partition in the group, it will pop a message
     from this partition buffer.
 
-<a id="quixstreams.rowconsumer.buffering.PartitionBufferGroup.pause_full"></a>
+<a id="quixstreams.internal_consumer.buffering.PartitionBufferGroup.pause_full"></a>
 
 #### PartitionBufferGroup.pause\_full
 
@@ -15528,13 +15523,13 @@ How it works:
 def pause_full() -> list[tuple[str, int]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L248)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L248)
 
 Pause the full `PartitionBuffer`s and return them as a list of tuples.
 
 If the group has only one topic partition, it will never be paused.
 
-<a id="quixstreams.rowconsumer.buffering.PartitionBufferGroup.resume_empty"></a>
+<a id="quixstreams.internal_consumer.buffering.PartitionBufferGroup.resume_empty"></a>
 
 #### PartitionBufferGroup.resume\_empty
 
@@ -15542,13 +15537,13 @@ If the group has only one topic partition, it will never be paused.
 def resume_empty() -> list[tuple[str, int]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L271)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L271)
 
 Resume the empty `PartitionBuffer`s and return them as a list of tuples.
 
 Only previously paused partitions are resumed.
 
-<a id="quixstreams.rowconsumer.buffering.InternalConsumerBuffer"></a>
+<a id="quixstreams.internal_consumer.buffering.InternalConsumerBuffer"></a>
 
 ### InternalConsumerBuffer
 
@@ -15556,9 +15551,9 @@ Only previously paused partitions are resumed.
 class InternalConsumerBuffer()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L294)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L294)
 
-<a id="quixstreams.rowconsumer.buffering.InternalConsumerBuffer.__init__"></a>
+<a id="quixstreams.internal_consumer.buffering.InternalConsumerBuffer.__init__"></a>
 
 #### InternalConsumerBuffer.\_\_init\_\_
 
@@ -15566,7 +15561,7 @@ class InternalConsumerBuffer()
 def __init__(max_partition_buffer_size: int = 10000)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L295)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L295)
 
 A buffer to align messages across different topics by timestamps and consume them
 
@@ -15598,7 +15593,7 @@ buffer when the buffer is considered full. It is a soft limit, and it may be exc
 in some cases. When individual buffer exceeds this limit, its TP can be paused
 to let other partitions to be consumed too.
 
-<a id="quixstreams.rowconsumer.buffering.InternalConsumerBuffer.assign_partitions"></a>
+<a id="quixstreams.internal_consumer.buffering.InternalConsumerBuffer.assign_partitions"></a>
 
 #### InternalConsumerBuffer.assign\_partitions
 
@@ -15606,7 +15601,7 @@ to let other partitions to be consumed too.
 def assign_partitions(topic_partitions: list[TopicPartition])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L327)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L327)
 
 Assign new partitions to the buffer.
 
@@ -15614,7 +15609,7 @@ Assign new partitions to the buffer.
 
 - `topic_partitions`: list of `confluent_kafka.TopicPartition`.
 
-<a id="quixstreams.rowconsumer.buffering.InternalConsumerBuffer.revoke_partitions"></a>
+<a id="quixstreams.internal_consumer.buffering.InternalConsumerBuffer.revoke_partitions"></a>
 
 #### InternalConsumerBuffer.revoke\_partitions
 
@@ -15622,7 +15617,7 @@ Assign new partitions to the buffer.
 def revoke_partitions(topic_partitions: list[TopicPartition])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L345)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L345)
 
 Drop the partitions from the buffer.
 
@@ -15630,7 +15625,7 @@ Drop the partitions from the buffer.
 
 - `topic_partitions`: list of `confluent_kafka.TopicPartition`.
 
-<a id="quixstreams.rowconsumer.buffering.InternalConsumerBuffer.feed"></a>
+<a id="quixstreams.internal_consumer.buffering.InternalConsumerBuffer.feed"></a>
 
 #### InternalConsumerBuffer.feed
 
@@ -15639,7 +15634,7 @@ def feed(messages: Iterable[SuccessfulConfluentKafkaMessageProto],
          high_watermarks: dict[tuple[str, int], int])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L356)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L356)
 
 Feed new batch of messages to the buffer.
 
@@ -15648,7 +15643,7 @@ Feed new batch of messages to the buffer.
 - `messages`: an iterable with successful `confluent_kafka.Message` objects (`.error()` is expected to be None).
 - `high_watermarks`: a dictionary with high watermarks for all assigned topic partitions.
 
-<a id="quixstreams.rowconsumer.buffering.InternalConsumerBuffer.pop"></a>
+<a id="quixstreams.internal_consumer.buffering.InternalConsumerBuffer.pop"></a>
 
 #### InternalConsumerBuffer.pop
 
@@ -15656,7 +15651,7 @@ Feed new batch of messages to the buffer.
 def pop() -> Optional[SuccessfulConfluentKafkaMessageProto]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L379)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L379)
 
 Pop the next message from the buffer in the timestamp order.
 
@@ -15664,7 +15659,7 @@ Pop the next message from the buffer in the timestamp order.
 
 `None` if all the buffers are empty or if the
 
-<a id="quixstreams.rowconsumer.buffering.InternalConsumerBuffer.pause_full"></a>
+<a id="quixstreams.internal_consumer.buffering.InternalConsumerBuffer.pause_full"></a>
 
 #### InternalConsumerBuffer.pause\_full
 
@@ -15672,11 +15667,11 @@ Pop the next message from the buffer in the timestamp order.
 def pause_full() -> list[tuple[str, int]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L392)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L392)
 
 Pause the full partition buffers and return them as a list.
 
-<a id="quixstreams.rowconsumer.buffering.InternalConsumerBuffer.resume_empty"></a>
+<a id="quixstreams.internal_consumer.buffering.InternalConsumerBuffer.resume_empty"></a>
 
 #### InternalConsumerBuffer.resume\_empty
 
@@ -15684,11 +15679,11 @@ Pause the full partition buffers and return them as a list.
 def resume_empty() -> list[tuple[str, int]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L401)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L401)
 
 Resume the empty partition buffers and return them as a list.
 
-<a id="quixstreams.rowconsumer.buffering.InternalConsumerBuffer.clear"></a>
+<a id="quixstreams.internal_consumer.buffering.InternalConsumerBuffer.clear"></a>
 
 #### InternalConsumerBuffer.clear
 
@@ -15696,11 +15691,11 @@ Resume the empty partition buffers and return them as a list.
 def clear(topic: str, partition: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L410)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L410)
 
 Clear the buffer for the given topic partition and keep it assigned.
 
-<a id="quixstreams.rowconsumer.buffering.InternalConsumerBuffer.close"></a>
+<a id="quixstreams.internal_consumer.buffering.InternalConsumerBuffer.close"></a>
 
 #### InternalConsumerBuffer.close
 
@@ -15708,7 +15703,7 @@ Clear the buffer for the given topic partition and keep it assigned.
 def close()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/rowconsumer/buffering.py#L418)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L418)
 
 Drop all partition buffers.
 

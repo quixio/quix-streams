@@ -131,8 +131,8 @@ Linked Environment Variable: `Quix__State__Dir`.
 Default - `"state"`.
 - `rocksdb_options`: RocksDB options.
 If `None`, the default options will be used.
-- `consumer_poll_timeout`: timeout for `RowConsumer.poll()`. Default - `1.0`s
-- `producer_poll_timeout`: timeout for `RowProducer.poll()`. Default - `0`s.
+- `consumer_poll_timeout`: timeout for `InternalConsumer.poll()`. Default - `1.0`s
+- `producer_poll_timeout`: timeout for `InternalProducer.poll()`. Default - `0`s.
 - `on_message_processed`: a callback triggered when message is successfully
 processed.
 - `loglevel`: a log level for "quixstreams" logger.
@@ -160,11 +160,11 @@ To handle errors, `Application` accepts callbacks triggered when
     exceptions occur on different stages of stream processing. If the callback
     returns `True`, the exception will be ignored. Otherwise, the exception
     will be propagated and the processing will eventually stop.
-- `on_consumer_error`: triggered when internal `RowConsumer` fails
+- `on_consumer_error`: triggered when internal `InternalConsumer` fails
 to poll Kafka or cannot deserialize a message.
 - `on_processing_error`: triggered when exception is raised within
 `StreamingDataFrame.process()`.
-- `on_producer_error`: triggered when `RowProducer` fails to serialize
+- `on_producer_error`: triggered when `InternalProducer` fails to serialize
 or to produce a message to Kafka.
 <br><br>***Quix Cloud Parameters***<br>
 - `quix_config_builder`: instance of `QuixKafkaConfigsBuilder` to be used

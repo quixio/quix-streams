@@ -10,7 +10,7 @@
 class Producer()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L45)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L65)
 
 <a id="quixstreams.kafka.producer.Producer.__init__"></a>
 
@@ -23,10 +23,11 @@ def __init__(broker_address: Union[str, ConnectionConfig],
              logger: logging.Logger = logger,
              error_callback: Callable[[KafkaError], None] = _default_error_cb,
              extra_config: Optional[dict] = None,
-             flush_timeout: Optional[float] = None)
+             flush_timeout: Optional[float] = None,
+             transactional: bool = False)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L46)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L66)
 
 A wrapper around `confluent_kafka.Producer`.
 
@@ -66,7 +67,7 @@ def produce(topic: str,
             on_delivery: Optional[DeliveryCallback] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L84)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L117)
 
 Produce a message to a topic.
 
@@ -101,7 +102,7 @@ for the produced message.
 def poll(timeout: float = 0)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L145)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L178)
 
 Polls the producer for events and calls `on_delivery` callbacks.
 
@@ -122,7 +123,7 @@ Polls the producer for events and calls `on_delivery` callbacks.
 def flush(timeout: Optional[float] = None) -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L153)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L213)
 
 Wait for all messages in the Producer queue to be delivered.
 
@@ -138,19 +139,6 @@ None use producer default or -1 is infinite. Default: None
 ***Returns:***
 
 number of messages remaining to flush
-
-<a id="quixstreams.kafka.producer.TransactionalProducer"></a>
-
-### TransactionalProducer
-
-```python
-class TransactionalProducer(Producer)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L184)
-
-A separate producer class used only internally for transactions
-(transactions are only needed when using a consumer).
 
 <a id="quixstreams.kafka.consumer"></a>
 
