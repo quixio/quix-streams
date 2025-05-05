@@ -513,12 +513,14 @@ class TestApplication:
         assert app.config.state_dir == Path("/path/to/other")
 
 
+@pytest.mark.parametrize("number_of_partitions", [1, 2])
 class TestAppGroupBy:
     def test_group_by(
         self,
         app_factory,
         internal_consumer_factory,
         executor,
+        number_of_partitions,
     ):
         """
         Test that StreamingDataFrame processes 6 messages from Kafka and groups them
@@ -540,8 +542,12 @@ class TestAppGroupBy:
         timestamp_ms = int(time.time() * 1000)
         user_id = "abc123"
         value_in = {"user": user_id}
-        expected_message_count = 1
-        total_messages = expected_message_count * 2  # groupby reproduces each message
+
+        if number_of_partitions == 1:
+            total_messages = 1  # groupby optimisation for 1 partition
+        else:
+            total_messages = 2  # groupby reproduces each message
+
         app = app_factory(
             auto_offset_reset="earliest",
             on_message_processed=on_message_processed,
@@ -551,6 +557,9 @@ class TestAppGroupBy:
             str(uuid.uuid4()),
             value_deserializer="json",
             value_serializer="json",
+            config=TopicConfig(
+                num_partitions=number_of_partitions, replication_factor=1
+            ),
         )
         app_topic_out = app.topic(
             str(uuid.uuid4()),
@@ -607,6 +616,7 @@ class TestAppGroupBy:
         internal_consumer_factory,
         executor,
         processing_guarantee,
+        number_of_partitions,
     ):
         """
         Test that StreamingDataFrame processes 6 messages from Kafka and groups them
@@ -631,8 +641,12 @@ class TestAppGroupBy:
         timestamp_ms = timestamp_ms - (timestamp_ms % window_duration_ms)
         user_id = "abc123"
         value_in = {"user": user_id}
-        expected_message_count = 1
-        total_messages = expected_message_count * 2  # groupby reproduces each message
+
+        if number_of_partitions == 1:
+            total_messages = 1  # groupby optimisation for 1 partition
+        else:
+            total_messages = 2  # groupby reproduces each message
+
         app = app_factory(
             auto_offset_reset="earliest",
             on_message_processed=on_message_processed,
@@ -643,6 +657,9 @@ class TestAppGroupBy:
             str(uuid.uuid4()),
             value_deserializer="json",
             value_serializer="json",
+            config=TopicConfig(
+                num_partitions=number_of_partitions, replication_factor=1
+            ),
         )
         app_topic_out = app.topic(
             str(uuid.uuid4()),
@@ -2380,11 +2397,9 @@ class TestApplicationMultipleSdf:
             assert row.timestamp == timestamp_ms
             assert row.headers == headers
 
+    @pytest.mark.parametrize("number_of_partitions", [1, 2])
     def test_group_by(
-        self,
-        app_factory,
-        internal_consumer_factory,
-        executor,
+        self, app_factory, internal_consumer_factory, executor, number_of_partitions
     ):
         """
         Test that StreamingDataFrame processes 6 messages from Kafka and groups them
@@ -2411,11 +2426,17 @@ class TestApplicationMultipleSdf:
             str(uuid.uuid4()),
             value_deserializer="json",
             value_serializer="json",
+            config=TopicConfig(
+                num_partitions=number_of_partitions, replication_factor=1
+            ),
         )
         input_topic_b = app.topic(
             str(uuid.uuid4()),
             value_deserializer="json",
             value_serializer="json",
+            config=TopicConfig(
+                num_partitions=number_of_partitions, replication_factor=1
+            ),
         )
         input_topics = [input_topic_a, input_topic_b]
         output_topic_user = app.topic(
@@ -2433,8 +2454,14 @@ class TestApplicationMultipleSdf:
         user_id = "abc123"
         account_id = "def456"
         value_in = {"user": user_id, "account": account_id}
-        # expected_processed = 1 (input msg per SDF) * 3 (2 groupbys, each reprocesses input) * 2 SDFs
-        expected_processed = 6
+
+        if number_of_partitions == 1:
+            # expected_processed = 1 (input msg per SDF) * 1 (2 optimized groupbys that don't reprocesses input) * 2 SDFs
+            expected_processed = 2
+        else:
+            # expected_processed = 1 (input msg per SDF) * 3 (2 groupbys, each reprocesses input) * 2 SDFs
+            expected_processed = 6
+
         expected_output_topic_count = 2
 
         sdf_a = app.dataframe(topic=input_topic_a)
