@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextvars
 import functools
+import itertools
 import operator
 import pprint
 import typing
@@ -1644,7 +1645,13 @@ class StreamingDataFrame:
         """
 
         merged_stream = self.stream.merge(other.stream)
-        self._registry.require_time_alignment()
+
+        # Enable partition time alignment only when concatenated StreamingDataFrames
+        # have different topics (they could be just branches)
+        total_topics = {t.name for t in itertools.chain(self.topics, other.topics)}
+        if len(total_topics) > 1:
+            self._registry.require_time_alignment()
+
         return self.__dataframe_clone__(
             *self.topics, *other.topics, stream=merged_stream
         )
