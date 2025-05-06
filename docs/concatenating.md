@@ -9,13 +9,13 @@ Use it when you need:
 
 ## Examples
 
-**Example 1:**  Aggregate e-commerce orders from different locations into one stream and calculate the number of orders made in 1h windows.
+**Example 1:**  Aggregate e-commerce orders from different locations into one stream and calculate the average order size in 1h windows.
 
 ```python
 from datetime import timedelta
 
 from quixstreams import Application
-from quixstreams.dataframe.windows import Count
+from quixstreams.dataframe.windows import Mean
 
 app = Application(...)
 
@@ -27,16 +27,17 @@ topic_de = app.topic("orders-de")
 orders_uk = app.dataframe(topic_uk)
 orders_de = app.dataframe(topic_de)
 
-# You can also process each topic independently here:
-orders_uk = orders_uk[orders_uk["status"] != "FAILED"]
-orders_de = orders_de[orders_de["status"] != "FAILED"]
+# Simulate the currency conversion step for each topic before concatenating them.
+orders_uk["amount_usd"] = orders_uk["amount"].apply(convert_currency("GBP", "USD"))
+
+orders_de["amount_usd"] = orders_de["amount"].apply(convert_currency("EUR", "USD"))
 
 # Concatenate the orders from different locations into a new StreamingDataFrame.
 # The new dataframe will have all records from both topics.
 orders_combined = orders_uk.concat(orders_de)
 
-# Calculate the average number of orders in 1h tumbling window. 
-orders_combined.tumbling_window(timedelta(hours=1)).agg(count=Count())
+# Calculate the average order size in USD within 1h tumbling window. 
+orders_combined.tumbling_window(timedelta(hours=1)).agg(avg_amount_usd=Mean("amount_usd"))
 
 
 if __name__ == '__main__':
@@ -44,7 +45,8 @@ if __name__ == '__main__':
 ```
 
 
-**Example 2:** Combine branches of the same `StreamingDataFrame` back together
+**Example 2:** Combine branches of the same `StreamingDataFrame` back together.  
+See the [Branching](branching.md) page for more details about branching.
 
 ```python
 from quixstreams import Application

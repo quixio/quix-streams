@@ -410,9 +410,11 @@ to non-branching), it may be tricky to identify valid versus invalid usage.
  
     - validate results manually if in question
 
-## Merging Branches
+## Combining Branches Back
 
-Merging allows you to combine or consolidate branches back into a single processing path.
+After branching, you may need to combine them back together, for example, to send the processed data to a single output topic. 
+
+On the diagram, your processing topology may look like this:
 
 ```
         C ──> D ──> E
@@ -422,7 +424,7 @@ A ──> B               P ──> Q
         K ──> L --->
 ```
 
-To merge branches back together, use `StreamingDataFrame.concat()`:
+You can do that using `StreamingDataFrame.concat()`:
 
 ```python
 from quixstreams import Application
@@ -435,14 +437,14 @@ output_topic = app.topic("output")
 # Create a dataframe with all orders
 all_orders = app.dataframe(input_topic)
 
-# Create a branches with DE and UK orders:
+# Create a branches with DE and UK orders
 orders_de = all_orders[all_orders["country"] == "DE"]
 orders_uk = all_orders[all_orders["country"] == "UK"]
 
 # Do some conditional processing for DE and UK orders here
 # ...
 
-# Merge the branches back with .concat()
+# Combine the branches back with .concat()
 all_orders = orders_de.concat(orders_uk)
 
 # Send data to the output topic
@@ -454,8 +456,8 @@ if __name__ == '__main__':
  ```
 
 
-### Avoiding duplicates after merging branches
-When concatenating branches of the same original StreamingDataFrame, same records may be processed twice if the branches are not exclusive:
+### Avoiding duplicates after concatenating branches
+When concatenating branches of the same original StreamingDataFrame, the same records may be processed twice if the branches are not exclusive:
 
 ```python
 from quixstreams import Application
