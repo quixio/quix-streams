@@ -39,13 +39,14 @@ nav:
     - Produce Data to Kafka: producer.md
     - Process & Transform Data: processing.md
     - Inspecting Data & Debugging: debugging.md
-    - Missing Data: missing-data.md
+    - Handling Missing Data: missing-data.md
     - GroupBy Operation: groupby.md
-    - Windows: windowing.md
+    - Windowing: windowing.md
     - Aggregations: aggregations.md
+    - Merging Topics: merging.md
+    - Branching StreamingDataFrames: branching.md
     - Configuration: configuration.md
-    - StreamingDataFrame Branching: branching.md
-    - Consuming Multiple Topics: consuming-multiple-topics.md
+
   - Advanced Usage:
     - Checkpointing: advanced/checkpointing.md
     - Serialization Formats: advanced/serialization.md
