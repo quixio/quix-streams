@@ -97,6 +97,5 @@ With timestamp alignment, the order is achievable given that the messages are al
 To perform stateful operations like windowed aggregations on the concatenated StreamingDataFrame, the underlying topics **must have the same number of partitions**.  
 The application will raise the error when this condition is not met.
 
-
 In addition, **the message keys must be distributed using the same partitioning algorithm.**  
 Otherwise, same keys may access different state stores leading to incorrect results.
