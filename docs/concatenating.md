@@ -29,7 +29,6 @@ orders_de = app.dataframe(topic_de)
 
 # Simulate the currency conversion step for each topic before concatenating them.
 orders_uk["amount_usd"] = orders_uk["amount"].apply(convert_currency("GBP", "USD"))
-
 orders_de["amount_usd"] = orders_de["amount"].apply(convert_currency("EUR", "USD"))
 
 # Concatenate the orders from different locations into a new StreamingDataFrame.
