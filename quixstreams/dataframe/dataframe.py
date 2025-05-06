@@ -1666,17 +1666,12 @@ class StreamingDataFrame:
                 f"Invalid how value: {how}. "
                 f"Valid values are: {', '.join(get_args(JoinHow))}."
             )
+
         if on_overlap not in get_args(JoinOnOverlap):
             raise ValueError(
                 f"Invalid on_overlap value: {on_overlap}. "
                 f"Valid values are: {', '.join(get_args(JoinOnOverlap))}."
             )
-
-        self.ensure_topics_copartitioned(*self.topics, *right.topics)
-        right.register_store(store_type=TimestampedStore)
-
-        is_inner_join = how == "inner"
-        retention_ms = ensure_milliseconds(retention_ms)
 
         if merger is None:
             if on_overlap == "keep-left":
@@ -1710,20 +1705,26 @@ class StreamingDataFrame:
                         )
                     return {**left_value, **right_value}
 
+        self.ensure_topics_copartitioned(*self.topics, *right.topics)
+        right.register_store(store_type=TimestampedStore)
+        is_inner_join = how == "inner"
+        retention_ms = ensure_milliseconds(retention_ms)
+
         def left_func(value, key, timestamp, headers):
             right_tx = _get_transaction(right)
-            right_value = right_tx.get_last(
-                timestamp=timestamp,
-                prefix=key,
-                retention_ms=retention_ms,
-            )
+            right_value = right_tx.get_last(timestamp=timestamp, prefix=key)
             if is_inner_join and not right_value:
                 return DISCARDED
             return merger(value, right_value)
 
         def right_func(value, key, timestamp, headers):
             right_tx = _get_transaction(right)
-            right_tx.set(timestamp=timestamp, value=value, prefix=key)
+            right_tx.set_for_timestamp(
+                timestamp=timestamp,
+                value=value,
+                prefix=key,
+                retention_ms=retention_ms,
+            )
 
         left = self.apply(left_func, metadata=True).filter(
             lambda value: value is not DISCARDED

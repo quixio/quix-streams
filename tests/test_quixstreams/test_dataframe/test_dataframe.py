@@ -4,6 +4,7 @@ import uuid
 import warnings
 from collections import namedtuple
 from datetime import timedelta
+from functools import partial
 from typing import Any, get_args
 from unittest import mock
 
@@ -2873,47 +2874,33 @@ class TestStreamingDataFrameJoin:
         joined_value = publish(joined_sdf, left_topic, value=2, key=b"key", timestamp=2)
         assert joined_value == [({"left": 2, "right": 1}, b"key", 2, None)]
 
-    @pytest.mark.parametrize(
-        "retention_ms, right_timestamp, left_timestamp, joined",
-        [
-            # Retention strategy includes right values greater or equal to 5 - 3 = 2
-            (3, 2, 5, True),
-            (timedelta(milliseconds=3), 2, 5, True),
-            # Retention strategy ignores right values lower than 6 - 3 = 3
-            (3, 2, 6, False),
-            (timedelta(milliseconds=3), 2, 6, False),
-        ],
-    )
     def test_retention_ms(
         self,
         create_topic,
         create_sdf,
         assign_partition,
         publish,
-        retention_ms,
-        right_timestamp,
-        left_timestamp,
-        joined,
     ):
         left_topic, right_topic = create_topic(), create_topic()
         left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
 
-        joined_sdf = left_sdf.join(right_sdf, retention_ms=retention_ms)
+        joined_sdf = left_sdf.join(right_sdf, retention_ms=10)
         assign_partition(right_sdf)
 
-        publish(
-            joined_sdf,
-            right_topic,
-            value={"right": 1},
-            key=b"key",
-            timestamp=right_timestamp,
-        )
-        joined_value = publish(
+        # min eligible timestamp is 15 - 10 = 5
+        publish(joined_sdf, right_topic, value={"right": 1}, key=b"key", timestamp=15)
+
+        # min eligible timestamp is still 5
+        publish(joined_sdf, right_topic, value={"right": 3}, key=b"key", timestamp=4)
+        publish(joined_sdf, right_topic, value={"right": 2}, key=b"key", timestamp=5)
+
+        publish_left = partial(
+            publish,
             joined_sdf,
             left_topic,
-            value={"left": 2},
+            value={"left": 4},
             key=b"key",
-            timestamp=left_timestamp,
         )
 
-        assert bool(joined_value) == joined
+        assert publish_left(timestamp=4) == []
+        assert publish_left(timestamp=5) == [({"left": 4, "right": 2}, b"key", 5, None)]
