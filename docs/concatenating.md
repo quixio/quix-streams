@@ -1,11 +1,11 @@
-# `StreamingDataFrame.concat()`: combining multiple topics into a stream 
+# `StreamingDataFrame.concat()`: concatenating multiple topics into a stream 
 
 Use `StreamingDataFrame.concat()` to combine two or more topics into a new stream containing all the elements from all the topics.
 
 Use it when you need:
 
 - To process multiple topics as a single stream.
-- To merge the branches of the same StreamingDataFrame back together.
+- To combine the branches of the same StreamingDataFrame back together.
 
 ## Examples
 
@@ -45,6 +45,7 @@ if __name__ == '__main__':
 
 
 **Example 2:** Combine branches of the same `StreamingDataFrame` back together
+
 ```python
 from quixstreams import Application
 app = Application(...)
@@ -62,7 +63,7 @@ orders_uk = all_orders[all_orders["country"] == "UK"]
 # Do some conditional processing for DE and UK orders here
 # ...
 
-# Merge the branches back with .concat()
+# Combine the branches back with .concat()
 all_orders = orders_de.concat(orders_uk)
 
 # Send data to the output topic

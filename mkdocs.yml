@@ -43,7 +43,7 @@ nav:
     - GroupBy Operation: groupby.md
     - Windowing: windowing.md
     - Aggregations: aggregations.md
-    - Merging Topics: merging.md
+    - Concatenating Topics: concatenating.md
     - Branching StreamingDataFrames: branching.md
     - Configuration: configuration.md
 
