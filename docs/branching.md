@@ -410,6 +410,91 @@ to non-branching), it may be tricky to identify valid versus invalid usage.
  
     - validate results manually if in question
 
+## Combining Branches Back
+
+After branching, you may need to combine them back together, for example, to send the processed data to a single output topic. 
+
+On the diagram, your processing topology may look like this:
+
+```
+        C ──> D ──> E
+       /             \
+A ──> B               P ──> Q
+       \             /
+        K ──> L --->
+```
+
+You can do that using `StreamingDataFrame.concat()`:
+
+```python
+from quixstreams import Application
+app = Application(...)
+
+# Simulate a processing of some e-commerce orders.
+input_topic = app.topic("orders")
+output_topic = app.topic("output")
+
+# Create a dataframe with all orders
+all_orders = app.dataframe(input_topic)
+
+# Create a branches with DE and UK orders
+orders_de = all_orders[all_orders["country"] == "DE"]
+orders_uk = all_orders[all_orders["country"] == "UK"]
+
+# Do some conditional processing for DE and UK orders here
+# ...
+
+# Combine the branches back with .concat()
+all_orders = orders_de.concat(orders_uk)
+
+# Send data to the output topic
+all_orders.to_topic(output_topic)
+
+
+if __name__ == '__main__':
+    app.run()
+ ```
+
+
+### Avoiding duplicates after concatenating branches
+When concatenating branches of the same original StreamingDataFrame, the same records may be processed twice if the branches are not exclusive:
+
+```python
+from quixstreams import Application
+
+app = Application(...)
+
+# Example: process e-commerce orders, print if the one is above the threshold, 
+#   and send them to the output topic.
+
+input_topic = app.topic("orders")
+output_topic = app.topic("output")
+
+all_orders = app.dataframe(input_topic)
+
+# Branching the original dataframe here to print the big orders 
+big_orders = all_orders[all_orders["total"] >= 1000] 
+big_orders.print()
+
+# This code will lead to the duplicated outputs because "all_orders" and "big_orders"
+# are now concatenated:
+all_orders = all_orders.concat(big_orders)
+```
+
+These code changes will make the branches exclusive, avoiding duplicated outputs:
+
+```python
+
+# To avoid duplicates after .concat(), make the branches exclusive.
+# "big_orders" will process only values with total >= 1000
+big_orders = all_orders[all_orders["total"] >= 1000]
+
+# "other_orders" will process the rest of the data stream, excluding the big orders
+other_orders = all_orders[all_orders["total"] < 1000]
+
+# Recombine branches back into "all_orders"
+all_orders = other_orders.concat(big_orders)
+```
 
 ## Performance
 
@@ -514,19 +599,3 @@ purchases[
 
 app.run()
 ```
-
-## Upcoming Features
-
-### Merging
-
-Merging allows you to combine or consolidate branches back into a single processing path.
-
-```
-        C ──> D ──> E
-       /             \
-A ──> B               P ──> Q
-       \             /
-        K ──> L --->
-```
-
-This feature is on the roadmap.
