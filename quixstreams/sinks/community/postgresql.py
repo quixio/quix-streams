@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Mapping, Optional
+from typing import Any, Callable, Mapping, Optional, Union
 
 try:
     import psycopg2
@@ -21,6 +21,7 @@ from quixstreams.sinks import (
     ClientConnectSuccessCallback,
     SinkBatch,
 )
+from quixstreams.sinks.base.item import SinkItem
 
 __all__ = ("PostgreSQLSink", "PostgreSQLSinkException")
 
@@ -58,7 +59,7 @@ class PostgreSQLSink(BatchingSink):
         dbname: str,
         user: str,
         password: str,
-        table_name: str,
+        table_name: Union[Callable[[SinkItem], str], str],
         schema_auto_update: bool = True,
         connection_timeout_seconds: int = 30,
         statement_timeout_seconds: int = 30,
@@ -72,9 +73,10 @@ class PostgreSQLSink(BatchingSink):
         :param host: PostgreSQL server address.
         :param port: PostgreSQL server port.
         :param dbname: PostgreSQL database name.
-        :param user: Database user name.
+        :param user: Database username.
         :param password: Database user password.
-        :param table_name: PostgreSQL table name.
+        :param table_name: PostgreSQL table name as either a string or a callable which
+            receives a SinkItem and returns a string.
         :param schema_auto_update: Automatically update the schema when new columns are detected.
         :param connection_timeout_seconds: Timeout for connection.
         :param statement_timeout_seconds: Timeout for DDL operations such as table
@@ -91,9 +93,9 @@ class PostgreSQLSink(BatchingSink):
             on_client_connect_success=on_client_connect_success,
             on_client_connect_failure=on_client_connect_failure,
         )
-
-        self.table_name = table_name
-        self.schema_auto_update = schema_auto_update
+        self._table_name = _table_name_setter(table_name)
+        self._tables = set()
+        self._schema_auto_update = schema_auto_update
         options = kwargs.pop("options", "")
         if "statement_timeout" not in options:
             options = f"{options} -c statement_timeout={statement_timeout_seconds}s"
@@ -112,37 +114,38 @@ class PostgreSQLSink(BatchingSink):
     def setup(self):
         self._client = psycopg2.connect(**self._client_settings)
 
-        # Initialize table if schema_auto_update is enabled
-        if self.schema_auto_update:
-            self._init_table()
-
     def write(self, batch: SinkBatch):
-        rows = []
-        cols_types = {}
-
+        tables = {}
         for item in batch:
+            table = tables.setdefault(
+                self._table_name(item), {"rows": [], "cols_types": {}}
+            )
             row = {}
             if item.key is not None:
                 key_type = type(item.key)
-                cols_types.setdefault(_KEY_COLUMN_NAME, key_type)
+                table["cols_types"].setdefault(_KEY_COLUMN_NAME, key_type)
                 row[_KEY_COLUMN_NAME] = item.key
 
             for key, value in item.value.items():
                 if value is not None:
-                    cols_types.setdefault(key, type(value))
+                    table["cols_types"].setdefault(key, type(value))
                     row[key] = value
 
             row[_TIMESTAMP_COLUMN_NAME] = datetime.fromtimestamp(item.timestamp / 1000)
-            rows.append(row)
+            table["rows"].append(row)
 
         try:
             with self._client:
-                if self.schema_auto_update:
-                    self._add_new_columns(cols_types)
-                self._insert_rows(rows)
+                for name, values in tables.items():
+                    if self._schema_auto_update:
+                        self._init_table(name)
+                        self._add_new_columns(name, values["cols_types"])
+                    self._insert_rows(name, values["rows"])
         except psycopg2.Error as e:
             self._client.rollback()
             raise PostgreSQLSinkException(f"Failed to write batch: {str(e)}") from e
+        table_counts = {table: len(values["rows"]) for table, values in tables.items()}
+        logger.info(f"Successfully wrote records to tables; row counts: {table_counts}")
 
     def add(
         self,
@@ -169,7 +172,9 @@ class PostgreSQLSink(BatchingSink):
             offset=offset,
         )
 
-    def _init_table(self):
+    def _init_table(self, table_name: str):
+        if table_name in self._tables:
+            return
         query = sql.SQL(
             """
             CREATE TABLE IF NOT EXISTS {table} (
@@ -178,7 +183,7 @@ class PostgreSQLSink(BatchingSink):
             )
             """
         ).format(
-            table=sql.Identifier(self.table_name),
+            table=sql.Identifier(table_name),
             timestamp_col=sql.Identifier(_TIMESTAMP_COLUMN_NAME),
             key_col=sql.Identifier(_KEY_COLUMN_NAME),
         )
@@ -186,7 +191,7 @@ class PostgreSQLSink(BatchingSink):
         with self._client.cursor() as cursor:
             cursor.execute(query)
 
-    def _add_new_columns(self, columns: dict[str, type]) -> None:
+    def _add_new_columns(self, table_name: str, columns: dict[str, type]) -> None:
         for col_name, py_type in columns.items():
             postgres_col_type = _POSTGRES_TYPES_MAP.get(py_type)
             if postgres_col_type is None:
@@ -200,7 +205,7 @@ class PostgreSQLSink(BatchingSink):
                 ADD COLUMN IF NOT EXISTS {column} {col_type}
                 """
             ).format(
-                table=sql.Identifier(self.table_name),
+                table=sql.Identifier(table_name),
                 column=sql.Identifier(col_name),
                 col_type=sql.SQL(postgres_col_type),
             )
@@ -208,7 +213,7 @@ class PostgreSQLSink(BatchingSink):
             with self._client.cursor() as cursor:
                 cursor.execute(query)
 
-    def _insert_rows(self, rows: list[dict]) -> None:
+    def _insert_rows(self, table_name: str, rows: list[dict]) -> None:
         if not rows:
             return
 
@@ -218,9 +223,17 @@ class PostgreSQLSink(BatchingSink):
         values = [[row.get(col, None) for col in columns] for row in rows]
 
         query = sql.SQL("INSERT INTO {table} ({columns}) VALUES %s").format(
-            table=sql.Identifier(self.table_name),
+            table=sql.Identifier(table_name),
             columns=sql.SQL(", ").join(map(sql.Identifier, columns)),
         )
 
         with self._client.cursor() as cursor:
             execute_values(cursor, query, values)
+
+
+def _table_name_setter(
+    table_name: Union[Callable[[SinkItem], str], str],
+) -> Callable[[SinkItem], str]:
+    if isinstance(table_name, str):
+        return lambda sink_item: table_name
+    return table_name

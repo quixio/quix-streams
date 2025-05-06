@@ -82,3 +82,33 @@ PostgreSQLSink accepts the following configuration parameters:
 - `password`: The database user password.
 - `table_name`: The name of the PostgreSQL table where data will be written.
 - `schema_auto_update`: If True, the sink will automatically update the schema by adding new columns when new fields are detected. Default: True.
+
+
+## Testing Locally
+
+Rather than connect to a hosted InfluxDB3 instance, you can alternatively test your 
+application using a local instance of Influxdb3 using Docker:
+
+1. Execute in terminal:
+
+    ```bash
+    docker run --rm -d --name postgres \
+    -e POSTGRES_PASSWORD=local \
+    -e POSTGRES_USER=local \
+    -e POSTGRES_DB=local \
+    -p 5432:5432 \
+    postgres
+    ```
+
+2. Use the following settings for `PostgreSQLSink` to connect:
+
+    ```python
+    PostgreSQLSink(
+        host="localhost",
+        port=5432,
+        user="local",
+        password="local",
+        dbname="local",
+        table_name="<YOUR TABLE NAME>",
+    )
+    ```
