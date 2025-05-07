@@ -152,18 +152,17 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         )
         self._set_min_eligible_timestamp(prefix, min_eligible_timestamp)
 
-    def _flush(self, changelog_offset: Optional[int]) -> None:
+    @validate_transaction_status(PartitionTransactionStatus.STARTED)
+    def prepare(self, processed_offsets: Optional[dict[str, int]] = None) -> None:
         """
-        Flushes the transaction.
-
         This method first calls `_expire()` to remove outdated entries based on
         their timestamps and retention periods, then calls the parent class's
-        `_flush()` method to persist changes.
+        `prepare()` to prepare the transaction for flush.
 
-        :param changelog_offset: Optional offset for the changelog.
+        :param processed_offsets: the dict with <topic: offset> of the latest processed message
         """
         self._expire()
-        super()._flush(changelog_offset=changelog_offset)
+        super().prepare(processed_offsets=processed_offsets)
 
     def _expire(self) -> None:
         """
