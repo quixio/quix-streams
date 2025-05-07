@@ -1644,3 +1644,93 @@ def run()
 
 Produces data from the DataFrame row by row.
 
+<a id="quixstreams.sources.community.influxdb3.influxdb3"></a>
+
+## quixstreams.sources.community.influxdb3.influxdb3
+
+<a id="quixstreams.sources.community.influxdb3.influxdb3.InfluxDB3Source"></a>
+
+### InfluxDB3Source
+
+```python
+class InfluxDB3Source(Source)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/influxdb3/influxdb3.py#L79)
+
+InfluxDB3Source extracts data from a specified set of measurements in a
+  database (or all available ones if none are specified).
+
+It processes measurements sequentially by gathering/producing a tumbling
+  "time_delta"-sized window of data, starting from 'start_date' and eventually
+  stopping at 'end_date', completing that measurement.
+
+It then starts the next measurement, continuing until all are complete.
+
+If no 'end_date' is provided, it will run indefinitely for a single
+  measurement (which means no other measurements will be processed!).
+
+<a id="quixstreams.sources.community.influxdb3.influxdb3.InfluxDB3Source.__init__"></a>
+
+<br><br>
+
+#### InfluxDB3Source.\_\_init\_\_
+
+```python
+def __init__(
+    host: str,
+    token: str,
+    organization_id: str,
+    database: str,
+    key_setter: Optional[Callable[[object], object]] = None,
+    timestamp_setter: Optional[Callable[[object], int]] = None,
+    start_date: datetime = datetime.now(tz=timezone.utc),
+    end_date: Optional[datetime] = None,
+    measurements: Optional[Union[str, list[str]]] = None,
+    measurement_column_name: str = "_measurement_name",
+    sql_query: Optional[str] = None,
+    time_delta: str = "5m",
+    delay: float = 0,
+    max_retries: int = 5,
+    name: Optional[str] = None,
+    shutdown_timeout: float = 10,
+    on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
+    on_client_connect_failure: Optional[ClientConnectFailureCallback] = None
+) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/influxdb3/influxdb3.py#L94)
+
+
+<br>
+***Arguments:***
+
+- `host`: Host URL of the InfluxDB instance.
+- `token`: Authentication token for InfluxDB.
+- `organization_id`: Organization name in InfluxDB.
+- `database`: Database name in InfluxDB.
+- `key_setter`: sets the kafka message key for a measurement record.
+By default, will set the key to the measurement's name.
+- `timestamp_setter`: sets the kafka message timestamp for a measurement record.
+By default, the timestamp will be the Kafka default (Kafka produce time).
+- `start_date`: The start datetime for querying InfluxDB. Uses current time by default.
+- `end_date`: The end datetime for querying InfluxDB.
+If none provided, runs indefinitely for a single measurement.
+- `measurements`: The measurements to query. If None, all measurements will be processed.
+- `measurement_column_name`: The column name used for appending the measurement name to the record.
+- `sql_query`: Custom SQL query for retrieving data.
+Query expects a `{start_time}`, `{end_time}`, and `{measurement_name}` for later formatting.
+If provided, it overrides the default window-query logic.
+- `time_delta`: Time interval for batching queries, e.g., "5m" for 5 minutes.
+- `delay`: An optional delay between producing batches.
+- `name`: A unique name for the Source, used as part of the topic name.
+- `shutdown_timeout`: Time in seconds to wait for graceful shutdown.
+- `max_retries`: Maximum number of retries for querying or producing.
+Note that consecutive retries have a multiplicative backoff.
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
+
