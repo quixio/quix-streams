@@ -148,3 +148,33 @@ def test_set_for_timestamp_with_retention_stored(
     with transaction() as tx:
         assert tx.get_last(timestamp=2, prefix=b"key") == None
         assert tx.get_last(timestamp=5, prefix=b"key") == "v5"
+
+
+def test_expire_multiple_keys(transaction: TimestampedPartitionTransaction):
+    with transaction() as tx:
+        tx.set_for_timestamp(timestamp=1, value="11", prefix=b"key1", retention_ms=10)
+        tx.set_for_timestamp(timestamp=1, value="21", prefix=b"key2", retention_ms=10)
+        tx.set_for_timestamp(timestamp=12, value="112", prefix=b"key1", retention_ms=10)
+        tx.set_for_timestamp(timestamp=12, value="212", prefix=b"key2", retention_ms=10)
+
+    with transaction() as tx:
+        assert tx.get(key=1, prefix=b"key1") is None
+        assert tx.get(key=1, prefix=b"key2") is None
+        assert tx.get(key=12, prefix=b"key1") == "112"
+        assert tx.get(key=12, prefix=b"key2") == "212"
+
+        # Expiration advances only on `set_for_timestamp` calls
+        assert tx.get_last(timestamp=30, prefix=b"key1") == "112"
+        assert tx.get_last(timestamp=30, prefix=b"key2") == "212"
+
+
+def test_set_for_timestamp_overwrites_value_with_same_timestamp(
+    transaction: TimestampedPartitionTransaction,
+):
+    with transaction() as tx:
+        tx.set_for_timestamp(timestamp=1, value="11", prefix=b"key")
+        tx.set_for_timestamp(timestamp=1, value="21", prefix=b"key")
+        assert tx.get_last(timestamp=1, prefix=b"key") == "21"
+
+    with transaction() as tx:
+        assert tx.get_last(timestamp=1, prefix=b"key") == "21"
