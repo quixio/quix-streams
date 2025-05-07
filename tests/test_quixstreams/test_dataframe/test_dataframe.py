@@ -2558,7 +2558,8 @@ class TestStreamingDataFrameConcat:
         topic_manager = topic_manager_factory()
         topic = topic_manager.topic(str(uuid.uuid4()))
 
-        sdf = dataframe_factory(topic)
+        registry = DataFrameRegistry()
+        sdf = dataframe_factory(topic, registry=registry)
         sdf_branch1 = sdf.apply(lambda v: v + 1)
         sdf_branch2 = sdf.apply(lambda v: v + 2)
 
@@ -2570,6 +2571,8 @@ class TestStreamingDataFrameConcat:
             (2, b"key1", 1, None),
             (3, b"key1", 1, None),
         ]
+        # Timestamp alignment is not required the concated SDFs are branches
+        assert not registry.requires_time_alignment
 
     def test_concat_stateful_success(
         self,
