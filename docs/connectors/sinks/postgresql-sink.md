@@ -75,12 +75,22 @@ PostgreSQLSink provides at-least-once guarantees, meaning that the same records 
 
 PostgreSQLSink accepts the following configuration parameters:
 
+## Required
+
 - `host`: The address of the PostgreSQL server.
 - `port`: The port of the PostgreSQL server.
 - `dbname`: The name of the PostgreSQL database.
 - `user`: The database user name.
 - `password`: The database user password.
-- `table_name`: The name of the PostgreSQL table where data will be written.
+- `table_name`: PostgreSQL table name as either a string or a callable which receives 
+  a `SinkItem` (from quixstreams.sinks.base.item) and returns a string.
+
+
+### Optional
+
+- `schema_name`: The schema name. Schemas are a way of organizing tables and 
+  not related to the table data, referenced as `<schema_name>.<table_name>`.  
+  PostrgeSQL uses "public" by default under the hood.
 - `schema_auto_update`: If True, the sink will automatically update the schema by adding new columns when new fields are detected. Default: True.
 
 

@@ -60,6 +60,7 @@ class PostgreSQLSink(BatchingSink):
         user: str,
         password: str,
         table_name: Union[Callable[[SinkItem], str], str],
+        schema_name: str = "public",
         schema_auto_update: bool = True,
         connection_timeout_seconds: int = 30,
         statement_timeout_seconds: int = 30,
@@ -77,6 +78,9 @@ class PostgreSQLSink(BatchingSink):
         :param password: Database user password.
         :param table_name: PostgreSQL table name as either a string or a callable which
             receives a SinkItem and returns a string.
+        :param schema_name: The schema name. Schemas are a way of organizing tables and
+            not related to the table data, referenced as `<schema_name>.<table_name>`.
+            PostrgeSQL uses "public" by default under the hood.
         :param schema_auto_update: Automatically update the schema when new columns are detected.
         :param connection_timeout_seconds: Timeout for connection.
         :param statement_timeout_seconds: Timeout for DDL operations such as table
@@ -95,6 +99,7 @@ class PostgreSQLSink(BatchingSink):
         )
         self._table_name = _table_name_setter(table_name)
         self._tables = set()
+        self._schema_name = schema_name
         self._schema_auto_update = schema_auto_update
         options = kwargs.pop("options", "")
         if "statement_timeout" not in options:
@@ -113,6 +118,7 @@ class PostgreSQLSink(BatchingSink):
 
     def setup(self):
         self._client = psycopg2.connect(**self._client_settings)
+        self._create_schema()
 
     def write(self, batch: SinkBatch):
         tables = {}
@@ -138,14 +144,22 @@ class PostgreSQLSink(BatchingSink):
             with self._client:
                 for name, values in tables.items():
                     if self._schema_auto_update:
-                        self._init_table(name)
+                        self._create_table(name)
                         self._add_new_columns(name, values["cols_types"])
                     self._insert_rows(name, values["rows"])
         except psycopg2.Error as e:
             self._client.rollback()
             raise PostgreSQLSinkException(f"Failed to write batch: {str(e)}") from e
         table_counts = {table: len(values["rows"]) for table, values in tables.items()}
-        logger.info(f"Successfully wrote records to tables; row counts: {table_counts}")
+        schema_log = (
+            " "
+            if self._schema_name == "public"
+            else f" for schema '{self._schema_name}' "
+        )
+        logger.info(
+            f"Successfully wrote records{schema_log}to tables; "
+            f"table row counts: {table_counts}"
+        )
 
     def add(
         self,
@@ -172,7 +186,15 @@ class PostgreSQLSink(BatchingSink):
             offset=offset,
         )
 
-    def _init_table(self, table_name: str):
+    def _create_schema(self):
+        query = sql.SQL("CREATE SCHEMA IF NOT EXISTS {}").format(
+            sql.Identifier(self._schema_name)
+        )
+
+        with self._client.cursor() as cursor:
+            cursor.execute(query)
+
+    def _create_table(self, table_name: str):
         if table_name in self._tables:
             return
         query = sql.SQL(
@@ -183,7 +205,7 @@ class PostgreSQLSink(BatchingSink):
             )
             """
         ).format(
-            table=sql.Identifier(table_name),
+            table=sql.Identifier(self._schema_name, table_name),
             timestamp_col=sql.Identifier(_TIMESTAMP_COLUMN_NAME),
             key_col=sql.Identifier(_KEY_COLUMN_NAME),
         )
@@ -205,7 +227,7 @@ class PostgreSQLSink(BatchingSink):
                 ADD COLUMN IF NOT EXISTS {column} {col_type}
                 """
             ).format(
-                table=sql.Identifier(table_name),
+                table=sql.Identifier(self._schema_name, table_name),
                 column=sql.Identifier(col_name),
                 col_type=sql.SQL(postgres_col_type),
             )
@@ -223,7 +245,7 @@ class PostgreSQLSink(BatchingSink):
         values = [[row.get(col, None) for col in columns] for row in rows]
 
         query = sql.SQL("INSERT INTO {table} ({columns}) VALUES %s").format(
-            table=sql.Identifier(table_name),
+            table=sql.Identifier(self._schema_name, table_name),
             columns=sql.SQL(", ").join(map(sql.Identifier, columns)),
         )
 
