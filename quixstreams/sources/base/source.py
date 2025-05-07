@@ -528,7 +528,7 @@ class StatefulSource(Source):
         :raises CheckpointProducerTimeout: if any message fails to produce before the timeout
         """
         if self._store_transaction:
-            self._store_transaction.prepare(None)
+            self._store_transaction.prepare()
             self._store_transaction.flush()
             self._store_transaction = None
             self._store_state = None
