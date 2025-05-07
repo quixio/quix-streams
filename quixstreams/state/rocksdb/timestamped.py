@@ -46,6 +46,14 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         loads: LoadsFunc,
         changelog_producer: Optional[ChangelogProducer] = None,
     ) -> None:
+        """
+        Initializes a new `TimestampedPartitionTransaction`.
+
+        :param partition: The `TimestampedStorePartition` this transaction belongs to.
+        :param dumps: The serialization function for keys/values.
+        :param loads: The deserialization function for keys/values.
+        :param changelog_producer: Optional `ChangelogProducer` for recording changes.
+        """
         super().__init__(
             partition=partition,
             dumps=dumps,
@@ -61,25 +69,23 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         )
 
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
-    def get_last(
-        self,
-        timestamp: int,
-        prefix: Any,
-    ) -> Optional[Any]:
+    def get_last(self, timestamp: int, prefix: Any) -> Optional[Any]:
         """Get the latest value for a prefix up to a given timestamp.
 
         Searches both the transaction's update cache and the underlying RocksDB store
         to find the value associated with the given `prefix` that has the highest
         timestamp less than or equal to the provided `timestamp`.
 
-        The search prioritizes values from the update cache if their timestamps are
-        more recent than those found in the store.
+        The search considers both the update cache and the store. It returns the value
+        associated with the key that has the numerically largest timestamp less than
+        or equal to the provided `timestamp`. If multiple entries exist for the same
+        prefix across the cache and store within the valid time range, the one with
+        the highest timestamp is chosen.
 
         :param timestamp: The upper bound timestamp (inclusive) in milliseconds.
         :param prefix: The key prefix.
         :return: The deserialized value if found, otherwise None.
         """
-
         prefix = self._ensure_bytes(prefix)
         min_eligible_timestamp = self._get_min_eligible_timestamp(prefix)
 
@@ -130,7 +136,9 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         to the parent `set` method. The parent method internally serializes these
         into a combined key before storing the value in the update cache.
 
-        Additionally, it triggers the expiration logic.
+        Additionally, it updates the minimum eligible timestamp for the given prefix
+        based on the `retention_ms`, which is used later during the flush process to
+        expire old data.
 
         :param timestamp: Timestamp associated with the value in milliseconds.
         :param value: The value to store.
@@ -144,7 +152,16 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         )
         self._set_min_eligible_timestamp(prefix, min_eligible_timestamp)
 
-    def _flush(self, changelog_offset: Optional[int]):
+    def _flush(self, changelog_offset: Optional[int]) -> None:
+        """
+        Flushes the transaction.
+
+        This method first calls `_expire()` to remove outdated entries based on
+        their timestamps and retention periods, then calls the parent class's
+        `_flush()` method to persist changes.
+
+        :param changelog_offset: Optional offset for the changelog.
+        """
         self._expire()
         super()._flush(changelog_offset=changelog_offset)
 
@@ -156,7 +173,6 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         This applies to both the in-memory update cache and the underlying
         RocksDB store within the current transaction.
         """
-
         updates = self._update_cache.get_updates()
         for prefix, cached in updates.items():
             min_eligible_timestamp = self._get_min_eligible_timestamp(prefix)
@@ -185,12 +201,32 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         raise ValueError(f"Invalid key type: {type(key)}")
 
     def _get_min_eligible_timestamp(self, prefix: bytes) -> int:
+        """
+        Retrieves the minimum eligible timestamp for a given prefix.
+
+        It first checks an in-memory cache (`self._min_eligible_timestamps`).
+        If not found, it queries the underlying RocksDB store using `self.get()`.
+        Defaults to 0 if no timestamp is found.
+
+        :param prefix: The key prefix (bytes).
+        :return: The minimum eligible timestamp (int).
+        """
         cache = self._min_eligible_timestamps
         return (
             cache.timestamps.get(prefix) or self.get(key=cache.key, prefix=prefix) or 0
         )
 
     def _set_min_eligible_timestamp(self, prefix: bytes, timestamp: int) -> None:
+        """
+        Sets the minimum eligible timestamp for a given prefix.
+
+        Updates an in-memory cache (`self._min_eligible_timestamps`) and then
+        persists this new minimum to the underlying RocksDB store using `self.set()`.
+        The value is stored in a designated column family.
+
+        :param prefix: The key prefix (bytes).
+        :param timestamp: The minimum eligible timestamp (int) to set.
+        """
         cache = self._min_eligible_timestamps
         cache.timestamps[prefix] = timestamp
         self.set(key=cache.key, value=timestamp, prefix=prefix, cf_name=cache.cf_name)
