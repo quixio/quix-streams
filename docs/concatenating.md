@@ -12,6 +12,7 @@ Use it when you need:
 **Example 1:**  Aggregate e-commerce orders from different locations into one stream and calculate the average order size in 1h windows.
 
 ```python
+
 from datetime import timedelta
 
 from quixstreams import Application
@@ -43,11 +44,11 @@ if __name__ == '__main__':
     app.run()
 ```
 
-
 **Example 2:** Combine branches of the same `StreamingDataFrame` back together.  
-See the [Branching](branching.md) page for more details about branching.
+See the [Branching StreamingDataFrames](branching.md) page for more details about branching.
 
 ```python
+
 from quixstreams import Application
 app = Application(...)
 
@@ -73,7 +74,7 @@ all_orders.to_topic(output_topic)
 
 if __name__ == '__main__':
     app.run()
- ```
+```
 
 
 ## Message ordering between partitions

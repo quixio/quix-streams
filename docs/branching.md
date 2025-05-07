@@ -103,12 +103,6 @@ operations together on a single line like `sdf = sdf.apply().filter().print()`.
 Chaining can be used alongside branching; the operations will be collectively treated 
 as a single branch addition.
 
-### Branching vs. Multiple Topics (Multi-SDF)
-
-[Consuming multiple topics](consuming-multiple-topics.md) is independent of branching;
-branches can be used in each of the `SDF`s from multiple topics, but they cannot
-interact with one another in any way.
-
 #### Clarifying Multiple SDFs
 `SDF`'s are delineated by the topic they are initialized with;
 branches just generate additional nodes you can manipulate on them, 
