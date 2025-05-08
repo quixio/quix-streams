@@ -1653,7 +1653,7 @@ class StreamingDataFrame:
             *self.topics, *other.topics, stream=merged_stream
         )
 
-    def join(
+    def join_latest(
         self,
         right: "StreamingDataFrame",
         how: JoinHow = "inner",

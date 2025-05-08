@@ -2645,7 +2645,7 @@ class TestStreamingDataFrameConcat:
             sdf1.concat(sdf2).update(lambda v, state: None, stateful=True)
 
 
-class TestStreamingDataFrameJoin:
+class TestStreamingDataFrameJoinLatest:
     @pytest.fixture
     def topic_manager(self, topic_manager_factory):
         return topic_manager_factory()
@@ -2748,7 +2748,7 @@ class TestStreamingDataFrameJoin:
     ):
         left_topic, right_topic = create_topic(), create_topic()
         left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
-        joined_sdf = left_sdf.join(right_sdf, how=how)
+        joined_sdf = left_sdf.join_latest(right_sdf, how=how)
         assign_partition(right_sdf)
 
         publish(joined_sdf, right_topic, value=right, key=b"key", timestamp=1)
@@ -2766,14 +2766,14 @@ class TestStreamingDataFrameJoin:
             f"Valid values are: {', '.join(get_args(JoinHow))}."
         )
         with pytest.raises(ValueError, match=match):
-            left_sdf.join(right_sdf, how="invalid")
+            left_sdf.join_latest(right_sdf, how="invalid")
 
     def test_mismatching_partitions_fails(self, create_topic, create_sdf):
         left_topic, right_topic = create_topic(), create_topic(num_partitions=2)
         left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
 
         with pytest.raises(TopicPartitionsMismatch):
-            left_sdf.join(right_sdf)
+            left_sdf.join_latest(right_sdf)
 
     @pytest.mark.parametrize(
         "on_overlap, right, left, expected",
@@ -2835,7 +2835,7 @@ class TestStreamingDataFrameJoin:
     ):
         left_topic, right_topic = create_topic(), create_topic()
         left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
-        joined_sdf = left_sdf.join(right_sdf, how="left", on_overlap=on_overlap)
+        joined_sdf = left_sdf.join_latest(right_sdf, how="left", on_overlap=on_overlap)
         assign_partition(right_sdf)
 
         publish(joined_sdf, right_topic, value=right, key=b"key", timestamp=1)
@@ -2858,7 +2858,7 @@ class TestStreamingDataFrameJoin:
             f"Valid values are: {', '.join(get_args(JoinOnOverlap))}."
         )
         with pytest.raises(ValueError, match=match):
-            left_sdf.join(right_sdf, on_overlap="invalid")
+            left_sdf.join_latest(right_sdf, on_overlap="invalid")
 
     def test_custom_merger(self, create_topic, create_sdf, assign_partition, publish):
         left_topic, right_topic = create_topic(), create_topic()
@@ -2867,7 +2867,7 @@ class TestStreamingDataFrameJoin:
         def merger(left, right):
             return {"left": left, "right": right}
 
-        joined_sdf = left_sdf.join(right_sdf, merger=merger)
+        joined_sdf = left_sdf.join_latest(right_sdf, merger=merger)
         assign_partition(right_sdf)
 
         publish(joined_sdf, right_topic, value=1, key=b"key", timestamp=1)
@@ -2884,7 +2884,7 @@ class TestStreamingDataFrameJoin:
         left_topic, right_topic = create_topic(), create_topic()
         left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
 
-        joined_sdf = left_sdf.join(right_sdf, retention_ms=10)
+        joined_sdf = left_sdf.join_latest(right_sdf, retention_ms=10)
         assign_partition(right_sdf)
 
         # min eligible timestamp is 15 - 10 = 5
