@@ -75,10 +75,50 @@ PostgreSQLSink provides at-least-once guarantees, meaning that the same records 
 
 PostgreSQLSink accepts the following configuration parameters:
 
+## Required
+
 - `host`: The address of the PostgreSQL server.
 - `port`: The port of the PostgreSQL server.
 - `dbname`: The name of the PostgreSQL database.
 - `user`: The database user name.
 - `password`: The database user password.
-- `table_name`: The name of the PostgreSQL table where data will be written.
+- `table_name`: PostgreSQL table name as either a string or a callable which receives 
+  a `SinkItem` (from quixstreams.sinks.base.item) and returns a string.
+
+
+### Optional
+
+- `schema_name`: The schema name. Schemas are a way of organizing tables and 
+  not related to the table data, referenced as `<schema_name>.<table_name>`.  
+  PostrgeSQL uses "public" by default under the hood.
 - `schema_auto_update`: If True, the sink will automatically update the schema by adding new columns when new fields are detected. Default: True.
+
+
+## Testing Locally
+
+Rather than connect to a hosted InfluxDB3 instance, you can alternatively test your 
+application using a local instance of Influxdb3 using Docker:
+
+1. Execute in terminal:
+
+    ```bash
+    docker run --rm -d --name postgres \
+    -e POSTGRES_PASSWORD=local \
+    -e POSTGRES_USER=local \
+    -e POSTGRES_DB=local \
+    -p 5432:5432 \
+    postgres
+    ```
+
+2. Use the following settings for `PostgreSQLSink` to connect:
+
+    ```python
+    PostgreSQLSink(
+        host="localhost",
+        port=5432,
+        user="local",
+        password="local",
+        dbname="local",
+        table_name="<YOUR TABLE NAME>",
+    )
+    ```
