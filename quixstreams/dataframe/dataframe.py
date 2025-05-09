@@ -1766,7 +1766,7 @@ class StreamingDataFrame:
         self._stream = self._stream.add_update(func, metadata=metadata)  # type: ignore[call-overload]
         return self
 
-    def register_store(self, store_type: Optional[StoreTypes] = None):
+    def register_store(self, store_type: Optional[StoreTypes] = None) -> None:
         """
         Register the default store for the current stream_id in StateStoreManager.
         """
