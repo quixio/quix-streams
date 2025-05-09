@@ -1661,6 +1661,12 @@ class StreamingDataFrame:
         merger: Optional[Callable[[Any, Any], Any]] = None,
         retention_ms: Union[int, timedelta] = timedelta(days=7),
     ) -> "StreamingDataFrame":
+        if self.stream_id == right.stream_id:
+            raise ValueError(
+                "Joining dataframes originating from "
+                "the same topic is not yet supported.",
+            )
+
         if how not in get_args(JoinHow):
             raise ValueError(
                 f"Invalid how value: {how}. "
