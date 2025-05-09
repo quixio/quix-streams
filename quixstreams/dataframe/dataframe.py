@@ -1726,10 +1726,10 @@ class StreamingDataFrame:
                 retention_ms=retention_ms,
             )
 
+        right = right.update(right_func, metadata=True).filter(lambda value: False)
         left = self.apply(left_func, metadata=True).filter(
             lambda value: value is not DISCARDED
         )
-        right = right.update(right_func, metadata=True).filter(lambda value: False)
         return left.concat(right)
 
     def ensure_topics_copartitioned(self, *topics: Topic):
