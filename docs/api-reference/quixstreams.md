@@ -4440,7 +4440,7 @@ Default - `json.dumps`.
 class PostgreSQLSink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/postgresql.py#L53)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/postgresql.py#L54)
 
 <a id="quixstreams.sinks.community.postgresql.PostgreSQLSink.__init__"></a>
 
@@ -4452,7 +4452,8 @@ def __init__(host: str,
              dbname: str,
              user: str,
              password: str,
-             table_name: str,
+             table_name: Union[Callable[[SinkItem], str], str],
+             schema_name: str = "public",
              schema_auto_update: bool = True,
              connection_timeout_seconds: int = 30,
              statement_timeout_seconds: int = 30,
@@ -4463,7 +4464,7 @@ def __init__(host: str,
              **kwargs)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/postgresql.py#L54)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/postgresql.py#L55)
 
 A connector to sink topic data to PostgreSQL.
 
@@ -4472,9 +4473,13 @@ A connector to sink topic data to PostgreSQL.
 - `host`: PostgreSQL server address.
 - `port`: PostgreSQL server port.
 - `dbname`: PostgreSQL database name.
-- `user`: Database user name.
+- `user`: Database username.
 - `password`: Database user password.
-- `table_name`: PostgreSQL table name.
+- `table_name`: PostgreSQL table name as either a string or a callable which
+receives a SinkItem and returns a string.
+- `schema_name`: The schema name. Schemas are a way of organizing tables and
+not related to the table data, referenced as `<schema_name>.<table_name>`.
+PostrgeSQL uses "public" by default under the hood.
 - `schema_auto_update`: Automatically update the schema when new columns are detected.
 - `connection_timeout_seconds`: Timeout for connection.
 - `statement_timeout_seconds`: Timeout for DDL operations such as table
