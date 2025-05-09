@@ -229,7 +229,7 @@ class TimeWindow(Window):
 
     def expire_by_key(
         self,
-        key: bytes,
+        key: Any,
         state: WindowedState,
         max_expired_start: int,
         collect: bool,
