@@ -4,12 +4,14 @@ import uuid
 import warnings
 from collections import namedtuple
 from datetime import timedelta
-from typing import Any
+from functools import partial
+from typing import Any, get_args
 from unittest import mock
 
 import pytest
 
 from quixstreams import State
+from quixstreams.dataframe.dataframe import JoinHow, JoinOnOverlap
 from quixstreams.dataframe.exceptions import (
     GroupByDuplicate,
     GroupByNestingLimit,
@@ -2641,3 +2643,280 @@ class TestStreamingDataFrameConcat:
             match="The underlying topics must have the same number of partitions to use State",
         ):
             sdf1.concat(sdf2).update(lambda v, state: None, stateful=True)
+
+
+class TestStreamingDataFrameJoinLatest:
+    @pytest.fixture
+    def topic_manager(self, topic_manager_factory):
+        return topic_manager_factory()
+
+    @pytest.fixture
+    def create_topic(self, topic_manager):
+        def _create_topic(num_partitions=1):
+            return topic_manager.topic(
+                str(uuid.uuid4()),
+                create_config=TopicConfig(
+                    num_partitions=num_partitions,
+                    replication_factor=1,
+                ),
+            )
+
+        return _create_topic
+
+    @pytest.fixture
+    def create_sdf(self, dataframe_factory, state_manager):
+        def _create_sdf(topic):
+            return dataframe_factory(topic=topic, state_manager=state_manager)
+
+        return _create_sdf
+
+    @pytest.fixture
+    def assign_partition(self, state_manager):
+        def _assign_partition(sdf):
+            state_manager.on_partition_assign(
+                stream_id=sdf.stream_id,
+                partition=0,
+                committed_offsets={},
+            )
+
+        return _assign_partition
+
+    @pytest.fixture
+    def publish(self, message_context_factory):
+        def _publish(sdf, topic, value, key, timestamp):
+            return sdf.test(
+                value=value,
+                key=key,
+                timestamp=timestamp,
+                topic=topic,
+                ctx=message_context_factory(topic=topic.name),
+            )
+
+        return _publish
+
+    @pytest.mark.parametrize(
+        "how, right, left, expected",
+        [
+            (
+                "inner",
+                {"right": 2},
+                {"left": 1},
+                [({"left": 1, "right": 2}, b"key", 2, None)],
+            ),
+            (
+                "inner",
+                None,
+                {"left": 1},
+                [],
+            ),
+            (
+                "inner",
+                {},
+                {"left": 1},
+                [],
+            ),
+            (
+                "left",
+                {"right": 2},
+                {"left": 1},
+                [({"left": 1, "right": 2}, b"key", 2, None)],
+            ),
+            (
+                "left",
+                None,
+                {"left": 1},
+                [({"left": 1}, b"key", 2, None)],
+            ),
+            (
+                "left",
+                {},
+                {"left": 1},
+                [({"left": 1}, b"key", 2, None)],
+            ),
+        ],
+    )
+    def test_how(
+        self,
+        create_topic,
+        create_sdf,
+        assign_partition,
+        publish,
+        how,
+        right,
+        left,
+        expected,
+    ):
+        left_topic, right_topic = create_topic(), create_topic()
+        left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
+        joined_sdf = left_sdf.join_latest(right_sdf, how=how)
+        assign_partition(right_sdf)
+
+        publish(joined_sdf, right_topic, value=right, key=b"key", timestamp=1)
+        joined_value = publish(
+            joined_sdf, left_topic, value=left, key=b"key", timestamp=2
+        )
+        assert joined_value == expected
+
+    def test_how_invalid_value(self, create_topic, create_sdf):
+        left_topic, right_topic = create_topic(), create_topic()
+        left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
+
+        match = (
+            "Invalid how value: invalid. "
+            f"Valid values are: {', '.join(get_args(JoinHow))}."
+        )
+        with pytest.raises(ValueError, match=match):
+            left_sdf.join_latest(right_sdf, how="invalid")
+
+    def test_mismatching_partitions_fails(self, create_topic, create_sdf):
+        left_topic, right_topic = create_topic(), create_topic(num_partitions=2)
+        left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
+
+        with pytest.raises(TopicPartitionsMismatch):
+            left_sdf.join_latest(right_sdf)
+
+    @pytest.mark.parametrize(
+        "on_overlap, right, left, expected",
+        [
+            (
+                "keep-left",
+                None,
+                {"A": 1},
+                {"A": 1},
+            ),
+            (
+                "keep-left",
+                {"B": "right", "C": 2},
+                {"A": 1, "B": "left"},
+                {"A": 1, "B": "left", "C": 2},
+            ),
+            (
+                "keep-right",
+                None,
+                {"A": 1},
+                {"A": 1},
+            ),
+            (
+                "keep-right",
+                {"B": "right", "C": 2},
+                {"A": 1, "B": "left"},
+                {"A": 1, "B": "right", "C": 2},
+            ),
+            (
+                "raise",
+                None,
+                {"A": 1},
+                {"A": 1},
+            ),
+            (
+                "raise",
+                {"B": 2},
+                {"A": 1},
+                {"A": 1, "B": 2},
+            ),
+            (
+                "raise",
+                {"B": "right B", "C": "right C"},
+                {"A": 1, "B": "left B", "C": "left C"},
+                ValueError("Overlapping columns: B, C."),
+            ),
+        ],
+    )
+    def test_on_overlap(
+        self,
+        create_topic,
+        create_sdf,
+        assign_partition,
+        publish,
+        on_overlap,
+        right,
+        left,
+        expected,
+    ):
+        left_topic, right_topic = create_topic(), create_topic()
+        left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
+        joined_sdf = left_sdf.join_latest(right_sdf, how="left", on_overlap=on_overlap)
+        assign_partition(right_sdf)
+
+        publish(joined_sdf, right_topic, value=right, key=b"key", timestamp=1)
+
+        if isinstance(expected, Exception):
+            with pytest.raises(expected.__class__, match=expected.args[0]):
+                publish(joined_sdf, left_topic, value=left, key=b"key", timestamp=2)
+        else:
+            joined_value = publish(
+                joined_sdf, left_topic, value=left, key=b"key", timestamp=2
+            )
+            assert joined_value == [(expected, b"key", 2, None)]
+
+    def test_on_overlap_invalid_value(self, create_topic, create_sdf):
+        left_topic, right_topic = create_topic(), create_topic()
+        left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
+
+        match = (
+            "Invalid on_overlap value: invalid. "
+            f"Valid values are: {', '.join(get_args(JoinOnOverlap))}."
+        )
+        with pytest.raises(ValueError, match=match):
+            left_sdf.join_latest(right_sdf, on_overlap="invalid")
+
+    def test_custom_merger(self, create_topic, create_sdf, assign_partition, publish):
+        left_topic, right_topic = create_topic(), create_topic()
+        left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
+
+        def merger(left, right):
+            return {"left": left, "right": right}
+
+        joined_sdf = left_sdf.join_latest(right_sdf, merger=merger)
+        assign_partition(right_sdf)
+
+        publish(joined_sdf, right_topic, value=1, key=b"key", timestamp=1)
+        joined_value = publish(joined_sdf, left_topic, value=2, key=b"key", timestamp=2)
+        assert joined_value == [({"left": 2, "right": 1}, b"key", 2, None)]
+
+    def test_retention_ms(
+        self,
+        create_topic,
+        create_sdf,
+        assign_partition,
+        publish,
+    ):
+        left_topic, right_topic = create_topic(), create_topic()
+        left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
+
+        joined_sdf = left_sdf.join_latest(right_sdf, retention_ms=10)
+        assign_partition(right_sdf)
+
+        # min eligible timestamp is 15 - 10 = 5
+        publish(joined_sdf, right_topic, value={"right": 1}, key=b"key", timestamp=15)
+
+        # min eligible timestamp is still 5
+        publish(joined_sdf, right_topic, value={"right": 3}, key=b"key", timestamp=4)
+        publish(joined_sdf, right_topic, value={"right": 2}, key=b"key", timestamp=5)
+
+        publish_left = partial(
+            publish,
+            joined_sdf,
+            left_topic,
+            value={"left": 4},
+            key=b"key",
+        )
+
+        assert publish_left(timestamp=4) == []
+        assert publish_left(timestamp=5) == [({"left": 4, "right": 2}, b"key", 5, None)]
+
+    def test_self_join_not_supported(self, create_topic, create_sdf):
+        topic = create_topic()
+        match = (
+            "Joining dataframes originating from the same topic is not yet supported."
+        )
+
+        # The very same sdf object
+        sdf = create_sdf(topic)
+        with pytest.raises(ValueError, match=match):
+            sdf.join_latest(sdf)
+
+        # Same topic, different branch
+        sdf2 = sdf.apply(lambda v: v)
+        with pytest.raises(ValueError, match=match):
+            sdf.join_latest(sdf2)
