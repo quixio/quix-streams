@@ -2904,3 +2904,19 @@ class TestStreamingDataFrameJoinLatest:
 
         assert publish_left(timestamp=4) == []
         assert publish_left(timestamp=5) == [({"left": 4, "right": 2}, b"key", 5, None)]
+
+    def test_self_join_not_supported(self, create_topic, create_sdf):
+        topic = create_topic()
+        match = (
+            "Joining dataframes originating from the same topic is not yet supported."
+        )
+
+        # The very same sdf object
+        sdf = create_sdf(topic)
+        with pytest.raises(ValueError, match=match):
+            sdf.join_latest(sdf)
+
+        # Same topic, different branch
+        sdf2 = sdf.apply(lambda v: v)
+        with pytest.raises(ValueError, match=match):
+            sdf.join_latest(sdf2)
