@@ -23,6 +23,8 @@ class RocksDBStore(Store):
     partitions' transactions.
     """
 
+    store_partition_class = RocksDBStorePartition
+
     def __init__(
         self,
         name: str,
@@ -61,6 +63,6 @@ class RocksDBStore(Store):
                 self._changelog_producer_factory.get_partition_producer(partition)
             )
 
-        return RocksDBStorePartition(
+        return self.store_partition_class(
             path=path, options=self._options, changelog_producer=changelog_producer
         )

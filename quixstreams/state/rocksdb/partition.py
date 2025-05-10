@@ -1,17 +1,27 @@
 import logging
 import time
-from typing import Dict, List, Literal, Optional, Union, cast
+from typing import (
+    Dict,
+    Iterator,
+    List,
+    Literal,
+    Optional,
+    TypeVar,
+    Union,
+    cast,
+)
 
-from rocksdict import AccessType, ColumnFamily, Rdict, WriteBatch
+from rocksdict import AccessType, ColumnFamily, Rdict, ReadOptions, WriteBatch
 
-from quixstreams.state.base import PartitionTransactionCache, StorePartition
+from quixstreams.state.base import (
+    PartitionTransaction,
+    PartitionTransactionCache,
+    StorePartition,
+)
 from quixstreams.state.exceptions import ColumnFamilyDoesNotExist
 from quixstreams.state.metadata import METADATA_CF_NAME, Marker
 from quixstreams.state.recovery import ChangelogProducer
-from quixstreams.state.serialization import (
-    int_from_int64_bytes,
-    int_to_int64_bytes,
-)
+from quixstreams.state.serialization import int_from_int64_bytes, int_to_int64_bytes
 
 from .exceptions import ColumnFamilyAlreadyExists
 from .metadata import (
@@ -22,10 +32,13 @@ from .types import RocksDBOptionsType
 
 __all__ = ("RocksDBStorePartition",)
 
+
 logger = logging.getLogger(__name__)
 
+T = TypeVar("T", bound=PartitionTransaction)
 
-class RocksDBStorePartition(StorePartition):
+
+class RocksDBStorePartition(StorePartition[T]):
     """
     A base class to access state in RocksDB.
     It represents a single RocksDB database.
@@ -41,6 +54,8 @@ class RocksDBStorePartition(StorePartition):
     :param path: an absolute path to the RocksDB folder
     :param options: RocksDB options. If `None`, the default options will be used.
     """
+
+    additional_column_families: tuple[str, ...] = ()
 
     def __init__(
         self,
@@ -60,6 +75,8 @@ class RocksDBStorePartition(StorePartition):
         self._db = self._init_rocksdb()
         self._cf_cache: Dict[str, Rdict] = {}
         self._cf_handle_cache: Dict[str, ColumnFamily] = {}
+        for cf_name in self.additional_column_families:
+            self._ensure_column_family(cf_name)
 
     def recover_from_changelog_message(
         self, key: bytes, value: Optional[bytes], cf_name: str, offset: int
@@ -138,6 +155,53 @@ class RocksDBStorePartition(StorePartition):
 
         # RDict accept Any type as value but we only write bytes so we should only get bytes back.
         return cast(Union[bytes, Literal[Marker.UNDEFINED]], result)
+
+    def iter_items(
+        self,
+        lower_bound: bytes,  # inclusive
+        upper_bound: bytes,  # exclusive
+        backwards: bool = False,
+        cf_name: str = "default",
+    ) -> Iterator[tuple[bytes, bytes]]:
+        """
+        Iterate over key-value pairs within a specified range in a column family.
+
+        :param lower_bound: The lower bound key (inclusive) for the iteration range.
+        :param upper_bound: The upper bound key (exclusive) for the iteration range.
+        :param backwards: If `True`, iterate in reverse order (descending).
+            Default is `False` (ascending).
+        :param cf_name: The name of the column family to iterate over.
+            Default is "default".
+        :return: An iterator yielding (key, value) tuples.
+        """
+        cf = self.get_column_family(cf_name=cf_name)
+
+        # Set iterator bounds to reduce IO by limiting the range of keys fetched
+        read_opt = ReadOptions()
+        read_opt.set_iterate_lower_bound(lower_bound)
+        read_opt.set_iterate_upper_bound(upper_bound)
+
+        from_key = upper_bound if backwards else lower_bound
+
+        # RDict accepts Any type as value but we only write bytes so we should only get bytes back.
+        items = cast(
+            Iterator[tuple[bytes, bytes]],
+            cf.items(from_key=from_key, read_opt=read_opt, backwards=backwards),
+        )
+
+        if not backwards:
+            # NOTE: Forward iteration respects bounds correctly.
+            # Also, we need to use yield from notation to replace RdictItems
+            # with Python-native generator or else garbage collection
+            # will make the result unpredictable.
+            yield from items
+        else:
+            # NOTE: When iterating backwards, the `read_opt` lower bound
+            # is not respected by Rdict for some reason. We need to manually
+            # filter it here.
+            for key, value in items:
+                if lower_bound <= key:
+                    yield key, value
 
     def exists(self, key: bytes, cf_name: str = "default") -> bool:
         """
@@ -328,3 +392,9 @@ class RocksDBStorePartition(StorePartition):
             int_to_int64_bytes(offset),
             self.get_column_family_handle(METADATA_CF_NAME),
         )
+
+    def _ensure_column_family(self, cf_name: str) -> None:
+        try:
+            self.get_column_family(cf_name)
+        except ColumnFamilyDoesNotExist:
+            self.create_column_family(cf_name)

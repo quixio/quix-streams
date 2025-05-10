@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Literal, Optional, Union
+from typing import TYPE_CHECKING, Generic, Literal, Optional, TypeVar, Union, cast
 
 from quixstreams.state.metadata import (
     Marker,
@@ -17,13 +17,17 @@ __all__ = ("StorePartition",)
 
 logger = logging.getLogger(__name__)
 
+T = TypeVar("T", bound=PartitionTransaction)
 
-class StorePartition(ABC):
+
+class StorePartition(ABC, Generic[T]):
     """
     A base class to access state in the underlying storage.
     It represents a single instance of some storage (e.g. a single database for
     the persistent storage).
     """
+
+    partition_transaction_class = PartitionTransaction
 
     def __init__(
         self,
@@ -106,17 +110,20 @@ class StorePartition(ABC):
         :param offset: changelog message offset
         """
 
-    def begin(self) -> PartitionTransaction:
+    def begin(self) -> T:
         """
         Start a new `PartitionTransaction`
 
         Using `PartitionTransaction` is a recommended way for accessing the data.
         """
-        return PartitionTransaction(
-            partition=self,
-            dumps=self._dumps,
-            loads=self._loads,
-            changelog_producer=self._changelog_producer,
+        return cast(
+            T,
+            self.partition_transaction_class(
+                partition=self,
+                dumps=self._dumps,
+                loads=self._loads,
+                changelog_producer=self._changelog_producer,
+            ),
         )
 
     def __enter__(self):
