@@ -1,17 +1,27 @@
 import logging
 import time
-from typing import Dict, Iterator, List, Literal, Optional, Union, cast
+from typing import (
+    Dict,
+    Iterator,
+    List,
+    Literal,
+    Optional,
+    TypeVar,
+    Union,
+    cast,
+)
 
 from rocksdict import AccessType, ColumnFamily, Rdict, ReadOptions, WriteBatch
 
-from quixstreams.state.base import PartitionTransactionCache, StorePartition
+from quixstreams.state.base import (
+    PartitionTransaction,
+    PartitionTransactionCache,
+    StorePartition,
+)
 from quixstreams.state.exceptions import ColumnFamilyDoesNotExist
 from quixstreams.state.metadata import METADATA_CF_NAME, Marker
 from quixstreams.state.recovery import ChangelogProducer
-from quixstreams.state.serialization import (
-    int_from_int64_bytes,
-    int_to_int64_bytes,
-)
+from quixstreams.state.serialization import int_from_int64_bytes, int_to_int64_bytes
 
 from .exceptions import ColumnFamilyAlreadyExists
 from .metadata import (
@@ -22,10 +32,13 @@ from .types import RocksDBOptionsType
 
 __all__ = ("RocksDBStorePartition",)
 
+
 logger = logging.getLogger(__name__)
 
+T = TypeVar("T", bound=PartitionTransaction)
 
-class RocksDBStorePartition(StorePartition):
+
+class RocksDBStorePartition(StorePartition[T]):
     """
     A base class to access state in RocksDB.
     It represents a single RocksDB database.

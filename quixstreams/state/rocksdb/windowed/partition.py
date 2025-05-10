@@ -15,7 +15,9 @@ from .transaction import WindowedRocksDBPartitionTransaction
 logger = logging.getLogger(__name__)
 
 
-class WindowedRocksDBStorePartition(RocksDBStorePartition):
+class WindowedRocksDBStorePartition(
+    RocksDBStorePartition[WindowedRocksDBPartitionTransaction]
+):
     """
     A base class to access windowed state in RocksDB.
     It represents a single RocksDB database.
