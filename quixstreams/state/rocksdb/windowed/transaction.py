@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from .partition import WindowedRocksDBStorePartition
 
 
-class WindowedRocksDBPartitionTransaction(PartitionTransaction):
+class WindowedRocksDBPartitionTransaction(PartitionTransaction[bytes, dict]):
     def __init__(
         self,
         partition: "WindowedRocksDBStorePartition",
@@ -469,8 +469,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         ):
             _, start, end = parse_window_key(key)
             if start_from_ms < start <= start_to_ms:
-                value = self._deserialize_value(value)
-                result.append(((start, end), value, prefix))
+                result.append(((start, end), self._deserialize_value(value), prefix))
 
         return result
 
@@ -532,7 +531,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
 
     def _get_timestamp(
         self, cache: TimestampsCache, prefix: bytes, default: Any = None
-    ) -> Any:
+    ) -> int:
         cached_ts = cache.timestamps.get(prefix)
         if cached_ts is not None:
             return cached_ts
@@ -585,7 +584,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         if cache.counter is None:
             cache.counter = self.get(
                 default=-1, key=cache.key, prefix=b"", cf_name=cache.cf_name
-            )
+            )  # type:ignore[call-overload]
 
         cache.counter += 1
 

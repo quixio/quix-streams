@@ -1,5 +1,5 @@
 import logging
-from typing import Iterator, cast
+from typing import Iterator, Type, cast
 
 from ..partition import RocksDBStorePartition
 from .metadata import (
@@ -15,9 +15,7 @@ from .transaction import WindowedRocksDBPartitionTransaction
 logger = logging.getLogger(__name__)
 
 
-class WindowedRocksDBStorePartition(
-    RocksDBStorePartition[WindowedRocksDBPartitionTransaction]
-):
+class WindowedRocksDBStorePartition(RocksDBStorePartition):
     """
     A base class to access windowed state in RocksDB.
     It represents a single RocksDB database.
@@ -26,7 +24,9 @@ class WindowedRocksDBStorePartition(
     stores the expiration index to delete expired windows.
     """
 
-    partition_transaction_class = WindowedRocksDBPartitionTransaction
+    partition_transaction_class: Type[WindowedRocksDBPartitionTransaction] = (
+        WindowedRocksDBPartitionTransaction
+    )
     additional_column_families = (
         LATEST_DELETED_VALUE_CF_NAME,
         LATEST_EXPIRED_WINDOW_CF_NAME,
@@ -47,3 +47,16 @@ class WindowedRocksDBStorePartition(
         """
         cf_dict = self.get_column_family(cf_name)
         return cast(Iterator[bytes], cf_dict.keys())
+
+    def begin(self) -> WindowedRocksDBPartitionTransaction:
+        """
+        Start a new `WindowedRocksDBPartitionTransaction`
+
+        Using `WindowedRocksDBPartitionTransaction` is a recommended way for accessing the data.
+        """
+        return self.partition_transaction_class(
+            partition=self,
+            dumps=self._dumps,
+            loads=self._loads,
+            changelog_producer=self._changelog_producer,
+        )
