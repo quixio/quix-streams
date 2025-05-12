@@ -6,7 +6,6 @@ from typing import (
     List,
     Literal,
     Optional,
-    TypeVar,
     Union,
     cast,
 )
@@ -14,7 +13,6 @@ from typing import (
 from rocksdict import AccessType, ColumnFamily, Rdict, ReadOptions, WriteBatch
 
 from quixstreams.state.base import (
-    PartitionTransaction,
     PartitionTransactionCache,
     StorePartition,
 )
@@ -35,10 +33,8 @@ __all__ = ("RocksDBStorePartition",)
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar("T", bound=PartitionTransaction)
 
-
-class RocksDBStorePartition(StorePartition[T]):
+class RocksDBStorePartition(StorePartition):
     """
     A base class to access state in RocksDB.
     It represents a single RocksDB database.
