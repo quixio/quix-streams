@@ -89,20 +89,29 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         prefix = self._ensure_bytes(prefix)
         min_eligible_timestamp = self._get_min_eligible_timestamp(prefix)
 
+        if timestamp < min_eligible_timestamp:
+            return None
+
         lower_bound = self._serialize_key(min_eligible_timestamp, prefix)
         # +1 because upper bound is exclusive
         upper_bound = self._serialize_key(timestamp + 1, prefix)
-
-        value: Optional[bytes] = None
 
         deletes = self._update_cache.get_deletes()
         updates = self._update_cache.get_updates().get(prefix, {})
 
         cached = sorted(updates.items(), reverse=True)
-        for cached_key, cached_value in cached:
-            if lower_bound <= cached_key < upper_bound and cached_key not in deletes:
-                value = cached_value
-                break
+        value: Optional[bytes] = None
+        cached_key: Optional[bytes] = None
+        # First check the boundaries to skip the iteration if the cached values
+        # are outside the search boundaries
+        if cached and cached[0][0] >= lower_bound and cached[-1][0] <= upper_bound:
+            for cached_key, cached_value in cached:
+                if (
+                    lower_bound <= cached_key < upper_bound
+                    and cached_key not in deletes
+                ):
+                    value = cached_value
+                    break
 
         stored = self._partition.iter_items(
             lower_bound=lower_bound,
@@ -113,7 +122,7 @@ class TimestampedPartitionTransaction(PartitionTransaction):
             if stored_key in deletes:
                 continue
 
-            if value is None or cached_key < stored_key:
+            if value is None or (cached_key and cached_key < stored_key):
                 value = stored_value
 
             # We only care about the first not deleted item when
@@ -198,7 +207,7 @@ class TimestampedPartitionTransaction(PartitionTransaction):
             return prefix + SEPARATOR + int_to_int64_bytes(key)
         elif isinstance(key, bytes):
             return prefix + SEPARATOR + key
-        raise ValueError(f"Invalid key type: {type(key)}")
+        raise TypeError(f"Invalid key type: {type(key)}")
 
     def _get_min_eligible_timestamp(self, prefix: bytes) -> int:
         """
