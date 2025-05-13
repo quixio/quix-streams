@@ -20,6 +20,7 @@ from typing import (
     TypeVar,
     Union,
     cast,
+    get_args,
     overload,
 )
 
@@ -49,6 +50,9 @@ from quixstreams.models import (
 from quixstreams.models.serializers import DeserializerType, SerializerType
 from quixstreams.sinks import BaseSink
 from quixstreams.state.base import State
+from quixstreams.state.base.transaction import PartitionTransaction
+from quixstreams.state.manager import StoreTypes
+from quixstreams.state.rocksdb.timestamped import TimestampedStore
 from quixstreams.utils.printing import (
     DEFAULT_COLUMN_NAME,
     DEFAULT_LIVE,
@@ -80,6 +84,11 @@ UpdateCallbackStateful = Callable[[Any, State], None]
 UpdateWithMetadataCallbackStateful = Callable[[Any, Any, int, Any, State], None]
 FilterCallbackStateful = Callable[[Any, State], bool]
 FilterWithMetadataCallbackStateful = Callable[[Any, Any, int, Any, State], bool]
+
+# Constants related to join
+DISCARDED = object()
+JoinHow = Literal["inner", "left"]
+JoinOnOverlap = Literal["keep-left", "keep-right", "raise"]
 
 
 class StreamingDataFrame:
@@ -275,7 +284,7 @@ class StreamingDataFrame:
             Default - `False`.
         """
         if stateful:
-            self._register_store()
+            self.register_store()
             # Force the callback to accept metadata
             if metadata:
                 with_metadata_func = cast(ApplyWithMetadataCallbackStateful, func)
@@ -284,11 +293,7 @@ class StreamingDataFrame:
                     cast(ApplyCallbackStateful, func)
                 )
 
-            stateful_func = _as_stateful(
-                func=with_metadata_func,
-                processing_context=self._processing_context,
-                stream_id=self.stream_id,
-            )
+            stateful_func = _as_stateful(with_metadata_func, self)
             stream = self.stream.add_apply(stateful_func, expand=expand, metadata=True)  # type: ignore[call-overload]
         else:
             stream = self.stream.add_apply(
@@ -384,7 +389,7 @@ class StreamingDataFrame:
         :return: the updated StreamingDataFrame instance (reassignment NOT required).
         """
         if stateful:
-            self._register_store()
+            self.register_store()
             # Force the callback to accept metadata
             if metadata:
                 with_metadata_func = cast(UpdateWithMetadataCallbackStateful, func)
@@ -393,11 +398,7 @@ class StreamingDataFrame:
                     cast(UpdateCallbackStateful, func)
                 )
 
-            stateful_func = _as_stateful(
-                func=with_metadata_func,
-                processing_context=self._processing_context,
-                stream_id=self.stream_id,
-            )
+            stateful_func = _as_stateful(with_metadata_func, self)
             return self._add_update(stateful_func, metadata=True)
         else:
             return self._add_update(
@@ -486,7 +487,7 @@ class StreamingDataFrame:
         """
 
         if stateful:
-            self._register_store()
+            self.register_store()
             # Force the callback to accept metadata
             if metadata:
                 with_metadata_func = cast(FilterWithMetadataCallbackStateful, func)
@@ -495,11 +496,7 @@ class StreamingDataFrame:
                     cast(FilterCallbackStateful, func)
                 )
 
-            stateful_func = _as_stateful(
-                func=with_metadata_func,
-                processing_context=self._processing_context,
-                stream_id=self.stream_id,
-            )
+            stateful_func = _as_stateful(with_metadata_func, self)
             stream = self.stream.add_filter(stateful_func, metadata=True)
         else:
             stream = self.stream.add_filter(  # type: ignore[call-overload]
@@ -1656,12 +1653,98 @@ class StreamingDataFrame:
             *self.topics, *other.topics, stream=merged_stream
         )
 
-    def ensure_topics_copartitioned(self):
-        partitions_counts = set(t.broker_config.num_partitions for t in self._topics)
+    def join_latest(
+        self,
+        right: "StreamingDataFrame",
+        how: JoinHow = "inner",
+        on_overlap: JoinOnOverlap = "raise",
+        merger: Optional[Callable[[Any, Any], Any]] = None,
+        retention_ms: Union[int, timedelta] = timedelta(days=7),
+    ) -> "StreamingDataFrame":
+        if self.stream_id == right.stream_id:
+            raise ValueError(
+                "Joining dataframes originating from "
+                "the same topic is not yet supported.",
+            )
+
+        if how not in get_args(JoinHow):
+            raise ValueError(
+                f"Invalid how value: {how}. "
+                f"Valid values are: {', '.join(get_args(JoinHow))}."
+            )
+
+        if on_overlap not in get_args(JoinOnOverlap):
+            raise ValueError(
+                f"Invalid on_overlap value: {on_overlap}. "
+                f"Valid values are: {', '.join(get_args(JoinOnOverlap))}."
+            )
+
+        if merger is None:
+            if on_overlap == "keep-left":
+
+                def merger(left_value, right_value):
+                    """
+                    Merge two dictionaries, preferring values from the left dictionary
+                    and preserving order with left columns coming first.
+                    """
+                    right_value = {
+                        key: value
+                        for key, value in (right_value or {}).items()
+                        if key not in left_value
+                    }
+                    return {**left_value, **right_value}
+
+            elif on_overlap == "keep-right":
+
+                def merger(left_value, right_value):
+                    return {**left_value, **(right_value or {})}
+            elif on_overlap == "raise":
+
+                def merger(left_value, right_value):
+                    right_value = right_value or {}
+                    if overlapping_columns := left_value.keys() & right_value.keys():
+                        overlapping_columns_str = ", ".join(sorted(overlapping_columns))
+                        raise ValueError(
+                            f"Overlapping columns: {overlapping_columns_str}."
+                            "You need to provide either an on_overlap value of "
+                            "'keep-left' or 'keep-right' or a custom merger function."
+                        )
+                    return {**left_value, **right_value}
+
+        self.ensure_topics_copartitioned(*self.topics, *right.topics)
+        right.register_store(store_type=TimestampedStore)
+        is_inner_join = how == "inner"
+        retention_ms = ensure_milliseconds(retention_ms)
+
+        def left_func(value, key, timestamp, headers):
+            right_tx = _get_transaction(right)
+            right_value = right_tx.get_last(timestamp=timestamp, prefix=key)
+            if is_inner_join and not right_value:
+                return DISCARDED
+            return merger(value, right_value)
+
+        def right_func(value, key, timestamp, headers):
+            right_tx = _get_transaction(right)
+            right_tx.set_for_timestamp(
+                timestamp=timestamp,
+                value=value,
+                prefix=key,
+                retention_ms=retention_ms,
+            )
+
+        right = right.update(right_func, metadata=True).filter(lambda value: False)
+        left = self.apply(left_func, metadata=True).filter(
+            lambda value: value is not DISCARDED
+        )
+        return left.concat(right)
+
+    def ensure_topics_copartitioned(self, *topics: Topic):
+        topics = topics or self._topics
+        partitions_counts = set(t.broker_config.num_partitions for t in topics)
         if len(partitions_counts) > 1:
             msg = ", ".join(
                 f'"{t.name}" ({t.broker_config.num_partitions} partitions)'
-                for t in self._topics
+                for t in topics
             )
             raise TopicPartitionsMismatch(
                 f"The underlying topics must have the same number of partitions to use State; got {msg}"
@@ -1689,7 +1772,7 @@ class StreamingDataFrame:
         self._stream = self._stream.add_update(func, metadata=metadata)  # type: ignore[call-overload]
         return self
 
-    def _register_store(self):
+    def register_store(self, store_type: Optional[StoreTypes] = None) -> None:
         """
         Register the default store for the current stream_id in StateStoreManager.
         """
@@ -1699,7 +1782,9 @@ class StreamingDataFrame:
         changelog_topic_config = self._topic_manager.derive_topic_config(self._topics)
 
         self._processing_context.state_manager.register_store(
-            stream_id=self.stream_id, changelog_config=changelog_topic_config
+            stream_id=self.stream_id,
+            store_type=store_type,
+            changelog_config=changelog_topic_config,
         )
 
     def _groupby_key(
@@ -1847,19 +1932,20 @@ def _as_metadata_func(
 
 def _as_stateful(
     func: Callable[[Any, Any, int, Any, State], T],
-    processing_context: ProcessingContext,
-    stream_id: str,
+    sdf: StreamingDataFrame,
 ) -> Callable[[Any, Any, int, Any], T]:
     @functools.wraps(func)
     def wrapper(value: Any, key: Any, timestamp: int, headers: Any) -> Any:
-        ctx = message_context()
-        transaction = processing_context.checkpoint.get_store_transaction(
-            stream_id=stream_id,
-            partition=ctx.partition,
-        )
         # Pass a State object with an interface limited to the key updates only
         # and prefix all the state keys by the message key
-        state = transaction.as_state(prefix=key)
+        state = _get_transaction(sdf).as_state(prefix=key)
         return func(value, key, timestamp, headers, state)
 
     return wrapper
+
+
+def _get_transaction(sdf: StreamingDataFrame) -> PartitionTransaction:
+    return sdf.processing_context.checkpoint.get_store_transaction(
+        stream_id=sdf.stream_id,
+        partition=message_context().partition,
+    )
