@@ -1,5 +1,5 @@
 import logging
-from typing import Iterator, Type, cast
+from typing import Iterator, cast
 
 from ..partition import RocksDBStorePartition
 from .metadata import (
@@ -24,9 +24,6 @@ class WindowedRocksDBStorePartition(RocksDBStorePartition):
     stores the expiration index to delete expired windows.
     """
 
-    partition_transaction_class: Type[WindowedRocksDBPartitionTransaction] = (
-        WindowedRocksDBPartitionTransaction
-    )
     additional_column_families = (
         LATEST_DELETED_VALUE_CF_NAME,
         LATEST_EXPIRED_WINDOW_CF_NAME,
@@ -54,7 +51,7 @@ class WindowedRocksDBStorePartition(RocksDBStorePartition):
 
         Using `WindowedRocksDBPartitionTransaction` is a recommended way for accessing the data.
         """
-        return self.partition_transaction_class(
+        return WindowedRocksDBPartitionTransaction(
             partition=self,
             dumps=self._dumps,
             loads=self._loads,

@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Literal, Optional, Type, Union
+from typing import TYPE_CHECKING, Literal, Optional, Union
 
 from quixstreams.state.metadata import (
     Marker,
@@ -24,8 +24,6 @@ class StorePartition(ABC):
     It represents a single instance of some storage (e.g. a single database for
     the persistent storage).
     """
-
-    partition_transaction_class: Type[PartitionTransaction] = PartitionTransaction
 
     def __init__(
         self,
@@ -108,18 +106,14 @@ class StorePartition(ABC):
         :param offset: changelog message offset
         """
 
+    @abstractmethod
     def begin(self) -> PartitionTransaction:
         """
         Start a new `PartitionTransaction`
 
         Using `PartitionTransaction` is a recommended way for accessing the data.
         """
-        return self.partition_transaction_class(
-            partition=self,
-            dumps=self._dumps,
-            loads=self._loads,
-            changelog_producer=self._changelog_producer,
-        )
+        ...
 
     def __enter__(self):
         return self

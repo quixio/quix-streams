@@ -240,8 +240,16 @@ class TimestampedStorePartition(RocksDBStorePartition):
     `TimestampedPartitionTransaction` instances to handle atomic operations for that partition.
     """
 
-    partition_transaction_class = TimestampedPartitionTransaction
     additional_column_families = (MIN_ELIGIBLE_TIMESTAMPS_CF_NAME,)
+
+    def begin(self) -> TimestampedPartitionTransaction:
+        # Override the method to specify the correct return type
+        return TimestampedPartitionTransaction(
+            partition=self,
+            dumps=self._dumps,
+            loads=self._loads,
+            changelog_producer=self._changelog_producer,
+        )
 
 
 class TimestampedStore(RocksDBStore):

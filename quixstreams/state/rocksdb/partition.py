@@ -13,6 +13,7 @@ from typing import (
 from rocksdict import AccessType, ColumnFamily, Rdict, ReadOptions, WriteBatch
 
 from quixstreams.state.base import (
+    PartitionTransaction,
     PartitionTransactionCache,
     StorePartition,
 )
@@ -198,6 +199,14 @@ class RocksDBStorePartition(StorePartition):
             for key, value in items:
                 if lower_bound <= key:
                     yield key, value
+
+    def begin(self) -> PartitionTransaction:
+        return PartitionTransaction(
+            partition=self,
+            dumps=self._dumps,
+            loads=self._loads,
+            changelog_producer=self._changelog_producer,
+        )
 
     def exists(self, key: bytes, cf_name: str = "default") -> bool:
         """

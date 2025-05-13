@@ -44,6 +44,7 @@ __all__ = (
     "PartitionTransactionStatus",
     "PartitionTransaction",
     "PartitionTransactionCache",
+    "validate_transaction_status",
 )
 
 logger = logging.getLogger(__name__)
