@@ -106,18 +106,14 @@ class StorePartition(ABC):
         :param offset: changelog message offset
         """
 
+    @abstractmethod
     def begin(self) -> PartitionTransaction:
         """
         Start a new `PartitionTransaction`
 
         Using `PartitionTransaction` is a recommended way for accessing the data.
         """
-        return PartitionTransaction(
-            partition=self,
-            dumps=self._dumps,
-            loads=self._loads,
-            changelog_producer=self._changelog_producer,
-        )
+        ...
 
     def __enter__(self):
         return self

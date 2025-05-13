@@ -2,6 +2,7 @@ import functools
 import logging
 from typing import Any, Dict, Literal, Optional, Union
 
+from quixstreams.state import PartitionTransaction
 from quixstreams.state.base import PartitionTransactionCache, StorePartition
 from quixstreams.state.exceptions import ColumnFamilyDoesNotExist
 from quixstreams.state.metadata import METADATA_CF_NAME, Marker
@@ -61,6 +62,14 @@ class MemoryStorePartition(StorePartition):
 
     def close(self) -> None:
         self._closed = True
+
+    def begin(self) -> PartitionTransaction:
+        return PartitionTransaction(
+            partition=self,
+            dumps=self._dumps,
+            loads=self._loads,
+            changelog_producer=self._changelog_producer,
+        )
 
     @_validate_partition_state()
     def write(

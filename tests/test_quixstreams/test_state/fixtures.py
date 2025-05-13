@@ -6,7 +6,7 @@ import pytest
 
 from quixstreams.internal_consumer import InternalConsumer
 from quixstreams.models import TopicManager
-from quixstreams.state.base import StorePartition
+from quixstreams.state.base import PartitionTransactionCache, StorePartition
 from quixstreams.state.memory import MemoryStore, MemoryStorePartition
 from quixstreams.state.recovery import (
     ChangelogProducer,
@@ -19,6 +19,7 @@ from quixstreams.state.rocksdb import (
     RocksDBStore,
     RocksDBStorePartition,
 )
+from quixstreams.state.rocksdb.timestamped import TimestampedStore
 
 
 @pytest.fixture()
@@ -86,14 +87,14 @@ def memory_store_factory():
     return factory
 
 
-def rocksdb_store_factory(tmp_path):
+def rocksdb_store_factory(tmp_path, cls):
     def factory(
         topic: Optional[str] = None,
         name: str = "default",
         changelog_producer_factory: Optional[ChangelogProducerFactory] = None,
-    ) -> RocksDBStore:
+    ) -> cls:
         topic = topic or str(uuid.uuid4())
-        return RocksDBStore(
+        return cls(
             stream_id=topic,
             name=name,
             base_dir=str(tmp_path),
@@ -105,8 +106,8 @@ def rocksdb_store_factory(tmp_path):
 
 @pytest.fixture()
 def store_factory(store_type, tmp_path):
-    if store_type == RocksDBStore:
-        return rocksdb_store_factory(tmp_path)
+    if store_type in [RocksDBStore, TimestampedStore]:
+        return rocksdb_store_factory(tmp_path, store_type)
     elif store_type == MemoryStore:
         return memory_store_factory()
     else:
@@ -171,3 +172,8 @@ def changelog_producer_mock():
     type(producer).changelog_name = PropertyMock(return_value="test-changelog-topic")
     type(producer).partition = PropertyMock(return_value=0)
     return producer
+
+
+@pytest.fixture()
+def cache() -> PartitionTransactionCache:
+    return PartitionTransactionCache()

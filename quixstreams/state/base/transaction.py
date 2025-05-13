@@ -44,6 +44,7 @@ __all__ = (
     "PartitionTransactionStatus",
     "PartitionTransaction",
     "PartitionTransactionCache",
+    "validate_transaction_status",
 )
 
 logger = logging.getLogger(__name__)
@@ -471,7 +472,7 @@ class PartitionTransaction(ABC, Generic[K, V]):
             return self._partition.exists(key_serialized, cf_name=cf_name)
 
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
-    def prepare(self, processed_offsets: Optional[dict[str, int]]):
+    def prepare(self, processed_offsets: Optional[dict[str, int]] = None) -> None:
         """
         Produce changelog messages to the changelog topic for all changes accumulated
         in this transaction and prepare transaction to flush its state to the state
@@ -581,4 +582,5 @@ class PartitionTransaction(ABC, Generic[K, V]):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_val is None and not self.failed:
+            self.prepare()
             self.flush()

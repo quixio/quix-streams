@@ -1,8 +1,5 @@
 import itertools
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Iterable, Optional, cast
-
-from rocksdict import ReadOptions
 
 from quixstreams.state.base.transaction import (
     PartitionTransaction,
@@ -11,6 +8,7 @@ from quixstreams.state.base.transaction import (
 )
 from quixstreams.state.metadata import DEFAULT_PREFIX, SEPARATOR
 from quixstreams.state.recovery import ChangelogProducer
+from quixstreams.state.rocksdb.cache import CounterCache, TimestampsCache
 from quixstreams.state.serialization import (
     DumpsFunc,
     LoadsFunc,
@@ -43,21 +41,7 @@ if TYPE_CHECKING:
     from .partition import WindowedRocksDBStorePartition
 
 
-@dataclass
-class TimestampsCache:
-    key: bytes
-    cf_name: str
-    timestamps: dict[bytes, Optional[int]] = field(default_factory=dict)
-
-
-@dataclass
-class CounterCache:
-    key: bytes
-    cf_name: str
-    counter: Optional[int] = None
-
-
-class WindowedRocksDBPartitionTransaction(PartitionTransaction):
+class WindowedRocksDBPartitionTransaction(PartitionTransaction[bytes, dict]):
     def __init__(
         self,
         partition: "WindowedRocksDBStorePartition",
@@ -485,8 +469,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         ):
             _, start, end = parse_window_key(key)
             if start_from_ms < start <= start_to_ms:
-                value = self._deserialize_value(value)
-                result.append(((start, end), value, prefix))
+                result.append(((start, end), self._deserialize_value(value), prefix))
 
         return result
 
@@ -520,12 +503,10 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         seek_to_key = append_integer(base_bytes=prefix, integer=end)
 
         # Create an iterator over the state store
-        # Set iterator bounds to reduce IO by limiting the range of keys fetched
-        read_opt = ReadOptions()
-        read_opt.set_iterate_lower_bound(seek_from_key)
-        read_opt.set_iterate_upper_bound(seek_to_key)
         db_items = self._partition.iter_items(
-            read_opt=read_opt, from_key=seek_from_key, cf_name=cf_name
+            lower_bound=seek_from_key,
+            upper_bound=seek_to_key,
+            cf_name=cf_name,
         )
 
         cache = self._update_cache
@@ -550,7 +531,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
 
     def _get_timestamp(
         self, cache: TimestampsCache, prefix: bytes, default: Any = None
-    ) -> Any:
+    ) -> int:
         cached_ts = cache.timestamps.get(prefix)
         if cached_ts is not None:
             return cached_ts
@@ -603,7 +584,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction):
         if cache.counter is None:
             cache.counter = self.get(
                 default=-1, key=cache.key, prefix=b"", cf_name=cache.cf_name
-            )
+            )  # type:ignore[call-overload]
 
         cache.counter += 1
 
