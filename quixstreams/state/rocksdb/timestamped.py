@@ -1,3 +1,4 @@
+from collections import deque
 from typing import Any, Optional, Union, cast
 
 from quixstreams.state.base.transaction import (
@@ -183,19 +184,25 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         RocksDB store within the current transaction.
         """
         updates = self._update_cache.get_updates()
+        # Accumulate the expired keys separately to avoid
+        # mutating the update cache during iteration
+        keys_to_delete: deque[tuple[bytes, bytes]] = deque()
+
         for prefix, cached in updates.items():
             min_eligible_timestamp = self._get_min_eligible_timestamp(prefix)
 
             key = self._serialize_key(min_eligible_timestamp, prefix)
-
-            # Cast to list to avoid RuntimeError: dictionary changed size during iteration
-            for cached_key in list(cached):
+            for cached_key in cached:
                 if cached_key < key:
-                    self._update_cache.delete(cached_key, prefix)
+                    keys_to_delete.append((cached_key, prefix))
 
             stored = self._partition.iter_items(lower_bound=prefix, upper_bound=key)
             for stored_key, _ in stored:
-                self._update_cache.delete(stored_key, prefix)
+                keys_to_delete.append((stored_key, prefix))
+
+        # Mark the expired keys as deleted in the update cache
+        for key, prefix in keys_to_delete:
+            self._update_cache.delete(key, prefix)
 
     def _ensure_bytes(self, prefix: Any) -> bytes:
         if isinstance(prefix, bytes):
