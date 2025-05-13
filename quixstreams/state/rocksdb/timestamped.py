@@ -155,7 +155,7 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         :param retention_ms: retention for the key in milliseconds
         """
         prefix = self._ensure_bytes(prefix)
-        super().set(timestamp, value, prefix)
+        self.set(timestamp, value, prefix)
         min_eligible_timestamp = max(
             self._get_min_eligible_timestamp(prefix),
             timestamp - retention_ms,
