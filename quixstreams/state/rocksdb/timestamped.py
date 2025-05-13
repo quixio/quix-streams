@@ -24,7 +24,7 @@ __all__ = (
     "TimestampedPartitionTransaction",
 )
 
-DAYS_7 = 7 * 24 * 60 * 60 * 1000
+DAY_MS = 24 * 60 * 60 * 1000
 
 MIN_ELIGIBLE_TIMESTAMPS_CF_NAME = "__min-eligible-timestamps__"
 MIN_ELIGIBLE_TIMESTAMPS_KEY = b"__min_eligible_timestamps__"
@@ -128,7 +128,7 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         timestamp: int,
         value: Any,
         prefix: Any,
-        retention_ms: int = DAYS_7,
+        retention_ms: int = 7 * DAY_MS,
     ) -> None:
         """Set a value for the timestamp.
 
@@ -143,6 +143,7 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         :param timestamp: Timestamp associated with the value in milliseconds.
         :param value: The value to store.
         :param prefix: The key prefix.
+        :param retention_ms: retention for the key in milliseconds
         """
         prefix = self._ensure_bytes(prefix)
         super().set(timestamp, value, prefix)
