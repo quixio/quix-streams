@@ -228,9 +228,13 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         :return: The minimum eligible timestamp (int).
         """
         cache = self._min_eligible_timestamps
-        return (
-            cache.timestamps.get(prefix) or self.get(key=cache.key, prefix=prefix) or 0
-        )
+        cached = cache.timestamps.get(prefix)
+        if cached is not None:
+            return cached
+        stored = self.get(key=cache.key, prefix=prefix) or 0
+        # Write the timestamp back to cache since it is known now
+        cache.timestamps[prefix] = stored
+        return stored
 
     def _set_min_eligible_timestamp(self, prefix: bytes, timestamp: int) -> None:
         """
