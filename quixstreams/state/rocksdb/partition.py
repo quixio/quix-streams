@@ -197,8 +197,10 @@ class RocksDBStorePartition(StorePartition):
             # is not respected by Rdict for some reason. We need to manually
             # filter it here.
             for key, value in items:
-                if lower_bound <= key:
-                    yield key, value
+                if key < lower_bound:
+                    # Exit early if the key falls below the lower bound
+                    break
+                yield key, value
 
     def begin(self) -> PartitionTransaction:
         return PartitionTransaction(
