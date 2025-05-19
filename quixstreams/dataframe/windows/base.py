@@ -70,7 +70,7 @@ class Window(abc.ABC):
         pass
 
     def register_store(self) -> None:
-        self._dataframe.ensure_topics_copartitioned()
+        TopicManager.ensure_topics_copartitioned(*self._dataframe.topics)
         # Create a config for the changelog topic based on the underlying SDF topics
         changelog_config = TopicManager.derive_topic_config(self._dataframe.topics)
         self._dataframe.processing_context.state_manager.register_windowed_store(

@@ -66,7 +66,7 @@ class JoinLatest:
                 "Joining dataframes originating from "
                 "the same topic is not yet supported.",
             )
-        left.ensure_topics_copartitioned(*left.topics, *right.topics)
+        TopicManager.ensure_topics_copartitioned(*left.topics, *right.topics)
 
         changelog_config = TopicManager.derive_topic_config(right.topics)
         right.processing_context.state_manager.register_timestamped_store(

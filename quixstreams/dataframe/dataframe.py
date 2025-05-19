@@ -56,7 +56,7 @@ from quixstreams.utils.printing import (
     DEFAULT_LIVE_SLOWDOWN,
 )
 
-from .exceptions import InvalidOperation, TopicPartitionsMismatch
+from .exceptions import InvalidOperation
 from .joins import JoinLatest, JoinLatestHow, OnOverlap
 from .registry import DataFrameRegistry
 from .series import StreamingSeries
@@ -1695,18 +1695,6 @@ class StreamingDataFrame:
             self, right
         )
 
-    def ensure_topics_copartitioned(self, *topics: Topic):
-        topics = topics or self._topics
-        partitions_counts = set(t.broker_config.num_partitions for t in topics)
-        if len(partitions_counts) > 1:
-            msg = ", ".join(
-                f'"{t.name}" ({t.broker_config.num_partitions} partitions)'
-                for t in topics
-            )
-            raise TopicPartitionsMismatch(
-                f"The underlying topics must have the same number of partitions to use State; got {msg}"
-            )
-
     def _produce(
         self,
         topic: Topic,
@@ -1733,7 +1721,7 @@ class StreamingDataFrame:
         """
         Register the default store for the current stream_id in StateStoreManager.
         """
-        self.ensure_topics_copartitioned()
+        TopicManager.ensure_topics_copartitioned(*self._topics)
 
         # Generate a changelog topic config based on the underlying topics.
         changelog_topic_config = self._topic_manager.derive_topic_config(self._topics)

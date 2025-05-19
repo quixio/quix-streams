@@ -15,11 +15,11 @@ from quixstreams.dataframe.exceptions import (
     GroupByDuplicate,
     GroupByNestingLimit,
     InvalidOperation,
-    TopicPartitionsMismatch,
 )
 from quixstreams.dataframe.registry import DataFrameRegistry
 from quixstreams.dataframe.windows.base import WindowResult
 from quixstreams.models import TopicConfig
+from quixstreams.models.topics.exceptions import TopicPartitionsMismatch
 from tests.utils import DummySink
 
 RecordStub = namedtuple("RecordStub", ("value", "key", "timestamp"))
