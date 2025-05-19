@@ -22,5 +22,6 @@ class RocksDBOptionsType(Protocol):
     loads: LoadsFunc
     open_max_retries: int
     open_retry_backoff: float
+    use_fsync: bool
 
     def to_options(self) -> rocksdict.Options: ...
