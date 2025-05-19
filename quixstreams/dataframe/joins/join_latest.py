@@ -65,13 +65,12 @@ class JoinLatest:
             )
         left.ensure_topics_copartitioned(*left.topics, *right.topics)
 
-        for sdf in (left, right):
-            changelog_config = TopicManager.derive_topic_config(sdf.topics)
-            sdf.processing_context.state_manager.register_timestamped_store(
-                stream_id=sdf.stream_id,
-                store_name=self._store_name,
-                changelog_config=changelog_config,
-            )
+        changelog_config = TopicManager.derive_topic_config(right.topics)
+        right.processing_context.state_manager.register_timestamped_store(
+            stream_id=right.stream_id,
+            store_name=self._store_name,
+            changelog_config=changelog_config,
+        )
 
         is_inner_join = self._how == "inner"
 
