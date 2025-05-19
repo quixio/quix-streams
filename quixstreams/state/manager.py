@@ -9,6 +9,7 @@ from quixstreams.models.topics import TopicConfig
 from .base import Store, StorePartition
 from .exceptions import (
     PartitionStoreIsUsed,
+    StoreAlreadyRegisteredError,
     StoreNotRegisteredError,
     WindowedStoreAlreadyRegisteredError,
 )
@@ -197,14 +198,6 @@ class StateStoreManager:
                     changelog_producer_factory=changelog_producer_factory,
                     options=self._rocksdb_options,
                 )
-            elif store_type == TimestampedStore:
-                store = TimestampedStore(
-                    name=store_name,
-                    stream_id=stream_id,
-                    base_dir=str(self._state_dir),
-                    changelog_producer_factory=changelog_producer_factory,
-                    options=self._rocksdb_options,
-                )
             elif store_type == MemoryStore:
                 store = MemoryStore(
                     name=store_name,
@@ -215,6 +208,31 @@ class StateStoreManager:
                 raise ValueError(f"invalid store type: {store_type}")
 
             self._stores.setdefault(stream_id, {})[store_name] = store
+
+    # TODO: Test
+    def register_timestamped_store(
+        self,
+        stream_id: str,
+        store_name: str,
+        changelog_config: Optional[TopicConfig] = None,
+    ) -> None:
+        if self._stores.get(stream_id, {}).get(store_name):
+            raise StoreAlreadyRegisteredError(
+                f'Store "{store_name}" for stream_id "{stream_id}" is already registered;'
+                f'provide a different "store_name" parameter'
+            )
+        store = TimestampedStore(
+            name=store_name,
+            stream_id=stream_id,
+            base_dir=str(self._state_dir),
+            changelog_producer_factory=self._setup_changelogs(
+                stream_id=stream_id,
+                store_name=store_name,
+                topic_config=changelog_config,
+            ),
+            options=self._rocksdb_options,
+        )
+        self._stores.setdefault(stream_id, {})[store_name] = store
 
     def register_windowed_store(
         self,

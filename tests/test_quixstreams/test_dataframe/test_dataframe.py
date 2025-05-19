@@ -5,13 +5,12 @@ import warnings
 from collections import namedtuple
 from datetime import timedelta
 from functools import partial
-from typing import Any, get_args
+from typing import Any
 from unittest import mock
 
 import pytest
 
 from quixstreams import State
-from quixstreams.dataframe.dataframe import JoinHow, JoinOnOverlap
 from quixstreams.dataframe.exceptions import (
     GroupByDuplicate,
     GroupByNestingLimit,
@@ -2650,6 +2649,7 @@ class TestStreamingDataFrameJoinLatest:
     def topic_manager(self, topic_manager_factory):
         return topic_manager_factory()
 
+    # TODO: Check if we already have a fixture for that to avoid the pollution
     @pytest.fixture
     def create_topic(self, topic_manager):
         def _create_topic(num_partitions=1):
@@ -2761,10 +2761,7 @@ class TestStreamingDataFrameJoinLatest:
         left_topic, right_topic = create_topic(), create_topic()
         left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
 
-        match = (
-            "Invalid how value: invalid. "
-            f"Valid values are: {', '.join(get_args(JoinHow))}."
-        )
+        match = 'Invalid "how" value'
         with pytest.raises(ValueError, match=match):
             left_sdf.join_latest(right_sdf, how="invalid")
 
@@ -2853,28 +2850,27 @@ class TestStreamingDataFrameJoinLatest:
         left_topic, right_topic = create_topic(), create_topic()
         left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
 
-        match = (
-            "Invalid on_overlap value: invalid. "
-            f"Valid values are: {', '.join(get_args(JoinOnOverlap))}."
-        )
+        match = 'Invalid "on_overlap"'
         with pytest.raises(ValueError, match=match):
             left_sdf.join_latest(right_sdf, on_overlap="invalid")
 
-    def test_custom_merger(self, create_topic, create_sdf, assign_partition, publish):
+    def test_on_overlap_callback(
+        self, create_topic, create_sdf, assign_partition, publish
+    ):
         left_topic, right_topic = create_topic(), create_topic()
         left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
 
-        def merger(left, right):
+        def on_overlap(left, right):
             return {"left": left, "right": right}
 
-        joined_sdf = left_sdf.join_latest(right_sdf, merger=merger)
+        joined_sdf = left_sdf.join_latest(right_sdf, on_overlap=on_overlap)
         assign_partition(right_sdf)
 
         publish(joined_sdf, right_topic, value=1, key=b"key", timestamp=1)
         joined_value = publish(joined_sdf, left_topic, value=2, key=b"key", timestamp=2)
         assert joined_value == [({"left": 2, "right": 1}, b"key", 2, None)]
 
-    def test_retention_ms(
+    def test_grace_ms(
         self,
         create_topic,
         create_sdf,
@@ -2884,7 +2880,7 @@ class TestStreamingDataFrameJoinLatest:
         left_topic, right_topic = create_topic(), create_topic()
         left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
 
-        joined_sdf = left_sdf.join_latest(right_sdf, retention_ms=10)
+        joined_sdf = left_sdf.join_latest(right_sdf, grace_ms=10)
         assign_partition(right_sdf)
 
         # min eligible timestamp is 15 - 10 = 5

@@ -386,7 +386,7 @@ class RocksDBStorePartition(StorePartition):
                     raise
 
                 logger.warning(
-                    f"Failed to open rocksdb partition, cannot acquire a lock. "
+                    f"Failed to open rocksdb partition , cannot acquire a lock. "
                     f"Retrying in {self._open_retry_backoff}sec."
                 )
 

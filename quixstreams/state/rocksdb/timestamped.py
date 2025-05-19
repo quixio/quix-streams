@@ -69,6 +69,7 @@ class TimestampedPartitionTransaction(PartitionTransaction):
             cf_name=MIN_ELIGIBLE_TIMESTAMPS_CF_NAME,
         )
 
+    # TODO: Rename to "get_latest()"
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
     def get_last(self, timestamp: int, prefix: Any) -> Optional[Any]:
         """Get the latest value for a prefix up to a given timestamp.

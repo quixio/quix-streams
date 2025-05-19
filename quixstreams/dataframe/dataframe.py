@@ -20,7 +20,6 @@ from typing import (
     TypeVar,
     Union,
     cast,
-    get_args,
     overload,
 )
 
@@ -50,15 +49,14 @@ from quixstreams.models import (
 from quixstreams.models.serializers import DeserializerType, SerializerType
 from quixstreams.sinks import BaseSink
 from quixstreams.state.base import State
-from quixstreams.state.base.transaction import PartitionTransaction
 from quixstreams.state.manager import StoreTypes
-from quixstreams.state.rocksdb.timestamped import TimestampedStore
 from quixstreams.utils.printing import (
     DEFAULT_COLUMN_NAME,
     DEFAULT_LIVE,
     DEFAULT_LIVE_SLOWDOWN,
 )
 
+from . import joins
 from .exceptions import InvalidOperation, TopicPartitionsMismatch
 from .registry import DataFrameRegistry
 from .series import StreamingSeries
@@ -84,11 +82,6 @@ UpdateCallbackStateful = Callable[[Any, State], None]
 UpdateWithMetadataCallbackStateful = Callable[[Any, Any, int, Any, State], None]
 FilterCallbackStateful = Callable[[Any, State], bool]
 FilterWithMetadataCallbackStateful = Callable[[Any, Any, int, Any, State], bool]
-
-# Constants related to join
-DISCARDED = object()
-JoinHow = Literal["inner", "left"]
-JoinOnOverlap = Literal["keep-left", "keep-right", "raise"]
 
 
 class StreamingDataFrame:
@@ -1656,87 +1649,51 @@ class StreamingDataFrame:
     def join_latest(
         self,
         right: "StreamingDataFrame",
-        how: JoinHow = "inner",
-        on_overlap: JoinOnOverlap = "raise",
-        merger: Optional[Callable[[Any, Any], Any]] = None,
-        retention_ms: Union[int, timedelta] = timedelta(days=7),
+        how: joins.How = "inner",
+        on_overlap: Union[joins.OnOverlap, Callable[[Any, Any], Any]] = "raise",
+        grace_ms: Union[int, timedelta] = timedelta(days=7),
+        # TODO: Allow passing the store name here?
     ) -> "StreamingDataFrame":
-        if self.stream_id == right.stream_id:
-            raise ValueError(
-                "Joining dataframes originating from "
-                "the same topic is not yet supported.",
-            )
+        """
+        Join the StreamingDataFrame with the latest effective values on the right side.
+        This join is built with enrichment use case in mind when the left side is a data stream and the right side
+        is metadata.
 
-        if how not in get_args(JoinHow):
-            raise ValueError(
-                f"Invalid how value: {how}. "
-                f"Valid values are: {', '.join(get_args(JoinHow))}."
-            )
+        The underlying topics of the dataframes must have the same number of partitions
+        and use the same partitioner (keys should be distributed between partitions using the same method).
 
-        if on_overlap not in get_args(JoinOnOverlap):
-            raise ValueError(
-                f"Invalid on_overlap value: {on_overlap}. "
-                f"Valid values are: {', '.join(get_args(JoinOnOverlap))}."
-            )
+        Joining dataframes belonging to the same topics (aka "self-join") is not supported as of now.
 
-        if merger is None:
-            if on_overlap == "keep-left":
+        How the joining works:
+            - Records from the right side get written to the state store without emitting any updates downstream.
+            - Records on the left side query the right store for the values with the same **key** and the timestamp lower or equal to the record's timestamp.
+              Left side emits data downstream.
+            - If the match is found, the two records are merged together into a new one according to the `on_overlap` logic.
+            - The size of the right store is controlled by the "grace_ms":
+              a newly added "right" record expires other values with the same key with timestamps below "<current timestamp> - <grace_ms>".
 
-                def merger(left_value, right_value):
-                    """
-                    Merge two dictionaries, preferring values from the left dictionary
-                    and preserving order with left columns coming first.
-                    """
-                    right_value = {
-                        key: value
-                        for key, value in (right_value or {}).items()
-                        if key not in left_value
-                    }
-                    return {**left_value, **right_value}
+        :param right: a StreamingDataFrame to join with.
 
-            elif on_overlap == "keep-right":
+        :param how: the join strategy. Can be one of:
+          - "inner" - emits the result when the match on the right side is found for the left record.
+          - "left" - emits the result for each left record even if there is no match on the right side.
+          Default - `"inner"`.
 
-                def merger(left_value, right_value):
-                    return {**left_value, **(right_value or {})}
-            elif on_overlap == "raise":
+        :param on_overlap: how to merge the matched records together assuming they are dictionaries:
+            - "raise" - fail with an error if the same keys are found in both dictionaries
+            - "keep-left" - prefer the keys from the left record.
+            - "keep-right" - prefer the keys from the right record
+            - callback - a callback in form "(<left>, <right>) -> <new record>" to merge the records manually.
+              Use it to customize the merging logic or when one of the records is not a dictionary.
 
-                def merger(left_value, right_value):
-                    right_value = right_value or {}
-                    if overlapping_columns := left_value.keys() & right_value.keys():
-                        overlapping_columns_str = ", ".join(sorted(overlapping_columns))
-                        raise ValueError(
-                            f"Overlapping columns: {overlapping_columns_str}."
-                            "You need to provide either an on_overlap value of "
-                            "'keep-left' or 'keep-right' or a custom merger function."
-                        )
-                    return {**left_value, **right_value}
+        :param grace_ms: how long to keep the right records in the store.
+           Can be specified as either an `int` representing milliseconds or as a `timedelta` object.
+           Default - 7 days.
 
-        self.ensure_topics_copartitioned(*self.topics, *right.topics)
-        right.register_store(store_type=TimestampedStore)
-        is_inner_join = how == "inner"
-        retention_ms = ensure_milliseconds(retention_ms)
-
-        def left_func(value, key, timestamp, headers):
-            right_tx = _get_transaction(right)
-            right_value = right_tx.get_last(timestamp=timestamp, prefix=key)
-            if is_inner_join and not right_value:
-                return DISCARDED
-            return merger(value, right_value)
-
-        def right_func(value, key, timestamp, headers):
-            right_tx = _get_transaction(right)
-            right_tx.set_for_timestamp(
-                timestamp=timestamp,
-                value=value,
-                prefix=key,
-                retention_ms=retention_ms,
-            )
-
-        right = right.update(right_func, metadata=True).filter(lambda value: False)
-        left = self.apply(left_func, metadata=True).filter(
-            lambda value: value is not DISCARDED
+        """
+        return joins.JoinLatest(how=how, on_overlap=on_overlap, grace_ms=grace_ms).join(
+            self, right
         )
-        return left.concat(right)
 
     def ensure_topics_copartitioned(self, *topics: Topic):
         topics = topics or self._topics
@@ -1938,14 +1895,10 @@ def _as_stateful(
     def wrapper(value: Any, key: Any, timestamp: int, headers: Any) -> Any:
         # Pass a State object with an interface limited to the key updates only
         # and prefix all the state keys by the message key
-        state = _get_transaction(sdf).as_state(prefix=key)
+        state = sdf.processing_context.checkpoint.get_store_transaction(
+            stream_id=sdf.stream_id,
+            partition=message_context().partition,
+        ).as_state(prefix=key)
         return func(value, key, timestamp, headers, state)
 
     return wrapper
-
-
-def _get_transaction(sdf: StreamingDataFrame) -> PartitionTransaction:
-    return sdf.processing_context.checkpoint.get_store_transaction(
-        stream_id=sdf.stream_id,
-        partition=message_context().partition,
-    )
