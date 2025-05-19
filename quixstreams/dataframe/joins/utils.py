@@ -30,7 +30,7 @@ def raise_merger(left: Optional[Mapping], right: Optional[Mapping]) -> dict:
         overlapping_columns_str = ", ".join(sorted(overlapping_columns))
         raise ValueError(
             f"Overlapping columns: {overlapping_columns_str}."
-            'You need to provide either an "on_overlap" value of '
+            'You need to provide either an "on_merge" value of '
             "'keep-left' or 'keep-right' or a custom merger function."
         )
     return {**left, **right}

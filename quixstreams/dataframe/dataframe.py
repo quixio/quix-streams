@@ -56,8 +56,8 @@ from quixstreams.utils.printing import (
     DEFAULT_LIVE_SLOWDOWN,
 )
 
-from . import joins
 from .exceptions import InvalidOperation, TopicPartitionsMismatch
+from .joins import JoinLatest, JoinLatestHow, OnOverlap
 from .registry import DataFrameRegistry
 from .series import StreamingSeries
 from .utils import ensure_milliseconds
@@ -1649,10 +1649,10 @@ class StreamingDataFrame:
     def join_latest(
         self,
         right: "StreamingDataFrame",
-        how: joins.How = "inner",
-        on_overlap: Union[joins.OnOverlap, Callable[[Any, Any], Any]] = "raise",
+        how: JoinLatestHow = "inner",
+        on_merge: Union[OnOverlap, Callable[[Any, Any], Any]] = "raise",
         grace_ms: Union[int, timedelta] = timedelta(days=7),
-        # TODO: Allow passing the store name here?
+        # TODO: Allow passing the store name here
     ) -> "StreamingDataFrame":
         """
         Join the StreamingDataFrame with the latest effective values on the right side.
@@ -1668,7 +1668,7 @@ class StreamingDataFrame:
             - Records from the right side get written to the state store without emitting any updates downstream.
             - Records on the left side query the right store for the values with the same **key** and the timestamp lower or equal to the record's timestamp.
               Left side emits data downstream.
-            - If the match is found, the two records are merged together into a new one according to the `on_overlap` logic.
+            - If the match is found, the two records are merged together into a new one according to the `on_merge` logic.
             - The size of the right store is controlled by the "grace_ms":
               a newly added "right" record expires other values with the same key with timestamps below "<current timestamp> - <grace_ms>".
 
@@ -1679,7 +1679,7 @@ class StreamingDataFrame:
           - "left" - emits the result for each left record even if there is no match on the right side.
           Default - `"inner"`.
 
-        :param on_overlap: how to merge the matched records together assuming they are dictionaries:
+        :param on_merge: how to merge the matched records together assuming they are dictionaries:
             - "raise" - fail with an error if the same keys are found in both dictionaries
             - "keep-left" - prefer the keys from the left record.
             - "keep-right" - prefer the keys from the right record
@@ -1691,7 +1691,7 @@ class StreamingDataFrame:
            Default - 7 days.
 
         """
-        return joins.JoinLatest(how=how, on_overlap=on_overlap, grace_ms=grace_ms).join(
+        return JoinLatest(how=how, on_merge=on_merge, grace_ms=grace_ms).join(
             self, right
         )
 

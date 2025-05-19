@@ -2773,7 +2773,7 @@ class TestStreamingDataFrameJoinLatest:
             left_sdf.join_latest(right_sdf)
 
     @pytest.mark.parametrize(
-        "on_overlap, right, left, expected",
+        "on_merge, right, left, expected",
         [
             (
                 "keep-left",
@@ -2819,20 +2819,20 @@ class TestStreamingDataFrameJoinLatest:
             ),
         ],
     )
-    def test_on_overlap(
+    def test_on_merge(
         self,
         create_topic,
         create_sdf,
         assign_partition,
         publish,
-        on_overlap,
+        on_merge,
         right,
         left,
         expected,
     ):
         left_topic, right_topic = create_topic(), create_topic()
         left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
-        joined_sdf = left_sdf.join_latest(right_sdf, how="left", on_overlap=on_overlap)
+        joined_sdf = left_sdf.join_latest(right_sdf, how="left", on_merge=on_merge)
         assign_partition(right_sdf)
 
         publish(joined_sdf, right_topic, value=right, key=b"key", timestamp=1)
@@ -2846,24 +2846,24 @@ class TestStreamingDataFrameJoinLatest:
             )
             assert joined_value == [(expected, b"key", 2, None)]
 
-    def test_on_overlap_invalid_value(self, create_topic, create_sdf):
+    def test_on_merge_invalid_value(self, create_topic, create_sdf):
         left_topic, right_topic = create_topic(), create_topic()
         left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
 
-        match = 'Invalid "on_overlap"'
+        match = 'Invalid "on_merge"'
         with pytest.raises(ValueError, match=match):
-            left_sdf.join_latest(right_sdf, on_overlap="invalid")
+            left_sdf.join_latest(right_sdf, on_merge="invalid")
 
-    def test_on_overlap_callback(
+    def test_on_merge_callback(
         self, create_topic, create_sdf, assign_partition, publish
     ):
         left_topic, right_topic = create_topic(), create_topic()
         left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
 
-        def on_overlap(left, right):
+        def on_merge(left, right):
             return {"left": left, "right": right}
 
-        joined_sdf = left_sdf.join_latest(right_sdf, on_overlap=on_overlap)
+        joined_sdf = left_sdf.join_latest(right_sdf, on_merge=on_merge)
         assign_partition(right_sdf)
 
         publish(joined_sdf, right_topic, value=1, key=b"key", timestamp=1)

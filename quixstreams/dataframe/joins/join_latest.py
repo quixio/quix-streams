@@ -12,9 +12,12 @@ from .utils import keep_left_merger, keep_right_merger, raise_merger
 if typing.TYPE_CHECKING:
     from quixstreams.dataframe.dataframe import StreamingDataFrame
 
+
+__all__ = ("JoinLatestHow", "OnOverlap", "JoinLatest")
+
 DISCARDED = object()
-How = Literal["inner", "left"]
-How_choices = get_args(How)
+JoinLatestHow = Literal["inner", "left"]
+JoinLatestHow_choices = get_args(JoinLatestHow)
 
 OnOverlap = Literal["keep-left", "keep-right", "raise"]
 OnOverlap_choices = get_args(OnOverlap)
@@ -23,29 +26,29 @@ OnOverlap_choices = get_args(OnOverlap)
 class JoinLatest:
     def __init__(
         self,
-        how: How,
-        on_overlap: Union[OnOverlap, Callable[[Any, Any], Any]],
+        how: JoinLatestHow,
+        on_merge: Union[OnOverlap, Callable[[Any, Any], Any]],
         grace_ms: Union[int, timedelta],
         store_name: str = "join",
     ):
-        if how not in How_choices:
+        if how not in JoinLatestHow_choices:
             raise ValueError(
                 f'Invalid "how" value: {how}. '
-                f"Valid choices are: {', '.join(How_choices)}."
+                f"Valid choices are: {', '.join(JoinLatestHow_choices)}."
             )
         self._how = how
 
-        if callable(on_overlap):
-            self._merger = on_overlap
-        elif on_overlap == "keep-left":
+        if callable(on_merge):
+            self._merger = on_merge
+        elif on_merge == "keep-left":
             self._merger = keep_left_merger
-        elif on_overlap == "keep-right":
+        elif on_merge == "keep-right":
             self._merger = keep_right_merger
-        elif on_overlap == "raise":
+        elif on_merge == "raise":
             self._merger = raise_merger
         else:
             raise ValueError(
-                f'Invalid "on_overlap" value: {on_overlap}. '
+                f'Invalid "on_merge" value: {on_merge}. '
                 f"Provide either one of {', '.join(OnOverlap_choices)} or "
                 f"a callable to merge records manually."
             )
