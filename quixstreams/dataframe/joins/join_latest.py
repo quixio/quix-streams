@@ -87,7 +87,7 @@ class JoinLatest:
                 ),
             )
 
-            right_value = tx.get_last(timestamp=timestamp, prefix=key)
+            right_value = tx.get_latest(timestamp=timestamp, prefix=key)
             if is_inner_join and not right_value:
                 return DISCARDED
             return self._merger(value, right_value)
