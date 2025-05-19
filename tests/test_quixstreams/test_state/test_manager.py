@@ -10,8 +10,8 @@ from quixstreams.kafka import Consumer
 from quixstreams.models import TopicConfig
 from quixstreams.state.exceptions import (
     PartitionStoreIsUsed,
+    StoreAlreadyRegisteredError,
     StoreNotRegisteredError,
-    WindowedStoreAlreadyRegisteredError,
 )
 from quixstreams.state.manager import SUPPORTED_STORES
 from quixstreams.state.rocksdb import RocksDBStore
@@ -101,7 +101,7 @@ class TestStateStoreManager:
 
     def test_register_windowed_store_twice(self, state_manager):
         state_manager.register_windowed_store("stream_id", "store")
-        with pytest.raises(WindowedStoreAlreadyRegisteredError):
+        with pytest.raises(StoreAlreadyRegisteredError):
             state_manager.register_windowed_store("stream_id", "store")
 
     def test_get_store_not_registered(self, state_manager):

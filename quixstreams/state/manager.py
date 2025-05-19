@@ -11,7 +11,6 @@ from .exceptions import (
     PartitionStoreIsUsed,
     StoreAlreadyRegisteredError,
     StoreNotRegisteredError,
-    WindowedStoreAlreadyRegisteredError,
 )
 from .memory import MemoryStore
 from .recovery import ChangelogProducerFactory, RecoveryManager
@@ -255,7 +254,7 @@ class StateStoreManager:
 
         store = self._stores.get(stream_id, {}).get(store_name)
         if store:
-            raise WindowedStoreAlreadyRegisteredError(
+            raise StoreAlreadyRegisteredError(
                 "This window range and type combination already exists; "
                 "to use this window, provide a unique name via the `name` parameter."
             )
