@@ -216,8 +216,8 @@ class StateStoreManager:
     ) -> None:
         if self._stores.get(stream_id, {}).get(store_name):
             raise StoreAlreadyRegisteredError(
-                f'Store "{store_name}" for stream_id "{stream_id}" is already registered;'
-                f'provide a different "store_name" parameter'
+                f'Store "{store_name}" for stream_id "{stream_id}" is already registered; '
+                f"provide a different name"
             )
         store = TimestampedStore(
             name=store_name,

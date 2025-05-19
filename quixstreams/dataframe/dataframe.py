@@ -1652,7 +1652,7 @@ class StreamingDataFrame:
         how: JoinLatestHow = "inner",
         on_merge: Union[OnOverlap, Callable[[Any, Any], Any]] = "raise",
         grace_ms: Union[int, timedelta] = timedelta(days=7),
-        # TODO: Allow passing the store name here
+        name: Optional[str] = None,
     ) -> "StreamingDataFrame":
         """
         Join the StreamingDataFrame with the latest effective values on the right side.
@@ -1686,14 +1686,37 @@ class StreamingDataFrame:
             - callback - a callback in form "(<left>, <right>) -> <new record>" to merge the records manually.
               Use it to customize the merging logic or when one of the records is not a dictionary.
 
-        :param grace_ms: how long to keep the right records in the store.
-           Can be specified as either an `int` representing milliseconds or as a `timedelta` object.
-           Default - 7 days.
+        :param grace_ms: how long to keep the right records in the store in event time
+            (the time is taken from the records' timestamps).
+            It can be specified as either an `int` representing milliseconds or as a `timedelta` object.
+            Default - 7 days.
+
+        :param name: The unique identifier of the underlying state store for the "right" dataframe.
+            If not provided, it will be generated based on the underlying topic names.
+            Provide a custom name if you need to join the same right dataframe multiple times
+            within the application.
+
+        Example:
+
+        ```python
+        from datetime import timedelta
+        from quixstreams import Application
+
+        app = Application()
+
+        sdf_measurements = app.dataframe(app.topic("measurements"))
+        sdf_metadata = app.dataframe(app.topic("metadata"))
+
+        # Join records from the topic "measurements"
+        # with the latest effective records from the topic "metadata"
+        # using the "inner" join strategy and keeping the "metadata" records stored for 14 days in event time.
+        sdf_joined = sdf_measurements.join_latest(sdf_metadata, how="inner", grace_ms=timedelta(days=14))
+        ```
 
         """
-        return JoinLatest(how=how, on_merge=on_merge, grace_ms=grace_ms).join(
-            self, right
-        )
+        return JoinLatest(
+            how=how, on_merge=on_merge, grace_ms=grace_ms, store_name=name
+        ).join(self, right)
 
     def _produce(
         self,

@@ -1,6 +1,6 @@
 import typing
 from datetime import timedelta
-from typing import Any, Callable, Literal, Union, cast, get_args
+from typing import Any, Callable, Literal, Optional, Union, cast, get_args
 
 from quixstreams.context import message_context
 from quixstreams.dataframe.utils import ensure_milliseconds
@@ -29,7 +29,7 @@ class JoinLatest:
         how: JoinLatestHow,
         on_merge: Union[OnOverlap, Callable[[Any, Any], Any]],
         grace_ms: Union[int, timedelta],
-        store_name: str = "join",
+        store_name: Optional[str] = None,
     ):
         if how not in JoinLatestHow_choices:
             raise ValueError(
@@ -54,7 +54,7 @@ class JoinLatest:
             )
 
         self._retention_ms = ensure_milliseconds(grace_ms)
-        self._store_name = store_name
+        self._store_name = store_name or "join"
 
     def join(
         self,

@@ -20,6 +20,7 @@ from quixstreams.dataframe.registry import DataFrameRegistry
 from quixstreams.dataframe.windows.base import WindowResult
 from quixstreams.models import TopicConfig
 from quixstreams.models.topics.exceptions import TopicPartitionsMismatch
+from quixstreams.state.exceptions import StoreAlreadyRegisteredError
 from tests.utils import DummySink
 
 RecordStub = namedtuple("RecordStub", ("value", "key", "timestamp"))
@@ -2916,3 +2917,23 @@ class TestStreamingDataFrameJoinLatest:
         sdf2 = sdf.apply(lambda v: v)
         with pytest.raises(ValueError, match=match):
             sdf.join_latest(sdf2)
+
+    def test_join_same_topic_multiple_times_fails(self, create_topic, create_sdf):
+        topic1 = create_topic()
+        topic2 = create_topic()
+        topic3 = create_topic()
+
+        sdf1 = create_sdf(topic1)
+        sdf2 = create_sdf(topic2)
+        sdf3 = create_sdf(topic3)
+
+        # Join topic1 with topic2 once
+        sdf1.join_latest(sdf2)
+
+        # Repeat the join
+        with pytest.raises(StoreAlreadyRegisteredError):
+            sdf1.join_latest(sdf2)
+
+        # Try joining topic2 with another sdf
+        with pytest.raises(StoreAlreadyRegisteredError):
+            sdf3.join_latest(sdf2)
