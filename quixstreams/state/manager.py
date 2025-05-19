@@ -208,7 +208,6 @@ class StateStoreManager:
 
             self._stores.setdefault(stream_id, {})[store_name] = store
 
-    # TODO: Test
     def register_timestamped_store(
         self,
         stream_id: str,

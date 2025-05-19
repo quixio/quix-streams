@@ -104,6 +104,11 @@ class TestStateStoreManager:
         with pytest.raises(StoreAlreadyRegisteredError):
             state_manager.register_windowed_store("stream_id", "store")
 
+    def test_register_timestamped_store_twice(self, state_manager):
+        state_manager.register_timestamped_store("stream_id", "store")
+        with pytest.raises(StoreAlreadyRegisteredError):
+            state_manager.register_timestamped_store("stream_id", "store")
+
     def test_get_store_not_registered(self, state_manager):
         with pytest.raises(StoreNotRegisteredError):
             state_manager.get_store("topic", "store")
