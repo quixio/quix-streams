@@ -12,7 +12,7 @@ __all__ = (
     "int_from_int64_bytes",
 )
 
-_int_packer = struct.Struct(">q")
+_int_packer = struct.Struct(">Q")
 _int_pack = _int_packer.pack
 _int_unpack = _int_packer.unpack
 
