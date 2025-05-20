@@ -12,7 +12,7 @@ from quixstreams.state.rocksdb.cache import TimestampsCache
 from quixstreams.state.serialization import (
     DumpsFunc,
     LoadsFunc,
-    int_to_int64_bytes,
+    encode_integer_pair,
     serialize,
 )
 
@@ -211,7 +211,9 @@ class TimestampedPartitionTransaction(PartitionTransaction):
 
     def _serialize_key(self, key: Union[int, bytes], prefix: bytes) -> bytes:
         if isinstance(key, int):
-            return prefix + SEPARATOR + int_to_int64_bytes(key)
+            # TODO: Currently using constant 0, but will be
+            # replaced with a global counter in the future
+            return prefix + SEPARATOR + encode_integer_pair(key, 0)
         elif isinstance(key, bytes):
             return prefix + SEPARATOR + key
         raise TypeError(f"Invalid key type: {type(key)}")
