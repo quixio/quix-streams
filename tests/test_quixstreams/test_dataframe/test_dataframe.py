@@ -2645,7 +2645,7 @@ class TestStreamingDataFrameConcat:
             sdf1.concat(sdf2).update(lambda v, state: None, stateful=True)
 
 
-class TestStreamingDataFrameJoinLatest:
+class TestStreamingDataFrameJoinAsOf:
     @pytest.fixture
     def topic_manager(self, topic_manager_factory):
         return topic_manager_factory()
@@ -2749,7 +2749,7 @@ class TestStreamingDataFrameJoinLatest:
     ):
         left_topic, right_topic = create_topic(), create_topic()
         left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
-        joined_sdf = left_sdf.join_latest(right_sdf, how=how)
+        joined_sdf = left_sdf.join_asof(right_sdf, how=how)
         assign_partition(right_sdf)
 
         publish(joined_sdf, right_topic, value=right, key=b"key", timestamp=1)
@@ -2764,14 +2764,14 @@ class TestStreamingDataFrameJoinLatest:
 
         match = 'Invalid "how" value'
         with pytest.raises(ValueError, match=match):
-            left_sdf.join_latest(right_sdf, how="invalid")
+            left_sdf.join_asof(right_sdf, how="invalid")
 
     def test_mismatching_partitions_fails(self, create_topic, create_sdf):
         left_topic, right_topic = create_topic(), create_topic(num_partitions=2)
         left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
 
         with pytest.raises(TopicPartitionsMismatch):
-            left_sdf.join_latest(right_sdf)
+            left_sdf.join_asof(right_sdf)
 
     @pytest.mark.parametrize(
         "on_merge, right, left, expected",
@@ -2833,7 +2833,7 @@ class TestStreamingDataFrameJoinLatest:
     ):
         left_topic, right_topic = create_topic(), create_topic()
         left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
-        joined_sdf = left_sdf.join_latest(right_sdf, how="left", on_merge=on_merge)
+        joined_sdf = left_sdf.join_asof(right_sdf, how="left", on_merge=on_merge)
         assign_partition(right_sdf)
 
         publish(joined_sdf, right_topic, value=right, key=b"key", timestamp=1)
@@ -2853,7 +2853,7 @@ class TestStreamingDataFrameJoinLatest:
 
         match = 'Invalid "on_merge"'
         with pytest.raises(ValueError, match=match):
-            left_sdf.join_latest(right_sdf, on_merge="invalid")
+            left_sdf.join_asof(right_sdf, on_merge="invalid")
 
     def test_on_merge_callback(
         self, create_topic, create_sdf, assign_partition, publish
@@ -2864,7 +2864,7 @@ class TestStreamingDataFrameJoinLatest:
         def on_merge(left, right):
             return {"left": left, "right": right}
 
-        joined_sdf = left_sdf.join_latest(right_sdf, on_merge=on_merge)
+        joined_sdf = left_sdf.join_asof(right_sdf, on_merge=on_merge)
         assign_partition(right_sdf)
 
         publish(joined_sdf, right_topic, value=1, key=b"key", timestamp=1)
@@ -2881,7 +2881,7 @@ class TestStreamingDataFrameJoinLatest:
         left_topic, right_topic = create_topic(), create_topic()
         left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
 
-        joined_sdf = left_sdf.join_latest(right_sdf, grace_ms=10)
+        joined_sdf = left_sdf.join_asof(right_sdf, grace_ms=10)
         assign_partition(right_sdf)
 
         # min eligible timestamp is 15 - 10 = 5
@@ -2911,12 +2911,12 @@ class TestStreamingDataFrameJoinLatest:
         # The very same sdf object
         sdf = create_sdf(topic)
         with pytest.raises(ValueError, match=match):
-            sdf.join_latest(sdf)
+            sdf.join_asof(sdf)
 
         # Same topic, different branch
         sdf2 = sdf.apply(lambda v: v)
         with pytest.raises(ValueError, match=match):
-            sdf.join_latest(sdf2)
+            sdf.join_asof(sdf2)
 
     def test_join_same_topic_multiple_times_fails(self, create_topic, create_sdf):
         topic1 = create_topic()
@@ -2928,12 +2928,12 @@ class TestStreamingDataFrameJoinLatest:
         sdf3 = create_sdf(topic3)
 
         # Join topic1 with topic2 once
-        sdf1.join_latest(sdf2)
+        sdf1.join_asof(sdf2)
 
         # Repeat the join
         with pytest.raises(StoreAlreadyRegisteredError):
-            sdf1.join_latest(sdf2)
+            sdf1.join_asof(sdf2)
 
         # Try joining topic2 with another sdf
         with pytest.raises(StoreAlreadyRegisteredError):
-            sdf3.join_latest(sdf2)
+            sdf3.join_asof(sdf2)

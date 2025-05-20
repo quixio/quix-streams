@@ -57,7 +57,7 @@ from quixstreams.utils.printing import (
 )
 
 from .exceptions import InvalidOperation
-from .joins import JoinLatest, JoinLatestHow, OnOverlap
+from .joins import JoinAsOf, JoinAsOfHow, OnOverlap
 from .registry import DataFrameRegistry
 from .series import StreamingSeries
 from .utils import ensure_milliseconds
@@ -1646,25 +1646,26 @@ class StreamingDataFrame:
             *self.topics, *other.topics, stream=merged_stream
         )
 
-    def join_latest(
+    def join_asof(
         self,
         right: "StreamingDataFrame",
-        how: JoinLatestHow = "inner",
+        how: JoinAsOfHow = "inner",
         on_merge: Union[OnOverlap, Callable[[Any, Any], Any]] = "raise",
         grace_ms: Union[int, timedelta] = timedelta(days=7),
         name: Optional[str] = None,
     ) -> "StreamingDataFrame":
         """
-        Join the StreamingDataFrame with the latest effective values on the right side.
-        This join is built with enrichment use case in mind when the left side is a data stream and the right side
-        is metadata.
+        Join the left dataframe with the records of the right dataframe with
+        the same key whose timestamp is less than or equal to the left timestamp.
+        This join is built with the enrichment use case in mind, where the left side
+        represents some measurements and the right side is metadata.
 
-        The underlying topics of the dataframes must have the same number of partitions
-        and use the same partitioner (keys should be distributed between partitions using the same method).
+        To be joined, the underlying topics of the dataframes must have the same number of partitions
+        and use the same partitioner (all keys should be distributed across partitions using the same algorithm).
 
         Joining dataframes belonging to the same topics (aka "self-join") is not supported as of now.
 
-        How the joining works:
+        How it works:
             - Records from the right side get written to the state store without emitting any updates downstream.
             - Records on the left side query the right store for the values with the same **key** and the timestamp lower or equal to the record's timestamp.
               Left side emits data downstream.
@@ -1686,9 +1687,10 @@ class StreamingDataFrame:
             - callback - a callback in form "(<left>, <right>) -> <new record>" to merge the records manually.
               Use it to customize the merging logic or when one of the records is not a dictionary.
 
-        :param grace_ms: how long to keep the right records in the store in event time
+        :param grace_ms: how long to keep the right records in the store in event time.
             (the time is taken from the records' timestamps).
             It can be specified as either an `int` representing milliseconds or as a `timedelta` object.
+            The records are expired per key when the new record gets added.
             Default - 7 days.
 
         :param name: The unique identifier of the underlying state store for the "right" dataframe.
@@ -1710,11 +1712,11 @@ class StreamingDataFrame:
         # Join records from the topic "measurements"
         # with the latest effective records from the topic "metadata"
         # using the "inner" join strategy and keeping the "metadata" records stored for 14 days in event time.
-        sdf_joined = sdf_measurements.join_latest(sdf_metadata, how="inner", grace_ms=timedelta(days=14))
+        sdf_joined = sdf_measurements.join_asof(sdf_metadata, how="inner", grace_ms=timedelta(days=14))
         ```
 
         """
-        return JoinLatest(
+        return JoinAsOf(
             how=how, on_merge=on_merge, grace_ms=grace_ms, store_name=name
         ).join(self, right)
 

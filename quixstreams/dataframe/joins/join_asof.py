@@ -13,28 +13,28 @@ if typing.TYPE_CHECKING:
     from quixstreams.dataframe.dataframe import StreamingDataFrame
 
 
-__all__ = ("JoinLatestHow", "OnOverlap", "JoinLatest")
+__all__ = ("JoinAsOfHow", "OnOverlap", "JoinAsOf")
 
 DISCARDED = object()
-JoinLatestHow = Literal["inner", "left"]
-JoinLatestHow_choices = get_args(JoinLatestHow)
+JoinAsOfHow = Literal["inner", "left"]
+JoinAsOfHow_choices = get_args(JoinAsOfHow)
 
 OnOverlap = Literal["keep-left", "keep-right", "raise"]
 OnOverlap_choices = get_args(OnOverlap)
 
 
-class JoinLatest:
+class JoinAsOf:
     def __init__(
         self,
-        how: JoinLatestHow,
+        how: JoinAsOfHow,
         on_merge: Union[OnOverlap, Callable[[Any, Any], Any]],
         grace_ms: Union[int, timedelta],
         store_name: Optional[str] = None,
     ):
-        if how not in JoinLatestHow_choices:
+        if how not in JoinAsOfHow_choices:
             raise ValueError(
                 f'Invalid "how" value: {how}. '
-                f"Valid choices are: {', '.join(JoinLatestHow_choices)}."
+                f"Valid choices are: {', '.join(JoinAsOfHow_choices)}."
             )
         self._how = how
 

@@ -1,3 +1,3 @@
-from .join_latest import JoinLatest as JoinLatest
-from .join_latest import JoinLatestHow as JoinLatestHow
-from .join_latest import OnOverlap as OnOverlap
+from .join_asof import JoinAsOf as JoinAsOf
+from .join_asof import JoinAsOfHow as JoinAsOfHow
+from .join_asof import OnOverlap as OnOverlap
