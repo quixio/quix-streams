@@ -14,6 +14,7 @@ from quixstreams.state.serialization import (
     ],
 )
 def test_encode_integer_pair(start, end):
+    # This test also covers decode_integer_pair function
     key = encode_integer_pair(start, end)
     assert isinstance(key, bytes)
 
