@@ -9,8 +9,8 @@ __all__ = (
     "LoadsFunc",
     "serialize",
     "deserialize",
-    "int_to_int64_bytes",
-    "int_from_int64_bytes",
+    "int_to_bytes",
+    "int_from_bytes",
     "encode_integer_pair",
     "decode_integer_pair",
 )
@@ -44,11 +44,11 @@ def deserialize(value: bytes, loads: LoadsFunc) -> Any:
         ) from exc
 
 
-def int_to_int64_bytes(value: int) -> bytes:
+def int_to_bytes(value: int) -> bytes:
     return _int_pack(value)
 
 
-def int_from_int64_bytes(value: bytes) -> int:
+def int_from_bytes(value: bytes) -> int:
     return _int_unpack(value)[0]
 
 

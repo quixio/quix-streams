@@ -13,7 +13,7 @@ from quixstreams.state.serialization import (
     DumpsFunc,
     LoadsFunc,
     encode_integer_pair,
-    int_to_int64_bytes,
+    int_to_bytes,
     serialize,
 )
 from quixstreams.state.types import ExpiredWindowDetail, WindowDetail
@@ -327,7 +327,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction[bytes, dict]):
             if not windows:
                 return
             last_expired = windows[-1]  # windows are ordered
-            suffixes: set[bytes] = set(int_to_int64_bytes(window) for window in windows)
+            suffixes: set[bytes] = set(int_to_bytes(window) for window in windows)
             for key in self.keys():
                 if key[-8:] in suffixes:
                     prefix, start, end = parse_window_key(key)
