@@ -3,9 +3,9 @@ import pytest
 from quixstreams.state.metadata import SEPARATOR
 from quixstreams.state.rocksdb.windowed.serialization import (
     append_integer,
-    encode_integer_pair,
     parse_window_key,
 )
+from quixstreams.state.serialization import encode_integer_pair
 
 
 @pytest.mark.parametrize(

@@ -1,6 +1,7 @@
 import enum
 
 SEPARATOR = b"|"
+SEPARATOR_LENGTH = len(SEPARATOR)
 
 CHANGELOG_CF_MESSAGE_HEADER = "__column_family__"
 CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER = "__processed_tp_offsets__"
