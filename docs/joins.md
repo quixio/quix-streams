@@ -62,7 +62,6 @@ Here is a description of the as-of join algorithm:
 
 - Records from the right side get written to the state store without emitting any updates downstream.
 - Records on the left side query the right store for the values with the same **key** and the timestamp lower or equal to the record's timestamp.
-  Left side emits data downstream.
 - If the match is found, the two records are merged together into a new one according to the `on_merge` logic.
 - The size of the right store is controlled by the "grace_ms":
   a newly added "right" record expires other values with the same key with timestamps below "<current timestamp> - <grace_ms>".
