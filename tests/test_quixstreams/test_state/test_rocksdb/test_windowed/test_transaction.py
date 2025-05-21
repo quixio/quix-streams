@@ -4,7 +4,7 @@ from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER,
 )
-from quixstreams.state.rocksdb.windowed.serialization import encode_integer_pair
+from quixstreams.state.serialization import encode_integer_pair
 from quixstreams.utils.json import dumps
 
 

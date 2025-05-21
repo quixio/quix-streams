@@ -20,7 +20,7 @@ from quixstreams.state.base import (
 from quixstreams.state.exceptions import ColumnFamilyDoesNotExist
 from quixstreams.state.metadata import METADATA_CF_NAME, Marker
 from quixstreams.state.recovery import ChangelogProducer
-from quixstreams.state.serialization import int_from_int64_bytes, int_to_int64_bytes
+from quixstreams.state.serialization import int_from_bytes, int_to_bytes
 
 from .exceptions import ColumnFamilyAlreadyExists
 from .metadata import (
@@ -231,7 +231,7 @@ class RocksDBStorePartition(StorePartition):
         if offset_bytes is None:
             return None
 
-        return int_from_int64_bytes(offset_bytes)
+        return int_from_bytes(offset_bytes)
 
     def write_changelog_offset(self, offset: int):
         """
@@ -396,7 +396,7 @@ class RocksDBStorePartition(StorePartition):
     def _update_changelog_offset(self, batch: WriteBatch, offset: int):
         batch.put(
             CHANGELOG_OFFSET_KEY,
-            int_to_int64_bytes(offset),
+            int_to_bytes(offset),
             self.get_column_family_handle(METADATA_CF_NAME),
         )
 

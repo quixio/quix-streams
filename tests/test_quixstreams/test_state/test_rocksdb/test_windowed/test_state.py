@@ -3,7 +3,7 @@ from contextlib import contextmanager
 import pytest
 
 from quixstreams.state.rocksdb.windowed.metadata import VALUES_CF_NAME
-from quixstreams.state.rocksdb.windowed.serialization import encode_integer_pair
+from quixstreams.state.serialization import encode_integer_pair
 
 
 @pytest.fixture

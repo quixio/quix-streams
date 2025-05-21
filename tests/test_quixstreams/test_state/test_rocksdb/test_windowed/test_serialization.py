@@ -1,29 +1,8 @@
 import pytest
 
 from quixstreams.state.metadata import SEPARATOR
-from quixstreams.state.rocksdb.windowed.serialization import (
-    append_integer,
-    encode_integer_pair,
-    parse_window_key,
-)
-
-
-@pytest.mark.parametrize(
-    "start, end",
-    [
-        (0, 0),
-        (1, 2),
-        (-1, 2),
-        (2, -2),
-    ],
-)
-def test_encode_integer_pair(start, end):
-    key = encode_integer_pair(start, end)
-    assert isinstance(key, bytes)
-
-    prefix, decoded_start, decoded_end = parse_window_key(key)
-    assert decoded_start == start
-    assert decoded_end == end
+from quixstreams.state.rocksdb.windowed.serialization import append_integer
+from quixstreams.state.serialization import encode_integer_pair
 
 
 @pytest.mark.parametrize("base_bytes", [b"", b"base_bytes"])
