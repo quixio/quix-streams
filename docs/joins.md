@@ -90,7 +90,33 @@ This is a default behavior.
 - `keep-right` - merge two records together into a new dictionary and prefer keys from the **right** record in case of overlap.
 
 - custom callback - pass a callback `(<left>, <right>) -> <merged>` to merge the records manually.  
-Use it when non-dictionary types are expected, or you want to customize the returned object.
+Use it when non-dictionary types are expected, or you want to customize the returned object:
+
+```python
+from typing import Optional
+
+from quixstreams import Application
+
+app = Application(...)
+
+sdf_measurements = app.dataframe(app.topic("measurements"))
+sdf_metadata = app.dataframe(app.topic("metadata"))
+
+
+def on_merge(left: int, right: Optional[str]) -> dict:
+    """
+    Merge non-dictionary items into a dict
+    """
+    return {'measurement': left, 'metadata': right}
+
+
+sdf_joined = sdf_measurements.join_asof(right=sdf_metadata, on_merge=on_merge)
+
+if __name__ == '__main__':
+    app.run()
+```
+
+
 
 #### State expiration
 `StreamingDataFrame.join_asof` stores the right records to the state.  
