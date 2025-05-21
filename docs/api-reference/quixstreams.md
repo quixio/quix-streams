@@ -885,7 +885,7 @@ messages in the timestamp-aligned way for the correct processing.
 class StreamingDataFrame()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L85)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L87)
 
 `StreamingDataFrame` is the main object you will use for ETL work.
 
@@ -940,7 +940,7 @@ sdf = sdf.to_topic(topic_obj)
 def stream_id() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L170)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L172)
 
 An identifier of the data stream this StreamingDataFrame
 manipulates in the application.
@@ -972,7 +972,7 @@ def apply(func: Union[
           metadata: bool = False) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L229)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L231)
 
 Apply a function to transform the value and return a new value.
 
@@ -1024,7 +1024,7 @@ def update(func: Union[
            metadata: bool = False) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L337)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L335)
 
 Apply a function to mutate value in-place or to perform a side effect
 
@@ -1084,7 +1084,7 @@ def filter(func: Union[
            metadata: bool = False) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L444)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L438)
 
 Filter value using provided function.
 
@@ -1132,7 +1132,7 @@ def group_by(
 ) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L533)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L523)
 
 "Groups" messages by re-keying them via the provided group_by operation
 
@@ -1189,7 +1189,7 @@ a clone with this operation added (assign to keep its effect).
 def contains(keys: Union[str, list[str]]) -> StreamingSeries
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L643)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L633)
 
 Check if keys are present in the Row value.
 
@@ -1223,7 +1223,7 @@ def to_topic(
         key: Optional[Callable[[Any], Any]] = None) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L674)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L664)
 
 Produce current value to a topic. You can optionally specify a new key.
 
@@ -1269,7 +1269,7 @@ def set_timestamp(
         func: Callable[[Any, Any, int, Any], int]) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L719)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L709)
 
 Set a new timestamp based on the current message value and its metadata.
 
@@ -1314,7 +1314,7 @@ def set_headers(
 ) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L762)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L752)
 
 Set new message headers based on the current message value and metadata.
 
@@ -1355,7 +1355,7 @@ a new StreamingDataFrame instance
 def print(pretty: bool = True, metadata: bool = False) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L813)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L803)
 
 Print out the current message value (and optionally, the message metadata) to
 
@@ -1410,7 +1410,7 @@ def print_table(
                                      int]] = None) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L859)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L849)
 
 Print a table with the most recent records.
 
@@ -1497,7 +1497,7 @@ automatically based on content. Example: {"name": 20, "id": 10}
 def compose(sink: Optional[VoidExecutor] = None) -> dict[str, VoidExecutor]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L975)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L965)
 
 Compose all functions of this StreamingDataFrame into one big closure.
 
@@ -1543,7 +1543,7 @@ def test(value: Any,
          topic: Optional[Topic] = None) -> List[Any]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1009)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L999)
 
 A shorthand to test `StreamingDataFrame` with provided value
 
@@ -1577,7 +1577,7 @@ def tumbling_window(
 ) -> TumblingTimeWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1048)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1038)
 
 Create a time-based tumbling window transformation on this StreamingDataFrame.
 
@@ -1660,7 +1660,7 @@ def tumbling_count_window(
         name: Optional[str] = None) -> TumblingCountWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1137)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1127)
 
 Create a count-based tumbling window transformation on this StreamingDataFrame.
 
@@ -1723,7 +1723,7 @@ def hopping_window(
 ) -> HoppingTimeWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1187)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1177)
 
 Create a time-based hopping window transformation on this StreamingDataFrame.
 
@@ -1817,7 +1817,7 @@ def hopping_count_window(
         name: Optional[str] = None) -> HoppingCountWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1290)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1280)
 
 Create a count-based hopping window transformation on this StreamingDataFrame.
 
@@ -1885,7 +1885,7 @@ def sliding_window(
 ) -> SlidingTimeWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1347)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1337)
 
 Create a time-based sliding window transformation on this StreamingDataFrame.
 
@@ -1974,7 +1974,7 @@ def sliding_count_window(
         name: Optional[str] = None) -> SlidingCountWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1442)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1432)
 
 Create a count-based sliding window transformation on this StreamingDataFrame.
 
@@ -2034,7 +2034,7 @@ like `sum`, `count`, etc. applied to the StreamingDataFrame.
 def fill(*columns: str, **mapping: Any) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1495)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1485)
 
 Fill missing values in the message value with a constant value.
 
@@ -2085,7 +2085,7 @@ def drop(columns: Union[str, List[str]],
          errors: Literal["ignore", "raise"] = "raise") -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1547)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1537)
 
 Drop column(s) from the message value (value must support `del`, like a dict).
 
@@ -2121,7 +2121,7 @@ a new StreamingDataFrame instance
 def sink(sink: BaseSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1591)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1581)
 
 Sink the processed data to the specified destination.
 
@@ -2147,7 +2147,7 @@ operations, but branches can still be generated from its originating SDF.
 def concat(other: "StreamingDataFrame") -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1629)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1619)
 
 Concatenate two StreamingDataFrames together and return a new one.
 
@@ -2169,6 +2169,91 @@ The same is true for the repartition topics created by `.group_by()`.
 **Returns**:
 
 a new StreamingDataFrame
+
+<a id="quixstreams.dataframe.dataframe.StreamingDataFrame.join_asof"></a>
+
+#### StreamingDataFrame.join\_asof
+
+```python
+def join_asof(right: "StreamingDataFrame",
+              how: JoinAsOfHow = "inner",
+              on_merge: Union[OnOverlap, Callable[[Any, Any], Any]] = "raise",
+              grace_ms: Union[int, timedelta] = timedelta(days=7),
+              name: Optional[str] = None) -> "StreamingDataFrame"
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1649)
+
+Join the left dataframe with the records of the right dataframe with
+
+the same key whose timestamp is less than or equal to the left timestamp.
+This join is built with the enrichment use case in mind, where the left side
+represents some measurements and the right side is metadata.
+
+To be joined, the underlying topics of the dataframes must have the same number of partitions
+and use the same partitioner (all keys should be distributed across partitions using the same algorithm).
+
+Joining dataframes belonging to the same topics (aka "self-join") is not supported as of now.
+
+How it works:
+    - Records from the right side get written to the state store without emitting any updates downstream.
+    - Records on the left side query the right store for the values with the same **key** and the timestamp lower or equal to the record's timestamp.
+      Left side emits data downstream.
+    - If the match is found, the two records are merged together into a new one according to the `on_merge` logic.
+    - The size of the right store is controlled by the "grace_ms":
+      a newly added "right" record expires other values with the same key with timestamps below "<current timestamp> - <grace_ms>".
+
+**Arguments**:
+
+- `right`: a StreamingDataFrame to join with.
+- `how`: the join strategy. Can be one of:
+- "inner" - emits the result when the match on the right side is found for the left record.
+- "left" - emits the result for each left record even if there is no match on the right side.
+Default - `"inner"`.
+- `on_merge`: how to merge the matched records together assuming they are dictionaries:
+- "raise" - fail with an error if the same keys are found in both dictionaries
+- "keep-left" - prefer the keys from the left record.
+- "keep-right" - prefer the keys from the right record
+- callback - a callback in form "(<left>, <right>) -> <new record>" to merge the records manually.
+  Use it to customize the merging logic or when one of the records is not a dictionary.
+- `grace_ms`: how long to keep the right records in the store in event time.
+(the time is taken from the records' timestamps).
+It can be specified as either an `int` representing milliseconds or as a `timedelta` object.
+The records are expired per key when the new record gets added.
+Default - 7 days.
+- `name`: The unique identifier of the underlying state store for the "right" dataframe.
+If not provided, it will be generated based on the underlying topic names.
+    Provide a custom name if you need to join the same right dataframe multiple times
+    within the application.
+
+Example:
+
+```python
+from datetime import timedelta
+from quixstreams import Application
+
+app = Application()
+
+sdf_measurements = app.dataframe(app.topic("measurements"))
+sdf_metadata = app.dataframe(app.topic("metadata"))
+
+# Join records from the topic "measurements"
+# with the latest effective records from the topic "metadata"
+# using the "inner" join strategy and keeping the "metadata" records stored for 14 days in event time.
+sdf_joined = sdf_measurements.join_asof(sdf_metadata, how="inner", grace_ms=timedelta(days=14))
+```
+
+<a id="quixstreams.dataframe.dataframe.StreamingDataFrame.register_store"></a>
+
+#### StreamingDataFrame.register\_store
+
+```python
+def register_store(store_type: Optional[StoreTypes] = None) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1745)
+
+Register the default store for the current stream_id in StateStoreManager.
 
 <a id="quixstreams.dataframe.series"></a>
 
@@ -2619,6 +2704,56 @@ higher precision.
 **Returns**:
 
 timedelta value in milliseconds as `int`
+
+<a id="quixstreams.dataframe.joins"></a>
+
+## quixstreams.dataframe.joins
+
+<a id="quixstreams.dataframe.joins.utils"></a>
+
+## quixstreams.dataframe.joins.utils
+
+<a id="quixstreams.dataframe.joins.utils.keep_left_merger"></a>
+
+#### keep\_left\_merger
+
+```python
+def keep_left_merger(left: Optional[Mapping],
+                     right: Optional[Mapping]) -> dict
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/utils.py#L4)
+
+Merge two dictionaries, preferring values from the left dictionary
+
+<a id="quixstreams.dataframe.joins.utils.keep_right_merger"></a>
+
+#### keep\_right\_merger
+
+```python
+def keep_right_merger(left: Optional[Mapping],
+                      right: Optional[Mapping]) -> dict
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/utils.py#L13)
+
+Merge two dictionaries, preferring values from the right dictionary
+
+<a id="quixstreams.dataframe.joins.utils.raise_merger"></a>
+
+#### raise\_merger
+
+```python
+def raise_merger(left: Optional[Mapping], right: Optional[Mapping]) -> dict
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/utils.py#L22)
+
+Merge two dictionaries and raise an error if overlapping keys detected
+
+<a id="quixstreams.dataframe.joins.join_asof"></a>
+
+## quixstreams.dataframe.joins.join\_asof
 
 <a id="quixstreams.dataframe.exceptions"></a>
 
@@ -7566,7 +7701,7 @@ Row, list of Rows or None if the message is ignored.
 class TopicManager()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L20)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L21)
 
 The source of all topic management for a Quix Streams Application.
 
@@ -7586,7 +7721,7 @@ def __init__(topic_admin: TopicAdmin,
              auto_create_topics: bool = True)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L43)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L44)
 
 **Arguments**:
 
@@ -7604,7 +7739,7 @@ def __init__(topic_admin: TopicAdmin,
 def changelog_topics() -> Dict[Optional[str], Dict[str, Topic]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L75)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L76)
 
 Note: `Topic`s are the changelogs.
 
@@ -7619,7 +7754,7 @@ returns: the changelog topic dict, {topic_name: {suffix: Topic}}
 def changelog_topics_list() -> List[Topic]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L84)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L85)
 
 Returns a list of changelog topics
 
@@ -7634,7 +7769,7 @@ returns: the changelog topic dict, {topic_name: {suffix: Topic}}
 def non_changelog_topics() -> Dict[str, Topic]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L93)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L94)
 
 Returns a dict with normal and repartition topics
 
@@ -7647,7 +7782,7 @@ Returns a dict with normal and repartition topics
 def all_topics() -> Dict[str, Topic]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L100)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L101)
 
 Every registered topic name mapped to its respective `Topic`.
 
@@ -7663,7 +7798,7 @@ def topic_config(num_partitions: Optional[int] = None,
                  extra_config: Optional[dict] = None) -> TopicConfig
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L113)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L114)
 
 Convenience method for generating a `TopicConfig` with default settings
 
@@ -7691,7 +7826,7 @@ def topic(name: str,
           timestamp_extractor: Optional[TimestampExtractor] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L135)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L136)
 
 A convenience method for generating a `Topic`. Will use default config options
 
@@ -7720,7 +7855,7 @@ Topic object with creation configs
 def register(topic: Topic) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L182)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L183)
 
 Register an already generated :class:`quixstreams.models.topics.Topic` to the topic manager.
 
@@ -7745,7 +7880,7 @@ def repartition_topic(
         key_serializer: Optional[SerializerType] = "json") -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L201)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L202)
 
 Create an internal repartition topic.
 
@@ -7772,7 +7907,7 @@ def changelog_topic(stream_id: Optional[str], store_name: str,
                     config: TopicConfig) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L238)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L239)
 
 Create and register a changelog topic for the given "stream_id" and store name.
 
@@ -7803,7 +7938,7 @@ generate changelog topics. To turn off changelogs, init an Application with
 def derive_topic_config(cls, topics: Iterable[Topic]) -> TopicConfig
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L286)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L287)
 
 Derive a topic config based on one or more input Topic configs.
 To be used for generating the internal changelogs and repartition topics.
@@ -7821,7 +7956,7 @@ Multiple topics are expected for merged and joins streams.
 def stream_id_from_topics(topics: Sequence[Topic]) -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L336)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L349)
 
 Generate a stream_id by combining names of the provided topics.
 
@@ -7880,19 +8015,13 @@ if using changelogs
 class WindowedRocksDBStorePartition(RocksDBStorePartition)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/partition.py#L24)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/partition.py#L18)
 
 A base class to access windowed state in RocksDB.
-
 It represents a single RocksDB database.
 
 Besides the data, it keeps track of the latest observed timestamp and
 stores the expiration index to delete expired windows.
-
-**Arguments**:
-
-- `path`: an absolute path to the RocksDB folder
-- `options`: RocksDB options. If `None`, the default options will be used.
 
 <a id="quixstreams.state.rocksdb.windowed.partition.WindowedRocksDBStorePartition.iter_keys"></a>
 
@@ -7902,7 +8031,7 @@ stores the expiration index to delete expired windows.
 def iter_keys(cf_name: str = "default") -> Iterator[bytes]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/partition.py#L63)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/partition.py#L36)
 
 Iterate over all keys in the DB.
 
@@ -7915,6 +8044,20 @@ Addition and deletion of keys during iteration is not supported.
 **Returns**:
 
 An iterable of keys
+
+<a id="quixstreams.state.rocksdb.windowed.partition.WindowedRocksDBStorePartition.begin"></a>
+
+#### WindowedRocksDBStorePartition.begin
+
+```python
+def begin() -> WindowedRocksDBPartitionTransaction
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/partition.py#L48)
+
+Start a new `WindowedRocksDBPartitionTransaction`
+
+Using `WindowedRocksDBPartitionTransaction` is a recommended way for accessing the data.
 
 <a id="quixstreams.state.rocksdb.windowed.metadata"></a>
 
@@ -7929,10 +8072,10 @@ An iterable of keys
 ### WindowedRocksDBPartitionTransaction
 
 ```python
-class WindowedRocksDBPartitionTransaction(PartitionTransaction)
+class WindowedRocksDBPartitionTransaction(PartitionTransaction[bytes, dict])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L60)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L41)
 
 <a id="quixstreams.state.rocksdb.windowed.transaction.WindowedRocksDBPartitionTransaction.expire_windows"></a>
 
@@ -7947,7 +8090,7 @@ def expire_windows(
         end_inclusive: bool = False) -> Iterable[ExpiredWindowDetail]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L230)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L211)
 
 Get all expired windows with a set prefix from RocksDB up to the specified `max_start_time` timestamp.
 
@@ -7995,7 +8138,7 @@ def expire_all_windows(max_end_time: int,
                        collect: bool = False) -> Iterable[ExpiredWindowDetail]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L323)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L304)
 
 Get all expired windows for all prefix from RocksDB up to the specified `max_end_time` timestamp.
 
@@ -8014,7 +8157,7 @@ def delete_windows(max_start_time: int, delete_values: bool,
                    prefix: bytes) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L397)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L378)
 
 Delete windows from RocksDB up to the specified `max_start_time` timestamp.
 
@@ -8049,7 +8192,7 @@ def get_windows(start_from_ms: int,
                 backwards: bool = False) -> list[WindowDetail]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L452)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L433)
 
 Get all windows within the specified time range.
 
@@ -8091,7 +8234,7 @@ A list of tuples in the format ((start_ms, end_ms), value).
 def parse_window_key(key: bytes) -> tuple[bytes, int, int]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/serialization.py#L20)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/serialization.py#L13)
 
 Parse the window key from Rocksdb into (message_key, start, end) structure.
 
@@ -8106,31 +8249,6 @@ Expected window key format:
 
 a tuple with message key, start timestamp, end timestamp
 
-<a id="quixstreams.state.rocksdb.windowed.serialization.encode_integer_pair"></a>
-
-#### encode\_integer\_pair
-
-```python
-def encode_integer_pair(integer_1: int, integer_2: int) -> bytes
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/serialization.py#L40)
-
-Encode a pair of integers into bytes of the following format:
-
-```<integer_1>|<integer_2>```
-
-Encoding integers this way make them sortable in RocksDB within the same prefix.
-
-**Arguments**:
-
-- `integer_1`: first integer
-- `integer_2`: second integer
-
-**Returns**:
-
-integers as bytes
-
 <a id="quixstreams.state.rocksdb.windowed.serialization.append_integer"></a>
 
 #### append\_integer
@@ -8139,7 +8257,7 @@ integers as bytes
 def append_integer(base_bytes: bytes, integer: int) -> bytes
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/serialization.py#L54)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/serialization.py#L33)
 
 Append integer to the base bytes
 
@@ -8465,7 +8583,7 @@ def __init__(
         options: Optional[RocksDBOptionsType] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/store.py#L26)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/store.py#L28)
 
 **Arguments**:
 
@@ -8488,7 +8606,7 @@ if using changelogs
 class RocksDBStorePartition(StorePartition)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L28)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L38)
 
 A base class to access state in RocksDB.
 
@@ -8517,7 +8635,7 @@ def write(cache: PartitionTransactionCache,
           batch: Optional[WriteBatch] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L78)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L92)
 
 Write data to RocksDB
 
@@ -8536,7 +8654,7 @@ def get(key: bytes,
         cf_name: str = "default") -> Union[bytes, Literal[Marker.UNDEFINED]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L127)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L141)
 
 Get a key from RocksDB.
 
@@ -8549,6 +8667,34 @@ Get a key from RocksDB.
 
 a value if the key is present in the DB. Otherwise, `default`
 
+<a id="quixstreams.state.rocksdb.partition.RocksDBStorePartition.iter_items"></a>
+
+#### RocksDBStorePartition.iter\_items
+
+```python
+def iter_items(lower_bound: bytes,
+               upper_bound: bytes,
+               backwards: bool = False,
+               cf_name: str = "default") -> Iterator[tuple[bytes, bytes]]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L156)
+
+Iterate over key-value pairs within a specified range in a column family.
+
+**Arguments**:
+
+- `lower_bound`: The lower bound key (inclusive) for the iteration range.
+- `upper_bound`: The upper bound key (exclusive) for the iteration range.
+- `backwards`: If `True`, iterate in reverse order (descending).
+Default is `False` (ascending).
+- `cf_name`: The name of the column family to iterate over.
+Default is "default".
+
+**Returns**:
+
+An iterator yielding (key, value) tuples.
+
 <a id="quixstreams.state.rocksdb.partition.RocksDBStorePartition.exists"></a>
 
 #### RocksDBStorePartition.exists
@@ -8557,7 +8703,7 @@ a value if the key is present in the DB. Otherwise, `default`
 def exists(key: bytes, cf_name: str = "default") -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L142)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L213)
 
 Check if a key is present in the DB.
 
@@ -8578,7 +8724,7 @@ Check if a key is present in the DB.
 def get_changelog_offset() -> Optional[int]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L153)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L224)
 
 Get offset that the changelog is up-to-date with.
 
@@ -8594,7 +8740,7 @@ offset or `None` if there's no processed offset yet
 def write_changelog_offset(offset: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L165)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L236)
 
 Write a new changelog offset to the db.
 
@@ -8613,7 +8759,7 @@ the actual data.
 def close()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L178)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L249)
 
 Close the underlying RocksDB
 
@@ -8626,7 +8772,7 @@ Close the underlying RocksDB
 def path() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L191)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L262)
 
 Absolute path to RocksDB database folder
 
@@ -8643,7 +8789,7 @@ file path
 def destroy(cls, path: str)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L199)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L270)
 
 Delete underlying RocksDB database
 
@@ -8661,7 +8807,7 @@ The database must be closed first.
 def get_column_family_handle(cf_name: str) -> ColumnFamily
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L209)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L280)
 
 Get a column family handle to pass to it WriteBatch.
 
@@ -8684,7 +8830,7 @@ instance of `rocksdict.ColumnFamily`
 def get_column_family(cf_name: str) -> Rdict
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L230)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L301)
 
 Get a column family instance.
 
@@ -8702,6 +8848,10 @@ instance of `rocksdict.Rdict` for the given column family
 
 ## quixstreams.state.rocksdb.metadata
 
+<a id="quixstreams.state.rocksdb.cache"></a>
+
+## quixstreams.state.rocksdb.cache
+
 <a id="quixstreams.state.rocksdb"></a>
 
 ## quixstreams.state.rocksdb
@@ -8713,6 +8863,161 @@ instance of `rocksdict.Rdict` for the given column family
 <a id="quixstreams.state.rocksdb.exceptions"></a>
 
 ## quixstreams.state.rocksdb.exceptions
+
+<a id="quixstreams.state.rocksdb.timestamped"></a>
+
+## quixstreams.state.rocksdb.timestamped
+
+<a id="quixstreams.state.rocksdb.timestamped.TimestampedPartitionTransaction"></a>
+
+### TimestampedPartitionTransaction
+
+```python
+class TimestampedPartitionTransaction(PartitionTransaction)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L34)
+
+A partition-specific transaction handler for the `TimestampedStore`.
+
+Provides timestamp-aware methods for querying key-value pairs
+based on a timestamp, alongside standard transaction operations.
+It interacts with both an in-memory update cache and the persistent RocksDB store.
+
+<a id="quixstreams.state.rocksdb.timestamped.TimestampedPartitionTransaction.__init__"></a>
+
+#### TimestampedPartitionTransaction.\_\_init\_\_
+
+```python
+def __init__(partition: "TimestampedStorePartition",
+             dumps: DumpsFunc,
+             loads: LoadsFunc,
+             changelog_producer: Optional[ChangelogProducer] = None) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L43)
+
+Initializes a new `TimestampedPartitionTransaction`.
+
+**Arguments**:
+
+- `partition`: The `TimestampedStorePartition` this transaction belongs to.
+- `dumps`: The serialization function for keys/values.
+- `loads`: The deserialization function for keys/values.
+- `changelog_producer`: Optional `ChangelogProducer` for recording changes.
+
+<a id="quixstreams.state.rocksdb.timestamped.TimestampedPartitionTransaction.get_latest"></a>
+
+#### TimestampedPartitionTransaction.get\_latest
+
+```python
+@validate_transaction_status(PartitionTransactionStatus.STARTED)
+def get_latest(timestamp: int, prefix: Any) -> Optional[Any]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L73)
+
+Get the latest value for a prefix up to a given timestamp.
+
+Searches both the transaction's update cache and the underlying RocksDB store
+to find the value associated with the given `prefix` that has the highest
+timestamp less than or equal to the provided `timestamp`.
+
+The search considers both the update cache and the store. It returns the value
+associated with the key that has the numerically largest timestamp less than
+or equal to the provided `timestamp`. If multiple entries exist for the same
+prefix across the cache and store within the valid time range, the one with
+the highest timestamp is chosen.
+
+**Arguments**:
+
+- `timestamp`: The upper bound timestamp (inclusive) in milliseconds.
+- `prefix`: The key prefix.
+
+**Returns**:
+
+The deserialized value if found, otherwise None.
+
+<a id="quixstreams.state.rocksdb.timestamped.TimestampedPartitionTransaction.set_for_timestamp"></a>
+
+#### TimestampedPartitionTransaction.set\_for\_timestamp
+
+```python
+@validate_transaction_status(PartitionTransactionStatus.STARTED)
+def set_for_timestamp(timestamp: int,
+                      value: Any,
+                      prefix: Any,
+                      retention_ms: int = 7 * DAY_MS) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L136)
+
+Set a value for the timestamp.
+
+This method acts as a proxy, passing the provided `timestamp` and `prefix`
+to the parent `set` method. The parent method internally serializes these
+into a combined key before storing the value in the update cache.
+
+Additionally, it updates the minimum eligible timestamp for the given prefix
+based on the `retention_ms`, which is used later during the flush process to
+expire old data.
+
+**Arguments**:
+
+- `timestamp`: Timestamp associated with the value in milliseconds.
+- `value`: The value to store.
+- `prefix`: The key prefix.
+- `retention_ms`: retention for the key in milliseconds
+
+<a id="quixstreams.state.rocksdb.timestamped.TimestampedPartitionTransaction.prepare"></a>
+
+#### TimestampedPartitionTransaction.prepare
+
+```python
+@validate_transaction_status(PartitionTransactionStatus.STARTED)
+def prepare(processed_offsets: Optional[dict[str, int]] = None) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L167)
+
+This method first calls `_expire()` to remove outdated entries based on
+
+their timestamps and retention periods, then calls the parent class's
+`prepare()` to prepare the transaction for flush.
+
+**Arguments**:
+
+- `processed_offsets`: the dict with <topic: offset> of the latest processed message
+
+<a id="quixstreams.state.rocksdb.timestamped.TimestampedStorePartition"></a>
+
+### TimestampedStorePartition
+
+```python
+class TimestampedStorePartition(RocksDBStorePartition)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L257)
+
+Represents a single partition within a `TimestampedStore`.
+
+This class is responsible for managing the state of one partition and creating
+`TimestampedPartitionTransaction` instances to handle atomic operations for that partition.
+
+<a id="quixstreams.state.rocksdb.timestamped.TimestampedStore"></a>
+
+### TimestampedStore
+
+```python
+class TimestampedStore(RocksDBStore)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L277)
+
+A RocksDB-backed state store implementation that manages key-value pairs
+associated with timestamps.
+
+Uses `TimestampedStorePartition` to manage individual partitions.
 
 <a id="quixstreams.state.metadata"></a>
 
@@ -8772,7 +9077,7 @@ if using changelogs topics.
 class MemoryStorePartition(StorePartition)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L35)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L36)
 
 Class to access in-memory state.
 
@@ -8791,7 +9096,7 @@ def write(cache: PartitionTransactionCache,
           changelog_offset: Optional[int]) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L66)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L75)
 
 Write data to the state
 
@@ -8808,7 +9113,7 @@ Write data to the state
 def get_changelog_offset() -> Optional[int]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L103)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L112)
 
 Get offset that the changelog is up-to-date with.
 
@@ -8824,7 +9129,7 @@ offset or `None` if there's no processed offset yet
 def write_changelog_offset(offset: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L110)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L119)
 
 Write a new changelog offset to the db.
 
@@ -8845,7 +9150,7 @@ def get(key: bytes,
         cf_name: str = "default") -> Union[bytes, Literal[Marker.UNDEFINED]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L122)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L131)
 
 Get a key from the store
 
@@ -8867,7 +9172,7 @@ a value if the key is present in the store. Otherwise, `default`
 def exists(key: bytes, cf_name: str = "default") -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L135)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/memory/partition.py#L144)
 
 Check if a key is present in the store.
 
@@ -10001,7 +10306,7 @@ Flush the recovery update to the storage.
 class StateStoreManager()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L31)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L32)
 
 Class for managing state stores and partitions.
 
@@ -10019,7 +10324,7 @@ StateStoreManager is responsible for:
 def stores() -> Dict[Optional[str], Dict[str, Store]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L80)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L81)
 
 Map of registered state stores
 
@@ -10036,7 +10341,7 @@ dict in format {stream_id: {store_name: store}}
 def recovery_required() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L88)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L89)
 
 Whether recovery needs to be done.
 
@@ -10049,7 +10354,7 @@ Whether recovery needs to be done.
 def using_changelogs() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L97)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L98)
 
 Whether the StateStoreManager is using changelog topics
 
@@ -10065,7 +10370,7 @@ using changelogs, as bool
 def do_recovery() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L109)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L110)
 
 Perform a state recovery, if necessary.
 
@@ -10077,7 +10382,7 @@ Perform a state recovery, if necessary.
 def stop_recovery() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L118)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L119)
 
 Stop recovery (called during app shutdown).
 
@@ -10090,7 +10395,7 @@ def get_store(stream_id: str,
               store_name: str = DEFAULT_STATE_STORE_NAME) -> Store
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L127)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L128)
 
 Get a store for given name and stream id
 
@@ -10114,7 +10419,7 @@ def register_store(stream_id: Optional[str],
                    changelog_config: Optional[TopicConfig] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L165)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L166)
 
 Register a state store to be managed by StateStoreManager.
 
@@ -10141,7 +10446,7 @@ def register_windowed_store(
         changelog_config: Optional[TopicConfig] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L210)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L235)
 
 Register a windowed state store to be managed by StateStoreManager.
 
@@ -10164,7 +10469,7 @@ Each window store can be registered only once for each stream_id.
 def clear_stores() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L248)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L273)
 
 Delete all state stores managed by StateStoreManager.
 
@@ -10178,7 +10483,7 @@ def on_partition_assign(
         committed_offsets: dict[str, int]) -> Dict[str, StorePartition]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L265)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L290)
 
 Assign store partitions for each registered store for the given stream_id
 
@@ -10203,7 +10508,7 @@ list of assigned `StorePartition`
 def on_partition_revoke(stream_id: str, partition: int) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L294)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L319)
 
 Revoke store partitions for each registered store
 
@@ -10222,7 +10527,7 @@ for the given stream_id and partition number.
 def init() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L312)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L337)
 
 Initialize `StateStoreManager` and create a store directory
 
@@ -10235,13 +10540,60 @@ Initialize `StateStoreManager` and create a store directory
 def close() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L319)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L344)
 
 Close all registered stores
 
 <a id="quixstreams.state.serialization"></a>
 
 ## quixstreams.state.serialization
+
+<a id="quixstreams.state.serialization.encode_integer_pair"></a>
+
+#### encode\_integer\_pair
+
+```python
+def encode_integer_pair(integer_1: int, integer_2: int) -> bytes
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/serialization.py#L55)
+
+Encode a pair of integers into bytes of the following format:
+
+```<integer_1>|<integer_2>```
+
+Encoding integers this way make them sortable in RocksDB within the same prefix.
+
+**Arguments**:
+
+- `integer_1`: first integer
+- `integer_2`: second integer
+
+**Returns**:
+
+integers as bytes
+
+<a id="quixstreams.state.serialization.decode_integer_pair"></a>
+
+#### decode\_integer\_pair
+
+```python
+def decode_integer_pair(value: bytes) -> tuple[int, int]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/serialization.py#L69)
+
+Decode a pair of integers from bytes of the following format:
+
+```<integer_1>|<integer_2>```
+
+**Arguments**:
+
+- `value`: bytes
+
+**Returns**:
+
+tuple of integers
 
 <a id="quixstreams.state.base.store"></a>
 
@@ -10519,10 +10871,11 @@ Updates state from a given changelog message.
 #### StorePartition.begin
 
 ```python
+@abstractmethod
 def begin() -> PartitionTransaction
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/partition.py#L109)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/partition.py#L110)
 
 Start a new `PartitionTransaction`
 
@@ -10540,7 +10893,7 @@ Using `PartitionTransaction` is a recommended way for accessing the data.
 class PartitionTransactionCache()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L52)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L53)
 
 A cache with the data updated in the current PartitionTransaction.
 It is used to read-your-own-writes before the transaction is committed to the Store.
@@ -10558,7 +10911,7 @@ def get(key: bytes,
         cf_name: str = "default") -> Union[bytes, Marker]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L75)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L76)
 
 Get a value for the key.
 
@@ -10582,7 +10935,7 @@ If the key is not present in the cache, returns "UNDEFINED sentinel
 def set(key: bytes, value: bytes, prefix: bytes, cf_name: str = "default")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L105)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L106)
 
 Set a value for the key.
 
@@ -10600,7 +10953,7 @@ Set a value for the key.
 def delete(key: Any, prefix: bytes, cf_name: str = "default")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L118)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L119)
 
 Delete a key.
 
@@ -10617,7 +10970,7 @@ Delete a key.
 def is_empty() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L130)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L131)
 
 Return True if any changes have been made (updates or deletes), otherwise
 return False.
@@ -10630,7 +10983,7 @@ return False.
 def get_column_families() -> Set[str]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L137)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L138)
 
 Get all update column families.
 
@@ -10642,7 +10995,7 @@ Get all update column families.
 def get_updates(cf_name: str = "default") -> Dict[bytes, Dict[bytes, bytes]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L143)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L144)
 
 Get all updated keys (excluding deleted)
 
@@ -10659,7 +11012,7 @@ in the format "{<prefix>: {<key>: <value>}}".
 def get_deletes(cf_name: str = "default") -> Set[bytes]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L152)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L153)
 
 Get all deleted keys (excluding updated) as a set.
 
@@ -10671,7 +11024,7 @@ Get all deleted keys (excluding updated) as a set.
 class PartitionTransactionStatus(enum.Enum)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L159)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L160)
 
 <a id="quixstreams.state.base.transaction.PartitionTransactionStatus.STARTED"></a>
 
@@ -10705,7 +11058,7 @@ Transaction is failed, it cannot be used anymore
 def validate_transaction_status(*allowed: PartitionTransactionStatus)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L170)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L171)
 
 Check that the status of `RocksDBTransaction` is valid before calling a method
 
@@ -10717,7 +11070,7 @@ Check that the status of `RocksDBTransaction` is valid before calling a method
 class PartitionTransaction(ABC, Generic[K, V])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L194)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L195)
 
 A transaction class to perform simple key-value operations like
 "get", "set", "delete" and "exists" on a single storage partition.
@@ -10731,7 +11084,7 @@ A transaction class to perform simple key-value operations like
 def failed() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L226)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L227)
 
 Return `True` if transaction failed to update data at some point.
 
@@ -10750,7 +11103,7 @@ bool
 def completed() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L236)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L237)
 
 Return `True` if transaction is successfully completed.
 
@@ -10769,7 +11122,7 @@ bool
 def prepared() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L246)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L247)
 
 Return `True` if transaction is prepared completed.
 
@@ -10788,7 +11141,7 @@ bool
 def changelog_topic_partition() -> Optional[Tuple[str, int]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L256)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L257)
 
 Return the changelog topic-partition for the StorePartition of this transaction.
 
@@ -10806,7 +11159,7 @@ Returns `None` if changelog_producer is not provided.
 def as_state(prefix: Any = DEFAULT_PREFIX) -> State[K, V]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L283)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L284)
 
 Create an instance implementing the `State` protocol to be provided
 
@@ -10829,7 +11182,7 @@ def get(key: K,
         cf_name: str = "default") -> Optional[V]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L309)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L310)
 
 Get a key from the store.
 
@@ -10857,7 +11210,7 @@ def get_bytes(key: K,
               cf_name: str = "default") -> Optional[bytes]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L348)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L349)
 
 Get a key from the store.
 
@@ -10883,7 +11236,7 @@ value as bytes or None if the key is not found and `default` is not provided
 def set(key: K, value: V, prefix: bytes, cf_name: str = "default") -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L391)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L392)
 
 Set value for the key.
 
@@ -10906,7 +11259,7 @@ def set_bytes(key: K,
               cf_name: str = "default") -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L409)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L410)
 
 Set bytes value for the key.
 
@@ -10926,7 +11279,7 @@ Set bytes value for the key.
 def delete(key: K, prefix: bytes, cf_name: str = "default")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L435)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L436)
 
 Delete value for the key.
 
@@ -10947,7 +11300,7 @@ This function always returns `None`, even if value is not found.
 def exists(key: K, prefix: bytes, cf_name: str = "default") -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L454)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L455)
 
 Check if the key exists in state.
 
@@ -10967,10 +11320,10 @@ True if key exists, False otherwise
 
 ```python
 @validate_transaction_status(PartitionTransactionStatus.STARTED)
-def prepare(processed_offsets: Optional[dict[str, int]])
+def prepare(processed_offsets: Optional[dict[str, int]] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L474)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L475)
 
 Produce changelog messages to the changelog topic for all changes accumulated
 
@@ -10997,7 +11350,7 @@ to the changelog topic.
 def flush(changelog_offset: Optional[int] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L534)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/transaction.py#L535)
 
 Flush the recent updates to the database.
 
