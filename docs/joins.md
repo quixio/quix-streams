@@ -77,7 +77,7 @@ As-of join supports the following joining strategies:
 #### Merging records together
 When the match is found, the two records are merged according to the `on_merge` parameter.  
 
-Out-of-box implementations assume that records are **dictionaries**.  
+Out-of-the-box implementations assume that records are **dictionaries**.  
 For merging other data types (as well as customizing the behavior) use the callback option.
 
 Possible values:
