@@ -14,7 +14,7 @@ from quixstreams.state.rocksdb import (
 from quixstreams.state.rocksdb.windowed.serialization import append_integer
 
 
-class TestRocksdbStorePartition:
+class TestRocksDBStorePartition:
     def test_open_db_locked_retries(self, store_partition_factory, executor):
         db1 = store_partition_factory("db")
 
@@ -67,37 +67,45 @@ class TestRocksdbStorePartition:
 
         assert str(raised.value) == "some exception"
 
-    def test_create_and_get_column_family(self, store_partition):
+    def test_create_and_get_column_family(self, store_partition: RocksDBStorePartition):
         store_partition.create_column_family("cf")
         assert store_partition.get_column_family("cf")
 
-    def test_create_column_family_already_exists(self, store_partition):
+    def test_create_column_family_already_exists(
+        self, store_partition: RocksDBStorePartition
+    ):
         store_partition.create_column_family("cf")
         with pytest.raises(ColumnFamilyAlreadyExists):
             store_partition.create_column_family("cf")
 
-    def test_get_column_family_doesnt_exist(self, store_partition):
+    def test_get_column_family_doesnt_exist(
+        self, store_partition: RocksDBStorePartition
+    ):
         with pytest.raises(ColumnFamilyDoesNotExist):
             store_partition.get_column_family("cf")
 
-    def test_get_column_family_cached(self, store_partition):
+    def test_get_column_family_cached(self, store_partition: RocksDBStorePartition):
         store_partition.create_column_family("cf")
         cf1 = store_partition.get_column_family("cf")
         cf2 = store_partition.get_column_family("cf")
         assert cf1 is cf2
 
-    def test_create_and_drop_column_family(self, store_partition):
+    def test_create_and_drop_column_family(
+        self, store_partition: RocksDBStorePartition
+    ):
         store_partition.create_column_family("cf")
         store_partition.drop_column_family("cf")
 
         with pytest.raises(ColumnFamilyDoesNotExist):
             store_partition.get_column_family("cf")
 
-    def test_drop_column_family_doesnt_exist(self, store_partition):
+    def test_drop_column_family_doesnt_exist(
+        self, store_partition: RocksDBStorePartition
+    ):
         with pytest.raises(ColumnFamilyDoesNotExist):
             store_partition.drop_column_family("cf")
 
-    def test_list_column_families(self, store_partition):
+    def test_list_column_families(self, store_partition: RocksDBStorePartition):
         store_partition.create_column_family("cf1")
         store_partition.create_column_family("cf2")
         cfs = store_partition.list_column_families()
@@ -121,7 +129,9 @@ class TestRocksdbStorePartition:
             assert logs_dir.is_dir()
             assert len(list(logs_dir.rglob("*"))) == 1
 
-    def test_list_column_families_defaults(self, store_partition):
+    def test_list_column_families_defaults(
+        self, store_partition: RocksDBStorePartition
+    ):
         cfs = store_partition.list_column_families()
         assert cfs == [
             # "default" CF is always present in RocksDB
@@ -130,7 +140,7 @@ class TestRocksdbStorePartition:
             "__metadata__",
         ]
 
-    def test_ensure_metadata_cf(self, store_partition):
+    def test_ensure_metadata_cf(self, store_partition: RocksDBStorePartition):
         assert store_partition.get_column_family("__metadata__")
 
     @pytest.mark.parametrize(
@@ -155,7 +165,7 @@ class TestRocksdbStorePartition:
         ],
     )
     def test_iter_items_returns_ordered_items(
-        self, store_partition, cache, backwards, expected
+        self, store_partition: RocksDBStorePartition, cache, backwards, expected
     ):
         for key, value in expected:
             cache.set(key=key, value=value, prefix=b"prefix")
@@ -177,7 +187,9 @@ class TestRocksdbStorePartition:
             == expected
         )
 
-    def test_iter_items_exclusive_upper_bound(self, store_partition, cache):
+    def test_iter_items_exclusive_upper_bound(
+        self, store_partition: RocksDBStorePartition, cache
+    ):
         cache.set(key=b"prefix|1", value=b"value1", prefix=b"prefix")
         cache.set(key=b"prefix|2", value=b"value2", prefix=b"prefix")
         store_partition.write(cache=cache, changelog_offset=None)
@@ -188,3 +200,53 @@ class TestRocksdbStorePartition:
                 upper_bound=b"prefix|2",
             )
         ) == [(b"prefix|1", b"value1")]
+
+    def test_iter_items_backwards_lower_bound(
+        self, store_partition: RocksDBStorePartition, cache
+    ):
+        """
+        Test that keys below the lower bound are filtered
+        """
+        prefix = b"2"
+        lower_bound = b"3"
+        upper_bound = b"4"
+
+        cache.set(key=prefix + b"|" + b"test1", value=b"", prefix=prefix)
+        cache.set(key=prefix + b"|" + b"test2", value=b"", prefix=prefix)
+        store_partition.write(cache=cache, changelog_offset=None)
+
+        assert (
+            list(
+                store_partition.iter_items(
+                    lower_bound=lower_bound,
+                    upper_bound=upper_bound,
+                    backwards=True,
+                )
+            )
+            == []
+        )
+
+    def test_iter_items_backwards_upper_bound(
+        self, store_partition: RocksDBStorePartition, cache
+    ):
+        """
+        Test that keys above the upper bound are filtered
+        """
+        prefix = b"4"
+        lower_bound = b"3"
+        upper_bound = b"4"
+
+        cache.set(key=prefix + b"|" + b"test1", value=b"", prefix=prefix)
+        cache.set(key=prefix + b"|" + b"test2", value=b"", prefix=prefix)
+        store_partition.write(cache=cache, changelog_offset=None)
+
+        assert (
+            list(
+                store_partition.iter_items(
+                    lower_bound=lower_bound,
+                    upper_bound=upper_bound,
+                    backwards=True,
+                )
+            )
+            == []
+        )

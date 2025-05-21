@@ -49,13 +49,15 @@ from quixstreams.models import (
 from quixstreams.models.serializers import DeserializerType, SerializerType
 from quixstreams.sinks import BaseSink
 from quixstreams.state.base import State
+from quixstreams.state.manager import StoreTypes
 from quixstreams.utils.printing import (
     DEFAULT_COLUMN_NAME,
     DEFAULT_LIVE,
     DEFAULT_LIVE_SLOWDOWN,
 )
 
-from .exceptions import InvalidOperation, TopicPartitionsMismatch
+from .exceptions import InvalidOperation
+from .joins import JoinAsOf, JoinAsOfHow, OnOverlap
 from .registry import DataFrameRegistry
 from .series import StreamingSeries
 from .utils import ensure_milliseconds
@@ -275,7 +277,7 @@ class StreamingDataFrame:
             Default - `False`.
         """
         if stateful:
-            self._register_store()
+            self.register_store()
             # Force the callback to accept metadata
             if metadata:
                 with_metadata_func = cast(ApplyWithMetadataCallbackStateful, func)
@@ -284,11 +286,7 @@ class StreamingDataFrame:
                     cast(ApplyCallbackStateful, func)
                 )
 
-            stateful_func = _as_stateful(
-                func=with_metadata_func,
-                processing_context=self._processing_context,
-                stream_id=self.stream_id,
-            )
+            stateful_func = _as_stateful(with_metadata_func, self)
             stream = self.stream.add_apply(stateful_func, expand=expand, metadata=True)  # type: ignore[call-overload]
         else:
             stream = self.stream.add_apply(
@@ -384,7 +382,7 @@ class StreamingDataFrame:
         :return: the updated StreamingDataFrame instance (reassignment NOT required).
         """
         if stateful:
-            self._register_store()
+            self.register_store()
             # Force the callback to accept metadata
             if metadata:
                 with_metadata_func = cast(UpdateWithMetadataCallbackStateful, func)
@@ -393,11 +391,7 @@ class StreamingDataFrame:
                     cast(UpdateCallbackStateful, func)
                 )
 
-            stateful_func = _as_stateful(
-                func=with_metadata_func,
-                processing_context=self._processing_context,
-                stream_id=self.stream_id,
-            )
+            stateful_func = _as_stateful(with_metadata_func, self)
             return self._add_update(stateful_func, metadata=True)
         else:
             return self._add_update(
@@ -486,7 +480,7 @@ class StreamingDataFrame:
         """
 
         if stateful:
-            self._register_store()
+            self.register_store()
             # Force the callback to accept metadata
             if metadata:
                 with_metadata_func = cast(FilterWithMetadataCallbackStateful, func)
@@ -495,11 +489,7 @@ class StreamingDataFrame:
                     cast(FilterCallbackStateful, func)
                 )
 
-            stateful_func = _as_stateful(
-                func=with_metadata_func,
-                processing_context=self._processing_context,
-                stream_id=self.stream_id,
-            )
+            stateful_func = _as_stateful(with_metadata_func, self)
             stream = self.stream.add_filter(stateful_func, metadata=True)
         else:
             stream = self.stream.add_filter(  # type: ignore[call-overload]
@@ -1656,16 +1646,79 @@ class StreamingDataFrame:
             *self.topics, *other.topics, stream=merged_stream
         )
 
-    def ensure_topics_copartitioned(self):
-        partitions_counts = set(t.broker_config.num_partitions for t in self._topics)
-        if len(partitions_counts) > 1:
-            msg = ", ".join(
-                f'"{t.name}" ({t.broker_config.num_partitions} partitions)'
-                for t in self._topics
-            )
-            raise TopicPartitionsMismatch(
-                f"The underlying topics must have the same number of partitions to use State; got {msg}"
-            )
+    def join_asof(
+        self,
+        right: "StreamingDataFrame",
+        how: JoinAsOfHow = "inner",
+        on_merge: Union[OnOverlap, Callable[[Any, Any], Any]] = "raise",
+        grace_ms: Union[int, timedelta] = timedelta(days=7),
+        name: Optional[str] = None,
+    ) -> "StreamingDataFrame":
+        """
+        Join the left dataframe with the records of the right dataframe with
+        the same key whose timestamp is less than or equal to the left timestamp.
+        This join is built with the enrichment use case in mind, where the left side
+        represents some measurements and the right side is metadata.
+
+        To be joined, the underlying topics of the dataframes must have the same number of partitions
+        and use the same partitioner (all keys should be distributed across partitions using the same algorithm).
+
+        Joining dataframes belonging to the same topics (aka "self-join") is not supported as of now.
+
+        How it works:
+            - Records from the right side get written to the state store without emitting any updates downstream.
+            - Records on the left side query the right store for the values with the same **key** and the timestamp lower or equal to the record's timestamp.
+              Left side emits data downstream.
+            - If the match is found, the two records are merged together into a new one according to the `on_merge` logic.
+            - The size of the right store is controlled by the "grace_ms":
+              a newly added "right" record expires other values with the same key with timestamps below "<current timestamp> - <grace_ms>".
+
+        :param right: a StreamingDataFrame to join with.
+
+        :param how: the join strategy. Can be one of:
+          - "inner" - emits the result when the match on the right side is found for the left record.
+          - "left" - emits the result for each left record even if there is no match on the right side.
+          Default - `"inner"`.
+
+        :param on_merge: how to merge the matched records together assuming they are dictionaries:
+            - "raise" - fail with an error if the same keys are found in both dictionaries
+            - "keep-left" - prefer the keys from the left record.
+            - "keep-right" - prefer the keys from the right record
+            - callback - a callback in form "(<left>, <right>) -> <new record>" to merge the records manually.
+              Use it to customize the merging logic or when one of the records is not a dictionary.
+
+        :param grace_ms: how long to keep the right records in the store in event time.
+            (the time is taken from the records' timestamps).
+            It can be specified as either an `int` representing milliseconds or as a `timedelta` object.
+            The records are expired per key when the new record gets added.
+            Default - 7 days.
+
+        :param name: The unique identifier of the underlying state store for the "right" dataframe.
+            If not provided, it will be generated based on the underlying topic names.
+            Provide a custom name if you need to join the same right dataframe multiple times
+            within the application.
+
+        Example:
+
+        ```python
+        from datetime import timedelta
+        from quixstreams import Application
+
+        app = Application()
+
+        sdf_measurements = app.dataframe(app.topic("measurements"))
+        sdf_metadata = app.dataframe(app.topic("metadata"))
+
+        # Join records from the topic "measurements"
+        # with the latest effective records from the topic "metadata"
+        # using the "inner" join strategy and keeping the "metadata" records stored for 14 days in event time.
+        sdf_joined = sdf_measurements.join_asof(sdf_metadata, how="inner", grace_ms=timedelta(days=14))
+        ```
+
+        """
+        return JoinAsOf(
+            how=how, on_merge=on_merge, grace_ms=grace_ms, store_name=name
+        ).join(self, right)
 
     def _produce(
         self,
@@ -1689,17 +1742,19 @@ class StreamingDataFrame:
         self._stream = self._stream.add_update(func, metadata=metadata)  # type: ignore[call-overload]
         return self
 
-    def _register_store(self):
+    def register_store(self, store_type: Optional[StoreTypes] = None) -> None:
         """
         Register the default store for the current stream_id in StateStoreManager.
         """
-        self.ensure_topics_copartitioned()
+        TopicManager.ensure_topics_copartitioned(*self._topics)
 
         # Generate a changelog topic config based on the underlying topics.
         changelog_topic_config = self._topic_manager.derive_topic_config(self._topics)
 
         self._processing_context.state_manager.register_store(
-            stream_id=self.stream_id, changelog_config=changelog_topic_config
+            stream_id=self.stream_id,
+            store_type=store_type,
+            changelog_config=changelog_topic_config,
         )
 
     def _groupby_key(
@@ -1847,19 +1902,16 @@ def _as_metadata_func(
 
 def _as_stateful(
     func: Callable[[Any, Any, int, Any, State], T],
-    processing_context: ProcessingContext,
-    stream_id: str,
+    sdf: StreamingDataFrame,
 ) -> Callable[[Any, Any, int, Any], T]:
     @functools.wraps(func)
     def wrapper(value: Any, key: Any, timestamp: int, headers: Any) -> Any:
-        ctx = message_context()
-        transaction = processing_context.checkpoint.get_store_transaction(
-            stream_id=stream_id,
-            partition=ctx.partition,
-        )
         # Pass a State object with an interface limited to the key updates only
         # and prefix all the state keys by the message key
-        state = transaction.as_state(prefix=key)
+        state = sdf.processing_context.checkpoint.get_store_transaction(
+            stream_id=sdf.stream_id,
+            partition=message_context().partition,
+        ).as_state(prefix=key)
         return func(value, key, timestamp, headers, state)
 
     return wrapper

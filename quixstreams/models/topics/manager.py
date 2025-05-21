@@ -9,6 +9,7 @@ from .exceptions import (
     TopicConfigurationMismatch,
     TopicNameLengthExceeded,
     TopicNotFoundError,
+    TopicPartitionsMismatch,
 )
 from .topic import TimestampExtractor, Topic, TopicConfig, TopicType
 
@@ -332,6 +333,18 @@ class TopicManager:
                 "retention.ms": str(retention_ms),
             },
         )
+
+    @classmethod
+    def ensure_topics_copartitioned(cls, *topics: Topic):
+        partitions_counts = set(t.broker_config.num_partitions for t in topics)
+        if len(partitions_counts) > 1:
+            msg = ", ".join(
+                f'"{t.name}" ({t.broker_config.num_partitions} partitions)'
+                for t in topics
+            )
+            raise TopicPartitionsMismatch(
+                f"The underlying topics must have the same number of partitions to use State; got {msg}"
+            )
 
     def stream_id_from_topics(self, topics: Sequence[Topic]) -> str:
         """

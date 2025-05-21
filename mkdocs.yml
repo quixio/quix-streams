@@ -44,6 +44,7 @@ nav:
     - Windowing: windowing.md
     - Aggregations: aggregations.md
     - Concatenating Topics: concatenating.md
+    - Joins: joins.md
     - Branching StreamingDataFrames: branching.md
     - Configuration: configuration.md
 

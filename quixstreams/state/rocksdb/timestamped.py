@@ -12,7 +12,7 @@ from quixstreams.state.rocksdb.cache import TimestampsCache
 from quixstreams.state.serialization import (
     DumpsFunc,
     LoadsFunc,
-    int_to_int64_bytes,
+    encode_integer_pair,
     serialize,
 )
 
@@ -70,7 +70,7 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         )
 
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
-    def get_last(self, timestamp: int, prefix: Any) -> Optional[Any]:
+    def get_latest(self, timestamp: int, prefix: Any) -> Optional[Any]:
         """Get the latest value for a prefix up to a given timestamp.
 
         Searches both the transaction's update cache and the underlying RocksDB store
@@ -211,7 +211,9 @@ class TimestampedPartitionTransaction(PartitionTransaction):
 
     def _serialize_key(self, key: Union[int, bytes], prefix: bytes) -> bytes:
         if isinstance(key, int):
-            return prefix + SEPARATOR + int_to_int64_bytes(key)
+            # TODO: Currently using constant 0, but will be
+            # replaced with a global counter in the future
+            return prefix + SEPARATOR + encode_integer_pair(key, 0)
         elif isinstance(key, bytes):
             return prefix + SEPARATOR + key
         raise TypeError(f"Invalid key type: {type(key)}")
@@ -228,9 +230,13 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         :return: The minimum eligible timestamp (int).
         """
         cache = self._min_eligible_timestamps
-        return (
-            cache.timestamps.get(prefix) or self.get(key=cache.key, prefix=prefix) or 0
-        )
+        cached = cache.timestamps.get(prefix)
+        if cached is not None:
+            return cached
+        stored = self.get(key=cache.key, prefix=prefix) or 0
+        # Write the timestamp back to cache since it is known now
+        cache.timestamps[prefix] = stored
+        return stored
 
     def _set_min_eligible_timestamp(self, prefix: bytes, timestamp: int) -> None:
         """

@@ -7,7 +7,6 @@ __all__ = (
     "ColumnDoesNotExist",
     "StreamingDataFrameDuplicate",
     "GroupByDuplicate",
-    "TopicPartitionsMismatch",
 )
 
 
@@ -27,6 +26,3 @@ class GroupByDuplicate(QuixException): ...
 
 
 class StreamingDataFrameDuplicate(QuixException): ...
-
-
-class TopicPartitionsMismatch(QuixException): ...

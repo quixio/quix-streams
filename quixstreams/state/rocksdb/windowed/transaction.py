@@ -12,6 +12,8 @@ from quixstreams.state.rocksdb.cache import CounterCache, TimestampsCache
 from quixstreams.state.serialization import (
     DumpsFunc,
     LoadsFunc,
+    encode_integer_pair,
+    int_to_bytes,
     serialize,
 )
 from quixstreams.state.types import ExpiredWindowDetail, WindowDetail
@@ -29,12 +31,7 @@ from .metadata import (
     LATEST_TIMESTAMPS_CF_NAME,
     VALUES_CF_NAME,
 )
-from .serialization import (
-    append_integer,
-    encode_integer_pair,
-    int_to_int64_bytes,
-    parse_window_key,
-)
+from .serialization import append_integer, parse_window_key
 from .state import WindowedTransactionState
 
 if TYPE_CHECKING:
@@ -330,7 +327,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction[bytes, dict]):
             if not windows:
                 return
             last_expired = windows[-1]  # windows are ordered
-            suffixes: set[bytes] = set(int_to_int64_bytes(window) for window in windows)
+            suffixes: set[bytes] = set(int_to_bytes(window) for window in windows)
             for key in self.keys():
                 if key[-8:] in suffixes:
                     prefix, start, end = parse_window_key(key)
