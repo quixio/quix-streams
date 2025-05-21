@@ -119,5 +119,3 @@ Timestamp alignment is effective only for the partitions **with the same numbers
 
 Note that message ordering works only when the messages are consumed from the topics.  
 If you change timestamps of the record during processing, they will be processed in the original order.
-
-
