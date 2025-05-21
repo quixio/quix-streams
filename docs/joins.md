@@ -23,7 +23,7 @@ To perform a join, the underlying topics must follow these requirements:
 Join is a stateful operation, and it requires partitions of left and right topics to be assigned to the same application during processing.
 
 2. **Keys in both topics must be distributed across partitions using the same algorithm.**
-For example, messages with the key `A` must go to the same partion number for both left and right topics.  
+For example, messages with the key `A` must go to the same partition number for both left and right topics. This is Kafka's default behaviour.  
 
 
 ### Example
