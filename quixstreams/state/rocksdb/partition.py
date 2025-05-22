@@ -1,4 +1,5 @@
 import logging
+import shutil
 import time
 from typing import (
     Dict,
@@ -20,9 +21,13 @@ from quixstreams.state.base import (
 from quixstreams.state.exceptions import ColumnFamilyDoesNotExist
 from quixstreams.state.metadata import METADATA_CF_NAME, Marker
 from quixstreams.state.recovery import ChangelogProducer
+from quixstreams.state.rocksdb.utils import (
+    is_rocksdb_corruption_error,
+    is_rocksdb_directory,
+)
 from quixstreams.state.serialization import int_from_bytes, int_to_bytes
 
-from .exceptions import ColumnFamilyAlreadyExists
+from .exceptions import ColumnFamilyAlreadyExists, RocksDBCorruptedError
 from .metadata import (
     CHANGELOG_OFFSET_KEY,
 )
@@ -350,11 +355,33 @@ class RocksDBStorePartition(StorePartition):
         options = self._rocksdb_options
         options.create_if_missing(True)
         options.create_missing_column_families(True)
-        rdict = Rdict(
+        create_rdict = lambda: Rdict(
             path=self._path,
             options=options,
             access_type=AccessType.read_write(),
         )
+
+        try:
+            rdict = create_rdict()
+        except Exception as exc:
+            if not is_rocksdb_corruption_error(exc):
+                raise
+
+            if not self._changelog_producer:
+                raise RocksDBCorruptedError(
+                    "State is corrupted and cannot be recovered from changelog. "
+                    "(use_changelog_topics=False)"
+                )
+
+            if not is_rocksdb_directory(self._path):
+                raise RocksDBCorruptedError(
+                    "State is corrupted and cannot be overwritten from changelog. "
+                    "Directory contains files unrelated to RocksDB."
+                )
+
+            shutil.rmtree(self._path)
+            rdict = create_rdict()
+
         # Ensure metadata column family is created without defining it upfront
         try:
             rdict.get_column_family(METADATA_CF_NAME)

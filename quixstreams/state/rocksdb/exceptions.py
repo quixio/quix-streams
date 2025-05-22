@@ -4,3 +4,6 @@ __all__ = ("ColumnFamilyAlreadyExists",)
 
 
 class ColumnFamilyAlreadyExists(StateError): ...
+
+
+class RocksDBCorruptedError(StateError): ...
