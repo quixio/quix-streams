@@ -51,6 +51,7 @@ class RocksDBOptions(RocksDBOptionsType):
     open_max_retries: int = 10
     open_retry_backoff: float = 3.0
     use_fsync: bool = True
+    recreate_corrupted: bool = False
 
     def to_options(self) -> rocksdict.Options:
         """
