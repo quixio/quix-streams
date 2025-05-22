@@ -1,5 +1,5 @@
 import logging
-import shutil
+import re
 import time
 from typing import (
     Dict,
@@ -21,10 +21,6 @@ from quixstreams.state.base import (
 from quixstreams.state.exceptions import ColumnFamilyDoesNotExist
 from quixstreams.state.metadata import METADATA_CF_NAME, Marker
 from quixstreams.state.recovery import ChangelogProducer
-from quixstreams.state.rocksdb.utils import (
-    is_rocksdb_corruption_error,
-    is_rocksdb_directory,
-)
 from quixstreams.state.serialization import int_from_bytes, int_to_bytes
 
 from .exceptions import ColumnFamilyAlreadyExists, RocksDBCorruptedError
@@ -38,6 +34,12 @@ __all__ = ("RocksDBStorePartition",)
 
 
 logger = logging.getLogger(__name__)
+
+ROCKSDB_CORRUPTION_REGEX = re.compile(
+    r"^Corruption: Corruption: IO error: No such file or "
+    r"directory: While open a file for random read: .*: "
+    r"No such file or directory  The file .* may be corrupted\.$"
+)
 
 
 class RocksDBStorePartition(StorePartition):
@@ -364,22 +366,16 @@ class RocksDBStorePartition(StorePartition):
         try:
             rdict = create_rdict()
         except Exception as exc:
-            if not is_rocksdb_corruption_error(exc):
+            if ROCKSDB_CORRUPTION_REGEX.fullmatch(str(exc)) is None:
                 raise
-
-            if not self._changelog_producer:
+            elif not self._changelog_producer:
                 raise RocksDBCorruptedError(
                     "State is corrupted and cannot be recovered from changelog. "
                     "(use_changelog_topics=False)"
                 )
 
-            if not is_rocksdb_directory(self._path):
-                raise RocksDBCorruptedError(
-                    "State is corrupted and cannot be overwritten from changelog. "
-                    "Directory contains files unrelated to RocksDB."
-                )
-
-            shutil.rmtree(self._path)
+            logger.info("Recreating corrupted RocksDB...")
+            Rdict.destroy(self._path)
             rdict = create_rdict()
 
         # Ensure metadata column family is created without defining it upfront
