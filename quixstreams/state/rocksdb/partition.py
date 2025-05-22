@@ -126,7 +126,8 @@ class RocksDBStorePartition(StorePartition):
         logger.debug(
             f"Flushing state changes to the disk "
             f'path="{self.path}" '
-            f"changelog_offset={changelog_offset}"
+            f"changelog_offset={changelog_offset} "
+            f"bytes_total={batch.size_in_bytes()}"
         )
 
         self._write(batch)
