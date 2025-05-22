@@ -50,6 +50,7 @@ class RocksDBOptions(RocksDBOptionsType):
     loads: LoadsFunc = loads
     open_max_retries: int = 10
     open_retry_backoff: float = 3.0
+    use_fsync: bool = True
 
     def to_options(self) -> rocksdict.Options:
         """
@@ -62,6 +63,7 @@ class RocksDBOptions(RocksDBOptionsType):
         opts.set_target_file_size_base(self.target_file_size_base)
         opts.set_max_write_buffer_number(self.max_write_buffer_number)
         opts.set_enable_pipelined_write(self.enable_pipelined_write)
+        opts.set_use_fsync(self.use_fsync)
         if self.wal_dir is not None:
             opts.set_wal_dir(self.wal_dir)
         if self.db_log_dir is not None:
