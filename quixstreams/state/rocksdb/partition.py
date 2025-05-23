@@ -22,7 +22,7 @@ from quixstreams.state.metadata import METADATA_CF_NAME, Marker
 from quixstreams.state.recovery import ChangelogProducer
 from quixstreams.state.serialization import int_from_bytes, int_to_bytes
 
-from .exceptions import ColumnFamilyAlreadyExists
+from .exceptions import ColumnFamilyAlreadyExists, RocksDBCorruptedError
 from .metadata import (
     CHANGELOG_OFFSET_KEY,
 )
@@ -350,11 +350,38 @@ class RocksDBStorePartition(StorePartition):
         options = self._rocksdb_options
         options.create_if_missing(True)
         options.create_missing_column_families(True)
-        rdict = Rdict(
+        create_rdict = lambda: Rdict(
             path=self._path,
             options=options,
             access_type=AccessType.read_write(),
         )
+        # TODO: Add docs
+
+        try:
+            rdict = create_rdict()
+        except Exception as exc:
+            if not str(exc).startswith("Corruption"):
+                raise
+            elif not self._changelog_producer:
+                raise RocksDBCorruptedError(
+                    f'State store at "{self._path}" is corrupted '
+                    f"and cannot be recovered from the changelog topic: "
+                    "`use_changelog_topics` is set to False."
+                ) from exc
+            elif not self._options.on_corrupted_recreate:
+                raise RocksDBCorruptedError(
+                    f'State store at "{self._path}" is corrupted '
+                    f"but may be recovered from the changelog topic. "
+                    "Pass `rocksdb_options=RocksDBOptions(..., on_corrupted_recreate=True)` "
+                    "to the Application to destroy the corrupted state "
+                    "and recover it from the changelog."
+                ) from exc
+
+            logger.warning(f"Destroying corrupted RocksDB path={self._path}")
+            Rdict.destroy(self._path)
+            logger.warning(f"Recreating corrupted RocksDB path={self._path}")
+            rdict = create_rdict()
+
         # Ensure metadata column family is created without defining it upfront
         try:
             rdict.get_column_family(METADATA_CF_NAME)

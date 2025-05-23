@@ -11,6 +11,7 @@ from quixstreams.state.rocksdb import (
     RocksDBOptions,
     RocksDBStorePartition,
 )
+from quixstreams.state.rocksdb.exceptions import RocksDBCorruptedError
 from quixstreams.state.rocksdb.windowed.serialization import append_integer
 
 
@@ -66,6 +67,51 @@ class TestRocksDBStorePartition:
                 store_partition_factory()
 
         assert str(raised.value) == "some exception"
+
+    def test_db_corrupted_fails_with_no_changelog(
+        self, store_partition_factory, tmp_path
+    ):
+        # Initialize and corrupt the database by messing with the MANIFEST
+        path = tmp_path.as_posix()
+        Rdict(path=path)
+        next(tmp_path.glob("MANIFEST*")).write_bytes(b"")
+
+        with pytest.raises(
+            RocksDBCorruptedError,
+            match=f'State store at "{path}" is corrupted and cannot be recovered '
+            f"from the changelog topic",
+        ):
+            store_partition_factory(changelog_producer=None)
+
+    def test_db_corrupted_fails_with_on_corrupted_recreate_false(
+        self, store_partition_factory, tmp_path
+    ):
+        # Initialize and corrupt the database by messing with the MANIFEST
+        path = tmp_path.as_posix()
+        Rdict(path=path)
+        next(tmp_path.glob("MANIFEST*")).write_bytes(b"")
+
+        with pytest.raises(
+            RocksDBCorruptedError,
+            match=f'State store at "{path}" is corrupted but may be recovered '
+            f"from the changelog topic",
+        ):
+            store_partition_factory()
+
+    def test_db_corrupted_manifest_file(self, store_partition_factory, tmp_path):
+        Rdict(path=tmp_path.as_posix())  # initialize db
+        next(tmp_path.glob("MANIFEST*")).write_bytes(b"")  # write random bytes
+
+        store_partition_factory(options=RocksDBOptions(on_corrupted_recreate=True))
+
+    def test_db_corrupted_sst_file(self, store_partition_factory, tmp_path):
+        rdict = Rdict(path=tmp_path.as_posix())  # initialize db
+        rdict[b"key"] = b"value"  # write something
+        rdict.flush()  # flush creates .sst file
+        rdict.close()  # required to release the lock
+        next(tmp_path.glob("*.sst")).unlink()  # delete the .sst file
+
+        store_partition_factory(options=RocksDBOptions(on_corrupted_recreate=True))
 
     def test_create_and_get_column_family(self, store_partition: RocksDBStorePartition):
         store_partition.create_column_family("cf")
@@ -123,7 +169,7 @@ class TestRocksDBStorePartition:
         Pass custom "logs_dir" to Rdict and ensure it exists and has some files
         """
 
-        logs_dir = Path(tmp_path / "db" / "logs")
+        logs_dir = Path(tmp_path / "logs")
         options = RocksDBOptions(db_log_dir=logs_dir.as_posix())
         with store_partition_factory(options=options):
             assert logs_dir.is_dir()

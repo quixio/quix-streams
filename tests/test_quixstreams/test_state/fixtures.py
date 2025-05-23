@@ -134,15 +134,15 @@ def memory_partition_factory(changelog_producer_mock):
 
 def rocksdb_partition_factory(tmp_path, changelog_producer_mock):
     def factory(
-        name: str = "db",
+        name: str = "",
         options: Optional[RocksDBOptions] = None,
-        changelog_producer: Optional[ChangelogProducer] = None,
+        changelog_producer: Optional[ChangelogProducer] = changelog_producer_mock,
     ) -> RocksDBStorePartition:
         path = (tmp_path / name).as_posix()
         _options = options or RocksDBOptions(open_max_retries=0, open_retry_backoff=3.0)
         return RocksDBStorePartition(
             path,
-            changelog_producer=changelog_producer or changelog_producer_mock,
+            changelog_producer=changelog_producer,
             options=_options,
         )
 

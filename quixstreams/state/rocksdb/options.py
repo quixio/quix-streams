@@ -32,6 +32,12 @@ class RocksDBOptions(RocksDBOptionsType):
     :param open_max_retries: number of times to retry opening the database
             if it's locked by another process. To disable retrying, pass 0
     :param open_retry_backoff: number of seconds to wait between each retry.
+    :param on_corrupted_recreate: when True, the corrupted DB will be destroyed
+        if the `use_changelog_topics=True` is also set on the Application.
+        If this option is True, but `use_changelog_topics=False`,
+        the DB won't be destroyed.
+        Note that the application doesn't validate the contents of the changelog topics.
+        Default - `False`.
 
     Please see `rocksdict.Options` for a complete description of other options.
     """
@@ -51,6 +57,7 @@ class RocksDBOptions(RocksDBOptionsType):
     open_max_retries: int = 10
     open_retry_backoff: float = 3.0
     use_fsync: bool = True
+    on_corrupted_recreate: bool = False
 
     def to_options(self) -> rocksdict.Options:
         """
