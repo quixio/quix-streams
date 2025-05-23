@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     from .partition import WindowedRocksDBStorePartition
 
 
-class WindowedRocksDBPartitionTransaction(PartitionTransaction[bytes, dict]):
+class WindowedRocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
     def __init__(
         self,
         partition: "WindowedRocksDBStorePartition",
@@ -108,13 +108,11 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction[bytes, dict]):
             yield key
 
     def get_latest_timestamp(self, prefix: bytes) -> int:
-        return self._get_timestamp(
-            prefix=prefix, cache=self._latest_timestamps, default=0
-        )
+        return self._get_timestamp(prefix=prefix, cache=self._latest_timestamps) or 0
 
     def get_latest_expired(self, prefix: bytes) -> int:
-        return self._get_timestamp(
-            prefix=prefix, cache=self._last_expired_timestamps, default=0
+        return (
+            self._get_timestamp(prefix=prefix, cache=self._last_expired_timestamps) or 0
         )
 
     def get_window(
@@ -315,9 +313,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction[bytes, dict]):
         :param delete: If True, expired windows will be deleted.
         :param collect: If True, values will be collected into windows.
         """
-        last_expired = self._get_timestamp(
-            prefix=b"", cache=self._last_expired_timestamps, default=0
-        )
+        last_expired = self.get_latest_expired(prefix=b"")
 
         to_delete: set[tuple[bytes, int, int]] = set()
         collected = []
@@ -526,18 +522,15 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction[bytes, dict]):
         # Sort and deserialize items merged from the cache and store
         return sorted(merged_items.items(), key=lambda kv: kv[0], reverse=backwards)
 
-    def _get_timestamp(
-        self, cache: TimestampsCache, prefix: bytes, default: Any = None
-    ) -> int:
-        cached_ts = cache.timestamps.get(prefix)
-        if cached_ts is not None:
-            return cached_ts
+    def _get_timestamp(self, cache: TimestampsCache, prefix: bytes) -> Optional[int]:
+        if prefix in cache.timestamps:
+            # Return the cached value if it has been set at least once
+            return cache.timestamps[prefix]
 
         stored_ts = self.get(
             key=cache.key,
             prefix=prefix,
             cf_name=cache.cf_name,
-            default=default,
         )
         if stored_ts is not None and not isinstance(stored_ts, int):
             raise ValueError(f"invalid timestamp {stored_ts}")
