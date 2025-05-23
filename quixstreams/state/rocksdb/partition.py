@@ -1,5 +1,4 @@
 import logging
-import re
 import time
 from typing import (
     Dict,
@@ -34,12 +33,6 @@ __all__ = ("RocksDBStorePartition",)
 
 
 logger = logging.getLogger(__name__)
-
-ROCKSDB_CORRUPTION_REGEX = re.compile(
-    r"^Corruption: Corruption: IO error: No such file or "
-    r"directory: While open a file for random read: .*: "
-    r"No such file or directory  The file .* may be corrupted\.$"
-)
 
 
 class RocksDBStorePartition(StorePartition):
@@ -366,7 +359,7 @@ class RocksDBStorePartition(StorePartition):
         try:
             rdict = create_rdict()
         except Exception as exc:
-            if ROCKSDB_CORRUPTION_REGEX.fullmatch(str(exc)) is None:
+            if not str(exc).startswith("Corruption"):
                 raise
             elif not self._changelog_producer:
                 raise RocksDBCorruptedError(
