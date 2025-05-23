@@ -1,3 +1,4 @@
+import re
 import time
 from pathlib import Path
 from unittest.mock import patch
@@ -11,7 +12,21 @@ from quixstreams.state.rocksdb import (
     RocksDBOptions,
     RocksDBStorePartition,
 )
+from quixstreams.state.rocksdb.exceptions import RocksDBCorruptedError
 from quixstreams.state.rocksdb.windowed.serialization import append_integer
+
+
+@pytest.fixture
+def corrupted_db(tmp_path):
+    """
+    Create a corrupted RocksDB database in a temporary directory.
+    """
+    rdict = Rdict(path=tmp_path.as_posix())
+    # Write something and flush so that the .sst file is created
+    rdict[b"key"] = b"value"
+    rdict.flush()
+    # Delete the .sst file
+    next(tmp_path.glob("*.sst")).unlink()
 
 
 class TestRocksDBStorePartition:
@@ -66,6 +81,34 @@ class TestRocksDBStorePartition:
                 store_partition_factory()
 
         assert str(raised.value) == "some exception"
+
+    def test_db_corrupted_fails_with_no_changelog(
+        self, store_partition_factory, corrupted_db
+    ):
+        with pytest.raises(
+            RocksDBCorruptedError,
+            match=(
+                "State is corrupted and cannot be recovered from changelog: "
+                "`use_changelog_topics` is set to False."
+            ),
+        ):
+            store_partition_factory(changelog_producer=None)
+
+    def test_db_corrupted_fails_with_on_corrupted_recreate_false(
+        self, store_partition_factory, corrupted_db
+    ):
+        with pytest.raises(
+            RocksDBCorruptedError,
+            match=re.escape(
+                "State is corrupted but may be recovered from changelog. "
+                "Set `RocksDBOptions(..., on_corrupted_recreate=True)` "
+                "to destroy the state and recreate it from changelog."
+            ),
+        ):
+            store_partition_factory()
+
+    def test_db_corrupted_recreated(self, store_partition_factory, corrupted_db):
+        store_partition_factory(options=RocksDBOptions(on_corrupted_recreate=True))
 
     def test_create_and_get_column_family(self, store_partition: RocksDBStorePartition):
         store_partition.create_column_family("cf")
