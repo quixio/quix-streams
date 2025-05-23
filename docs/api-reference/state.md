@@ -363,6 +363,13 @@ RocksDB database options.
 - `open_max_retries`: number of times to retry opening the database
 if it's locked by another process. To disable retrying, pass 0
 - `open_retry_backoff`: number of seconds to wait between each retry.
+- `on_corrupted_recreate`: when True, the corrupted DB will be destroyed
+if the `use_changelog_topics=True` is also set on the Application.
+    If this option is True, but `use_changelog_topics=False`,
+    the DB won't be destroyed.
+    Note that the application doesn't validate the contents of the changelog topics.
+    Default - `False`.
+
 Please see `rocksdict.Options` for a complete description of other options.
 
 <a id="quixstreams.state.rocksdb.options.RocksDBOptions.to_options"></a>
@@ -375,7 +382,7 @@ Please see `rocksdict.Options` for a complete description of other options.
 def to_options() -> rocksdict.Options
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/options.py#L54)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/options.py#L62)
 
 Convert parameters to `rocksdict.Options`
 
