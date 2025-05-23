@@ -123,7 +123,7 @@ class TestRocksDBStorePartition:
         Pass custom "logs_dir" to Rdict and ensure it exists and has some files
         """
 
-        logs_dir = Path(tmp_path / "db" / "logs")
+        logs_dir = Path(tmp_path / "logs")
         options = RocksDBOptions(db_log_dir=logs_dir.as_posix())
         with store_partition_factory(options=options):
             assert logs_dir.is_dir()
