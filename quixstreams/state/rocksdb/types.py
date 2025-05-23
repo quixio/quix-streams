@@ -23,6 +23,6 @@ class RocksDBOptionsType(Protocol):
     open_max_retries: int
     open_retry_backoff: float
     use_fsync: bool
-    recreate_corrupted: bool
+    on_corrupted_recreate: bool
 
     def to_options(self) -> rocksdict.Options: ...

@@ -373,11 +373,11 @@ class RocksDBStorePartition(StorePartition):
                     "State is corrupted and cannot be recovered from changelog: "
                     "`use_changelog_topics` is set to False."
                 )
-            elif not self._options.recreate_corrupted:
+            elif not self._options.on_corrupted_recreate:
                 raise RocksDBCorruptedError(
                     "State is corrupted but may be recovered from changelog. "
-                    "Set `RocksDBOptions(..., recreate_corrupted=True)` to destroy "
-                    "the state and recreate it from changelog."
+                    "Set `RocksDBOptions(..., on_corrupted_recreate=True)` "
+                    "to destroy the state and recreate it from changelog."
                 )
 
             logger.info("Recreating corrupted RocksDB...")
