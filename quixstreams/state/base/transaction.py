@@ -388,7 +388,6 @@ class PartitionTransaction(ABC, Generic[K, V]):
 
         return cached
 
-    @validate_transaction_status(PartitionTransactionStatus.STARTED)
     def set(self, key: K, value: V, prefix: bytes, cf_name: str = "default") -> None:
         """
         Set value for the key.
@@ -404,9 +403,8 @@ class PartitionTransaction(ABC, Generic[K, V]):
             self._status = PartitionTransactionStatus.FAILED
             raise
 
-        self.set_bytes(key, value_serialized, prefix, cf_name=cf_name)
+        self._set_bytes(key, value_serialized, prefix, cf_name=cf_name)
 
-    @validate_transaction_status(PartitionTransactionStatus.STARTED)
     def set_bytes(
         self, key: K, value: bytes, prefix: bytes, cf_name: str = "default"
     ) -> None:
@@ -417,10 +415,17 @@ class PartitionTransaction(ABC, Generic[K, V]):
         :param value: value
         :param cf_name: column family name
         """
-        try:
-            if not isinstance(value, bytes):
-                raise StateSerializationError("Value must be bytes")
+        if not isinstance(value, bytes):
+            self._status = PartitionTransactionStatus.FAILED
+            raise StateSerializationError("Value must be bytes")
 
+        self._set_bytes(key=key, value=value, prefix=prefix, cf_name=cf_name)
+
+    @validate_transaction_status(PartitionTransactionStatus.STARTED)
+    def _set_bytes(
+        self, key: K, value: bytes, prefix: bytes, cf_name: str = "default"
+    ) -> None:
+        try:
             key_serialized = self._serialize_key(key, prefix=prefix)
             self._update_cache.set(
                 key=key_serialized,
