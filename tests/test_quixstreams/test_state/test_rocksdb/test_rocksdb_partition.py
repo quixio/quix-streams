@@ -1,4 +1,3 @@
-import re
 import time
 from pathlib import Path
 from unittest.mock import patch
@@ -73,15 +72,14 @@ class TestRocksDBStorePartition:
         self, store_partition_factory, tmp_path
     ):
         # Initialize and corrupt the database by messing with the MANIFEST
-        Rdict(path=tmp_path.as_posix())
+        path = tmp_path.as_posix()
+        Rdict(path=path)
         next(tmp_path.glob("MANIFEST*")).write_bytes(b"")
 
         with pytest.raises(
             RocksDBCorruptedError,
-            match=(
-                "State is corrupted and cannot be recovered from changelog: "
-                "`use_changelog_topics` is set to False."
-            ),
+            match=f'State store at "{path}" is corrupted and cannot be recovered '
+            f"from the changelog topic",
         ):
             store_partition_factory(changelog_producer=None)
 
@@ -89,16 +87,14 @@ class TestRocksDBStorePartition:
         self, store_partition_factory, tmp_path
     ):
         # Initialize and corrupt the database by messing with the MANIFEST
-        Rdict(path=tmp_path.as_posix())
+        path = tmp_path.as_posix()
+        Rdict(path=path)
         next(tmp_path.glob("MANIFEST*")).write_bytes(b"")
 
         with pytest.raises(
             RocksDBCorruptedError,
-            match=re.escape(
-                "State is corrupted but may be recovered from changelog. "
-                "Set `RocksDBOptions(..., on_corrupted_recreate=True)` "
-                "to destroy the state and recreate it from changelog."
-            ),
+            match=f'State store at "{path}" is corrupted but may be recovered '
+            f"from the changelog topic",
         ):
             store_partition_factory()
 

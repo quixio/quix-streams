@@ -355,6 +355,7 @@ class RocksDBStorePartition(StorePartition):
             options=options,
             access_type=AccessType.read_write(),
         )
+        # TODO: Add docs
 
         try:
             rdict = create_rdict()
@@ -363,18 +364,22 @@ class RocksDBStorePartition(StorePartition):
                 raise
             elif not self._changelog_producer:
                 raise RocksDBCorruptedError(
-                    "State is corrupted and cannot be recovered from changelog: "
+                    f'State store at "{self._path}" is corrupted '
+                    f"and cannot be recovered from the changelog topic: "
                     "`use_changelog_topics` is set to False."
-                )
+                ) from exc
             elif not self._options.on_corrupted_recreate:
                 raise RocksDBCorruptedError(
-                    "State is corrupted but may be recovered from changelog. "
-                    "Set `RocksDBOptions(..., on_corrupted_recreate=True)` "
-                    "to destroy the state and recreate it from changelog."
-                )
+                    f'State store at "{self._path}" is corrupted '
+                    f"but may be recovered from the changelog topic. "
+                    "Pass `rocksdb_options=RocksDBOptions(..., on_corrupted_recreate=True)` "
+                    "to the Application to destroy the corrupted state "
+                    "and recover it from the changelog."
+                ) from exc
 
-            logger.info("Recreating corrupted RocksDB...")
+            logger.warning(f"Destroying corrupted RocksDB path={self._path}")
             Rdict.destroy(self._path)
+            logger.warning(f"Recreating corrupted RocksDB path={self._path}")
             rdict = create_rdict()
 
         # Ensure metadata column family is created without defining it upfront
