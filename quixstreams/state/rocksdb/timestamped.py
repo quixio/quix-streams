@@ -7,8 +7,9 @@ from quixstreams.state.base.transaction import (
     validate_transaction_status,
 )
 from quixstreams.state.metadata import SEPARATOR
-from quixstreams.state.recovery import ChangelogProducer
+from quixstreams.state.recovery import ChangelogProducer, ChangelogProducerFactory
 from quixstreams.state.rocksdb.cache import TimestampsCache
+from quixstreams.state.rocksdb.types import RocksDBOptionsType
 from quixstreams.state.serialization import (
     DumpsFunc,
     LoadsFunc,
@@ -24,8 +25,6 @@ __all__ = (
     "TimestampedStorePartition",
     "TimestampedPartitionTransaction",
 )
-
-DAY_MS = 24 * 60 * 60 * 1000
 
 MIN_ELIGIBLE_TIMESTAMPS_CF_NAME = "__min-eligible-timestamps__"
 MIN_ELIGIBLE_TIMESTAMPS_KEY = b"__min_eligible_timestamps__"
@@ -45,6 +44,7 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         partition: "TimestampedStorePartition",
         dumps: DumpsFunc,
         loads: LoadsFunc,
+        grace_ms: int,
         changelog_producer: Optional[ChangelogProducer] = None,
     ) -> None:
         """
@@ -54,6 +54,7 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         :param dumps: The serialization function for keys/values.
         :param loads: The deserialization function for keys/values.
         :param changelog_producer: Optional `ChangelogProducer` for recording changes.
+        :param grace_ms: retention for the key in milliseconds
         """
         super().__init__(
             partition=partition,
@@ -68,6 +69,7 @@ class TimestampedPartitionTransaction(PartitionTransaction):
             key=MIN_ELIGIBLE_TIMESTAMPS_KEY,
             cf_name=MIN_ELIGIBLE_TIMESTAMPS_CF_NAME,
         )
+        self._grace_ms = grace_ms
 
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
     def get_latest(self, timestamp: int, prefix: Any) -> Optional[Any]:
@@ -133,13 +135,7 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         return self._deserialize_value(value) if value is not None else None
 
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
-    def set_for_timestamp(
-        self,
-        timestamp: int,
-        value: Any,
-        prefix: Any,
-        retention_ms: int = 7 * DAY_MS,
-    ) -> None:
+    def set_for_timestamp(self, timestamp: int, value: Any, prefix: Any) -> None:
         """Set a value for the timestamp.
 
         This method acts as a proxy, passing the provided `timestamp` and `prefix`
@@ -147,19 +143,18 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         into a combined key before storing the value in the update cache.
 
         Additionally, it updates the minimum eligible timestamp for the given prefix
-        based on the `retention_ms`, which is used later during the flush process to
+        based on the `grace_ms`, which is used later during the flush process to
         expire old data.
 
         :param timestamp: Timestamp associated with the value in milliseconds.
         :param value: The value to store.
         :param prefix: The key prefix.
-        :param retention_ms: retention for the key in milliseconds
         """
         prefix = self._ensure_bytes(prefix)
         self.set(timestamp, value, prefix)
         min_eligible_timestamp = max(
             self._get_min_eligible_timestamp(prefix),
-            timestamp - retention_ms,
+            timestamp - self._grace_ms,
         )
         self._set_min_eligible_timestamp(prefix, min_eligible_timestamp)
 
@@ -167,7 +162,7 @@ class TimestampedPartitionTransaction(PartitionTransaction):
     def prepare(self, processed_offsets: Optional[dict[str, int]] = None) -> None:
         """
         This method first calls `_expire()` to remove outdated entries based on
-        their timestamps and retention periods, then calls the parent class's
+        their timestamps and grace periods, then calls the parent class's
         `prepare()` to prepare the transaction for flush.
 
         :param processed_offsets: the dict with <topic: offset> of the latest processed message
@@ -262,12 +257,22 @@ class TimestampedStorePartition(RocksDBStorePartition):
     `TimestampedPartitionTransaction` instances to handle atomic operations for that partition.
     """
 
+    def __init__(
+        self,
+        path: str,
+        grace_ms: int,
+        options: Optional[RocksDBOptionsType] = None,
+        changelog_producer: Optional[ChangelogProducer] = None,
+    ) -> None:
+        super().__init__(path, options=options, changelog_producer=changelog_producer)
+        self._grace_ms = grace_ms
+
     def begin(self) -> TimestampedPartitionTransaction:
-        # Override the method to specify the correct return type
         return TimestampedPartitionTransaction(
             partition=self,
             dumps=self._dumps,
             loads=self._loads,
+            grace_ms=self._grace_ms,
             changelog_producer=self._changelog_producer,
         )
 
@@ -280,4 +285,39 @@ class TimestampedStore(RocksDBStore):
     Uses `TimestampedStorePartition` to manage individual partitions.
     """
 
-    store_partition_class = TimestampedStorePartition
+    def __init__(
+        self,
+        name: str,
+        stream_id: Optional[str],
+        base_dir: str,
+        grace_ms: int,
+        changelog_producer_factory: Optional[ChangelogProducerFactory] = None,
+        options: Optional[RocksDBOptionsType] = None,
+    ) -> None:
+        super().__init__(
+            name=name,
+            stream_id=stream_id,
+            base_dir=base_dir,
+            changelog_producer_factory=changelog_producer_factory,
+            options=options,
+        )
+        self._grace_ms = grace_ms
+
+    def create_new_partition(
+        self,
+        partition: int,
+    ) -> RocksDBStorePartition:
+        path = str((self._partitions_dir / str(partition)).absolute())
+
+        changelog_producer: Optional[ChangelogProducer] = None
+        if self._changelog_producer_factory:
+            changelog_producer = (
+                self._changelog_producer_factory.get_partition_producer(partition)
+            )
+
+        return TimestampedStorePartition(
+            path=path,
+            grace_ms=self._grace_ms,
+            options=self._options,
+            changelog_producer=changelog_producer,
+        )

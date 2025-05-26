@@ -212,6 +212,7 @@ class StateStoreManager:
         self,
         stream_id: str,
         store_name: str,
+        grace_ms: int,
         changelog_config: Optional[TopicConfig] = None,
     ) -> None:
         if self._stores.get(stream_id, {}).get(store_name):
@@ -223,6 +224,7 @@ class StateStoreManager:
             name=store_name,
             stream_id=stream_id,
             base_dir=str(self._state_dir),
+            grace_ms=grace_ms,
             changelog_producer_factory=self._setup_changelogs(
                 stream_id=stream_id,
                 store_name=store_name,
