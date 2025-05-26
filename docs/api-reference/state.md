@@ -365,10 +365,10 @@ if it's locked by another process. To disable retrying, pass 0
 - `open_retry_backoff`: number of seconds to wait between each retry.
 - `on_corrupted_recreate`: when True, the corrupted DB will be destroyed
 if the `use_changelog_topics=True` is also set on the Application.
-    If this option is True, but `use_changelog_topics=False`,
-    the DB won't be destroyed.
-    Note that the application doesn't validate the contents of the changelog topics.
-    Default - `False`.
+If this option is True, but `use_changelog_topics=False`,
+the DB won't be destroyed.
+Note: risk of data loss! Make sure that the changelog topics are up-to-date before enabling it in production.
+Default - `False`.
 
 Please see `rocksdict.Options` for a complete description of other options.
 
