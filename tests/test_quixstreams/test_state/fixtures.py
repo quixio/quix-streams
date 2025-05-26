@@ -1,9 +1,11 @@
 import uuid
-from typing import Generator, Optional
+from datetime import timedelta
+from typing import Generator, Optional, Union
 from unittest.mock import MagicMock, PropertyMock
 
 import pytest
 
+from quixstreams.dataframe.utils import ensure_milliseconds
 from quixstreams.internal_consumer import InternalConsumer
 from quixstreams.models import TopicManager
 from quixstreams.state.base import PartitionTransactionCache, StorePartition
@@ -77,7 +79,7 @@ def memory_store_factory():
         topic: Optional[str] = None,
         name: str = "default",
         changelog_producer_factory: Optional[ChangelogProducerFactory] = None,
-    ):
+    ) -> MemoryStore:
         return MemoryStore(
             stream_id=topic or str(uuid.uuid4()),
             name=name,
@@ -104,10 +106,32 @@ def rocksdb_store_factory(tmp_path, cls):
     return factory
 
 
+def timestamped_store_factory(tmp_path):
+    def factory(
+        topic: Optional[str] = None,
+        name: str = "default",
+        grace_ms: Union[int, timedelta] = timedelta(days=7),
+        changelog_producer_factory: Optional[ChangelogProducerFactory] = None,
+    ) -> TimestampedStore:
+        topic = topic or str(uuid.uuid4())
+        grace_ms = ensure_milliseconds(grace_ms)
+        return TimestampedStore(
+            stream_id=topic,
+            name=name,
+            base_dir=str(tmp_path),
+            grace_ms=grace_ms,
+            changelog_producer_factory=changelog_producer_factory,
+        )
+
+    return factory
+
+
 @pytest.fixture()
 def store_factory(store_type, tmp_path):
-    if store_type in [RocksDBStore, TimestampedStore]:
+    if store_type == RocksDBStore:
         return rocksdb_store_factory(tmp_path, store_type)
+    elif store_type == TimestampedStore:
+        return timestamped_store_factory(tmp_path)
     elif store_type == MemoryStore:
         return memory_store_factory()
     else:
