@@ -183,7 +183,7 @@ class ConfigurationVersion:
             VERSION_RETRY_MAX_DELAY,
         )
         super().__setattr__("retry_count", self.retry_count + 1)
-        super().__setattr__("retry_at", time.time() + delay)
+        super().__setattr__("retry_at", int(time.time()) + delay)
 
 
 @dataclasses.dataclass

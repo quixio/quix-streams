@@ -65,7 +65,7 @@ class Lookup(BaseLookup[Field]):
         fallback: Literal["error", "default"] = "error",
     ):
         if QUIX_REPLICA_NAME:
-            consumer_group = f"-{consumer_group}-{QUIX_REPLICA_NAME.split('-')[-1]}"
+            consumer_group = f"{consumer_group}-{QUIX_REPLICA_NAME.split('-')[-1]}"
 
         if app_config is None:
             if broker_address is None:
@@ -83,7 +83,7 @@ class Lookup(BaseLookup[Field]):
                 consumer_poll_timeout = app_config.consumer_poll_timeout
             if consumer_extra_config is None:
                 consumer_extra_config = app_config.consumer_extra_config
-            consumer_group = f"{app_config.consumer_group_prefix}{consumer_group}"
+            consumer_group = f"{app_config.consumer_group_prefix}-{consumer_group}"
 
         self._topic = topic
         self._request_timeout = request_timeout
@@ -112,9 +112,9 @@ class Lookup(BaseLookup[Field]):
 
     def _fetch_version_content(self, version: ConfigurationVersion) -> Optional[Any]:
         """
-        Fetch and parse JSON content from a URL.
+        Fetch and parse JSON content from the URL specified in the version's contentUrl attribute.
 
-        :param url: The URL to fetch JSON content from.
+        :param version: The configuration version containing the contentUrl to fetch JSON content from.
 
         :returns: The parsed JSON content, or FALLBACK_DEFAULT if fetching fails and fallback is enabled.
 
@@ -295,12 +295,12 @@ class Lookup(BaseLookup[Field]):
         self, version: Optional[ConfigurationVersion], fields: dict[str, Field]
     ) -> dict[str, Any]:
         """
-        Retrieve the configuration data for a given type and version.
+        Retrieve the configuration data for a given version and fields.
 
-        :param type: The configuration type.
         :param version: The configuration version.
+        :param fields: A dictionary mapping field names to Field objects, which define how to parse the configuration data.
 
-        :returns: dict[str, Any]: The configuration data for the specified type and version.
+        :returns: dict[str, Any]: The configuration data for the specified version and fields.
         """
         if version is None:
             return {key: field.missing() for key, field in fields.items()}
