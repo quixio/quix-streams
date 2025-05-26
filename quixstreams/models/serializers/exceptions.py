@@ -22,8 +22,6 @@ __all__ = (
     "KeySerializationError",
     "ValueSerializationError",
     "ValueDeserializationError",
-    "SerializerIsNotProvidedError",
-    "DeserializerIsNotProvidedError",
     "IgnoreMessage",
 )
 
@@ -43,12 +41,6 @@ class ValueSerializationError(exceptions.QuixException, _ValueSerializationError
 class ValueDeserializationError(
     exceptions.QuixException, _ValueDeserializationError
 ): ...
-
-
-class SerializerIsNotProvidedError(exceptions.QuixException): ...
-
-
-class DeserializerIsNotProvidedError(exceptions.QuixException): ...
 
 
 class IgnoreMessage(exceptions.QuixException):

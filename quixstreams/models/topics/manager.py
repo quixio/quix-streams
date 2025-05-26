@@ -136,10 +136,10 @@ class TopicManager:
     def topic(
         self,
         name: str,
-        value_deserializer: Optional[DeserializerType] = None,
-        key_deserializer: Optional[DeserializerType] = "bytes",
-        value_serializer: Optional[SerializerType] = None,
-        key_serializer: Optional[SerializerType] = "bytes",
+        value_deserializer: DeserializerType = "json",
+        key_deserializer: DeserializerType = "bytes",
+        value_serializer: SerializerType = "json",
+        key_serializer: SerializerType = "bytes",
         create_config: Optional[TopicConfig] = None,
         timestamp_extractor: Optional[TimestampExtractor] = None,
     ) -> Topic:
@@ -204,10 +204,10 @@ class TopicManager:
         operation: str,
         stream_id: str,
         config: TopicConfig,
-        value_deserializer: Optional[DeserializerType] = "json",
-        key_deserializer: Optional[DeserializerType] = "json",
-        value_serializer: Optional[SerializerType] = "json",
-        key_serializer: Optional[SerializerType] = "json",
+        value_deserializer: DeserializerType = "json",
+        key_deserializer: DeserializerType = "json",
+        value_serializer: SerializerType = "json",
+        key_serializer: SerializerType = "json",
     ) -> Topic:
         """
         Create an internal repartition topic.
