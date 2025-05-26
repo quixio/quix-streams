@@ -1738,7 +1738,7 @@ class StreamingDataFrame:
         The join is performed in-place: the input value dictionary is updated with the enrichment data.
 
         Lookup implementation part of the standard quixstreams library:
-            - `quixstreams.dataframe.lookups.QuixConfigurationService`
+            - `quixstreams.dataframe.joins.lookups.QuixConfigurationService`
 
         :param lookup: An instance of a subclass of BaseLookup that implements the enrichment logic.
         :param fields: A mapping of field names to the lookup Field objects specifying how to extract or map enrichment data.
