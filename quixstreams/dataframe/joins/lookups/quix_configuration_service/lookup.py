@@ -9,7 +9,7 @@ import httpx
 import orjson
 
 from quixstreams.kafka import ConnectionConfig, Consumer
-from quixstreams.models import Topic
+from quixstreams.models import HeadersMapping, Topic
 
 from ..base import BaseLookup
 from .cache import CacheInfo, VersionDataLRU
@@ -333,7 +333,7 @@ class Lookup(BaseLookup[Field]):
         value: dict[str, Any],
         key: Any,
         timestamp: int,
-        headers: dict[str, str | bytes],
+        headers: HeadersMapping,
     ) -> None:
         """
         Enrich the message with configuration data from the Quix Configuration Service.
