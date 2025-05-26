@@ -36,7 +36,7 @@ class RocksDBOptions(RocksDBOptionsType):
         if the `use_changelog_topics=True` is also set on the Application.
         If this option is True, but `use_changelog_topics=False`,
         the DB won't be destroyed.
-        Note that the application doesn't validate the contents of the changelog topics.
+        Note: risk of data loss! Make sure that the changelog topics are up-to-date before enabling it in production.
         Default - `False`.
 
     Please see `rocksdict.Options` for a complete description of other options.
