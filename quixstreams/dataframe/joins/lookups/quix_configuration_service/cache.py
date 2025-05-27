@@ -7,13 +7,12 @@ from .models import ConfigurationVersion, Field
 
 class CacheInfo(TypedDict):
     """
-    Cache information for the LRU cache.
+    Typed dictionary containing cache statistics for the LRU cache.
 
-    Attributes:
-        hits (int): The number of cache hits.
-        misses (int): The number of cache misses.
-        size (int): The current size of the cache.
-        maxsize (int): The maximum size of the cache.
+    :param hits: The number of cache hits.
+    :param misses: The number of cache misses.
+    :param size: The current size of the cache.
+    :param maxsize: The maximum size of the cache.
     """
 
     hits: int
@@ -58,7 +57,7 @@ class VersionDataLRU:
         :param version: The configuration version.
         :param fields: The fields to extract.
 
-        :returns: Any: The cached or newly computed data.
+        :returns: The cached or newly computed data.
         """
         cache = self.cache
         key = (version, tuple(hash(field) for field in fields.values()))
@@ -80,6 +79,7 @@ class VersionDataLRU:
         Remove the cached data for the given version and fields, if present.
 
         :param version: The configuration version to remove from the cache.
+        :param fields: The fields to remove from the cache.
         """
         key = (version, tuple(hash(field) for field in fields.values()))
         if key in self.cache:
@@ -89,7 +89,7 @@ class VersionDataLRU:
         """
         Get cache statistics.
 
-        :returns: CacheInfo: A dictionary containing cache statistics.
+        :returns: A dictionary containing cache statistics.
         """
         return CacheInfo(
             hits=self.hits,

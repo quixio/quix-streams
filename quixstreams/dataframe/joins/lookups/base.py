@@ -12,14 +12,14 @@ class BaseLookup(abc.ABC, Generic[F]):
     Abstract base class for implementing custom lookup join strategies for data enrichment in streaming dataframes.
 
     This class defines the interface for lookup joins, where incoming records are enriched with external or configuration data
-    based on a target key and a set of fields. Subclasses should implement the `join` method to specify how enrichment is performed.
+    based on a key and a set of fields. Subclasses should implement the `join` method to specify how enrichment is performed.
 
     Typical usage involves passing an instance of a subclass to `StreamingDataFrame.lookup_join`, along with a mapping of field names
     to BaseField instances that describe how to extract or map enrichment data.
 
     Example:
         class MyLookup(BaseLookup[MyField]):
-            def join(self, fields, target_key, value, key, timestamp, headers):
+            def join(self, fields, on, value, key, timestamp, headers):
                 # Custom enrichment logic here
                 ...
     """
@@ -28,7 +28,7 @@ class BaseLookup(abc.ABC, Generic[F]):
     def join(
         self,
         fields: dict[str, F],
-        target_key: str,
+        on: str,
         value: dict[str, Any],
         key: Any,
         timestamp: int,
@@ -38,7 +38,7 @@ class BaseLookup(abc.ABC, Generic[F]):
         Perform a lookup join operation to enrich the provided value with data from the specified fields.
 
         :param fields: Mapping of field names to Field objects specifying how to extract and parse configuration data.
-        :param target_key: The key used to fetch data in the lookup.
+        :param on: The key used to fetch data in the lookup.
         :param value: The message value to be updated with enriched configuration values.
         :param key: The message key.
         :param timestamp: The message timestamp, used to select the appropriate configuration version.

@@ -118,8 +118,7 @@ class Lookup(BaseLookup[Field]):
 
         :returns: The parsed JSON content, or FALLBACK_DEFAULT if fetching fails and fallback is enabled.
 
-        Raises:
-            Exception: If fetching fails and fallback is set to "error".
+        :raises: Exception: If fetching fails and fallback is set to "error".
         """
         logger.info(f"Fetching configuration content from URL: {version.contentUrl}")
         try:
@@ -201,8 +200,7 @@ class Lookup(BaseLookup[Field]):
             - `contentUrl` (str): The URL to fetch the configuration content.
             - `metadata` (EventMetadata): Metadata about the configuration, including version, valid_from, and other details.
 
-        Raises:
-            RuntimeError: If the event type is unknown.
+        :raises: RuntimeError: If the event type is unknown.
         """
         logger.info(f"Processing event: {event['event']} for ID: {event['id']}")
         if event["event"] in {"created", "updated"}:
@@ -254,40 +252,40 @@ class Lookup(BaseLookup[Field]):
     def _find_version(
         self,
         type: str,
-        target_key: str,
+        on: str,
         timestamp: int,
     ) -> Optional[ConfigurationVersion]:
         """
         Find the valid configuration version for a given type, target key, and timestamp.
 
         :param type: The configuration type.
-        :param target_key: The target key for the configuration.
+        :param on: The target key for the configuration.
         :param timestamp: The timestamp to find the valid version.
 
         :returns: The valid configuration version, or None if not found.
         """
         logger.debug(
-            f"Fetching data for type: {type}, target_key: {target_key}, timestamp: {timestamp}"
+            f"Fetching data for type: {type}, on: {on}, timestamp: {timestamp}"
         )
-        configuration = self._configurations.get(self._config_id(type, target_key))
+        configuration = self._configurations.get(self._config_id(type, on))
         if not configuration:
             logger.debug(
-                f"No configuration found for type: {type}, target_key: {target_key}. Trying wildcard."
+                f"No configuration found for type: {type}, on: {on}. Trying wildcard."
             )
             configuration = self._configurations.get(self._config_id(type, "*"))
         if not configuration:
-            logger.debug(f"No configuration found for type: {type}, target_key: *")
+            logger.debug(f"No configuration found for type: {type}, on: *")
             return None
 
         version = configuration.find_valid_version(timestamp)
         if version is None:
             logger.debug(
-                f"No valid version found for type: {type}, target_key: {target_key}, timestamp: {timestamp}"
+                f"No valid version found for type: {type}, on: {on}, timestamp: {timestamp}"
             )
             return None
 
         logger.debug(
-            f"Found valid version '{version.version}' for type: {type}, target_key: {target_key}, timestamp: {timestamp}"
+            f"Found valid version '{version.version}' for type: {type}, on: {on}, timestamp: {timestamp}"
         )
         return version
 
@@ -329,7 +327,7 @@ class Lookup(BaseLookup[Field]):
     def join(
         self,
         fields: dict[str, Field],
-        target_key: str,
+        on: str,
         value: dict[str, Any],
         key: Any,
         timestamp: int,
@@ -342,7 +340,7 @@ class Lookup(BaseLookup[Field]):
         If a configuration version is not found or content retrieval fails, the corresponding fields are set to their missing values.
 
         :param fields: Mapping of field names to Field objects specifying how to extract and parse configuration data.
-        :param target_key: The key used to identify the target configuration for enrichment.
+        :param on: The key used to identify the target configuration for enrichment.
         :param value: The message value to be updated with enriched configuration values.
         :param key: The message key.
         :param timestamp: The message timestamp, used to select the appropriate configuration version.
@@ -351,9 +349,7 @@ class Lookup(BaseLookup[Field]):
         :returns: None. The input value dictionary is updated in-place with the enriched configuration data.
         """
         start = time.time()
-        logger.debug(
-            f"Joining message with target_key: {target_key}, timestamp: {timestamp}"
-        )
+        logger.debug(f"Joining message with key: {on}, timestamp: {timestamp}")
 
         fields_by_type = self._fields_by_type.get(id(fields))
         if fields_by_type is None:
@@ -363,7 +359,7 @@ class Lookup(BaseLookup[Field]):
             self._fields_by_type[id(fields)] = fields_by_type
 
         for type, fields in fields_by_type.items():
-            version = self._find_version(type, target_key, timestamp)
+            version = self._find_version(type, on, timestamp)
             if version is not None and version.retry_at < start:
                 self._version_data_cached.remove(version, fields)
 

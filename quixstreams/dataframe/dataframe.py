@@ -1770,22 +1770,22 @@ class StreamingDataFrame:
         """
         if callable(on):
 
-            def _target_key(value: dict[str, Any], key: Any) -> str:
+            def _on(value: dict[str, Any], key: Any) -> str:
                 return on(value, key)
         elif isinstance(on, str):
 
-            def _target_key(value: dict[str, Any], key: Any) -> str:
+            def _on(value: dict[str, Any], key: Any) -> str:
                 return value[on]
         else:
 
-            def _target_key(value: dict[str, Any], key: Any) -> str:
+            def _on(value: dict[str, Any], key: Any) -> str:
                 return key
 
         def _join(
             value: dict[str, Any], key: Any, timestamp: int, headers: HeadersMapping
         ):
-            target_key = _target_key(value, key)
-            lookup.join(fields, target_key, value, key, timestamp, headers)
+            on_key = _on(value, key)
+            lookup.join(fields, on_key, value, key, timestamp, headers)
 
         return self.update(_join, metadata=True)
 

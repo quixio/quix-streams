@@ -9,10 +9,10 @@ class DummyField(BaseField):
 
 
 class DummyLookup(BaseLookup[DummyField]):
-    def join(self, fields, target_key, value, key, timestamp, headers):
+    def join(self, fields, on, value, key, timestamp, headers):
         # Simulate enrichment by adding all field values to value dict
         for k, field in fields.items():
-            value[k] = field.values[target_key]
+            value[k] = field.values[on]
 
 
 def test_lookup_join_enriches_value(dataframe_factory):
@@ -56,7 +56,7 @@ def test_lookup_join_on_column(dataframe_factory):
 
 
 def test_lookup_join_on_callable(dataframe_factory):
-    def target_key(value, key):
+    def _on(value, key):
         if key == "key1":
             return "custom_key_1"
         elif key == "key2":
@@ -70,7 +70,7 @@ def test_lookup_join_on_callable(dataframe_factory):
             "foo": DummyField({"custom_key_1": "foo", "custom_key_2": "bar"}),
             "num": DummyField({"custom_key_1": 123, "custom_key_2": 456}),
         },
-        on=target_key,
+        on=_on,
     )
 
     enriched, *_ = sdf.test(value={}, key="key1", timestamp=123456)[0]

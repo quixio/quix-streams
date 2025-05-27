@@ -19,14 +19,13 @@ class EventMetadata(TypedDict):
     """
     Metadata describing a configuration event.
 
-    Attributes:
-        type (str): The configuration type.
-        target_key (str): The target key for the configuration.
-        valid_from (str): ISO8601 timestamp when this version becomes valid.
-        category (str): The configuration category.
-        version (int): The version number.
-        created_at (str): ISO8601 timestamp when this version was created.
-        sha256sum (str): SHA256 checksum of the configuration content.
+    :param type: The configuration type.
+    :param target_key: The target key for the configuration.
+    :param valid_from: ISO8601 timestamp when this version becomes valid.
+    :param category: The configuration category.
+    :param version: The version number.
+    :param created_at: ISO8601 timestamp when this version was created.
+    :param sha256sum: SHA256 checksum of the configuration content.
     """
 
     type: str
@@ -42,11 +41,10 @@ class Event(TypedDict):
     """
     A configuration event received from the configuration topic.
 
-    Attributes:
-        id (str): The unique identifier for the configuration.
-        event (str): The event type ("created", "updated", "deleted").
-        contentUrl (str): URL to fetch the configuration content.
-        metadata (EventMetadata): Metadata about the configuration version.
+    :param id: The unique identifier for the configuration.
+    :param event: The event type ("created", "updated", "deleted").
+    :param contentUrl: URL to fetch the configuration content.
+    :param metadata: Metadata about the configuration version.
     """
 
     id: str
@@ -60,11 +58,10 @@ class Field(BaseField):
     """
     Represents a field to extract from a configuration using JSONPath.
 
-    Attributes:
-        type (str): The type of configuration this field belongs to.
-        default (Any): The default value if the field is missing (raises if not set).
-        jsonpath (str): JSONPath expression to extract the value.
-        first_match_only (bool): If True, only the first match is returned; otherwise, all matches are returned.
+    :param type: The type of configuration this field belongs to.
+    :param default: The default value if the field is missing (raises if not set).
+    :param jsonpath: JSONPath expression to extract the value.
+    :param first_match_only: If True, only the first match is returned; otherwise, all matches are returned.
     """
 
     type: str
@@ -86,8 +83,7 @@ class Field(BaseField):
 
         :returns: Any: The default value.
 
-        Raises:
-            KeyError: If no default value is set.
+        :raises KeyError: If no default value is set.
         """
         if self.default is RAISE_ON_MISSING:
             raise KeyError(
@@ -105,8 +101,7 @@ class Field(BaseField):
 
         :returns: The extracted value(s).
 
-        Raises:
-            KeyError: If the field is missing and no default is set.
+        :raises KeyError: If the field is missing and no default is set.
         """
         if self.first_match_only:
             try:
@@ -126,12 +121,11 @@ class ConfigurationVersion:
     """
     Represents a specific version of a configuration.
 
-    Attributes:
-        id (str): The configuration ID.
-        version (int): The version number.
-        contentUrl (str): URL to fetch the configuration content.
-        sha256sum (str): SHA256 checksum of the configuration content.
-        valid_from (float): Timestamp (ms) when this version becomes valid.
+    :param id: The configuration ID.
+    :param version: The version number.
+    :param contentUrl: URL to fetch the configuration content.
+    :param sha256sum: SHA256 checksum of the configuration content.
+    :param valid_from: Timestamp (ms) when this version becomes valid.
     """
 
     id: str
@@ -147,7 +141,7 @@ class ConfigurationVersion:
         """
         Create a ConfigurationVersion from an Event.
 
-        :param event (Event): The event containing configuration version data.
+        :param event: The event containing configuration version data.
 
         :returns: ConfigurationVersion: The created configuration version.
         """
@@ -191,11 +185,10 @@ class Configuration:
     """
     Represents a configuration with multiple versions and provides logic to select the valid version for a given timestamp.
 
-    Attributes:
-        versions (dict[int, ConfigurationVersion]): All versions of this configuration, keyed by version number.
-        version (Optional[ConfigurationVersion]): The currently valid version (cached).
-        next_version (Optional[ConfigurationVersion]): The next version to become valid (cached).
-        previous_version (Optional[ConfigurationVersion]): The previous version before the current one (cached).
+    :param versions: All versions of this configuration, keyed by version number.
+    :param version: The currently valid version (cached).
+    :param next_version: The next version to become valid (cached).
+    :param previous_version: The previous version before the current one (cached).
     """
 
     versions: dict[int, ConfigurationVersion]
@@ -208,10 +201,9 @@ class Configuration:
         """
         Create a Configuration from an Event.
 
-        Args:
-            event (Event): The event containing configuration data.
+        :param event: The event containing configuration data.
 
-        Returns: Configuration: The created configuration.
+        :returns: Configuration: The created configuration.
         """
         version = ConfigurationVersion.from_event(event)
         return cls(versions={version.version: version})
@@ -220,7 +212,7 @@ class Configuration:
         """
         Add or update a version in this configuration.
 
-        :param version (ConfigurationVersion): The version to add.
+        :param version: The version to add.
         """
         self.versions[version.version] = version
 
@@ -232,7 +224,7 @@ class Configuration:
         """
         Find the valid configuration version for a given timestamp.
 
-        :param timestamp (int): The timestamp (ms) to check.
+        :param timestamp: The timestamp (ms) to check.
 
         :returns: Optional[ConfigurationVersion]: The valid version, or None if not found.
         """
@@ -268,8 +260,7 @@ class Configuration:
         """
         Internal helper to find the previous, current, and next configuration versions for a given timestamp.
 
-        Args:
-            timestamp (int): The timestamp (ms) to check.
+        :param timestamp: The timestamp (ms) to check.
 
         :returns:
             Tuple[
