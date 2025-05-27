@@ -49,6 +49,9 @@ def test_sqlite_lookup_cache(sqlite_db):
     lookup.join(fields, "k1", value, key=None, timestamp=0, headers=None)
     assert value["f"] == {"col1": "foo"}
 
+    info = lookup.cache_info()
+    assert info == {"hits": 0, "misses": 1, "size": 1, "maxsize": 1000}
+
     # Update DB directly
     with sqlite3.connect(sqlite_db) as conn:
         conn.execute("UPDATE test SET col1='baz' WHERE id='k1'")
@@ -59,11 +62,17 @@ def test_sqlite_lookup_cache(sqlite_db):
     lookup.join(fields, "k1", value, key=None, timestamp=0, headers=None)
     assert value["f"] == {"col1": "foo"}
 
+    info = lookup.cache_info()
+    assert info == {"hits": 1, "misses": 1, "size": 1, "maxsize": 1000}
+
     # Wait for cache to expire
     time.sleep(0.11)
     value = {}
     lookup.join(fields, "k1", value, key=None, timestamp=0, headers=None)
     assert value["f"] == {"col1": "baz"}
+
+    info = lookup.cache_info()
+    assert info == {"hits": 1, "misses": 2, "size": 1, "maxsize": 1000}
 
 
 def test_sqlite_lookup_no_ttl(sqlite_db):
@@ -73,6 +82,10 @@ def test_sqlite_lookup_no_ttl(sqlite_db):
     value = {}
     lookup.join(fields, "k1", value, key=None, timestamp=0, headers=None)
     assert value["f"] == {"col1": "foo"}
+
+    # Cache isn't in use
+    info = lookup.cache_info()
+    assert info == {"hits": 0, "misses": 0, "size": 0, "maxsize": 1000}
 
     # Update DB directly
     with sqlite3.connect(sqlite_db) as conn:

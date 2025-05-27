@@ -5,11 +5,15 @@ import logging
 import re
 import sqlite3
 import time
+from collections import OrderedDict
 from typing import Any, Literal, Mapping, Tuple, Union
 
-from .base import BaseField, BaseLookup
+from .base import BaseField, BaseLookup, CacheInfo
 
 logger = logging.getLogger(__name__)
+
+
+MISSING = object()
 
 
 # @dataclasses.dataclass(frozen=True, kw_only=True)  # TODO: uncomment python 3.10+
@@ -241,29 +245,34 @@ class SQLiteLookup(BaseLookup[Union[SQLiteLookupField, SQLiteLookupQueryField]])
     Lookup join implementation for enriching streaming data with data from a SQLite database.
 
     This class queries a SQLite database for each field, using a persistent connection and per-field caching
-    based on a configurable TTL.
+    based on a configurable TTL. The cache is a least recently used (LRU) cache with a configurable maximum size.
 
     Example:
 
     ```python
         lookup = SQLiteLookup(path="/path/to/db.sqlite")
-        fields = {"my_field": SQLiteLookupField(table="my_table", columns=["col1"])}
+        fields = {"my_field": SQLiteLookupField(table="my_table", columns=["col2"], on="primary_key_col")}
         sdf = sdf.lookup_join(lookup, fields)
     ```
 
     :param path: Path to the SQLite database file.
+    :param cache_maxsize: Maximum number of fields to keep in the LRU cache. Default is 1000.
     """
 
-    def __init__(self, path: str):
+    def __init__(self, path: str, cache_size: int = 1000):
         self.db_path = path
         self._conn: sqlite3.Connection = sqlite3.connect(
             f"file:{self.db_path}?mode=ro", uri=True, check_same_thread=False
         )
-
-        self._cache: dict[
-            tuple[str, Any], tuple[float, Any]
-        ] = {}  # (field_name, key) -> (timestamp, value)
-        logger.info(f"SQLiteLookup initialized with db_path={self.db_path}")
+        self._cache: OrderedDict[tuple[str, Any], tuple[float, Any]] = (
+            OrderedDict()
+        )  # (field_name, key) -> (timestamp, value)
+        self._cache_size = cache_size
+        self._cache_hits = 0
+        self._cache_misses = 0
+        logger.info(
+            f"SQLiteLookup initialized with db_path={self.db_path}, cache_maxsize={self._cache_size}"
+        )
 
     def __del__(self) -> None:
         if hasattr(self, "_conn"):
@@ -272,6 +281,15 @@ class SQLiteLookup(BaseLookup[Union[SQLiteLookupField, SQLiteLookupQueryField]])
     def _process_field(
         self, field: BaseSQLiteLookupField, on: str, value: dict[str, Any]
     ) -> Union[dict[str, Any], list[Any]]:
+        """
+        Execute the SQL query for a given field and return the result.
+
+        :param field: The field definition (SQLiteLookupField or SQLiteLookupQueryField).
+        :param on: The key to use in the WHERE clause for lookup.
+        :param value: The message value, used to substitute parameters in the query.
+
+        :returns: The extracted data, either a single row or a list of rows.
+        """
         query, parameters = field.build_query(on, value)
         logger.debug(f"Executing SQL: {query}")
 
@@ -282,6 +300,39 @@ class SQLiteLookup(BaseLookup[Union[SQLiteLookupField, SQLiteLookupQueryField]])
             raise
 
         return field.result(cur)
+
+    def _get_from_cache(
+        self, cache_key: tuple[str, str], ttl: float, now: float
+    ) -> Any:
+        """
+        Retrieve a value from the cache if it exists and is not expired.
+
+        :param cache_key: The cache key (field_name, key).
+        :param ttl: Time-to-live for the cache entry in seconds.
+        :param now: The current time (epoch seconds).
+
+        :returns: The cached value if present and not expired, else None.
+        """
+        cached = self._cache.get(cache_key)
+        if cached and now - cached[0] < ttl:
+            logger.debug(f"Cache hit for {cache_key}")
+            self._cache_hits += 1
+            self._cache.move_to_end(cache_key)
+            return copy.copy(cached[1])
+        return MISSING
+
+    def _set_cache(self, cache_key: tuple[str, str], value: Any, now: float) -> None:
+        """
+        Set a value in the cache and evict the least recently used item if the cache exceeds its maximum size.
+
+        :param cache_key: The cache key (field_name, key).
+        :param value: The value to cache.
+        :param now: The current time (epoch seconds).
+        """
+        self._cache[cache_key] = (now, copy.copy(value))
+        self._cache.move_to_end(cache_key)
+        if len(self._cache) > self._cache_size:
+            self._cache.popitem(last=False)
 
     def join(
         self,
@@ -307,20 +358,30 @@ class SQLiteLookup(BaseLookup[Union[SQLiteLookupField, SQLiteLookupQueryField]])
         :returns: None. The input value dictionary is updated in-place with the enriched data.
         """
         now = time.time()
-
         for field_name, field in fields.items():
             if field.ttl <= 0:
                 value[field_name] = self._process_field(field, on, value)
                 continue
 
             cache_key = (field_name, on)
-            cached = self._cache.get(cache_key)
-            if cached and now - cached[0] < field.ttl:
-                logger.debug(f"Cache hit for {cache_key}")
-                value[field_name] = copy.copy(cached[1])
-                continue
+            result = self._get_from_cache(cache_key, field.ttl, now)
+            if result is MISSING:
+                logger.debug(f"Cache miss for {cache_key}, querying database")
+                self._cache_misses += 1
+                result = self._process_field(field, on, value)
+                self._set_cache(cache_key, result, now)
 
-            logger.debug(f"Cache miss for {cache_key}, querying database")
-            result = self._process_field(field, on, value)
-            self._cache[cache_key] = (now, result)
-            value[field_name] = copy.copy(result)
+            value[field_name] = result
+
+    def cache_info(self) -> CacheInfo:
+        """
+        Get cache statistics for the SQLiteLookup LRU cache.
+
+        :returns: A dictionary containing cache statistics: hits, misses, size, maxsize.
+        """
+        return CacheInfo(
+            hits=self._cache_hits,
+            misses=self._cache_misses,
+            size=len(self._cache),
+            maxsize=self._cache_size,
+        )

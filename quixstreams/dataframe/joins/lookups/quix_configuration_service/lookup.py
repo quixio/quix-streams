@@ -11,8 +11,8 @@ import orjson
 from quixstreams.kafka import ConnectionConfig, Consumer
 from quixstreams.models import HeadersMapping, Topic
 
-from ..base import BaseLookup
-from .cache import CacheInfo, VersionDataLRU
+from ..base import BaseLookup, CacheInfo
+from .cache import VersionDataLRU
 from .environment import QUIX_REPLICA_NAME
 from .models import Configuration, ConfigurationVersion, Event, Field
 

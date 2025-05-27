@@ -1,25 +1,10 @@
 from collections import OrderedDict
-from typing import Any, Callable, Optional, Tuple, TypedDict
+from typing import Any, Callable, Optional, Tuple
 
 from quixstreams.utils.pickle import pickle_copier
 
+from ..base import CacheInfo
 from .models import ConfigurationVersion, Field
-
-
-class CacheInfo(TypedDict):
-    """
-    Typed dictionary containing cache statistics for the LRU cache.
-
-    :param hits: The number of cache hits.
-    :param misses: The number of cache misses.
-    :param size: The current size of the cache.
-    :param maxsize: The maximum size of the cache.
-    """
-
-    hits: int
-    misses: int
-    size: int
-    maxsize: int
 
 
 class VersionDataLRU:
