@@ -3,7 +3,7 @@ import logging
 import threading
 import time
 from collections import defaultdict
-from typing import TYPE_CHECKING, Any, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Literal, Mapping, Optional, Union
 
 import httpx
 import orjson
@@ -326,7 +326,7 @@ class Lookup(BaseLookup[Field]):
 
     def join(
         self,
-        fields: dict[str, Field],
+        fields: Mapping[str, Field],
         on: str,
         value: dict[str, Any],
         key: Any,

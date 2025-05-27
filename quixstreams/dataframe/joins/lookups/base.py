@@ -1,6 +1,6 @@
 import abc
 import dataclasses
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, Mapping, TypeVar
 
 from quixstreams.models.types import HeadersMapping
 
@@ -27,7 +27,7 @@ class BaseLookup(abc.ABC, Generic[F]):
     @abc.abstractmethod
     def join(
         self,
-        fields: dict[str, F],
+        fields: Mapping[str, F],
         on: str,
         value: dict[str, Any],
         key: Any,
