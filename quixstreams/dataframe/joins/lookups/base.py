@@ -38,7 +38,7 @@ class BaseLookup(abc.ABC, Generic[F]):
         Perform a lookup join operation to enrich the provided value with data from the specified fields.
 
         :param fields: Mapping of field names to Field objects specifying how to extract and parse configuration data.
-        :param target_key: The key used to identify the target configuration for enrichment.
+        :param target_key: The key used to fetch data in the lookup.
         :param value: The message value to be updated with enriched configuration values.
         :param key: The message key.
         :param timestamp: The message timestamp, used to select the appropriate configuration version.
