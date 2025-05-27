@@ -13,18 +13,16 @@ from typing import (
 from rocksdict import AccessType, ColumnFamily, Rdict, ReadOptions, WriteBatch
 
 from quixstreams.state.base import (
-    PartitionTransaction,
     PartitionTransactionCache,
     StorePartition,
 )
 from quixstreams.state.metadata import METADATA_CF_NAME, Marker
 from quixstreams.state.recovery import ChangelogProducer
+from quixstreams.state.rocksdb.transaction import RocksDBPartitionTransaction
 from quixstreams.state.serialization import int_from_bytes, int_to_bytes
 
 from .exceptions import RocksDBCorruptedError
-from .metadata import (
-    CHANGELOG_OFFSET_KEY,
-)
+from .metadata import CHANGELOG_OFFSET_KEY
 from .options import RocksDBOptions
 from .types import RocksDBOptionsType
 
@@ -200,8 +198,8 @@ class RocksDBStorePartition(StorePartition):
                     break
                 yield key, value
 
-    def begin(self) -> PartitionTransaction:
-        return PartitionTransaction(
+    def begin(self) -> RocksDBPartitionTransaction:
+        return RocksDBPartitionTransaction(
             partition=self,
             dumps=self._dumps,
             loads=self._loads,

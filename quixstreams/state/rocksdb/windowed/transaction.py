@@ -2,13 +2,13 @@ import itertools
 from typing import TYPE_CHECKING, Any, Iterable, Optional, cast
 
 from quixstreams.state.base.transaction import (
-    PartitionTransaction,
     PartitionTransactionStatus,
     validate_transaction_status,
 )
-from quixstreams.state.metadata import DEFAULT_PREFIX, SEPARATOR
+from quixstreams.state.metadata import DEFAULT_PREFIX
 from quixstreams.state.recovery import ChangelogProducer
-from quixstreams.state.rocksdb.cache import CounterCache, TimestampsCache
+from quixstreams.state.rocksdb.cache import TimestampsCache
+from quixstreams.state.rocksdb.transaction import RocksDBPartitionTransaction
 from quixstreams.state.serialization import (
     DumpsFunc,
     LoadsFunc,
@@ -19,8 +19,6 @@ from quixstreams.state.serialization import (
 from quixstreams.state.types import ExpiredWindowDetail, WindowDetail
 
 from .metadata import (
-    GLOBAL_COUNTER_CF_NAME,
-    GLOBAL_COUNTER_KEY,
     LATEST_DELETED_VALUE_CF_NAME,
     LATEST_DELETED_VALUE_TIMESTAMP_KEY,
     LATEST_DELETED_WINDOW_CF_NAME,
@@ -38,7 +36,7 @@ if TYPE_CHECKING:
     from .partition import WindowedRocksDBStorePartition
 
 
-class WindowedRocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
+class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
     def __init__(
         self,
         partition: "WindowedRocksDBStorePartition",
@@ -73,10 +71,6 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         self._last_deleted_value_timestamps: TimestampsCache = TimestampsCache(
             key=LATEST_DELETED_VALUE_TIMESTAMP_KEY,
             cf_name=LATEST_DELETED_VALUE_CF_NAME,
-        )
-        self._global_counter: CounterCache = CounterCache(
-            key=GLOBAL_COUNTER_KEY,
-            cf_name=GLOBAL_COUNTER_CF_NAME,
         )
 
     def as_state(self, prefix: Any = DEFAULT_PREFIX) -> WindowedTransactionState:  # type: ignore [override]
@@ -553,33 +547,6 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
                 f"Invalid window duration: window end {end_ms} is smaller or equal "
                 f"than window start {start_ms}"
             )
-
-    def _serialize_key(self, key: Any, prefix: bytes) -> bytes:
-        # Allow bytes keys in WindowedStore
-        key_bytes = key if isinstance(key, bytes) else serialize(key, dumps=self._dumps)
-        return prefix + SEPARATOR + key_bytes
-
-    def _get_next_count(self) -> int:
-        """
-        Get the next unique global counter value.
-
-        This method maintains a global counter in RocksDB to ensure unique
-        identifiers for values collected within the same timestamp. The counter
-        is cached to reduce database reads.
-
-        :return: Next sequential counter value
-        """
-        cache = self._global_counter
-
-        if cache.counter is None:
-            cache.counter = self.get(
-                default=-1, key=cache.key, prefix=b"", cf_name=cache.cf_name
-            )  # type:ignore[call-overload]
-
-        cache.counter += 1
-
-        self.set(value=cache.counter, key=cache.key, prefix=b"", cf_name=cache.cf_name)
-        return cache.counter
 
 
 def windows_to_expire(

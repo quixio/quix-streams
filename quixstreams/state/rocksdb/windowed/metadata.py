@@ -10,7 +10,4 @@ LATEST_DELETED_VALUE_TIMESTAMP_KEY = b"__value_deleted_start_gt__"
 LATEST_TIMESTAMPS_CF_NAME = "__latest-timestamps__"
 LATEST_TIMESTAMP_KEY = b"__latest_timestamp__"
 
-GLOBAL_COUNTER_CF_NAME = "__global-counter__"
-GLOBAL_COUNTER_KEY = b"__global_counter__"
-
 VALUES_CF_NAME = "__values__"

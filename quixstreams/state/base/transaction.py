@@ -277,7 +277,7 @@ class PartitionTransaction(ABC, Generic[K, V]):
         return deserialize(value, loads=self._loads)
 
     def _serialize_key(self, key: K, prefix: bytes) -> bytes:
-        key_bytes = serialize(key, dumps=self._dumps)
+        key_bytes = key if isinstance(key, bytes) else serialize(key, dumps=self._dumps)
         prefix = prefix + SEPARATOR if prefix else b""
         return prefix + key_bytes
 
