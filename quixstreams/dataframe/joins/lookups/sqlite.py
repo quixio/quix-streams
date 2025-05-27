@@ -12,20 +12,22 @@ from .base import BaseField, BaseLookup
 logger = logging.getLogger(__name__)
 
 
-@dataclasses.dataclass(frozen=True, kw_only=True)
+# @dataclasses.dataclass(frozen=True, kw_only=True)  # TODO: uncomment python 3.10+
+@dataclasses.dataclass(frozen=True)
 class BaseSQLiteLookupField(BaseField, abc.ABC):
-    ttl: float = 60.0
-    default: Any = None
-    first_match_only: bool = True
+    # TODO: Uncomment python 3.10+
+    # ttl: float = 60.0
+    # default: Any = None
+    # first_match_only: bool = True
 
     @abc.abstractmethod
     def build_query(
-        self, target_key: str, value: dict[str, Any]
+        self, on: str, value: dict[str, Any]
     ) -> Tuple[str, Union[dict[str, Any], Tuple[str, ...]]]:
         """
         Build the SQL query string for this field.
 
-        :param target_key: The key to use in the WHERE clause for lookup.
+        :param on: The key to use in the WHERE clause for lookup.
         :param value: The message value, used to substitute parameters in the query.
 
         :returns: A tuple of the SQL query string and the parameters.
@@ -97,6 +99,11 @@ class SQLiteLookupField(BaseSQLiteLookupField):
     order_by: str = ""
     order_by_direction: Literal["ASC", "DESC"] = "ASC"
 
+    # TODO: remove on python 3.10+
+    ttl: float = 60.0
+    default: Any = None
+    first_match_only: bool = True
+
     def __post_init__(self) -> None:
         if "*" in self.columns:
             raise ValueError(
@@ -122,12 +129,12 @@ class SQLiteLookupField(BaseSQLiteLookupField):
             raise ValueError(f"Invalid SQL identifier: {identifier}")
 
     def build_query(
-        self, target_key: str, value: dict[str, Any]
+        self, on: str, value: dict[str, Any]
     ) -> Tuple[str, Tuple[str, ...]]:
         """
         Build the SQL query string for this field.
 
-        :param target_key: The key to use in the WHERE clause for lookup.
+        :param on: The key to use in the WHERE clause for lookup.
         :param value: The message value, used to substitute parameters in the query.
 
         :returns: A tuple of the SQL query string and the parameters.
@@ -141,7 +148,7 @@ class SQLiteLookupField(BaseSQLiteLookupField):
             query += f" ORDER BY {self.order_by} {self.order_by_direction}"
         if self.first_match_only:
             query += " LIMIT 1"
-        return (query, (target_key,))
+        return (query, (on,))
 
     def result(
         self, cursor: sqlite3.Cursor
@@ -206,11 +213,14 @@ class SQLiteLookupQueryField(BaseSQLiteLookupField):
     :param first_match_only: If True, only the first row is returned; otherwise, all rows are returned.
     """
 
-    query: str
+    query: str = dataclasses.field()
 
-    def build_query(
-        self, target_key: str, value: dict[str, Any]
-    ) -> Tuple[str, dict[str, Any]]:
+    # TODO: remove on python 3.10+
+    ttl: float = 60.0
+    default: Any = None
+    first_match_only: bool = True
+
+    def build_query(self, on: str, value: dict[str, Any]) -> Tuple[str, dict[str, Any]]:
         return self.query, value
 
     def result(self, cursor: sqlite3.Cursor) -> Union[dict[str, Any], list[Any]]:
@@ -226,7 +236,7 @@ class SQLiteLookupQueryField(BaseSQLiteLookupField):
         return cursor.fetchall()
 
 
-class SQLiteLookup(BaseLookup[BaseSQLiteLookupField]):
+class SQLiteLookup(BaseLookup[Union[SQLiteLookupField, SQLiteLookupQueryField]]):
     """
     Lookup join implementation for enriching streaming data with data from a SQLite database.
 
@@ -259,10 +269,10 @@ class SQLiteLookup(BaseLookup[BaseSQLiteLookupField]):
         if hasattr(self, "_conn"):
             self._conn.close()
 
-    def _join_field(
-        self, field: BaseSQLiteLookupField, target_key: str, value: dict[str, Any]
+    def _process_field(
+        self, field: BaseSQLiteLookupField, on: str, value: dict[str, Any]
     ) -> Union[dict[str, Any], list[Any]]:
-        query, parameters = field.build_query(target_key, value)
+        query, parameters = field.build_query(on, value)
         logger.debug(f"Executing SQL: {query}")
 
         try:
@@ -275,8 +285,10 @@ class SQLiteLookup(BaseLookup[BaseSQLiteLookupField]):
 
     def join(
         self,
-        fields: Mapping[str, BaseSQLiteLookupField],
-        target_key: str,
+        fields: Mapping[
+            str, Union[SQLiteLookupField, SQLiteLookupQueryField]
+        ],  # TODO: Use BaseSQLiteLookupField when python 3.10+ is required
+        on: str,
         value: dict[str, Any],
         key: Any,
         timestamp: int,
@@ -298,10 +310,10 @@ class SQLiteLookup(BaseLookup[BaseSQLiteLookupField]):
 
         for field_name, field in fields.items():
             if field.ttl <= 0:
-                value[field_name] = self._join_field(field, target_key, value)
+                value[field_name] = self._process_field(field, on, value)
                 continue
 
-            cache_key = (field_name, target_key)
+            cache_key = (field_name, on)
             cached = self._cache.get(cache_key)
             if cached and now - cached[0] < field.ttl:
                 logger.debug(f"Cache hit for {cache_key}")
@@ -309,6 +321,6 @@ class SQLiteLookup(BaseLookup[BaseSQLiteLookupField]):
                 continue
 
             logger.debug(f"Cache miss for {cache_key}, querying database")
-            result = self._join_field(field, target_key, value)
+            result = self._process_field(field, on, value)
             self._cache[cache_key] = (now, result)
             value[field_name] = copy.copy(result)
