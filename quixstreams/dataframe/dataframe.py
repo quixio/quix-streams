@@ -1729,6 +1729,7 @@ class StreamingDataFrame:
         on: Optional[Union[str, Callable[[dict[str, Any], Any], str]]] = None,
     ) -> "StreamingDataFrame":
         """
+        Note: This is an experimental feature, and its API is likely to change in the future.  
         Enrich the records in this StreamingDataFrame by performing a lookup join using a custom lookup strategy.
 
         This method allows you to enrich each record in the dataframe with additional data fetched from an external
