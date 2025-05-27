@@ -305,10 +305,10 @@ class SQLiteLookup(BaseLookup[BaseSQLiteLookupField]):
             cached = self._cache.get(cache_key)
             if cached and now - cached[0] < field.ttl:
                 logger.debug(f"Cache hit for {cache_key}")
-                value[field_name] = copy.deepcopy(cached[1])
+                value[field_name] = copy.copy(cached[1])
                 continue
 
             logger.debug(f"Cache miss for {cache_key}, querying database")
             result = self._join_field(field, target_key, value)
             self._cache[cache_key] = (now, result)
-            value[field_name] = copy.deepcopy(result)
+            value[field_name] = copy.copy(result)
