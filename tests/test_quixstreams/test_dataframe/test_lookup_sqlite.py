@@ -185,3 +185,42 @@ def test_sqlite_lookup_query_field_missing(sqlite_db):
 
     with pytest.raises(sqlite3.ProgrammingError):
         lookup.join(fields, "aa", {}, key=None, timestamp=0, headers=None)
+
+
+def test_sqlite_lookup_field_and_query_field_all_rows(sqlite_db):
+    lookup = SQLiteLookup(sqlite_db)
+
+    # SQLiteLookupField with first_match_only=False
+    fields = {
+        "f": SQLiteLookupField(
+            table="test", columns=["col1", "col2"], on="id", first_match_only=False
+        )
+    }
+    value = {}
+    lookup.join(fields, "k1", value, key=None, timestamp=0, headers=None)
+
+    # Should return all rows with id='k1'
+    assert isinstance(value["f"], list)
+    assert {"col1": "foo", "col2": 1} in value["f"]
+    assert {"col1": "foo0", "col2": 0} in value["f"]
+    assert {"col1": "foo5", "col2": 5} in value["f"]
+    assert len(value["f"]) == 3
+
+
+def test_sqlite_lookup_query_field_all_rows(sqlite_db):
+    lookup = SQLiteLookup(sqlite_db)
+
+    # SQLiteLookupQueryField with first_match_only=False
+    fields = {
+        "f": SQLiteLookupQueryField(
+            query="SELECT col1, col2 FROM test WHERE id = :id", first_match_only=False
+        )
+    }
+    value = {"id": "k1"}
+    lookup.join(fields, "k1", value, key=None, timestamp=0, headers=None)
+    # Should return all col2 values for id='k1'
+    assert isinstance(value["f"], list)
+    assert value == {
+        "id": "k1",
+        "f": [("foo", 1), ("foo0", 0), ("foo5", 5)],  # SQLite returns rows as lists
+    }
