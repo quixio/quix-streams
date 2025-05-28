@@ -2,6 +2,7 @@ from typing import Any, Optional
 
 from quixstreams.state.base.partition import StorePartition
 from quixstreams.state.base.transaction import PartitionTransaction
+from quixstreams.state.exceptions import StateSerializationError
 from quixstreams.state.recovery import ChangelogProducer
 from quixstreams.state.serialization import DumpsFunc, LoadsFunc
 
@@ -38,6 +39,9 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         identifiers for values collected within the same timestamp. The counter
         is cached to reduce database reads.
 
+        The counter will reset to 0 if it reaches the maximum unsigned 64-bit
+        integer value (18446744073709551615) to prevent overflow.
+
         :return: Next sequential counter value
         """
         cache = self._global_counter
@@ -49,5 +53,11 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
 
         cache.counter += 1
 
-        self.set(value=cache.counter, key=cache.key, prefix=b"", cf_name=cache.cf_name)
+        try:
+            value = self._serialize_value(cache.counter)
+        except StateSerializationError:
+            cache.counter = 0
+            value = self._serialize_value(cache.counter)
+
+        self.set_bytes(value=value, key=cache.key, prefix=b"", cf_name=cache.cf_name)
         return cache.counter
