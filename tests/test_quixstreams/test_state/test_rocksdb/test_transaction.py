@@ -4,6 +4,8 @@ import pytest
 
 from quixstreams.state.rocksdb.store import RocksDBStore
 
+MAX_UINT64 = 2**64 - 1  # 18446744073709551615
+
 
 @pytest.fixture
 def transaction(store: RocksDBStore):
@@ -24,3 +26,12 @@ def test_get_next_count(transaction):
     with transaction() as tx:
         assert tx._get_next_count() == 2
         assert tx._get_next_count() == 3
+
+
+def test_get_next_count_reset_to_zero(transaction):
+    with transaction() as tx:
+        cache = tx._global_counter
+        tx.set(value=MAX_UINT64 - 1, key=cache.key, prefix=b"", cf_name=cache.cf_name)
+
+        assert tx._get_next_count() == MAX_UINT64
+        assert tx._get_next_count() == 0
