@@ -89,6 +89,7 @@ To see Quix Streams in action, check out the Quickstart and Tutorials in the doc
 - [**Tutorial - Word Count**](https://quix.io/docs/quix-streams/tutorials/word-count/tutorial.html)
 - [**Tutorial - Anomaly Detection**](https://quix.io/docs/quix-streams/tutorials/anomaly-detection/tutorial.html)
 - [**Tutorial - Purchase Filtering**](https://quix.io/docs/quix-streams/tutorials/purchase-filtering/tutorial.html)
+- [**Tutorial - Solar Farm Telemetry Enrichment**](https://quix.io/docs/quix-streams/tutorials/solar-farm-enrichment/tutorial.html)
 
 
 ### Key Concepts
