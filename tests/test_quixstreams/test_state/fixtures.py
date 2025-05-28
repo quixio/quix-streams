@@ -120,6 +120,7 @@ def timestamped_store_factory(tmp_path):
             name=name,
             base_dir=str(tmp_path),
             grace_ms=grace_ms,
+            collect_duplicates=False,
             changelog_producer_factory=changelog_producer_factory,
         )
 

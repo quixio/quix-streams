@@ -1,8 +1,7 @@
 from collections import deque
-from typing import Any, Optional, Union, cast
+from typing import Any, Optional, cast
 
 from quixstreams.state.base.transaction import (
-    PartitionTransaction,
     PartitionTransactionStatus,
     validate_transaction_status,
 )
@@ -14,11 +13,13 @@ from quixstreams.state.serialization import (
     DumpsFunc,
     LoadsFunc,
     encode_integer_pair,
+    int_to_bytes,
     serialize,
 )
 
 from .partition import RocksDBStorePartition
 from .store import RocksDBStore
+from .transaction import RocksDBPartitionTransaction
 
 __all__ = (
     "TimestampedStore",
@@ -28,9 +29,10 @@ __all__ = (
 
 MIN_ELIGIBLE_TIMESTAMPS_CF_NAME = "__min-eligible-timestamps__"
 MIN_ELIGIBLE_TIMESTAMPS_KEY = b"__min_eligible_timestamps__"
+ZERO = int_to_bytes(0)
 
 
-class TimestampedPartitionTransaction(PartitionTransaction):
+class TimestampedPartitionTransaction(RocksDBPartitionTransaction):
     """
     A partition-specific transaction handler for the `TimestampedStore`.
 
@@ -45,6 +47,7 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         dumps: DumpsFunc,
         loads: LoadsFunc,
         grace_ms: int,
+        collect_duplicates: bool,
         changelog_producer: Optional[ChangelogProducer] = None,
     ) -> None:
         """
@@ -53,6 +56,7 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         :param partition: The `TimestampedStorePartition` this transaction belongs to.
         :param dumps: The serialization function for keys/values.
         :param loads: The deserialization function for keys/values.
+        :param collect_duplicates: Whether to collect all values for the same timestamp or just the latest.
         :param changelog_producer: Optional `ChangelogProducer` for recording changes.
         :param grace_ms: retention for the key in milliseconds
         """
@@ -70,6 +74,7 @@ class TimestampedPartitionTransaction(PartitionTransaction):
             cf_name=MIN_ELIGIBLE_TIMESTAMPS_CF_NAME,
         )
         self._grace_ms = grace_ms
+        self._collect_duplicates = collect_duplicates
 
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
     def get_latest(self, timestamp: int, prefix: Any) -> Optional[Any]:
@@ -90,14 +95,15 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         :return: The deserialized value if found, otherwise None.
         """
         prefix = self._ensure_bytes(prefix)
-        min_eligible_timestamp = self._get_min_eligible_timestamp(prefix)
+        lower_bound_bytes = self._get_min_eligible_timestamp(prefix)
+        # +1 because upper bound is exclusive
+        upper_bount_bytes = int_to_bytes(timestamp + 1)
 
-        if timestamp < min_eligible_timestamp:
+        if upper_bount_bytes <= lower_bound_bytes:
             return None
 
-        lower_bound = self._serialize_key(min_eligible_timestamp, prefix)
-        # +1 because upper bound is exclusive
-        upper_bound = self._serialize_key(timestamp + 1, prefix)
+        lower_bound = self._serialize_key(lower_bound_bytes, prefix)
+        upper_bound = self._serialize_key(upper_bount_bytes, prefix)
 
         deletes = self._update_cache.get_deletes()
         updates = self._update_cache.get_updates().get(prefix, {})
@@ -151,10 +157,12 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         :param prefix: The key prefix.
         """
         prefix = self._ensure_bytes(prefix)
-        self.set(timestamp, value, prefix)
+        counter = self._get_next_count() if self._collect_duplicates else 0
+        key = encode_integer_pair(timestamp, counter)
+        self.set(key, value, prefix)
         min_eligible_timestamp = max(
             self._get_min_eligible_timestamp(prefix),
-            timestamp - self._grace_ms,
+            int_to_bytes(max(timestamp - self._grace_ms, 0)),
         )
         self._set_min_eligible_timestamp(prefix, min_eligible_timestamp)
 
@@ -204,16 +212,10 @@ class TimestampedPartitionTransaction(PartitionTransaction):
             return prefix
         return serialize(prefix, dumps=self._dumps)
 
-    def _serialize_key(self, key: Union[int, bytes], prefix: bytes) -> bytes:
-        if isinstance(key, int):
-            # TODO: Currently using constant 0, but will be
-            # replaced with a global counter in the future
-            return prefix + SEPARATOR + encode_integer_pair(key, 0)
-        elif isinstance(key, bytes):
-            return prefix + SEPARATOR + key
-        raise TypeError(f"Invalid key type: {type(key)}")
+    def _serialize_key(self, key: bytes, prefix: bytes) -> bytes:
+        return prefix + SEPARATOR + key
 
-    def _get_min_eligible_timestamp(self, prefix: bytes) -> int:
+    def _get_min_eligible_timestamp(self, prefix: bytes) -> bytes:
         """
         Retrieves the minimum eligible timestamp for a given prefix.
 
@@ -228,12 +230,12 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         cached = cache.values.get(prefix)
         if cached is not None:
             return cached
-        stored = self.get(key=cache.key, prefix=prefix) or 0
+        stored = self.get_bytes(key=cache.key, prefix=prefix, default=ZERO)
         # Write the timestamp back to cache since it is known now
         cache.values[prefix] = stored
         return stored
 
-    def _set_min_eligible_timestamp(self, prefix: bytes, timestamp: int) -> None:
+    def _set_min_eligible_timestamp(self, prefix: bytes, timestamp: bytes) -> None:
         """
         Sets the minimum eligible timestamp for a given prefix.
 
@@ -245,8 +247,10 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         :param timestamp: The minimum eligible timestamp (int) to set.
         """
         cache = self._min_eligible_timestamps
-        self.set(key=cache.key, value=timestamp, prefix=prefix, cf_name=cache.cf_name)
         cache.values[prefix] = timestamp
+        self.set_bytes(
+            key=cache.key, value=timestamp, prefix=prefix, cf_name=cache.cf_name
+        )
 
 
 class TimestampedStorePartition(RocksDBStorePartition):
@@ -261,11 +265,13 @@ class TimestampedStorePartition(RocksDBStorePartition):
         self,
         path: str,
         grace_ms: int,
+        collect_duplicates: bool,
         options: Optional[RocksDBOptionsType] = None,
         changelog_producer: Optional[ChangelogProducer] = None,
     ) -> None:
         super().__init__(path, options=options, changelog_producer=changelog_producer)
         self._grace_ms = grace_ms
+        self._collect_duplicates = collect_duplicates
 
     def begin(self) -> TimestampedPartitionTransaction:
         return TimestampedPartitionTransaction(
@@ -273,6 +279,7 @@ class TimestampedStorePartition(RocksDBStorePartition):
             dumps=self._dumps,
             loads=self._loads,
             grace_ms=self._grace_ms,
+            collect_duplicates=self._collect_duplicates,
             changelog_producer=self._changelog_producer,
         )
 
@@ -291,6 +298,7 @@ class TimestampedStore(RocksDBStore):
         stream_id: Optional[str],
         base_dir: str,
         grace_ms: int,
+        collect_duplicates: bool,
         changelog_producer_factory: Optional[ChangelogProducerFactory] = None,
         options: Optional[RocksDBOptionsType] = None,
     ) -> None:
@@ -302,6 +310,7 @@ class TimestampedStore(RocksDBStore):
             options=options,
         )
         self._grace_ms = grace_ms
+        self._collect_duplicates = collect_duplicates
 
     def create_new_partition(
         self,
@@ -318,6 +327,7 @@ class TimestampedStore(RocksDBStore):
         return TimestampedStorePartition(
             path=path,
             grace_ms=self._grace_ms,
+            collect_duplicates=self._collect_duplicates,
             options=self._options,
             changelog_producer=changelog_producer,
         )
