@@ -1,12 +1,12 @@
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Any, Optional
 
 
 @dataclass
-class TimestampsCache:
+class Cache:
     key: bytes
     cf_name: str
-    timestamps: dict[bytes, Optional[int]] = field(default_factory=dict)
+    values: dict[bytes, Any] = field(default_factory=dict)
 
 
 @dataclass

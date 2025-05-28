@@ -8,7 +8,7 @@ from quixstreams.state.base.transaction import (
 )
 from quixstreams.state.metadata import SEPARATOR
 from quixstreams.state.recovery import ChangelogProducer, ChangelogProducerFactory
-from quixstreams.state.rocksdb.cache import TimestampsCache
+from quixstreams.state.rocksdb.cache import Cache
 from quixstreams.state.rocksdb.types import RocksDBOptionsType
 from quixstreams.state.serialization import (
     DumpsFunc,
@@ -65,7 +65,7 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         self._partition: TimestampedStorePartition = cast(
             "TimestampedStorePartition", self._partition
         )
-        self._min_eligible_timestamps: TimestampsCache = TimestampsCache(
+        self._min_eligible_timestamps: Cache = Cache(
             key=MIN_ELIGIBLE_TIMESTAMPS_KEY,
             cf_name=MIN_ELIGIBLE_TIMESTAMPS_CF_NAME,
         )
@@ -225,12 +225,12 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         :return: The minimum eligible timestamp (int).
         """
         cache = self._min_eligible_timestamps
-        cached = cache.timestamps.get(prefix)
+        cached = cache.values.get(prefix)
         if cached is not None:
             return cached
         stored = self.get(key=cache.key, prefix=prefix) or 0
         # Write the timestamp back to cache since it is known now
-        cache.timestamps[prefix] = stored
+        cache.values[prefix] = stored
         return stored
 
     def _set_min_eligible_timestamp(self, prefix: bytes, timestamp: int) -> None:
@@ -245,8 +245,8 @@ class TimestampedPartitionTransaction(PartitionTransaction):
         :param timestamp: The minimum eligible timestamp (int) to set.
         """
         cache = self._min_eligible_timestamps
-        cache.timestamps[prefix] = timestamp
         self.set(key=cache.key, value=timestamp, prefix=prefix, cf_name=cache.cf_name)
+        cache.values[prefix] = timestamp
 
 
 class TimestampedStorePartition(RocksDBStorePartition):

@@ -7,7 +7,7 @@ from quixstreams.state.base.transaction import (
 )
 from quixstreams.state.metadata import DEFAULT_PREFIX
 from quixstreams.state.recovery import ChangelogProducer
-from quixstreams.state.rocksdb.cache import TimestampsCache
+from quixstreams.state.rocksdb.cache import Cache
 from quixstreams.state.rocksdb.transaction import RocksDBPartitionTransaction
 from quixstreams.state.serialization import (
     DumpsFunc,
@@ -56,19 +56,19 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
         # Cache the metadata separately to avoid serdes on each access
         # (we are 100% sure that the underlying types are immutable, while windows'
         # values are not)
-        self._latest_timestamps: TimestampsCache = TimestampsCache(
+        self._latest_timestamps: Cache = Cache(
             key=LATEST_TIMESTAMP_KEY,
             cf_name=LATEST_TIMESTAMPS_CF_NAME,
         )
-        self._last_expired_timestamps: TimestampsCache = TimestampsCache(
+        self._last_expired_timestamps: Cache = Cache(
             key=LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY,
             cf_name=LATEST_EXPIRED_WINDOW_CF_NAME,
         )
-        self._last_deleted_window_timestamps: TimestampsCache = TimestampsCache(
+        self._last_deleted_window_timestamps: Cache = Cache(
             key=LATEST_DELETED_WINDOW_TIMESTAMP_KEY,
             cf_name=LATEST_DELETED_WINDOW_CF_NAME,
         )
-        self._last_deleted_value_timestamps: TimestampsCache = TimestampsCache(
+        self._last_deleted_value_timestamps: Cache = Cache(
             key=LATEST_DELETED_VALUE_TIMESTAMP_KEY,
             cf_name=LATEST_DELETED_VALUE_CF_NAME,
         )
@@ -516,10 +516,10 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
         # Sort and deserialize items merged from the cache and store
         return sorted(merged_items.items(), key=lambda kv: kv[0], reverse=backwards)
 
-    def _get_timestamp(self, cache: TimestampsCache, prefix: bytes) -> Optional[int]:
-        if prefix in cache.timestamps:
+    def _get_timestamp(self, cache: Cache, prefix: bytes) -> Optional[int]:
+        if prefix in cache.values:
             # Return the cached value if it has been set at least once
-            return cache.timestamps[prefix]
+            return cache.values[prefix]
 
         stored_ts = self.get(
             key=cache.key,
@@ -529,11 +529,11 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
         if stored_ts is not None and not isinstance(stored_ts, int):
             raise ValueError(f"invalid timestamp {stored_ts}")
 
-        cache.timestamps[prefix] = stored_ts
+        cache.values[prefix] = stored_ts
         return stored_ts
 
-    def _set_timestamp(self, cache: TimestampsCache, prefix: bytes, timestamp_ms: int):
-        cache.timestamps[prefix] = timestamp_ms
+    def _set_timestamp(self, cache: Cache, prefix: bytes, timestamp_ms: int):
+        cache.values[prefix] = timestamp_ms
         self.set(
             key=cache.key,
             value=timestamp_ms,
