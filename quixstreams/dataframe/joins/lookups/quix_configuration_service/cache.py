@@ -1,6 +1,7 @@
-import copy
 from collections import OrderedDict
 from typing import Any, Callable, Optional, Tuple, TypedDict
+
+from quixstreams.utils.pickle import pickle_copier
 
 from .models import ConfigurationVersion, Field
 
@@ -64,13 +65,14 @@ class VersionDataLRU:
         if key in cache:
             self.hits += 1
             cache.move_to_end(key)
-            return copy.deepcopy(cache[key])
+            return cache[key]()
+
         self.misses += 1
         result = self.func(version, fields)
-        cache[key] = result
+        cache[key] = pickle_copier(result)
         if len(cache) > self.maxsize:
             cache.popitem(last=False)
-        return copy.deepcopy(result)
+        return result
 
     def remove(
         self, version: Optional[ConfigurationVersion], fields: dict[str, Field]
