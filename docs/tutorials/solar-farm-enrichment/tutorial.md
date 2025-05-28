@@ -43,8 +43,6 @@ The data will be processed by the Solar Farm `Application`, which will do the jo
 
 
 
-## TODO: Explain how joins work
-
 ## Generating Sample Data
 
 In our [**>>> Enrichment Application <<<**](tutorial_app.py), we use two `Sources`:
@@ -251,6 +249,8 @@ The output should look like this:
 │ b'location-1' │ 1748444439009 │ 2025-05-28T15:00:39.009870 │ panel-2  │ location-1  │ 23            │ 0.8        │ 2025-05-28T15:00:20.929200 │ 29                     │ 88                      │
 └───────────────┴───────────────┴────────────────────────────┴──────────┴─────────────┴───────────────┴────────────┴────────────────────────────┴────────────────────────┴─────────────────────────┘
 ```
+
+Now we can examine how the battery metrics correlate with the weather forecast in the area!
 
 ### Producing the output messages
 
