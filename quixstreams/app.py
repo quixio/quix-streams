@@ -7,16 +7,7 @@ import time
 import warnings
 from collections import defaultdict
 from pathlib import Path
-from typing import (
-    Callable,
-    List,
-    Literal,
-    Optional,
-    Protocol,
-    Tuple,
-    Type,
-    Union,
-)
+from typing import Callable, List, Literal, Optional, Protocol, Tuple, Type, Union
 
 from confluent_kafka import TopicPartition
 from pydantic import AliasGenerator, Field
@@ -45,6 +36,7 @@ from .models import (
     TopicManager,
 )
 from .platforms.quix import (
+    DEFAULT_PORTAL_API_URL,
     QuixKafkaConfigsBuilder,
     QuixTopicManager,
     check_state_dir,
@@ -134,6 +126,7 @@ class Application:
         broker_address: Optional[Union[str, ConnectionConfig]] = None,
         *,
         quix_sdk_token: Optional[str] = None,
+        quix_portal_api: Optional[str] = None,
         consumer_group: Optional[str] = None,
         auto_offset_reset: AutoOffsetReset = "latest",
         commit_interval: float = 5.0,
@@ -171,6 +164,11 @@ class Application:
             Either this OR `broker_address` must be set to use Application (not both).
             Linked Environment Variable: `Quix__Sdk__Token`.
             Default: None (if not run on Quix Cloud)
+              >***NOTE:*** the environment variable is set for you in the Quix Cloud
+        :param quix_portal_api: If using the Quix Cloud, the cluster API URL to use.
+            Use it to connect to the dedicated Quix Cloud environment.
+            Linked Environment Variable: `Quix__Portal__Api`.
+            Default: `https://portal-api.platform.quix.io/`.
               >***NOTE:*** the environment variable is set for you in the Quix Cloud
         :param consumer_group: Kafka consumer group.
             Passed as `group.id` to `confluent_kafka.Consumer`.
@@ -249,11 +247,11 @@ class Application:
             )
         state_dir = Path(state_dir)
 
-        # We can't use os.getenv as defaults (and have testing work nicely)
-        # since it evaluates getenv when the function is defined.
-        # In general this is just a most robust approach.
         broker_address = broker_address or os.getenv("Quix__Broker__Address")
         quix_sdk_token = quix_sdk_token or os.getenv("Quix__Sdk__Token")
+        quix_portal_api = (
+            quix_portal_api or os.getenv("Quix__Portal__Api") or DEFAULT_PORTAL_API_URL
+        )
 
         if not consumer_group:
             consumer_group = os.getenv("Quix__Consumer_Group", "quixstreams-default")
@@ -276,8 +274,8 @@ class Application:
                     )
             elif quix_sdk_token:
                 quix_app_source = "Quix SDK Token"
-                quix_config_builder = QuixKafkaConfigsBuilder(
-                    quix_sdk_token=quix_sdk_token
+                quix_config_builder = QuixKafkaConfigsBuilder.from_credentials(
+                    quix_sdk_token=quix_sdk_token, quix_portal_api=quix_portal_api
                 )
             else:
                 raise ValueError(
@@ -287,7 +285,8 @@ class Application:
             # SDK Token or QuixKafkaConfigsBuilder were provided
             logger.info(
                 f"{quix_app_source} detected; "
-                f"the application will connect to Quix Cloud brokers"
+                f"the application will connect to Quix Cloud brokers "
+                f'(quix_portal_api="{quix_portal_api}")'
             )
             self._topic_manager_factory = functools.partial(
                 QuixTopicManager, quix_config_builder=quix_config_builder

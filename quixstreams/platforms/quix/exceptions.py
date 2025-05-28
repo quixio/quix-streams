@@ -6,6 +6,10 @@ __all__ = (
     "MissingConnectionRequirements",
     "UndefinedQuixWorkspaceId",
     "QuixApiRequestFailure",
+    "MultipleWorkspaces",
+    "NoWorkspaceFound",
+    "QuixCreateTopicFailure",
+    "QuixCreateTopicTimeout",
 )
 
 

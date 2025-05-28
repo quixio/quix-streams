@@ -44,15 +44,6 @@ class QuixEnvironment:
         return os.environ.get(self.WORKSPACE_ID)
 
     @property
-    def portal_api(self) -> Optional[str]:
-        """
-        Return Quix Portal API url if set
-
-        :return: portal API URL or None
-        """
-        return os.environ.get(self.PORTAL_API)
-
-    @property
     def state_dir(self) -> str:
         """
         Return application state directory on Quix.
