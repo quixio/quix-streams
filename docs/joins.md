@@ -144,3 +144,44 @@ Timestamp alignment is effective only for the partitions **with the same numbers
 
 Note that message ordering works only when the messages are consumed from the topics.  
 If you change timestamps of the record during processing, they will be processed in the original order.
+
+## Lookup join
+
+`StreamingDataFrame.lookup_join()` allows you to enrich records in a streaming dataframe by performing a lookup join using a custom lookup strategy. This is useful for augmenting your data with external configuration, metadata, or reference data at processing time.
+
+### Use cases
+
+- Enriching streaming data with configuration or reference data from an external source, like a database.
+- Adding metadata or computed fields to records in real time.
+- Implementing custom enrichment logic for streaming pipelines.
+
+### How it works
+
+- For each record in the dataframe, a user-defined lookup strategy (a subclass of `BaseLookup`) is called with a mapping of field names to field definitions (subclasses of `BaseField`).
+- The lookup strategy fetches or computes enrichment data based on the provided key and fields, and updates the record in-place.
+- The enrichment can come from external sources such as configuration topics, databases, or in-memory data.
+
+### Example
+```python
+from quixstreams import Application
+from quixstreams.dataframe.joins.lookups import QuixConfigurationService, QuixConfigurationServiceField as Field
+
+app = Application(...)
+
+sdf = app.dataframe(app.topic("input"))
+lookup = QuixConfigurationService(app.topic("config"), config=app.config)
+
+fields = {
+    "test": Field(type="test", default="test_default")
+}
+
+sdf = sdf.lookup_join(lookup, fields)
+
+if __name__ == '__main__':
+    app.run()
+```
+
+### Notes
+- This is an experimental feature; the API may change in future releases.
+- The enrichment is performed in-place: the input value dictionary is updated with the enrichment data.
+- The lookup strategy and field definitions are fully customizable, allowing integration with a wide range of external data sources.
