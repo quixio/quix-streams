@@ -3,7 +3,7 @@ import logging
 import threading
 import time
 from collections import defaultdict
-from typing import TYPE_CHECKING, Any, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Literal, Mapping, Optional, Union
 
 import httpx
 import orjson
@@ -11,8 +11,8 @@ import orjson
 from quixstreams.kafka import ConnectionConfig, Consumer
 from quixstreams.models import HeadersMapping, Topic
 
-from ..base import BaseLookup
-from .cache import CacheInfo, VersionDataLRU
+from ..base import BaseLookup, CacheInfo
+from .cache import VersionDataLRU
 from .environment import QUIX_REPLICA_NAME
 from .models import Configuration, ConfigurationVersion, Event, Field
 
@@ -326,7 +326,7 @@ class Lookup(BaseLookup[Field]):
 
     def join(
         self,
-        fields: dict[str, Field],
+        fields: Mapping[str, Field],
         on: str,
         value: dict[str, Any],
         key: Any,

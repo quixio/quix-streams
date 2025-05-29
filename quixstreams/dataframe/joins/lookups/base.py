@@ -1,6 +1,6 @@
 import abc
 import dataclasses
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, Mapping, TypedDict, TypeVar
 
 from quixstreams.models.types import HeadersMapping
 
@@ -27,7 +27,7 @@ class BaseLookup(abc.ABC, Generic[F]):
     @abc.abstractmethod
     def join(
         self,
-        fields: dict[str, F],
+        fields: Mapping[str, F],
         on: str,
         value: dict[str, Any],
         key: Any,
@@ -60,3 +60,19 @@ class BaseField(abc.ABC):
     """
 
     pass
+
+
+class CacheInfo(TypedDict):
+    """
+    Typed dictionary containing cache statistics for the LRU cache.
+
+    :param hits: The number of cache hits.
+    :param misses: The number of cache misses.
+    :param size: The current size of the cache.
+    :param maxsize: The maximum size of the cache.
+    """
+
+    hits: int
+    misses: int
+    size: int
+    maxsize: int
