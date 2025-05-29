@@ -161,10 +161,12 @@ You can use it to enriching streaming data with configuration or reference data 
 
 To perform a lookup join, you need:
 
-1. A subclass of `quixstreams.dataframe.joins.lookups.base.BaseLookup` to query the external source and cache the results when necessary.
-2. A subclass of `quixstreams.dataframe.joins.lookups.base.BaseField` to define how the data is extracted from the result.
+1. A subclass of [quixstreams.dataframe.joins.lookups.base.BaseLookup](api-reference/dataframe.md#baselookup) to query the external source and cache the results when necessary.
+2. A subclass of [quixstreams.dataframe.joins.lookups.base.BaseField](api-reference/dataframe.md#basefield) to define how the data is extracted from the result.
 3. To pass the lookup and the fields to the `StreamingDataFrame.lookup_join`.
 
+
+See [SQLiteLookup](api-reference/dataframe.md#sqlitelookup) and [SQLiteLookupField](api-reference/dataframe.md#sqlitelookupfield) for the reference implementation. 
 
 Here is an example of lookup join with a SQLite database:
 

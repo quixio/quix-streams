@@ -103,6 +103,9 @@ doc_map = {
         for k in [
             "quixstreams.dataframe.dataframe",
             "quixstreams.dataframe.series",
+            "quixstreams.dataframe.joins.lookups.base",
+            "quixstreams.dataframe.joins.lookups.sqlite",
+            "quixstreams.dataframe.joins.join_asof",
         ]
     },
     "context.md": {
