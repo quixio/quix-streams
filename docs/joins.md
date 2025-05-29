@@ -1,6 +1,6 @@
 # Joins
 ## Join as-of
-
+> _New in [3.15.0](https://github.com/quixio/quix-streams/releases/tag/v3.15.0)_
 
 Use `StreamingDataFrame.join_asof()` to join two topics into a new stream where each left record 
 is merged with the right record with the same key whose timestamp is less than or equal to the left timestamp.
@@ -135,8 +135,8 @@ Adjust `grace_ms` based on the expected time gap between the left and the right 
 - As-of join preserves headers only for the left dataframe.  
 If you need headers of the right side records, consider adding them to the value.
 
-## Message ordering between partitions
-Joins use [`StreamingDataFrame.concat()`](concatenating.md) under the hood, which means that the application's internal consumer goes into a special "buffered" mode
+### Message ordering between partitions
+Streaming joins use [`StreamingDataFrame.concat()`](concatenating.md) under the hood, which means that the application's internal consumer goes into a special "buffered" mode
 when the join is used.
 
 In this mode, it buffers messages per partition in order to process them in the timestamp order between different topics.  
@@ -147,41 +147,53 @@ If you change timestamps of the record during processing, they will be processed
 
 ## Lookup join
 
-`StreamingDataFrame.lookup_join()` allows you to enrich records in a streaming dataframe by performing a lookup join using a custom lookup strategy. This is useful for augmenting your data with external configuration, metadata, or reference data at processing time.
+> _New in [3.16.0](https://github.com/quixio/quix-streams/releases/tag/v3.16.0)_
 
-### Use cases
+!!! warning
+    This is an experimental feature; the API may change in future releases.
 
-- Enriching streaming data with configuration or reference data from an external source, like a database.
-- Adding metadata or computed fields to records in real time.
-- Implementing custom enrichment logic for streaming pipelines.
+
+`StreamingDataFrame.lookup_join()` is a special type of join that allows you to enrich records in a streaming dataframe with the data from external systems.  
+
+You can use it to enriching streaming data with configuration or reference data from an external source, like a database.
+
+### Example
+
+To perform a lookup join, you need:
+
+1. A subclass of `quixstreams.dataframe.joins.lookups.base.BaseLookup` to query the external source and cache the results when necessary.
+2. A subclass of `quixstreams.dataframe.joins.lookups.base.BaseField` to define how the data is extracted from the result.
+3. To pass the lookup and the fields to the `StreamingDataFrame.lookup_join`.
+
+
+Here is an example of lookup join with a SQLite database:
+
+```python
+from quixstreams import Application
+from quixstreams.dataframe.joins.lookups import SQLiteLookup, SQLiteLookupField
+
+app = Application(...)
+
+# An implementation of BaseLookup for SQLite 
+lookup = SQLiteLookup(path="db.db")  
+
+sdf = app.dataframe(app.topic("input"))
+
+sdf = sdf.lookup_join(
+    lookup,
+    on="column", # A column in StreamingDataFrame to join on
+    fields={
+        # A mapping with SQLite fields to join with 
+        "lookup": SQLiteLookupField(table="table", columns=["column"], on="id"),
+    },
+)
+
+if __name__ == '__main__':
+    app.run()
+```
 
 ### How it works
 
 - For each record in the dataframe, a user-defined lookup strategy (a subclass of `BaseLookup`) is called with a mapping of field names to field definitions (subclasses of `BaseField`).
 - The lookup strategy fetches or computes enrichment data based on the provided key and fields, and updates the record in-place.
 - The enrichment can come from external sources such as configuration topics, databases, or in-memory data.
-
-### Example
-```python
-from quixstreams import Application
-from quixstreams.dataframe.joins.lookups import QuixConfigurationService, QuixConfigurationServiceField as Field
-
-app = Application(...)
-
-sdf = app.dataframe(app.topic("input"))
-lookup = QuixConfigurationService(app.topic("config"), config=app.config)
-
-fields = {
-    "test": Field(type="test", default="test_default")
-}
-
-sdf = sdf.lookup_join(lookup, fields)
-
-if __name__ == '__main__':
-    app.run()
-```
-
-### Notes
-- This is an experimental feature; the API may change in future releases.
-- The enrichment is performed in-place: the input value dictionary is updated with the enrichment data.
-- The lookup strategy and field definitions are fully customizable, allowing integration with a wide range of external data sources.
