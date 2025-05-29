@@ -4,7 +4,6 @@ from typing import Any, Dict, Literal, Optional, Union
 
 from quixstreams.state import PartitionTransaction
 from quixstreams.state.base import PartitionTransactionCache, StorePartition
-from quixstreams.state.exceptions import ColumnFamilyDoesNotExist
 from quixstreams.state.metadata import METADATA_CF_NAME, Marker
 from quixstreams.state.recovery import ChangelogProducer
 from quixstreams.utils.json import dumps as json_dumps
@@ -99,9 +98,6 @@ class MemoryStorePartition(StorePartition):
     def recover_from_changelog_message(
         self, key: bytes, value: Optional[bytes], cf_name: str, offset: int
     ) -> None:
-        if cf_name not in self._state:
-            raise ColumnFamilyDoesNotExist(f'Column family "{cf_name}" does not exist')
-
         if value:
             self._state.setdefault(cf_name, {})[key] = value
         else:

@@ -17,7 +17,6 @@ from quixstreams.state.base import (
     PartitionTransactionCache,
     StorePartition,
 )
-from quixstreams.state.exceptions import ColumnFamilyDoesNotExist
 from quixstreams.state.metadata import METADATA_CF_NAME, Marker
 from quixstreams.state.recovery import ChangelogProducer
 from quixstreams.state.serialization import int_from_bytes, int_to_bytes
@@ -52,8 +51,6 @@ class RocksDBStorePartition(StorePartition):
     :param options: RocksDB options. If `None`, the default options will be used.
     """
 
-    additional_column_families: tuple[str, ...] = ()
-
     def __init__(
         self,
         path: str,
@@ -72,8 +69,6 @@ class RocksDBStorePartition(StorePartition):
         self._db = self._init_rocksdb()
         self._cf_cache: Dict[str, Rdict] = {}
         self._cf_handle_cache: Dict[str, ColumnFamily] = {}
-        for cf_name in self.additional_column_families:
-            self._ensure_column_family(cf_name)
 
     def recover_from_changelog_message(
         self, key: bytes, value: Optional[bytes], cf_name: str, offset: int
@@ -290,13 +285,12 @@ class RocksDBStorePartition(StorePartition):
         if (cf_handle := self._cf_handle_cache.get(cf_name)) is None:
             try:
                 cf_handle = self._db.get_column_family_handle(cf_name)
-                self._cf_handle_cache[cf_name] = cf_handle
             except Exception as exc:
-                if "does not exist" in str(exc):
-                    raise ColumnFamilyDoesNotExist(
-                        f'Column family "{cf_name}" does not exist'
-                    )
-                raise
+                if "does not exist" not in str(exc):
+                    raise
+                self._db.create_column_family(cf_name, options=self._rocksdb_options)
+                cf_handle = self._db.get_column_family_handle(cf_name)
+            self._cf_handle_cache[cf_name] = cf_handle
         return cf_handle
 
     def get_column_family(self, cf_name: str) -> Rdict:
@@ -310,13 +304,13 @@ class RocksDBStorePartition(StorePartition):
         if (cf := self._cf_cache.get(cf_name)) is None:
             try:
                 cf = self._db.get_column_family(cf_name)
-                self._cf_cache[cf_name] = cf
             except Exception as exc:
-                if "does not exist" in str(exc):
-                    raise ColumnFamilyDoesNotExist(
-                        f'Column family "{cf_name}" does not exist'
-                    )
-                raise
+                if "does not exist" not in str(exc):
+                    raise
+                cf = self._db.create_column_family(
+                    cf_name, options=self._rocksdb_options
+                )
+            self._cf_cache[cf_name] = cf
         return cf
 
     def create_column_family(self, cf_name: str):
@@ -415,9 +409,3 @@ class RocksDBStorePartition(StorePartition):
             int_to_bytes(offset),
             self.get_column_family_handle(METADATA_CF_NAME),
         )
-
-    def _ensure_column_family(self, cf_name: str) -> None:
-        try:
-            self.get_column_family(cf_name)
-        except ColumnFamilyDoesNotExist:
-            self.create_column_family(cf_name)
