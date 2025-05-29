@@ -1,7 +1,6 @@
 import contextlib
 import functools
 import logging
-import os
 import signal
 import time
 import warnings
@@ -43,6 +42,7 @@ from .platforms.quix import (
     check_state_management_enabled,
     is_quix_deployment,
 )
+from .platforms.quix.env import QUIX_ENVIRONMENT
 from .processing import ProcessingContext
 from .runtracker import RunTracker
 from .sinks import SinkManager
@@ -242,19 +242,20 @@ class Application:
         consumer_extra_config = consumer_extra_config or {}
 
         if state_dir is None:
-            state_dir = os.getenv(
-                "Quix__State__Dir", "/app/state" if is_quix_deployment() else "state"
+            state_dir = QUIX_ENVIRONMENT.state_dir or (
+                "/app/state" if is_quix_deployment() else "state"
             )
         state_dir = Path(state_dir)
 
-        broker_address = broker_address or os.getenv("Quix__Broker__Address")
-        quix_sdk_token = quix_sdk_token or os.getenv("Quix__Sdk__Token")
+        broker_address = broker_address or QUIX_ENVIRONMENT.broker_address
+        quix_sdk_token = quix_sdk_token or QUIX_ENVIRONMENT.sdk_token
         quix_portal_api = (
-            quix_portal_api or os.getenv("Quix__Portal__Api") or DEFAULT_PORTAL_API_URL
+            quix_portal_api or QUIX_ENVIRONMENT.portal_api or DEFAULT_PORTAL_API_URL
         )
 
-        if not consumer_group:
-            consumer_group = os.getenv("Quix__Consumer_Group", "quixstreams-default")
+        consumer_group = (
+            consumer_group or QUIX_ENVIRONMENT.consumer_group or "quixstreams-default"
+        )
 
         if broker_address:
             # If broker_address is passed to the app it takes priority over any quix configuration
