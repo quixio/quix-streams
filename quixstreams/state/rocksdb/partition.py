@@ -144,7 +144,9 @@ class RocksDBStorePartition(StorePartition):
         :param cf_name: rocksdb column family name. Default - "default"
         :return: a value if the key is present in the DB. Otherwise, `default`
         """
-        result = self.get_column_family(cf_name).get(key, default=Marker.UNDEFINED)
+        result = self.get_or_create_column_family(cf_name).get(
+            key, default=Marker.UNDEFINED
+        )
 
         # RDict accept Any type as value but we only write bytes so we should only get bytes back.
         return cast(Union[bytes, Literal[Marker.UNDEFINED]], result)
@@ -167,7 +169,7 @@ class RocksDBStorePartition(StorePartition):
             Default is "default".
         :return: An iterator yielding (key, value) tuples.
         """
-        cf = self.get_column_family(cf_name=cf_name)
+        cf = self.get_or_create_column_family(cf_name=cf_name)
 
         # Set iterator bounds to reduce IO by limiting the range of keys fetched
         read_opt = ReadOptions()
@@ -214,7 +216,7 @@ class RocksDBStorePartition(StorePartition):
         :param cf_name: rocksdb column family name. Default - "default"
         :return: `True` if the key is present, `False` otherwise.
         """
-        cf_dict = self.get_column_family(cf_name)
+        cf_dict = self.get_or_create_column_family(cf_name)
         return key in cf_dict
 
     def get_changelog_offset(self) -> Optional[int]:
@@ -222,7 +224,7 @@ class RocksDBStorePartition(StorePartition):
         Get offset that the changelog is up-to-date with.
         :return: offset or `None` if there's no processed offset yet
         """
-        metadata_cf = self.get_column_family(METADATA_CF_NAME)
+        metadata_cf = self.get_or_create_column_family(METADATA_CF_NAME)
         offset_bytes = metadata_cf.get(CHANGELOG_OFFSET_KEY)
         if offset_bytes is None:
             return None
@@ -293,7 +295,7 @@ class RocksDBStorePartition(StorePartition):
             self._cf_handle_cache[cf_name] = cf_handle
         return cf_handle
 
-    def get_column_family(self, cf_name: str) -> Rdict:
+    def get_or_create_column_family(self, cf_name: str) -> Rdict:
         """
         Get a column family instance.
         This method will cache the CF instance to avoid creating them repeatedly.

@@ -111,17 +111,19 @@ class TestRocksDBStorePartition:
 
         store_partition_factory(options=RocksDBOptions(on_corrupted_recreate=True))
 
-    def test_get_column_family(self, store_partition: RocksDBStorePartition):
-        assert store_partition.get_column_family("cf")
+    def test_get_or_create_column_family(self, store_partition: RocksDBStorePartition):
+        assert store_partition.get_or_create_column_family("cf")
 
-    def test_get_column_family_cached(self, store_partition: RocksDBStorePartition):
-        cf1 = store_partition.get_column_family("cf")
-        cf2 = store_partition.get_column_family("cf")
+    def test_get_or_create_column_family_cached(
+        self, store_partition: RocksDBStorePartition
+    ):
+        cf1 = store_partition.get_or_create_column_family("cf")
+        cf2 = store_partition.get_or_create_column_family("cf")
         assert cf1 is cf2
 
     def test_list_column_families(self, store_partition: RocksDBStorePartition):
-        store_partition.get_column_family("cf1")
-        store_partition.get_column_family("cf2")
+        store_partition.get_or_create_column_family("cf1")
+        store_partition.get_or_create_column_family("cf2")
         cfs = store_partition.list_column_families()
         assert "cf1" in cfs
         assert "cf2" in cfs
@@ -155,7 +157,7 @@ class TestRocksDBStorePartition:
         ]
 
     def test_ensure_metadata_cf(self, store_partition: RocksDBStorePartition):
-        assert store_partition.get_column_family("__metadata__")
+        assert store_partition.get_or_create_column_family("__metadata__")
 
     @pytest.mark.parametrize(
         ["backwards", "expected"],

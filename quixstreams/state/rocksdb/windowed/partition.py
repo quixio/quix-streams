@@ -25,7 +25,7 @@ class WindowedRocksDBStorePartition(RocksDBStorePartition):
         :param cf_name: rocksdb column family name. Default - "default"
         :return: An iterable of keys
         """
-        cf_dict = self.get_column_family(cf_name)
+        cf_dict = self.get_or_create_column_family(cf_name)
         return cast(Iterator[bytes], cf_dict.keys())
 
     def begin(self) -> WindowedRocksDBPartitionTransaction:
