@@ -136,21 +136,6 @@ class TestRocksDBStorePartition:
         cf2 = store_partition.get_column_family("cf")
         assert cf1 is cf2
 
-    def test_create_and_drop_column_family(
-        self, store_partition: RocksDBStorePartition
-    ):
-        store_partition.create_column_family("cf")
-        store_partition.drop_column_family("cf")
-
-        with pytest.raises(ColumnFamilyDoesNotExist):
-            store_partition.get_column_family("cf")
-
-    def test_drop_column_family_doesnt_exist(
-        self, store_partition: RocksDBStorePartition
-    ):
-        with pytest.raises(ColumnFamilyDoesNotExist):
-            store_partition.drop_column_family("cf")
-
     def test_list_column_families(self, store_partition: RocksDBStorePartition):
         store_partition.create_column_family("cf1")
         store_partition.create_column_family("cf2")

@@ -331,18 +331,6 @@ class RocksDBStorePartition(StorePartition):
 
         self._cf_cache[cf_name] = cf
 
-    def drop_column_family(self, cf_name: str):
-        self._cf_cache.pop(cf_name, None)
-        self._cf_handle_cache.pop(cf_name, None)
-        try:
-            self._db.drop_column_family(cf_name)
-        except Exception as exc:
-            if "invalid column family:" in str(exc).lower():
-                raise ColumnFamilyDoesNotExist(
-                    f'Column family does not exist: "{cf_name}"'
-                )
-            raise
-
     def list_column_families(self) -> List[str]:
         return self._db.list_cf(self._path)
 
