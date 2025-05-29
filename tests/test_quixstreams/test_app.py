@@ -814,7 +814,16 @@ class TestAppExactlyOnce:
 
 
 class TestQuixApplication:
-    def test_init_with_quix_sdk_token_arg(self):
+    @pytest.mark.parametrize(
+        "quix_portal_api_arg, quix_portal_api_expected",
+        [
+            (None, "https://portal-api.platform.quix.io/"),
+            ("http://example.com", "http://example.com"),
+        ],
+    )
+    def test_init_with_quix_sdk_token_arg(
+        self, quix_portal_api_arg, quix_portal_api_expected
+    ):
         consumer_group = "c_group"
         expected_workspace_cgroup = f"my_ws-{consumer_group}"
         quix_sdk_token = "my_sdk_token"
@@ -842,32 +851,38 @@ class TestQuixApplication:
             "partition.assignment.strategy": "range",
         }
 
-        def get_cfg_builder(quix_sdk_token):
-            cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
-            cfg_builder.workspace_id = "abcd"
-            cfg_builder.librdkafka_connection_config = connection_config
-            cfg_builder.prepend_workspace_id.return_value = expected_workspace_cgroup
-            cfg_builder.quix_sdk_token = quix_sdk_token
-            cfg_builder.get_application_config.side_effect = lambda cg: (
-                QuixApplicationConfig(
-                    connection_config, quix_extras, cfg_builder.prepend_workspace_id(cg)
-                )
+        # Mock QuixKafkaConfigsBuilder
+        cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
+        cfg_builder.workspace_id = "abcd"
+        cfg_builder.librdkafka_connection_config = connection_config
+        cfg_builder.prepend_workspace_id.return_value = expected_workspace_cgroup
+        cfg_builder.quix_sdk_token = quix_sdk_token
+        cfg_builder.get_application_config.side_effect = lambda cg: (
+            QuixApplicationConfig(
+                connection_config, quix_extras, cfg_builder.prepend_workspace_id(cg)
             )
-            return cfg_builder
+        )
+        cfg_builder.from_credentials.return_value = cfg_builder
 
         # Mock consumer and producer to check the init args
         with (
-            patch("quixstreams.app.QuixKafkaConfigsBuilder", get_cfg_builder),
+            patch("quixstreams.app.QuixKafkaConfigsBuilder", cfg_builder),
             patch("quixstreams.app.InternalConsumer") as consumer_init_mock,
             patch("quixstreams.app.InternalProducer") as producer_init_mock,
         ):
             app = Application(
                 consumer_group=consumer_group,
                 quix_sdk_token=quix_sdk_token,
+                quix_portal_api=quix_portal_api_arg,
                 consumer_extra_config=extra_config,
                 producer_extra_config=extra_config,
             )
             assert app.is_quix_app
+
+        # Check that quix_portal_api is passed correctly
+        cfg_builder.from_credentials.assert_called_with(
+            quix_sdk_token=quix_sdk_token, quix_portal_api=quix_portal_api_expected
+        )
 
         # Check if items from the Quix config have been passed
         # to the low-level configs of producer and consumer
@@ -880,7 +895,16 @@ class TestQuixApplication:
         assert consumer_call_kwargs["consumer_group"] == expected_workspace_cgroup
         assert consumer_call_kwargs["extra_config"] == expected_consumer_extra_config
 
-    def test_init_with_quix_sdk_token_env(self, monkeypatch):
+    @pytest.mark.parametrize(
+        "quix_portal_api_arg, quix_portal_api_expected",
+        [
+            ("", "https://portal-api.platform.quix.io/"),
+            ("http://example.com", "http://example.com"),
+        ],
+    )
+    def test_init_with_quix_sdk_token_env(
+        self, monkeypatch, quix_portal_api_arg, quix_portal_api_expected
+    ):
         consumer_group = "c_group"
         expected_workspace_cgroup = f"my_ws-{consumer_group}"
         quix_sdk_token = "my_sdk_token"
@@ -908,22 +932,23 @@ class TestQuixApplication:
             "partition.assignment.strategy": "range",
         }
 
-        def get_cfg_builder(quix_sdk_token):
-            cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
-            cfg_builder.workspace_id = "abcd"
-            cfg_builder.librdkafka_connection_config = connection_config
-            cfg_builder.prepend_workspace_id.return_value = expected_workspace_cgroup
-            cfg_builder.quix_sdk_token = quix_sdk_token
-            cfg_builder.get_application_config.side_effect = lambda cg: (
-                QuixApplicationConfig(
-                    connection_config, quix_extras, cfg_builder.prepend_workspace_id(cg)
-                )
+        # Mock QuixKafkaConfigsBuilder
+        cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
+        cfg_builder.workspace_id = "abcd"
+        cfg_builder.librdkafka_connection_config = connection_config
+        cfg_builder.prepend_workspace_id.return_value = expected_workspace_cgroup
+        cfg_builder.quix_sdk_token = quix_sdk_token
+        cfg_builder.get_application_config.side_effect = lambda cg: (
+            QuixApplicationConfig(
+                connection_config, quix_extras, cfg_builder.prepend_workspace_id(cg)
             )
-            return cfg_builder
+        )
+        cfg_builder.from_credentials.return_value = cfg_builder
 
         monkeypatch.setenv("Quix__Sdk__Token", quix_sdk_token)
+        monkeypatch.setenv("Quix__Portal__Api", quix_portal_api_arg)
         with (
-            patch("quixstreams.app.QuixKafkaConfigsBuilder", get_cfg_builder),
+            patch("quixstreams.app.QuixKafkaConfigsBuilder", cfg_builder),
             patch("quixstreams.app.InternalConsumer") as consumer_init_mock,
             patch("quixstreams.app.InternalProducer") as producer_init_mock,
         ):
@@ -932,6 +957,11 @@ class TestQuixApplication:
                 consumer_extra_config=extra_config,
                 producer_extra_config=extra_config,
             )
+
+        # Check that quix_portal_api is passed correctly
+        cfg_builder.from_credentials.assert_called_with(
+            quix_sdk_token=quix_sdk_token, quix_portal_api=quix_portal_api_expected
+        )
 
         # Check if items from the Quix config have been passed
         # to the low-level configs of producer and consumer

@@ -14,8 +14,6 @@ from .exceptions import (
 
 __all__ = ("QuixPortalApiService",)
 
-DEFAULT_PORTAL_API_URL = "https://portal-api.platform.quix.io/"
-
 
 class QuixPortalApiService:
     """
@@ -34,13 +32,11 @@ class QuixPortalApiService:
     def __init__(
         self,
         auth_token: str,
-        portal_api: Optional[str] = None,
+        portal_api: str,
         api_version: Optional[str] = None,
         default_workspace_id: Optional[str] = None,
     ):
-        self._portal_api_url = (
-            portal_api or QUIX_ENVIRONMENT.portal_api or DEFAULT_PORTAL_API_URL
-        )
+        self._portal_api_url = portal_api
         if not auth_token:
             raise MissingConnectionRequirements(
                 f"A Quix Cloud auth token (SDK or PAT) is required; "

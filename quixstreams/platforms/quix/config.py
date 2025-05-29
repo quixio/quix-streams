@@ -20,10 +20,12 @@ from .exceptions import (
     UndefinedQuixWorkspaceId,
 )
 
+__all__ = ("QuixKafkaConfigsBuilder", "QuixApplicationConfig", "DEFAULT_PORTAL_API_URL")
+
 logger = logging.getLogger(__name__)
 
-__all__ = ("QuixKafkaConfigsBuilder", "QuixApplicationConfig")
 
+DEFAULT_PORTAL_API_URL = "https://portal-api.platform.quix.io/"
 QUIX_CONNECTIONS_MAX_IDLE_MS = 3 * 60 * 1000
 QUIX_METADATA_MAX_AGE_MS = 3 * 60 * 1000
 
@@ -95,32 +97,21 @@ class QuixKafkaConfigsBuilder:
     It also currently handles the app_auto_create_topics setting for Quix Applications.
     """
 
-    # TODO: Consider a workspace class?
     def __init__(
         self,
-        quix_sdk_token: Optional[str] = None,
+        quix_portal_api_service: QuixPortalApiService,
         workspace_id: Optional[str] = None,
-        quix_portal_api_service: Optional[QuixPortalApiService] = None,
         timeout: float = 30,
         topic_create_timeout: float = 60,
     ):
         """
-        :param quix_portal_api_service: A QuixPortalApiService instance (else generated)
+        :param quix_portal_api_service: A QuixPortalApiService instance
         :param workspace_id: A valid Quix Workspace ID (else searched for)
         """
-        if quix_sdk_token:
-            self.api = QuixPortalApiService(
-                default_workspace_id=workspace_id, auth_token=quix_sdk_token
-            )
-        elif quix_portal_api_service:
-            self.api = quix_portal_api_service
-        else:
-            raise ValueError(
-                'Either "quix_sdk_token" or "quix_portal_api_service" must be provided'
-            )
 
+        self._api = quix_portal_api_service
         try:
-            self._workspace_id = workspace_id or self.api.default_workspace_id
+            self._workspace_id = workspace_id or self._api.default_workspace_id
         except UndefinedQuixWorkspaceId:
             self._workspace_id = ""
             logger.warning(
@@ -135,6 +126,30 @@ class QuixKafkaConfigsBuilder:
         self._workspace_meta: dict[str, Any] = {}
         self._timeout = timeout
         self._topic_create_timeout = topic_create_timeout
+
+    @classmethod
+    def from_credentials(
+        cls,
+        quix_sdk_token: str,
+        quix_portal_api: str = DEFAULT_PORTAL_API_URL,
+        workspace_id: Optional[str] = None,
+        timeout: float = 30,
+        topic_create_timeout: float = 60,
+    ) -> "QuixKafkaConfigsBuilder":
+        """
+        Initialize class using the quix_sdk_token and quix_portal_api params.
+        """
+        api_service = QuixPortalApiService(
+            default_workspace_id=workspace_id,
+            auth_token=quix_sdk_token,
+            portal_api=quix_portal_api,
+        )
+        return cls(
+            quix_portal_api_service=api_service,
+            workspace_id=workspace_id,
+            timeout=timeout,
+            topic_create_timeout=topic_create_timeout,
+        )
 
     @property
     def workspace_id(self) -> str:
@@ -250,12 +265,12 @@ class QuixKafkaConfigsBuilder:
         if not workspace_name_or_id:
             workspace_name_or_id = self._workspace_id
         try:
-            return self.api.get_workspace(
+            return self._api.get_workspace(
                 workspace_id=workspace_name_or_id, timeout=timeout
             )
         except HTTPError:
             # check to see if they provided the workspace name instead
-            ws_list = self.api.get_workspaces(timeout=timeout)
+            ws_list = self._api.get_workspaces(timeout=timeout)
             for ws in ws_list:
                 if ws["name"] == workspace_name_or_id:
                     return ws
@@ -315,7 +330,7 @@ class QuixKafkaConfigsBuilder:
 
         :return: the workspace_id if success, else None
         """
-        topics = self.api.get_topics(
+        topics = self._api.get_topics(
             workspace_id=workspace_id,
             timeout=timeout if timeout is not None else self._timeout,
         )
@@ -338,7 +353,7 @@ class QuixKafkaConfigsBuilder:
 
         :return: workspace data dict if topic search success, else None
         """
-        ws_list = self.api.get_workspaces(
+        ws_list = self._api.get_workspaces(
             timeout=timeout if timeout is not None else self._timeout
         )
         if len(ws_list) == 1:
@@ -376,7 +391,7 @@ class QuixKafkaConfigsBuilder:
             f'Creating topic "{topic.name}" '
             f'with a config: "{topic.create_config.as_dict() if topic.create_config is not None else {} }"'
         )
-        resp = self.api.post_topic(
+        resp = self._api.post_topic(
             topic_name=topic.name,
             workspace_id=self.workspace_id,
             topic_partitions=cfg.num_partitions,
@@ -473,14 +488,14 @@ class QuixKafkaConfigsBuilder:
         :return: response dict of the topic info if topic found, else None
         :raises QuixApiRequestFailure: when topic does not exist
         """
-        return self.api.get_topic(
+        return self._api.get_topic(
             topic_name=topic.name,
             workspace_id=self.workspace_id,
             timeout=timeout if timeout is not None else self._timeout,
         )
 
     def get_topics(self, timeout: Optional[float] = None) -> List[dict]:
-        return self.api.get_topics(
+        return self._api.get_topics(
             workspace_id=self.workspace_id,
             timeout=timeout if timeout is not None else self._timeout,
         )
@@ -490,7 +505,7 @@ class QuixKafkaConfigsBuilder:
         Get the full client config required to authenticate a confluent-kafka
         client to a Quix platform broker/workspace as a ConnectionConfig
         """
-        librdkafka_dict = self.api.get_librdkafka_connection_config(self.workspace_id)
+        librdkafka_dict = self._api.get_librdkafka_connection_config(self.workspace_id)
         if (cert := librdkafka_dict.pop("ssl.ca.cert", None)) is not None:
             librdkafka_dict["ssl.ca.pem"] = base64.b64decode(cert)
         return ConnectionConfig.from_librdkafka_dict(librdkafka_dict)

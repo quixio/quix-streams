@@ -19,7 +19,9 @@ from quixstreams.platforms.quix.exceptions import (
 class TestQuixKafkaConfigsBuilder:
     def test_no_workspace_id_warning(self, caplog):
         QuixKafkaConfigsBuilder(
-            quix_portal_api_service=QuixPortalApiService(auth_token="12345")
+            quix_portal_api_service=QuixPortalApiService(
+                auth_token="12345", portal_api="12345"
+            )
         )
         assert "'workspace_id' argument was not provided" in caplog.text
 
