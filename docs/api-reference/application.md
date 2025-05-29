@@ -10,7 +10,7 @@
 class Application()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L94)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L86)
 
 The main Application class.
 
@@ -61,6 +61,7 @@ app.run()
 def __init__(broker_address: Optional[Union[str, ConnectionConfig]] = None,
              *,
              quix_sdk_token: Optional[str] = None,
+             quix_portal_api: Optional[str] = None,
              consumer_group: Optional[str] = None,
              auto_offset_reset: AutoOffsetReset = "latest",
              commit_interval: float = 5.0,
@@ -86,7 +87,7 @@ def __init__(broker_address: Optional[Union[str, ConnectionConfig]] = None,
              max_partition_buffer_size: int = 10000)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L132)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L124)
 
 
 <br>
@@ -104,6 +105,11 @@ Default: `None`
 Either this OR `broker_address` must be set to use Application (not both).
 Linked Environment Variable: `Quix__Sdk__Token`.
 Default: None (if not run on Quix Cloud)
+  >***NOTE:*** the environment variable is set for you in the Quix Cloud
+- `quix_portal_api`: If using the Quix Cloud, the cluster API URL to use.
+Use it to connect to the dedicated Quix Cloud environment.
+Linked Environment Variable: `Quix__Portal__Api`.
+Default: `https://portal-api.platform.quix.io/`.
   >***NOTE:*** the environment variable is set for you in the Quix Cloud
 - `consumer_group`: Kafka consumer group.
 Passed as `group.id` to `confluent_kafka.Consumer`.
