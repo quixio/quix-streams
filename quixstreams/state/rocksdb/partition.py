@@ -21,7 +21,7 @@ from quixstreams.state.metadata import METADATA_CF_NAME, Marker
 from quixstreams.state.recovery import ChangelogProducer
 from quixstreams.state.serialization import int_from_bytes, int_to_bytes
 
-from .exceptions import ColumnFamilyAlreadyExists, RocksDBCorruptedError
+from .exceptions import RocksDBCorruptedError
 from .metadata import (
     CHANGELOG_OFFSET_KEY,
 )
@@ -312,18 +312,6 @@ class RocksDBStorePartition(StorePartition):
                 )
             self._cf_cache[cf_name] = cf
         return cf
-
-    def create_column_family(self, cf_name: str):
-        try:
-            cf = self._db.create_column_family(cf_name, options=self._rocksdb_options)
-        except Exception as exc:
-            if "column family already exists" in str(exc).lower():
-                raise ColumnFamilyAlreadyExists(
-                    f'Column family already exists: "{cf_name}"'
-                )
-            raise
-
-        self._cf_cache[cf_name] = cf
 
     def list_column_families(self) -> List[str]:
         return self._db.list_cf(self._path)

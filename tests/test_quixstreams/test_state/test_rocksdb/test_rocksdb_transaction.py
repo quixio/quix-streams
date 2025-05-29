@@ -8,7 +8,7 @@ class TestRocksDBPartitionTransaction:
         key = "key"
         value = "value"
         prefix = b"__key__"
-        store_partition.create_column_family("cf")
+        store_partition.get_column_family("cf")
 
         with store_partition.begin() as tx:
             tx.set(key, value, cf_name="cf", prefix=prefix)
@@ -21,7 +21,7 @@ class TestRocksDBPartitionTransaction:
         key = "key"
         value = "value"
         prefix = b"__key__"
-        store_partition.create_column_family("cf")
+        store_partition.get_column_family("cf")
 
         with store_partition.begin() as tx:
             tx.set(key, value, cf_name="cf", prefix=prefix)
@@ -35,7 +35,7 @@ class TestRocksDBPartitionTransaction:
     def test_set_exists_get_with_column_family(self, store_partition):
         key = "key"
         value = "value"
-        store_partition.create_column_family("cf")
+        store_partition.get_column_family("cf")
         prefix = b"__key__"
 
         with store_partition.begin() as tx:
