@@ -152,7 +152,7 @@ class SQLiteLookupField(BaseSQLiteLookupField):
             query += f" ORDER BY {self.order_by} {self.order_by_direction}"
         if self.first_match_only:
             query += " LIMIT 1"
-        return (query, (on,))
+        return query, (on,)
 
     def result(
         self, cursor: sqlite3.Cursor
@@ -270,6 +270,8 @@ class SQLiteLookup(BaseLookup[Union[SQLiteLookupField, SQLiteLookupQueryField]])
         self._cache_size = cache_size
         self._cache_hits = 0
         self._cache_misses = 0
+        self._debug = logger.isEnabledFor(logging.DEBUG)
+
         logger.info(
             f"SQLiteLookup initialized with db_path={self.db_path}, cache_maxsize={self._cache_size}"
         )
@@ -291,7 +293,8 @@ class SQLiteLookup(BaseLookup[Union[SQLiteLookupField, SQLiteLookupQueryField]])
         :returns: The extracted data, either a single row or a list of rows.
         """
         query, parameters = field.build_query(on, value)
-        logger.debug(f"Executing SQL: {query}")
+        if self._debug:
+            logger.debug(f"Executing SQL: {query}")
 
         try:
             cur = self._conn.execute(query, parameters)
@@ -315,7 +318,8 @@ class SQLiteLookup(BaseLookup[Union[SQLiteLookupField, SQLiteLookupQueryField]])
         """
         cached = self._cache.get(cache_key)
         if cached and now - cached[0] < ttl:
-            logger.debug(f"Cache hit for {cache_key}")
+            if self._debug:
+                logger.debug(f"Cache hit for {cache_key}")
             self._cache_hits += 1
             self._cache.move_to_end(cache_key)
             return copy.copy(cached[1])
@@ -366,7 +370,8 @@ class SQLiteLookup(BaseLookup[Union[SQLiteLookupField, SQLiteLookupQueryField]])
             cache_key = (field_name, on)
             result = self._get_from_cache(cache_key, field.ttl, now)
             if result is MISSING:
-                logger.debug(f"Cache miss for {cache_key}, querying database")
+                if self._debug:
+                    logger.debug(f"Cache miss for {cache_key}, querying database")
                 self._cache_misses += 1
                 result = self._process_field(field, on, value)
                 self._set_cache(cache_key, result, now)
