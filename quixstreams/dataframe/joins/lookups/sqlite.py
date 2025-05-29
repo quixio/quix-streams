@@ -127,7 +127,7 @@ class SQLiteLookupField(BaseSQLiteLookupField):
         """
         Validate SQL identifiers (table/column names) to allow only alphanumeric and underscore.
 
-        :param identifer: the identifier to validate (table or column name).
+        :param identifier: the identifier to validate (table or column name).
         """
         if not re.match(r"^\w+$", identifier):
             raise ValueError(f"Invalid SQL identifier: {identifier}")
@@ -256,7 +256,7 @@ class SQLiteLookup(BaseLookup[Union[SQLiteLookupField, SQLiteLookupQueryField]])
     ```
 
     :param path: Path to the SQLite database file.
-    :param cache_maxsize: Maximum number of fields to keep in the LRU cache. Default is 1000.
+    :param cache_size: Maximum number of fields to keep in the LRU cache. Default is 1000.
     """
 
     def __init__(self, path: str, cache_size: int = 1000):
@@ -349,7 +349,7 @@ class SQLiteLookup(BaseLookup[Union[SQLiteLookupField, SQLiteLookupQueryField]])
         Enrich the message value in-place by querying SQLite for each field and caching results per TTL.
 
         :param fields: Mapping of field names to BaseSQLiteLookupField objects specifying how to extract and map enrichment data.
-        :param target_key: The key used in the WHERE clause for SQLiteLookupField lookup.
+        :param on: The key used in the WHERE clause for SQLiteLookupField lookup.
         :param value: The message value.
         :param key: The message key.
         :param timestamp: The message timestamp.
