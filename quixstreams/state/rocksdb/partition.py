@@ -285,13 +285,8 @@ class RocksDBStorePartition(StorePartition):
         :return: instance of `rocksdict.ColumnFamily`
         """
         if (cf_handle := self._cf_handle_cache.get(cf_name)) is None:
-            try:
-                cf_handle = self._db.get_column_family_handle(cf_name)
-            except Exception as exc:
-                if "does not exist" not in str(exc):
-                    raise
-                self._db.create_column_family(cf_name, options=self._rocksdb_options)
-                cf_handle = self._db.get_column_family_handle(cf_name)
+            self.get_or_create_column_family(cf_name)
+            cf_handle = self._db.get_column_family_handle(cf_name)
             self._cf_handle_cache[cf_name] = cf_handle
         return cf_handle
 
