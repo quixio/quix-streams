@@ -97,13 +97,13 @@ class TimestampedPartitionTransaction(RocksDBPartitionTransaction):
         prefix = self._ensure_bytes(prefix)
         lower_bound_bytes = self._get_min_eligible_timestamp(prefix)
         # +1 because upper bound is exclusive
-        upper_bount_bytes = int_to_bytes(timestamp + 1)
+        upper_bound_bytes = int_to_bytes(timestamp + 1)
 
-        if upper_bount_bytes <= lower_bound_bytes:
+        if upper_bound_bytes <= lower_bound_bytes:
             return None
 
         lower_bound = self._serialize_key(lower_bound_bytes, prefix)
-        upper_bound = self._serialize_key(upper_bount_bytes, prefix)
+        upper_bound = self._serialize_key(upper_bound_bytes, prefix)
 
         deletes = self._update_cache.get_deletes()
         updates = self._update_cache.get_updates().get(prefix, {})
@@ -224,7 +224,7 @@ class TimestampedPartitionTransaction(RocksDBPartitionTransaction):
         Defaults to 0 if no timestamp is found.
 
         :param prefix: The key prefix (bytes).
-        :return: The minimum eligible timestamp (int).
+        :return: The minimum eligible timestamp as bytes.
         """
         cache = self._min_eligible_timestamps
         cached = cache.values.get(prefix)
