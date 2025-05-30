@@ -119,6 +119,7 @@ markers = ["timeit"]
 module = [
   "confluent_kafka.*",
   "pyarrow.*",
+  "jsonpath_ng.*",
 ]
 ignore_missing_imports = true
 

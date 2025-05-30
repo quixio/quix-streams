@@ -1,8 +1,9 @@
 import abc
 from typing import Any
 
+from quixstreams.utils.pickle import pickle_copier
+
 from .types import StreamCallback, VoidExecutor
-from .utils import pickle_copier
 
 __all__ = ("StreamFunction",)
 

@@ -47,6 +47,7 @@ from quixstreams.models import (
     TopicManager,
 )
 from quixstreams.models.serializers import DeserializerType, SerializerType
+from quixstreams.models.types import HeadersMapping
 from quixstreams.sinks import BaseSink
 from quixstreams.state.base import State
 from quixstreams.state.manager import StoreTypes
@@ -58,6 +59,7 @@ from quixstreams.utils.printing import (
 
 from .exceptions import InvalidOperation
 from .joins import JoinAsOf, JoinAsOfHow, OnOverlap
+from .joins.lookups import BaseField, BaseLookup
 from .registry import DataFrameRegistry
 from .series import StreamingSeries
 from .utils import ensure_milliseconds
@@ -1719,6 +1721,73 @@ class StreamingDataFrame:
         return JoinAsOf(
             how=how, on_merge=on_merge, grace_ms=grace_ms, store_name=name
         ).join(self, right)
+
+    def lookup_join(
+        self,
+        lookup: BaseLookup,
+        fields: dict[str, BaseField],
+        on: Optional[Union[str, Callable[[dict[str, Any], Any], str]]] = None,
+    ) -> "StreamingDataFrame":
+        """
+        Note: This is an experimental feature, and its API is likely to change in the future.
+        Enrich the records in this StreamingDataFrame by performing a lookup join using a custom lookup strategy.
+
+        This method allows you to enrich each record in the dataframe with additional data fetched from an external
+        source, using a user-defined lookup strategy (subclass of BaseLookup) and a set of fields
+        (subclasses of BaseField) that specify how to extract or map the enrichment data.
+
+        The join is performed in-place: the input value dictionary is updated with the enrichment data.
+
+        Lookup implementation part of the standard quixstreams library:
+            - `quixstreams.dataframe.joins.lookups.QuixConfigurationService`
+
+        :param lookup: An instance of a subclass of BaseLookup that implements the enrichment logic.
+        :param fields: A mapping of field names to the lookup Field objects specifying how to extract or map enrichment data.
+        :param on: Specifies how to determine the target key for the lookup:
+            - If a string, it is interpreted as the column name in the value dict to use as the lookup key.
+            - If a callable, it should accept (value, key) and return the target key as a string.
+            - If None (default), the message key is used as the lookup key.
+
+        :returns: StreamingDataFrame: The same StreamingDataFrame instance with the enrichment applied in-place.
+
+        Example:
+
+        ```python
+        from quixstreams import Application
+        from quixstreams.dataframe.joins.lookups import QuixConfigurationService, QuixConfigurationServiceField as Field
+
+        app = Application()
+
+        sdf = app.dataframe(app.topic("input"))
+        lookup = QuixConfigurationService(app.topic("config"), config=app.config)
+
+        fields = {
+            "test": Field(type="test", default="test_default")
+        }
+
+        sdf = sdf.lookup_join(lookup, fields)
+        ```
+        """
+        if callable(on):
+
+            def _on(value: dict[str, Any], key: Any) -> str:
+                return on(value, key)
+        elif isinstance(on, str):
+
+            def _on(value: dict[str, Any], key: Any) -> str:
+                return value[on]
+        else:
+
+            def _on(value: dict[str, Any], key: Any) -> str:
+                return key
+
+        def _join(
+            value: dict[str, Any], key: Any, timestamp: int, headers: HeadersMapping
+        ):
+            on_key = _on(value, key)
+            lookup.join(fields, on_key, value, key, timestamp, headers)
+
+        return self.update(_join, metadata=True)
 
     def _produce(
         self,

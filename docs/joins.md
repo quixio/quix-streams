@@ -1,6 +1,6 @@
 # Joins
 ## Join as-of
-
+> _New in [3.15.0](https://github.com/quixio/quix-streams/releases/tag/v3.15.0)_
 
 Use `StreamingDataFrame.join_asof()` to join two topics into a new stream where each left record 
 is merged with the right record with the same key whose timestamp is less than or equal to the left timestamp.
@@ -135,8 +135,8 @@ Adjust `grace_ms` based on the expected time gap between the left and the right 
 - As-of join preserves headers only for the left dataframe.  
 If you need headers of the right side records, consider adding them to the value.
 
-## Message ordering between partitions
-Joins use [`StreamingDataFrame.concat()`](concatenating.md) under the hood, which means that the application's internal consumer goes into a special "buffered" mode
+### Message ordering between partitions
+Streaming joins use [`StreamingDataFrame.concat()`](concatenating.md) under the hood, which means that the application's internal consumer goes into a special "buffered" mode
 when the join is used.
 
 In this mode, it buffers messages per partition in order to process them in the timestamp order between different topics.  
@@ -144,3 +144,58 @@ Timestamp alignment is effective only for the partitions **with the same numbers
 
 Note that message ordering works only when the messages are consumed from the topics.  
 If you change timestamps of the record during processing, they will be processed in the original order.
+
+## Lookup join
+
+> _New in [3.16.0](https://github.com/quixio/quix-streams/releases/tag/v3.16.0)_
+
+!!! warning
+    This is an experimental feature; the API may change in future releases.
+
+
+`StreamingDataFrame.lookup_join()` is a special type of join that allows you to enrich records in a streaming dataframe with the data from external systems.  
+
+You can use it to enriching streaming data with configuration or reference data from an external source, like a database.
+
+### Example
+
+To perform a lookup join, you need:
+
+1. A subclass of [quixstreams.dataframe.joins.lookups.base.BaseLookup](api-reference/dataframe.md#baselookup) to query the external source and cache the results when necessary.
+2. A subclass of [quixstreams.dataframe.joins.lookups.base.BaseField](api-reference/dataframe.md#basefield) to define how the data is extracted from the result.
+3. To pass the lookup and the fields to the `StreamingDataFrame.lookup_join`.
+
+
+See [SQLiteLookup](api-reference/dataframe.md#sqlitelookup) and [SQLiteLookupField](api-reference/dataframe.md#sqlitelookupfield) for the reference implementation. 
+
+Here is an example of lookup join with a SQLite database:
+
+```python
+from quixstreams import Application
+from quixstreams.dataframe.joins.lookups import SQLiteLookup, SQLiteLookupField
+
+app = Application(...)
+
+# An implementation of BaseLookup for SQLite 
+lookup = SQLiteLookup(path="db.db")  
+
+sdf = app.dataframe(app.topic("input"))
+
+sdf = sdf.lookup_join(
+    lookup,
+    on="column", # A column in StreamingDataFrame to join on
+    fields={
+        # A mapping with SQLite fields to join with 
+        "lookup": SQLiteLookupField(table="table", columns=["column"], on="id"),
+    },
+)
+
+if __name__ == '__main__':
+    app.run()
+```
+
+### How it works
+
+- For each record in the dataframe, a user-defined lookup strategy (a subclass of `BaseLookup`) is called with a mapping of field names to field definitions (subclasses of `BaseField`).
+- The lookup strategy fetches or computes enrichment data based on the provided key and fields, and updates the record in-place.
+- The enrichment can come from external sources such as configuration topics, databases, or in-memory data.
