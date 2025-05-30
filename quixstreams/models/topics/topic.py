@@ -278,9 +278,9 @@ class Topic:
 
         timestamp_type, timestamp_ms = message.timestamp()
         message_context = MessageContext(
-            topic=message.topic(),
-            partition=message.partition(),
-            offset=message.offset(),
+            topic=topic,
+            partition=partition,
+            offset=offset,
             size=len(message),
             leader_epoch=message.leader_epoch(),
         )
