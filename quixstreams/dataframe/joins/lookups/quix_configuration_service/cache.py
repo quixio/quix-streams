@@ -3,7 +3,7 @@ from typing import Any, Callable, Optional, Tuple
 
 from quixstreams.utils.pickle import pickle_copier
 
-from ..base import CacheInfo
+from ..utils import CacheInfo
 from .models import ConfigurationVersion, Field
 
 

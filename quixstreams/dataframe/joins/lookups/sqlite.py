@@ -8,7 +8,8 @@ import time
 from collections import OrderedDict
 from typing import Any, Literal, Mapping, Tuple, Union
 
-from .base import BaseField, BaseLookup, CacheInfo
+from .base import BaseField, BaseLookup
+from .utils import CacheInfo
 
 logger = logging.getLogger(__name__)
 
