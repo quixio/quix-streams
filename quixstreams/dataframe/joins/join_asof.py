@@ -73,7 +73,7 @@ class JoinAsOf:
             stream_id=right.stream_id,
             store_name=self._store_name,
             grace_ms=self._grace_ms,
-            collect_duplicates=False,
+            keep_duplicates=False,
             changelog_config=changelog_config,
         )
 

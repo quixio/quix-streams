@@ -47,7 +47,7 @@ class TimestampedPartitionTransaction(RocksDBPartitionTransaction):
         dumps: DumpsFunc,
         loads: LoadsFunc,
         grace_ms: int,
-        collect_duplicates: bool,
+        keep_duplicates: bool,
         changelog_producer: Optional[ChangelogProducer] = None,
     ) -> None:
         """
@@ -56,7 +56,7 @@ class TimestampedPartitionTransaction(RocksDBPartitionTransaction):
         :param partition: The `TimestampedStorePartition` this transaction belongs to.
         :param dumps: The serialization function for keys/values.
         :param loads: The deserialization function for keys/values.
-        :param collect_duplicates: Whether to collect all values for the same timestamp or just the latest.
+        :param keep_duplicates: Whether to collect all values for the same timestamp or just the latest.
         :param changelog_producer: Optional `ChangelogProducer` for recording changes.
         :param grace_ms: retention for the key in milliseconds
         """
@@ -74,7 +74,7 @@ class TimestampedPartitionTransaction(RocksDBPartitionTransaction):
             cf_name=MIN_ELIGIBLE_TIMESTAMPS_CF_NAME,
         )
         self._grace_ms = grace_ms
-        self._collect_duplicates = collect_duplicates
+        self._keep_duplicates = keep_duplicates
 
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
     def get_latest(self, timestamp: int, prefix: Any) -> Optional[Any]:
@@ -157,7 +157,7 @@ class TimestampedPartitionTransaction(RocksDBPartitionTransaction):
         :param prefix: The key prefix.
         """
         prefix = self._ensure_bytes(prefix)
-        counter = self._get_next_count() if self._collect_duplicates else 0
+        counter = self._get_next_count() if self._keep_duplicates else 0
         key = encode_integer_pair(timestamp, counter)
         self.set(key, value, prefix)
         min_eligible_timestamp = max(
@@ -265,13 +265,13 @@ class TimestampedStorePartition(RocksDBStorePartition):
         self,
         path: str,
         grace_ms: int,
-        collect_duplicates: bool,
+        keep_duplicates: bool,
         options: Optional[RocksDBOptionsType] = None,
         changelog_producer: Optional[ChangelogProducer] = None,
     ) -> None:
         super().__init__(path, options=options, changelog_producer=changelog_producer)
         self._grace_ms = grace_ms
-        self._collect_duplicates = collect_duplicates
+        self._keep_duplicates = keep_duplicates
 
     def begin(self) -> TimestampedPartitionTransaction:
         return TimestampedPartitionTransaction(
@@ -279,7 +279,7 @@ class TimestampedStorePartition(RocksDBStorePartition):
             dumps=self._dumps,
             loads=self._loads,
             grace_ms=self._grace_ms,
-            collect_duplicates=self._collect_duplicates,
+            keep_duplicates=self._keep_duplicates,
             changelog_producer=self._changelog_producer,
         )
 
@@ -298,7 +298,7 @@ class TimestampedStore(RocksDBStore):
         stream_id: Optional[str],
         base_dir: str,
         grace_ms: int,
-        collect_duplicates: bool,
+        keep_duplicates: bool,
         changelog_producer_factory: Optional[ChangelogProducerFactory] = None,
         options: Optional[RocksDBOptionsType] = None,
     ) -> None:
@@ -310,7 +310,7 @@ class TimestampedStore(RocksDBStore):
             options=options,
         )
         self._grace_ms = grace_ms
-        self._collect_duplicates = collect_duplicates
+        self._keep_duplicates = keep_duplicates
 
     def create_new_partition(
         self,
@@ -327,7 +327,7 @@ class TimestampedStore(RocksDBStore):
         return TimestampedStorePartition(
             path=path,
             grace_ms=self._grace_ms,
-            collect_duplicates=self._collect_duplicates,
+            keep_duplicates=self._keep_duplicates,
             options=self._options,
             changelog_producer=changelog_producer,
         )

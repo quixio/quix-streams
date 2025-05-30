@@ -25,10 +25,10 @@ def transaction(store: TimestampedStore):
     @contextmanager
     def _transaction(
         grace_ms: Union[int, timedelta] = timedelta(days=7),
-        collect_duplicates: bool = False,
+        keep_duplicates: bool = False,
     ):
         store._grace_ms = ensure_milliseconds(grace_ms)
-        store._collect_duplicates = collect_duplicates
+        store._keep_duplicates = keep_duplicates
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             yield tx
@@ -187,28 +187,28 @@ class TestTimestampedPartitionTransaction:
         with transaction() as tx:
             assert tx.get_latest(timestamp=1, prefix=b"key") == "21"
 
-    def test_set_for_timestamp_without_collect_duplicates(
+    def test_set_for_timestamp_without_keep_duplicates(
         self,
         transaction: TimestampedPartitionTransaction,
     ):
-        with transaction(collect_duplicates=False) as tx:
+        with transaction(keep_duplicates=False) as tx:
             tx.set_for_timestamp(timestamp=123, value="1", prefix=b"key")
             tx.set_for_timestamp(timestamp=123, value="2", prefix=b"key")
 
-        with transaction(collect_duplicates=False) as tx:
+        with transaction(keep_duplicates=False) as tx:
             assert tx.get_latest(timestamp=123, prefix=b"key") == "2"
             assert tx.get(key=encode_integer_pair(123, 0), prefix=b"key") == "2"
             assert tx.get(key=encode_integer_pair(123, 1), prefix=b"key") == None
 
-    def test_set_for_timestamp_with_collect_duplicates(
+    def test_set_for_timestamp_with_keep_duplicates(
         self,
         transaction: TimestampedPartitionTransaction,
     ):
-        with transaction(collect_duplicates=True) as tx:
+        with transaction(keep_duplicates=True) as tx:
             tx.set_for_timestamp(timestamp=123, value="1", prefix=b"key")
             tx.set_for_timestamp(timestamp=123, value="2", prefix=b"key")
 
-        with transaction(collect_duplicates=True) as tx:
+        with transaction(keep_duplicates=True) as tx:
             assert tx.get_latest(timestamp=123, prefix=b"key") == "2"
             assert tx.get(key=encode_integer_pair(123, 0), prefix=b"key") == "1"
             assert tx.get(key=encode_integer_pair(123, 1), prefix=b"key") == "2"
