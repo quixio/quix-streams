@@ -5,9 +5,7 @@ from unittest.mock import patch
 import pytest
 from rocksdict import Rdict
 
-from quixstreams.state.exceptions import ColumnFamilyDoesNotExist
 from quixstreams.state.rocksdb import (
-    ColumnFamilyAlreadyExists,
     RocksDBOptions,
     RocksDBStorePartition,
 )
@@ -113,47 +111,19 @@ class TestRocksDBStorePartition:
 
         store_partition_factory(options=RocksDBOptions(on_corrupted_recreate=True))
 
-    def test_create_and_get_column_family(self, store_partition: RocksDBStorePartition):
-        store_partition.create_column_family("cf")
-        assert store_partition.get_column_family("cf")
+    def test_get_or_create_column_family(self, store_partition: RocksDBStorePartition):
+        assert store_partition.get_or_create_column_family("cf")
 
-    def test_create_column_family_already_exists(
+    def test_get_or_create_column_family_cached(
         self, store_partition: RocksDBStorePartition
     ):
-        store_partition.create_column_family("cf")
-        with pytest.raises(ColumnFamilyAlreadyExists):
-            store_partition.create_column_family("cf")
-
-    def test_get_column_family_doesnt_exist(
-        self, store_partition: RocksDBStorePartition
-    ):
-        with pytest.raises(ColumnFamilyDoesNotExist):
-            store_partition.get_column_family("cf")
-
-    def test_get_column_family_cached(self, store_partition: RocksDBStorePartition):
-        store_partition.create_column_family("cf")
-        cf1 = store_partition.get_column_family("cf")
-        cf2 = store_partition.get_column_family("cf")
+        cf1 = store_partition.get_or_create_column_family("cf")
+        cf2 = store_partition.get_or_create_column_family("cf")
         assert cf1 is cf2
 
-    def test_create_and_drop_column_family(
-        self, store_partition: RocksDBStorePartition
-    ):
-        store_partition.create_column_family("cf")
-        store_partition.drop_column_family("cf")
-
-        with pytest.raises(ColumnFamilyDoesNotExist):
-            store_partition.get_column_family("cf")
-
-    def test_drop_column_family_doesnt_exist(
-        self, store_partition: RocksDBStorePartition
-    ):
-        with pytest.raises(ColumnFamilyDoesNotExist):
-            store_partition.drop_column_family("cf")
-
     def test_list_column_families(self, store_partition: RocksDBStorePartition):
-        store_partition.create_column_family("cf1")
-        store_partition.create_column_family("cf2")
+        store_partition.get_or_create_column_family("cf1")
+        store_partition.get_or_create_column_family("cf2")
         cfs = store_partition.list_column_families()
         assert "cf1" in cfs
         assert "cf2" in cfs
@@ -187,7 +157,7 @@ class TestRocksDBStorePartition:
         ]
 
     def test_ensure_metadata_cf(self, store_partition: RocksDBStorePartition):
-        assert store_partition.get_column_family("__metadata__")
+        assert store_partition.get_or_create_column_family("__metadata__")
 
     @pytest.mark.parametrize(
         ["backwards", "expected"],

@@ -1,7 +1,7 @@
 import pytest
 
-from quixstreams.state.exceptions import ColumnFamilyDoesNotExist
 from quixstreams.state.manager import SUPPORTED_STORES
+from quixstreams.state.metadata import Marker
 
 
 @pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
@@ -24,13 +24,12 @@ class TestStorePartition:
         assert store_partition.get(b"key") == b"value"
         assert store_partition.get_changelog_offset() == 1
 
-    def test_recover_from_changelog_message_missing_cf_fails(self, store_partition):
-        with pytest.raises(
-            ColumnFamilyDoesNotExist, match='Column family "some_cf" does not exist'
-        ):
-            store_partition.recover_from_changelog_message(
-                key=b"key", value=b"value", cf_name="some_cf", offset=1
-            )
+    def test_recover_from_changelog_message_missing_cf(self, store_partition):
+        store_partition.recover_from_changelog_message(
+            key=b"key", value=b"value", cf_name="some_cf", offset=1
+        )
+        assert store_partition.get(b"key") == Marker.UNDEFINED
+        assert store_partition.get_changelog_offset() == 1
 
     def test_write_changelog_offset(self, store_partition):
         assert store_partition.get_changelog_offset() is None

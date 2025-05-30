@@ -2,14 +2,6 @@ import logging
 from typing import Iterator, cast
 
 from ..partition import RocksDBStorePartition
-from .metadata import (
-    GLOBAL_COUNTER_CF_NAME,
-    LATEST_DELETED_VALUE_CF_NAME,
-    LATEST_DELETED_WINDOW_CF_NAME,
-    LATEST_EXPIRED_WINDOW_CF_NAME,
-    LATEST_TIMESTAMPS_CF_NAME,
-    VALUES_CF_NAME,
-)
 from .transaction import WindowedRocksDBPartitionTransaction
 
 logger = logging.getLogger(__name__)
@@ -24,15 +16,6 @@ class WindowedRocksDBStorePartition(RocksDBStorePartition):
     stores the expiration index to delete expired windows.
     """
 
-    additional_column_families = (
-        LATEST_DELETED_VALUE_CF_NAME,
-        LATEST_EXPIRED_WINDOW_CF_NAME,
-        LATEST_DELETED_WINDOW_CF_NAME,
-        LATEST_TIMESTAMPS_CF_NAME,
-        GLOBAL_COUNTER_CF_NAME,
-        VALUES_CF_NAME,
-    )
-
     def iter_keys(self, cf_name: str = "default") -> Iterator[bytes]:
         """
         Iterate over all keys in the DB.
@@ -42,7 +25,7 @@ class WindowedRocksDBStorePartition(RocksDBStorePartition):
         :param cf_name: rocksdb column family name. Default - "default"
         :return: An iterable of keys
         """
-        cf_dict = self.get_column_family(cf_name)
+        cf_dict = self.get_or_create_column_family(cf_name)
         return cast(Iterator[bytes], cf_dict.keys())
 
     def begin(self) -> WindowedRocksDBPartitionTransaction:

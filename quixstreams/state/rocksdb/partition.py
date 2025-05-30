@@ -17,12 +17,11 @@ from quixstreams.state.base import (
     PartitionTransactionCache,
     StorePartition,
 )
-from quixstreams.state.exceptions import ColumnFamilyDoesNotExist
 from quixstreams.state.metadata import METADATA_CF_NAME, Marker
 from quixstreams.state.recovery import ChangelogProducer
 from quixstreams.state.serialization import int_from_bytes, int_to_bytes
 
-from .exceptions import ColumnFamilyAlreadyExists, RocksDBCorruptedError
+from .exceptions import RocksDBCorruptedError
 from .metadata import (
     CHANGELOG_OFFSET_KEY,
 )
@@ -52,8 +51,6 @@ class RocksDBStorePartition(StorePartition):
     :param options: RocksDB options. If `None`, the default options will be used.
     """
 
-    additional_column_families: tuple[str, ...] = ()
-
     def __init__(
         self,
         path: str,
@@ -72,8 +69,6 @@ class RocksDBStorePartition(StorePartition):
         self._db = self._init_rocksdb()
         self._cf_cache: Dict[str, Rdict] = {}
         self._cf_handle_cache: Dict[str, ColumnFamily] = {}
-        for cf_name in self.additional_column_families:
-            self._ensure_column_family(cf_name)
 
     def recover_from_changelog_message(
         self, key: bytes, value: Optional[bytes], cf_name: str, offset: int
@@ -149,7 +144,9 @@ class RocksDBStorePartition(StorePartition):
         :param cf_name: rocksdb column family name. Default - "default"
         :return: a value if the key is present in the DB. Otherwise, `default`
         """
-        result = self.get_column_family(cf_name).get(key, default=Marker.UNDEFINED)
+        result = self.get_or_create_column_family(cf_name).get(
+            key, default=Marker.UNDEFINED
+        )
 
         # RDict accept Any type as value but we only write bytes so we should only get bytes back.
         return cast(Union[bytes, Literal[Marker.UNDEFINED]], result)
@@ -172,7 +169,7 @@ class RocksDBStorePartition(StorePartition):
             Default is "default".
         :return: An iterator yielding (key, value) tuples.
         """
-        cf = self.get_column_family(cf_name=cf_name)
+        cf = self.get_or_create_column_family(cf_name=cf_name)
 
         # Set iterator bounds to reduce IO by limiting the range of keys fetched
         read_opt = ReadOptions()
@@ -219,7 +216,7 @@ class RocksDBStorePartition(StorePartition):
         :param cf_name: rocksdb column family name. Default - "default"
         :return: `True` if the key is present, `False` otherwise.
         """
-        cf_dict = self.get_column_family(cf_name)
+        cf_dict = self.get_or_create_column_family(cf_name)
         return key in cf_dict
 
     def get_changelog_offset(self) -> Optional[int]:
@@ -227,7 +224,7 @@ class RocksDBStorePartition(StorePartition):
         Get offset that the changelog is up-to-date with.
         :return: offset or `None` if there's no processed offset yet
         """
-        metadata_cf = self.get_column_family(METADATA_CF_NAME)
+        metadata_cf = self.get_or_create_column_family(METADATA_CF_NAME)
         offset_bytes = metadata_cf.get(CHANGELOG_OFFSET_KEY)
         if offset_bytes is None:
             return None
@@ -288,18 +285,12 @@ class RocksDBStorePartition(StorePartition):
         :return: instance of `rocksdict.ColumnFamily`
         """
         if (cf_handle := self._cf_handle_cache.get(cf_name)) is None:
-            try:
-                cf_handle = self._db.get_column_family_handle(cf_name)
-                self._cf_handle_cache[cf_name] = cf_handle
-            except Exception as exc:
-                if "does not exist" in str(exc):
-                    raise ColumnFamilyDoesNotExist(
-                        f'Column family "{cf_name}" does not exist'
-                    )
-                raise
+            self.get_or_create_column_family(cf_name)
+            cf_handle = self._db.get_column_family_handle(cf_name)
+            self._cf_handle_cache[cf_name] = cf_handle
         return cf_handle
 
-    def get_column_family(self, cf_name: str) -> Rdict:
+    def get_or_create_column_family(self, cf_name: str) -> Rdict:
         """
         Get a column family instance.
         This method will cache the CF instance to avoid creating them repeatedly.
@@ -310,38 +301,14 @@ class RocksDBStorePartition(StorePartition):
         if (cf := self._cf_cache.get(cf_name)) is None:
             try:
                 cf = self._db.get_column_family(cf_name)
-                self._cf_cache[cf_name] = cf
             except Exception as exc:
-                if "does not exist" in str(exc):
-                    raise ColumnFamilyDoesNotExist(
-                        f'Column family "{cf_name}" does not exist'
-                    )
-                raise
+                if "does not exist" not in str(exc):
+                    raise
+                cf = self._db.create_column_family(
+                    cf_name, options=self._rocksdb_options
+                )
+            self._cf_cache[cf_name] = cf
         return cf
-
-    def create_column_family(self, cf_name: str):
-        try:
-            cf = self._db.create_column_family(cf_name, options=self._rocksdb_options)
-        except Exception as exc:
-            if "column family already exists" in str(exc).lower():
-                raise ColumnFamilyAlreadyExists(
-                    f'Column family already exists: "{cf_name}"'
-                )
-            raise
-
-        self._cf_cache[cf_name] = cf
-
-    def drop_column_family(self, cf_name: str):
-        self._cf_cache.pop(cf_name, None)
-        self._cf_handle_cache.pop(cf_name, None)
-        try:
-            self._db.drop_column_family(cf_name)
-        except Exception as exc:
-            if "invalid column family:" in str(exc).lower():
-                raise ColumnFamilyDoesNotExist(
-                    f'Column family does not exist: "{cf_name}"'
-                )
-            raise
 
     def list_column_families(self) -> List[str]:
         return self._db.list_cf(self._path)
@@ -427,9 +394,3 @@ class RocksDBStorePartition(StorePartition):
             int_to_bytes(offset),
             self.get_column_family_handle(METADATA_CF_NAME),
         )
-
-    def _ensure_column_family(self, cf_name: str) -> None:
-        try:
-            self.get_column_family(cf_name)
-        except ColumnFamilyDoesNotExist:
-            self.create_column_family(cf_name)
