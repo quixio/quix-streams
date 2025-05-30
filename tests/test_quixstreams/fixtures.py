@@ -620,11 +620,10 @@ def topic_manager_topic_factory(topic_manager_factory):
     def factory(
         name: Optional[str] = None,
         partitions: int = 1,
-        use_serdes_nones: bool = False,
-        key_serializer: Optional[Union[Serializer, str]] = None,
-        value_serializer: Optional[Union[Serializer, str]] = None,
-        key_deserializer: Optional[Union[Deserializer, str]] = None,
-        value_deserializer: Optional[Union[Deserializer, str]] = None,
+        key_serializer: Union[Serializer, str] = "bytes",
+        value_serializer: Union[Serializer, str] = "json",
+        key_deserializer: Union[Deserializer, str] = "bytes",
+        value_deserializer: Union[Deserializer, str] = "json",
         timestamp_extractor: Optional[TimestampExtractor] = None,
         topic_manager: Optional[TopicManager] = None,
     ) -> Topic:
@@ -638,9 +637,6 @@ def topic_manager_topic_factory(topic_manager_factory):
             "create_config": topic_manager.topic_config(num_partitions=partitions),
             "timestamp_extractor": timestamp_extractor,
         }
-        if not use_serdes_nones:
-            # will use the topic manager serdes defaults rather than "Nones"
-            topic_args = {k: v for k, v in topic_args.items() if v is not None}
         topic = topic_manager.topic(name, **topic_args)
         return topic
 

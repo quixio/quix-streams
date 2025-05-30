@@ -16,7 +16,6 @@ from quixstreams.models.serializers import (
     BytesDeserializer,
     BytesSerializer,
     Deserializer,
-    DeserializerIsNotProvidedError,
     DoubleDeserializer,
     IgnoreMessage,
     IntegerDeserializer,
@@ -26,7 +25,6 @@ from quixstreams.models.serializers import (
     SerializationContext,
     SerializationError,
     Serializer,
-    SerializerIsNotProvidedError,
 )
 from quixstreams.models.topics.exceptions import TopicConfigurationError
 from tests.utils import ConfluentKafkaMessageStub
@@ -290,26 +288,6 @@ class TestTopic:
             assert row.timestamp == expected_timestamps[index]
 
     @pytest.mark.parametrize(
-        "key_deserializer, value_deserializer",
-        [
-            (None, None),
-            (BytesDeserializer(), None),
-            (None, BytesDeserializer()),
-        ],
-    )
-    def test_row_deserialize_deserializer_isnot_provided_error(
-        self, key_deserializer, value_deserializer, topic_manager_topic_factory
-    ):
-        topic = topic_manager_topic_factory()
-        # override any defaults that get set when `None` is provided
-        topic._key_deserializer = key_deserializer
-        topic._value_deserializer = value_deserializer
-        with pytest.raises(DeserializerIsNotProvidedError):
-            topic.row_deserialize(
-                message=ConfluentKafkaMessageStub(key=b"key", value=b"123")
-            )
-
-    @pytest.mark.parametrize(
         "key_serializer, value_serializer, key, value, new_key, expected_key, "
         "expected_value",
         [
@@ -448,9 +426,7 @@ class TestTopic:
     def test_serialize_no_key(
         self, topic_json_serdes_factory, topic_manager_topic_factory
     ):
-        topic = topic_manager_topic_factory(
-            key_serializer=None, value_serializer="json"
-        )
+        topic = topic_manager_topic_factory(value_serializer="json")
         message = topic.serialize(
             value={"a": ["cool", "json"]},
             headers={"header": "value"},
@@ -492,21 +468,6 @@ class TestTopic:
                 timestamp_ms=1234567890,
             )
 
-    def test_serialize_serializer_missing(
-        self, topic_json_serdes_factory, topic_manager_topic_factory
-    ):
-        topic = topic_manager_topic_factory(
-            key_serializer="string",
-            value_serializer=None,
-        )
-        with pytest.raises(SerializerIsNotProvidedError):
-            topic.serialize(
-                key="woo",
-                value={"a": ["cool", "json"]},
-                headers={"header": "value"},
-                timestamp_ms=1234567890,
-            )
-
     @pytest.mark.parametrize(
         "deserializers, input_kv, expected_kv",
         [
@@ -516,7 +477,7 @@ class TestTopic:
                 {"key": "woo", "value": {"a": ["cool", "json"]}},
             ),
             (
-                {"key_deserializer": None, "value_deserializer": "int"},
+                {"key_deserializer": "bytes", "value_deserializer": "int"},
                 {"key": None, "value": int_to_bytes(12345)},
                 {"key": None, "value": 12345},
             ),
@@ -530,7 +491,7 @@ class TestTopic:
     def test_deserialize(
         self, topic_manager_topic_factory, deserializers, input_kv, expected_kv
     ):
-        topic = topic_manager_topic_factory(**deserializers, use_serdes_nones=True)
+        topic = topic_manager_topic_factory(**deserializers)
         message = topic.deserialize(
             ConfluentKafkaMessageStub(
                 **input_kv,
@@ -541,20 +502,6 @@ class TestTopic:
         assert {"key": message.key, "value": message.value} == expected_kv
         assert message.headers == [("header", b"value")]
         assert message.timestamp == 2000
-
-    def test_deserializer_missing_deserializer(self, topic_manager_topic_factory):
-        topic = topic_manager_topic_factory(
-            key_deserializer=None, value_deserializer="str", use_serdes_nones=True
-        )
-        with pytest.raises(DeserializerIsNotProvidedError):
-            topic.deserialize(
-                ConfluentKafkaMessageStub(
-                    key=b"key",
-                    value=b"value",
-                    headers=[("header", b"value")],
-                    timestamp=(1000, 2000),
-                )
-            )
 
     @pytest.mark.parametrize(
         "key_serializer, value_serializer, key, value",
@@ -637,3 +584,29 @@ class TestTopic:
             TopicConfigurationError, match="The broker topic configuration is missing"
         ):
             topic.broker_config
+
+    @pytest.mark.parametrize(
+        "serializer, exc_match",
+        [
+            ("abc", "Unknown serializer option"),
+            (object(), "Serializer must be either one of"),
+        ],
+    )
+    def test_invalid_serializer(self, serializer, exc_match):
+        with pytest.raises(ValueError, match=exc_match):
+            Topic(name="test", key_serializer=serializer)
+        with pytest.raises(ValueError, match=exc_match):
+            Topic(name="test", value_serializer=serializer)
+
+    @pytest.mark.parametrize(
+        "deserializer, exc_match",
+        [
+            ("abc", "Unknown deserializer option"),
+            (object(), "Deserializer must be either one of"),
+        ],
+    )
+    def test_invalid_deserializer(self, deserializer, exc_match):
+        with pytest.raises(ValueError, match=exc_match):
+            Topic(name="test", key_deserializer=deserializer)
+        with pytest.raises(ValueError, match=exc_match):
+            Topic(name="test", value_deserializer=deserializer)

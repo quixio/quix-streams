@@ -505,10 +505,10 @@ class StreamingDataFrame:
         self,
         key: str,
         name: Optional[str] = ...,
-        value_deserializer: Optional[DeserializerType] = ...,
-        key_deserializer: Optional[DeserializerType] = ...,
-        value_serializer: Optional[SerializerType] = ...,
-        key_serializer: Optional[SerializerType] = ...,
+        value_deserializer: DeserializerType = ...,
+        key_deserializer: DeserializerType = ...,
+        value_serializer: SerializerType = ...,
+        key_serializer: SerializerType = ...,
     ) -> "StreamingDataFrame": ...
 
     @overload
@@ -516,20 +516,20 @@ class StreamingDataFrame:
         self,
         key: Callable[[Any], Any],
         name: str,
-        value_deserializer: Optional[DeserializerType] = ...,
-        key_deserializer: Optional[DeserializerType] = ...,
-        value_serializer: Optional[SerializerType] = ...,
-        key_serializer: Optional[SerializerType] = ...,
+        value_deserializer: DeserializerType = ...,
+        key_deserializer: DeserializerType = ...,
+        value_serializer: SerializerType = ...,
+        key_serializer: SerializerType = ...,
     ) -> "StreamingDataFrame": ...
 
     def group_by(
         self,
         key: Union[str, Callable[[Any], Any]],
         name: Optional[str] = None,
-        value_deserializer: Optional[DeserializerType] = "json",
-        key_deserializer: Optional[DeserializerType] = "json",
-        value_serializer: Optional[SerializerType] = "json",
-        key_serializer: Optional[SerializerType] = "json",
+        value_deserializer: DeserializerType = "json",
+        key_deserializer: DeserializerType = "json",
+        value_serializer: SerializerType = "json",
+        key_serializer: SerializerType = "json",
     ) -> "StreamingDataFrame":
         """
         "Groups" messages by re-keying them via the provided group_by operation
