@@ -277,14 +277,12 @@ Default - `False`.
 #### StreamingDataFrame.group\_by
 
 ```python
-def group_by(
-        key: Union[str, Callable[[Any], Any]],
-        name: Optional[str] = None,
-        value_deserializer: Optional[DeserializerType] = "json",
-        key_deserializer: Optional[DeserializerType] = "json",
-        value_serializer: Optional[SerializerType] = "json",
-        key_serializer: Optional[SerializerType] = "json"
-) -> "StreamingDataFrame"
+def group_by(key: Union[str, Callable[[Any], Any]],
+             name: Optional[str] = None,
+             value_deserializer: DeserializerType = "json",
+             key_deserializer: DeserializerType = "json",
+             value_serializer: SerializerType = "json",
+             key_serializer: SerializerType = "json") -> "StreamingDataFrame"
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L525)

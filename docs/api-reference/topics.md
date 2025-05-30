@@ -142,7 +142,7 @@ fail (it ignores issues for a topic already existing).
 class TopicConfig()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L45)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L41)
 
 Represents all kafka-level configuration for a kafka topic.
 
@@ -156,7 +156,7 @@ Generally used by Topic and any topic creation procedures.
 class Topic()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L92)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L98)
 
 A definition of a Kafka topic.
 
@@ -171,19 +171,18 @@ instance.
 #### Topic.\_\_init\_\_
 
 ```python
-def __init__(
-        name: str,
-        topic_type: TopicType = TopicType.REGULAR,
-        create_config: Optional[TopicConfig] = None,
-        value_deserializer: Optional[DeserializerType] = None,
-        key_deserializer: Optional[DeserializerType] = BytesDeserializer(),
-        value_serializer: Optional[SerializerType] = None,
-        key_serializer: Optional[SerializerType] = BytesSerializer(),
-        timestamp_extractor: Optional[TimestampExtractor] = None,
-        quix_name: str = "")
+def __init__(name: str,
+             topic_type: TopicType = TopicType.REGULAR,
+             create_config: Optional[TopicConfig] = None,
+             value_deserializer: DeserializerType = "json",
+             key_deserializer: DeserializerType = "bytes",
+             value_serializer: SerializerType = "json",
+             key_serializer: SerializerType = "bytes",
+             timestamp_extractor: Optional[TimestampExtractor] = None,
+             quix_name: str = "")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L101)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L107)
 
 
 <br>
@@ -217,7 +216,7 @@ It is set only by `QuixTopicManager`.
 def create_config() -> Optional[TopicConfig]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L161)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L167)
 
 A config to create the topic
 
@@ -232,7 +231,7 @@ A config to create the topic
 def broker_config() -> TopicConfig
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L172)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L178)
 
 A topic config obtained from the Kafka broker
 
@@ -246,7 +245,7 @@ A topic config obtained from the Kafka broker
 def row_serialize(row: Row, key: Any) -> KafkaMessage
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L198)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L204)
 
 Serialize Row to a Kafka message structure
 
@@ -275,7 +274,7 @@ def row_deserialize(
 ) -> Union[Row, List[Row], None]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L238)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/topic.py#L235)
 
 Deserialize incoming Kafka message to a Row.
 
@@ -440,10 +439,10 @@ a TopicConfig object
 
 ```python
 def topic(name: str,
-          value_deserializer: Optional[DeserializerType] = None,
-          key_deserializer: Optional[DeserializerType] = "bytes",
-          value_serializer: Optional[SerializerType] = None,
-          key_serializer: Optional[SerializerType] = "bytes",
+          value_deserializer: DeserializerType = "json",
+          key_deserializer: DeserializerType = "bytes",
+          value_serializer: SerializerType = "json",
+          key_serializer: SerializerType = "bytes",
           create_config: Optional[TopicConfig] = None,
           timestamp_extractor: Optional[TimestampExtractor] = None) -> Topic
 ```
@@ -502,14 +501,13 @@ The topic name and config can be updated by the topic manager.
 #### TopicManager.repartition\_topic
 
 ```python
-def repartition_topic(
-        operation: str,
-        stream_id: str,
-        config: TopicConfig,
-        value_deserializer: Optional[DeserializerType] = "json",
-        key_deserializer: Optional[DeserializerType] = "json",
-        value_serializer: Optional[SerializerType] = "json",
-        key_serializer: Optional[SerializerType] = "json") -> Topic
+def repartition_topic(operation: str,
+                      stream_id: str,
+                      config: TopicConfig,
+                      value_deserializer: DeserializerType = "json",
+                      key_deserializer: DeserializerType = "json",
+                      value_serializer: SerializerType = "json",
+                      key_serializer: SerializerType = "json") -> Topic
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L202)
