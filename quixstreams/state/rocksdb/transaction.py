@@ -31,9 +31,9 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             cf_name=GLOBAL_COUNTER_CF_NAME,
         )
 
-    def _get_next_count(self) -> int:
+    def _increment_global_counter(self) -> int:
         """
-        Get the next unique global counter value.
+        Increment the global counter.
 
         This method maintains a global counter in RocksDB to ensure unique
         identifiers for values collected within the same timestamp. The counter

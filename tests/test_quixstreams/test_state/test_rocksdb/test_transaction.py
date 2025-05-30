@@ -18,20 +18,20 @@ def transaction(store: RocksDBStore):
     return _transaction
 
 
-def test_get_next_count(transaction):
+def test_increment_global_counter(transaction):
     with transaction() as tx:
-        assert tx._get_next_count() == 0
-        assert tx._get_next_count() == 1
+        assert tx._increment_global_counter() == 0
+        assert tx._increment_global_counter() == 1
 
     with transaction() as tx:
-        assert tx._get_next_count() == 2
-        assert tx._get_next_count() == 3
+        assert tx._increment_global_counter() == 2
+        assert tx._increment_global_counter() == 3
 
 
-def test_get_next_count_reset_to_zero(transaction):
+def test_increment_global_counter_reset_to_zero(transaction):
     with transaction() as tx:
-        cache = tx._global_counter
-        tx.set(value=MAX_UINT64 - 1, key=cache.key, prefix=b"", cf_name=cache.cf_name)
+        # Set the counter to the maximum value
+        tx._global_counter.counter = MAX_UINT64 - 1
 
-        assert tx._get_next_count() == MAX_UINT64
-        assert tx._get_next_count() == 0
+        assert tx._increment_global_counter() == MAX_UINT64
+        assert tx._increment_global_counter() == 0
