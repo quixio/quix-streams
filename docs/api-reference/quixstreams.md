@@ -938,7 +938,7 @@ messages in the timestamp-aligned way for the correct processing.
 class StreamingDataFrame()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L87)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L89)
 
 `StreamingDataFrame` is the main object you will use for ETL work.
 
@@ -993,7 +993,7 @@ sdf = sdf.to_topic(topic_obj)
 def stream_id() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L172)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L174)
 
 An identifier of the data stream this StreamingDataFrame
 manipulates in the application.
@@ -1025,7 +1025,7 @@ def apply(func: Union[
           metadata: bool = False) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L231)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L233)
 
 Apply a function to transform the value and return a new value.
 
@@ -1077,7 +1077,7 @@ def update(func: Union[
            metadata: bool = False) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L335)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L337)
 
 Apply a function to mutate value in-place or to perform a side effect
 
@@ -1137,7 +1137,7 @@ def filter(func: Union[
            metadata: bool = False) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L438)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L440)
 
 Filter value using provided function.
 
@@ -1185,7 +1185,7 @@ def group_by(
 ) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L523)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L525)
 
 "Groups" messages by re-keying them via the provided group_by operation
 
@@ -1242,7 +1242,7 @@ a clone with this operation added (assign to keep its effect).
 def contains(keys: Union[str, list[str]]) -> StreamingSeries
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L633)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L635)
 
 Check if keys are present in the Row value.
 
@@ -1276,7 +1276,7 @@ def to_topic(
         key: Optional[Callable[[Any], Any]] = None) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L664)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L666)
 
 Produce current value to a topic. You can optionally specify a new key.
 
@@ -1322,7 +1322,7 @@ def set_timestamp(
         func: Callable[[Any, Any, int, Any], int]) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L709)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L711)
 
 Set a new timestamp based on the current message value and its metadata.
 
@@ -1367,7 +1367,7 @@ def set_headers(
 ) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L752)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L754)
 
 Set new message headers based on the current message value and metadata.
 
@@ -1408,7 +1408,7 @@ a new StreamingDataFrame instance
 def print(pretty: bool = True, metadata: bool = False) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L803)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L805)
 
 Print out the current message value (and optionally, the message metadata) to
 
@@ -1463,7 +1463,7 @@ def print_table(
                                      int]] = None) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L849)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L851)
 
 Print a table with the most recent records.
 
@@ -1550,7 +1550,7 @@ automatically based on content. Example: {"name": 20, "id": 10}
 def compose(sink: Optional[VoidExecutor] = None) -> dict[str, VoidExecutor]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L965)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L967)
 
 Compose all functions of this StreamingDataFrame into one big closure.
 
@@ -1596,7 +1596,7 @@ def test(value: Any,
          topic: Optional[Topic] = None) -> List[Any]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L999)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1001)
 
 A shorthand to test `StreamingDataFrame` with provided value
 
@@ -1630,7 +1630,7 @@ def tumbling_window(
 ) -> TumblingTimeWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1038)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1040)
 
 Create a time-based tumbling window transformation on this StreamingDataFrame.
 
@@ -1713,7 +1713,7 @@ def tumbling_count_window(
         name: Optional[str] = None) -> TumblingCountWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1127)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1129)
 
 Create a count-based tumbling window transformation on this StreamingDataFrame.
 
@@ -1776,7 +1776,7 @@ def hopping_window(
 ) -> HoppingTimeWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1177)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1179)
 
 Create a time-based hopping window transformation on this StreamingDataFrame.
 
@@ -1870,7 +1870,7 @@ def hopping_count_window(
         name: Optional[str] = None) -> HoppingCountWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1280)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1282)
 
 Create a count-based hopping window transformation on this StreamingDataFrame.
 
@@ -1938,7 +1938,7 @@ def sliding_window(
 ) -> SlidingTimeWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1337)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1339)
 
 Create a time-based sliding window transformation on this StreamingDataFrame.
 
@@ -2027,7 +2027,7 @@ def sliding_count_window(
         name: Optional[str] = None) -> SlidingCountWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1432)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1434)
 
 Create a count-based sliding window transformation on this StreamingDataFrame.
 
@@ -2087,7 +2087,7 @@ like `sum`, `count`, etc. applied to the StreamingDataFrame.
 def fill(*columns: str, **mapping: Any) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1485)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1487)
 
 Fill missing values in the message value with a constant value.
 
@@ -2138,7 +2138,7 @@ def drop(columns: Union[str, List[str]],
          errors: Literal["ignore", "raise"] = "raise") -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1537)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1539)
 
 Drop column(s) from the message value (value must support `del`, like a dict).
 
@@ -2174,7 +2174,7 @@ a new StreamingDataFrame instance
 def sink(sink: BaseSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1581)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1583)
 
 Sink the processed data to the specified destination.
 
@@ -2200,7 +2200,7 @@ operations, but branches can still be generated from its originating SDF.
 def concat(other: "StreamingDataFrame") -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1619)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1621)
 
 Concatenate two StreamingDataFrames together and return a new one.
 
@@ -2235,7 +2235,7 @@ def join_asof(right: "StreamingDataFrame",
               name: Optional[str] = None) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1649)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1651)
 
 Join the left dataframe with the records of the right dataframe with
 
@@ -2296,6 +2296,63 @@ sdf_metadata = app.dataframe(app.topic("metadata"))
 sdf_joined = sdf_measurements.join_asof(sdf_metadata, how="inner", grace_ms=timedelta(days=14))
 ```
 
+<a id="quixstreams.dataframe.dataframe.StreamingDataFrame.lookup_join"></a>
+
+#### StreamingDataFrame.lookup\_join
+
+```python
+def lookup_join(
+    lookup: BaseLookup,
+    fields: dict[str, BaseField],
+    on: Optional[Union[str, Callable[[dict[str, Any], Any], str]]] = None
+) -> "StreamingDataFrame"
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1725)
+
+Note: This is an experimental feature, and its API is likely to change in the future.
+
+Enrich the records in this StreamingDataFrame by performing a lookup join using a custom lookup strategy.
+
+This method allows you to enrich each record in the dataframe with additional data fetched from an external
+source, using a user-defined lookup strategy (subclass of BaseLookup) and a set of fields
+(subclasses of BaseField) that specify how to extract or map the enrichment data.
+
+The join is performed in-place: the input value dictionary is updated with the enrichment data.
+
+Lookup implementation part of the standard quixstreams library:
+    - `quixstreams.dataframe.joins.lookups.QuixConfigurationService`
+
+**Arguments**:
+
+- `lookup`: An instance of a subclass of BaseLookup that implements the enrichment logic.
+- `fields`: A mapping of field names to the lookup Field objects specifying how to extract or map enrichment data.
+- `on`: Specifies how to determine the target key for the lookup:
+- If a string, it is interpreted as the column name in the value dict to use as the lookup key.
+- If a callable, it should accept (value, key) and return the target key as a string.
+- If None (default), the message key is used as the lookup key.
+
+**Returns**:
+
+StreamingDataFrame: The same StreamingDataFrame instance with the enrichment applied in-place.
+Example:
+
+```python
+from quixstreams import Application
+from quixstreams.dataframe.joins.lookups import QuixConfigurationService, QuixConfigurationServiceField as Field
+
+app = Application()
+
+sdf = app.dataframe(app.topic("input"))
+lookup = QuixConfigurationService(app.topic("config"), config=app.config)
+
+fields = {
+    "test": Field(type="test", default="test_default")
+}
+
+sdf = sdf.lookup_join(lookup, fields)
+```
+
 <a id="quixstreams.dataframe.dataframe.StreamingDataFrame.register_store"></a>
 
 #### StreamingDataFrame.register\_store
@@ -2304,7 +2361,7 @@ sdf_joined = sdf_measurements.join_asof(sdf_metadata, how="inner", grace_ms=time
 def register_store(store_type: Optional[StoreTypes] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1745)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1814)
 
 Register the default store for the current stream_id in StateStoreManager.
 
@@ -2757,6 +2814,837 @@ higher precision.
 **Returns**:
 
 timedelta value in milliseconds as `int`
+
+<a id="quixstreams.dataframe.joins.lookups"></a>
+
+## quixstreams.dataframe.joins.lookups
+
+<a id="quixstreams.dataframe.joins.lookups.sqlite"></a>
+
+## quixstreams.dataframe.joins.lookups.sqlite
+
+<a id="quixstreams.dataframe.joins.lookups.sqlite.BaseSQLiteLookupField"></a>
+
+### BaseSQLiteLookupField
+
+```python
+@dataclasses.dataclass(frozen=True)
+class BaseSQLiteLookupField(BaseField, abc.ABC)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/sqlite.py#L22)
+
+<a id="quixstreams.dataframe.joins.lookups.sqlite.BaseSQLiteLookupField.build_query"></a>
+
+#### BaseSQLiteLookupField.build\_query
+
+```python
+@abc.abstractmethod
+def build_query(
+    on: str,
+    value: dict[str,
+                Any]) -> Tuple[str, Union[dict[str, Any], Tuple[str, ...]]]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/sqlite.py#L29)
+
+Build the SQL query string for this field.
+
+**Arguments**:
+
+- `on`: The key to use in the WHERE clause for lookup.
+- `value`: The message value, used to substitute parameters in the query.
+
+**Returns**:
+
+A tuple of the SQL query string and the parameters.
+
+<a id="quixstreams.dataframe.joins.lookups.sqlite.BaseSQLiteLookupField.result"></a>
+
+#### BaseSQLiteLookupField.result
+
+```python
+@abc.abstractmethod
+def result(cursor: sqlite3.Cursor) -> Union[dict[str, Any], list[Any]]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/sqlite.py#L43)
+
+Extract the result from the cursor based on the field definition.
+
+**Arguments**:
+
+- `cursor`: The SQLite cursor containing the query results.
+
+**Returns**:
+
+The extracted data, either a single row or a list of rows.
+
+<a id="quixstreams.dataframe.joins.lookups.sqlite.SQLiteLookupField"></a>
+
+### SQLiteLookupField
+
+```python
+@dataclasses.dataclass(frozen=True)
+class SQLiteLookupField(BaseSQLiteLookupField)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/sqlite.py#L55)
+
+Field definition for use with SQLiteLookup in lookup joins.
+
+Table and column names are sanitized to prevent SQL injection.
+Rows will be deserialized into a dictionary with column names as keys.
+
+Example:
+
+```python
+    lookup = SQLiteLookup(path="/path/to/db.sqlite")
+
+    # Select the value in `col1` from the table `my_table` where `col2` matches the `sdf.lookup_join` on parameter.
+    fields = {"my_field": SQLiteLookupField(table="my_table", columns=["col1", "col2"], on="col2")}
+
+    # After the lookup the `my_field` column in the message will contains:
+    # {"col1": <row1 col1 value>, "col2": <row1 col2 value>}
+    sdf = sdf.lookup_join(lookup, fields)
+```
+
+```python
+    lookup = SQLiteLookup(path="/path/to/db.sqlite")
+
+    # Select the value in `col1` from the table `my_table` where `col2` matches the `sdf.lookup_join` on parameter.
+    fields = {"my_field": SQLiteLookupField(table="my_table", columns=["col1", "col2"], on="col2", first_match_only=False)}
+
+    # After the lookup the `my_field` column in the message will contains:
+    # [
+    #   {"col1": <row1 col1 value>, "col2": <row1 col2 value>},
+    #   {"col1": <row2 col1 value>, "col2": <row2 col2 value>},
+    #   ...
+    #   {"col1": <rowN col1 value>, "col2": <rowN col2 value>,},
+    # ]
+    sdf = sdf.lookup_join(lookup, fields)
+```
+
+**Arguments**:
+
+- `table`: Name of the table to query in the SQLite database.
+- `columns`: List of columns to select from the table.
+- `on`: The column name to use in the WHERE clause for matching against the target key.
+- `order_by`: Optional ORDER BY clause to sort the results.
+- `order_by_direction`: Direction of the ORDER BY clause, either "ASC" or "DESC". Default is "ASC".
+- `ttl`: Time-to-live for cache in seconds. Default is 60.0.
+- `default`: Default value if no result is found. Default is None.
+- `first_match_only`: If True, only the first row is returned; otherwise, all rows are returned.
+
+<a id="quixstreams.dataframe.joins.lookups.sqlite.SQLiteLookupField.build_query"></a>
+
+#### SQLiteLookupField.build\_query
+
+```python
+def build_query(on: str, value: dict[str, Any]) -> Tuple[str, Tuple[str, ...]]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/sqlite.py#L136)
+
+Build the SQL query string for this field.
+
+**Arguments**:
+
+- `on`: The key to use in the WHERE clause for lookup.
+- `value`: The message value, used to substitute parameters in the query.
+
+**Returns**:
+
+A tuple of the SQL query string and the parameters.
+
+<a id="quixstreams.dataframe.joins.lookups.sqlite.SQLiteLookupField.result"></a>
+
+#### SQLiteLookupField.result
+
+```python
+def result(
+        cursor: sqlite3.Cursor) -> Union[dict[str, Any], list[dict[str, Any]]]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/sqlite.py#L158)
+
+Extract the result from the cursor based on the field definition.
+
+**Arguments**:
+
+- `cursor`: The SQLite cursor containing the query results.
+
+**Returns**:
+
+The extracted data, either a single row or a list of rows.
+
+<a id="quixstreams.dataframe.joins.lookups.sqlite.SQLiteLookupQueryField"></a>
+
+### SQLiteLookupQueryField
+
+```python
+@dataclasses.dataclass(frozen=True)
+class SQLiteLookupQueryField(BaseSQLiteLookupField)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/sqlite.py#L176)
+
+Field definition for use with SQLiteLookup in lookup joins.
+
+Enables advanced SQL queries with support for parameter substitution from message columns, allowing dynamic lookups.
+
+The `sdf.lookup_join` `on` parameter is not used in the query itself, but is important for cache management. When caching is enabled, the query is executed once per TTL for each unique target key.
+
+Query results are returned as tuples of values, without additional deserialization.
+
+Example:
+
+```python
+    lookup = SQLiteLookup(path="/path/to/db.sqlite")
+
+    # Select all columns from the first row of `my_table` where `col2` matches the value of `field1` in the message.
+    fields = {"my_field": SQLiteLookupQueryField("SELECT * FROM my_table WHERE col2 = :field1")}
+
+    # After the lookup, the `my_field` column in the message will contain:
+    # [<row1 col1 value>, <row1 col2 value>, ..., <row1 colN value>]
+    sdf = sdf.lookup_join(lookup, fields)
+```
+
+```python
+    lookup = SQLiteLookup(path="/path/to/db.sqlite")
+
+    # Select all columns from all rows of `my_table` where `col2` matches the value of `field1` in the message.
+    fields = {"my_field": SQLiteLookupQueryField("SELECT * FROM my_table WHERE col2 = :field1", first_match_only=False)}
+
+    # After the lookup, the `my_field` column in the message will contain:
+    # [
+    #   [<row1 col1 value>, <row1 col2 value>, ..., <row1 colN value>],
+    #   [<row2 col1 value>, <row2 col2 value>, ..., <row2 colN value>],
+    #   ...
+    #   [<rowN col1 value>, <rowN col2 value>, ..., <rowN colN value>],
+    # ]
+    sdf = sdf.lookup_join(lookup, fields)
+```
+
+**Arguments**:
+
+- `query`: SQL query to execute.
+- `ttl`: Time-to-live for cache in seconds. Default is 60.0.
+- `default`: Default value if no result is found. Default is None.
+- `first_match_only`: If True, only the first row is returned; otherwise, all rows are returned.
+
+<a id="quixstreams.dataframe.joins.lookups.sqlite.SQLiteLookupQueryField.result"></a>
+
+#### SQLiteLookupQueryField.result
+
+```python
+def result(cursor: sqlite3.Cursor) -> Union[dict[str, Any], list[Any]]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/sqlite.py#L231)
+
+Extract the result from the cursor based on the field definition.
+
+**Arguments**:
+
+- `cursor`: The SQLite cursor containing the query results.
+
+**Returns**:
+
+The extracted data, either a single row or a list of rows.
+
+<a id="quixstreams.dataframe.joins.lookups.sqlite.SQLiteLookup"></a>
+
+### SQLiteLookup
+
+```python
+class SQLiteLookup(BaseLookup[Union[SQLiteLookupField,
+                                    SQLiteLookupQueryField]])
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/sqlite.py#L244)
+
+Lookup join implementation for enriching streaming data with data from a SQLite database.
+
+This class queries a SQLite database for each field, using a persistent connection and per-field caching
+based on a configurable TTL. The cache is a least recently used (LRU) cache with a configurable maximum size.
+
+Example:
+
+```python
+    lookup = SQLiteLookup(path="/path/to/db.sqlite")
+    fields = {"my_field": SQLiteLookupField(table="my_table", columns=["col2"], on="primary_key_col")}
+    sdf = sdf.lookup_join(lookup, fields)
+```
+
+**Arguments**:
+
+- `path`: Path to the SQLite database file.
+- `cache_size`: Maximum number of fields to keep in the LRU cache. Default is 1000.
+
+<a id="quixstreams.dataframe.joins.lookups.sqlite.SQLiteLookup.join"></a>
+
+#### SQLiteLookup.join
+
+```python
+def join(fields: Mapping[str, Union[SQLiteLookupField,
+                                    SQLiteLookupQueryField]], on: str,
+         value: dict[str,
+                     Any], key: Any, timestamp: int, headers: Any) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/sqlite.py#L342)
+
+Enrich the message value in-place by querying SQLite for each field and caching results per TTL.
+
+**Arguments**:
+
+- `fields`: Mapping of field names to BaseSQLiteLookupField objects specifying how to extract and map enrichment data.
+- `on`: The key used in the WHERE clause for SQLiteLookupField lookup.
+- `value`: The message value.
+- `key`: The message key.
+- `timestamp`: The message timestamp.
+- `headers`: The message headers.
+
+**Returns**:
+
+None. The input value dictionary is updated in-place with the enriched data.
+
+<a id="quixstreams.dataframe.joins.lookups.sqlite.SQLiteLookup.cache_info"></a>
+
+#### SQLiteLookup.cache\_info
+
+```python
+def cache_info() -> CacheInfo
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/sqlite.py#L382)
+
+Get cache statistics for the SQLiteLookup LRU cache.
+
+**Returns**:
+
+A dictionary containing cache statistics: hits, misses, size, maxsize.
+
+<a id="quixstreams.dataframe.joins.lookups.utils"></a>
+
+## quixstreams.dataframe.joins.lookups.utils
+
+<a id="quixstreams.dataframe.joins.lookups.utils.CacheInfo"></a>
+
+### CacheInfo
+
+```python
+class CacheInfo(TypedDict)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/utils.py#L4)
+
+Typed dictionary containing cache statistics for the LRU cache.
+
+**Arguments**:
+
+- `hits`: The number of cache hits.
+- `misses`: The number of cache misses.
+- `size`: The current size of the cache.
+- `maxsize`: The maximum size of the cache.
+
+<a id="quixstreams.dataframe.joins.lookups.quix_configuration_service.models"></a>
+
+## quixstreams.dataframe.joins.lookups.quix\_configuration\_service.models
+
+<a id="quixstreams.dataframe.joins.lookups.quix_configuration_service.models.EventMetadata"></a>
+
+### EventMetadata
+
+```python
+class EventMetadata(TypedDict)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L18)
+
+Metadata describing a configuration event.
+
+**Arguments**:
+
+- `type`: The configuration type.
+- `target_key`: The target key for the configuration.
+- `valid_from`: ISO8601 timestamp when this version becomes valid.
+- `category`: The configuration category.
+- `version`: The version number.
+- `created_at`: ISO8601 timestamp when this version was created.
+- `sha256sum`: SHA256 checksum of the configuration content.
+
+<a id="quixstreams.dataframe.joins.lookups.quix_configuration_service.models.Event"></a>
+
+### Event
+
+```python
+class Event(TypedDict)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L40)
+
+A configuration event received from the configuration topic.
+
+**Arguments**:
+
+- `id`: The unique identifier for the configuration.
+- `event`: The event type ("created", "updated", "deleted").
+- `contentUrl`: URL to fetch the configuration content.
+- `metadata`: Metadata about the configuration version.
+
+<a id="quixstreams.dataframe.joins.lookups.quix_configuration_service.models.Field"></a>
+
+### Field
+
+```python
+@dataclasses.dataclass(frozen=True)
+class Field(BaseField)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L57)
+
+Represents a field to extract from a configuration using JSONPath.
+
+**Arguments**:
+
+- `type`: The type of configuration this field belongs to.
+- `default`: The default value if the field is missing (raises if not set).
+- `jsonpath`: JSONPath expression to extract the value.
+- `first_match_only`: If True, only the first match is returned; otherwise, all matches are returned.
+
+<a id="quixstreams.dataframe.joins.lookups.quix_configuration_service.models.Field.missing"></a>
+
+#### Field.missing
+
+```python
+def missing() -> Any
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L80)
+
+Return the default value for this field, or raise KeyError if no default is set.
+
+**Raises**:
+
+- `KeyError`: If no default value is set.
+
+**Returns**:
+
+Any: The default value.
+
+<a id="quixstreams.dataframe.joins.lookups.quix_configuration_service.models.Field.parse"></a>
+
+#### Field.parse
+
+```python
+def parse(id: str, version: int, content: Any) -> Any
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L94)
+
+Extract the value(s) from the configuration content using JSONPath.
+
+**Arguments**:
+
+- `id`: The configuration ID.
+- `version`: The configuration version.
+- `content`: The configuration content (parsed JSON).
+
+**Raises**:
+
+- `KeyError`: If the field is missing and no default is set.
+
+**Returns**:
+
+The extracted value(s).
+
+<a id="quixstreams.dataframe.joins.lookups.quix_configuration_service.models.ConfigurationVersion"></a>
+
+### ConfigurationVersion
+
+```python
+@dataclasses.dataclass(frozen=True)
+class ConfigurationVersion()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L120)
+
+Represents a specific version of a configuration.
+
+**Arguments**:
+
+- `id`: The configuration ID.
+- `version`: The version number.
+- `contentUrl`: URL to fetch the configuration content.
+- `sha256sum`: SHA256 checksum of the configuration content.
+- `valid_from`: Timestamp (ms) when this version becomes valid.
+
+<a id="quixstreams.dataframe.joins.lookups.quix_configuration_service.models.ConfigurationVersion.valid_from"></a>
+
+#### valid\_from
+
+timestamp ms
+
+<a id="quixstreams.dataframe.joins.lookups.quix_configuration_service.models.ConfigurationVersion.from_event"></a>
+
+#### ConfigurationVersion.from\_event
+
+```python
+@classmethod
+def from_event(cls, event: Event) -> "ConfigurationVersion"
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L140)
+
+Create a ConfigurationVersion from an Event.
+
+**Arguments**:
+
+- `event`: The event containing configuration version data.
+
+**Returns**:
+
+ConfigurationVersion: The created configuration version.
+
+<a id="quixstreams.dataframe.joins.lookups.quix_configuration_service.models.ConfigurationVersion.success"></a>
+
+#### ConfigurationVersion.success
+
+```python
+def success() -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L159)
+
+Mark the configuration version fetch as successful.
+
+Resets the retry count and retry time, so future fetch attempts will not be delayed.
+
+<a id="quixstreams.dataframe.joins.lookups.quix_configuration_service.models.ConfigurationVersion.failed"></a>
+
+#### ConfigurationVersion.failed
+
+```python
+def failed() -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L168)
+
+Mark the configuration version fetch as failed.
+
+Increments the retry count and sets the next retry time using exponential backoff,
+capped by VERSION_RETRY_MAX_DELAY.
+
+<a id="quixstreams.dataframe.joins.lookups.quix_configuration_service.models.Configuration"></a>
+
+### Configuration
+
+```python
+@dataclasses.dataclass
+class Configuration()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L184)
+
+Represents a configuration with multiple versions and provides logic to select the valid version for a given timestamp.
+
+**Arguments**:
+
+- `versions`: All versions of this configuration, keyed by version number.
+- `version`: The currently valid version (cached).
+- `next_version`: The next version to become valid (cached).
+- `previous_version`: The previous version before the current one (cached).
+
+<a id="quixstreams.dataframe.joins.lookups.quix_configuration_service.models.Configuration.from_event"></a>
+
+#### Configuration.from\_event
+
+```python
+@classmethod
+def from_event(cls, event: Event) -> "Configuration"
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L200)
+
+Create a Configuration from an Event.
+
+**Arguments**:
+
+- `event`: The event containing configuration data.
+
+**Returns**:
+
+Configuration: The created configuration.
+
+<a id="quixstreams.dataframe.joins.lookups.quix_configuration_service.models.Configuration.add_version"></a>
+
+#### Configuration.add\_version
+
+```python
+def add_version(version: ConfigurationVersion) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L211)
+
+Add or update a version in this configuration.
+
+**Arguments**:
+
+- `version`: The version to add.
+
+<a id="quixstreams.dataframe.joins.lookups.quix_configuration_service.models.Configuration.find_valid_version"></a>
+
+#### Configuration.find\_valid\_version
+
+```python
+def find_valid_version(timestamp: int) -> Optional[ConfigurationVersion]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L223)
+
+Find the valid configuration version for a given timestamp.
+
+**Arguments**:
+
+- `timestamp`: The timestamp (ms) to check.
+
+**Returns**:
+
+Optional[ConfigurationVersion]: The valid version, or None if not found.
+
+<a id="quixstreams.dataframe.joins.lookups.quix_configuration_service.lookup"></a>
+
+## quixstreams.dataframe.joins.lookups.quix\_configuration\_service.lookup
+
+<a id="quixstreams.dataframe.joins.lookups.quix_configuration_service.lookup.Lookup"></a>
+
+### Lookup
+
+```python
+class Lookup(BaseLookup[Field])
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/lookup.py#L31)
+
+Lookup join implementation for enriching streaming data with configuration data from a Kafka topic.
+
+This class listens to configuration events from a Kafka topic connected to the Quix Configuration Service,
+manages configuration versions, fetches and caches configuration content (including from URLs), and provides
+enrichment for incoming records by joining them with the appropriate configuration fields based on type, key,
+and timestamp.
+
+Usage:
+- Instantiate with a configuration topic and (optionally) application config or connection details.
+- Use as the `lookup` argument in `StreamingDataFrame.lookup_join()` with a mapping of field names to Field objects.
+- The `join` method is called for each record to enrich, updating the record in-place with configuration data.
+
+Features:
+- Handles configuration creation, update, and deletion events.
+- Supports versioned configurations and time-based lookups.
+- Fetches configuration content from URLs and caches results for performance.
+- Provides fallback behavior if configuration or content is missing.
+
+**Example**:
+
+  lookup = Lookup(topic, app_config=app.config)
+  sdf = sdf.lookup_join(lookup, fields)
+
+<a id="quixstreams.dataframe.joins.lookups.quix_configuration_service.lookup.Lookup.cache_info"></a>
+
+#### Lookup.cache\_info
+
+```python
+def cache_info() -> CacheInfo
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/lookup.py#L316)
+
+Get information about the cache.
+
+**Returns**:
+
+dict[str, int]: A dictionary containing cache information.
+- "hits": Number of cache hits.
+- "misses": Number of cache misses.
+- "size": Current size of the cache.
+
+<a id="quixstreams.dataframe.joins.lookups.quix_configuration_service.lookup.Lookup.join"></a>
+
+#### Lookup.join
+
+```python
+def join(fields: Mapping[str, Field], on: str, value: dict[str, Any], key: Any,
+         timestamp: int, headers: HeadersMapping) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/lookup.py#L328)
+
+Enrich the message with configuration data from the Quix Configuration Service.
+
+This method determines the appropriate configuration version for each field type, fetching the relevant configuration data, and updating the input value dictionary in-place with the enriched results.
+If a configuration version is not found or content retrieval fails, the corresponding fields are set to their missing values.
+
+**Arguments**:
+
+- `fields`: Mapping of field names to Field objects specifying how to extract and parse configuration data.
+- `on`: The key used to identify the target configuration for enrichment.
+- `value`: The message value to be updated with enriched configuration values.
+- `key`: The message key.
+- `timestamp`: The message timestamp, used to select the appropriate configuration version.
+- `headers`: The message headers.
+
+**Returns**:
+
+None. The input value dictionary is updated in-place with the enriched configuration data.
+
+<a id="quixstreams.dataframe.joins.lookups.quix_configuration_service.cache"></a>
+
+## quixstreams.dataframe.joins.lookups.quix\_configuration\_service.cache
+
+<a id="quixstreams.dataframe.joins.lookups.quix_configuration_service.cache.VersionDataLRU"></a>
+
+### VersionDataLRU
+
+```python
+class VersionDataLRU()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/cache.py#L10)
+
+Least Recently Used (LRU) cache for configuration version data.
+
+This class caches the results of a function that generates data for a given
+ConfigurationVersion and a set of Fields, up to a maximum size. When the cache
+exceeds the maximum size, the least recently used item is evicted.
+
+**Arguments**:
+
+- `func`: The function to cache. It should take a ConfigurationVersion (or None)
+and a dictionary of Field objects, and return the computed data.
+- `maxsize`: The maximum number of items to cache. Defaults to 128.
+
+<a id="quixstreams.dataframe.joins.lookups.quix_configuration_service.cache.VersionDataLRU.remove"></a>
+
+#### VersionDataLRU.remove
+
+```python
+def remove(version: Optional[ConfigurationVersion],
+           fields: dict[str, Field]) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/cache.py#L62)
+
+Remove the cached data for the given version and fields, if present.
+
+**Arguments**:
+
+- `version`: The configuration version to remove from the cache.
+- `fields`: The fields to remove from the cache.
+
+<a id="quixstreams.dataframe.joins.lookups.quix_configuration_service.cache.VersionDataLRU.info"></a>
+
+#### VersionDataLRU.info
+
+```python
+def info() -> CacheInfo
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/cache.py#L75)
+
+Get cache statistics.
+
+**Returns**:
+
+A dictionary containing cache statistics.
+
+<a id="quixstreams.dataframe.joins.lookups.quix_configuration_service"></a>
+
+## quixstreams.dataframe.joins.lookups.quix\_configuration\_service
+
+<a id="quixstreams.dataframe.joins.lookups.quix_configuration_service.environment"></a>
+
+## quixstreams.dataframe.joins.lookups.quix\_configuration\_service.environment
+
+<a id="quixstreams.dataframe.joins.lookups.quix_configuration_service.environment.VERSION_RETRY_MAX_DELAY"></a>
+
+#### VERSION\_RETRY\_MAX\_DELAY
+
+seconds (10 minutes)
+
+<a id="quixstreams.dataframe.joins.lookups.base"></a>
+
+## quixstreams.dataframe.joins.lookups.base
+
+<a id="quixstreams.dataframe.joins.lookups.base.BaseLookup"></a>
+
+### BaseLookup
+
+```python
+class BaseLookup(abc.ABC, Generic[F])
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/base.py#L10)
+
+Abstract base class for implementing custom lookup join strategies for data enrichment in streaming dataframes.
+
+This class defines the interface for lookup joins, where incoming records are enriched with external data based on a key and
+a set of fields. Subclasses should implement the `join` method to specify how enrichment is performed.
+
+Typical usage involves passing an instance of a subclass to `StreamingDataFrame.lookup_join`, along with a mapping of field names
+to BaseField instances that describe how to extract or map enrichment data.
+
+**Example**:
+
+  class MyLookup(BaseLookup[MyField]):
+  def join(self, fields, on, value, key, timestamp, headers):
+  # Custom enrichment logic here
+  ...
+
+<a id="quixstreams.dataframe.joins.lookups.base.BaseLookup.join"></a>
+
+#### BaseLookup.join
+
+```python
+@abc.abstractmethod
+def join(fields: Mapping[str, F], on: str, value: dict[str, Any], key: Any,
+         timestamp: int, headers: HeadersMapping) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/base.py#L28)
+
+Perform a lookup join operation to enrich the provided value with data from the specified fields.
+
+**Arguments**:
+
+- `fields`: Mapping of field names to Field objects specifying how to extract and parse configuration data.
+- `on`: The key used to fetch data in the lookup.
+- `value`: The message value to be updated with enriched configuration values.
+- `key`: The message key.
+- `timestamp`: The message timestamp, used to select the appropriate configuration version.
+- `headers`: The message headers.
+
+**Returns**:
+
+None. The input value dictionary is updated in-place with the enriched configuration data.
+
+<a id="quixstreams.dataframe.joins.lookups.base.BaseField"></a>
+
+### BaseField
+
+```python
+@dataclasses.dataclass(frozen=True)
+class BaseField(abc.ABC)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/base.py#L53)
+
+Abstract base dataclass for defining a field used in lookup joins.
+
+Subclasses should specify the structure, metadata, and extraction/mapping logic required for a field
+to participate in a lookup join operation. Fields are used to describe how enrichment data is mapped
+into the target record during a lookup join.
 
 <a id="quixstreams.dataframe.joins"></a>
 
@@ -4161,29 +5049,6 @@ downstream.
 
 ## quixstreams.core.stream.functions.types
 
-<a id="quixstreams.core.stream.functions.utils"></a>
-
-## quixstreams.core.stream.functions.utils
-
-<a id="quixstreams.core.stream.functions.utils.pickle_copier"></a>
-
-#### pickle\_copier
-
-```python
-def pickle_copier(obj: T) -> Callable[[], T]
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/functions/utils.py#L12)
-
-A utility function to copy objects using a "pickle" library.
-
-On average, it's faster than "copy.deepcopy".
-It accepts an object and returns a callable creating copies of this object.
-
-**Arguments**:
-
-- `obj`: an object to copy
-
 <a id="quixstreams.core.stream.functions.transform"></a>
 
 ## quixstreams.core.stream.functions.transform
@@ -4260,7 +5125,7 @@ Otherwise, the value will be filtered out.
 class StreamFunction(abc.ABC)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/functions/base.py#L10)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/functions/base.py#L11)
 
 A base class for all the streaming operations in Quix Streams.
 
@@ -4276,7 +5141,7 @@ values.
 def get_executor(*child_executors: VoidExecutor) -> VoidExecutor
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/functions/base.py#L24)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/core/stream/functions/base.py#L25)
 
 Returns a wrapper to be called on a value, key, timestamp and headers.
 
@@ -6466,6 +7331,29 @@ Dump any non-empty config values as a dictionary.
 **Returns**:
 
 a dictionary
+
+<a id="quixstreams.utils.pickle"></a>
+
+## quixstreams.utils.pickle
+
+<a id="quixstreams.utils.pickle.pickle_copier"></a>
+
+#### pickle\_copier
+
+```python
+def pickle_copier(obj: T) -> Callable[[], T]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/utils/pickle.py#L12)
+
+A utility function to copy objects using a "pickle" library.
+
+On average, it's faster than "copy.deepcopy".
+It accepts an object and returns a callable creating copies of this object.
+
+**Arguments**:
+
+- `obj`: an object to copy
 
 <a id="quixstreams.utils.dicts"></a>
 
