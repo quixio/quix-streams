@@ -182,7 +182,7 @@ when the telemetry was produced.
 In particular: 
 
 - We use `how="inner"` which means that the results are emitted only when the match is found.  
-In can also be set to `how="left"` to emit records even if there is no matching forecast for the telemetry event.
+It can also be set to `how="left"` to emit records even if there is no matching forecast for the telemetry event.
 
 - We also provide a custom `merge_events` function to define how the join result will look like.    
 It's an optional step if the column names in both dataframes don't overlap.  
@@ -202,7 +202,7 @@ In this tutorial, both topics have one partition.
 <br>
 <br>
 
-2. The messages keys in these topics must be distributed across partitions using the same algorithm Messageshe same partitioner.
+2. The messages keys in these topics must be distributed across partitions using the same algorithm .
 In our case, messages are produced using the default built-in partitioner.
 
 Under the hood, `join_asof` works like this:
