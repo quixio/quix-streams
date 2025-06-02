@@ -1546,14 +1546,14 @@ sdf_metadata = app.dataframe(app.topic("metadata"))
 sdf_joined = sdf_measurements.join_asof(sdf_metadata, how="inner", grace_ms=timedelta(days=14))
 ```
 
-<a id="quixstreams.dataframe.dataframe.StreamingDataFrame.lookup_join"></a>
+<a id="quixstreams.dataframe.dataframe.StreamingDataFrame.join_lookup"></a>
 
 <br><br>
 
-#### StreamingDataFrame.lookup\_join
+#### StreamingDataFrame.join\_lookup
 
 ```python
-def lookup_join(
+def join_lookup(
     lookup: BaseLookup,
     fields: dict[str, BaseField],
     on: Optional[Union[str, Callable[[dict[str, Any], Any], str]]] = None
@@ -1594,10 +1594,10 @@ StreamingDataFrame: The same StreamingDataFrame instance with the enrichment app
 
 **Example**:
 
+  
 ```python
 from quixstreams import Application
-from quixstreams.dataframe.joins.lookups import QuixConfigurationService,
-  QuixConfigurationServiceField as Field
+from quixstreams.dataframe.joins.lookups import QuixConfigurationService, QuixConfigurationServiceField as Field
 
 app = Application()
 
@@ -1605,7 +1605,7 @@ sdf = app.dataframe(app.topic("input"))
 lookup = QuixConfigurationService(app.topic("config"), config=app.config)
 
 fields = {
-  "test": Field(type="test", default="test_default")
+    "test": Field(type="test", default="test_default")
 }
 
 sdf = sdf.join_lookup(lookup, fields)
@@ -2142,7 +2142,7 @@ Abstract base class for implementing custom lookup join strategies for data enri
 This class defines the interface for lookup joins, where incoming records are enriched with external data based on a key and
 a set of fields. Subclasses should implement the `join` method to specify how enrichment is performed.
 
-Typical usage involves passing an instance of a subclass to `StreamingDataFrame.lookup_join`, along with a mapping of field names
+Typical usage involves passing an instance of a subclass to `StreamingDataFrame.join_lookup`, along with a mapping of field names
 to BaseField instances that describe how to extract or map enrichment data.
 
 **Example**:
@@ -2293,34 +2293,32 @@ Rows will be deserialized into a dictionary with column names as keys.
 
 **Example**:
 
+  
 ```python
     lookup = SQLiteLookup(path="/path/to/db.sqlite")
 
-# Select the value in `col1` from the table `my_table` where `col2` matches the `sdf.lookup_join` on parameter.
-fields = {
-  "my_field": SQLiteLookupField(table="my_table", columns=["col1", "col2"], on="col2")}
+    # Select the value in `col1` from the table `my_table` where `col2` matches the `sdf.join_lookup` on parameter.
+    fields = {"my_field": SQLiteLookupField(table="my_table", columns=["col1", "col2"], on="col2")}
 
-# After the lookup the `my_field` column in the message will contains:
-# {"col1": <row1 col1 value>, "col2": <row1 col2 value>}
-sdf = sdf.join_lookup(lookup, fields)
+    # After the lookup the `my_field` column in the message will contains:
+    # {"col1": <row1 col1 value>, "col2": <row1 col2 value>}
+    sdf = sdf.join_lookup(lookup, fields)
 ```
-
+  
 ```python
     lookup = SQLiteLookup(path="/path/to/db.sqlite")
 
-# Select the value in `col1` from the table `my_table` where `col2` matches the `sdf.lookup_join` on parameter.
-fields = {
-  "my_field": SQLiteLookupField(table="my_table", columns=["col1", "col2"], on="col2",
-                                first_match_only=False)}
+    # Select the value in `col1` from the table `my_table` where `col2` matches the `sdf.join_lookup` on parameter.
+    fields = {"my_field": SQLiteLookupField(table="my_table", columns=["col1", "col2"], on="col2", first_match_only=False)}
 
-# After the lookup the `my_field` column in the message will contains:
-# [
-#   {"col1": <row1 col1 value>, "col2": <row1 col2 value>},
-#   {"col1": <row2 col1 value>, "col2": <row2 col2 value>},
-#   ...
-#   {"col1": <rowN col1 value>, "col2": <rowN col2 value>,},
-# ]
-sdf = sdf.join_lookup(lookup, fields)
+    # After the lookup the `my_field` column in the message will contains:
+    # [
+    #   {"col1": <row1 col1 value>, "col2": <row1 col2 value>},
+    #   {"col1": <row2 col1 value>, "col2": <row2 col2 value>},
+    #   ...
+    #   {"col1": <rowN col1 value>, "col2": <rowN col2 value>,},
+    # ]
+    sdf = sdf.join_lookup(lookup, fields)
 ```
   
   
@@ -2405,40 +2403,38 @@ Field definition for use with SQLiteLookup in lookup joins.
 
 Enables advanced SQL queries with support for parameter substitution from message columns, allowing dynamic lookups.
 
-The `sdf.lookup_join` `on` parameter is not used in the query itself, but is important for cache management. When caching is enabled, the query is executed once per TTL for each unique target key.
+The `sdf.join_lookup` `on` parameter is not used in the query itself, but is important for cache management. When caching is enabled, the query is executed once per TTL for each unique target key.
 
 Query results are returned as tuples of values, without additional deserialization.
 
 **Example**:
 
+  
 ```python
     lookup = SQLiteLookup(path="/path/to/db.sqlite")
 
-# Select all columns from the first row of `my_table` where `col2` matches the value of `field1` in the message.
-fields = {
-  "my_field": SQLiteLookupQueryField("SELECT * FROM my_table WHERE col2 = :field1")}
+    # Select all columns from the first row of `my_table` where `col2` matches the value of `field1` in the message.
+    fields = {"my_field": SQLiteLookupQueryField("SELECT * FROM my_table WHERE col2 = :field1")}
 
-# After the lookup, the `my_field` column in the message will contain:
-# [<row1 col1 value>, <row1 col2 value>, ..., <row1 colN value>]
-sdf = sdf.join_lookup(lookup, fields)
+    # After the lookup, the `my_field` column in the message will contain:
+    # [<row1 col1 value>, <row1 col2 value>, ..., <row1 colN value>]
+    sdf = sdf.join_lookup(lookup, fields)
 ```
-
+  
 ```python
     lookup = SQLiteLookup(path="/path/to/db.sqlite")
 
-# Select all columns from all rows of `my_table` where `col2` matches the value of `field1` in the message.
-fields = {
-  "my_field": SQLiteLookupQueryField("SELECT * FROM my_table WHERE col2 = :field1",
-                                     first_match_only=False)}
+    # Select all columns from all rows of `my_table` where `col2` matches the value of `field1` in the message.
+    fields = {"my_field": SQLiteLookupQueryField("SELECT * FROM my_table WHERE col2 = :field1", first_match_only=False)}
 
-# After the lookup, the `my_field` column in the message will contain:
-# [
-#   [<row1 col1 value>, <row1 col2 value>, ..., <row1 colN value>],
-#   [<row2 col1 value>, <row2 col2 value>, ..., <row2 colN value>],
-#   ...
-#   [<rowN col1 value>, <rowN col2 value>, ..., <rowN colN value>],
-# ]
-sdf = sdf.join_lookup(lookup, fields)
+    # After the lookup, the `my_field` column in the message will contain:
+    # [
+    #   [<row1 col1 value>, <row1 col2 value>, ..., <row1 colN value>],
+    #   [<row2 col1 value>, <row2 col2 value>, ..., <row2 colN value>],
+    #   ...
+    #   [<rowN col1 value>, <rowN col2 value>, ..., <rowN colN value>],
+    # ]
+    sdf = sdf.join_lookup(lookup, fields)
 ```
   
   
@@ -2494,11 +2490,11 @@ based on a configurable TTL. The cache is a least recently used (LRU) cache with
 
 **Example**:
 
+  
 ```python
     lookup = SQLiteLookup(path="/path/to/db.sqlite")
-fields = {"my_field": SQLiteLookupField(table="my_table", columns=["col2"],
-                                        on="primary_key_col")}
-sdf = sdf.join_lookup(lookup, fields)
+    fields = {"my_field": SQLiteLookupField(table="my_table", columns=["col2"], on="primary_key_col")}
+    sdf = sdf.join_lookup(lookup, fields)
 ```
   
   
