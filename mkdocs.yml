@@ -35,6 +35,8 @@ nav:
     - Purchase Filtering: 'tutorials/purchase-filtering/tutorial.md'
     - Word Count: 'tutorials/word-count/tutorial.md'
     - Websocket Source: 'tutorials/websocket-source/tutorial.md'
+    - Solar Farm Telemetry Enrichment: 'tutorials/solar-farm-enrichment/tutorial.md'
+
   - How to:
     - Produce Data to Kafka: producer.md
     - Process & Transform Data: processing.md
