@@ -2,4 +2,4 @@ mypy==1.15.0
 mypy-extensions==1.1.0
 types-jsonschema==4.24.0.20250528
 types-protobuf==6.30.2.20250516
-types-requests==2.32.0.20250515
+types-requests==2.32.0.20250602
