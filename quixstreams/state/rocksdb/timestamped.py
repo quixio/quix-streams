@@ -157,7 +157,7 @@ class TimestampedPartitionTransaction(RocksDBPartitionTransaction):
         :param prefix: The key prefix.
         """
         prefix = self._ensure_bytes(prefix)
-        counter = self._increment_global_counter() if self._keep_duplicates else 0
+        counter = self._increment_counter() if self._keep_duplicates else 0
         key = encode_integer_pair(timestamp, counter)
         self.set(key, value, prefix)
         min_eligible_timestamp = max(

@@ -153,7 +153,7 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
         value: Any,
         prefix: bytes,
     ) -> int:
-        counter = self._increment_global_counter()
+        counter = self._increment_counter()
         if id is None:
             key = encode_integer_pair(counter, counter)
         else:
