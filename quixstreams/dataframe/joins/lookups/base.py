@@ -14,7 +14,7 @@ class BaseLookup(abc.ABC, Generic[F]):
     This class defines the interface for lookup joins, where incoming records are enriched with external data based on a key and
     a set of fields. Subclasses should implement the `join` method to specify how enrichment is performed.
 
-    Typical usage involves passing an instance of a subclass to `StreamingDataFrame.lookup_join`, along with a mapping of field names
+    Typical usage involves passing an instance of a subclass to `StreamingDataFrame.join_lookup`, along with a mapping of field names
     to BaseField instances that describe how to extract or map enrichment data.
 
     Example:

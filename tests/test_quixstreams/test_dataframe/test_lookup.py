@@ -15,9 +15,9 @@ class DummyLookup(BaseLookup[DummyField]):
             value[k] = field.values[on]
 
 
-def test_lookup_join_enriches_value(dataframe_factory):
+def test_join_lookup_enriches_value(dataframe_factory):
     sdf = dataframe_factory()
-    sdf = sdf.lookup_join(
+    sdf = sdf.join_lookup(
         DummyLookup(),
         {
             "foo": DummyField({"key1": "foo", "key2": "bar"}),
@@ -33,9 +33,9 @@ def test_lookup_join_enriches_value(dataframe_factory):
     assert enriched == {"foo": "bar", "num": 456}
 
 
-def test_lookup_join_on_column(dataframe_factory):
+def test_join_lookup_on_column(dataframe_factory):
     sdf = dataframe_factory()
-    sdf = sdf.lookup_join(
+    sdf = sdf.join_lookup(
         DummyLookup(),
         {
             "foo": DummyField({"custom_key_1": "foo", "custom_key_2": "bar"}),
@@ -55,7 +55,7 @@ def test_lookup_join_on_column(dataframe_factory):
     assert enriched == {"custom_key": "custom_key_2", "foo": "bar", "num": 456}
 
 
-def test_lookup_join_on_callable(dataframe_factory):
+def test_join_lookup_on_callable(dataframe_factory):
     def _on(value, key):
         if key == "key1":
             return "custom_key_1"
@@ -64,7 +64,7 @@ def test_lookup_join_on_callable(dataframe_factory):
         return None
 
     sdf = dataframe_factory()
-    sdf = sdf.lookup_join(
+    sdf = sdf.join_lookup(
         DummyLookup(),
         {
             "foo": DummyField({"custom_key_1": "foo", "custom_key_2": "bar"}),
