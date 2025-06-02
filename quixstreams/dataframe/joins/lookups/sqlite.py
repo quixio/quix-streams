@@ -64,18 +64,18 @@ class SQLiteLookupField(BaseSQLiteLookupField):
     ```python
         lookup = SQLiteLookup(path="/path/to/db.sqlite")
 
-        # Select the value in `col1` from the table `my_table` where `col2` matches the `sdf.lookup_join` on parameter.
+        # Select the value in `col1` from the table `my_table` where `col2` matches the `sdf.join_lookup` on parameter.
         fields = {"my_field": SQLiteLookupField(table="my_table", columns=["col1", "col2"], on="col2")}
 
         # After the lookup the `my_field` column in the message will contains:
         # {"col1": <row1 col1 value>, "col2": <row1 col2 value>}
-        sdf = sdf.lookup_join(lookup, fields)
+        sdf = sdf.join_lookup(lookup, fields)
     ```
 
     ```python
         lookup = SQLiteLookup(path="/path/to/db.sqlite")
 
-        # Select the value in `col1` from the table `my_table` where `col2` matches the `sdf.lookup_join` on parameter.
+        # Select the value in `col1` from the table `my_table` where `col2` matches the `sdf.join_lookup` on parameter.
         fields = {"my_field": SQLiteLookupField(table="my_table", columns=["col1", "col2"], on="col2", first_match_only=False)}
 
         # After the lookup the `my_field` column in the message will contains:
@@ -85,7 +85,7 @@ class SQLiteLookupField(BaseSQLiteLookupField):
         #   ...
         #   {"col1": <rowN col1 value>, "col2": <rowN col2 value>,},
         # ]
-        sdf = sdf.lookup_join(lookup, fields)
+        sdf = sdf.join_lookup(lookup, fields)
     ```
 
     :param table: Name of the table to query in the SQLite database.
@@ -179,7 +179,7 @@ class SQLiteLookupQueryField(BaseSQLiteLookupField):
 
     Enables advanced SQL queries with support for parameter substitution from message columns, allowing dynamic lookups.
 
-    The `sdf.lookup_join` `on` parameter is not used in the query itself, but is important for cache management. When caching is enabled, the query is executed once per TTL for each unique target key.
+    The `sdf.join_lookup` `on` parameter is not used in the query itself, but is important for cache management. When caching is enabled, the query is executed once per TTL for each unique target key.
 
     Query results are returned as tuples of values, without additional deserialization.
 
@@ -193,7 +193,7 @@ class SQLiteLookupQueryField(BaseSQLiteLookupField):
 
         # After the lookup, the `my_field` column in the message will contain:
         # [<row1 col1 value>, <row1 col2 value>, ..., <row1 colN value>]
-        sdf = sdf.lookup_join(lookup, fields)
+        sdf = sdf.join_lookup(lookup, fields)
     ```
 
     ```python
@@ -209,7 +209,7 @@ class SQLiteLookupQueryField(BaseSQLiteLookupField):
         #   ...
         #   [<rowN col1 value>, <rowN col2 value>, ..., <rowN colN value>],
         # ]
-        sdf = sdf.lookup_join(lookup, fields)
+        sdf = sdf.join_lookup(lookup, fields)
     ```
 
     :param query: SQL query to execute.
@@ -253,7 +253,7 @@ class SQLiteLookup(BaseLookup[Union[SQLiteLookupField, SQLiteLookupQueryField]])
     ```python
         lookup = SQLiteLookup(path="/path/to/db.sqlite")
         fields = {"my_field": SQLiteLookupField(table="my_table", columns=["col2"], on="primary_key_col")}
-        sdf = sdf.lookup_join(lookup, fields)
+        sdf = sdf.join_lookup(lookup, fields)
     ```
 
     :param path: Path to the SQLite database file.

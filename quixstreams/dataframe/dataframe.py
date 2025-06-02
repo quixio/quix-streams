@@ -1722,7 +1722,7 @@ class StreamingDataFrame:
             how=how, on_merge=on_merge, grace_ms=grace_ms, store_name=name
         ).join(self, right)
 
-    def lookup_join(
+    def join_lookup(
         self,
         lookup: BaseLookup,
         fields: dict[str, BaseField],
@@ -1765,7 +1765,7 @@ class StreamingDataFrame:
             "test": Field(type="test", default="test_default")
         }
 
-        sdf = sdf.lookup_join(lookup, fields)
+        sdf = sdf.join_lookup(lookup, fields)
         ```
         """
         if callable(on):

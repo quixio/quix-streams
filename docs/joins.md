@@ -153,7 +153,7 @@ If you change timestamps of the record during processing, they will be processed
     This is an experimental feature; the API may change in future releases.
 
 
-`StreamingDataFrame.lookup_join()` is a special type of join that allows you to enrich records in a streaming dataframe with the data from external systems.  
+`StreamingDataFrame.join_lookup()` is a special type of join that allows you to enrich records in a streaming dataframe with the data from external systems.  
 
 You can use it to enriching streaming data with configuration or reference data from an external source, like a database.
 
@@ -163,7 +163,7 @@ To perform a lookup join, you need:
 
 1. A subclass of [quixstreams.dataframe.joins.lookups.base.BaseLookup](api-reference/dataframe.md#baselookup) to query the external source and cache the results when necessary.
 2. A subclass of [quixstreams.dataframe.joins.lookups.base.BaseField](api-reference/dataframe.md#basefield) to define how the data is extracted from the result.
-3. To pass the lookup and the fields to the `StreamingDataFrame.lookup_join`.
+3. To pass the lookup and the fields to the `StreamingDataFrame.join_lookup`.
 
 
 See [SQLiteLookup](api-reference/dataframe.md#sqlitelookup) and [SQLiteLookupField](api-reference/dataframe.md#sqlitelookupfield) for the reference implementation. 
@@ -177,13 +177,13 @@ from quixstreams.dataframe.joins.lookups import SQLiteLookup, SQLiteLookupField
 app = Application(...)
 
 # An implementation of BaseLookup for SQLite 
-lookup = SQLiteLookup(path="db.db")  
+lookup = SQLiteLookup(path="db.db")
 
 sdf = app.dataframe(app.topic("input"))
 
-sdf = sdf.lookup_join(
+sdf = sdf.join_lookup(
     lookup,
-    on="column", # A column in StreamingDataFrame to join on
+    on="column",  # A column in StreamingDataFrame to join on
     fields={
         # A mapping with SQLite fields to join with 
         "lookup": SQLiteLookupField(table="table", columns=["column"], on="id"),

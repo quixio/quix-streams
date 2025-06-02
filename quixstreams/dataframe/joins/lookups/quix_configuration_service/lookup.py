@@ -39,7 +39,7 @@ class Lookup(BaseLookup[Field]):
 
     Usage:
         - Instantiate with a configuration topic and (optionally) application config or connection details.
-        - Use as the `lookup` argument in `StreamingDataFrame.lookup_join()` with a mapping of field names to Field objects.
+        - Use as the `lookup` argument in `StreamingDataFrame.join_lookup()` with a mapping of field names to Field objects.
         - The `join` method is called for each record to enrich, updating the record in-place with configuration data.
 
     Features:
@@ -50,7 +50,7 @@ class Lookup(BaseLookup[Field]):
 
     Example:
         lookup = Lookup(topic, app_config=app.config)
-        sdf = sdf.lookup_join(lookup, fields)
+        sdf = sdf.join_lookup(lookup, fields)
     """
 
     def __init__(
