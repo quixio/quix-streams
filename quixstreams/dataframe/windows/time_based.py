@@ -274,11 +274,11 @@ class TimeWindow(Window):
 class SessionWindow(Window):
     """
     Session window groups events that occur within a specified timeout period.
-    
+
     A session starts with the first event and extends each time a new event arrives
     within the timeout period. The session closes after the timeout period with no
     new events.
-    
+
     Each session window can have different start and end times based on the actual
     events, making sessions dynamic rather than fixed-time intervals.
     """
@@ -400,23 +400,25 @@ class SessionWindow(Window):
                 late_by_ms=late_by_ms,
             )
             return [], []
-        
+
         # Look for an existing session that can be extended
         session_start = None
         session_end = None
         can_extend_session = False
         existing_aggregated = None
         old_window_to_delete = None
-        
+
         # Search for active sessions that can accommodate the new event
         search_start = max(0, timestamp_ms - timeout_ms * 2)
-        windows = state.get_windows(search_start, timestamp_ms + timeout_ms + 1, backwards=True)
-        
+        windows = state.get_windows(
+            search_start, timestamp_ms + timeout_ms + 1, backwards=True
+        )
+
         for (window_start, window_end), aggregated_value, _ in windows:
             # Calculate the time gap between the new event and the session's last activity
             session_last_activity = window_end - timeout_ms
             time_gap = timestamp_ms - session_last_activity
-            
+
             # Check if this session can be extended
             if time_gap <= timeout_ms + grace_ms and timestamp_ms >= window_start:
                 session_start = window_start
@@ -433,12 +435,12 @@ class SessionWindow(Window):
 
         # Process the event for this session
         updated_windows: list[WindowKeyResult] = []
-        
+
         # Delete the old window if extending an existing session
         if can_extend_session and old_window_to_delete:
             old_start, old_end = old_window_to_delete
-            transaction.delete_window(old_start, old_end, prefix=key)
-        
+            transaction.delete_window(old_start, old_end, prefix=state._prefix)  # type: ignore # noqa: SLF001
+
         # Add to collection if needed
         if collect:
             state.add_to_collection(
@@ -454,7 +456,11 @@ class SessionWindow(Window):
                 current_value = self._initialize_value()
 
             aggregated = self._aggregate_value(current_value, value, timestamp_ms)
-        
+
+        # By this point, session_start and session_end are guaranteed to be set
+        assert session_start is not None  # noqa: S101
+        assert session_end is not None  # noqa: S101
+
         # Output intermediate results for aggregations
         if aggregate:
             updated_windows.append(
@@ -463,8 +469,10 @@ class SessionWindow(Window):
                     self._results(aggregated, [], session_start, session_end),
                 )
             )
-            
-        state.update_window(session_start, session_end, value=aggregated, timestamp_ms=timestamp_ms)
+
+        state.update_window(
+            session_start, session_end, value=aggregated, timestamp_ms=timestamp_ms
+        )
 
         # Expire old sessions
         if self._closing_strategy == ClosingStrategy.PARTITION:
@@ -489,13 +497,13 @@ class SessionWindow(Window):
 
         # Import the parsing function to extract message keys from window keys
         from quixstreams.state.rocksdb.windowed.serialization import parse_window_key
-        
+
         expired_results = []
-        
+
         # Collect all keys and extract unique prefixes to avoid iteration conflicts
         all_keys = list(transaction.keys())
         seen_prefixes = set()
-        
+
         for key_bytes in all_keys:
             try:
                 prefix, start_ms, end_ms = parse_window_key(key_bytes)
@@ -504,21 +512,23 @@ class SessionWindow(Window):
             except (ValueError, IndexError):
                 # Skip invalid window key formats
                 continue
-                
+
         # Expire sessions for each unique prefix
         for prefix in seen_prefixes:
             state = transaction.as_state(prefix=prefix)
-            prefix_expired = list(self.expire_sessions_by_key(
-                prefix, state, expiry_threshold, collect
-            ))
+            prefix_expired = list(
+                self.expire_sessions_by_key(prefix, state, expiry_threshold, collect)
+            )
             expired_results.extend(prefix_expired)
             count += len(prefix_expired)
 
         if count:
             logger.debug(
-                "Expired %s session windows in %ss", count, round(time.monotonic() - start, 2)
+                "Expired %s session windows in %ss",
+                count,
+                round(time.monotonic() - start, 2),
             )
-        
+
         return expired_results
 
     def expire_sessions_by_key(
@@ -532,8 +542,10 @@ class SessionWindow(Window):
         count = 0
 
         # Get all windows and check which ones have expired
-        all_windows = list(state.get_windows(0, expiry_threshold + self._timeout_ms, backwards=False))
-        
+        all_windows = list(
+            state.get_windows(0, expiry_threshold + self._timeout_ms, backwards=False)
+        )
+
         windows_to_delete = []
         for (window_start, window_end), aggregated, _ in all_windows:
             # Session expires when the session end time has passed the expiry threshold
@@ -541,20 +553,29 @@ class SessionWindow(Window):
                 collected = []
                 if collect:
                     collected = state.get_from_collection(window_start, window_end)
-                
+
                 windows_to_delete.append((window_start, window_end))
                 count += 1
-                yield (key, self._results(aggregated, collected, window_start, window_end))
+                yield (
+                    key,
+                    self._results(aggregated, collected, window_start, window_end),
+                )
 
         # Clean up expired windows
         for window_start, window_end in windows_to_delete:
-            state._transaction.delete_window(window_start, window_end, prefix=state._prefix)
+            state._transaction.delete_window(  # type: ignore # noqa: SLF001
+                window_start,
+                window_end,
+                prefix=state._prefix,  # type: ignore # noqa: SLF001
+            )
             if collect:
                 state.delete_from_collection(window_end, start=window_start)
 
         if count:
             logger.debug(
-                "Expired %s session windows in %ss", count, round(time.monotonic() - start, 2)
+                "Expired %s session windows in %ss",
+                count,
+                round(time.monotonic() - start, 2),
             )
 
     def _on_expired_session(
@@ -576,9 +597,9 @@ class SessionWindow(Window):
             topic = "unknown"
             partition = -1
             offset = -1
-            
+
         to_log = True
-        
+
         # Trigger the "on_late" callback if provided
         if self._on_late:
             to_log = self._on_late(
