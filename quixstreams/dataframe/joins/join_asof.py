@@ -1,25 +1,22 @@
 import typing
 from datetime import timedelta
-from typing import Any, Callable, Literal, Optional, Union, cast, get_args
+from typing import Any, Callable, Optional, Union, cast
 
 from quixstreams.context import message_context
 from quixstreams.dataframe.utils import ensure_milliseconds
 from quixstreams.models.topics.manager import TopicManager
 from quixstreams.state.rocksdb.timestamped import TimestampedPartitionTransaction
 
-from .base import JoinHow, JoinHow_choices
+from .base import JoinHow, JoinHow_choices, OnOverlap, OnOverlap_choices
 from .utils import keep_left_merger, keep_right_merger, raise_merger
 
 if typing.TYPE_CHECKING:
     from quixstreams.dataframe.dataframe import StreamingDataFrame
 
 
-__all__ = ("OnOverlap", "JoinAsOf")
+__all__ = ("JoinAsOf",)
 
 DISCARDED = object()
-
-OnOverlap = Literal["keep-left", "keep-right", "raise"]
-OnOverlap_choices = get_args(OnOverlap)
 
 
 class JoinAsOf:
