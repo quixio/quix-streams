@@ -176,7 +176,10 @@ class TestAggregators:
             (Mean(), "Mean"),
             (Max(), "Max"),
             (Min(), "Min"),
-            (Reduce(reducer=lambda old, new: old + new, initializer=lambda x: x), "Reduce"),
+            (
+                Reduce(reducer=lambda old, new: old + new, initializer=lambda x: x),
+                "Reduce",
+            ),
             (Count("value"), "Count/value"),
             (Sum("value"), "Sum/value"),
             (Mean("value"), "Mean/value"),
