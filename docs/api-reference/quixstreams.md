@@ -4471,7 +4471,7 @@ class Reduce(Aggregator, Generic[R])
 class BaseCollector(ABC, Generic[I])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L367)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L368)
 
 Base class for window collections.
 
@@ -4491,7 +4491,7 @@ To reduce incoming items as they come in use an `Aggregator`.
 def column() -> Optional[str]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L380)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L381)
 
 The column to collect.
 
@@ -4506,7 +4506,7 @@ Use `None` to collect the whole message.
 def result(items: Iterable[I]) -> Any
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L389)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L390)
 
 This method is triggered when a window is closed.
 It should return the final collection result.
@@ -4519,7 +4519,7 @@ It should return the final collection result.
 class Collector(BaseCollector)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L397)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L398)
 
 Implementation of the `BaseCollector` interface.
 
@@ -4533,7 +4533,7 @@ Provides a default implementation for the `column` property.
 class Collect(Collector)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L412)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/aggregations.py#L413)
 
 Use `Collect()` to gather all events within each window period. into a list.
 
