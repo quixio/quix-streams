@@ -67,6 +67,7 @@ from .utils import ensure_milliseconds
 from .windows import (
     HoppingCountWindowDefinition,
     HoppingTimeWindowDefinition,
+    SessionWindowDefinition,
     SlidingCountWindowDefinition,
     SlidingTimeWindowDefinition,
     TumblingCountWindowDefinition,
@@ -1524,6 +1525,103 @@ class StreamingDataFrame:
             count=count,
             dataframe=self,
             name=name,
+        )
+
+    def session_window(
+        self,
+        timeout_ms: Union[int, timedelta],
+        grace_ms: Union[int, timedelta] = 0,
+        name: Optional[str] = None,
+        on_late: Optional[WindowOnLateCallback] = None,
+    ) -> SessionWindowDefinition:
+        """
+        Create a session window transformation on this StreamingDataFrame.
+        
+        Session windows group events that occur within a specified timeout period.
+        A session starts with the first event and extends each time a new event arrives
+        within the timeout period. The session closes after the timeout period with no
+        new events.
+        
+        Unlike fixed-time windows, session windows have dynamic durations based on the
+        actual events and their timing, making them ideal for user activity tracking,
+        fraud detection, and other event-driven scenarios.
+
+        They allow performing stateful aggregations like `sum`, `reduce`, etc.
+        on top of the data and emit results downstream.
+
+        Notes:
+
+        - The timestamp of the aggregation result is set to the session start timestamp.
+        - Every session is grouped by the current Kafka message key.
+        - Messages with `None` key will be ignored.
+        - Sessions always use the current event time.
+
+        Example Snippet:
+
+        ```python
+        from quixstreams import Application
+        import quixstreams.dataframe.windows.aggregations as agg
+
+        app = Application()
+        sdf = app.dataframe(...)
+
+        sdf = (
+            # Define a session window with 30-second timeout and 10-second grace period
+            sdf.session_window(
+                timeout_ms=timedelta(seconds=30),
+                grace_ms=timedelta(seconds=10)
+            )
+
+            # Specify the aggregation function
+            .agg(value=agg.Sum())
+
+            # Specify how the results should be emitted downstream.
+            # "current()" will emit results as they come for each updated session,
+            # possibly producing multiple messages per key-session pair
+            # "final()" will emit sessions only when they are closed and cannot
+            # receive any updates anymore.
+            .final()
+        )
+        ```
+
+        :param timeout_ms: The session timeout period.
+            If no new events arrive within this period, the session will be closed.
+            Can be specified as either an `int` representing milliseconds
+            or a `timedelta` object.
+            >***NOTE:*** `timedelta` objects will be rounded to the closest millisecond
+            value.
+
+        :param grace_ms: The grace period for data arrival.
+            It allows late-arriving data to be included in the session,
+            even if it arrives after the session has theoretically timed out.
+            Can be specified as either an `int` representing milliseconds
+            or a `timedelta` object.
+            >***NOTE:*** `timedelta` objects will be rounded to the closest millisecond
+            value.
+
+        :param name: The unique identifier for the window. If not provided, it will be
+            automatically generated based on the window's properties.
+
+        :param on_late: an optional callback to react on late records in sessions and
+            to configure the logging of such events.
+            If the callback returns `True`, the message about a late record will be logged
+            (default behavior).
+            Otherwise, no message will be logged.
+
+        :return: `SessionWindowDefinition` instance representing the session window
+            configuration.
+            This object can be further configured with aggregation functions
+            like `sum`, `count`, etc. applied to the StreamingDataFrame.
+        """
+        timeout_ms = ensure_milliseconds(timeout_ms)
+        grace_ms = ensure_milliseconds(grace_ms)
+
+        return SessionWindowDefinition(
+            timeout_ms=timeout_ms,
+            grace_ms=grace_ms,
+            dataframe=self,
+            name=name,
+            on_late=on_late,
         )
 
     def fill(self, *columns: str, **mapping: Any) -> "StreamingDataFrame":
