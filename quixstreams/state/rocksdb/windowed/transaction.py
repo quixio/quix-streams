@@ -2,13 +2,13 @@ import itertools
 from typing import TYPE_CHECKING, Any, Iterable, Optional, cast
 
 from quixstreams.state.base.transaction import (
-    PartitionTransaction,
     PartitionTransactionStatus,
     validate_transaction_status,
 )
-from quixstreams.state.metadata import DEFAULT_PREFIX, SEPARATOR
+from quixstreams.state.metadata import DEFAULT_PREFIX
 from quixstreams.state.recovery import ChangelogProducer
-from quixstreams.state.rocksdb.cache import CounterCache, TimestampsCache
+from quixstreams.state.rocksdb.cache import Cache
+from quixstreams.state.rocksdb.transaction import RocksDBPartitionTransaction
 from quixstreams.state.serialization import (
     DumpsFunc,
     LoadsFunc,
@@ -19,8 +19,6 @@ from quixstreams.state.serialization import (
 from quixstreams.state.types import ExpiredWindowDetail, WindowDetail
 
 from .metadata import (
-    GLOBAL_COUNTER_CF_NAME,
-    GLOBAL_COUNTER_KEY,
     LATEST_DELETED_VALUE_CF_NAME,
     LATEST_DELETED_VALUE_TIMESTAMP_KEY,
     LATEST_DELETED_WINDOW_CF_NAME,
@@ -38,7 +36,7 @@ if TYPE_CHECKING:
     from .partition import WindowedRocksDBStorePartition
 
 
-class WindowedRocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
+class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
     def __init__(
         self,
         partition: "WindowedRocksDBStorePartition",
@@ -58,25 +56,21 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         # Cache the metadata separately to avoid serdes on each access
         # (we are 100% sure that the underlying types are immutable, while windows'
         # values are not)
-        self._latest_timestamps: TimestampsCache = TimestampsCache(
+        self._latest_timestamps: Cache = Cache(
             key=LATEST_TIMESTAMP_KEY,
             cf_name=LATEST_TIMESTAMPS_CF_NAME,
         )
-        self._last_expired_timestamps: TimestampsCache = TimestampsCache(
+        self._last_expired_timestamps: Cache = Cache(
             key=LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY,
             cf_name=LATEST_EXPIRED_WINDOW_CF_NAME,
         )
-        self._last_deleted_window_timestamps: TimestampsCache = TimestampsCache(
+        self._last_deleted_window_timestamps: Cache = Cache(
             key=LATEST_DELETED_WINDOW_TIMESTAMP_KEY,
             cf_name=LATEST_DELETED_WINDOW_CF_NAME,
         )
-        self._last_deleted_value_timestamps: TimestampsCache = TimestampsCache(
+        self._last_deleted_value_timestamps: Cache = Cache(
             key=LATEST_DELETED_VALUE_TIMESTAMP_KEY,
             cf_name=LATEST_DELETED_VALUE_CF_NAME,
-        )
-        self._global_counter: CounterCache = CounterCache(
-            key=GLOBAL_COUNTER_KEY,
-            cf_name=GLOBAL_COUNTER_CF_NAME,
         )
 
     def as_state(self, prefix: Any = DEFAULT_PREFIX) -> WindowedTransactionState:  # type: ignore [override]
@@ -159,7 +153,7 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         value: Any,
         prefix: bytes,
     ) -> int:
-        counter = self._get_next_count()
+        counter = self._increment_counter()
         if id is None:
             key = encode_integer_pair(counter, counter)
         else:
@@ -522,10 +516,10 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         # Sort and deserialize items merged from the cache and store
         return sorted(merged_items.items(), key=lambda kv: kv[0], reverse=backwards)
 
-    def _get_timestamp(self, cache: TimestampsCache, prefix: bytes) -> Optional[int]:
-        if prefix in cache.timestamps:
+    def _get_timestamp(self, cache: Cache, prefix: bytes) -> Optional[int]:
+        if prefix in cache.values:
             # Return the cached value if it has been set at least once
-            return cache.timestamps[prefix]
+            return cache.values[prefix]
 
         stored_ts = self.get(
             key=cache.key,
@@ -535,11 +529,11 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         if stored_ts is not None and not isinstance(stored_ts, int):
             raise ValueError(f"invalid timestamp {stored_ts}")
 
-        cache.timestamps[prefix] = stored_ts
+        cache.values[prefix] = stored_ts
         return stored_ts
 
-    def _set_timestamp(self, cache: TimestampsCache, prefix: bytes, timestamp_ms: int):
-        cache.timestamps[prefix] = timestamp_ms
+    def _set_timestamp(self, cache: Cache, prefix: bytes, timestamp_ms: int):
+        cache.values[prefix] = timestamp_ms
         self.set(
             key=cache.key,
             value=timestamp_ms,
@@ -553,33 +547,6 @@ class WindowedRocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
                 f"Invalid window duration: window end {end_ms} is smaller or equal "
                 f"than window start {start_ms}"
             )
-
-    def _serialize_key(self, key: Any, prefix: bytes) -> bytes:
-        # Allow bytes keys in WindowedStore
-        key_bytes = key if isinstance(key, bytes) else serialize(key, dumps=self._dumps)
-        return prefix + SEPARATOR + key_bytes
-
-    def _get_next_count(self) -> int:
-        """
-        Get the next unique global counter value.
-
-        This method maintains a global counter in RocksDB to ensure unique
-        identifiers for values collected within the same timestamp. The counter
-        is cached to reduce database reads.
-
-        :return: Next sequential counter value
-        """
-        cache = self._global_counter
-
-        if cache.counter is None:
-            cache.counter = self.get(
-                default=-1, key=cache.key, prefix=b"", cf_name=cache.cf_name
-            )  # type:ignore[call-overload]
-
-        cache.counter += 1
-
-        self.set(value=cache.counter, key=cache.key, prefix=b"", cf_name=cache.cf_name)
-        return cache.counter
 
 
 def windows_to_expire(

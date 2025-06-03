@@ -53,7 +53,7 @@ class JoinAsOf:
                 f"a callable to merge records manually."
             )
 
-        self._retention_ms = ensure_milliseconds(grace_ms)
+        self._grace_ms = ensure_milliseconds(grace_ms)
         self._store_name = store_name or "join"
 
     def join(
@@ -72,6 +72,8 @@ class JoinAsOf:
         right.processing_context.state_manager.register_timestamped_store(
             stream_id=right.stream_id,
             store_name=self._store_name,
+            grace_ms=self._grace_ms,
+            keep_duplicates=False,
             changelog_config=changelog_config,
         )
 
@@ -101,12 +103,7 @@ class JoinAsOf:
                     store_name=self._store_name,
                 ),
             )
-            tx.set_for_timestamp(
-                timestamp=timestamp,
-                value=value,
-                prefix=key,
-                retention_ms=self._retention_ms,
-            )
+            tx.set_for_timestamp(timestamp=timestamp, value=value, prefix=key)
 
         right = right.update(right_func, metadata=True).filter(lambda value: False)
         left = left.apply(left_func, metadata=True).filter(

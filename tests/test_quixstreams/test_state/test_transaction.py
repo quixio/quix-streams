@@ -26,6 +26,7 @@ TEST_KEYS = [
     123,
     123.123,
     (123, 456),
+    b"somebytes",
 ]
 
 TEST_VALUES = [
@@ -240,9 +241,7 @@ class TestPartitionTransaction:
             with pytest.raises(StateSerializationError):
                 tx.set_bytes(key="key", value="value", prefix=prefix)
 
-    @pytest.mark.parametrize(
-        "key", [object(), b"somebytes", datetime.now(timezone.utc)]
-    )
+    @pytest.mark.parametrize("key", [object(), datetime.now(timezone.utc)])
     def test_delete_serialization_error(self, key, store_partition):
         prefix = b"__key__"
         with store_partition.begin() as tx:
@@ -274,8 +273,6 @@ class TestPartitionTransaction:
         with store_partition.begin() as tx:
             with pytest.raises(StateSerializationError):
                 tx.get(string_, prefix=b"")
-            with pytest.raises(StateSerializationError):
-                tx.get(bytes_, prefix=b"")
 
     def test_set_key_different_prefixes(self, store_partition):
         prefix1, prefix2 = b"__key1__", b"__key2__"

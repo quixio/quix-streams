@@ -1,12 +1,15 @@
 from contextlib import contextmanager
-from typing import Any
+from datetime import timedelta
+from typing import Any, Union
 
 import pytest
 
+from quixstreams.dataframe.utils import ensure_milliseconds
 from quixstreams.state.rocksdb.timestamped import (
     TimestampedPartitionTransaction,
     TimestampedStore,
 )
+from quixstreams.state.serialization import encode_integer_pair
 
 
 @pytest.fixture
@@ -20,7 +23,12 @@ def store_type():
 @pytest.fixture
 def transaction(store: TimestampedStore):
     @contextmanager
-    def _transaction():
+    def _transaction(
+        grace_ms: Union[int, timedelta] = timedelta(days=7),
+        keep_duplicates: bool = False,
+    ):
+        store._grace_ms = ensure_milliseconds(grace_ms)
+        store._keep_duplicates = keep_duplicates
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             yield tx
@@ -107,17 +115,11 @@ class TestTimestampedPartitionTransaction:
         self,
         transaction: TimestampedPartitionTransaction,
     ):
-        with transaction() as tx:
-            tx.set_for_timestamp(
-                timestamp=10, value="value10", prefix=b"key", retention_ms=5
-            )
+        with transaction(grace_ms=5) as tx:
+            tx.set_for_timestamp(timestamp=10, value="value10", prefix=b"key")
             assert tx.get_latest(timestamp=10, prefix=b"key") == "value10"
-            tx.set_for_timestamp(
-                timestamp=5, value="value5", prefix=b"key", retention_ms=5
-            )
-            tx.set_for_timestamp(
-                timestamp=4, value="value4", prefix=b"key", retention_ms=5
-            )
+            tx.set_for_timestamp(timestamp=5, value="value5", prefix=b"key")
+            tx.set_for_timestamp(timestamp=4, value="value4", prefix=b"key")
 
         with transaction() as tx:
             assert tx.get_latest(timestamp=5, prefix=b"key") == "value5"
@@ -134,48 +136,40 @@ class TestTimestampedPartitionTransaction:
             assert tx.get_latest(timestamp=10, prefix="key") == "value"
             assert tx.get_latest(timestamp=10, prefix=b'"key"') == "value"
 
-    def test_set_for_timestamp_with_retention_cached(
+    def test_set_for_timestamp_with_grace_cached(
         self,
         transaction: TimestampedPartitionTransaction,
     ):
-        with transaction() as tx:
-            tx.set_for_timestamp(timestamp=2, value="v2", prefix=b"key", retention_ms=2)
-            tx.set_for_timestamp(timestamp=5, value="v5", prefix=b"key", retention_ms=2)
+        with transaction(grace_ms=2) as tx:
+            tx.set_for_timestamp(timestamp=2, value="v2", prefix=b"key")
+            tx.set_for_timestamp(timestamp=5, value="v5", prefix=b"key")
             assert tx.get_latest(timestamp=2, prefix=b"key") is None
             assert tx.get_latest(timestamp=5, prefix=b"key") == "v5"
 
-    def test_set_for_timestamp_with_retention_stored(
+    def test_set_for_timestamp_with_grace_stored(
         self,
         transaction: TimestampedPartitionTransaction,
     ):
-        with transaction() as tx:
-            tx.set_for_timestamp(timestamp=2, value="v2", prefix=b"key", retention_ms=2)
-            tx.set_for_timestamp(timestamp=5, value="v5", prefix=b"key", retention_ms=2)
+        with transaction(grace_ms=2) as tx:
+            tx.set_for_timestamp(timestamp=2, value="v2", prefix=b"key")
+            tx.set_for_timestamp(timestamp=5, value="v5", prefix=b"key")
 
-        with transaction() as tx:
+        with transaction(grace_ms=2) as tx:
             assert tx.get_latest(timestamp=2, prefix=b"key") is None
             assert tx.get_latest(timestamp=5, prefix=b"key") == "v5"
 
     def test_expire_multiple_keys(self, transaction: TimestampedPartitionTransaction):
-        with transaction() as tx:
-            tx.set_for_timestamp(
-                timestamp=1, value="11", prefix=b"key1", retention_ms=10
-            )
-            tx.set_for_timestamp(
-                timestamp=1, value="21", prefix=b"key2", retention_ms=10
-            )
-            tx.set_for_timestamp(
-                timestamp=12, value="112", prefix=b"key1", retention_ms=10
-            )
-            tx.set_for_timestamp(
-                timestamp=12, value="212", prefix=b"key2", retention_ms=10
-            )
+        with transaction(grace_ms=10) as tx:
+            tx.set_for_timestamp(timestamp=1, value="11", prefix=b"key1")
+            tx.set_for_timestamp(timestamp=1, value="21", prefix=b"key2")
+            tx.set_for_timestamp(timestamp=12, value="112", prefix=b"key1")
+            tx.set_for_timestamp(timestamp=12, value="212", prefix=b"key2")
 
-        with transaction() as tx:
-            assert tx.get(key=1, prefix=b"key1") is None
-            assert tx.get(key=1, prefix=b"key2") is None
-            assert tx.get(key=12, prefix=b"key1") == "112"
-            assert tx.get(key=12, prefix=b"key2") == "212"
+        with transaction(grace_ms=10) as tx:
+            assert tx.get(key=encode_integer_pair(1, 0), prefix=b"key1") is None
+            assert tx.get(key=encode_integer_pair(1, 0), prefix=b"key2") is None
+            assert tx.get(key=encode_integer_pair(12, 0), prefix=b"key1") == "112"
+            assert tx.get(key=encode_integer_pair(12, 0), prefix=b"key2") == "212"
 
             # Expiration advances only on `set_for_timestamp` calls
             assert tx.get_latest(timestamp=30, prefix=b"key1") == "112"
@@ -192,3 +186,29 @@ class TestTimestampedPartitionTransaction:
 
         with transaction() as tx:
             assert tx.get_latest(timestamp=1, prefix=b"key") == "21"
+
+    def test_set_for_timestamp_without_keep_duplicates(
+        self,
+        transaction: TimestampedPartitionTransaction,
+    ):
+        with transaction(keep_duplicates=False) as tx:
+            tx.set_for_timestamp(timestamp=123, value="1", prefix=b"key")
+            tx.set_for_timestamp(timestamp=123, value="2", prefix=b"key")
+
+        with transaction(keep_duplicates=False) as tx:
+            assert tx.get_latest(timestamp=123, prefix=b"key") == "2"
+            assert tx.get(key=encode_integer_pair(123, 0), prefix=b"key") == "2"
+            assert tx.get(key=encode_integer_pair(123, 1), prefix=b"key") == None
+
+    def test_set_for_timestamp_with_keep_duplicates(
+        self,
+        transaction: TimestampedPartitionTransaction,
+    ):
+        with transaction(keep_duplicates=True) as tx:
+            tx.set_for_timestamp(timestamp=123, value="1", prefix=b"key")
+            tx.set_for_timestamp(timestamp=123, value="2", prefix=b"key")
+
+        with transaction(keep_duplicates=True) as tx:
+            assert tx.get_latest(timestamp=123, prefix=b"key") == "2"
+            assert tx.get(key=encode_integer_pair(123, 0), prefix=b"key") == "1"
+            assert tx.get(key=encode_integer_pair(123, 1), prefix=b"key") == "2"
