@@ -7,17 +7,16 @@ from quixstreams.dataframe.utils import ensure_milliseconds
 from quixstreams.models.topics.manager import TopicManager
 from quixstreams.state.rocksdb.timestamped import TimestampedPartitionTransaction
 
+from .base import JoinHow, JoinHow_choices
 from .utils import keep_left_merger, keep_right_merger, raise_merger
 
 if typing.TYPE_CHECKING:
     from quixstreams.dataframe.dataframe import StreamingDataFrame
 
 
-__all__ = ("JoinAsOfHow", "OnOverlap", "JoinAsOf")
+__all__ = ("OnOverlap", "JoinAsOf")
 
 DISCARDED = object()
-JoinAsOfHow = Literal["inner", "left"]
-JoinAsOfHow_choices = get_args(JoinAsOfHow)
 
 OnOverlap = Literal["keep-left", "keep-right", "raise"]
 OnOverlap_choices = get_args(OnOverlap)
@@ -26,15 +25,15 @@ OnOverlap_choices = get_args(OnOverlap)
 class JoinAsOf:
     def __init__(
         self,
-        how: JoinAsOfHow,
+        how: JoinHow,
         on_merge: Union[OnOverlap, Callable[[Any, Any], Any]],
         grace_ms: Union[int, timedelta],
         store_name: Optional[str] = None,
     ):
-        if how not in JoinAsOfHow_choices:
+        if how not in JoinHow_choices:
             raise ValueError(
                 f'Invalid "how" value: {how}. '
-                f"Valid choices are: {', '.join(JoinAsOfHow_choices)}."
+                f"Valid choices are: {', '.join(JoinHow_choices)}."
             )
         self._how = how
 
