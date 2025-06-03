@@ -348,6 +348,7 @@ class Reduce(Aggregator, Generic[R]):
         reducer: Callable[[R, Any], R],
         initializer: Callable[[Any], R],
     ) -> None:
+        super().__init__()
         self._initializer: Callable[[Any], R] = initializer
         self._reducer: Callable[[R, Any], R] = reducer
 
