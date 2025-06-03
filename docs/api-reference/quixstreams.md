@@ -9009,10 +9009,10 @@ Using `WindowedRocksDBPartitionTransaction` is a recommended way for accessing t
 ### WindowedRocksDBPartitionTransaction
 
 ```python
-class WindowedRocksDBPartitionTransaction(PartitionTransaction[bytes, Any])
+class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L41)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L39)
 
 <a id="quixstreams.state.rocksdb.windowed.transaction.WindowedRocksDBPartitionTransaction.expire_windows"></a>
 
@@ -9027,7 +9027,7 @@ def expire_windows(
         end_inclusive: bool = False) -> Iterable[ExpiredWindowDetail]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L209)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L203)
 
 Get all expired windows with a set prefix from RocksDB up to the specified `max_start_time` timestamp.
 
@@ -9075,7 +9075,7 @@ def expire_all_windows(max_end_time: int,
                        collect: bool = False) -> Iterable[ExpiredWindowDetail]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L302)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L296)
 
 Get all expired windows for all prefix from RocksDB up to the specified `max_end_time` timestamp.
 
@@ -9094,7 +9094,7 @@ def delete_windows(max_start_time: int, delete_values: bool,
                    prefix: bytes) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L374)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L368)
 
 Delete windows from RocksDB up to the specified `max_start_time` timestamp.
 
@@ -9129,7 +9129,7 @@ def get_windows(start_from_ms: int,
                 backwards: bool = False) -> list[WindowDetail]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L429)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L423)
 
 Get all windows within the specified time range.
 
@@ -9527,7 +9527,7 @@ def __init__(
         options: Optional[RocksDBOptionsType] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/store.py#L28)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/store.py#L26)
 
 **Arguments**:
 
@@ -9550,7 +9550,7 @@ if using changelogs
 class RocksDBStorePartition(StorePartition)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L37)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L35)
 
 A base class to access state in RocksDB.
 
@@ -9579,7 +9579,7 @@ def write(cache: PartitionTransactionCache,
           batch: Optional[WriteBatch] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L87)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L85)
 
 Write data to RocksDB
 
@@ -9598,7 +9598,7 @@ def get(key: bytes,
         cf_name: str = "default") -> Union[bytes, Literal[Marker.UNDEFINED]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L137)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L135)
 
 Get a key from RocksDB.
 
@@ -9622,7 +9622,7 @@ def iter_items(lower_bound: bytes,
                cf_name: str = "default") -> Iterator[tuple[bytes, bytes]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L154)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L152)
 
 Iterate over key-value pairs within a specified range in a column family.
 
@@ -9647,7 +9647,7 @@ An iterator yielding (key, value) tuples.
 def exists(key: bytes, cf_name: str = "default") -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L211)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L209)
 
 Check if a key is present in the DB.
 
@@ -9668,7 +9668,7 @@ Check if a key is present in the DB.
 def get_changelog_offset() -> Optional[int]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L222)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L220)
 
 Get offset that the changelog is up-to-date with.
 
@@ -9684,7 +9684,7 @@ offset or `None` if there's no processed offset yet
 def write_changelog_offset(offset: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L234)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L232)
 
 Write a new changelog offset to the db.
 
@@ -9703,7 +9703,7 @@ the actual data.
 def close()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L247)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L245)
 
 Close the underlying RocksDB
 
@@ -9716,7 +9716,7 @@ Close the underlying RocksDB
 def path() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L260)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L258)
 
 Absolute path to RocksDB database folder
 
@@ -9733,7 +9733,7 @@ file path
 def destroy(cls, path: str)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L268)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L266)
 
 Delete underlying RocksDB database
 
@@ -9751,7 +9751,7 @@ The database must be closed first.
 def get_column_family_handle(cf_name: str) -> ColumnFamily
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L278)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L276)
 
 Get a column family handle to pass to it WriteBatch.
 
@@ -9774,7 +9774,7 @@ instance of `rocksdict.ColumnFamily`
 def get_or_create_column_family(cf_name: str) -> Rdict
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L293)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/partition.py#L291)
 
 Get a column family instance.
 
@@ -9791,6 +9791,45 @@ instance of `rocksdict.Rdict` for the given column family
 <a id="quixstreams.state.rocksdb.metadata"></a>
 
 ## quixstreams.state.rocksdb.metadata
+
+<a id="quixstreams.state.rocksdb.transaction"></a>
+
+## quixstreams.state.rocksdb.transaction
+
+<a id="quixstreams.state.rocksdb.transaction.MAX_UINT64"></a>
+
+#### MAX\_UINT64
+
+18446744073709551615
+
+<a id="quixstreams.state.rocksdb.transaction.RocksDBPartitionTransaction"></a>
+
+### RocksDBPartitionTransaction
+
+```python
+class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any])
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/transaction.py#L19)
+
+<a id="quixstreams.state.rocksdb.transaction.RocksDBPartitionTransaction.prepare"></a>
+
+#### RocksDBPartitionTransaction.prepare
+
+```python
+@validate_transaction_status(PartitionTransactionStatus.STARTED)
+def prepare(processed_offsets: Optional[dict[str, int]] = None) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/transaction.py#L36)
+
+This method first persists the counter and then calls the parent class's
+
+`prepare()` to prepare the transaction for flush.
+
+**Arguments**:
+
+- `processed_offsets`: the dict with <topic: offset> of the latest processed message
 
 <a id="quixstreams.state.rocksdb.cache"></a>
 
@@ -9817,10 +9856,10 @@ instance of `rocksdict.Rdict` for the given column family
 ### TimestampedPartitionTransaction
 
 ```python
-class TimestampedPartitionTransaction(PartitionTransaction)
+class TimestampedPartitionTransaction(RocksDBPartitionTransaction)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L34)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L35)
 
 A partition-specific transaction handler for the `TimestampedStore`.
 
@@ -9836,10 +9875,12 @@ It interacts with both an in-memory update cache and the persistent RocksDB stor
 def __init__(partition: "TimestampedStorePartition",
              dumps: DumpsFunc,
              loads: LoadsFunc,
+             grace_ms: int,
+             keep_duplicates: bool,
              changelog_producer: Optional[ChangelogProducer] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L43)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L44)
 
 Initializes a new `TimestampedPartitionTransaction`.
 
@@ -9848,7 +9889,9 @@ Initializes a new `TimestampedPartitionTransaction`.
 - `partition`: The `TimestampedStorePartition` this transaction belongs to.
 - `dumps`: The serialization function for keys/values.
 - `loads`: The deserialization function for keys/values.
+- `keep_duplicates`: Whether to collect all values for the same timestamp or just the latest.
 - `changelog_producer`: Optional `ChangelogProducer` for recording changes.
+- `grace_ms`: retention for the key in milliseconds
 
 <a id="quixstreams.state.rocksdb.timestamped.TimestampedPartitionTransaction.get_latest"></a>
 
@@ -9859,7 +9902,7 @@ Initializes a new `TimestampedPartitionTransaction`.
 def get_latest(timestamp: int, prefix: Any) -> Optional[Any]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L73)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L80)
 
 Get the latest value for a prefix up to a given timestamp.
 
@@ -9888,13 +9931,10 @@ The deserialized value if found, otherwise None.
 
 ```python
 @validate_transaction_status(PartitionTransactionStatus.STARTED)
-def set_for_timestamp(timestamp: int,
-                      value: Any,
-                      prefix: Any,
-                      retention_ms: int = 7 * DAY_MS) -> None
+def set_for_timestamp(timestamp: int, value: Any, prefix: Any) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L136)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L144)
 
 Set a value for the timestamp.
 
@@ -9903,7 +9943,7 @@ to the parent `set` method. The parent method internally serializes these
 into a combined key before storing the value in the update cache.
 
 Additionally, it updates the minimum eligible timestamp for the given prefix
-based on the `retention_ms`, which is used later during the flush process to
+based on the `grace_ms`, which is used later during the flush process to
 expire old data.
 
 **Arguments**:
@@ -9911,7 +9951,6 @@ expire old data.
 - `timestamp`: Timestamp associated with the value in milliseconds.
 - `value`: The value to store.
 - `prefix`: The key prefix.
-- `retention_ms`: retention for the key in milliseconds
 
 <a id="quixstreams.state.rocksdb.timestamped.TimestampedPartitionTransaction.prepare"></a>
 
@@ -9922,11 +9961,11 @@ expire old data.
 def prepare(processed_offsets: Optional[dict[str, int]] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L167)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L170)
 
 This method first calls `_expire()` to remove outdated entries based on
 
-their timestamps and retention periods, then calls the parent class's
+their timestamps and grace periods, then calls the parent class's
 `prepare()` to prepare the transaction for flush.
 
 **Arguments**:
@@ -9941,7 +9980,7 @@ their timestamps and retention periods, then calls the parent class's
 class TimestampedStorePartition(RocksDBStorePartition)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L257)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L256)
 
 Represents a single partition within a `TimestampedStore`.
 
@@ -9956,7 +9995,7 @@ This class is responsible for managing the state of one partition and creating
 class TimestampedStore(RocksDBStore)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L275)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L287)
 
 A RocksDB-backed state store implementation that manages key-value pairs
 associated with timestamps.
@@ -11390,7 +11429,7 @@ def register_windowed_store(
         changelog_config: Optional[TopicConfig] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L235)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L239)
 
 Register a windowed state store to be managed by StateStoreManager.
 
@@ -11413,7 +11452,7 @@ Each window store can be registered only once for each stream_id.
 def clear_stores() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L273)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L277)
 
 Delete all state stores managed by StateStoreManager.
 
@@ -11427,7 +11466,7 @@ def on_partition_assign(
         committed_offsets: dict[str, int]) -> Dict[str, StorePartition]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L290)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L294)
 
 Assign store partitions for each registered store for the given stream_id
 
@@ -11452,7 +11491,7 @@ list of assigned `StorePartition`
 def on_partition_revoke(stream_id: str, partition: int) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L319)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L323)
 
 Revoke store partitions for each registered store
 
@@ -11471,7 +11510,7 @@ for the given stream_id and partition number.
 def init() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L337)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L341)
 
 Initialize `StateStoreManager` and create a store directory
 
@@ -11484,7 +11523,7 @@ Initialize `StateStoreManager` and create a store directory
 def close() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L344)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/manager.py#L348)
 
 Close all registered stores
 
