@@ -3,7 +3,6 @@ import pytest
 import quixstreams.dataframe.windows.aggregations as agg
 from quixstreams.dataframe import DataFrameRegistry
 from quixstreams.dataframe.windows.definitions import SessionWindowDefinition
-from quixstreams.dataframe.windows.time_based import ClosingStrategy
 
 
 @pytest.fixture()
@@ -31,7 +30,13 @@ class TestSessionWindow:
     @pytest.mark.parametrize(
         "timeout, grace, provided_name, func_name, expected_name",
         [
-            (30000, 5000, "custom_window", "sum", "custom_window_session_window_30000_sum"),
+            (
+                30000,
+                5000,
+                "custom_window",
+                "sum",
+                "custom_window_session_window_30000_sum",
+            ),
             (30000, 5000, None, "sum", "session_window_30000_sum"),
             (15000, 5000, None, "count", "session_window_15000_count"),
         ],
@@ -360,7 +365,7 @@ class TestSessionWindow:
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             key = b"key"
-            
+
             # Start session 1
             updated, expired = process(
                 window, value=1, key=key, transaction=tx, timestamp_ms=1000
@@ -406,7 +411,7 @@ class TestSessionWindow:
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             key = b"key"
-            
+
             # Start session
             updated, expired = process(
                 window, value=1, key=key, transaction=tx, timestamp_ms=1000
@@ -444,7 +449,7 @@ class TestSessionWindow:
         with store.start_partition_transaction(0) as tx:
             key1 = b"key1"
             key2 = b"key2"
-            
+
             # Start session for key1
             updated, expired = process(
                 window, value=1, key=key1, transaction=tx, timestamp_ms=1000
@@ -530,11 +535,11 @@ class TestSessionWindow:
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             key = b"key"
-            
+
             # Start and finish a session
             process(window, value=1, key=key, transaction=tx, timestamp_ms=1000)
             process(window, value=2, key=key, transaction=tx, timestamp_ms=3000)
-            
+
             # Start new session that will cause first to expire
             updated, expired = process(
                 window, value=5, key=key, transaction=tx, timestamp_ms=15000
@@ -562,7 +567,7 @@ class TestSessionWindow:
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             key = b"key"
-            
+
             # Start session - should get update immediately
             updated, expired = process(
                 window, value=1, key=key, transaction=tx, timestamp_ms=1000
@@ -590,13 +595,13 @@ class TestSessionWindow:
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             key = b"key"
-            
+
             # Start session 1
             updated, expired = process(
                 window, value=1, key=key, transaction=tx, timestamp_ms=1000
             )
             session1_end = updated[0][1]["end"]
-            
+
             # Event within timeout - extends session 1
             updated, expired = process(
                 window, value=2, key=key, transaction=tx, timestamp_ms=5000
@@ -604,7 +609,7 @@ class TestSessionWindow:
             new_end = updated[0][1]["end"]
             assert new_end > session1_end  # Session extended
             assert updated[0][1]["value"] == 3  # Accumulated value
-            
+
             # Event far in future - starts session 2, expires session 1
             updated, expired = process(
                 window, value=10, key=key, transaction=tx, timestamp_ms=30000
@@ -626,7 +631,7 @@ class TestSessionWindow:
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             key = b"key"
-            
+
             # Create first session
             updated, expired = process(
                 window, value=1, key=key, transaction=tx, timestamp_ms=1000
@@ -636,7 +641,7 @@ class TestSessionWindow:
             assert updated[0][1]["end"] == 11000  # 1000 + 10000
             assert updated[0][1]["value"] == 1
             assert not expired
-            
+
             # Create second session that doesn't expire the first one yet
             # (13000 is still within timeout + grace of first session: 11000 + 1000 = 12000)
             # Actually, let's make it further: 20000ms to ensure two separate sessions
@@ -648,12 +653,12 @@ class TestSessionWindow:
             assert expired[0][1]["start"] == 1000
             assert expired[0][1]["end"] == 11000
             assert expired[0][1]["value"] == 1
-            
+
             assert len(updated) == 1
             assert updated[0][1]["start"] == 20000
             assert updated[0][1]["end"] == 30000  # 20000 + 10000
             assert updated[0][1]["value"] == 10
-            
+
             # Add another event to the second session
             updated, expired = process(
                 window, value=5, key=key, transaction=tx, timestamp_ms=25000
@@ -663,7 +668,7 @@ class TestSessionWindow:
             assert updated[0][1]["end"] == 35000  # 25000 + 10000
             assert updated[0][1]["value"] == 15  # 10 + 5
             assert not expired
-            
+
             # Now test the limitation: we'll create a third session that could theoretically
             # merge with the second session if there was a bridging event
             # But since sessions don't auto-merge, they'll remain separate
@@ -675,7 +680,7 @@ class TestSessionWindow:
             assert expired[0][1]["start"] == 20000
             assert expired[0][1]["end"] == 35000
             assert expired[0][1]["value"] == 15
-            
+
             # Third session starts
             assert len(updated) == 1
             assert updated[0][1]["start"] == 50000
@@ -687,18 +692,18 @@ class TestSessionWindow:
     ):
         """
         Test scenario where an event arrives that could theoretically bridge two sessions.
-        
+
         This test documents the current behavior where sessions don't auto-merge,
         even when a bridging event could logically connect them.
-        
+
         Scenario:
         1. Session A: [1000, 11000] with value 5
-        2. Session B: [15000, 25000] with value 10  
+        2. Session B: [15000, 25000] with value 10
         3. Bridging event at 12000ms that:
            - Can extend Session A to [1000, 22000]
            - Now overlaps with Session B [15000, 25000]
            - Ideally should merge into single session [1000, 25000] with value 15+bridge_value
-        
+
         Current behavior: Session A gets extended, Session B remains separate
         Ideal behavior: Sessions A and B get merged when bridging event arrives
         """
@@ -709,7 +714,7 @@ class TestSessionWindow:
         store.assign_partition(0)
         with store.start_partition_transaction(0) as tx:
             key = b"key"
-            
+
             # Create Session A
             updated, expired = process(
                 window, value=5, key=key, transaction=tx, timestamp_ms=1000
@@ -719,7 +724,7 @@ class TestSessionWindow:
             assert updated[0][1]["end"] == 11000  # 1000 + 10000
             assert updated[0][1]["value"] == 5
             assert not expired
-            
+
             # Create Session B - close enough that it doesn't expire Session A
             # Session A expires when time > 11000 + 2000 = 13000
             # So event at 12000 should keep Session A alive
@@ -732,9 +737,9 @@ class TestSessionWindow:
             assert len(updated) == 1
             assert updated[0][1]["start"] == 1000  # Session A extended
             assert updated[0][1]["end"] == 22000  # 12000 + 10000
-            assert updated[0][1]["value"] == 15   # 5 + 10
+            assert updated[0][1]["value"] == 15  # 5 + 10
             assert not expired
-            
+
             # Now create what would be Session B if Session A hadn't been extended
             updated, expired = process(
                 window, value=20, key=key, transaction=tx, timestamp_ms=15000
@@ -743,9 +748,9 @@ class TestSessionWindow:
             assert len(updated) == 1
             assert updated[0][1]["start"] == 1000  # Still Session A
             assert updated[0][1]["end"] == 25000  # 15000 + 10000
-            assert updated[0][1]["value"] == 35   # 5 + 10 + 20
+            assert updated[0][1]["value"] == 35  # 5 + 10 + 20
             assert not expired
-            
+
             # Final event to expire the session
             updated, expired = process(
                 window, value=1, key=key, transaction=tx, timestamp_ms=40000
@@ -754,7 +759,91 @@ class TestSessionWindow:
             assert expired[0][1]["start"] == 1000
             assert expired[0][1]["end"] == 25000
             assert expired[0][1]["value"] == 35  # All events combined
-            
+
             assert len(updated) == 1
             assert updated[0][1]["start"] == 40000
             assert updated[0][1]["value"] == 1
+
+    def test_session_window_string_key_extension(
+        self, session_window_definition_factory, state_manager
+    ):
+        """
+        Test session window extension with string keys.
+
+        This test specifically verifies that session extension works correctly
+        when using string keys (which need to be serialized to bytes internally).
+
+        This test would have caught the original TypeError bug where
+        `transaction.delete_window()` was called with a string key instead of
+        the properly serialized bytes prefix.
+        """
+        window_def = session_window_definition_factory(timeout_ms=10000, grace_ms=1000)
+        window = window_def.sum()
+        window.final(closing_strategy="key")
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
+        store.assign_partition(0)
+        with store.start_partition_transaction(0) as tx:
+            # Use a string key instead of bytes to trigger the serialization path
+            key = "user_123"
+
+            # Start a session
+            updated, expired = process(
+                window, value=100, key=key, transaction=tx, timestamp_ms=1000
+            )
+            assert len(updated) == 1
+            assert updated[0][1]["start"] == 1000
+            assert updated[0][1]["end"] == 11000  # 1000 + 10000
+            assert updated[0][1]["value"] == 100
+            assert not expired
+
+            # Extend the session - this should trigger the delete_window call
+            # that would have failed with the original bug
+            updated, expired = process(
+                window, value=200, key=key, transaction=tx, timestamp_ms=5000
+            )
+            assert len(updated) == 1
+            assert updated[0][1]["start"] == 1000  # Session extended, same start
+            assert updated[0][1]["end"] == 15000  # 5000 + 10000 (new end time)
+            assert updated[0][1]["value"] == 300  # 100 + 200
+            assert not expired
+
+            # Extend the session again to make sure it still works
+            updated, expired = process(
+                window, value=50, key=key, transaction=tx, timestamp_ms=8000
+            )
+            assert len(updated) == 1
+            assert updated[0][1]["start"] == 1000  # Session extended again
+            assert updated[0][1]["end"] == 18000  # 8000 + 10000
+            assert updated[0][1]["value"] == 350  # 100 + 200 + 50
+            assert not expired
+
+            # Test with a different string key to make sure multiple keys work
+            key2 = "user_456"
+            updated, expired = process(
+                window, value=75, key=key2, transaction=tx, timestamp_ms=9000
+            )
+            assert len(updated) == 1
+            assert updated[0][0] == key2  # Different key
+            assert updated[0][1]["start"] == 9000
+            assert updated[0][1]["end"] == 19000  # 9000 + 10000
+            assert updated[0][1]["value"] == 75
+            assert not expired
+
+            # Expire the first session by advancing time far enough
+            updated, expired = process(
+                window, value=25, key=key, transaction=tx, timestamp_ms=30000
+            )
+
+            # Should have expired the first session
+            assert len(expired) == 1
+            assert expired[0][0] == key
+            assert expired[0][1]["start"] == 1000
+            assert expired[0][1]["end"] == 18000
+            assert expired[0][1]["value"] == 350
+
+            # Should have started a new session for the first key
+            assert len(updated) == 1
+            assert updated[0][0] == key
+            assert updated[0][1]["start"] == 30000
+            assert updated[0][1]["end"] == 40000
+            assert updated[0][1]["value"] == 25
