@@ -1,6 +1,6 @@
 import typing
 from datetime import timedelta
-from typing import Any, Callable, Optional, Union, cast
+from typing import Any, Callable, Optional, Union
 
 from quixstreams.context import message_context
 from quixstreams.dataframe.utils import ensure_milliseconds
@@ -76,13 +76,12 @@ class AsOfJoin:
         is_inner_join = self._how == "inner"
 
         def left_func(value, key, timestamp, headers):
-            tx = cast(
-                TimestampedPartitionTransaction,
+            tx: TimestampedPartitionTransaction = (
                 right.processing_context.checkpoint.get_store_transaction(
                     stream_id=right.stream_id,
                     partition=message_context().partition,
                     store_name=self._store_name,
-                ),
+                )
             )
 
             right_value = tx.get_latest(timestamp=timestamp, prefix=key)
@@ -91,13 +90,12 @@ class AsOfJoin:
             return self._merger(value, right_value)
 
         def right_func(value, key, timestamp, headers):
-            tx = cast(
-                TimestampedPartitionTransaction,
+            tx: TimestampedPartitionTransaction = (
                 right.processing_context.checkpoint.get_store_transaction(
                     stream_id=right.stream_id,
                     partition=message_context().partition,
                     store_name=self._store_name,
-                ),
+                )
             )
             tx.set_for_timestamp(timestamp=timestamp, value=value, prefix=key)
 
