@@ -64,8 +64,11 @@ class AsOfJoin:
             )
         TopicManager.ensure_topics_copartitioned(*left.topics, *right.topics)
 
+        # ProcessingContext is shared between all dataframes in the same application
+        processing_context = left.processing_context
+
         changelog_config = TopicManager.derive_topic_config(right.topics)
-        right.processing_context.state_manager.register_timestamped_store(
+        processing_context.state_manager.register_timestamped_store(
             stream_id=right.stream_id,
             store_name=self._store_name,
             grace_ms=self._grace_ms,
@@ -77,7 +80,7 @@ class AsOfJoin:
 
         def left_func(value, key, timestamp, headers):
             tx: TimestampedPartitionTransaction = (
-                right.processing_context.checkpoint.get_store_transaction(
+                processing_context.checkpoint.get_store_transaction(
                     stream_id=right.stream_id,
                     partition=message_context().partition,
                     store_name=self._store_name,
@@ -91,7 +94,7 @@ class AsOfJoin:
 
         def right_func(value, key, timestamp, headers):
             tx: TimestampedPartitionTransaction = (
-                right.processing_context.checkpoint.get_store_transaction(
+                processing_context.checkpoint.get_store_transaction(
                     stream_id=right.stream_id,
                     partition=message_context().partition,
                     store_name=self._store_name,
