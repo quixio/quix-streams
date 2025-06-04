@@ -3,6 +3,9 @@ import sys
 import time
 from datetime import datetime, timezone
 from typing import Any, Callable, Iterable, Literal, Mapping, Optional, Union, get_args
+from urllib.parse import urljoin
+
+import requests
 
 from quixstreams.models import HeadersTuples
 
@@ -154,6 +157,7 @@ class InfluxDB3Sink(BatchingSink):
             on_client_connect_success=on_client_connect_success,
             on_client_connect_failure=on_client_connect_failure,
         )
+        self._request_timeout_ms = request_timeout_ms
 
         if time_precision not in (time_args := get_args(TimePrecision)):
             raise ValueError(
@@ -175,7 +179,7 @@ class InfluxDB3Sink(BatchingSink):
             "database": database,
             "debug": debug,
             "enable_gzip": enable_gzip,
-            "timeout": request_timeout_ms,
+            "timeout": self._request_timeout_ms,
             "write_client_options": {
                 "write_options": WriteOptions(
                     write_type=WriteType.synchronous,
@@ -193,19 +197,37 @@ class InfluxDB3Sink(BatchingSink):
         self._allow_missing_fields = allow_missing_fields
         self._convert_ints_to_floats = convert_ints_to_floats
 
+    def _get_influx_version(self):
+        # This validates the token is valid regardless of version
+        headers = {"Authorization": f"Token {self._client_args['token']}"}
+        try:
+            r = requests.get(
+                urljoin(self._client_args["host"], "ping"),
+                headers=headers,
+                timeout=self._request_timeout_ms / 1000,
+            )
+            r.raise_for_status()
+        except Exception:
+            logger.error("Ping to InfluxDB failed, likely due to an invalid token.")
+            raise
+        version = r.headers.get("X-Influxdb-Version") or r.json()["version"]
+        return version.split(".")[0][-1]
+
     def setup(self):
         self._client = InfluxDBClient3(**self._client_args)
-        try:
-            # We cannot safely parameterize the table (measurement) selection, so
-            # the best we can do is confirm authentication was successful
-            self._client.query("")
-        except Exception as e:
-            e_str = str(e)
-            if not (
-                "No SQL statements were provided in the query string" in e_str
-                or "database not found" in e_str  # attempts making db when writing
-            ):
-                raise
+        if (version := self._get_influx_version()) == "3":
+            # additional client functionality/connectivity check with v3
+            # write and create operations work with v2 due to backwards compatibility
+            try:
+                self._client.query("SHOW MEASUREMENTS", language="influxql")
+            except Exception as e:
+                if "database not found" not in str(e):  # attempts db create on write
+                    raise
+        else:
+            logger.warning(
+                f"connected InfluxDB instance is v{version};"
+                f"this sink only guarantees functionality with v3."
+            )
 
     def add(
         self,
