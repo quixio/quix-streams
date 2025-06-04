@@ -1,4 +1,4 @@
 from .base import JoinHow, OnOverlap
-from .join_asof import JoinAsOf
+from .join_asof import AsOfJoin
 
-__all__ = ("JoinHow", "JoinAsOf", "OnOverlap")
+__all__ = ("AsOfJoin", "JoinHow", "OnOverlap")

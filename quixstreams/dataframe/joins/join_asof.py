@@ -14,12 +14,12 @@ if typing.TYPE_CHECKING:
     from quixstreams.dataframe.dataframe import StreamingDataFrame
 
 
-__all__ = ("JoinAsOf",)
+__all__ = ("AsOfJoin",)
 
 DISCARDED = object()
 
 
-class JoinAsOf:
+class AsOfJoin:
     def __init__(
         self,
         how: JoinHow,

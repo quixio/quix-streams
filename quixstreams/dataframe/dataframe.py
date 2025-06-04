@@ -60,7 +60,7 @@ from quixstreams.utils.printing import (
 from quixstreams.utils.stream_id import stream_id_from_strings
 
 from .exceptions import InvalidOperation
-from .joins import JoinAsOf, JoinHow, OnOverlap
+from .joins import AsOfJoin, JoinHow, OnOverlap
 from .joins.lookups import BaseField, BaseLookup
 from .registry import DataFrameRegistry
 from .series import StreamingSeries
@@ -1729,7 +1729,7 @@ class StreamingDataFrame:
         ```
 
         """
-        return JoinAsOf(
+        return AsOfJoin(
             how=how, on_merge=on_merge, grace_ms=grace_ms, store_name=name
         ).join(self, right)
 
