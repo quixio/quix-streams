@@ -2707,24 +2707,6 @@ class TestStreamingDataFrameConcat:
 
 class TestStreamingDataFrameJoinAsOf:
     @pytest.fixture
-    def topic_manager(self, topic_manager_factory):
-        return topic_manager_factory()
-
-    # TODO: Check if we already have a fixture for that to avoid the pollution
-    @pytest.fixture
-    def create_topic(self, topic_manager):
-        def _create_topic(num_partitions=1):
-            return topic_manager.topic(
-                str(uuid.uuid4()),
-                create_config=TopicConfig(
-                    num_partitions=num_partitions,
-                    replication_factor=1,
-                ),
-            )
-
-        return _create_topic
-
-    @pytest.fixture
     def create_sdf(self, dataframe_factory, state_manager):
         def _create_sdf(topic):
             return dataframe_factory(topic=topic, state_manager=state_manager)
@@ -2798,7 +2780,7 @@ class TestStreamingDataFrameJoinAsOf:
     )
     def test_how(
         self,
-        create_topic,
+        topic_manager_topic_factory,
         create_sdf,
         assign_partition,
         publish,
@@ -2807,7 +2789,8 @@ class TestStreamingDataFrameJoinAsOf:
         left,
         expected,
     ):
-        left_topic, right_topic = create_topic(), create_topic()
+        left_topic = topic_manager_topic_factory()
+        right_topic = topic_manager_topic_factory()
         left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
         joined_sdf = left_sdf.join_asof(right_sdf, how=how)
         assign_partition(right_sdf)
@@ -2818,16 +2801,20 @@ class TestStreamingDataFrameJoinAsOf:
         )
         assert joined_value == expected
 
-    def test_how_invalid_value(self, create_topic, create_sdf):
-        left_topic, right_topic = create_topic(), create_topic()
+    def test_how_invalid_value(self, topic_manager_topic_factory, create_sdf):
+        left_topic = topic_manager_topic_factory()
+        right_topic = topic_manager_topic_factory()
         left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
 
         match = 'Invalid "how" value'
         with pytest.raises(ValueError, match=match):
             left_sdf.join_asof(right_sdf, how="invalid")
 
-    def test_mismatching_partitions_fails(self, create_topic, create_sdf):
-        left_topic, right_topic = create_topic(), create_topic(num_partitions=2)
+    def test_mismatching_partitions_fails(
+        self, topic_manager_topic_factory, create_sdf
+    ):
+        left_topic = topic_manager_topic_factory()
+        right_topic = topic_manager_topic_factory(partitions=2)
         left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
 
         with pytest.raises(TopicPartitionsMismatch):
@@ -2882,7 +2869,7 @@ class TestStreamingDataFrameJoinAsOf:
     )
     def test_on_merge(
         self,
-        create_topic,
+        topic_manager_topic_factory,
         create_sdf,
         assign_partition,
         publish,
@@ -2891,7 +2878,8 @@ class TestStreamingDataFrameJoinAsOf:
         left,
         expected,
     ):
-        left_topic, right_topic = create_topic(), create_topic()
+        left_topic = topic_manager_topic_factory()
+        right_topic = topic_manager_topic_factory()
         left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
         joined_sdf = left_sdf.join_asof(right_sdf, how="left", on_merge=on_merge)
         assign_partition(right_sdf)
@@ -2907,8 +2895,9 @@ class TestStreamingDataFrameJoinAsOf:
             )
             assert joined_value == [(expected, b"key", 2, None)]
 
-    def test_on_merge_invalid_value(self, create_topic, create_sdf):
-        left_topic, right_topic = create_topic(), create_topic()
+    def test_on_merge_invalid_value(self, topic_manager_topic_factory, create_sdf):
+        left_topic = topic_manager_topic_factory()
+        right_topic = topic_manager_topic_factory()
         left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
 
         match = 'Invalid "on_merge"'
@@ -2916,9 +2905,10 @@ class TestStreamingDataFrameJoinAsOf:
             left_sdf.join_asof(right_sdf, on_merge="invalid")
 
     def test_on_merge_callback(
-        self, create_topic, create_sdf, assign_partition, publish
+        self, topic_manager_topic_factory, create_sdf, assign_partition, publish
     ):
-        left_topic, right_topic = create_topic(), create_topic()
+        left_topic = topic_manager_topic_factory()
+        right_topic = topic_manager_topic_factory()
         left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
 
         def on_merge(left, right):
@@ -2933,12 +2923,13 @@ class TestStreamingDataFrameJoinAsOf:
 
     def test_grace_ms(
         self,
-        create_topic,
+        topic_manager_topic_factory,
         create_sdf,
         assign_partition,
         publish,
     ):
-        left_topic, right_topic = create_topic(), create_topic()
+        left_topic = topic_manager_topic_factory()
+        right_topic = topic_manager_topic_factory()
         left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
 
         joined_sdf = left_sdf.join_asof(right_sdf, grace_ms=10)
@@ -2962,8 +2953,8 @@ class TestStreamingDataFrameJoinAsOf:
         assert publish_left(timestamp=4) == []
         assert publish_left(timestamp=5) == [({"left": 4, "right": 2}, b"key", 5, None)]
 
-    def test_self_join_not_supported(self, create_topic, create_sdf):
-        topic = create_topic()
+    def test_self_join_not_supported(self, topic_manager_topic_factory, create_sdf):
+        topic = topic_manager_topic_factory()
         match = (
             "Joining dataframes originating from the same topic is not yet supported."
         )
@@ -2978,10 +2969,12 @@ class TestStreamingDataFrameJoinAsOf:
         with pytest.raises(ValueError, match=match):
             sdf.join_asof(sdf2)
 
-    def test_join_same_topic_multiple_times_fails(self, create_topic, create_sdf):
-        topic1 = create_topic()
-        topic2 = create_topic()
-        topic3 = create_topic()
+    def test_join_same_topic_multiple_times_fails(
+        self, topic_manager_topic_factory, create_sdf
+    ):
+        topic1 = topic_manager_topic_factory()
+        topic2 = topic_manager_topic_factory()
+        topic3 = topic_manager_topic_factory()
 
         sdf1 = create_sdf(topic1)
         sdf2 = create_sdf(topic2)
