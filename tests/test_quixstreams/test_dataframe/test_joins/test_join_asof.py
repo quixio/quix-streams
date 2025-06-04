@@ -7,37 +7,6 @@ from quixstreams.state.exceptions import StoreAlreadyRegisteredError
 
 
 class TestStreamingDataFrameJoinAsOf:
-    @pytest.fixture
-    def create_sdf(self, dataframe_factory, state_manager):
-        def _create_sdf(topic):
-            return dataframe_factory(topic=topic, state_manager=state_manager)
-
-        return _create_sdf
-
-    @pytest.fixture
-    def assign_partition(self, state_manager):
-        def _assign_partition(sdf):
-            state_manager.on_partition_assign(
-                stream_id=sdf.stream_id,
-                partition=0,
-                committed_offsets={},
-            )
-
-        return _assign_partition
-
-    @pytest.fixture
-    def publish(self, message_context_factory):
-        def _publish(sdf, topic, value, key, timestamp):
-            return sdf.test(
-                value=value,
-                key=key,
-                timestamp=timestamp,
-                topic=topic,
-                ctx=message_context_factory(topic=topic.name),
-            )
-
-        return _publish
-
     @pytest.mark.parametrize(
         "how, right, left, expected",
         [
