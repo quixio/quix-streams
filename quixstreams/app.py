@@ -992,6 +992,7 @@ class Application:
         than only reactively when new messages arrive.
         """
         
+        
         # Skip if timeout checking is disabled
         if not self._enable_window_timeout_checking:
             return
@@ -1028,12 +1029,15 @@ class Application:
         :param topic_name: Name of the topic
         :param dataframe: The dataframe to check for timeout-enabled windows
         """
+        logger.info(f"Entering _expire_dataframe_timeouts")
+        
         # Check if this topic has timeout-enabled windows
         if topic_name not in self._timeout_enabled_windows:
             return
             
         # Get active keys for all partitions of this topic
         topic_keys = self._active_window_keys.get(topic_name, {})
+        logger.info(f"Active keys for topic {topic_name}: {topic_keys}")
         if not topic_keys:
             return
             
@@ -1046,6 +1050,8 @@ class Application:
                 # Get stream IDs for this topic
                 stream_ids = self._dataframe_registry.get_stream_ids(topic_name)
                 if not stream_ids:
+                    logger.info(
+                        f"No streams found for topic {topic_name}, skipping timeout processing.")
                     continue
                     
                 # Process timeouts for each stream that uses this topic
