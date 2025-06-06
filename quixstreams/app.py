@@ -1125,8 +1125,7 @@ class Application:
                 topic=topic_name,
                 partition=partition,
                 offset=-1,  # Synthetic offset for timeout events
-                timestamp=int(time.time() * 1000),  # Current timestamp
-                headers={},
+                size=0,  # No actual message size for timeout events
             )
             
             # Process the timeout result through the dataframe pipeline
@@ -1137,12 +1136,13 @@ class Application:
             # Get the composed dataframe executor for this topic
             dataframes_composed = self._dataframe_registry.compose_all()
             if topic_name in dataframes_composed:
+                current_timestamp = int(time.time() * 1000)
                 execution_context.run(
                     dataframes_composed[topic_name],
-                    result.value,  # The aggregated window result
+                    result[1],  # The aggregated window result (result is tuple[key, result_dict])
                     key,
-                    context.timestamp,
-                    context.headers,
+                    current_timestamp,  # Use current timestamp for the timeout event
+                    [],  # Empty headers list for timeout events
                 )
                 
         except Exception as e:
