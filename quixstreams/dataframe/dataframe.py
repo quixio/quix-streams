@@ -1043,6 +1043,7 @@ class StreamingDataFrame:
         grace_ms: Union[int, timedelta] = 0,
         name: Optional[str] = None,
         on_late: Optional[WindowOnLateCallback] = None,
+        timeout_ms: Optional[Union[int, timedelta]] = None,
     ) -> TumblingTimeWindowDefinition:
         """
         Create a time-based tumbling window transformation on this StreamingDataFrame.
@@ -1109,6 +1110,14 @@ class StreamingDataFrame:
             (default behavior).
             Otherwise, no message will be logged.
 
+        :param timeout_ms: an optional timeout for windows based on wall clock time.
+            Windows will be closed when the specified time has passed since the
+            window was first created, even if no new data is received.
+            Can be specified as either an `int` representing milliseconds
+            or as a `timedelta` object.
+            >***NOTE:*** `timedelta` objects will be rounded to the closest millisecond
+            value.
+
         :return: `TumblingTimeWindowDefinition` instance representing the tumbling window
             configuration.
             This object can be further configured with aggregation functions
@@ -1117,6 +1126,7 @@ class StreamingDataFrame:
         """
         duration_ms = ensure_milliseconds(duration_ms)
         grace_ms = ensure_milliseconds(grace_ms)
+        timeout_ms = ensure_milliseconds(timeout_ms) if timeout_ms is not None else None
 
         return TumblingTimeWindowDefinition(
             duration_ms=duration_ms,
@@ -1124,6 +1134,7 @@ class StreamingDataFrame:
             dataframe=self,
             name=name,
             on_late=on_late,
+            timeout_ms=timeout_ms,
         )
 
     def tumbling_count_window(

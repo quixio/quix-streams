@@ -1122,8 +1122,9 @@ class TestCountTumblingWindow:
                 assert updated[0][1]["value"] == 3  # 1 + 2
                 assert not expired  # Should not be expired yet
                 
-                # Advance wall clock by 6000ms total (past the 5000ms timeout)
-                mock_time.return_value = 1006.0
+                # Advance wall clock by 8500ms total (past the 5000ms idle timeout from last activity)
+                # Last activity was at 1003.0s, so we need to go past 1003.0 + 5.0 = 1008.0s
+                mock_time.return_value = 1008.5
                 
                 # Process another message - should expire the timed-out window
                 updated, expired = process(
@@ -1135,16 +1136,16 @@ class TestCountTumblingWindow:
                 assert updated[0][1]["start"] == 100
                 assert updated[0][1]["end"] == 110
                 
-                # The timed-out window should be in expired
+                # The timed-out window should be in expired (last activity was 5500ms ago)
                 assert len(expired) == 1
                 assert expired[0][1]["value"] == 3  # Previous sum of 1 + 2
                 assert expired[0][1]["start"] == 100
                 assert expired[0][1]["end"] == 110
 
-    def test_tumbling_window_timeout_fails_without_new_messages(
+    def test_tumbling_window_timeout_proactive_expiration(
         self, tumbling_window_definition_factory, state_manager
     ):
-        """Test that FAILS: demonstrates windows don't expire without new messages triggering timeout check."""
+        """Test that windows can be expired proactively without new messages using expire_timeouts_for_key."""
         import time
         import unittest.mock
         
@@ -1175,19 +1176,18 @@ class TestCountTumblingWindow:
                 # Now advance wall clock by 2000ms (past the 1000ms timeout)
                 mock_time.return_value = 1002.0
                 
-                # The fundamental problem: the timeout logic only runs during process_window(),
-                # which only happens when new messages arrive. If no messages arrive,
-                # expired windows just sit there forever.
+                # Now we can proactively check for expired windows using the new method
+                # This simulates what an application polling loop or background thread would do
+                collect = False  # This is a sum window, not a collect window
+                expired_windows = list(window.expire_timeouts_for_key(key, tx, collect))
                 
-                # Check that the window is still in state (it shouldn't be, but it is)
+                # The window should now be expired proactively
+                assert len(expired_windows) == 1, "Window should have been expired proactively"
+                assert expired_windows[0][1]["value"] == 1
+                assert expired_windows[0][1]["start"] == 100
+                assert expired_windows[0][1]["end"] == 110
+                
+                # Check that the window is now removed from state
                 state_obj = tx.as_state(prefix=key)
                 existing_window = state_obj.get_window(100, 110)
-                
-                # This assertion will FAIL, demonstrating the problem
-                assert existing_window is None, (
-                    "FAILURE: Window should have been expired 2000ms ago due to timeout, "
-                    "but it's still present because no new messages arrived to trigger "
-                    "timeout checking. This demonstrates the fundamental flaw: "
-                    "timeouts are only reactive (triggered by new messages) "
-                    "rather than proactive (triggered by wall clock time)."
-                )
+                assert existing_window is None, "Window should be removed after timeout expiration"

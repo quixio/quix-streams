@@ -194,21 +194,19 @@ class TimeWindow(Window):
                     )
                 )
                 
-                # Store window creation time if timeout is configured and this is a new window
-                if self._timeout_ms is not None and is_new_window:
-                    self._store_window_creation_time(state, start, end, current_wall_time_ms)
+                # Store/update window last activity time if timeout is configured
+                if self._timeout_ms is not None:
+                    self._store_window_last_activity_time(state, start, end, current_wall_time_ms)
             
             state.update_window(start, end, value=aggregated, timestamp_ms=timestamp_ms)
 
         if collect:
-            # For collect-only windows, we need to track creation time too
+            # For collect-only windows, we need to track activity time too
             if self._timeout_ms is not None and not aggregate:
                 for start, end in ranges:
                     if start > max_expired_window_start:  # Only for non-expired windows
-                        # Check if this window is new by looking for existing collection data
-                        existing_data = state.get_from_collection(start, end)
-                        if not existing_data:  # New window
-                            self._store_window_creation_time(state, start, end, current_wall_time_ms)
+                        # Update last activity time for this window
+                        self._store_window_last_activity_time(state, start, end, current_wall_time_ms)
             
             state.add_to_collection(
                 value=self._collect_value(value),
@@ -318,25 +316,25 @@ class TimeWindow(Window):
                 f"offset={ctx.offset}"
             )
 
-    def _store_window_creation_time(
-        self, state: WindowedState, start: int, end: int, creation_time_ms: int
+    def _store_window_last_activity_time(
+        self, state: WindowedState, start: int, end: int, activity_time_ms: int
     ) -> None:
-        """Store the wall clock creation time for a window."""
-        timeout_key = f"__timeout__{start}_{end}"
-        state.set(timeout_key, creation_time_ms)
+        """Store the wall clock time of last activity for a window."""
+        timeout_key = f"__last_activity__{start}_{end}"
+        state.set(timeout_key, activity_time_ms)
 
-    def _get_window_creation_time(
+    def _get_window_last_activity_time(
         self, state: WindowedState, start: int, end: int
     ) -> Optional[int]:
-        """Get the wall clock creation time for a window."""
-        timeout_key = f"__timeout__{start}_{end}"
+        """Get the wall clock time of last activity for a window."""
+        timeout_key = f"__last_activity__{start}_{end}"
         return state.get(timeout_key)
 
-    def _delete_window_creation_time(
+    def _delete_window_last_activity_time(
         self, state: WindowedState, start: int, end: int
     ) -> None:
-        """Delete the wall clock creation time for a window."""
-        timeout_key = f"__timeout__{start}_{end}"
+        """Delete the wall clock time of last activity for a window."""
+        timeout_key = f"__last_activity__{start}_{end}"
         state.delete(timeout_key)
 
     def _expire_timeout_windows(
@@ -366,8 +364,8 @@ class TimeWindow(Window):
         windows = state.get_windows(scan_start, scan_end)
         
         for (window_start, window_end), aggregated, _ in windows:
-            creation_time = self._get_window_creation_time(state, window_start, window_end)
-            if creation_time is not None and creation_time <= timeout_threshold:
+            last_activity_time = self._get_window_last_activity_time(state, window_start, window_end)
+            if last_activity_time is not None and last_activity_time <= timeout_threshold:
                 # This window has timed out
                 collected = []
                 if collect:
@@ -376,13 +374,36 @@ class TimeWindow(Window):
                 
                 # Clean up the window and its metadata
                 state.delete_windows(window_start, delete_values=True)
-                self._delete_window_creation_time(state, window_start, window_end)
+                self._delete_window_last_activity_time(state, window_start, window_end)
                 
                 expired_windows.append(
                     (key, self._results(aggregated, collected, window_start, window_end))
                 )
                 
         return expired_windows
+
+    def expire_timeouts_for_key(
+        self, key: Any, transaction: WindowedPartitionTransaction, collect: bool = False
+    ) -> Iterable[WindowKeyResult]:
+        """
+        Proactively expire windows that have exceeded their timeout for a specific key.
+        
+        This method can be called without processing a new message to check for
+        timed-out windows. It's designed to be called by application polling loops
+        or background threads.
+        
+        :param key: The key to check for expired windows
+        :param transaction: The windowed partition transaction
+        :param collect: Whether this is a collect-type window
+        :return: Iterable of expired window results
+        """
+        if self._timeout_ms is None:
+            return []
+        
+        state = transaction.as_state(prefix=key)
+        current_wall_time_ms = int(time.time() * 1000)
+        
+        return self._expire_timeout_windows(key, state, current_wall_time_ms, collect)
 
 
 class TimeWindowSingleAggregation(SingleAggregationWindowMixin, TimeWindow):

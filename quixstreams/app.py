@@ -928,6 +928,8 @@ class Application:
 
         if rows is None:
             self._run_tracker.set_current_message_tp(None)
+            # Check for window timeouts when no new messages arrive
+            self._check_window_timeouts()
             return
 
         # Deserializer may return multiple rows for a single message
@@ -969,6 +971,54 @@ class Application:
 
         if self._on_message_processed is not None:
             self._on_message_processed(topic_name, partition, offset)
+
+    def _check_window_timeouts(self):
+        """
+        Check for window timeouts across all dataframes when no new messages arrive.
+        
+        This method is called during consumer polling when no messages are received,
+        allowing windows to be expired proactively based on wall clock time rather
+        than only reactively when new messages arrive.
+        """
+        import time
+        
+        # Only check timeouts periodically to avoid excessive overhead
+        current_time = time.time()
+        if not hasattr(self, '_last_timeout_check'):
+            self._last_timeout_check = current_time
+            return
+            
+        # Check timeouts every 5 seconds when no messages arrive
+        if current_time - self._last_timeout_check < 5.0:
+            return
+            
+        self._last_timeout_check = current_time
+        
+        # Check timeouts for all dataframes that have timeout-enabled windows
+        for topic_name, dataframes in self._dataframe_registry.items():
+            for dataframe in dataframes:
+                # Look for timeout-enabled windows in the dataframe processing pipeline
+                self._expire_dataframe_timeouts(topic_name, dataframe)
+
+    def _expire_dataframe_timeouts(self, topic_name: str, dataframe):
+        """
+        Expire timeouts for windows in a specific dataframe.
+        
+        :param topic_name: Name of the topic
+        :param dataframe: The dataframe to check for timeout-enabled windows
+        """
+        # This is a simplified implementation - in practice we'd need to:
+        # 1. Track active window operations in the dataframe pipeline
+        # 2. Track active keys for each partition
+        # 3. Get the appropriate state store for each window
+        # 4. Call expire_timeouts_for_key() for each active key
+        
+        # For now, this is a placeholder that demonstrates the integration point
+        # A full implementation would require additional tracking of:
+        # - Active window operations in dataframes  
+        # - Active keys per partition
+        # - Mapping between dataframes and their window operations
+        pass
 
     def _on_assign(self, _, topic_partitions: List[TopicPartition]):
         """

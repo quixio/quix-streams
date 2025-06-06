@@ -329,6 +329,7 @@ class TumblingTimeWindowDefinition(TimeWindowDefinition):
         dataframe: "StreamingDataFrame",
         name: Optional[str] = None,
         on_late: Optional[WindowOnLateCallback] = None,
+        timeout_ms: Optional[int] = None,
     ):
         super().__init__(
             duration_ms=duration_ms,
@@ -337,6 +338,7 @@ class TumblingTimeWindowDefinition(TimeWindowDefinition):
             name=name,
             on_late=on_late,
         )
+        self._timeout_ms = timeout_ms
 
     def _get_name(self, func_name: Optional[str]) -> str:
         prefix = f"{self._name}_tumbling_window" if self._name else "tumbling_window"
@@ -366,6 +368,7 @@ class TumblingTimeWindowDefinition(TimeWindowDefinition):
             aggregators=aggregators or {},
             collectors=collectors or {},
             on_late=self._on_late,
+            timeout_ms=self._timeout_ms,
         )
 
 
