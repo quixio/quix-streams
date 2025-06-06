@@ -11,12 +11,12 @@ from quixstreams.dataframe.windows.time_based import ClosingStrategy
 
 @pytest.fixture()
 def tumbling_window_definition_factory(state_manager, dataframe_factory):
-    def factory(duration_ms: int, grace_ms: int = 0) -> TumblingTimeWindowDefinition:
+    def factory(duration_ms: int, grace_ms: int = 0, timeout_ms: int = None) -> TumblingTimeWindowDefinition:
         sdf = dataframe_factory(
             state_manager=state_manager, registry=DataFrameRegistry()
         )
         window_def = TumblingTimeWindowDefinition(
-            duration_ms=duration_ms, grace_ms=grace_ms, dataframe=sdf
+            duration_ms=duration_ms, grace_ms=grace_ms, dataframe=sdf, timeout_ms=timeout_ms
         )
         return window_def
 
@@ -1076,3 +1076,118 @@ class TestCountTumblingWindow:
             )
             assert expired[0][1]["value"] == [4, 5, 6]
             assert len(updated) == 0
+
+    def test_tumbling_window_timeout(
+        self, tumbling_window_definition_factory, state_manager
+    ):
+        """Test that windows expire based on timeout even without new data."""
+        import time
+        import unittest.mock
+        
+        # Create a window with 10ms duration, 0ms grace, and 5000ms timeout
+        window_def = tumbling_window_definition_factory(
+            duration_ms=10, grace_ms=0, timeout_ms=5000
+        )
+        window = window_def.sum()
+        window.final()
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
+        store.assign_partition(0)
+        
+        key = b"key"
+        
+        with store.start_partition_transaction(0) as tx:
+            # Mock the time.time() function to control wall clock  
+            with unittest.mock.patch('quixstreams.dataframe.windows.time_based.time.time') as mock_time:
+                # Start at wall clock time 1000 seconds (1000000 ms)
+                mock_time.return_value = 1000.0
+                
+                # Add item to window [100, 110) at wall clock time 1000000ms
+                updated, expired = process(
+                    window, value=1, key=key, transaction=tx, timestamp_ms=100
+                )
+                assert len(updated) == 1
+                assert updated[0][1]["value"] == 1
+                assert updated[0][1]["start"] == 100
+                assert updated[0][1]["end"] == 110
+                assert not expired
+                
+                # Advance wall clock by 3000ms (still within 5000ms timeout)
+                mock_time.return_value = 1003.0
+                
+                # Process another message - window should not be expired yet
+                updated, expired = process(
+                    window, value=2, key=key, transaction=tx, timestamp_ms=101
+                )
+                assert len(updated) == 1
+                assert updated[0][1]["value"] == 3  # 1 + 2
+                assert not expired  # Should not be expired yet
+                
+                # Advance wall clock by 6000ms total (past the 5000ms timeout)
+                mock_time.return_value = 1006.0
+                
+                # Process another message - should expire the timed-out window
+                updated, expired = process(
+                    window, value=3, key=key, transaction=tx, timestamp_ms=102
+                )
+                
+                # The new window [100, 110) should be in updated
+                assert len(updated) == 1
+                assert updated[0][1]["start"] == 100
+                assert updated[0][1]["end"] == 110
+                
+                # The timed-out window should be in expired
+                assert len(expired) == 1
+                assert expired[0][1]["value"] == 3  # Previous sum of 1 + 2
+                assert expired[0][1]["start"] == 100
+                assert expired[0][1]["end"] == 110
+
+    def test_tumbling_window_timeout_fails_without_new_messages(
+        self, tumbling_window_definition_factory, state_manager
+    ):
+        """Test that FAILS: demonstrates windows don't expire without new messages triggering timeout check."""
+        import time
+        import unittest.mock
+        
+        # Create a window with 10ms duration, 0ms grace, and 1000ms timeout
+        window_def = tumbling_window_definition_factory(
+            duration_ms=10, grace_ms=0, timeout_ms=1000
+        )
+        window = window_def.sum()
+        window.final()
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
+        store.assign_partition(0)
+        
+        key = b"key"
+        
+        with store.start_partition_transaction(0) as tx:
+            with unittest.mock.patch('quixstreams.dataframe.windows.time_based.time.time') as mock_time:
+                # Start at wall clock time 1000 seconds
+                mock_time.return_value = 1000.0
+                
+                # Add item to window [100, 110) at wall clock time 1000000ms
+                updated, expired = process(
+                    window, value=1, key=key, transaction=tx, timestamp_ms=100
+                )
+                assert len(updated) == 1
+                assert updated[0][1]["value"] == 1
+                assert not expired
+                
+                # Now advance wall clock by 2000ms (past the 1000ms timeout)
+                mock_time.return_value = 1002.0
+                
+                # The fundamental problem: the timeout logic only runs during process_window(),
+                # which only happens when new messages arrive. If no messages arrive,
+                # expired windows just sit there forever.
+                
+                # Check that the window is still in state (it shouldn't be, but it is)
+                state_obj = tx.as_state(prefix=key)
+                existing_window = state_obj.get_window(100, 110)
+                
+                # This assertion will FAIL, demonstrating the problem
+                assert existing_window is None, (
+                    "FAILURE: Window should have been expired 2000ms ago due to timeout, "
+                    "but it's still present because no new messages arrived to trigger "
+                    "timeout checking. This demonstrates the fundamental flaw: "
+                    "timeouts are only reactive (triggered by new messages) "
+                    "rather than proactive (triggered by wall clock time)."
+                )
