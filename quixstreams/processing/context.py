@@ -39,6 +39,9 @@ class ProcessingContext:
     
     # Callback for registering timeout-enabled windows
     window_timeout_registrar: Optional[Callable[[str, Any], None]] = None
+    
+    # Callback for tracking active window keys
+    window_key_tracker: Optional[Callable[[str, int, Any], None]] = None
 
     _checkpoint: Optional[Checkpoint] = dataclasses.field(
         init=False, repr=False, default=None
