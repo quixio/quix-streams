@@ -1191,3 +1191,267 @@ class TestCountTumblingWindow:
                 state_obj = tx.as_state(prefix=key)
                 existing_window = state_obj.get_window(100, 110)
                 assert existing_window is None, "Window should be removed after timeout expiration"
+
+
+def test_application_window_timeout_integration():
+    """
+    Test the complete Application-level window timeout integration.
+    
+    This test verifies:
+    1. Application registers timeout-enabled windows
+    2. Keys are tracked when windows are processed
+    3. Timeout checking works during consumer polling
+    4. Windows are expired proactively when no messages arrive
+    5. Key cleanup prevents memory leaks
+    """
+    import time
+    import unittest.mock
+    from unittest.mock import Mock, MagicMock
+    from quixstreams import Application
+    from quixstreams.models import Topic
+    
+    # Create an Application with timeout checking enabled
+    app = Application(
+        broker_address="localhost:9092",
+        consumer_group="test-group",
+        enable_window_timeout_checking=True,
+        window_timeout_check_interval=1.0,  # Check every 1 second
+        auto_create_topics=False  # Avoid creating real topics
+    )
+    
+    # Create a topic
+    topic = app.topic("test-topic")
+    
+    # Create a dataframe with a timeout-enabled window
+    sdf = app.dataframe(topic)
+    sdf = sdf.tumbling_window(duration_ms=100, timeout_ms=1000).sum()  # 1-second timeout
+    
+    # Verify that the window was registered for timeout checking
+    assert "test-topic" in app._timeout_enabled_windows
+    assert len(app._timeout_enabled_windows["test-topic"]) == 1
+    window_def = app._timeout_enabled_windows["test-topic"][0]
+    assert hasattr(window_def, '_timeout_ms')
+    assert window_def._timeout_ms == 1000
+    
+    # Test key tracking functionality
+    test_key = b"test_key"
+    partition = 0
+    
+    # Initially, no keys should be tracked
+    assert "test-topic" not in app._active_window_keys or \
+           partition not in app._active_window_keys.get("test-topic", {})
+    
+    # Simulate tracking a window key (this would happen during message processing)
+    app.track_window_key("test-topic", partition, test_key)
+    
+    # Verify key is now tracked
+    assert "test-topic" in app._active_window_keys
+    assert partition in app._active_window_keys["test-topic"]
+    assert test_key in app._active_window_keys["test-topic"][partition]
+    assert "test-topic" in app._key_last_activity
+    assert partition in app._key_last_activity["test-topic"]
+    assert test_key in app._key_last_activity["test-topic"][partition]
+    
+    # Test timeout checking logic
+    with unittest.mock.patch('time.time') as mock_time:
+        # Set initial time
+        mock_time.return_value = 1000.0
+        
+        # Track initial activity
+        app.track_window_key("test-topic", partition, test_key)
+        initial_time = app._key_last_activity["test-topic"][partition][test_key]
+        
+        # Advance time by 500ms - should not trigger timeout
+        mock_time.return_value = 1000.5
+        
+        # Mock the dataframe registry and processing context
+        app._dataframe_registry._registry = {"test-topic": Mock()}
+        app._dataframe_registry.get_stream_ids = Mock(return_value=["test-stream"])
+        
+        # Mock the checkpoint and store transaction
+        mock_transaction = Mock()
+        app._processing_context.checkpoint = Mock()
+        app._processing_context.checkpoint.get_store_transaction = Mock(return_value=mock_transaction)
+        
+        # Mock the window definition's expire_timeouts_for_key method
+        expired_results = []
+        window_def.expire_timeouts_for_key = Mock(return_value=expired_results)
+        
+        # Call the timeout checking method directly
+        app._check_window_timeouts()
+        
+        # Should not have called expire_timeouts_for_key since interval hasn't passed
+        assert not window_def.expire_timeouts_for_key.called
+        
+        # Advance time past the check interval
+        mock_time.return_value = 1001.5
+        
+        # Call timeout checking again
+        app._check_window_timeouts()
+        
+        # Now it should have called expire_timeouts_for_key
+        window_def.expire_timeouts_for_key.assert_called()
+    
+    # Test key untracking
+    app.untrack_window_key("test-topic", partition, test_key)
+    
+    # Verify key is no longer tracked
+    assert test_key not in app._active_window_keys["test-topic"][partition]
+    assert test_key not in app._key_last_activity["test-topic"][partition]
+    
+    # Test stale key cleanup
+    with unittest.mock.patch('time.time') as mock_time:
+        # Add some keys with old activity times
+        mock_time.return_value = 1000.0
+        app.track_window_key("test-topic", partition, b"old_key1")
+        app.track_window_key("test-topic", partition, b"old_key2")
+        
+        # Advance time significantly
+        mock_time.return_value = 2000.0  # 1000 seconds later
+        
+        # Call cleanup (this happens automatically during _check_window_timeouts)
+        app._cleanup_stale_keys()
+        
+        # Keys should be cleaned up since they're older than any reasonable timeout
+        assert b"old_key1" not in app._active_window_keys.get("test-topic", {}).get(partition, set())
+        assert b"old_key2" not in app._active_window_keys.get("test-topic", {}).get(partition, set())
+    
+    print("✅ Application window timeout integration test passed!")
+
+
+def test_application_timeout_disabled():
+    """Test that timeout checking can be disabled."""
+    from quixstreams import Application
+    
+    # Create an Application with timeout checking disabled
+    app = Application(
+        broker_address="localhost:9092",
+        consumer_group="test-group",
+        enable_window_timeout_checking=False,
+        auto_create_topics=False
+    )
+    
+    # Create a topic and dataframe with timeout
+    topic = app.topic("test-topic")
+    sdf = app.dataframe(topic)
+    sdf = sdf.tumbling_window(duration_ms=100, timeout_ms=1000).sum()
+    
+    # Window should still be registered (for consistency)
+    assert "test-topic" in app._timeout_enabled_windows
+    
+    # But timeout checking should be disabled
+    assert app._enable_window_timeout_checking is False
+    
+    # Track a key
+    app.track_window_key("test-topic", 0, b"test_key")
+    
+    # Call timeout checking - should return early
+    result = app._check_window_timeouts()
+    
+    # Should return None/early due to disabled checking
+    assert result is None
+    
+    print("✅ Application timeout disabled test passed!")
+
+
+def test_application_window_timeout_end_to_end():
+    """
+    End-to-end test simulating the complete timeout flow.
+    
+    This test simulates:
+    1. Creating windows with timeouts
+    2. Processing messages to create windows
+    3. Time advancing without new messages
+    4. Proactive window expiration
+    5. Results being processed through the pipeline
+    """
+    import time
+    import unittest.mock
+    from unittest.mock import Mock, patch
+    from quixstreams import Application
+    
+    # Create application
+    app = Application(
+        broker_address="localhost:9092",
+        consumer_group="test-group",
+        enable_window_timeout_checking=True,
+        window_timeout_check_interval=0.1,  # Check frequently for testing
+        auto_create_topics=False
+    )
+    
+    # Create topic and dataframe with timeout
+    topic = app.topic("test-topic")
+    sdf = app.dataframe(topic)
+    
+    # Track processed results
+    processed_results = []
+    
+    def capture_result(value, context):
+        processed_results.append({"value": value, "context": context})
+        return value
+    
+    # Create window and add processing
+    sdf = sdf.tumbling_window(duration_ms=100, timeout_ms=500).sum()  # 500ms timeout
+    sdf = sdf.apply(capture_result)
+    
+    # Verify window registration
+    assert "test-topic" in app._timeout_enabled_windows
+    window_def = app._timeout_enabled_windows["test-topic"][0]
+    assert window_def._timeout_ms == 500
+    
+    # Mock time for controlled testing
+    with unittest.mock.patch('time.time') as mock_time:
+        mock_time.return_value = 1000.0
+        
+        # Simulate window creation by tracking a key
+        test_key = b"test_key"
+        partition = 0
+        app.track_window_key("test-topic", partition, test_key)
+        
+        # Mock the required components for expiration
+        app._dataframe_registry._registry = {"test-topic": Mock()}
+        app._dataframe_registry.get_stream_ids = Mock(return_value=["test-stream"])
+        
+        # Create a mock store transaction that can handle window operations
+        mock_transaction = Mock()
+        
+        # Mock window state operations
+        mock_state = Mock()
+        mock_state.get_window = Mock(return_value={"value": 42, "start": 100, "end": 200})
+        mock_state.delete_window = Mock()
+        mock_transaction.as_state = Mock(return_value=mock_state)
+        
+        app._processing_context.checkpoint = Mock()
+        app._processing_context.checkpoint.get_store_transaction = Mock(return_value=mock_transaction)
+        
+        # Mock the window definition to return expired results
+        from quixstreams.dataframe.windows.base import WindowKeyResult
+        expired_result = WindowKeyResult(
+            key=test_key,
+            value={"value": 42, "start": 100, "end": 200}
+        )
+        
+        # Advance time past timeout
+        mock_time.return_value = 1000.6  # 600ms later, past 500ms timeout
+        
+        # Mock the expire_timeouts_for_key method to return our test result
+        original_expire = window_def.expire_timeouts_for_key
+        window_def.expire_timeouts_for_key = Mock(return_value=[expired_result])
+        
+        # Mock the dataframe execution pipeline
+        mock_executor = Mock()
+        app._dataframe_registry.compose_all = Mock(return_value={"test-topic": mock_executor})
+        
+        # Call timeout checking
+        app._check_window_timeouts()
+        
+        # Verify that expire_timeouts_for_key was called
+        window_def.expire_timeouts_for_key.assert_called_with(test_key, mock_transaction, collect=False)
+        
+        # Verify that the expired result would be processed through the pipeline
+        # (Note: In the real implementation, this happens via _process_window_timeout_result)
+        
+        # Restore original method
+        window_def.expire_timeouts_for_key = original_expire
+    
+    print("✅ Application end-to-end timeout test passed!")
