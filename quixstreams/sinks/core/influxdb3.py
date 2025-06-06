@@ -199,11 +199,10 @@ class InfluxDB3Sink(BatchingSink):
 
     def _get_influx_version(self):
         # This validates the token is valid regardless of version
-        headers = {"Authorization": f"Token {self._client_args['token']}"}
         try:
             r = requests.get(
                 urljoin(self._client_args["host"], "ping"),
-                headers=headers,
+                headers={"Authorization": f"Token {self._client_args['token']}"},
                 timeout=self._request_timeout_ms / 1000,
             )
             r.raise_for_status()
