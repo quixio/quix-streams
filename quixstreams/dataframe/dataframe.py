@@ -1137,12 +1137,6 @@ class StreamingDataFrame:
             timeout_ms=timeout_ms,
         )
         
-        # Register the window for timeout checking if it has a timeout and registrar is available
-        if (timeout_ms is not None and 
-            self._processing_context.window_timeout_registrar is not None):
-            for topic in self._topics:
-                self._processing_context.window_timeout_registrar(topic.name, window_def)
-        
         return window_def
 
     def tumbling_count_window(

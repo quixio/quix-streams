@@ -360,7 +360,7 @@ class TumblingTimeWindowDefinition(TimeWindowDefinition):
         else:
             window_type = TimeWindowMultiAggregation
 
-        return window_type(
+        window = window_type(
             duration_ms=self._duration_ms,
             grace_ms=self._grace_ms,
             name=self._get_name(func_name=func_name),
@@ -370,6 +370,14 @@ class TumblingTimeWindowDefinition(TimeWindowDefinition):
             on_late=self._on_late,
             timeout_ms=self._timeout_ms,
         )
+        
+        # Register the window for timeout checking if it has a timeout and registrar is available
+        if (self._timeout_ms is not None and 
+            self._dataframe._processing_context.window_timeout_registrar is not None):
+            for topic in self._dataframe._topics:
+                self._dataframe._processing_context.window_timeout_registrar(topic.name, window)
+        
+        return window
 
 
 class SlidingTimeWindowDefinition(TimeWindowDefinition):
