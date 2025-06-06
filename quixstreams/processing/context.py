@@ -1,7 +1,7 @@
 import dataclasses
 import logging
 import time
-from typing import Optional
+from typing import Any, Callable, Optional
 
 from quixstreams.checkpointing import Checkpoint
 from quixstreams.dataframe import DataFrameRegistry
@@ -36,6 +36,9 @@ class ProcessingContext:
     commit_every: int = 0
     exactly_once: bool = False
     printer: Printer = Printer()
+    
+    # Callback for registering timeout-enabled windows
+    window_timeout_registrar: Optional[Callable[[str, Any], None]] = None
 
     _checkpoint: Optional[Checkpoint] = dataclasses.field(
         init=False, repr=False, default=None

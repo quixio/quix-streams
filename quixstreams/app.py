@@ -6,7 +6,7 @@ import time
 import warnings
 from collections import defaultdict
 from pathlib import Path
-from typing import Callable, List, Literal, Optional, Protocol, Tuple, Type, Union
+from typing import Any, Callable, List, Literal, Optional, Protocol, Tuple, Type, Union
 
 from confluent_kafka import TopicPartition
 from pydantic import AliasGenerator, Field
@@ -141,6 +141,8 @@ class Application:
         on_message_processed: Optional[MessageProcessedCallback] = None,
         consumer_poll_timeout: float = 1.0,
         producer_poll_timeout: float = 0.0,
+        enable_window_timeout_checking: bool = True,
+        window_timeout_check_interval: float = 5.0,
         loglevel: Optional[Union[int, LogLevel]] = "INFO",
         auto_create_topics: bool = True,
         use_changelog_topics: bool = True,
@@ -374,8 +376,15 @@ class Application:
             exactly_once=self._config.exactly_once,
             sink_manager=self._sink_manager,
             dataframe_registry=self._dataframe_registry,
+            window_timeout_registrar=self.register_timeout_window,
         )
         self._run_tracker = RunTracker(processing_context=self._processing_context)
+        
+        # Window timeout tracking
+        self._enable_window_timeout_checking = enable_window_timeout_checking
+        self._window_timeout_check_interval = window_timeout_check_interval
+        self._timeout_enabled_windows: dict[str, list] = {}  # topic -> list of window definitions
+        self._active_window_keys: dict[str, dict[int, set]] = {}  # topic -> partition -> set of keys
 
     @property
     def config(self) -> "ApplicationConfig":
@@ -980,25 +989,33 @@ class Application:
         allowing windows to be expired proactively based on wall clock time rather
         than only reactively when new messages arrive.
         """
-        import time
         
+        # Skip if timeout checking is disabled
+        if not self._enable_window_timeout_checking:
+            return
+            
         # Only check timeouts periodically to avoid excessive overhead
         current_time = time.time()
         if not hasattr(self, '_last_timeout_check'):
             self._last_timeout_check = current_time
             return
             
-        # Check timeouts every 5 seconds when no messages arrive
-        if current_time - self._last_timeout_check < 5.0:
+        # Check timeouts at the configured interval when no messages arrive
+        if current_time - self._last_timeout_check < self._window_timeout_check_interval:
             return
             
         self._last_timeout_check = current_time
         
-        # Check timeouts for all dataframes that have timeout-enabled windows
-        for topic_name, dataframes in self._dataframe_registry.items():
-            for dataframe in dataframes:
-                # Look for timeout-enabled windows in the dataframe processing pipeline
-                self._expire_dataframe_timeouts(topic_name, dataframe)
+        # Check timeouts for all topics that have timeout-enabled windows
+        for topic_name in self._timeout_enabled_windows.keys():
+            # Get the dataframe for this topic from the registry
+            try:
+                dataframes_composed = self._dataframe_registry.compose_all()
+                if topic_name in dataframes_composed:
+                    # Pass None as the dataframe since we already have the composed executor
+                    self._expire_dataframe_timeouts(topic_name, None)
+            except Exception as e:
+                logger.warning(f"Error checking timeouts for topic {topic_name}: {e}")
 
     def _expire_dataframe_timeouts(self, topic_name: str, dataframe):
         """
@@ -1007,18 +1024,154 @@ class Application:
         :param topic_name: Name of the topic
         :param dataframe: The dataframe to check for timeout-enabled windows
         """
-        # This is a simplified implementation - in practice we'd need to:
-        # 1. Track active window operations in the dataframe pipeline
-        # 2. Track active keys for each partition
-        # 3. Get the appropriate state store for each window
-        # 4. Call expire_timeouts_for_key() for each active key
+        # Check if this topic has timeout-enabled windows
+        if topic_name not in self._timeout_enabled_windows:
+            return
+            
+        # Get active keys for all partitions of this topic
+        topic_keys = self._active_window_keys.get(topic_name, {})
+        if not topic_keys:
+            return
+            
+        # Process timeouts for each partition and its active keys
+        for partition, active_keys in topic_keys.items():
+            if not active_keys:
+                continue
+                
+            # Get the state manager for this topic and partition
+            try:
+                stream_ids = self._dataframe_registry.get_stream_ids(topic_name)
+                if not stream_ids:
+                    continue
+                    
+                # Process timeouts for each stream that uses this topic
+                for stream_id in stream_ids:
+                    # Get the partition state for this stream
+                    partition_state = self._state_manager.get_store(stream_id, partition)
+                    if partition_state is None:
+                        continue
+                        
+                    # Process timeouts for each timeout-enabled window definition
+                    for window_def in self._timeout_enabled_windows[topic_name]:
+                        # Create a windowed transaction for this partition
+                        with partition_state.start_windowed_transaction() as transaction:
+                            # Expire timeouts for each active key
+                            for key in list(active_keys):  # Copy to avoid modification during iteration
+                                try:
+                                    expired_results = window_def.expire_timeouts_for_key(
+                                        key, transaction, collect=True
+                                    )
+                                    
+                                    # Process expired windows through the dataframe pipeline
+                                    for result in expired_results:
+                                        self._process_window_timeout_result(
+                                            topic_name, partition, key, result, dataframe
+                                        )
+                                        
+                                except Exception as e:
+                                    # Log the error but continue processing other keys
+                                    logger.warning(
+                                        f"Error expiring timeouts for key {key} in "
+                                        f"topic {topic_name}[{partition}]: {e}"
+                                    )
+                                    
+            except Exception as e:
+                logger.warning(
+                    f"Error processing timeouts for topic {topic_name}[{partition}]: {e}"
+                )
+                
+    def _process_window_timeout_result(self, topic_name: str, partition: int, key: Any, result, dataframe):
+        """
+        Process a single window timeout result by sending it through the dataframe pipeline.
         
-        # For now, this is a placeholder that demonstrates the integration point
-        # A full implementation would require additional tracking of:
-        # - Active window operations in dataframes  
-        # - Active keys per partition
-        # - Mapping between dataframes and their window operations
-        pass
+        :param topic_name: Name of the topic
+        :param partition: Partition number
+        :param key: The key that had a timeout
+        :param result: The window timeout result
+        :param dataframe: The dataframe to process the result through
+        """
+        try:
+            # Create a synthetic message context for the timeout result
+            from .models import MessageContext
+            
+            # Create a message context for the timeout event
+            context = MessageContext(
+                topic=topic_name,
+                partition=partition,
+                offset=-1,  # Synthetic offset for timeout events
+                timestamp=int(time.time() * 1000),  # Current timestamp
+                headers={},
+            )
+            
+            # Process the timeout result through the dataframe pipeline
+            from .context import copy_context, set_message_context
+            execution_context = copy_context()
+            execution_context.run(set_message_context, context)
+            
+            # Get the composed dataframe executor for this topic
+            dataframes_composed = self._dataframe_registry.compose_all()
+            if topic_name in dataframes_composed:
+                execution_context.run(
+                    dataframes_composed[topic_name],
+                    result.value,  # The aggregated window result
+                    key,
+                    context.timestamp,
+                    context.headers,
+                )
+                
+        except Exception as e:
+            logger.warning(
+                f"Error processing timeout result for key {key} in "
+                f"topic {topic_name}[{partition}]: {e}"
+            )
+            
+    def register_timeout_window(self, topic_name: str, window_definition):
+        """
+        Register a window definition that has timeout capability.
+        
+        This method is called by StreamingDataFrame when a window with timeout is created.
+        
+        :param topic_name: Name of the topic the window operates on
+        :param window_definition: The window definition object with timeout capability
+        """
+        if hasattr(window_definition, '_timeout_ms') and window_definition._timeout_ms is not None:
+            if topic_name not in self._timeout_enabled_windows:
+                self._timeout_enabled_windows[topic_name] = []
+            self._timeout_enabled_windows[topic_name].append(window_definition)
+            
+            # Initialize tracking for this topic if needed
+            if topic_name not in self._active_window_keys:
+                self._active_window_keys[topic_name] = {}
+                
+    def track_window_key(self, topic_name: str, partition: int, key: Any):
+        """
+        Track a key that has active windows.
+        
+        This method should be called when a window is created for a key.
+        
+        :param topic_name: Name of the topic
+        :param partition: Partition number
+        :param key: The key to track
+        """
+        if topic_name not in self._active_window_keys:
+            self._active_window_keys[topic_name] = {}
+        if partition not in self._active_window_keys[topic_name]:
+            self._active_window_keys[topic_name][partition] = set()
+        self._active_window_keys[topic_name][partition].add(key)
+        
+    def untrack_window_key(self, topic_name: str, partition: int, key: Any):
+        """
+        Stop tracking a key that no longer has active windows.
+        
+        This method should be called when all windows for a key are closed.
+        
+        :param topic_name: Name of the topic
+        :param partition: Partition number
+        :param key: The key to stop tracking
+        """
+        if (topic_name in self._active_window_keys and 
+            partition in self._active_window_keys[topic_name]):
+            self._active_window_keys[topic_name][partition].discard(key)
 
     def _on_assign(self, _, topic_partitions: List[TopicPartition]):
         """
