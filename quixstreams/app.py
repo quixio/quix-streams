@@ -1081,12 +1081,14 @@ class Application:
                                             topic_name, partition, key, result, dataframe
                                         )
                                         
-                                    # If any windows were expired, log it for debugging
+                                    # If any windows were expired, remove the key from tracking
                                     if expired_results:
                                         logger.info(
                                             f"Expired {len(expired_results)} windows for key {key} "
                                             f"in topic {topic_name}[{partition}]"
                                         )
+                                        # Remove the key from active tracking since its windows have expired
+                                        self.untrack_window_key(topic_name, partition, key)
                                         
                                 except Exception as e:
                                     # Log the error but continue processing other keys
