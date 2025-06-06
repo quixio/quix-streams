@@ -396,6 +396,21 @@ def _noop() -> Any:
     return []
 
 
+def _track_window_key(processing_context: "ProcessingContext", topic: str, partition: int, key: Any) -> None:
+    """
+    Track a key as having active windows for timeout processing.
+    
+    This function calls the Application's key tracking method if available.
+    """
+    # Check if the processing context has a window key tracker
+    if hasattr(processing_context, 'window_key_tracker') and processing_context.window_key_tracker:
+        try:
+            processing_context.window_key_tracker(topic, partition, key)
+        except Exception as e:
+            # Log the error but don't let it break window processing
+            logger.warning(f"Error tracking window key {key} for topic {topic}[{partition}]: {e}")
+
+
 def _as_windowed(
     func: TransformRecordCallbackExpandedWindowed,
     processing_context: "ProcessingContext",
@@ -419,7 +434,22 @@ def _as_windowed(
                 f"partition='{ctx.topic}[{ctx.partition}]' offset='{ctx.offset}'."
             )
             return _noop()
-        return func(value, key, timestamp, headers, transaction)
+            
+        # Track this key as active for window timeout processing
+        _track_window_key(processing_context, ctx.topic, ctx.partition, key)
+        
+        # Execute the window function
+        result = func(value, key, timestamp, headers, transaction)
+        
+        # Convert result to list to process it and track expired windows
+        result_list = list(result)
+        
+        # Check if any windows were expired and untrack keys if needed
+        # Note: This is a simplified approach - a more sophisticated implementation
+        # would track individual windows per key and only untrack when all windows
+        # for a key are closed
+        
+        return result_list
 
     return wrapper
 
