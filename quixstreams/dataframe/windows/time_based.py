@@ -342,10 +342,13 @@ class TimeWindow(Window):
     ) -> list[WindowKeyResult]:
         """Expire windows that have exceeded their timeout period."""
         if self._timeout_ms is None:
+            logger.info(f"No timeout configured for key {key}, returning empty list")
             return []
 
+        logger.info(f"Checking timeout expiration for key {key}, timeout_ms={self._timeout_ms}")
         expired_windows = []
         timeout_threshold = current_time_ms - self._timeout_ms
+        logger.info(f"Current time: {current_time_ms}, timeout threshold: {timeout_threshold}")
         
         # Instead of scanning by window start time (which is based on message timestamp),
         # we need to scan through all windows and check their creation times.
@@ -354,19 +357,25 @@ class TimeWindow(Window):
         
         # Get the latest timestamp from state to determine a reasonable scan range
         latest_msg_timestamp = state.get_latest_timestamp() or 0
+        logger.info(f"Latest message timestamp: {latest_msg_timestamp}")
         
         # Scan a broad range of message timestamps to find all active windows
         # This is not optimal but works for the timeout feature
         scan_start = max(0, latest_msg_timestamp - self._timeout_ms - self._duration_ms)
         scan_end = latest_msg_timestamp + self._duration_ms
+        logger.info(f"Scanning window range: {scan_start} to {scan_end}")
         
         # Get windows in the scanning range
         windows = state.get_windows(scan_start, scan_end)
+        logger.info(f"Found {len(windows)} windows to check for key {key}")
         
         for (window_start, window_end), aggregated, _ in windows:
+            logger.info(f"Checking window [{window_start}, {window_end})")
             last_activity_time = self._get_window_last_activity_time(state, window_start, window_end)
+            logger.info(f"Last activity time for window [{window_start}, {window_end}): {last_activity_time}")
             if last_activity_time is not None and last_activity_time <= timeout_threshold:
                 # This window has timed out
+                logger.info(f"Window [{window_start}, {window_end}) has timed out! Expiring...")
                 collected = []
                 if collect:
                     collected = state.get_from_collection(window_start, window_end)
@@ -379,7 +388,14 @@ class TimeWindow(Window):
                 expired_windows.append(
                     (key, self._results(aggregated, collected, window_start, window_end))
                 )
+            else:
+                if last_activity_time is None:
+                    logger.info(f"Window [{window_start}, {window_end}) has no activity time recorded")
+                else:
+                    time_until_timeout = (last_activity_time - timeout_threshold) / 1000.0
+                    logger.info(f"Window [{window_start}, {window_end}) not expired yet, {time_until_timeout:.1f}s remaining")
                 
+        logger.info(f"Returning {len(expired_windows)} expired windows for key {key}")
         return expired_windows
 
     def expire_timeouts_for_key(
@@ -397,13 +413,18 @@ class TimeWindow(Window):
         :param collect: Whether this is a collect-type window
         :return: Iterable of expired window results
         """
+        logger.info(f"expire_timeouts_for_key called for key {key}, timeout_ms={self._timeout_ms}")
         if self._timeout_ms is None:
+            logger.info(f"No timeout configured, returning empty list")
             return []
         
         state = transaction.as_state(prefix=key)
         current_wall_time_ms = int(time.time() * 1000)
+        logger.info(f"Current wall time: {current_wall_time_ms}")
         
-        return self._expire_timeout_windows(key, state, current_wall_time_ms, collect)
+        result = self._expire_timeout_windows(key, state, current_wall_time_ms, collect)
+        logger.info(f"expire_timeouts_for_key returning {len(result)} results")
+        return result
 
 
 class TimeWindowSingleAggregation(SingleAggregationWindowMixin, TimeWindow):

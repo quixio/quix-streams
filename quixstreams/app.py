@@ -1049,6 +1049,7 @@ class Application:
             try:
                 # Get stream IDs for this topic
                 stream_ids = self._dataframe_registry.get_stream_ids(topic_name)
+                logger.info(f"Found {len(stream_ids) if stream_ids else 0} streams for topic {topic_name}: {stream_ids}")
                 if not stream_ids:
                     logger.info(
                         f"No streams found for topic {topic_name}, skipping timeout processing.")
@@ -1056,39 +1057,48 @@ class Application:
                     
                 # Process timeouts for each stream that uses this topic
                 for stream_id in stream_ids:
+                    logger.info(f"Processing stream {stream_id} for topic {topic_name}")
                     # Process timeouts for each timeout-enabled window definition
                     for window_def in self._timeout_enabled_windows[topic_name]:
+                        logger.info(f"Processing window definition: {window_def._name if hasattr(window_def, '_name') else 'unnamed'}")
                         # Get window name to identify the correct store
                         if hasattr(window_def, '_name') and window_def._name:
                             store_name = window_def._name
+                            logger.info(f"Using store name: {store_name}")
                         else:
                             # Skip if we can't identify the store name
+                            logger.info("Skipping window definition - no name found")
                             continue
                             
                         try:
                             # Get store transaction for this stream/partition/store
+                            logger.info(f"Getting store transaction for stream={stream_id}, partition={partition}, store={store_name}")
                             transaction = self._processing_context.checkpoint.get_store_transaction(
                                 stream_id=stream_id,
                                 partition=partition,
                                 store_name=store_name
                             )
+                            logger.info(f"Got transaction: {transaction}")
                             
                             # Expire timeouts for each active key
                             for key in list(active_keys):  # Copy to avoid modification during iteration
                                 try:
+                                    logger.info(f"Checking timeouts for key {key}")
                                     expired_results = list(window_def.expire_timeouts_for_key(
                                         key, transaction, collect=False
                                     ))
+                                    logger.info(f"Got {len(expired_results)} expired results for key {key}")
                                     
                                     # Process expired windows through the dataframe pipeline
                                     for result in expired_results:
+                                        logger.info(f"Processing expired result: {result}")
                                         self._process_window_timeout_result(
                                             topic_name, partition, key, result, dataframe
                                         )
                                         
                                     # If any windows were expired, log it for debugging
                                     if expired_results:
-                                        logger.debug(
+                                        logger.info(
                                             f"Expired {len(expired_results)} windows for key {key} "
                                             f"in topic {topic_name}[{partition}]"
                                         )
