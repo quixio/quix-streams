@@ -56,6 +56,7 @@ from quixstreams.utils.printing import (
     DEFAULT_LIVE,
     DEFAULT_LIVE_SLOWDOWN,
 )
+from quixstreams.utils.stream_id import stream_id_from_strings
 
 from .exceptions import InvalidOperation
 from .joins import JoinAsOf, JoinAsOfHow, OnOverlap
@@ -648,8 +649,7 @@ class StreamingDataFrame:
         sdf['has_column_X_Y'] = sdf.contains(['column_x', 'column_y'])
         ```
 
-
-        :param key: column names to check.
+        :param keys: column names to check.
         :return: a Column object that evaluates to True if the keys are present
             or False otherwise.
         """
@@ -1638,15 +1638,21 @@ class StreamingDataFrame:
 
         merged_stream = self.stream.merge(other.stream)
 
-        # Enable partition time alignment only when concatenated StreamingDataFrames
-        # have different topics (they could be just branches)
         total_topics = {t.name for t in itertools.chain(self.topics, other.topics)}
         if len(total_topics) > 1:
+            # Enable partition time alignment only when concatenated StreamingDataFrames
+            # have different topics (they could be just branches)
             self._registry.require_time_alignment()
-
-        return self.__dataframe_clone__(
-            *self.topics, *other.topics, stream=merged_stream
-        )
+            return self.__dataframe_clone__(
+                *self.topics, *other.topics, stream=merged_stream
+            )
+        else:
+            # There's only one topic which means that branches are being concatenated.
+            # However, branches may have different stream ids, so we generate a new one.
+            merged_stream_id = stream_id_from_strings(self.stream_id, other.stream_id)
+            return self.__dataframe_clone__(
+                stream=merged_stream, stream_id=merged_stream_id
+            )
 
     def join_asof(
         self,
@@ -1849,13 +1855,25 @@ class StreamingDataFrame:
         Clone the StreamingDataFrame with a new `stream`, `topics`,
         and optional `stream_id` parameters.
 
-        :param topics: one or more `Topic` objects
+
+        :param topics: one or more `Topic` objects.
+            Cannot be passed together with `stream_id`.
         :param stream: instance of `Stream`, optional.
+        :param stream_id: a stream_id to be used for the cloned dataframe.
+            Cannot be passed together with `*topics`.
         :return: a new `StreamingDataFrame`.
         """
 
+        if topics and stream_id:
+            raise ValueError('Cannot pass both "*topics" and "stream_id"')
+        elif topics:
+            stream_id = None
+        else:
+            topics = self._topics
+            stream_id = stream_id or self._stream_id
+
         clone = self.__class__(
-            *(topics or self._topics),
+            *topics,
             stream=stream,
             stream_id=stream_id,
             processing_context=self._processing_context,

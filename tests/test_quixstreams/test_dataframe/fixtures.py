@@ -24,6 +24,7 @@ def dataframe_factory(topic_manager_topic_factory, topic_manager_factory):
         state_manager: Optional[StateStoreManager] = None,
         producer: Optional[InternalProducer] = None,
         registry: Optional[DataFrameRegistry] = None,
+        stream_id: Optional[str] = None,
     ) -> StreamingDataFrame:
         producer = (
             producer if producer is not None else MagicMock(spec_set=InternalProducer)
@@ -52,6 +53,7 @@ def dataframe_factory(topic_manager_topic_factory, topic_manager_factory):
             topic_manager=topic_manager,
             registry=registry,
             processing_context=processing_ctx,
+            stream_id=stream_id,
         )
         registry.register_root(sdf)
         return sdf

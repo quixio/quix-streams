@@ -1,5 +1,6 @@
 import logging
 import operator
+import re
 import uuid
 import warnings
 from collections import namedtuple
@@ -21,6 +22,7 @@ from quixstreams.dataframe.windows.base import WindowResult
 from quixstreams.models import TopicConfig
 from quixstreams.models.topics.exceptions import TopicPartitionsMismatch
 from quixstreams.state.exceptions import StoreAlreadyRegisteredError
+from quixstreams.utils.stream_id import stream_id_from_strings
 from tests.utils import DummySink
 
 RecordStub = namedtuple("RecordStub", ("value", "key", "timestamp"))
@@ -541,6 +543,30 @@ class TestStreamingDataFrame:
             0
         ] == (expected, key, timestamp, headers)
 
+    def test__dataframe_clone__stream_id(
+        self, dataframe_factory, topic_manager_topic_factory
+    ):
+        sdf = dataframe_factory(stream_id="some-id")
+        assert sdf.stream_id == "some-id"
+
+        # Ensure that the previous stream_id is passed
+        assert sdf.__dataframe_clone__().stream_id == sdf.stream_id
+
+        # Ensure that new stream_id is passed
+        assert sdf.__dataframe_clone__(stream_id="new-id").stream_id == "new-id"
+
+        # If the topic is passed to the __dataframe_clone__, the existing
+        # must be overridden
+        new_topic = topic_manager_topic_factory(name="some-topic")
+        clone = sdf.__dataframe_clone__(new_topic)
+        assert clone.stream_id == new_topic.name
+
+        # Validate that "*topics" and "stream_id" are not passed at the same time
+        with pytest.raises(
+            ValueError, match=re.escape('Cannot pass both "*topics" and "stream_id"')
+        ):
+            sdf.__dataframe_clone__(new_topic, stream_id="another-id")
+
 
 class TestStreamingDataFrameApplyExpand:
     def test_apply_expand(self, dataframe_factory):
@@ -782,7 +808,7 @@ class TestStreamingDataframeStateful:
         sdf = sdf.apply(stateful_func, stateful=True)
 
         state_manager.on_partition_assign(
-            stream_id=topic.name, partition=0, committed_offsets={topic.name: -1001}
+            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
         )
         values = [
             {"number": 1},
@@ -821,7 +847,7 @@ class TestStreamingDataframeStateful:
         sdf = sdf.update(stateful_func, stateful=True)
 
         state_manager.on_partition_assign(
-            stream_id=topic.name, partition=0, committed_offsets={topic.name: -1001}
+            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
         )
         result = None
         values = [
@@ -861,7 +887,7 @@ class TestStreamingDataframeStateful:
         sdf = sdf.filter(lambda v, state: state.get("max") >= 3, stateful=True)
 
         state_manager.on_partition_assign(
-            stream_id=topic.name, partition=0, committed_offsets={topic.name: -1001}
+            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
         )
         values = [
             {"number": 1},
@@ -902,7 +928,7 @@ class TestStreamingDataframeStateful:
         sdf = sdf[sdf.apply(lambda v, state: state.get("max") >= 3, stateful=True)]
 
         state_manager.on_partition_assign(
-            stream_id=topic.name, partition=0, committed_offsets={topic.name: -1001}
+            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
         )
         values = [
             {"number": 1},
@@ -973,7 +999,7 @@ class TestStreamingDataFrameTumblingWindow:
         )
 
         state_manager.on_partition_assign(
-            stream_id=topic.name, partition=0, committed_offsets={topic.name: -1001}
+            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
         )
 
         records = [
@@ -1049,7 +1075,7 @@ class TestStreamingDataFrameTumblingWindow:
         )
 
         state_manager.on_partition_assign(
-            stream_id=topic.name, partition=0, committed_offsets={topic.name: -1001}
+            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
         )
         records = [
             # Create window [0, 10)
@@ -1102,7 +1128,7 @@ class TestStreamingDataFrameTumblingWindow:
         sdf = sdf.tumbling_window(duration_ms=10, grace_ms=0).sum().final()
 
         state_manager.on_partition_assign(
-            stream_id=topic.name, partition=0, committed_offsets={topic.name: -1001}
+            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
         )
         records = [
             # Create window [0, 10)
@@ -1164,7 +1190,7 @@ class TestStreamingDataFrameTumblingWindow:
         sdf = sdf.tumbling_window(duration_ms=10).sum().current()
 
         state_manager.on_partition_assign(
-            stream_id=topic.name, partition=0, committed_offsets={topic.name: -1001}
+            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
         )
         records = [
             # Create window [0,10)
@@ -1214,7 +1240,7 @@ class TestStreamingDataFrameTumblingWindow:
         )
 
         state_manager.on_partition_assign(
-            stream_id=topic.name, partition=0, committed_offsets={topic.name: -1001}
+            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
         )
 
         records = [
@@ -1327,7 +1353,7 @@ class TestStreamingDataFrameHoppingWindow:
         sdf = sdf.hopping_window(duration_ms=10, step_ms=5).sum().current()
 
         state_manager.on_partition_assign(
-            stream_id=topic.name, partition=0, committed_offsets={topic.name: -1001}
+            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
         )
         records = [
             # Create window [0,10)
@@ -1378,7 +1404,7 @@ class TestStreamingDataFrameHoppingWindow:
         sdf = sdf.hopping_window(duration_ms=10, step_ms=5).sum().current()
 
         state_manager.on_partition_assign(
-            stream_id=topic.name, partition=0, committed_offsets={topic.name: -1001}
+            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
         )
         records = [
             # Create window [0,10)
@@ -1422,7 +1448,7 @@ class TestStreamingDataFrameHoppingWindow:
         sdf = sdf.hopping_window(duration_ms=10, step_ms=5).sum().final()
 
         state_manager.on_partition_assign(
-            stream_id=topic.name, partition=0, committed_offsets={topic.name: -1001}
+            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
         )
 
         records = [
@@ -1489,7 +1515,7 @@ class TestStreamingDataFrameHoppingWindow:
         sdf = sdf.hopping_window(duration_ms=10, step_ms=5).sum().current()
 
         state_manager.on_partition_assign(
-            stream_id=topic.name, partition=0, committed_offsets={topic.name: -1001}
+            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
         )
         records = [
             # Create window [0,10)
@@ -1536,7 +1562,7 @@ class TestStreamingDataFrameSlidingWindow:
         )
 
         state_manager.on_partition_assign(
-            stream_id=topic.name, partition=0, committed_offsets={topic.name: -1001}
+            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
         )
 
         records = [
@@ -1609,7 +1635,7 @@ class TestStreamingDataFrameSlidingWindow:
         )
 
         state_manager.on_partition_assign(
-            stream_id=topic.name, partition=0, committed_offsets={topic.name: -1001}
+            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
         )
         records = [
             # Create window [0, 1]
@@ -2054,6 +2080,24 @@ class TestStreamingDataFrameGroupBy:
         sdf.update(lambda x: x)
         # no children should be added to the sink operation
         assert not sdf_sink_node.children
+
+    def test_group_by_stream_id(
+        self, dataframe_factory, num_partitions, topic_manager_factory
+    ):
+        topic_manager = topic_manager_factory()
+        topic = topic_manager.topic(
+            str(uuid.uuid4()),
+            create_config=TopicConfig(
+                num_partitions=num_partitions, replication_factor=1
+            ),
+        )
+        sdf = dataframe_factory(topic, topic_manager=topic_manager)
+
+        grouped_sdf = sdf.group_by("column")
+        assert sdf.stream_id != grouped_sdf.stream_id
+
+        assert grouped_sdf.apply(lambda _: _).stream_id == grouped_sdf.stream_id
+        assert grouped_sdf.filter(lambda _: _).stream_id == grouped_sdf.stream_id
 
 
 def add_n(n):
@@ -2568,11 +2612,45 @@ class TestStreamingDataFrameConcat:
         # Branching is not exclusive, and it duplicates data in this case.
         # Check that we receive the results from both branches
         sdf_concatenated = sdf_branch1.concat(sdf_branch2)
-        assert sdf_concatenated.stream_id == sdf.stream_id
+        assert (
+            sdf_concatenated.stream_id
+            == sdf.stream_id
+            == sdf_branch1.stream_id
+            == sdf_branch2.stream_id
+        )
         assert sdf_concatenated.test(value=1, key=b"key1", timestamp=1) == [
             (2, b"key1", 1, None),
             (3, b"key1", 1, None),
         ]
+        # Timestamp alignment is not required the concated SDFs are branches
+        assert not registry.requires_time_alignment
+
+    def test_concat_same_topic_different_stream_ids(
+        self, topic_manager_factory, dataframe_factory
+    ):
+        """
+        Test that `StreamingDataFrame.concat()` merges two branches of the same SDF
+        """
+        topic_manager = topic_manager_factory()
+        topic = topic_manager.topic(
+            str(uuid.uuid4()),
+            create_config=TopicConfig(num_partitions=1, replication_factor=1),
+        )
+
+        registry = DataFrameRegistry()
+        sdf = dataframe_factory(topic, registry=registry)
+        # Doing a groupby on a single-partition topic changes the stream_id
+        # without changing the underlying topic
+        sdf_branch1 = sdf.group_by("column")
+        sdf_branch2 = sdf.apply(lambda v: v + 2)
+
+        # Concatenate branches back and ensure that streamid behaves the same as it would
+        # be with multi-partition topic
+        sdf_concatenated = sdf_branch1.concat(sdf_branch2)
+
+        assert sdf_concatenated.stream_id == stream_id_from_strings(
+            sdf_branch1.stream_id, sdf_branch2.stream_id
+        )
         # Timestamp alignment is not required the concated SDFs are branches
         assert not registry.requires_time_alignment
 
@@ -2650,7 +2728,6 @@ class TestStreamingDataFrameJoinAsOf:
     def topic_manager(self, topic_manager_factory):
         return topic_manager_factory()
 
-    # TODO: Check if we already have a fixture for that to avoid the pollution
     @pytest.fixture
     def create_topic(self, topic_manager):
         def _create_topic(num_partitions=1):
