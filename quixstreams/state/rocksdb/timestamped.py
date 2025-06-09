@@ -140,6 +140,10 @@ class TimestampedPartitionTransaction(RocksDBPartitionTransaction):
 
         return self._deserialize_value(value) if value is not None else None
 
+    def get_interval(self, start: int, end: int, prefix: Any) -> list[Any]:
+        items = self._get_items(start=start, end=end, prefix=self._ensure_bytes(prefix))
+        return [self._deserialize_value(value) for _, value in items]
+
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
     def set_for_timestamp(self, timestamp: int, value: Any, prefix: Any) -> None:
         """Set a value for the timestamp.
