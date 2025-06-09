@@ -9,6 +9,8 @@ if typing.TYPE_CHECKING:
 __all__ = ("AsOfJoin",)
 
 DISCARDED = object()
+block_all = lambda value: False
+block_discarded = lambda value: value is not DISCARDED
 
 
 class AsOfJoin(Join):
@@ -24,16 +26,13 @@ class AsOfJoin(Join):
         merger = self._merger
 
         def left_func(value, key, timestamp, headers):
-            right_value = tx(right).get_latest(timestamp=timestamp, prefix=key)
-            if is_inner_join and not right_value:
-                return DISCARDED
-            return merger(value, right_value)
+            if right_value := tx(right).get_latest(timestamp=timestamp, prefix=key):
+                return merger(value, right_value)
+            return DISCARDED if is_inner_join else merger(value, None)
 
         def right_func(value, key, timestamp, headers):
             tx(right).set_for_timestamp(timestamp=timestamp, value=value, prefix=key)
 
-        right = right.update(right_func, metadata=True).filter(lambda value: False)
-        left = left.apply(left_func, metadata=True).filter(
-            lambda value: value is not DISCARDED
-        )
+        right = right.update(right_func, metadata=True).filter(block_all)
+        left = left.apply(left_func, metadata=True).filter(block_discarded)
         return left.concat(right)
