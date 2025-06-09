@@ -12,6 +12,7 @@ from quixstreams.state.rocksdb.transaction import RocksDBPartitionTransaction
 from quixstreams.state.serialization import (
     DumpsFunc,
     LoadsFunc,
+    append_integer,
     encode_integer_pair,
     int_to_bytes,
     serialize,
@@ -29,7 +30,7 @@ from .metadata import (
     LATEST_TIMESTAMPS_CF_NAME,
     VALUES_CF_NAME,
 )
-from .serialization import append_integer, parse_window_key
+from .serialization import parse_window_key
 from .state import WindowedTransactionState
 
 if TYPE_CHECKING:

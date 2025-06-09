@@ -13,6 +13,7 @@ __all__ = (
     "int_from_bytes",
     "encode_integer_pair",
     "decode_integer_pair",
+    "append_integer",
 )
 
 _int_packer = struct.Struct(">Q")
@@ -76,3 +77,16 @@ def decode_integer_pair(value: bytes) -> tuple[int, int]:
     """
     integer_1, _, integer_2 = _int_pair_unpack(value)
     return integer_1, integer_2
+
+
+def append_integer(base_bytes: bytes, integer: int) -> bytes:
+    """
+    Append integer to the base bytes
+    Format:
+    ```<base_bytes>|<integer>```
+
+    :param base_bytes: base bytes
+    :param integer: integer to append
+    :return: bytes
+    """
+    return base_bytes + SEPARATOR + int_to_bytes(integer)
