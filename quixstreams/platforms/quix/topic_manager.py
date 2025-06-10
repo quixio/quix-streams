@@ -3,6 +3,7 @@ from typing import Literal, Optional, Sequence
 
 from quixstreams.models.topics import Topic, TopicAdmin, TopicConfig, TopicManager
 from quixstreams.models.topics.exceptions import TopicNotFoundError
+from quixstreams.utils.stream_id import stream_id_from_strings
 
 from .config import QuixKafkaConfigsBuilder
 from .exceptions import QuixApiRequestFailure
@@ -70,10 +71,10 @@ class QuixTopicManager(TopicManager):
             # If only one topic is passed, return its full name
             # for backwards compatibility
             return topics[0].name
-
-        # Use the "quix_name" to generate stream_id.
-        # In Quix Cloud, the "quix_name" can differ from the actual broker topic name
-        return "--".join(sorted(t.quix_name for t in topics))
+        else:
+            # Use the "quix_name" to generate stream_id.
+            # In Quix Cloud, the "quix_name" can differ from the actual broker topic name
+            return stream_id_from_strings(*(t.quix_name for t in topics))
 
     def _fetch_topic(self, topic: Topic) -> Topic:
         try:

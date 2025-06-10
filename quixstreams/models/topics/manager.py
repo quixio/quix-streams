@@ -3,6 +3,7 @@ from itertools import chain
 from typing import Dict, Iterable, List, Literal, Optional, Sequence
 
 from quixstreams.models.serializers import DeserializerType, SerializerType
+from quixstreams.utils.stream_id import stream_id_from_strings
 
 from .admin import TopicAdmin
 from .exceptions import (
@@ -352,8 +353,7 @@ class TopicManager:
         """
         if not topics:
             raise ValueError("At least one Topic must be passed")
-
-        return "--".join(sorted(t.name for t in topics))
+        return stream_id_from_strings(*(t.name for t in topics))
 
     def _validate_topic_name(self, name: str) -> None:
         """
