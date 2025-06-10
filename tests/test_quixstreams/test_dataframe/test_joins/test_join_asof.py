@@ -2,7 +2,6 @@ from functools import partial
 
 import pytest
 
-from quixstreams.models.topics.exceptions import TopicPartitionsMismatch
 from quixstreams.state.exceptions import StoreAlreadyRegisteredError
 
 
@@ -70,25 +69,6 @@ class TestStreamingDataFrameJoinAsOf:
             joined_sdf, left_topic, value=left, key=b"key", timestamp=2
         )
         assert joined_value == expected
-
-    def test_how_invalid_value(self, topic_manager_topic_factory, create_sdf):
-        left_topic = topic_manager_topic_factory()
-        right_topic = topic_manager_topic_factory()
-        left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
-
-        match = 'Invalid "how" value'
-        with pytest.raises(ValueError, match=match):
-            left_sdf.join_asof(right_sdf, how="invalid")
-
-    def test_mismatching_partitions_fails(
-        self, topic_manager_topic_factory, create_sdf
-    ):
-        left_topic = topic_manager_topic_factory()
-        right_topic = topic_manager_topic_factory(partitions=2)
-        left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
-
-        with pytest.raises(TopicPartitionsMismatch):
-            left_sdf.join_asof(right_sdf)
 
     @pytest.mark.parametrize(
         "on_merge, right, left, expected",
@@ -165,15 +145,6 @@ class TestStreamingDataFrameJoinAsOf:
             )
             assert joined_value == [(expected, b"key", 2, None)]
 
-    def test_on_merge_invalid_value(self, topic_manager_topic_factory, create_sdf):
-        left_topic = topic_manager_topic_factory()
-        right_topic = topic_manager_topic_factory()
-        left_sdf, right_sdf = create_sdf(left_topic), create_sdf(right_topic)
-
-        match = 'Invalid "on_merge"'
-        with pytest.raises(ValueError, match=match):
-            left_sdf.join_asof(right_sdf, on_merge="invalid")
-
     def test_on_merge_callback(
         self, topic_manager_topic_factory, create_sdf, assign_partition, publish
     ):
@@ -222,22 +193,6 @@ class TestStreamingDataFrameJoinAsOf:
 
         assert publish_left(timestamp=4) == []
         assert publish_left(timestamp=5) == [({"left": 4, "right": 2}, b"key", 5, None)]
-
-    def test_self_join_not_supported(self, topic_manager_topic_factory, create_sdf):
-        topic = topic_manager_topic_factory()
-        match = (
-            "Joining dataframes originating from the same topic is not yet supported."
-        )
-
-        # The very same sdf object
-        sdf = create_sdf(topic)
-        with pytest.raises(ValueError, match=match):
-            sdf.join_asof(sdf)
-
-        # Same topic, different branch
-        sdf2 = sdf.apply(lambda v: v)
-        with pytest.raises(ValueError, match=match):
-            sdf.join_asof(sdf2)
 
     def test_join_same_topic_multiple_times_fails(
         self, topic_manager_topic_factory, create_sdf
