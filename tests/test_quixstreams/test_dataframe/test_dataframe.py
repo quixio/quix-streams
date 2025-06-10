@@ -556,7 +556,7 @@ class TestStreamingDataFrame:
         assert sdf.__dataframe_clone__(stream_id="new-id").stream_id == "new-id"
 
         # If the topic is passed to the __dataframe_clone__, the existing
-        # must be overridden
+        # stream_id must be overridden
         new_topic = topic_manager_topic_factory(name="some-topic")
         clone = sdf.__dataframe_clone__(new_topic)
         assert clone.stream_id == new_topic.name
