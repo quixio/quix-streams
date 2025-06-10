@@ -550,7 +550,7 @@ class TestStreamingDataFrame:
         assert sdf.stream_id == "some-id"
 
         # Ensure that the previous stream_id is passed
-        assert sdf.__dataframe_clone__().stream_id == sdf.stream_id
+        assert sdf.__dataframe_clone__().stream_id == sdf.stream_id == "some-id"
 
         # Ensure that new stream_id is passed
         assert sdf.__dataframe_clone__(stream_id="new-id").stream_id == "new-id"
