@@ -695,7 +695,7 @@ certificate as bytes if present, or None
 class QuixTopicManager(TopicManager)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/topic_manager.py#L15)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/topic_manager.py#L16)
 
 The source of all topic management with quixstreams.
 
@@ -720,7 +720,7 @@ def __init__(topic_admin: TopicAdmin,
              auto_create_topics: bool = True)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/topic_manager.py#L36)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/topic_manager.py#L37)
 
 **Arguments**:
 
@@ -738,7 +738,7 @@ generated for you.
 def stream_id_from_topics(topics: Sequence[Topic]) -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/topic_manager.py#L63)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/topic_manager.py#L64)
 
 Generate a stream_id by combining names of the provided topics.
 
@@ -938,7 +938,7 @@ messages in the timestamp-aligned way for the correct processing.
 class StreamingDataFrame()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L89)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L90)
 
 `StreamingDataFrame` is the main object you will use for ETL work.
 
@@ -993,7 +993,7 @@ sdf = sdf.to_topic(topic_obj)
 def stream_id() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L174)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L175)
 
 An identifier of the data stream this StreamingDataFrame
 manipulates in the application.
@@ -1025,7 +1025,7 @@ def apply(func: Union[
           metadata: bool = False) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L233)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L234)
 
 Apply a function to transform the value and return a new value.
 
@@ -1077,7 +1077,7 @@ def update(func: Union[
            metadata: bool = False) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L337)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L338)
 
 Apply a function to mutate value in-place or to perform a side effect
 
@@ -1137,7 +1137,7 @@ def filter(func: Union[
            metadata: bool = False) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L440)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L441)
 
 Filter value using provided function.
 
@@ -1183,7 +1183,7 @@ def group_by(key: Union[str, Callable[[Any], Any]],
              key_serializer: SerializerType = "json") -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L525)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L526)
 
 "Groups" messages by re-keying them via the provided group_by operation
 
@@ -1240,7 +1240,7 @@ a clone with this operation added (assign to keep its effect).
 def contains(keys: Union[str, list[str]]) -> StreamingSeries
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L635)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L636)
 
 Check if keys are present in the Row value.
 
@@ -1257,7 +1257,7 @@ sdf['has_column_X_Y'] = sdf.contains(['column_x', 'column_y'])
 
 **Arguments**:
 
-- `key`: column names to check.
+- `keys`: column names to check.
 
 **Returns**:
 
@@ -2233,7 +2233,7 @@ def join_asof(right: "StreamingDataFrame",
               name: Optional[str] = None) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1651)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1657)
 
 Join the left dataframe with the records of the right dataframe with
 
@@ -2306,7 +2306,7 @@ def join_lookup(
 ) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1725)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1731)
 
 Note: This is an experimental feature, and its API is likely to change in the future.
 
@@ -2359,7 +2359,7 @@ sdf = sdf.join_lookup(lookup, fields)
 def register_store(store_type: Optional[StoreTypes] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1814)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1820)
 
 Register the default store for the current stream_id in StateStoreManager.
 
@@ -7290,6 +7290,10 @@ a timeout specified in `retry_after`, and resume them when it's elapsed.
 
 ## quixstreams.sinks.base.item
 
+<a id="quixstreams.utils.stream_id"></a>
+
+## quixstreams.utils.stream\_id
+
 <a id="quixstreams.utils"></a>
 
 ## quixstreams.utils
@@ -8639,7 +8643,7 @@ Row, list of Rows or None if the message is ignored.
 class TopicManager()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L21)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L22)
 
 The source of all topic management for a Quix Streams Application.
 
@@ -8659,7 +8663,7 @@ def __init__(topic_admin: TopicAdmin,
              auto_create_topics: bool = True)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L44)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L45)
 
 **Arguments**:
 
@@ -8677,7 +8681,7 @@ def __init__(topic_admin: TopicAdmin,
 def changelog_topics() -> Dict[Optional[str], Dict[str, Topic]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L76)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L77)
 
 Note: `Topic`s are the changelogs.
 
@@ -8692,7 +8696,7 @@ returns: the changelog topic dict, {topic_name: {suffix: Topic}}
 def changelog_topics_list() -> List[Topic]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L85)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L86)
 
 Returns a list of changelog topics
 
@@ -8707,7 +8711,7 @@ returns: the changelog topic dict, {topic_name: {suffix: Topic}}
 def non_changelog_topics() -> Dict[str, Topic]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L94)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L95)
 
 Returns a dict with normal and repartition topics
 
@@ -8720,7 +8724,7 @@ Returns a dict with normal and repartition topics
 def all_topics() -> Dict[str, Topic]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L101)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L102)
 
 Every registered topic name mapped to its respective `Topic`.
 
@@ -8736,7 +8740,7 @@ def topic_config(num_partitions: Optional[int] = None,
                  extra_config: Optional[dict] = None) -> TopicConfig
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L114)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L115)
 
 Convenience method for generating a `TopicConfig` with default settings
 
@@ -8764,7 +8768,7 @@ def topic(name: str,
           timestamp_extractor: Optional[TimestampExtractor] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L136)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L137)
 
 A convenience method for generating a `Topic`. Will use default config options
 
@@ -8793,7 +8797,7 @@ Topic object with creation configs
 def register(topic: Topic) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L183)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L184)
 
 Register an already generated :class:`quixstreams.models.topics.Topic` to the topic manager.
 
@@ -8817,7 +8821,7 @@ def repartition_topic(operation: str,
                       key_serializer: SerializerType = "json") -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L202)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L203)
 
 Create an internal repartition topic.
 
@@ -8844,7 +8848,7 @@ def changelog_topic(stream_id: Optional[str], store_name: str,
                     config: TopicConfig) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L239)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L240)
 
 Create and register a changelog topic for the given "stream_id" and store name.
 
@@ -8875,7 +8879,7 @@ generate changelog topics. To turn off changelogs, init an Application with
 def derive_topic_config(cls, topics: Iterable[Topic]) -> TopicConfig
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L287)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L288)
 
 Derive a topic config based on one or more input Topic configs.
 To be used for generating the internal changelogs and repartition topics.
@@ -8893,7 +8897,7 @@ Multiple topics are expected for merged and joins streams.
 def stream_id_from_topics(topics: Sequence[Topic]) -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L349)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L350)
 
 Generate a stream_id by combining names of the provided topics.
 
