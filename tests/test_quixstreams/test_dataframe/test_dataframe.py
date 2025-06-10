@@ -2728,6 +2728,7 @@ class TestStreamingDataFrameJoinAsOf:
     def topic_manager(self, topic_manager_factory):
         return topic_manager_factory()
 
+    # TODO: Check if we already have a fixture for that to avoid the pollution
     @pytest.fixture
     def create_topic(self, topic_manager):
         def _create_topic(num_partitions=1):
