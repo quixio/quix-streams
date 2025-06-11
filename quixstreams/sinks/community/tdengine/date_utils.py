@@ -1,4 +1,5 @@
 """Utils to get right Date parsing function."""
+
 import datetime
 import threading
 from datetime import timezone as tz
@@ -56,9 +57,9 @@ class DateHelper:
         Solution comes from v1 client. Thx.
         https://github.com/influxdata/influxdb-python/pull/811
         """
-        nanoseconds_in_days = delta.days * 86400 * 10 ** 9
-        nanoseconds_in_seconds = delta.seconds * 10 ** 9
-        nanoseconds_in_micros = delta.microseconds * 10 ** 3
+        nanoseconds_in_days = delta.days * 86400 * 10**9
+        nanoseconds_in_seconds = delta.seconds * 10**9
+        nanoseconds_in_micros = delta.microseconds * 10**3
 
         return nanoseconds_in_days + nanoseconds_in_seconds + nanoseconds_in_micros
 
@@ -89,6 +90,7 @@ def get_date_helper() -> DateHelper:
                 _date_helper = DateHelper()
                 try:
                     import ciso8601
+
                     _date_helper.parse_date = ciso8601.parse_datetime
                 except ModuleNotFoundError:
                     if (version_info.major, version_info.minor) >= (3, 11):

@@ -9,7 +9,6 @@ from urllib.parse import urljoin, urlencode
 import urllib3
 from quixstreams.models import HeadersTuples
 
-
 from quixstreams.sinks.base import (
     BatchingSink,
     ClientConnectFailureCallback,
@@ -44,7 +43,7 @@ class TDengineSink(BatchingSink):
         host: str,
         database: str,
         measurement: MeasurementSetter,
-        table_name_key: str ,
+        table_name_key: str,
         fields_keys: FieldsSetter = (),
         tags_keys: TagsSetter = (),
         time_key: Optional[str] = None,
@@ -152,7 +151,7 @@ class TDengineSink(BatchingSink):
         precision = time_precision
         if precision == "us":
             precision = "u"
-        query_params = {"db":database,"precision": precision}
+        query_params = {"db": database, "precision": precision}
         header = {
             "Content-Type": "text/plain; charset=utf-8",
         }
@@ -162,11 +161,11 @@ class TDengineSink(BatchingSink):
             query_params["token"] = token
         elif username != "" and password != "":
             basic_auth = f"{username}:{password}"
-            header["authorization"] = f"Basic {base64.b64encode(basic_auth.encode('latin-1')).decode()}"
-        else:
-            raise ValueError(
-                "Either token or username and password must be provided"
+            header["authorization"] = (
+                f"Basic {base64.b64encode(basic_auth.encode('latin-1')).decode()}"
             )
+        else:
+            raise ValueError("Either token or username and password must be provided")
         if table_name_key:
             if table_name_key not in tags_keys:
                 raise ValueError(
@@ -208,14 +207,13 @@ class TDengineSink(BatchingSink):
         return lambda value: setter
 
     def setup(self):
-        if self._client_args['verify_ssl']:
+        if self._client_args["verify_ssl"]:
             cert_reqs = ssl.CERT_REQUIRED
         else:
             cert_reqs = ssl.CERT_NONE
         self._client = urllib3.PoolManager(
-                cert_reqs=cert_reqs,
-            )
-
+            cert_reqs=cert_reqs,
+        )
 
     def add(
         self,
@@ -300,15 +298,20 @@ class TDengineSink(BatchingSink):
                 logger.debug("No records to write")
                 continue
             _start = time.monotonic()
-            l: list[bytes] = [b''] * len(records)
+            l: list[bytes] = [b""] * len(records)
             for i, point in enumerate(records):
                 p = Point.from_dict(point, self._write_precision)
-                l[i] = p.to_line_protocol().encode('utf-8')
+                l[i] = p.to_line_protocol().encode("utf-8")
             body = b"\n".join(l)
-            timeout = urllib3.Timeout(total=self._client_args['timeout'] / 1_000)
+            timeout = urllib3.Timeout(total=self._client_args["timeout"] / 1_000)
             logger.debug(f"Sending data to {self._client_args['url']} : {body}")
-            resp = self._client.request("POST", self._client_args['url'], body=body,
-                                        headers=self._client_args['header'], timeout=timeout)
+            resp = self._client.request(
+                "POST",
+                self._client_args["url"],
+                body=body,
+                headers=self._client_args["header"],
+                timeout=timeout,
+            )
             elapsed = round(time.monotonic() - _start, 2)
             logger.info(
                 f"Sent data to TDengine; "
@@ -318,12 +321,10 @@ class TDengineSink(BatchingSink):
                 f"time_elapsed={elapsed}s"
             )
             err = urllib3.exceptions.HTTPError(
-                    f"Failed to write data to TDengine: {resp.status} {resp.data}"
-                )
+                f"Failed to write data to TDengine: {resp.status} {resp.data}"
+            )
             if resp.status != 204:
                 if resp.status == 503:
-                    retry_after = resp.getheader('Retry-After')
-                    raise SinkBackpressureError(
-                        retry_after=int(retry_after)
-                    ) from err
+                    retry_after = resp.getheader("Retry-After")
+                    raise SinkBackpressureError(retry_after=int(retry_after)) from err
                 raise err

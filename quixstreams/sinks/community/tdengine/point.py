@@ -10,27 +10,33 @@ EPOCH = datetime.fromtimestamp(0, tz=timezone.utc)
 
 DEFAULT_WRITE_PRECISION = "ns"
 
-_ESCAPE_MEASUREMENT = str.maketrans({
-    ',': r'\,',
-    ' ': r'\ ',
-    '\n': r'\n',
-    '\t': r'\t',
-    '\r': r'\r',
-})
+_ESCAPE_MEASUREMENT = str.maketrans(
+    {
+        ",": r"\,",
+        " ": r"\ ",
+        "\n": r"\n",
+        "\t": r"\t",
+        "\r": r"\r",
+    }
+)
 
-_ESCAPE_KEY = str.maketrans({
-    ',': r'\,',
-    '=': r'\=',
-    ' ': r'\ ',
-    '\n': r'\n',
-    '\t': r'\t',
-    '\r': r'\r',
-})
+_ESCAPE_KEY = str.maketrans(
+    {
+        ",": r"\,",
+        "=": r"\=",
+        " ": r"\ ",
+        "\n": r"\n",
+        "\t": r"\t",
+        "\r": r"\r",
+    }
+)
 
-_ESCAPE_STRING = str.maketrans({
-    '"': r'\"',
-    '\\': r'\\',
-})
+_ESCAPE_STRING = str.maketrans(
+    {
+        '"': r"\"",
+        "\\": r"\\",
+    }
+)
 
 try:
     import numpy as np
@@ -48,7 +54,9 @@ class Point(object):
         return p
 
     @staticmethod
-    def from_dict(dictionary: dict, write_precision: str = DEFAULT_WRITE_PRECISION, **kwargs):
+    def from_dict(
+        dictionary: dict, write_precision: str = DEFAULT_WRITE_PRECISION, **kwargs
+    ):
         """
         Initialize point from 'dict' structure.
 
@@ -124,44 +132,51 @@ class Point(object):
                           The ``field_types`` can be also specified as part of incoming dictionary. For more info see an example above.
         :return: new data point
         """  # noqa: E501
-        measurement_ = kwargs.get('record_measurement_name', None)
+        measurement_ = kwargs.get("record_measurement_name", None)
         if measurement_ is None:
-            measurement_ = dictionary[kwargs.get('record_measurement_key', 'measurement')]
+            measurement_ = dictionary[
+                kwargs.get("record_measurement_key", "measurement")
+            ]
         point = Point(measurement_)
 
-        record_tag_keys = kwargs.get('record_tag_keys', None)
+        record_tag_keys = kwargs.get("record_tag_keys", None)
         if record_tag_keys is not None:
             for tag_key in record_tag_keys:
                 if tag_key in dictionary:
                     point.tag(tag_key, dictionary[tag_key])
-        elif 'tags' in dictionary:
-            for tag_key, tag_value in dictionary['tags'].items():
+        elif "tags" in dictionary:
+            for tag_key, tag_value in dictionary["tags"].items():
                 point.tag(tag_key, tag_value)
 
-        record_field_keys = kwargs.get('record_field_keys', None)
+        record_field_keys = kwargs.get("record_field_keys", None)
         if record_field_keys is not None:
             for field_key in record_field_keys:
                 if field_key in dictionary:
                     point.field(field_key, dictionary[field_key])
         else:
-            for field_key, field_value in dictionary['fields'].items():
+            for field_key, field_value in dictionary["fields"].items():
                 point.field(field_key, field_value)
 
-        record_time_key = kwargs.get('record_time_key', 'time')
+        record_time_key = kwargs.get("record_time_key", "time")
         if record_time_key in dictionary:
             point.time(dictionary[record_time_key], write_precision=write_precision)
 
-        _field_types = kwargs.get('field_types', {})
-        if 'field_types' in dictionary:
-            _field_types = dictionary['field_types']
+        _field_types = kwargs.get("field_types", {})
+        if "field_types" in dictionary:
+            _field_types = dictionary["field_types"]
         # Map API fields types to Line Protocol types postfix:
         # - int: 'i'
         # - uint: 'u'
         # - float: ''
-        point._field_types = dict(map(
-            lambda item: (item[0], 'i' if item[1] == 'int' else 'u' if item[1] == 'uint' else ''),
-            _field_types.items()
-        ))
+        point._field_types = dict(
+            map(
+                lambda item: (
+                    item[0],
+                    "i" if item[1] == "int" else "u" if item[1] == "uint" else "",
+                ),
+                _field_types.items(),
+            )
+        )
 
         return point
 
@@ -223,7 +238,9 @@ The output Line protocol will be interpret as a comment by InfluxDB. For more in
         _fields = _append_fields(self._fields, self._field_types)
         if not _fields:
             return ""
-        _time = _append_time(self._time, self._write_precision if precision is None else precision)
+        _time = _append_time(
+            self._time, self._write_precision if precision is None else precision
+        )
 
         return f"{_measurement}{_tags}{_fields}{_time}"
 
@@ -251,8 +268,8 @@ def _append_tags(tags):
 
         tag = _escape_key(tag_key)
         value = _escape_tag_value(tag_value)
-        if tag != '' and value != '':
-            _return.append(f'{tag}={value}')
+        if tag != "" and value != "":
+            _return.append(f"{tag}={value}")
 
     return f"{',' if _return else ''}{','.join(_return)} "
 
@@ -264,7 +281,11 @@ def _append_fields(fields, field_types):
         if value is None:
             continue
 
-        if isinstance(value, float) or isinstance(value, Decimal) or _np_is_subtype(value, 'float'):
+        if (
+            isinstance(value, float)
+            or isinstance(value, Decimal)
+            or _np_is_subtype(value, "float")
+        ):
             if not math.isfinite(value):
                 continue
             s = str(value)
@@ -272,25 +293,29 @@ def _append_fields(fields, field_types):
             # and the trailing ".0" that Python produces is unnecessary
             # in line-protocol, inconsistent with other line-protocol encoders,
             # and takes more space than needed, so trim it off.
-            if s.endswith('.0'):
+            if s.endswith(".0"):
                 s = s[:-2]
-            _return.append(f'{_escape_key(field)}={s}')
-        elif (isinstance(value, int) or _np_is_subtype(value, 'int')) and not isinstance(value, bool):
+            _return.append(f"{_escape_key(field)}={s}")
+        elif (
+            isinstance(value, int) or _np_is_subtype(value, "int")
+        ) and not isinstance(value, bool):
             _type = field_types.get(field, "i")
-            _return.append(f'{_escape_key(field)}={str(value)}{_type}')
+            _return.append(f"{_escape_key(field)}={str(value)}{_type}")
         elif isinstance(value, bool):
-            _return.append(f'{_escape_key(field)}={str(value).lower()}')
+            _return.append(f"{_escape_key(field)}={str(value).lower()}")
         elif isinstance(value, str):
             _return.append(f'{_escape_key(field)}="{_escape_string(value)}"')
         else:
-            raise ValueError(f'Type: "{type(value)}" of field: "{field}" is not supported.')
+            raise ValueError(
+                f'Type: "{type(value)}" of field: "{field}" is not supported.'
+            )
 
     return f"{','.join(_return)}"
 
 
 def _append_time(time, write_precision) -> str:
     if time is None:
-        return ''
+        return ""
     return f" {int(_convert_timestamp(time, write_precision))}"
 
 
@@ -302,8 +327,8 @@ def _escape_key(tag, escape_list=None) -> str:
 
 def _escape_tag_value(value) -> str:
     ret = _escape_key(value)
-    if ret.endswith('\\'):
-        ret += ' '
+    if ret.endswith("\\"):
+        ret += " "
     return ret
 
 
@@ -339,11 +364,11 @@ def _convert_timestamp(timestamp, precision=DEFAULT_WRITE_PRECISION):
 
 
 def _np_is_subtype(value, np_type):
-    if not _HAS_NUMPY or not hasattr(value, 'dtype'):
+    if not _HAS_NUMPY or not hasattr(value, "dtype"):
         return False
 
-    if np_type == 'float':
+    if np_type == "float":
         return np.issubdtype(value, np.floating)
-    elif np_type == 'int':
+    elif np_type == "int":
         return np.issubdtype(value, np.integer)
     return False
