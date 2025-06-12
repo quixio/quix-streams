@@ -4,7 +4,6 @@ from .exceptions import (
     GroupByDuplicate,
     GroupByNestingLimit,
     InvalidColumnReference,
-    InvalidOperation,
     StreamingDataFrameDuplicate,
 )
 from .registry import DataFrameRegistry
@@ -16,7 +15,6 @@ __all__ = (
     "GroupByDuplicate",
     "GroupByNestingLimit",
     "InvalidColumnReference",
-    "InvalidOperation",
     "StreamingDataFrame",
     "StreamingDataFrameDuplicate",
     "StreamingSeries",

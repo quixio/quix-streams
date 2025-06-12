@@ -12,11 +12,8 @@ from unittest import mock
 import pytest
 
 from quixstreams import State
-from quixstreams.dataframe.exceptions import (
-    GroupByDuplicate,
-    GroupByNestingLimit,
-    InvalidOperation,
-)
+from quixstreams.core.stream.exceptions import InvalidOperation
+from quixstreams.dataframe.exceptions import GroupByDuplicate, GroupByNestingLimit
 from quixstreams.dataframe.registry import DataFrameRegistry
 from quixstreams.dataframe.windows.base import WindowResult
 from quixstreams.models import TopicConfig

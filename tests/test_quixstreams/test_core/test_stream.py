@@ -3,14 +3,13 @@ from operator import setitem
 import pytest
 
 from quixstreams.core.stream import Stream
+from quixstreams.core.stream.exceptions import InvalidOperation, InvalidTopology
 from quixstreams.core.stream.functions import (
     ApplyFunction,
     FilterFunction,
     TransformFunction,
     UpdateFunction,
 )
-from quixstreams.core.stream.stream import InvalidTopology
-from quixstreams.dataframe.exceptions import InvalidOperation
 
 from .utils import Sink
 

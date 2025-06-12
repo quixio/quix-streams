@@ -39,6 +39,7 @@ from quixstreams.core.stream import (
     UpdateWithMetadataCallback,
     VoidExecutor,
 )
+from quixstreams.core.stream.exceptions import InvalidOperation
 from quixstreams.models import (
     HeadersTuples,
     MessageContext,
@@ -58,7 +59,6 @@ from quixstreams.utils.printing import (
 )
 from quixstreams.utils.stream_id import stream_id_from_strings
 
-from .exceptions import InvalidOperation
 from .joins import JoinAsOf, JoinAsOfHow, OnOverlap
 from .joins.lookups import BaseField, BaseLookup
 from .registry import DataFrameRegistry
