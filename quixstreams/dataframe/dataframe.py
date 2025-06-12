@@ -59,7 +59,7 @@ from quixstreams.utils.printing import (
 from quixstreams.utils.stream_id import stream_id_from_strings
 
 from .exceptions import InvalidOperation
-from .joins import JoinAsOf, JoinAsOfHow, OnOverlap
+from .joins import AsOfJoin, IntervalJoin, JoinHow, OnOverlap
 from .joins.lookups import BaseField, BaseLookup
 from .registry import DataFrameRegistry
 from .series import StreamingSeries
@@ -1657,7 +1657,7 @@ class StreamingDataFrame:
     def join_asof(
         self,
         right: "StreamingDataFrame",
-        how: JoinAsOfHow = "inner",
+        how: JoinHow = "inner",
         on_merge: Union[OnOverlap, Callable[[Any, Any], Any]] = "raise",
         grace_ms: Union[int, timedelta] = timedelta(days=7),
         name: Optional[str] = None,
@@ -1724,8 +1724,27 @@ class StreamingDataFrame:
         ```
 
         """
-        return JoinAsOf(
+        return AsOfJoin(
             how=how, on_merge=on_merge, grace_ms=grace_ms, store_name=name
+        ).join(self, right)
+
+    def join_interval(
+        self,
+        right: "StreamingDataFrame",
+        how: Literal["inner", "left"] = "inner",
+        on_merge: Union[OnOverlap, Callable[[Any, Any], Any]] = "raise",
+        grace_ms: Union[int, timedelta] = timedelta(days=7),
+        name: Optional[str] = None,
+        backward_ms: Union[int, timedelta] = 0,
+        forward_ms: Union[int, timedelta] = 0,
+    ) -> "StreamingDataFrame":
+        return IntervalJoin(
+            how=how,
+            on_merge=on_merge,
+            grace_ms=grace_ms,
+            store_name=name,
+            backward_ms=backward_ms,
+            forward_ms=forward_ms,
         ).join(self, right)
 
     def join_lookup(
