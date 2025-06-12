@@ -1728,6 +1728,9 @@ class TestStreamingDataFrameGroupBy:
         if num_partitions == 1:
             post_groupby_branch_result = pre_groupby_branch_result
         else:
+            # Ensure that messages are not propagated downstream by the original
+            # SDF after .group_by()
+            assert not pre_groupby_branch_result
             with internal_consumer_factory(auto_offset_reset="earliest") as consumer:
                 consumer.subscribe([groupby_topic])
                 consumed_row = consumer.poll_row(timeout=5.0)
@@ -1738,12 +1741,6 @@ class TestStreamingDataFrameGroupBy:
             assert consumed_row.timestamp == orig_timestamp_ms
             assert consumed_row.value == value
             assert consumed_row.headers == headers
-            assert pre_groupby_branch_result[0] == (
-                value,
-                orig_key,
-                orig_timestamp_ms,
-                headers,
-            )
 
             # Check that the value is updated after record passed the groupby
             post_groupby_branch_result = sdf.test(
@@ -1830,12 +1827,6 @@ class TestStreamingDataFrameGroupBy:
             assert consumed_row.timestamp == orig_timestamp_ms
             assert consumed_row.value == value
             assert consumed_row.headers == headers
-            assert pre_groupby_branch_result[0] == (
-                value,
-                orig_key,
-                orig_timestamp_ms,
-                headers,
-            )
 
             # Check that the value is updated after record passed the groupby
             post_groupby_branch_result = sdf.test(
@@ -1922,12 +1913,6 @@ class TestStreamingDataFrameGroupBy:
             assert consumed_row.timestamp == orig_timestamp_ms
             assert consumed_row.value == value
             assert consumed_row.headers == headers
-            assert pre_groupby_branch_result[0] == (
-                value,
-                orig_key,
-                orig_timestamp_ms,
-                headers,
-            )
 
             # Check that the value is updated after record passed the groupby
             post_groupby_branch_result = sdf.test(
