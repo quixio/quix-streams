@@ -13,9 +13,7 @@ from typing import (
     overload,
 )
 
-from quixstreams.dataframe.exceptions import InvalidOperation
-
-from .exceptions import InvalidTopology
+from .exceptions import InvalidOperation, InvalidTopology
 from .functions import (
     ApplyCallback,
     ApplyExpandedCallback,
@@ -39,7 +37,7 @@ from .functions import (
     VoidExecutor,
 )
 
-__all__ = ("Stream", "InvalidTopology")
+__all__ = ("Stream",)
 
 
 class Stream:

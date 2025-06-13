@@ -14,6 +14,7 @@ from pydantic_settings import BaseSettings as PydanticBaseSettings
 from pydantic_settings import PydanticBaseSettingsSource, SettingsConfigDict
 
 from .context import copy_context, set_message_context
+from .core.stream.functions.types import VoidExecutor
 from .dataframe import DataFrameRegistry, StreamingDataFrame
 from .error_callbacks import (
     ConsumerErrorCallback,
@@ -44,7 +45,7 @@ from .platforms.quix import (
 )
 from .platforms.quix.env import QUIX_ENVIRONMENT
 from .processing import ProcessingContext
-from .runtracker import RunTracker
+from .runtracker import CollectMode, RunTracker
 from .sinks import SinkManager
 from .sources import BaseSource, SourceException, SourceManager
 from .state import StateStoreManager
@@ -375,7 +376,7 @@ class Application:
             sink_manager=self._sink_manager,
             dataframe_registry=self._dataframe_registry,
         )
-        self._run_tracker = RunTracker(processing_context=self._processing_context)
+        self._run_tracker = RunTracker()
 
     @property
     def config(self) -> "ApplicationConfig":
@@ -568,7 +569,7 @@ class Application:
             to unhandled exception, and it shouldn't commit the current checkpoint.
         """
 
-        self._run_tracker.stop_and_reset()
+        self._run_tracker.stop()
         if fail:
             # Update "_failed" only when fail=True to prevent stop(failed=False) from
             # resetting it
@@ -747,7 +748,8 @@ class Application:
         dataframe: Optional[StreamingDataFrame] = None,
         timeout: float = 0.0,
         count: int = 0,
-    ):
+        collect_mode: CollectMode = "values",
+    ) -> list[dict]:
         """
         Start processing data from Kafka using provided `StreamingDataFrame`
 
@@ -755,7 +757,7 @@ class Application:
         (like Kubernetes does) or a typical `KeyboardInterrupt` (`Ctrl+C`).
 
         Alternatively, stop conditions can be set (typically for debugging purposes);
-            has the option of stopping after a number of messages, timeout, or both.
+            has the option of stopping after a number of outputs, timeout, or both.
 
         Not setting a timeout or count limit will result in the Application running
           indefinitely (expected production behavior).
@@ -763,18 +765,18 @@ class Application:
 
         Stop Condition Details:
 
-        A timeout will immediately stop an Application once no new messages have
-            been consumed after T seconds (after rebalance and recovery).
+        A `timeout` will immediately stop an Application once no new messages have
+        been consumed after T seconds (after rebalance and recovery).
 
-        A count will process N total records from ANY input/SDF topics (so
-          multiple input topics will very likely differ in their consume total!) after
-          an initial rebalance and recovery.
-        THEN, any remaining processes from things such as groupby (which uses internal
-          topics) will also be validated to ensure the results of said messages are
-          fully processed (this does NOT count towards the process total).
-        Note that without a timeout, the Application runs until the count is hit.
+        A `count` will make the application to wait until N total outputs
+        are processed from all the input topics after an initial rebalance
+        and recovery.
+        Note that each message may produce from 0 to N outputs depending
+        on the processing code.
 
-        If timeout and count are used together (which is the recommended pattern for
+        If `timeout` is not set, the Application runs until the `count` is hit.
+
+        If `timeout` and `count` are used together (which is the recommended pattern for
         debugging), either condition will trigger a stop.
 
 
@@ -794,10 +796,18 @@ class Application:
         app.run()  # could pass `timeout=5` here, for example
         ```
         :param dataframe: DEPRECATED - do not use; sdfs are now automatically tracked.
+
         :param timeout: maximum time to wait for a new message.
-            Default = 0.0 (infinite)
-        :param count: how many input topic messages to process before stopping.
-            Default = 0 (infinite)
+            Default: 0.0 (infinite)
+        :param count: stop the application after processing N outputs.
+            Default: 0 (infinite)
+        :param collect_mode: how to collect outputs when "timeout" or "count" are passed.
+            The collected data is returned as a list of dictionaries.
+
+            Possible values:
+              - "values" (default) - collect only values,
+              - "values-and-metadata" - collect values, keys, timestamps, offsets, topics and partitions.
+              - "off" - turn the collection off.
         """
         if dataframe is not None:
             warnings.warn(
@@ -813,24 +823,8 @@ class Application:
                     "Can only provide a timeout to .run() when running "
                     "a plain Source (no StreamingDataFrame)."
                 )
-        self._run_tracker.set_topics(
-            [t for t in self._topic_manager.topics],
-            [t for t in self._topic_manager.repartition_topics],
-        )
+        self._run_tracker.reset()
         self._run_tracker.set_stop_condition(timeout=timeout, count=count)
-        self._run()
-
-    def _exception_handler(self, exc_type, exc_val, exc_tb):
-        fail = False
-
-        # Sources and the application are independent.
-        # If a source fails, the application can shutdown gracefully.
-        if exc_val is not None and exc_type is not SourceException:
-            fail = True
-
-        self.stop(fail=fail)
-
-    def _run(self):
         self._setup_signal_handlers()
 
         logger.info(
@@ -855,27 +849,43 @@ class Application:
         with exit_stack:
             # Subscribe to topics in Kafka and start polling
             if self._dataframe_registry.consumer_topics:
-                self._run_dataframe()
+                collector = self._run_tracker.get_collector(collect_mode=collect_mode)
+                self._run_dataframe(sink=collector)
             else:
                 self._run_sources()
 
-    def _run_dataframe(self):
+        return self._run_tracker.collected
+
+    def _exception_handler(self, exc_type, exc_val, exc_tb):
+        fail = False
+
+        # Sources and the application are independent.
+        # If a source fails, the application can shutdown gracefully.
+        if exc_val is not None and exc_type is not SourceException:
+            fail = True
+
+        self.stop(fail=fail)
+
+    def _run_dataframe(self, sink: Optional[VoidExecutor] = None):
         changelog_topics = self._topic_manager.changelog_topics_list
-        self._consumer.subscribe(
-            topics=self._dataframe_registry.consumer_topics + changelog_topics,
-            on_assign=self._on_assign,
-            on_revoke=self._on_revoke,
-            on_lost=self._on_lost,
-        )
 
         # set refs for performance improvements
-        dataframes_composed = self._dataframe_registry.compose_all()
         state_manager = self._state_manager
         processing_context = self._processing_context
         source_manager = self._source_manager
         process_message = self._process_message
         printer = self._processing_context.printer
         run_tracker = self._run_tracker
+        consumer = self._consumer
+
+        consumer.subscribe(
+            topics=self._dataframe_registry.consumer_topics + changelog_topics,
+            on_assign=self._on_assign,
+            on_revoke=self._on_revoke,
+            on_lost=self._on_lost,
+        )
+
+        dataframes_composed = self._dataframe_registry.compose_all(sink=sink)
 
         processing_context.init_checkpoint()
         run_tracker.set_as_running()
@@ -888,7 +898,7 @@ class Application:
             else:
                 process_message(dataframes_composed)
                 processing_context.commit_checkpoint()
-                self._consumer.resume_backpressured()
+                consumer.resume_backpressured()
                 source_manager.raise_for_error()
                 printer.print()
                 run_tracker.update_status()
@@ -927,7 +937,7 @@ class Application:
         )
 
         if rows is None:
-            self._run_tracker.set_current_message_tp(None)
+            self._run_tracker.set_message_consumed(False)
             return
 
         # Deserializer may return multiple rows for a single message
@@ -965,7 +975,7 @@ class Application:
         self._processing_context.store_offset(
             topic=topic_name, partition=partition, offset=offset
         )
-        self._run_tracker.set_current_message_tp((topic_name, partition))
+        self._run_tracker.set_message_consumed(True)
 
         if self._on_message_processed is not None:
             self._on_message_processed(topic_name, partition, offset)

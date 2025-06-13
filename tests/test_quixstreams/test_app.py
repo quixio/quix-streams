@@ -31,7 +31,7 @@ from quixstreams.platforms.quix import QuixApplicationConfig, QuixKafkaConfigsBu
 from quixstreams.platforms.quix.env import QuixEnvironment
 from quixstreams.sinks import SinkBackpressureError, SinkBatch
 from quixstreams.sources import SourceException, multiprocessing
-from quixstreams.state import State
+from quixstreams.state import RecoveryManager, State
 from quixstreams.state.manager import SUPPORTED_STORES
 from quixstreams.state.rocksdb import RocksDBStore
 from tests.utils import DummySink, DummySource, DummyStatefulSource
@@ -2238,7 +2238,7 @@ class TestApplicationSource:
 
         executor.submit(self.wait_finished, app, done, 15.0)
 
-        app._run()
+        app.run()
 
         results = []
         with app.get_consumer() as consumer:
@@ -2891,3 +2891,326 @@ class TestApplicationMultipleSdf:
         with partition.begin() as tx:
             assert tx.get("timestamps", prefix=message_key) == timestamps_sorted
         store.revoke_partition(partition_num)
+
+
+class TestApplicationRun:
+    def test_run_with_count(
+        self,
+        app_factory,
+        internal_consumer_factory,
+    ):
+        app = app_factory(auto_offset_reset="earliest")
+        input_topic = app.topic(
+            str(uuid.uuid4()),
+            value_deserializer="json",
+            value_serializer="json",
+        )
+
+        values_in = [{"x": 1}, {"x": 2}, {"x": 3}, {"x": 4}]
+
+        app.dataframe(topic=input_topic).group_by("x")
+
+        with app.get_producer() as producer:
+            for value in values_in:
+                msg = input_topic.serialize(key="some_key", value=value)
+                producer.produce(input_topic.name, key=msg.key, value=msg.value)
+
+        assert app.run(count=1) == values_in[:1]
+        assert app.run(count=2) == values_in[1:3]
+
+    def test_run_with_count_multiple_branches(
+        self,
+        app_factory,
+        internal_consumer_factory,
+    ):
+        app = app_factory(auto_offset_reset="earliest")
+        input_topic = app.topic(
+            str(uuid.uuid4()),
+            value_deserializer="json",
+            value_serializer="json",
+        )
+
+        values_in = [{"x": 1}, {"x": 2}, {"x": 3}, {"x": 4}]
+
+        sdf = app.dataframe(topic=input_topic).group_by("x")
+        # Add two branches
+        sdf.apply(lambda v: v)
+        sdf.apply(lambda v: v)
+
+        with app.get_producer() as producer:
+            for value in values_in:
+                msg = input_topic.serialize(key="some_key", value=value)
+                producer.produce(input_topic.name, key=msg.key, value=msg.value)
+
+        # Branching can multiply the outputs.
+        # Make sure that every output is counted
+        expected = []
+        for v in values_in:
+            expected.append(v)
+            expected.append(v)
+
+        assert app.run(count=len(expected)) == expected
+
+    def test_run_with_count_concat(
+        self,
+        app_factory,
+        internal_consumer_factory,
+    ):
+        app = app_factory(auto_offset_reset="earliest")
+        input_topic1 = app.topic(
+            str(uuid.uuid4()),
+            value_deserializer="json",
+            value_serializer="json",
+        )
+        input_topic2 = app.topic(
+            str(uuid.uuid4()),
+            value_deserializer="json",
+            value_serializer="json",
+        )
+
+        values_in = [{"x": 1}, {"x": 2}, {"x": 3}, {"x": 4}]
+
+        sdf1 = app.dataframe(topic=input_topic1)
+        sdf2 = app.dataframe(topic=input_topic2)
+        sdf1.concat(sdf2)
+
+        with app.get_producer() as producer:
+            ts = int(time.time() * 1000)
+            for topic in (input_topic1, input_topic2):
+                for value in values_in:
+                    msg = topic.serialize(key="some_key", value=value)
+                    producer.produce(
+                        topic.name, key=msg.key, value=msg.value, timestamp=ts
+                    )
+                    ts += 1
+
+        expected = values_in + values_in
+        assert app.run(count=len(expected)) == expected
+
+    def test_run_with_count_collect_mode_values_and_metadata(
+        self,
+        app_factory,
+        internal_consumer_factory,
+    ):
+        app = app_factory(auto_offset_reset="earliest")
+        input_topic = app.topic(
+            str(uuid.uuid4()),
+            value_deserializer="json",
+            value_serializer="json",
+        )
+
+        values_in = [{"x": 1}, {"x": 2}]
+        timestamp = 100
+        key = b"some_key"
+
+        app.dataframe(topic=input_topic)
+
+        with app.get_producer() as producer:
+            for value in values_in:
+                msg = input_topic.serialize(key=key, value=value)
+                producer.produce(
+                    input_topic.name, key=msg.key, value=msg.value, timestamp=timestamp
+                )
+
+        expected = [
+            {
+                "_key": key,
+                "_timestamp": timestamp,
+                "_topic": input_topic.name,
+                "_partition": 0,
+                "_offset": 0,
+                "_headers": None,
+                "x": 1,
+            },
+            {
+                "_key": key,
+                "_timestamp": timestamp,
+                "_topic": input_topic.name,
+                "_partition": 0,
+                "_offset": 1,
+                "_headers": None,
+                "x": 2,
+            },
+        ]
+        assert (
+            app.run(count=len(values_in), collect_mode="values-and-metadata")
+            == expected
+        )
+
+    def test_run_with_count_collect_mode_off(
+        self,
+        app_factory,
+        internal_consumer_factory,
+    ):
+        app = app_factory(auto_offset_reset="earliest")
+        input_topic = app.topic(
+            str(uuid.uuid4()),
+            value_deserializer="json",
+            value_serializer="json",
+        )
+
+        values_in = [{"x": 1}, {"x": 2}]
+        timestamp = 100
+        key = b"some_key"
+
+        app.dataframe(topic=input_topic)
+
+        with app.get_producer() as producer:
+            for value in values_in:
+                msg = input_topic.serialize(key=key, value=value)
+                producer.produce(
+                    input_topic.name, key=msg.key, value=msg.value, timestamp=timestamp
+                )
+
+        assert app.run(count=len(values_in), collect_mode="off") == []
+
+    def test_run_with_timeout(
+        self,
+        app_factory,
+        internal_consumer_factory,
+        caplog,
+    ):
+        """
+        Timeout resets if a message was processed, else stops app.
+        """
+        timeout = 1.0
+        app = app_factory(
+            auto_offset_reset="earliest",
+            # force tighter polling for faster and more accurate timeout assessments
+            consumer_poll_timeout=timeout * 0.3,
+        )
+        input_topic = app.topic(
+            str(uuid.uuid4()),
+            value_deserializer="json",
+            value_serializer="json",
+        )
+        output_topic = app.topic(
+            str(uuid.uuid4()),
+            value_deserializer="json",
+        )
+
+        values_in = [{"x": 1}, {"x": 2}, {"x": 3}, {"x": 4}]
+        # extended process times (time.sleep) don't affect the timeout
+        app.dataframe(topic=input_topic).update(
+            lambda _: time.sleep(timeout * 1.1)
+        ).to_topic(output_topic)
+
+        with app.get_producer() as producer:
+            for value in values_in[:2]:
+                msg = input_topic.serialize(key="some_key", value=value)
+                producer.produce(input_topic.name, key=msg.key, value=msg.value)
+
+        assert app.run(timeout=timeout) == values_in[:2]
+
+    def test_run_with_timeout_or_count(
+        self,
+        app_factory,
+        internal_consumer_factory,
+        caplog,
+    ):
+        """
+        Passing timeout or count together each trigger as expected.
+        """
+        app = app_factory(
+            auto_offset_reset="earliest",
+            # force tighter polling for faster and more accurate timeout assessments
+            consumer_poll_timeout=0.1,
+        )
+        input_topic = app.topic(
+            str(uuid.uuid4()),
+            value_deserializer="json",
+            value_serializer="json",
+        )
+        output_topic = app.topic(
+            str(uuid.uuid4()),
+            value_deserializer="json",
+        )
+
+        values_in = [{"x": 1}, {"x": 2}, {"x": 3}, {"x": 4}]
+        app.dataframe(topic=input_topic).to_topic(output_topic)
+
+        with app.get_producer() as producer:
+            for value in values_in[:1]:
+                msg = input_topic.serialize(key="some_key", value=value)
+                producer.produce(input_topic.name, key=msg.key, value=msg.value)
+
+        with caplog.at_level("INFO"):
+            # gets 1 message (hits timeout)
+            timeout = 1.0
+            assert app.run(count=2, timeout=timeout) == values_in[:1]
+            assert f"Timeout of {timeout}s reached" in caplog.text
+            caplog.clear()
+
+        with app.get_producer() as producer:
+            for value in values_in[1:]:
+                msg = input_topic.serialize(key="some_key", value=value)
+                producer.produce(input_topic.name, key=msg.key, value=msg.value)
+
+        with caplog.at_level("INFO"):
+            assert app.run(count=2, timeout=1.0) == values_in[1:3]
+            assert "Count of 2 records reached" in caplog.text
+
+    def test_run_with_timeout_resets_after_recovery(
+        self,
+        app_factory,
+        internal_consumer_factory,
+        executor,
+    ):
+        """
+        Timeout is set only after recovery is complete
+        """
+        timeout = 1.0
+
+        app = app_factory(
+            auto_offset_reset="earliest",
+            # force tighter polling for faster and more accurate timeout assessments
+            consumer_poll_timeout=timeout * 0.3,
+        )
+        input_topic = app.topic(
+            str(uuid.uuid4()),
+            value_deserializer="json",
+            value_serializer="json",
+        )
+        output_topic = app.topic(
+            str(uuid.uuid4()),
+            value_deserializer="json",
+        )
+
+        values_in = [{"x": 1}, {"x": 2}, {"x": 3}, {"x": 4}]
+        app.dataframe(topic=input_topic).update(
+            lambda v, state: state.set("blah", 1), stateful=True
+        ).to_topic(output_topic)
+
+        with app.get_producer() as producer:
+            for value in values_in[:1]:
+                msg = input_topic.serialize(key="some_key", value=value)
+                producer.produce(input_topic.name, key=msg.key, value=msg.value)
+        assert app.run(count=1) == values_in[:1]
+
+        # force a recovery
+        app.clear_state()
+
+        # set up a delayed recovery and produce
+        original_do_recovery = RecoveryManager.do_recovery
+        producer = app.get_producer()
+
+        def produce_on_delay(app_producer):
+            # produce just on the cusp of the expected timeout
+            time.sleep(timeout * 0.8)
+            with app_producer as producer:
+                for value in values_in[1:]:
+                    msg = input_topic.serialize(key="some_key", value=value)
+                    producer.produce(input_topic.name, key=msg.key, value=msg.value)
+
+        def sleep_recovery(self):
+            original_do_recovery(self)
+            # sleep to ensure that if timeout was for some reason not set
+            # after recovery, this test would fail by not consuming the messages
+            # produced after the delay.
+            time.sleep(timeout)
+            executor.submit(produce_on_delay, producer)
+
+        with patch(
+            "quixstreams.state.recovery.RecoveryManager.do_recovery", new=sleep_recovery
+        ):
+            assert app.run(timeout=timeout) == values_in[1:]

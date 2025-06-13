@@ -18,7 +18,7 @@ from typing_extensions import TypeAlias
 
 from quixstreams.context import message_context
 from quixstreams.core.stream import TransformExpandedCallback
-from quixstreams.dataframe.exceptions import InvalidOperation
+from quixstreams.core.stream.exceptions import InvalidOperation
 from quixstreams.models.topics.manager import TopicManager
 from quixstreams.state import WindowedPartitionTransaction
 

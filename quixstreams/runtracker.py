@@ -1,38 +1,77 @@
 import logging
 import time
-from typing import Optional
+from collections.abc import Mapping
+from typing import Any, Literal, Optional, get_args
 
-from confluent_kafka import TopicPartition
+from .context import message_context
+from .core.stream import VoidExecutor
+from .models import Headers
 
-from .processing import ProcessingContext
-
-__all__ = ("RunTracker",)
+__all__ = ("RunTracker", "RunCollector", "CollectMode")
 
 logger = logging.getLogger(__name__)
 
+CollectMode = Literal["off", "values", "values-and-metadata"]
+
+
+class RunCollector:
+    """
+    A simple sink to accumulate the outputs during the application run.
+    """
+
+    def __init__(self):
+        self._items: list[dict] = []
+        self._count: int = 0
+
+    def add_value_and_metadata(
+        self,
+        value: Any,
+        key: Any,
+        timestamp_ms: int,
+        headers: Headers,
+        topic: str,
+        partition: int,
+        offset: int,
+    ):
+        if not isinstance(value, Mapping):
+            value = {"_value": value}
+        self._items.append(
+            {
+                "_key": key,
+                "_timestamp": timestamp_ms,
+                "_headers": headers,
+                "_topic": topic,
+                "_partition": partition,
+                "_offset": offset,
+                **value,
+            }
+        )
+        self._count += 1
+
+    def add_value(self, value: Any):
+        if not isinstance(value, Mapping):
+            value = {"_value": value}
+        self._items.append(value)
+        self._count += 1
+
+    def increment_count(self):
+        self._count += 1
+
+    @property
+    def items(self) -> list[dict]:
+        # Make a copy to retain a list after the .clear() is called
+        return self._items.copy()
+
+    @property
+    def count(self) -> int:
+        return self._count
+
 
 class RunTracker:
-    __slots__ = (
-        "running",
-        "_has_stop_condition",
-        "_processing_context",
-        "_stop_checker",
-        "_timeout",
-        "_timeout_start_time",
-        "_primary_topics",
-        "_repartition_topics",
-        "_current_message_tp",
-        "_max_count",
-        "_current_count",
-        "_repartition_stop_points",
-    )
-
-    # Here we establish all attrs that will be reset every `Application.run()` call
-    # This avoids various IDE and mypy complaints around not setting them in init.
-
     running: bool
     _has_stop_condition: bool
-    _current_message_tp: Optional[tuple[str, int]]
+    _message_consumed: bool
+    _collector: RunCollector
 
     # timeout-specific attrs
     _timeout: float
@@ -40,15 +79,8 @@ class RunTracker:
 
     # count-specific attrs
     _max_count: int
-    _current_count: int
-    _primary_topics: list[str]
-    _repartition_topics: list[str]
-    _repartition_stop_points: dict[tuple, int]
 
-    def __init__(
-        self,
-        processing_context: ProcessingContext,
-    ):
+    def __init__(self):
         """
         Tracks the runtime status of an Application, along with managing variables
           associated with stopping the app based on a timeout or count.
@@ -56,47 +88,76 @@ class RunTracker:
         Though intended for debugging, it is designed to minimize impact on
           normal Application operation.
         """
-        self._processing_context = processing_context
-
         # Sets the resettable attributes, avoiding defining the same values twice.
-        self.stop_and_reset()
+        self.reset()
 
     @property
-    def _consumer(self):
-        return self._processing_context.consumer
+    def collected(self) -> list[dict]:
+        """
+        Get a list of results accumulated during the run
+        """
+        return self._collector.items
 
-    def stop_and_reset(self):
+    def collect_values_and_metadata(
+        self,
+        value: Any,
+        key: Any,
+        timestamp: int,
+        headers: Any,
+    ):
+        ctx = message_context()
+        self._collector.add_value_and_metadata(
+            key=key,
+            value=value,
+            timestamp_ms=timestamp,
+            headers=headers,
+            offset=ctx.offset,
+            partition=ctx.partition,
+            topic=ctx.topic,
+        )
+
+    def collect_values(
+        self,
+        value: Any,
+        key: Any,
+        timestamp: int,
+        headers: Any,
+    ):
+        self._collector.add_value(value=value)
+
+    def collect_noop(
+        self,
+        value: Any,
+        key: Any,
+        timestamp: int,
+        headers: Any,
+    ):
+        self._collector.increment_count()
+
+    def stop(self):
         """
         Called when Application is stopped, or self._stop_checker condition is met.
+        """
+        self.running = False
+
+    def reset(self):
+        """
         Resets all values required for re-running.
         """
         self.running = False
+        self._collector = RunCollector()
         self._has_stop_condition = False
-
         self._timeout = 0.0
         self._timeout_start_time = 0.0
-
-        self._current_message_tp = None
+        self._message_consumed = False
         self._max_count = 0
-        self._current_count = 0
-        self._primary_topics = []
-        self._repartition_topics = []
-        self._repartition_stop_points = {}
 
     def update_status(self):
         """
         Trigger stop if any stop conditions are met.
         """
-        if self._has_stop_condition:
-            if self._at_timeout() or self._at_count():
-                self.stop_and_reset()
-
-    def set_topics(self, primary: list[str], repartition: list[str]):
-        """
-        Sets the primary and repartition topic lists for counting.
-        """
-        self._primary_topics = primary
-        self._repartition_topics = repartition
+        if self._has_stop_condition and (self._at_timeout() or self._at_count()):
+            self.stop()
 
     def set_as_running(self):
         """
@@ -107,11 +168,11 @@ class RunTracker:
             # give an additional 60s buffer for initial assignment to trigger
             self._timeout_start_time = time.monotonic() + 60
 
-    def set_current_message_tp(self, tp: Optional[tuple[str, int]]):
+    def set_message_consumed(self, consumed: bool):
         """
         Sets the current message topic partition (if one was consumed)
         """
-        self._current_message_tp = tp
+        self._message_consumed = consumed
 
     def timeout_refresh(self):
         """
@@ -144,62 +205,31 @@ class RunTracker:
             f"{time_stop_log}{' OR ' if (timeout and count) else ''}{count_stop_log}"
         )
 
-    def _at_count(self) -> bool:
-        if not self._max_count:
-            return False
-        if self._max_count == self._current_count:
-            return self._count_repartitions_finished()
-        if (tp := self._current_message_tp) and tp[0] in self._primary_topics:
-            self._current_count += 1
-            if self._max_count == self._current_count:
-                logger.info(f"Count of {self._max_count} records reached.")
-                if not self._repartition_topics:
-                    return True
-                self._count_prepare_repartition_check()
-        return False
-
-    def _count_prepare_repartition_check(self):
-        """
-        Stores repartition watermarks for efficient validation.
-        Commits checkpoint and pauses primary topics to ensure watermark accuracy.
-        """
-        logger.info("Finalizing any repartition topic processing...")
-        self._processing_context.commit_checkpoint(force=True)
-        self._consumer.pause(
-            [t for t in self._consumer.assignment() if t.topic in self._primary_topics]
-        )
-        topic_partitions = [
-            tp
-            for tp in self._consumer.assignment()
-            if tp.topic in self._repartition_topics
-        ]
-        self._repartition_stop_points = {
-            (tp.topic, tp.partition): self._consumer.get_watermark_offsets(tp)[1]
-            for tp in topic_partitions
-        }
-
-    def _count_repartitions_finished(self) -> bool:
-        """
-        Confirms repartitions are at their watermarks as those messages are consumed.
-        Empty consumer polls will cause a check on all of them.
-        """
-        if self._current_message_tp:
-            tps = [self._current_message_tp]
+    def get_collector(self, collect_mode: CollectMode) -> Optional[VoidExecutor]:
+        if not self._has_stop_condition:
+            return None
+        elif collect_mode == "off":
+            return self.collect_noop
+        elif collect_mode == "values":
+            return self.collect_values
+        elif collect_mode == "values-and-metadata":
+            return self.collect_values_and_metadata
         else:
-            tps = list(self._repartition_stop_points.keys())
-        for tp in tps:
-            current_offset = self._consumer.position([TopicPartition(*tp)])[0].offset
-            if current_offset >= self._repartition_stop_points[tp]:
-                self._repartition_stop_points.pop(tp)
-        if not self._repartition_stop_points:
-            logger.info("All downstream repartition topics processed with counting.")
+            options = ", ".join(f'"{i}"' for i in get_args(CollectMode))
+            raise ValueError(
+                f'Invalid collect_mode "{collect_mode}"; available options: {options}'
+            )
+
+    def _at_count(self) -> bool:
+        if self._max_count and self._collector.count >= self._max_count:
+            logger.info(f"Count of {self._max_count} records reached.")
             return True
         return False
 
     def _at_timeout(self) -> bool:
         if not self._timeout:
             return False
-        if self._current_message_tp:
+        if self._message_consumed:
             # refresh when any message is consumed
             self.timeout_refresh()
         elif (time.monotonic() - self._timeout_start_time) >= self._timeout:
