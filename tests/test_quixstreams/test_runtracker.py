@@ -70,6 +70,3 @@ def test_runcollector(message_context_factory):
             "field": "value",
         },
     ]
-
-    # The items must still be accessible after the sink is cleared
-    assert items is not collector.items

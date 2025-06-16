@@ -59,8 +59,7 @@ class RunCollector:
 
     @property
     def items(self) -> list[dict]:
-        # Make a copy to retain a list after the .clear() is called
-        return self._items.copy()
+        return self._items
 
     @property
     def count(self) -> int:
