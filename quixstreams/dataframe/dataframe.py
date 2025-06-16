@@ -1699,6 +1699,8 @@ class StreamingDataFrame:
             - "keep-right" - prefer the keys from the right record
             - callback - a callback in form "(<left>, <right>) -> <new record>" to merge the records manually.
               Use it to customize the merging logic or when one of the records is not a dictionary.
+              WARNING: Custom merge functions must not mutate the input values as this will lead to
+              inconsistencies in the state store. Always return a new object instead.
 
         :param grace_ms: how long to keep the right records in the store in event time.
             (the time is taken from the records' timestamps).
@@ -1743,6 +1745,90 @@ class StreamingDataFrame:
         backward_ms: Union[int, timedelta] = 0,
         forward_ms: Union[int, timedelta] = 0,
     ) -> "StreamingDataFrame":
+        """
+        Join the left dataframe with records from the right dataframe that fall within
+        specified time intervals. This join is useful for matching records that occur
+        within a specific time window of each other, rather than just the latest record.
+
+        To be joined, the underlying topics of the dataframes must have the same number of partitions
+        and use the same partitioner (all keys should be distributed across partitions using the same algorithm).
+
+        Joining dataframes belonging to the same topics (aka "self-join") is not supported.
+
+        Note:
+            When both `backward_ms` and `forward_ms` are set to 0 (default), the join will only match
+            records with exactly the same timestamp.
+
+        How it works:
+            - Records from both sides are stored in the state store
+            - For each record on the left side:
+              - Look for matching records on the right side that fall within the specified time interval
+              - If matches are found, merge the records according to the `on_merge` logic
+              - For inner joins, only emit if matches are found
+              - For left joins, emit even without matches
+            - For each record on the right side:
+              - Look for matching records on the left side that fall within the specified time interval
+              - Merge all matching records according to the `on_merge` logic
+
+        :param right: a StreamingDataFrame to join with.
+
+        :param how: the join strategy. Can be one of:
+          - "inner" - emits the result only when matches are found (default)
+          - "left" - emits the result even without matches
+          Default - `"inner"`.
+
+        :param on_merge: how to merge the matched records together assuming they are dictionaries:
+            - "raise" - fail with an error if the same keys are found in both dictionaries
+            - "keep-left" - prefer the keys from the left record
+            - "keep-right" - prefer the keys from the right record
+            - callback - a callback in form "(<left>, <right>) -> <new record>" to merge the records manually.
+              Use it to customize the merging logic or when one of the records is not a dictionary.
+              WARNING: Custom merge functions must not mutate the input values as this will lead to
+              unexpected exceptions or incorrect data in the joined stream. Always return a new object instead.
+
+        :param grace_ms: how long to keep records in the store in event time.
+            (the time is taken from the records' timestamps).
+            It can be specified as either an `int` representing milliseconds or as a `timedelta` object.
+            The records are expired per key when the new record gets added.
+            Default - 7 days.
+
+        :param name: The unique identifier of the underlying state store.
+            If not provided, it will be generated based on the underlying topic names.
+            Provide a custom name if you need to join the same right dataframe multiple times
+            within the application.
+
+        :param backward_ms: How far back in time to look for matches from the right side.
+            Can be specified as either an `int` representing milliseconds or as a `timedelta` object.
+            Must not be greater than `grace_ms`. Default - 0.
+
+        :param forward_ms: How far forward in time to look for matches from the right side.
+            Can be specified as either an `int` representing milliseconds or as a `timedelta` object.
+            Default - 0.
+
+        Example:
+
+        ```python
+        from datetime import timedelta
+        from quixstreams import Application
+
+        app = Application()
+
+        sdf_measurements = app.dataframe(app.topic("measurements"))
+        sdf_events = app.dataframe(app.topic("events"))
+
+        # Join records from the topic "measurements"
+        # with records from "events" that occur within a 5-minute window
+        # before and after each measurement
+        sdf_joined = sdf_measurements.join_interval(
+            right=sdf_events,
+            how="inner",
+            on_merge="keep-left",
+            grace_ms=timedelta(days=7),
+            backward_ms=timedelta(minutes=5),
+            forward_ms=timedelta(minutes=5)
+        )
+        ```
+        """
         return IntervalJoin(
             how=how,
             on_merge=on_merge,

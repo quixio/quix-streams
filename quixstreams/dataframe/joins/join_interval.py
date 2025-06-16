@@ -13,6 +13,13 @@ __all__ = ("IntervalJoin",)
 
 
 class IntervalJoin(Join):
+    """A join that matches records based on time intervals.
+
+    This join type allows matching records from two topics that fall within specified
+    time intervals of each other. For each record, it looks for matches within a
+    backward and forward time window.
+    """
+
     def __init__(
         self,
         how: JoinHow,

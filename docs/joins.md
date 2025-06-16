@@ -199,3 +199,88 @@ if __name__ == '__main__':
 - For each record in the dataframe, a user-defined lookup strategy (a subclass of `BaseLookup`) is called with a mapping of field names to field definitions (subclasses of `BaseField`).
 - The lookup strategy fetches or computes enrichment data based on the provided key and fields, and updates the record in-place.
 - The enrichment can come from external sources such as configuration topics, databases, or in-memory data.
+
+## Interval join
+
+> _New in [3.17.0](https://github.com/quixio/quix-streams/releases/tag/v3.17.0)_
+
+Use `StreamingDataFrame.join_interval()` to join two topics into a new stream where each record is merged with records from the other topic that fall within a specified time interval.
+
+This join is useful for cases where you need to match records that occur within a specific time window of each other, rather than just the latest record (as in as-of join).
+
+### Example
+
+Join records from the topic "measurements" with records from the topic "events" that occur within a 5-minute window before and after each measurement:
+
+```python
+from datetime import timedelta
+
+from quixstreams import Application
+
+app = Application(...)
+
+sdf_measurements = app.dataframe(app.topic("measurements"))
+sdf_events = app.dataframe(app.topic("events"))
+
+# Join records from the topic "measurements"
+# with records from "events" that occur within a 5-minute window
+# before and after each measurement
+sdf_joined = sdf_measurements.join_interval(
+    right=sdf_events,
+    how="inner",                 # Emit updates only if matches are found
+    on_merge="keep-left",        # Prefer the columns from the left dataframe if they overlap
+    grace_ms=timedelta(days=7),  # Keep the state for 7 days
+    backward_ms=timedelta(minutes=5),  # Look for events up to 5 minutes before
+    forward_ms=timedelta(minutes=5),   # Look for events up to 5 minutes after
+)
+
+if __name__ == '__main__':
+    app.run()
+```
+
+### How it works
+
+The interval join algorithm works as follows:
+
+- Records from both sides are stored in the state store
+- For each record on the left side:
+  - Look for matching records on the right side that fall within the specified time interval
+  - If matches are found, merge the records according to the `on_merge` logic
+  - For inner joins, only emit if matches are found
+  - For left joins, emit even without matches
+- For each record on the right side:
+  - Look for matching records on the left side that fall within the specified time interval
+  - Merge all matching records according to the `on_merge` logic
+
+#### Time intervals
+The join uses two time intervals to determine matches:
+
+- `backward_ms`: How far back in time to look for matches from the right side
+- `forward_ms`: How far forward in time to look for matches from the right side
+
+> **Note:** When both `backward_ms` and `forward_ms` are set to 0 (default), the join will only match records with exactly the same timestamp.
+
+The `grace_ms` parameter controls how long records are kept in the state store, similar to other join types.
+
+#### Joining strategies
+Interval join supports the following joining strategies:
+
+- `inner` - emit the output only when matches are found (default)
+- `left` - emit the output even without matches
+
+#### Merging records
+The merging behavior is controlled by the `on_merge` parameter, which works the same way as in other join types:
+
+- `raise` - merge records and raise an exception if keys overlap (default)
+- `keep-left` - prefer keys from the left record in case of overlap
+- `keep-right` - prefer keys from the right record in case of overlap
+- custom callback - use a custom function to merge records
+
+> **Warning:** Custom merge functions must not mutate the input values as this will lead to
+> unexpected exceptions or incorrect data in the joined stream. Always return a new object instead.
+
+### Limitations
+
+- Joining dataframes belonging to the same topics (aka "self-join") is not supported
+- The `backward_ms` must not be greater than the `grace_ms` to avoid losing data
+- Interval join preserves headers only for the left dataframe
