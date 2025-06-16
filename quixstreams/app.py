@@ -45,7 +45,7 @@ from .platforms.quix import (
 )
 from .platforms.quix.env import QUIX_ENVIRONMENT
 from .processing import ProcessingContext
-from .runtracker import CollectMode, RunTracker
+from .runtracker import RunTracker
 from .sinks import SinkManager
 from .sources import BaseSource, SourceException, SourceManager
 from .state import StateStoreManager
@@ -748,7 +748,8 @@ class Application:
         dataframe: Optional[StreamingDataFrame] = None,
         timeout: float = 0.0,
         count: int = 0,
-        collect_mode: CollectMode = "values",
+        collect: bool = True,
+        metadata: bool = False,
     ) -> list[dict]:
         """
         Start processing data from Kafka using provided `StreamingDataFrame`
@@ -801,13 +802,15 @@ class Application:
             Default: 0.0 (infinite)
         :param count: stop the application after processing N outputs.
             Default: 0 (infinite)
-        :param collect_mode: how to collect outputs when "timeout" or "count" are passed.
-            The collected data is returned as a list of dictionaries.
-
-            Possible values:
-              - "values" (default) - collect only values,
-              - "values-and-metadata" - collect values, keys, timestamps, offsets, topics and partitions.
-              - "off" - turn the collection off.
+        :param collect: if True, collect the outputs and return them as a list of dictionaries
+            in the format defined by the `metadata` parameter.
+            This parameter is effective only when `timeout` or `count` are passed.
+            Default: `True`.
+        :param metadata: if True, the collected outputs will contain values, keys,
+            timestamps, offsets, topics and partitions.
+            Otherwise, only values are collected.
+            This parameter is effective only if `collect=True` and `timeout` or `count` are passed.
+            Default - `False`.
         """
         if dataframe is not None:
             warnings.warn(
@@ -849,7 +852,9 @@ class Application:
         with exit_stack:
             # Subscribe to topics in Kafka and start polling
             if self._dataframe_registry.consumer_topics:
-                collector = self._run_tracker.get_collector(collect_mode=collect_mode)
+                collector = self._run_tracker.get_collector(
+                    collect=collect, metadata=metadata
+                )
                 self._run_dataframe(sink=collector)
             else:
                 self._run_sources()

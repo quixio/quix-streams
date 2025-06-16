@@ -1,17 +1,15 @@
 import logging
 import time
 from collections.abc import Mapping
-from typing import Any, Literal, Optional, get_args
+from typing import Any, Optional
 
 from .context import message_context
 from .core.stream import VoidExecutor
 from .models import Headers
 
-__all__ = ("RunTracker", "RunCollector", "CollectMode")
+__all__ = ("RunTracker", "RunCollector")
 
 logger = logging.getLogger(__name__)
-
-CollectMode = Literal["off", "values", "values-and-metadata"]
 
 
 class RunCollector:
@@ -124,7 +122,7 @@ class RunTracker:
     ):
         self._collector.add_value(value=value)
 
-    def collect_noop(
+    def increment_count(
         self,
         value: Any,
         key: Any,
@@ -204,20 +202,19 @@ class RunTracker:
             f"{time_stop_log}{' OR ' if (timeout and count) else ''}{count_stop_log}"
         )
 
-    def get_collector(self, collect_mode: CollectMode) -> Optional[VoidExecutor]:
+    def get_collector(self, collect: bool, metadata: bool) -> Optional[VoidExecutor]:
         if not self._has_stop_condition:
+            # Skip collecting when the app doesn't have the "count" stop condition.
             return None
-        elif collect_mode == "off":
-            return self.collect_noop
-        elif collect_mode == "values":
+        elif not collect:
+            # There's a "count" stop condition, but "collect" is False.
+            return self.increment_count
+        elif not metadata:
+            # Collect values only
             return self.collect_values
-        elif collect_mode == "values-and-metadata":
-            return self.collect_values_and_metadata
         else:
-            options = ", ".join(f'"{i}"' for i in get_args(CollectMode))
-            raise ValueError(
-                f'Invalid collect_mode "{collect_mode}"; available options: {options}'
-            )
+            # Collect values and metadata
+            return self.collect_values_and_metadata
 
     def _at_count(self) -> bool:
         if self._max_count and self._collector.count >= self._max_count:

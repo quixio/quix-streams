@@ -113,15 +113,18 @@ when the applicable condition is met:
 
 - `timeout`: maximum time to wait for a new message to arrive (default `0.0` == infinite)
 - `count`: a number of outputs to process across all dataframes and input topics (default `0` == infinite)
-- `collect_mode`: how to collect the processed outputs to return them as a result of the `Application.run()` call.  
-  This setting is effective only when either `timeout` or `count` are passed.  
-  Possible values:
-  - `"values"` (default) - the output values are collected into a list of dictionaries.
-  - `"values-and-metadata"` - collect values, keys, timestamps, offsets, topics and partitions.
-  - `"off"` - don't collect anything.
 
 If `timeout` and `count` are passed together (which is the recommended pattern for debugging), either condition 
 will trigger the stop.
+
+
+Also, you can collect the outputs of your application and examine them after
+the `Application.run()` call:
+
+- `collect`: if `True` (default), collect the outputs and return them as a list of dictionaries from the `Application.run()` call.  
+  This setting is effective only when `timeout` or `count` are passed.
+- `metadata`: if `True`, the collected outputs will include values, keys, timestamps, topics, partitions, and offsets.    
+  Otherwise, only values are included (the default).
 
 **Example**: 
 
@@ -139,21 +142,21 @@ topic = app.topic("some-topic")
 sdf = app.dataframe(topic=topic)
 
 # Process one output and collect the value (stops if no messages for 10s)
-result_values_only = app.run(count=1, timeout=10, collect_mode="values")  
+result_values_only = app.run(count=1, timeout=10, collect=True)  
 # >>> result_values_only = [
 #   {"temperature": 30}
 # ]
 
 
 # Process one output and collect the value with metadata (stops if no messages for 10s)
-result_values_and_metadata = app.run(count=1, timeout=10, collect_mode="values-and-metadata")
+result_values_and_metadata = app.run(count=1, timeout=10, collect=True, metadata=True)
 # >>> result_values_and_metadata = [
 #   {"temperature": 40, "_key": "<message_key>", "_timestamp": 123, "_offset": 1, "_topic": "some-topic", "_partition": 1, "_headers": None},
 # ]
 
 
 # Process one output and without collecting (stops if no messages for 10s)
-result_empty = app.run(count=1, timeout=10, collect_mode="off")
+result_empty = app.run(count=1, timeout=10, collect=False)
 # >>> result_empty = []
 
 
@@ -181,7 +184,7 @@ A couple of things to note about `timeout`:
 - Tracking starts once the first partition assignment (or recovery, if needed) finishes.
   - There is a 60s wait buffer for the first assignment to trigger.
 
-- Using only `timeout` when collecting data from high-volume topics may cause out-of-memory errors when `collect_mode` is either `"values"` (default) or `"values-and-metadata"`.
+- Using only `timeout` when collecting data from high-volume topics may cause out-of-memory errors when `collect=True` (default).
 
 #### Multiple Application.run() calls
 

@@ -2987,7 +2987,7 @@ class TestApplicationRun:
         expected = values_in + values_in
         assert app.run(count=len(expected)) == expected
 
-    def test_run_with_count_collect_mode_values_and_metadata(
+    def test_run_with_count_collect_True_and_metadata_True(
         self,
         app_factory,
         internal_consumer_factory,
@@ -3032,12 +3032,9 @@ class TestApplicationRun:
                 "x": 2,
             },
         ]
-        assert (
-            app.run(count=len(values_in), collect_mode="values-and-metadata")
-            == expected
-        )
+        assert app.run(count=len(values_in), collect=True, metadata=True) == expected
 
-    def test_run_with_count_collect_mode_off(
+    def test_run_with_count_collect_False(
         self,
         app_factory,
         internal_consumer_factory,
@@ -3062,7 +3059,7 @@ class TestApplicationRun:
                     input_topic.name, key=msg.key, value=msg.value, timestamp=timestamp
                 )
 
-        assert app.run(count=len(values_in), collect_mode="off") == []
+        assert app.run(count=len(values_in), collect=False) == []
 
     def test_run_with_timeout(
         self,
