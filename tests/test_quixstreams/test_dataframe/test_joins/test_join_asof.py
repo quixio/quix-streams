@@ -2,6 +2,7 @@ from functools import partial
 
 import pytest
 
+from quixstreams.dataframe.joins.join_asof import AsOfJoin
 from quixstreams.state.exceptions import StoreAlreadyRegisteredError
 
 
@@ -215,3 +216,10 @@ class TestStreamingDataFrameJoinAsOf:
         # Try joining topic2 with another sdf
         with pytest.raises(StoreAlreadyRegisteredError):
             sdf3.join_asof(sdf2)
+
+    @pytest.mark.parametrize("how", ["right", "outer"])
+    def test_join_types_not_supported(
+        self, topic_manager_topic_factory, create_sdf, how
+    ):
+        with pytest.raises(ValueError, match=f"Join type not supported: {how}"):
+            AsOfJoin(how=how, on_merge="raise", grace_ms=1)

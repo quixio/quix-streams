@@ -1,12 +1,11 @@
-import typing
 from datetime import timedelta
-from typing import Any, Callable, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 from quixstreams.dataframe.utils import ensure_milliseconds
 
 from .base import Join, JoinHow, OnOverlap
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     from quixstreams.dataframe.dataframe import StreamingDataFrame
 
 __all__ = ("IntervalJoin",)
@@ -28,7 +27,7 @@ class IntervalJoin(Join):
         store_name: Optional[str] = None,
         backward_ms: Union[int, timedelta] = 0,
         forward_ms: Union[int, timedelta] = 0,
-    ):
+    ) -> None:
         super().__init__(how, on_merge, grace_ms, store_name)
         self._backward_ms = ensure_milliseconds(backward_ms)
         self._forward_ms = ensure_milliseconds(forward_ms)
@@ -48,7 +47,8 @@ class IntervalJoin(Join):
         self._register_store(right, keep_duplicates=True)
 
         tx = self._get_transaction
-        is_inner_join = self._how == "inner"
+        emit_if_no_match_on_the_right = self._how in ["left", "outer"]
+        emit_if_no_match_on_the_left = self._how in ["right", "outer"]
         merger = self._merger
         backward_ms = self._backward_ms
         forward_ms = self._forward_ms
@@ -62,17 +62,18 @@ class IntervalJoin(Join):
                 prefix=key,
             ):
                 return [merger(value, right_value) for right_value in right_values]
-            return [] if is_inner_join else [merger(value, None)]
+            return [merger(value, None)] if emit_if_no_match_on_the_right else []
 
         def right_func(value, key, timestamp, headers):
             tx(right).set_for_timestamp(timestamp=timestamp, value=value, prefix=key)
 
-            left_values = tx(left).get_interval(
+            if left_values := tx(left).get_interval(
                 start=timestamp - forward_ms,
                 end=timestamp + 1,  # +1 because end is exclusive
                 prefix=key,
-            )
-            return [merger(left_value, value) for left_value in left_values]
+            ):
+                return [merger(left_value, value) for left_value in left_values]
+            return [merger(None, value)] if emit_if_no_match_on_the_left else []
 
         right = right.apply(right_func, expand=True, metadata=True)
         left = left.apply(left_func, expand=True, metadata=True)

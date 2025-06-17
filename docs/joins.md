@@ -69,9 +69,8 @@ Here is a description of the as-of join algorithm:
 #### Joining strategies
 As-of join supports the following joining strategies:
 
-- `inner` - emit the output for the left record only when the match is found (default).
-- `left` - emit the output for the left record even without a match.
-
+- `inner` - emit the output for the left record only when the match is found (default)
+- `left` - emit the result for each left record even without matches on the right side
 
 #### Merging records together
 When the match is found, the two records are merged according to the `on_merge` parameter.  
@@ -265,8 +264,10 @@ The `grace_ms` parameter controls how long records are kept in the state store, 
 #### Joining strategies
 Interval join supports the following joining strategies:
 
-- `inner` - emit the output only when matches are found (default)
-- `left` - emit the output even without matches
+- `inner` - emit the output for the left record only when the match is found (default)
+- `left` - emit the result for each left record even without matches on the right side
+- `right` - emit the result for each right record even without matches on the left side
+- `outer` - emit the output for both left and right records even without matches
 
 #### Merging records
 The merging behavior is controlled by the `on_merge` parameter, which works the same way as in other join types:

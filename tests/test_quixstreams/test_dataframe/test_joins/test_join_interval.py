@@ -215,6 +215,51 @@ class TestStreamingDataFrameJoinInterval:
                     ),
                 ],
             ),
+            # Right join - left message is not published, right message
+            # is published without a match and a joined left+right is published
+            Case(
+                how="right",
+                messages=[
+                    Message(topic="left", timestamp=6, value={"left": 1}),
+                    Message(
+                        topic="right",
+                        timestamp=7,
+                        value={"right": 2},
+                        expected=[Message(timestamp=7, value={"right": 2})],
+                    ),
+                    Message(
+                        topic="left",
+                        timestamp=7,
+                        value={"left": 3},
+                        expected=[Message(timestamp=7, value={"left": 3, "right": 2})],
+                    ),
+                ],
+            ),
+            # Outer join - left message is published without a match, right message
+            # is published without a match and a joined left+right is published
+            Case(
+                how="outer",
+                messages=[
+                    Message(
+                        topic="left",
+                        timestamp=6,
+                        value={"left": 1},
+                        expected=[Message(timestamp=6, value={"left": 1})],
+                    ),
+                    Message(
+                        topic="right",
+                        timestamp=7,
+                        value={"right": 2},
+                        expected=[Message(timestamp=7, value={"right": 2})],
+                    ),
+                    Message(
+                        topic="left",
+                        timestamp=7,
+                        value={"left": 3},
+                        expected=[Message(timestamp=7, value={"left": 3, "right": 2})],
+                    ),
+                ],
+            ),
         ],
     )
     def test_join_interval(

@@ -1689,8 +1689,8 @@ class StreamingDataFrame:
         :param right: a StreamingDataFrame to join with.
 
         :param how: the join strategy. Can be one of:
-          - "inner" - emits the result when the match on the right side is found for the left record.
-          - "left" - emits the result for each left record even if there is no match on the right side.
+          - "inner" - emit the output for the left record only when the match is found (default)
+          - "left" - emit the result for each left record even without matches on the right side
           Default - `"inner"`.
 
         :param on_merge: how to merge the matched records together assuming they are dictionaries:
@@ -1773,8 +1773,10 @@ class StreamingDataFrame:
         :param right: a StreamingDataFrame to join with.
 
         :param how: the join strategy. Can be one of:
-          - "inner" - emits the result only when matches are found (default)
-          - "left" - emits the result even without matches
+          - "inner" - emit the output for the left record only when the match is found (default)
+          - "left" - emit the result for each left record even without matches on the right side
+          - "right" - emit the result for each right record even without matches on the left side
+          - "outer" - emit the output for both left and right records even without matches
           Default - `"inner"`.
 
         :param on_merge: how to merge the matched records together assuming they are dictionaries:

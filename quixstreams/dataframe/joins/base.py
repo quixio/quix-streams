@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 __all__ = ("Join", "JoinHow", "JoinHow_choices", "OnOverlap", "OnOverlap_choices")
 
-JoinHow = Literal["inner", "left"]
+JoinHow = Literal["inner", "left", "right", "outer"]
 JoinHow_choices = get_args(JoinHow)
 
 OnOverlap = Literal["keep-left", "keep-right", "raise"]
