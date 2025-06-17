@@ -207,6 +207,8 @@ Use `StreamingDataFrame.join_interval()` to join two topics into a new stream wh
 
 This join is useful for cases where you need to match records that occur within a specific time window of each other, rather than just the latest record (as in as-of join).
 
+![img.png](img/join-interval.png)
+
 ### Example
 
 Join records from the topic "measurements" with records from the topic "events" that occur within a 5-minute window before and after each measurement:
