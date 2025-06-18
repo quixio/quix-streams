@@ -59,7 +59,6 @@ from quixstreams.utils.printing import (
 )
 from quixstreams.utils.stream_id import stream_id_from_strings
 
-from .exceptions import InvalidOperation
 from .joins import AsOfJoin, IntervalJoin, JoinHow, OnOverlap
 from .joins.lookups import BaseField, BaseLookup
 from .registry import DataFrameRegistry
