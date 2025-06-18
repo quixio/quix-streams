@@ -5491,7 +5491,7 @@ Default - `json.dumps`.
 class PostgreSQLSink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/postgresql.py#L54)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/postgresql.py#L55)
 
 <a id="quixstreams.sinks.community.postgresql.PostgreSQLSink.__init__"></a>
 
@@ -5515,7 +5515,7 @@ def __init__(host: str,
              **kwargs)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/postgresql.py#L55)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/postgresql.py#L56)
 
 A connector to sink topic data to PostgreSQL.
 
