@@ -1,16 +1,12 @@
 from quixstreams.exceptions.base import QuixException
 
 __all__ = (
-    "InvalidOperation",
     "GroupByNestingLimit",
     "InvalidColumnReference",
     "ColumnDoesNotExist",
     "StreamingDataFrameDuplicate",
     "GroupByDuplicate",
 )
-
-
-class InvalidOperation(QuixException): ...
 
 
 class ColumnDoesNotExist(QuixException): ...
