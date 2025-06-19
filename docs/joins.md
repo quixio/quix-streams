@@ -286,3 +286,4 @@ The merging behavior is controlled by the `on_merge` parameter, which works the 
 - Joining dataframes belonging to the same topics (aka "self-join") is not supported
 - The `backward_ms` must not be greater than the `grace_ms` to avoid losing data
 - Interval join does not preserve any headers. If you need headers from any side, consider adding them to the value.
+- Performance of the join depends on the density of the data. If streams on both sides move very fast (a lot of messages) then the performance may drop significantly.
