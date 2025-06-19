@@ -115,7 +115,6 @@ if __name__ == '__main__':
 ```
 
 
-
 #### State expiration
 `StreamingDataFrame.join_asof` stores the right records to the state.  
 The `grace_ms` parameter regulates the state's lifetime (default - 7 days) to prevent it from growing in size forever.
@@ -131,6 +130,7 @@ Adjust `grace_ms` based on the expected time gap between the left and the right 
 ### Limitations
 
 - Joining dataframes belonging to the same topics (aka "self-join") is not supported.
+- Join types "right" and "outer" are not supported.
 - As-of join preserves headers only for the left dataframe. If you need headers of the right side records, consider adding them to the value.
 
 ### Message ordering between partitions
@@ -283,7 +283,8 @@ The merging behavior is controlled by the `on_merge` parameter, which works the 
 
 ### Limitations
 
-- Joining dataframes belonging to the same topics (aka "self-join") is not supported
-- The `backward_ms` must not be greater than the `grace_ms` to avoid losing data
+- Joining dataframes belonging to the same topic (aka "self-join") is not supported.
+- The `backward_ms` must not be greater than the `grace_ms` to avoid losing data.
 - Interval join does not preserve any headers. If you need headers from any side, consider adding them to the value.
-- Performance of the join depends on the density of the data. If streams on both sides move very fast (a lot of messages) then the performance may drop significantly.
+- The performance of the interval join depends on the density of the data.   
+If both streams have too many matching messages falling within the interval, the performance may drop significantly due to the large number of produced outputs.

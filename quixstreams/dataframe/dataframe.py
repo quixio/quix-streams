@@ -1737,7 +1737,7 @@ class StreamingDataFrame:
     def join_interval(
         self,
         right: "StreamingDataFrame",
-        how: Literal["inner", "left"] = "inner",
+        how: JoinHow = "inner",
         on_merge: Union[OnOverlap, Callable[[Any, Any], Any]] = "raise",
         grace_ms: Union[int, timedelta] = timedelta(days=7),
         name: Optional[str] = None,
