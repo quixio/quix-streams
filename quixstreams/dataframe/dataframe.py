@@ -59,7 +59,7 @@ from quixstreams.utils.printing import (
 )
 from quixstreams.utils.stream_id import stream_id_from_strings
 
-from .joins import AsOfJoin, IntervalJoin, JoinHow, OnOverlap
+from .joins import AsOfJoin, AsOfJoinHow, IntervalJoin, IntervalJoinHow, OnOverlap
 from .joins.lookups import BaseField, BaseLookup
 from .registry import DataFrameRegistry
 from .series import StreamingSeries
@@ -1661,7 +1661,7 @@ class StreamingDataFrame:
     def join_asof(
         self,
         right: "StreamingDataFrame",
-        how: JoinHow = "inner",
+        how: AsOfJoinHow = "inner",
         on_merge: Union[OnOverlap, Callable[[Any, Any], Any]] = "raise",
         grace_ms: Union[int, timedelta] = timedelta(days=7),
         name: Optional[str] = None,
@@ -1737,7 +1737,7 @@ class StreamingDataFrame:
     def join_interval(
         self,
         right: "StreamingDataFrame",
-        how: JoinHow = "inner",
+        how: IntervalJoinHow = "inner",
         on_merge: Union[OnOverlap, Callable[[Any, Any], Any]] = "raise",
         grace_ms: Union[int, timedelta] = timedelta(days=7),
         name: Optional[str] = None,

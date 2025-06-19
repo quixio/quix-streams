@@ -1,15 +1,17 @@
 from datetime import timedelta
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Union, get_args
 
 from quixstreams.dataframe.utils import ensure_milliseconds
 from quixstreams.models.types import HeadersTuples
 
-from .base import Join, JoinHow, OnOverlap
+from .base import Join, OnOverlap
 
 if TYPE_CHECKING:
     from quixstreams.dataframe.dataframe import StreamingDataFrame
 
 __all__ = ("IntervalJoin",)
+
+IntervalJoinHow = Literal["inner", "left", "right", "outer"]
 
 drop_headers: Callable[[Any, Any, int, HeadersTuples], HeadersTuples] = lambda *_: []
 
@@ -24,13 +26,16 @@ class IntervalJoin(Join):
 
     def __init__(
         self,
-        how: JoinHow,
+        how: IntervalJoinHow,
         on_merge: Union[OnOverlap, Callable[[Any, Any], Any]],
         grace_ms: Union[int, timedelta],
         store_name: Optional[str] = None,
         backward_ms: Union[int, timedelta] = 0,
         forward_ms: Union[int, timedelta] = 0,
     ) -> None:
+        if how not in get_args(IntervalJoinHow):
+            raise ValueError(f"Join type not supported: {how}")
+
         super().__init__(how, on_merge, grace_ms, store_name)
         self._backward_ms = ensure_milliseconds(backward_ms)
         self._forward_ms = ensure_milliseconds(forward_ms)

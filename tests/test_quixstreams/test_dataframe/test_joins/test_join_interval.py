@@ -4,7 +4,7 @@ from typing import Any, Callable, Literal, Optional, Union
 
 import pytest
 
-from quixstreams.dataframe.joins.base import OnOverlap
+from quixstreams.dataframe.joins import IntervalJoin, OnOverlap
 from quixstreams.models.types import HeadersTuples
 
 
@@ -352,3 +352,7 @@ class TestStreamingDataFrameJoinInterval:
             match="The backward_ms must not be greater than the grace_ms to avoid losing data.",
         ):
             left_sdf.join_interval(right_sdf, grace_ms=1, backward_ms=2)
+
+    def test_join_type_not_supported(self, topic_manager_topic_factory, create_sdf):
+        with pytest.raises(ValueError, match="Join type not supported: incorrect"):
+            IntervalJoin(how="incorrect", on_merge="raise", grace_ms=1)

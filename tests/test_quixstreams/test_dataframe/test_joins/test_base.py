@@ -8,11 +8,6 @@ class TestJoin(Join):
     def _prepare_join(self, left, right): ...
 
 
-def test_how_invalid_value():
-    with pytest.raises(ValueError, match='Invalid "how" value'):
-        TestJoin(how="invalid", on_merge="raise", grace_ms=1)
-
-
 def test_on_merge_invalid_value():
     with pytest.raises(ValueError, match='Invalid "on_merge"'):
         TestJoin(how="inner", on_merge="invalid", grace_ms=1)

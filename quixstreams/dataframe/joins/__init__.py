@@ -1,5 +1,11 @@
-from .base import JoinHow, OnOverlap
-from .join_asof import AsOfJoin
-from .join_interval import IntervalJoin
+from .base import OnOverlap
+from .join_asof import AsOfJoin, AsOfJoinHow
+from .join_interval import IntervalJoin, IntervalJoinHow
 
-__all__ = ("AsOfJoin", "IntervalJoin", "JoinHow", "OnOverlap")
+__all__ = (
+    "AsOfJoin",
+    "AsOfJoinHow",
+    "IntervalJoin",
+    "IntervalJoinHow",
+    "OnOverlap",
+)

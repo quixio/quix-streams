@@ -21,10 +21,7 @@ from .utils import keep_left_merger, keep_right_merger, raise_merger
 if TYPE_CHECKING:
     from quixstreams.dataframe.dataframe import StreamingDataFrame
 
-__all__ = ("Join", "JoinHow", "JoinHow_choices", "OnOverlap", "OnOverlap_choices")
-
-JoinHow = Literal["inner", "left", "right", "outer"]
-JoinHow_choices = get_args(JoinHow)
+__all__ = ("Join", "OnOverlap", "OnOverlap_choices")
 
 OnOverlap = Literal["keep-left", "keep-right", "raise"]
 OnOverlap_choices = get_args(OnOverlap)
@@ -33,18 +30,11 @@ OnOverlap_choices = get_args(OnOverlap)
 class Join(ABC):
     def __init__(
         self,
-        how: JoinHow,
+        how: str,
         on_merge: Union[OnOverlap, Callable[[Any, Any], Any]],
         grace_ms: Union[int, timedelta],
         store_name: Optional[str] = None,
     ) -> None:
-        if how not in JoinHow_choices:
-            raise ValueError(
-                f'Invalid "how" value: {how}. '
-                f"Valid choices are: {', '.join(JoinHow_choices)}."
-            )
-        self._how = how
-
         if callable(on_merge):
             self._merger = on_merge
         elif on_merge == "keep-left":
@@ -60,6 +50,7 @@ class Join(ABC):
                 f"a callable to merge records manually."
             )
 
+        self._how = how
         self._grace_ms = ensure_milliseconds(grace_ms)
         self._store_name = store_name or "join"
 

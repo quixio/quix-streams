@@ -1,12 +1,14 @@
 from datetime import timedelta
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Union, get_args
 
-from .base import Join, JoinHow, OnOverlap
+from .base import Join, OnOverlap
 
 if TYPE_CHECKING:
     from quixstreams.dataframe.dataframe import StreamingDataFrame
 
 __all__ = ("AsOfJoin",)
+
+AsOfJoinHow = Literal["inner", "left"]
 
 DISCARDED = object()
 block_all = lambda value: False
@@ -16,12 +18,12 @@ block_discarded = lambda value: value is not DISCARDED
 class AsOfJoin(Join):
     def __init__(
         self,
-        how: JoinHow,
+        how: AsOfJoinHow,
         on_merge: Union[OnOverlap, Callable[[Any, Any], Any]],
         grace_ms: Union[int, timedelta],
         store_name: Optional[str] = None,
     ) -> None:
-        if how in ["right", "outer"]:
+        if how not in get_args(AsOfJoinHow):
             raise ValueError(f"Join type not supported: {how}")
         super().__init__(how, on_merge, grace_ms, store_name)
 
