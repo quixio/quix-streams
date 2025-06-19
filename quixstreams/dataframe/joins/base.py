@@ -1,4 +1,4 @@
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from datetime import timedelta
 from typing import (
     TYPE_CHECKING,
@@ -30,7 +30,7 @@ OnOverlap = Literal["keep-left", "keep-right", "raise"]
 OnOverlap_choices = get_args(OnOverlap)
 
 
-class Join:
+class Join(ABC):
     def __init__(
         self,
         how: JoinHow,
