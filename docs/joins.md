@@ -131,8 +131,7 @@ Adjust `grace_ms` based on the expected time gap between the left and the right 
 ### Limitations
 
 - Joining dataframes belonging to the same topics (aka "self-join") is not supported.
-- As-of join preserves headers only for the left dataframe.  
-If you need headers of the right side records, consider adding them to the value.
+- As-of join preserves headers only for the left dataframe. If you need headers of the right side records, consider adding them to the value.
 
 ### Message ordering between partitions
 Streaming joins use [`StreamingDataFrame.concat()`](concatenating.md) under the hood, which means that the application's internal consumer goes into a special "buffered" mode
@@ -286,4 +285,4 @@ The merging behavior is controlled by the `on_merge` parameter, which works the 
 
 - Joining dataframes belonging to the same topics (aka "self-join") is not supported
 - The `backward_ms` must not be greater than the `grace_ms` to avoid losing data
-- Interval join preserves headers only for the left dataframe
+- Interval join does not preserve any headers. If you need headers from any side, consider adding them to the value.

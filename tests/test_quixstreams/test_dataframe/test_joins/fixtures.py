@@ -23,12 +23,13 @@ def assign_partition(state_manager):
 
 @pytest.fixture
 def publish(message_context_factory):
-    def _publish(sdf, topic, value, key, timestamp):
+    def _publish(sdf, topic, value, key, timestamp, headers=None):
         return sdf.test(
             value=value,
             key=key,
             timestamp=timestamp,
             topic=topic,
+            headers=headers,
             ctx=message_context_factory(topic=topic.name),
         )
 

@@ -5,6 +5,7 @@ from typing import Any, Callable, Literal, Optional, Union
 import pytest
 
 from quixstreams.dataframe.joins.base import OnOverlap
+from quixstreams.models.types import HeadersTuples
 
 
 @dataclass
@@ -14,6 +15,7 @@ class Message:
     key: bytes = b"key"
     topic: Optional[Literal["left", "right"]] = None
     expected: list[Any] = field(default_factory=list)
+    headers: HeadersTuples = field(default_factory=list)
 
 
 @dataclass
@@ -260,6 +262,33 @@ class TestStreamingDataFrameJoinInterval:
                     ),
                 ],
             ),
+            # Drop all headers
+            Case(
+                how="outer",
+                messages=[
+                    Message(
+                        topic="left",
+                        timestamp=6,
+                        value={"left": 1},
+                        headers=[("a", "b")],
+                        expected=[Message(timestamp=6, value={"left": 1})],
+                    ),
+                    Message(
+                        topic="right",
+                        timestamp=7,
+                        value={"right": 2},
+                        headers=[("a", "b")],
+                        expected=[Message(timestamp=7, value={"right": 2})],
+                    ),
+                    Message(
+                        topic="left",
+                        timestamp=7,
+                        value={"left": 3},
+                        headers=[("c", "d")],
+                        expected=[Message(timestamp=7, value={"left": 3, "right": 2})],
+                    ),
+                ],
+            ),
         ],
     )
     def test_join_interval(
@@ -293,16 +322,21 @@ class TestStreamingDataFrameJoinInterval:
                 value=message.value,
                 key=message.key,
                 timestamp=message.timestamp,
+                headers=message.headers,
             )
 
             assert len(result) == len(message.expected)
 
-            for (result_value, result_key, result_timestamp, _), expected in zip(
-                result, message.expected
-            ):
+            for (
+                result_value,
+                result_key,
+                result_timestamp,
+                result_headers,
+            ), expected in zip(result, message.expected):
                 assert result_timestamp == expected.timestamp
                 assert result_key == expected.key
                 assert result_value == expected.value
+                assert result_headers == expected.headers
 
     def test_backward_ms_greater_than_grace_ms(
         self,

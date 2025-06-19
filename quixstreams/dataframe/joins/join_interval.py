@@ -2,6 +2,7 @@ from datetime import timedelta
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 from quixstreams.dataframe.utils import ensure_milliseconds
+from quixstreams.models.types import HeadersTuples
 
 from .base import Join, JoinHow, OnOverlap
 
@@ -9,6 +10,8 @@ if TYPE_CHECKING:
     from quixstreams.dataframe.dataframe import StreamingDataFrame
 
 __all__ = ("IntervalJoin",)
+
+drop_headers: Callable[[Any, Any, int, HeadersTuples], HeadersTuples] = lambda *_: []
 
 
 class IntervalJoin(Join):
@@ -75,6 +78,10 @@ class IntervalJoin(Join):
                 return [merger(left_value, value) for left_value in left_values]
             return [merger(None, value)] if emit_if_no_match_on_the_left else []
 
-        right = right.apply(right_func, expand=True, metadata=True)
-        left = left.apply(left_func, expand=True, metadata=True)
+        right = right.set_headers(drop_headers).apply(
+            right_func, expand=True, metadata=True
+        )
+        left = left.set_headers(drop_headers).apply(
+            left_func, expand=True, metadata=True
+        )
         return left.concat(right)
