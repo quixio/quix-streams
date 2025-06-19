@@ -1,4 +1,5 @@
 import logging
+import time
 from typing import Dict, List, Optional
 
 from confluent_kafka import OFFSET_BEGINNING
@@ -61,6 +62,7 @@ class RecoveryPartition:
         self._committed_offsets = committed_offsets
         self._recovery_consume_position: Optional[int] = None
         self._initial_offset: Optional[int] = None
+        self._last_progress_logged_time = 0.0
 
     def __repr__(self):
         return (
@@ -155,6 +157,7 @@ class RecoveryPartition:
         processed_offsets = json_loads(
             headers.get(CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER, b"null")
         )
+        offset = changelog_message.offset()
         if processed_offsets is None or self._should_apply_changelog(
             processed_offsets=processed_offsets
         ):
@@ -174,14 +177,18 @@ class RecoveryPartition:
                 cf_name=cf_name,
                 key=key,
                 value=value,
-                offset=changelog_message.offset(),
+                offset=offset,
             )
         else:
             # Even if the changelog update is skipped, roll the changelog offset
             # to move forward within the changelog topic
-            self._store_partition.write_changelog_offset(
-                offset=changelog_message.offset(),
+            self._store_partition.write_changelog_offset(offset=offset)
+
+        if self._last_progress_logged_time < time.monotonic() - 10:
+            logger.info(
+                f"Recovery progress for {self}: {offset} / {self._changelog_highwater}"
             )
+            self._last_progress_logged_time = time.monotonic()
 
     def set_recovery_consume_position(self, offset: int):
         """
