@@ -2227,7 +2227,7 @@ a new StreamingDataFrame
 
 ```python
 def join_asof(right: "StreamingDataFrame",
-              how: JoinAsOfHow = "inner",
+              how: AsOfJoinHow = "inner",
               on_merge: Union[OnOverlap, Callable[[Any, Any], Any]] = "raise",
               grace_ms: Union[int, timedelta] = timedelta(days=7),
               name: Optional[str] = None) -> "StreamingDataFrame"
@@ -2258,8 +2258,8 @@ How it works:
 
 - `right`: a StreamingDataFrame to join with.
 - `how`: the join strategy. Can be one of:
-- "inner" - emits the result when the match on the right side is found for the left record.
-- "left" - emits the result for each left record even if there is no match on the right side.
+- "inner" - emit the output for the left record only when the match is found (default)
+- "left" - emit the result for each left record even without matches on the right side
 Default - `"inner"`.
 - `on_merge`: how to merge the matched records together assuming they are dictionaries:
 - "raise" - fail with an error if the same keys are found in both dictionaries
@@ -2267,6 +2267,8 @@ Default - `"inner"`.
 - "keep-right" - prefer the keys from the right record
 - callback - a callback in form "(<left>, <right>) -> <new record>" to merge the records manually.
   Use it to customize the merging logic or when one of the records is not a dictionary.
+  WARNING: Custom merge functions must not mutate the input values as this will lead to
+  inconsistencies in the state store. Always return a new object instead.
 - `grace_ms`: how long to keep the right records in the store in event time.
 (the time is taken from the records' timestamps).
 It can be specified as either an `int` representing milliseconds or as a `timedelta` object.
@@ -2294,6 +2296,105 @@ sdf_metadata = app.dataframe(app.topic("metadata"))
 sdf_joined = sdf_measurements.join_asof(sdf_metadata, how="inner", grace_ms=timedelta(days=14))
 ```
 
+<a id="quixstreams.dataframe.dataframe.StreamingDataFrame.join_interval"></a>
+
+#### StreamingDataFrame.join\_interval
+
+```python
+def join_interval(
+        right: "StreamingDataFrame",
+        how: IntervalJoinHow = "inner",
+        on_merge: Union[OnOverlap, Callable[[Any, Any], Any]] = "raise",
+        grace_ms: Union[int, timedelta] = timedelta(days=7),
+        name: Optional[str] = None,
+        backward_ms: Union[int, timedelta] = 0,
+        forward_ms: Union[int, timedelta] = 0) -> "StreamingDataFrame"
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1737)
+
+Join the left dataframe with records from the right dataframe that fall within
+
+specified time intervals. This join is useful for matching records that occur
+within a specific time window of each other, rather than just the latest record.
+
+To be joined, the underlying topics of the dataframes must have the same number of partitions
+and use the same partitioner (all keys should be distributed across partitions using the same algorithm).
+
+Joining dataframes belonging to the same topics (aka "self-join") is not supported.
+
+Note:
+    When both `backward_ms` and `forward_ms` are set to 0 (default), the join will only match
+    records with exactly the same timestamp.
+
+How it works:
+    - Records from both sides are stored in the state store
+    - For each record on the left side:
+      - Look for matching records on the right side that fall within the specified time interval
+      - If matches are found, merge the records according to the `on_merge` logic
+      - For inner joins, only emit if matches are found
+      - For left joins, emit even without matches
+    - For each record on the right side:
+      - Look for matching records on the left side that fall within the specified time interval
+      - Merge all matching records according to the `on_merge` logic
+
+**Arguments**:
+
+- `right`: a StreamingDataFrame to join with.
+- `how`: the join strategy. Can be one of:
+- "inner" - emit the output for the left record only when the match is found (default)
+- "left" - emit the result for each left record even without matches on the right side
+- "right" - emit the result for each right record even without matches on the left side
+- "outer" - emit the output for both left and right records even without matches
+Default - `"inner"`.
+- `on_merge`: how to merge the matched records together assuming they are dictionaries:
+- "raise" - fail with an error if the same keys are found in both dictionaries
+- "keep-left" - prefer the keys from the left record
+- "keep-right" - prefer the keys from the right record
+- callback - a callback in form "(<left>, <right>) -> <new record>" to merge the records manually.
+  Use it to customize the merging logic or when one of the records is not a dictionary.
+  WARNING: Custom merge functions must not mutate the input values as this will lead to
+  unexpected exceptions or incorrect data in the joined stream. Always return a new object instead.
+- `grace_ms`: how long to keep records in the store in event time.
+(the time is taken from the records' timestamps).
+It can be specified as either an `int` representing milliseconds or as a `timedelta` object.
+The records are expired per key when the new record gets added.
+Default - 7 days.
+- `name`: The unique identifier of the underlying state store.
+If not provided, it will be generated based on the underlying topic names.
+Provide a custom name if you need to join the same right dataframe multiple times
+within the application.
+- `backward_ms`: How far back in time to look for matches from the right side.
+Can be specified as either an `int` representing milliseconds or as a `timedelta` object.
+Must not be greater than `grace_ms`. Default - 0.
+- `forward_ms`: How far forward in time to look for matches from the right side.
+Can be specified as either an `int` representing milliseconds or as a `timedelta` object.
+    Default - 0.
+
+Example:
+
+```python
+from datetime import timedelta
+from quixstreams import Application
+
+app = Application()
+
+sdf_measurements = app.dataframe(app.topic("measurements"))
+sdf_events = app.dataframe(app.topic("events"))
+
+# Join records from the topic "measurements"
+# with records from "events" that occur within a 5-minute window
+# before and after each measurement
+sdf_joined = sdf_measurements.join_interval(
+    right=sdf_events,
+    how="inner",
+    on_merge="keep-left",
+    grace_ms=timedelta(days=7),
+    backward_ms=timedelta(minutes=5),
+    forward_ms=timedelta(minutes=5)
+)
+```
+
 <a id="quixstreams.dataframe.dataframe.StreamingDataFrame.join_lookup"></a>
 
 #### StreamingDataFrame.join\_lookup
@@ -2306,7 +2407,7 @@ def join_lookup(
 ) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1735)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1842)
 
 Note: This is an experimental feature, and its API is likely to change in the future.
 
@@ -2359,7 +2460,7 @@ sdf = sdf.join_lookup(lookup, fields)
 def register_store(store_type: Optional[StoreTypes] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1824)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1931)
 
 Register the default store for the current stream_id in StateStoreManager.
 
@@ -3644,6 +3745,26 @@ Subclasses should specify the structure, metadata, and extraction/mapping logic 
 to participate in a lookup join operation. Fields are used to describe how enrichment data is mapped
 into the target record during a lookup join.
 
+<a id="quixstreams.dataframe.joins.join_interval"></a>
+
+## quixstreams.dataframe.joins.join\_interval
+
+<a id="quixstreams.dataframe.joins.join_interval.IntervalJoin"></a>
+
+### IntervalJoin
+
+```python
+class IntervalJoin(Join)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/join_interval.py#L19)
+
+A join that matches records based on time intervals.
+
+This join type allows matching records from two topics that fall within specified
+time intervals of each other. For each record, it looks for matches within a
+backward and forward time window.
+
 <a id="quixstreams.dataframe.joins"></a>
 
 ## quixstreams.dataframe.joins
@@ -3689,6 +3810,10 @@ def raise_merger(left: Optional[Mapping], right: Optional[Mapping]) -> dict
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/utils.py#L22)
 
 Merge two dictionaries and raise an error if overlapping keys detected
+
+<a id="quixstreams.dataframe.joins.base"></a>
+
+## quixstreams.dataframe.joins.base
 
 <a id="quixstreams.dataframe.joins.join_asof"></a>
 
@@ -9016,7 +9141,7 @@ Using `WindowedRocksDBPartitionTransaction` is a recommended way for accessing t
 class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L39)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L38)
 
 <a id="quixstreams.state.rocksdb.windowed.transaction.WindowedRocksDBPartitionTransaction.expire_windows"></a>
 
@@ -9031,7 +9156,7 @@ def expire_windows(
         end_inclusive: bool = False) -> Iterable[ExpiredWindowDetail]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L203)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L202)
 
 Get all expired windows with a set prefix from RocksDB up to the specified `max_start_time` timestamp.
 
@@ -9079,7 +9204,7 @@ def expire_all_windows(max_end_time: int,
                        collect: bool = False) -> Iterable[ExpiredWindowDetail]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L296)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L295)
 
 Get all expired windows for all prefix from RocksDB up to the specified `max_end_time` timestamp.
 
@@ -9098,7 +9223,7 @@ def delete_windows(max_start_time: int, delete_values: bool,
                    prefix: bytes) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L368)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L367)
 
 Delete windows from RocksDB up to the specified `max_start_time` timestamp.
 
@@ -9133,7 +9258,7 @@ def get_windows(start_from_ms: int,
                 backwards: bool = False) -> list[WindowDetail]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L423)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/transaction.py#L422)
 
 Get all windows within the specified time range.
 
@@ -9189,30 +9314,6 @@ Expected window key format:
 **Returns**:
 
 a tuple with message key, start timestamp, end timestamp
-
-<a id="quixstreams.state.rocksdb.windowed.serialization.append_integer"></a>
-
-#### append\_integer
-
-```python
-def append_integer(base_bytes: bytes, integer: int) -> bytes
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/windowed/serialization.py#L33)
-
-Append integer to the base bytes
-
-Format:
-```<base_bytes>|<integer>```
-
-**Arguments**:
-
-- `base_bytes`: base bytes
-- `integer`: integer to append
-
-**Returns**:
-
-bytes
 
 <a id="quixstreams.state.rocksdb.windowed.state"></a>
 
@@ -9814,7 +9915,7 @@ instance of `rocksdict.Rdict` for the given column family
 class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/transaction.py#L19)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/transaction.py#L22)
 
 <a id="quixstreams.state.rocksdb.transaction.RocksDBPartitionTransaction.prepare"></a>
 
@@ -9825,7 +9926,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any])
 def prepare(processed_offsets: Optional[dict[str, int]] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/transaction.py#L36)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/transaction.py#L98)
 
 This method first persists the counter and then calls the parent class's
 
@@ -9938,7 +10039,7 @@ The deserialized value if found, otherwise None.
 def set_for_timestamp(timestamp: int, value: Any, prefix: Any) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L144)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L148)
 
 Set a value for the timestamp.
 
@@ -9965,7 +10066,7 @@ expire old data.
 def prepare(processed_offsets: Optional[dict[str, int]] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L170)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L174)
 
 This method first calls `_expire()` to remove outdated entries based on
 
@@ -9984,7 +10085,7 @@ their timestamps and grace periods, then calls the parent class's
 class TimestampedStorePartition(RocksDBStorePartition)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L256)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L260)
 
 Represents a single partition within a `TimestampedStore`.
 
@@ -9999,7 +10100,7 @@ This class is responsible for managing the state of one partition and creating
 class TimestampedStore(RocksDBStore)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L287)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/timestamped.py#L291)
 
 A RocksDB-backed state store implementation that manages key-value pairs
 associated with timestamps.
@@ -11543,7 +11644,7 @@ Close all registered stores
 def encode_integer_pair(integer_1: int, integer_2: int) -> bytes
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/serialization.py#L55)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/serialization.py#L56)
 
 Encode a pair of integers into bytes of the following format:
 
@@ -11568,7 +11669,7 @@ integers as bytes
 def decode_integer_pair(value: bytes) -> tuple[int, int]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/serialization.py#L69)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/serialization.py#L70)
 
 Decode a pair of integers from bytes of the following format:
 
@@ -11581,6 +11682,30 @@ Decode a pair of integers from bytes of the following format:
 **Returns**:
 
 tuple of integers
+
+<a id="quixstreams.state.serialization.append_integer"></a>
+
+#### append\_integer
+
+```python
+def append_integer(base_bytes: bytes, integer: int) -> bytes
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/serialization.py#L82)
+
+Append integer to the base bytes
+
+Format:
+```<base_bytes>|<integer>```
+
+**Arguments**:
+
+- `base_bytes`: base bytes
+- `integer`: integer to append
+
+**Returns**:
+
+bytes
 
 <a id="quixstreams.state.base.store"></a>
 
