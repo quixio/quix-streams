@@ -30,7 +30,7 @@ class EventMetadata(TypedDict):
 
     type: str
     target_key: str
-    valid_from: str
+    valid_from: Optional[str]
     category: str
     version: int
     created_at: str
@@ -132,7 +132,7 @@ class ConfigurationVersion:
     version: int
     contentUrl: str
     sha256sum: str
-    valid_from: float  # timestamp ms
+    valid_from: Optional[float]  # timestamp ms
     retry_count: int = dataclasses.field(default=0, hash=False, init=False)
     retry_at: int = dataclasses.field(default=sys.maxsize, hash=False, init=False)
 
@@ -153,7 +153,9 @@ class ConfigurationVersion:
             valid_from=datetime.fromisoformat(
                 event["metadata"]["valid_from"]
             ).timestamp()
-            * 1000,
+            * 1000
+            if event["metadata"]["valid_from"]
+            else None,
         )
 
     def success(self) -> None:
@@ -235,15 +237,25 @@ class Configuration:
                 self._find_versions(timestamp)
             )
             return self.version
-        if self.next_version and self.next_version.valid_from <= timestamp:
+        if (
+            self.next_version
+            and self.next_version.valid_from
+            and self.next_version.valid_from <= timestamp
+        ):
             self.previous_version, self.version, self.next_version = (
                 self._find_versions(timestamp)
             )
             return self.version
-        if self.version and self.version.valid_from <= timestamp:
-            return self.version
-        if self.previous_version and self.previous_version.valid_from <= timestamp:
-            return self.previous_version
+        if self.version:
+            if self.version.valid_from is None:
+                return self.version
+            if self.version.valid_from <= timestamp:
+                return self.version
+        if self.previous_version:
+            if self.previous_version.valid_from is None:
+                return self.previous_version
+            if self.previous_version.valid_from <= timestamp:
+                return self.previous_version
 
         self.previous_version, self.version, self.next_version = self._find_versions(
             timestamp
@@ -276,10 +288,19 @@ class Configuration:
         for _, version in sorted(
             self.versions.items(), reverse=True, key=lambda x: x[0]
         ):
-            if version.valid_from > timestamp:
+            if version.valid_from is None:
+                if current_version is None:
+                    current_version = version
+                elif previous_version is None:
+                    previous_version = version
+                    return previous_version, current_version, next_version
+            elif version.valid_from > timestamp:
                 if next_version is None:
                     next_version = version
-                elif version.valid_from < next_version.valid_from:
+                elif (
+                    next_version.valid_from is not None
+                    and version.valid_from < next_version.valid_from
+                ):
                     next_version = version
             elif current_version is None:
                 current_version = version
