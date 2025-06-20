@@ -1266,7 +1266,7 @@ The serialized batch as bytes in Parquet format.
 class BigQuerySink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/bigquery.py#L56)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/bigquery.py#L60)
 
 <a id="quixstreams.sinks.community.bigquery.BigQuerySink.__init__"></a>
 
@@ -1291,7 +1291,7 @@ def __init__(project_id: str,
              **kwargs)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/bigquery.py#L57)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/bigquery.py#L61)
 
 A connector to sink processed data to Google Cloud BigQuery.
 
