@@ -3900,20 +3900,20 @@ aggregation and combine it with the incoming message.
 ### WindowDefinition
 
 ```python
-class WindowDefinition(abc.ABC)
+class WindowDefinition(abc.ABC, Generic[WindowT])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L49)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L51)
 
 <a id="quixstreams.dataframe.windows.definitions.WindowDefinition.sum"></a>
 
 #### WindowDefinition.sum
 
 ```python
-def sum() -> "Window"
+def sum() -> WindowT
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L70)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L72)
 
 Configure the window to aggregate data by summing up values within
 
@@ -3928,10 +3928,10 @@ an instance of `FixedTimeWindow` configured to perform sum aggregation.
 #### WindowDefinition.count
 
 ```python
-def count() -> "Window"
+def count() -> WindowT
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L83)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L85)
 
 Configure the window to aggregate data by counting the number of values
 
@@ -3946,10 +3946,10 @@ an instance of `FixedTimeWindow` configured to perform record count.
 #### WindowDefinition.mean
 
 ```python
-def mean() -> "Window"
+def mean() -> WindowT
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L96)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L98)
 
 Configure the window to aggregate data by calculating the mean of the values
 
@@ -3966,10 +3966,10 @@ of the values.
 
 ```python
 def reduce(reducer: Callable[[Any, Any], Any],
-           initializer: Callable[[Any], Any]) -> "Window"
+           initializer: Callable[[Any], Any]) -> WindowT
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L110)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L112)
 
 Configure the window to perform a custom aggregation using `reducer`
 
@@ -4015,10 +4015,10 @@ A window configured to perform custom reduce aggregation on the data.
 #### WindowDefinition.max
 
 ```python
-def max() -> "Window"
+def max() -> WindowT
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L154)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L156)
 
 Configure a window to aggregate the maximum value within each window period.
 
@@ -4032,10 +4032,10 @@ value within each window period.
 #### WindowDefinition.min
 
 ```python
-def min() -> "Window"
+def min() -> WindowT
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L167)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L169)
 
 Configure a window to aggregate the minimum value within each window period.
 
@@ -4049,10 +4049,10 @@ value within each window period.
 #### WindowDefinition.collect
 
 ```python
-def collect() -> "Window"
+def collect() -> WindowT
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L180)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/definitions.py#L182)
 
 Configure the window to collect all values within each window period into a
 
@@ -4090,7 +4090,7 @@ within each window period.
 class TimeWindow(Window)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/time_based.py#L41)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/time_based.py#L40)
 
 <a id="quixstreams.dataframe.windows.time_based.TimeWindow.final"></a>
 
@@ -4102,7 +4102,7 @@ def final(
 ) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/time_based.py#L63)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/time_based.py#L62)
 
 Apply the window aggregation and return results only when the windows are
 
@@ -4142,7 +4142,7 @@ def current(
 ) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/time_based.py#L95)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/windows/time_based.py#L94)
 
 Apply the window transformation to the StreamingDataFrame to return results
 
@@ -6562,7 +6562,7 @@ instead, with the downside that duplicate writes may occur if errors arise.
 class BigQuerySink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/bigquery.py#L56)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/bigquery.py#L60)
 
 <a id="quixstreams.sinks.community.bigquery.BigQuerySink.__init__"></a>
 
@@ -6585,7 +6585,7 @@ def __init__(project_id: str,
              **kwargs)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/bigquery.py#L57)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/bigquery.py#L61)
 
 A connector to sink processed data to Google Cloud BigQuery.
 
@@ -7122,6 +7122,117 @@ def flush() -> None
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/pubsub.py#L137)
 
 Wait for all publish operations to complete successfully.
+
+<a id="quixstreams.sinks.community.influxdb1"></a>
+
+## quixstreams.sinks.community.influxdb1
+
+<a id="quixstreams.sinks.community.influxdb1.InfluxDB1Sink"></a>
+
+### InfluxDB1Sink
+
+```python
+class InfluxDB1Sink(BatchingSink)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/influxdb1.py#L50)
+
+<a id="quixstreams.sinks.community.influxdb1.InfluxDB1Sink.__init__"></a>
+
+#### InfluxDB1Sink.\_\_init\_\_
+
+```python
+def __init__(host: str,
+             database: str,
+             measurement: MeasurementSetter,
+             port: int = 8086,
+             username: Optional[str] = None,
+             password: Optional[str] = None,
+             fields_keys: FieldsSetter = (),
+             tags_keys: TagsSetter = (),
+             time_setter: Optional[TimeSetter] = None,
+             time_precision: TimePrecision = "ms",
+             allow_missing_fields: bool = False,
+             include_metadata_tags: bool = False,
+             convert_ints_to_floats: bool = False,
+             batch_size: int = 1000,
+             request_timeout_ms: int = 10_000,
+             on_client_connect_success: Optional[
+                 ClientConnectSuccessCallback] = None,
+             on_client_connect_failure: Optional[
+                 ClientConnectFailureCallback] = None)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/influxdb1.py#L58)
+
+A connector to sink processed data to InfluxDB v1.
+
+It batches the processed records in memory per topic partition, converts
+them to the InfluxDB format, and flushes them to InfluxDB at the checkpoint.
+
+The InfluxDB sink transparently handles backpressure if the destination instance
+cannot accept more data at the moment
+(e.g., when InfluxDB returns an HTTP 429 error with the "retry_after" header set).
+When this happens, the sink will notify the Application to pause consuming
+from the backpressured topic partition until the "retry_after" timeout elapses.
+
+>***NOTE***: InfluxDB1Sink can accept only dictionaries.
+> If the record values are not dicts, you need to convert them to dicts before
+> sinking.
+
+**Arguments**:
+
+- `host`: InfluxDB host in format "https://<host>"
+- `database`: database name
+- `measurement`: measurement name as a string.
+Also accepts a single-argument callable that receives the current message
+data as a dict and returns a string.
+- `username`: database username
+- `password`: database password
+- `fields_keys`: an iterable (list) of strings used as InfluxDB "fields".
+Also accepts a single-argument callable that receives the current message
+data as a dict and returns an iterable of strings.
+- If present, it must not overlap with "tags_keys".
+- If empty, the whole record value will be used.
+>***NOTE*** The fields' values can only be strings, floats, integers, or booleans.
+Default - `()`.
+- `tags_keys`: an iterable (list) of strings used as InfluxDB "tags".
+Also accepts a single-argument callable that receives the current message
+data as a dict and returns an iterable of strings.
+- If present, it must not overlap with "fields_keys".
+- Given keys are popped from the value dictionary since the same key
+cannot be both a tag and field.
+- If empty, no tags will be sent.
+>***NOTE***: InfluxDB client always converts tag values to strings.
+Default - `()`.
+- `time_setter`: an optional column name to use as "time" for InfluxDB.
+Also accepts a callable which receives the current message data and
+returns either the desired time or `None` (use default).
+The time can be an `int`, `string` (RFC3339 format), or `datetime`.
+The time must match the `time_precision` argument if not a `datetime` object, else raises.
+By default, a record's kafka timestamp with "ms" time precision is used.
+- `time_precision`: a time precision to use when writing to InfluxDB.
+Possible values: "ms", "ns", "us", "s".
+Default - `"ms"`.
+- `allow_missing_fields`: if `True`, skip the missing fields keys, else raise `KeyError`.
+Default - `False`
+- `include_metadata_tags`: if True, includes record's key, topic,
+and partition as tags.
+Default - `False`.
+- `convert_ints_to_floats`: if True, converts all integer values to floats.
+Default - `False`.
+- `batch_size`: how many records to write to InfluxDB in one request.
+Note that it only affects the size of one write request, and not the number
+of records flushed on each checkpoint.
+Default - `1000`.
+- `request_timeout_ms`: an HTTP request timeout in milliseconds.
+Default - `10000`.
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
 
 <a id="quixstreams.sinks.base.sink"></a>
 
@@ -10289,7 +10400,7 @@ Check if a key is present in the store.
 class RecoveryPartition()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L39)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L40)
 
 A changelog topic partition mapped to a respective `StorePartition` with helper
 methods to determine its current recovery status.
@@ -10305,7 +10416,7 @@ Since `StorePartition`s do recovery directly, it also handles recovery transacti
 def offset() -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L79)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L84)
 
 Get the changelog offset from the underlying `StorePartition`.
 
@@ -10322,7 +10433,7 @@ changelog offset (int)
 def needs_recovery_check() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L98)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L103)
 
 Determine whether to attempt recovery for underlying `StorePartition`.
 
@@ -10337,7 +10448,7 @@ This does NOT mean that anything actually requires recovering.
 def has_invalid_offset() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L109)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L114)
 
 Determine if the current changelog offset stored in state is invalid.
 
@@ -10350,7 +10461,7 @@ def recover_from_changelog_message(
         changelog_message: SuccessfulConfluentKafkaMessageProto)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L126)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L131)
 
 Recover the StorePartition using a message read from its respective changelog.
 
@@ -10375,7 +10486,7 @@ messages and improves the state consistency guarantees.
 def set_recovery_consume_position(offset: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L186)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L191)
 
 Update the recovery partition with the consumer's position (whenever
 
@@ -10395,7 +10506,7 @@ It is possible that it may be set more than once.
 class ChangelogProducerFactory()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L218)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L223)
 
 Generates ChangelogProducers, which produce changelog messages to a StorePartition.
 
@@ -10407,7 +10518,7 @@ Generates ChangelogProducers, which produce changelog messages to a StorePartiti
 def __init__(changelog_name: str, producer: InternalProducer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L223)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L228)
 
 **Arguments**:
 
@@ -10426,7 +10537,7 @@ a ChangelogWriter instance
 def get_partition_producer(partition_num) -> "ChangelogProducer"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L233)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L238)
 
 Generate a ChangelogProducer for producing to a specific partition number
 
@@ -10444,7 +10555,7 @@ Generate a ChangelogProducer for producing to a specific partition number
 class ChangelogProducer()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L247)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L252)
 
 Generated for a `StorePartition` to produce state changes to its respective
 kafka changelog partition.
@@ -10457,7 +10568,7 @@ kafka changelog partition.
 def __init__(changelog_name: str, partition: int, producer: InternalProducer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L253)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L258)
 
 **Arguments**:
 
@@ -10475,7 +10586,7 @@ def produce(key: bytes,
             headers: Optional[Headers] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L276)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L281)
 
 Produce a message to a changelog topic partition.
 
@@ -10493,7 +10604,7 @@ Produce a message to a changelog topic partition.
 class RecoveryManager()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L301)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L306)
 
 Manages all consumer-related aspects of recovery, including:
     - assigning/revoking, pausing/resuming topic partitions (especially changelogs)
@@ -10513,7 +10624,7 @@ Recovery is attempted from the `Application` after any new partition assignment.
 def partitions() -> Dict[int, Dict[str, RecoveryPartition]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L320)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L326)
 
 Returns a mapping of assigned RecoveryPartitions in the following format:
 {<partition>: {<store_name>: <RecoveryPartition>}}
@@ -10527,7 +10638,7 @@ Returns a mapping of assigned RecoveryPartitions in the following format:
 def has_assignments() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L328)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L334)
 
 Whether the Application has assigned RecoveryPartitions
 
@@ -10544,7 +10655,7 @@ has assignments, as bool
 def recovering() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L337)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L343)
 
 Whether the Application is currently recovering
 
@@ -10561,7 +10672,7 @@ def register_changelog(stream_id: Optional[str], store_name: str,
                        topic_config: TopicConfig) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L345)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L351)
 
 Register a changelog Topic with the TopicManager.
 
@@ -10579,7 +10690,7 @@ Register a changelog Topic with the TopicManager.
 def do_recovery()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L364)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L370)
 
 If there are any active RecoveryPartitions, do a recovery procedure.
 
@@ -10595,7 +10706,7 @@ def assign_partition(topic: Optional[str], partition: int,
                      store_partitions: Dict[str, StorePartition])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L436)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L442)
 
 Assigns `StorePartition`s (as `RecoveryPartition`s) ONLY IF recovery required.
 
@@ -10609,7 +10720,7 @@ Pauses active consumer partitions as needed.
 def revoke_partition(partition_num: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L518)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/recovery.py#L524)
 
 revoke ALL StorePartitions (across all Stores) for a given partition number
 
