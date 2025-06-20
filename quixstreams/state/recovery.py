@@ -535,9 +535,7 @@ class RecoveryManager:
     def _update_recovery_status(self):
         rp_revokes = []
         for rp in dict_values(self._recovery_partitions):
-            position = self._consumer.position(
-                [ConfluentPartition(rp.changelog_name, rp.partition_num)]
-            )[0].offset
+            position = self._get_changelog_offset(rp)
             rp.set_recovery_consume_position(position)
             if rp.finished_recovery_check:
                 rp_revokes.append(rp)
@@ -569,10 +567,19 @@ class RecoveryManager:
         """
         if self._last_progress_logged_time < time.monotonic() - 10:
             for rp in dict_values(self._recovery_partitions):
+                last_consumed_offset = self._get_changelog_offset(rp) - 1
                 logger.info(
-                    f"Recovery progress for {rp}: {rp.offset} / {rp.changelog_highwater}"
+                    f"Recovery progress for {rp}: {last_consumed_offset} / {rp.changelog_highwater}"
                 )
             self._last_progress_logged_time = time.monotonic()
+
+    def _get_changelog_offset(self, rp: RecoveryPartition) -> int:
+        """
+        Get the current offset of the changelog partition.
+        """
+        return self._consumer.position(
+            [ConfluentPartition(rp.changelog_name, rp.partition_num)]
+        )[0].offset
 
     def stop_recovery(self):
         self._running = False
