@@ -45,10 +45,10 @@ __all__ = [
     "TumblingTimeWindowDefinition",
 ]
 
-WindowType = TypeVar("WindowType", bound=Window)
+WindowT = TypeVar("WindowT", bound=Window)
 
 
-class WindowDefinition(abc.ABC, Generic[WindowType]):
+class WindowDefinition(abc.ABC, Generic[WindowT]):
     def __init__(
         self,
         name: Optional[str],
@@ -67,9 +67,9 @@ class WindowDefinition(abc.ABC, Generic[WindowType]):
         func_name: Optional[str],
         aggregators: Optional[dict[str, BaseAggregator]] = None,
         collectors: Optional[dict[str, BaseCollector]] = None,
-    ) -> WindowType: ...
+    ) -> WindowT: ...
 
-    def sum(self) -> WindowType:
+    def sum(self) -> WindowT:
         """
         Configure the window to aggregate data by summing up values within
         each window period.
@@ -82,7 +82,7 @@ class WindowDefinition(abc.ABC, Generic[WindowType]):
             aggregators={"value": Sum(column=None)},
         )
 
-    def count(self) -> WindowType:
+    def count(self) -> WindowT:
         """
         Configure the window to aggregate data by counting the number of values
         within each window period.
@@ -95,7 +95,7 @@ class WindowDefinition(abc.ABC, Generic[WindowType]):
             aggregators={"value": Count()},
         )
 
-    def mean(self) -> WindowType:
+    def mean(self) -> WindowT:
         """
         Configure the window to aggregate data by calculating the mean of the values
         within each window period.
@@ -111,7 +111,7 @@ class WindowDefinition(abc.ABC, Generic[WindowType]):
 
     def reduce(
         self, reducer: Callable[[Any, Any], Any], initializer: Callable[[Any], Any]
-    ) -> WindowType:
+    ) -> WindowT:
         """
         Configure the window to perform a custom aggregation using `reducer`
         and `initializer` functions.
@@ -153,7 +153,7 @@ class WindowDefinition(abc.ABC, Generic[WindowType]):
             aggregators={"value": Reduce(reducer=reducer, initializer=initializer)},
         )
 
-    def max(self) -> WindowType:
+    def max(self) -> WindowT:
         """
         Configure a window to aggregate the maximum value within each window period.
 
@@ -166,7 +166,7 @@ class WindowDefinition(abc.ABC, Generic[WindowType]):
             aggregators={"value": Max(column=None)},
         )
 
-    def min(self) -> WindowType:
+    def min(self) -> WindowT:
         """
         Configure a window to aggregate the minimum value within each window period.
 
@@ -179,7 +179,7 @@ class WindowDefinition(abc.ABC, Generic[WindowType]):
             aggregators={"value": Min(column=None)},
         )
 
-    def collect(self) -> WindowType:
+    def collect(self) -> WindowT:
         """
         Configure the window to collect all values within each window period into a
         list, without performing any aggregation.
@@ -204,7 +204,7 @@ class WindowDefinition(abc.ABC, Generic[WindowType]):
             collectors={"value": Collect(column=None)},
         )
 
-    def agg(self, **operations: Union[BaseAggregator, BaseCollector]) -> WindowType:
+    def agg(self, **operations: Union[BaseAggregator, BaseCollector]) -> WindowT:
         if "start" in operations or "end" in operations:
             raise ValueError(
                 "`start` and `end` are reserved keywords for the window boundaries"
@@ -230,7 +230,7 @@ class WindowDefinition(abc.ABC, Generic[WindowType]):
         )
 
 
-class TimeWindowDefinition(WindowDefinition[WindowType], Generic[WindowType]):
+class TimeWindowDefinition(WindowDefinition[WindowT], Generic[WindowT]):
     def __init__(
         self,
         duration_ms: int,
