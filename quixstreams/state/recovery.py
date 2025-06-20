@@ -62,7 +62,6 @@ class RecoveryPartition:
         self._committed_offsets = committed_offsets
         self._recovery_consume_position: Optional[int] = None
         self._initial_offset: Optional[int] = None
-        self._last_progress_logged_time = 0.0
 
     def __repr__(self):
         return (
@@ -72,6 +71,10 @@ class RecoveryPartition:
     @property
     def changelog_name(self) -> str:
         return self._changelog_name
+
+    @property
+    def changelog_highwater(self) -> int:
+        return self._changelog_highwater
 
     @property
     def partition_num(self) -> int:
@@ -157,7 +160,6 @@ class RecoveryPartition:
         processed_offsets = json_loads(
             headers.get(CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER, b"null")
         )
-        offset = changelog_message.offset()
         if processed_offsets is None or self._should_apply_changelog(
             processed_offsets=processed_offsets
         ):
@@ -177,18 +179,14 @@ class RecoveryPartition:
                 cf_name=cf_name,
                 key=key,
                 value=value,
-                offset=offset,
+                offset=changelog_message.offset(),
             )
         else:
             # Even if the changelog update is skipped, roll the changelog offset
             # to move forward within the changelog topic
-            self._store_partition.write_changelog_offset(offset=offset)
-
-        if self._last_progress_logged_time < time.monotonic() - 10:
-            logger.info(
-                f"Recovery progress for {self}: {offset} / {self._changelog_highwater}"
+            self._store_partition.write_changelog_offset(
+                offset=changelog_message.offset(),
             )
-            self._last_progress_logged_time = time.monotonic()
 
     def set_recovery_consume_position(self, offset: int):
         """
@@ -322,6 +320,7 @@ class RecoveryManager:
         self._consumer = consumer
         self._topic_manager = topic_manager
         self._recovery_partitions: Dict[int, Dict[str, RecoveryPartition]] = {}
+        self._last_progress_logged_time = time.monotonic()
 
     @property
     def partitions(self) -> Dict[int, Dict[str, RecoveryPartition]]:
@@ -556,12 +555,24 @@ class RecoveryManager:
         A RecoveryPartition is unassigned immediately once fully updated.
         """
         while self.recovering:
+            self._log_recovery_progress()
             if (msg := self._consumer.poll(1)) is None:
                 self._update_recovery_status()
             else:
                 msg = raise_for_msg_error(msg)
                 rp = self._recovery_partitions[msg.partition()][msg.topic()]
                 rp.recover_from_changelog_message(changelog_message=msg)
+
+    def _log_recovery_progress(self) -> None:
+        """
+        Periodically log the recovery progress of all RecoveryPartitions.
+        """
+        if self._last_progress_logged_time < time.monotonic() - 10:
+            for rp in dict_values(self._recovery_partitions):
+                logger.info(
+                    f"Recovery progress for {rp}: {rp.offset} / {rp.changelog_highwater}"
+                )
+            self._last_progress_logged_time = time.monotonic()
 
     def stop_recovery(self):
         self._running = False
