@@ -6,6 +6,7 @@ from decimal import Decimal
 from typing import Any, Mapping, Optional
 
 try:
+    from google.api_core.client_info import ClientInfo
     from google.cloud import bigquery
     from google.cloud.exceptions import NotFound
     from google.oauth2 import service_account
@@ -27,6 +28,9 @@ from quixstreams.sinks import (
 __all__ = ("BigQuerySink", "BigQuerySinkException")
 
 logger = logging.getLogger(__name__)
+
+# Bump this if there are significant changes to the sink
+SINK_VERSION = "1.0"
 
 # A column name for the records keys
 _KEY_COLUMN_NAME = "__key"
@@ -137,6 +141,8 @@ class BigQuerySink(BatchingSink):
                 scopes=["https://www.googleapis.com/auth/bigquery"],
             )
             kwargs["credentials"] = credentials
+        user_agent = f"quixstreams-bigquery-sink/{SINK_VERSION} (GPN:Quix;)"
+        kwargs.setdefault("client_info", ClientInfo(user_agent=user_agent))
         self._client: Optional[bigquery.Client] = None
         self._client_settings = kwargs
 
