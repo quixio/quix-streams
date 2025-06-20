@@ -140,7 +140,7 @@ class ConfigurationVersion:
     version: int
     contentUrl: str
     sha256sum: str
-    valid_from: float  # timestamp ms
+    valid_from: Optional[float]  # timestamp ms
     retry_count: int = dataclasses.field(default=0, hash=False, init=False)
     retry_at: int = dataclasses.field(default=sys.maxsize, hash=False, init=False)
 

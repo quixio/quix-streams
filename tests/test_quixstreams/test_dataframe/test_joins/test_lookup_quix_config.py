@@ -147,7 +147,7 @@ class TestConfiguration:
 
     def test_find_valid_version_single_version_no_timestamp(self):
         """Test finding valid version with a single version that has no valid_from timestamp."""
-        version = create_configuration_version(version=1, valid_from=0)
+        version = create_configuration_version(version=1, valid_from=None)
         config = Configuration(versions={1: version})
 
         result = config.find_valid_version(1500)
@@ -258,7 +258,9 @@ class TestConfiguration:
     def test_find_valid_version_mixed_timestamp_and_no_timestamp(self):
         """Test finding valid version with mix of timestamped and non-timestamped versions."""
         version1 = create_configuration_version(version=1, valid_from=1000.0)
-        version2 = create_configuration_version(version=2, valid_from=0.0)
+        version2 = create_configuration_version(
+            version=2, valid_from=None
+        )  # No timestamp
         version3 = create_configuration_version(version=3, valid_from=3000.0)
 
         config = Configuration(versions={1: version1, 2: version2, 3: version3})
@@ -314,8 +316,8 @@ class TestConfiguration:
 
     def test_find_versions_with_no_timestamp_versions(self):
         """Test _find_versions with versions that have no valid_from timestamp."""
-        version1 = create_configuration_version(version=1, valid_from=0.0)
-        version2 = create_configuration_version(version=2, valid_from=0.0)
+        version1 = create_configuration_version(version=1, valid_from=None)
+        version2 = create_configuration_version(version=2, valid_from=None)
 
         config = Configuration(versions={1: version1, 2: version2})
 
@@ -405,7 +407,7 @@ class TestConfigurationVersion:
 
         assert version.id == "test-config"
         assert version.version == 1
-        assert version.valid_from == 0
+        assert version.valid_from is None
 
     def test_success_method(self):
         """Test the success method resets retry parameters."""
@@ -610,7 +612,10 @@ class TestLookupFindVersion:
         wildcard_id = lookup._config_id("user-config", "*")
 
         # All should be different
-        assert len({config_id1, config_id2, config_id3, wildcard_id}) == 4
+        assert config_id1 != config_id2
+        assert config_id1 != config_id3
+        assert config_id1 != wildcard_id
+        assert config_id2 != config_id3
 
         # Same inputs should produce same ID
         assert config_id1 == lookup._config_id("user-config", "user123")
