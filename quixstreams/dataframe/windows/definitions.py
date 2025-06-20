@@ -1,6 +1,6 @@
 import abc
 from abc import abstractmethod
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Generic, Optional, TypeVar, Union
 
 from .aggregations import (
     BaseAggregator,
@@ -45,8 +45,10 @@ __all__ = [
     "TumblingTimeWindowDefinition",
 ]
 
+WindowType = TypeVar("WindowType", bound=Window)
 
-class WindowDefinition(abc.ABC):
+
+class WindowDefinition(abc.ABC, Generic[WindowType]):
     def __init__(
         self,
         name: Optional[str],
@@ -65,9 +67,9 @@ class WindowDefinition(abc.ABC):
         func_name: Optional[str],
         aggregators: Optional[dict[str, BaseAggregator]] = None,
         collectors: Optional[dict[str, BaseCollector]] = None,
-    ) -> Window: ...
+    ) -> WindowType: ...
 
-    def sum(self) -> "Window":
+    def sum(self) -> WindowType:
         """
         Configure the window to aggregate data by summing up values within
         each window period.
@@ -80,7 +82,7 @@ class WindowDefinition(abc.ABC):
             aggregators={"value": Sum(column=None)},
         )
 
-    def count(self) -> "Window":
+    def count(self) -> WindowType:
         """
         Configure the window to aggregate data by counting the number of values
         within each window period.
@@ -93,7 +95,7 @@ class WindowDefinition(abc.ABC):
             aggregators={"value": Count()},
         )
 
-    def mean(self) -> "Window":
+    def mean(self) -> WindowType:
         """
         Configure the window to aggregate data by calculating the mean of the values
         within each window period.
@@ -109,7 +111,7 @@ class WindowDefinition(abc.ABC):
 
     def reduce(
         self, reducer: Callable[[Any, Any], Any], initializer: Callable[[Any], Any]
-    ) -> "Window":
+    ) -> WindowType:
         """
         Configure the window to perform a custom aggregation using `reducer`
         and `initializer` functions.
@@ -151,7 +153,7 @@ class WindowDefinition(abc.ABC):
             aggregators={"value": Reduce(reducer=reducer, initializer=initializer)},
         )
 
-    def max(self) -> "Window":
+    def max(self) -> WindowType:
         """
         Configure a window to aggregate the maximum value within each window period.
 
@@ -164,7 +166,7 @@ class WindowDefinition(abc.ABC):
             aggregators={"value": Max(column=None)},
         )
 
-    def min(self) -> "Window":
+    def min(self) -> WindowType:
         """
         Configure a window to aggregate the minimum value within each window period.
 
@@ -177,7 +179,7 @@ class WindowDefinition(abc.ABC):
             aggregators={"value": Min(column=None)},
         )
 
-    def collect(self) -> "Window":
+    def collect(self) -> WindowType:
         """
         Configure the window to collect all values within each window period into a
         list, without performing any aggregation.
@@ -202,7 +204,7 @@ class WindowDefinition(abc.ABC):
             collectors={"value": Collect(column=None)},
         )
 
-    def agg(self, **operations: Union[BaseAggregator, BaseCollector]) -> "Window":
+    def agg(self, **operations: Union[BaseAggregator, BaseCollector]) -> WindowType:
         if "start" in operations or "end" in operations:
             raise ValueError(
                 "`start` and `end` are reserved keywords for the window boundaries"
@@ -228,7 +230,7 @@ class WindowDefinition(abc.ABC):
         )
 
 
-class TimeWindowDefinition(WindowDefinition):
+class TimeWindowDefinition(WindowDefinition[WindowType], Generic[WindowType]):
     def __init__(
         self,
         duration_ms: int,
@@ -270,7 +272,7 @@ class TimeWindowDefinition(WindowDefinition):
         return self._step_ms
 
 
-class HoppingTimeWindowDefinition(TimeWindowDefinition):
+class HoppingTimeWindowDefinition(TimeWindowDefinition[TimeWindow]):
     def __init__(
         self,
         duration_ms: int,
@@ -321,7 +323,7 @@ class HoppingTimeWindowDefinition(TimeWindowDefinition):
         )
 
 
-class TumblingTimeWindowDefinition(TimeWindowDefinition):
+class TumblingTimeWindowDefinition(TimeWindowDefinition[TimeWindow]):
     def __init__(
         self,
         duration_ms: int,
@@ -369,7 +371,7 @@ class TumblingTimeWindowDefinition(TimeWindowDefinition):
         )
 
 
-class SlidingTimeWindowDefinition(TimeWindowDefinition):
+class SlidingTimeWindowDefinition(TimeWindowDefinition[SlidingWindow]):
     def __init__(
         self,
         duration_ms: int,
@@ -418,7 +420,7 @@ class SlidingTimeWindowDefinition(TimeWindowDefinition):
         )
 
 
-class CountWindowDefinition(WindowDefinition):
+class CountWindowDefinition(WindowDefinition[CountWindow]):
     def __init__(
         self, count: int, dataframe: "StreamingDataFrame", name: Optional[str] = None
     ) -> None:
