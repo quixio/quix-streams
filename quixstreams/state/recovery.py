@@ -1,4 +1,5 @@
 import logging
+import time
 from typing import Dict, List, Optional
 
 from confluent_kafka import OFFSET_BEGINNING
@@ -70,6 +71,10 @@ class RecoveryPartition:
     @property
     def changelog_name(self) -> str:
         return self._changelog_name
+
+    @property
+    def changelog_highwater(self) -> int:
+        return self._changelog_highwater
 
     @property
     def partition_num(self) -> int:
@@ -315,6 +320,7 @@ class RecoveryManager:
         self._consumer = consumer
         self._topic_manager = topic_manager
         self._recovery_partitions: Dict[int, Dict[str, RecoveryPartition]] = {}
+        self._last_progress_logged_time = time.monotonic()
 
     @property
     def partitions(self) -> Dict[int, Dict[str, RecoveryPartition]]:
@@ -529,9 +535,7 @@ class RecoveryManager:
     def _update_recovery_status(self):
         rp_revokes = []
         for rp in dict_values(self._recovery_partitions):
-            position = self._consumer.position(
-                [ConfluentPartition(rp.changelog_name, rp.partition_num)]
-            )[0].offset
+            position = self._get_changelog_offset(rp)
             rp.set_recovery_consume_position(position)
             if rp.finished_recovery_check:
                 rp_revokes.append(rp)
@@ -549,12 +553,33 @@ class RecoveryManager:
         A RecoveryPartition is unassigned immediately once fully updated.
         """
         while self.recovering:
+            self._log_recovery_progress()
             if (msg := self._consumer.poll(1)) is None:
                 self._update_recovery_status()
             else:
                 msg = raise_for_msg_error(msg)
                 rp = self._recovery_partitions[msg.partition()][msg.topic()]
                 rp.recover_from_changelog_message(changelog_message=msg)
+
+    def _log_recovery_progress(self) -> None:
+        """
+        Periodically log the recovery progress of all RecoveryPartitions.
+        """
+        if self._last_progress_logged_time < time.monotonic() - 10:
+            for rp in dict_values(self._recovery_partitions):
+                last_consumed_offset = self._get_changelog_offset(rp) - 1
+                logger.info(
+                    f"Recovery progress for {rp}: {last_consumed_offset} / {rp.changelog_highwater}"
+                )
+            self._last_progress_logged_time = time.monotonic()
+
+    def _get_changelog_offset(self, rp: RecoveryPartition) -> int:
+        """
+        Get the current offset of the changelog partition.
+        """
+        return self._consumer.position(
+            [ConfluentPartition(rp.changelog_name, rp.partition_num)]
+        )[0].offset
 
     def stop_recovery(self):
         self._running = False
