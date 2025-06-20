@@ -1,5 +1,4 @@
 import logging
-import time
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Iterable, Literal, Optional
 
@@ -207,9 +206,6 @@ class TimeWindow(Window):
         max_expired_end: int,
         collect: bool,
     ) -> Iterable[WindowKeyResult]:
-        start = time.monotonic()
-        count = 0
-
         for (
             window_start,
             window_end,
@@ -219,13 +215,7 @@ class TimeWindow(Window):
             collect=collect,
             delete=True,
         ):
-            count += 1
             yield key, self._results(aggregated, collected, window_start, window_end)
-
-        if count:
-            logger.debug(
-                "Expired %s windows in %ss", count, round(time.monotonic() - start, 2)
-            )
 
     def expire_by_key(
         self,
@@ -234,9 +224,6 @@ class TimeWindow(Window):
         max_expired_start: int,
         collect: bool,
     ) -> Iterable[WindowKeyResult]:
-        start = time.monotonic()
-        count = 0
-
         for (
             window_start,
             window_end,
@@ -244,13 +231,7 @@ class TimeWindow(Window):
             max_start_time=max_expired_start,
             collect=collect,
         ):
-            count += 1
             yield (key, self._results(aggregated, collected, window_start, window_end))
-
-        if count:
-            logger.debug(
-                "Expired %s windows in %ss", count, round(time.monotonic() - start, 2)
-            )
 
     def _on_expired_window(
         self,
