@@ -1266,7 +1266,7 @@ The serialized batch as bytes in Parquet format.
 class BigQuerySink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/bigquery.py#L56)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/bigquery.py#L60)
 
 <a id="quixstreams.sinks.community.bigquery.BigQuerySink.__init__"></a>
 
@@ -1291,7 +1291,7 @@ def __init__(project_id: str,
              **kwargs)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/bigquery.py#L57)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/bigquery.py#L61)
 
 A connector to sink processed data to Google Cloud BigQuery.
 
@@ -2086,4 +2086,119 @@ client authentication (which should raise an Exception).
 Callback should accept the raised Exception as an argument.
 Callback must resolve (or propagate/re-raise) the Exception.
 - `kwargs`: Additional keyword arguments passed to the `redis.Redis` instance.
+
+<a id="quixstreams.sinks.community.influxdb1"></a>
+
+## quixstreams.sinks.community.influxdb1
+
+<a id="quixstreams.sinks.community.influxdb1.InfluxDB1Sink"></a>
+
+### InfluxDB1Sink
+
+```python
+class InfluxDB1Sink(BatchingSink)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/influxdb1.py#L50)
+
+<a id="quixstreams.sinks.community.influxdb1.InfluxDB1Sink.__init__"></a>
+
+<br><br>
+
+#### InfluxDB1Sink.\_\_init\_\_
+
+```python
+def __init__(host: str,
+             database: str,
+             measurement: MeasurementSetter,
+             port: int = 8086,
+             username: Optional[str] = None,
+             password: Optional[str] = None,
+             fields_keys: FieldsSetter = (),
+             tags_keys: TagsSetter = (),
+             time_setter: Optional[TimeSetter] = None,
+             time_precision: TimePrecision = "ms",
+             allow_missing_fields: bool = False,
+             include_metadata_tags: bool = False,
+             convert_ints_to_floats: bool = False,
+             batch_size: int = 1000,
+             request_timeout_ms: int = 10_000,
+             on_client_connect_success: Optional[
+                 ClientConnectSuccessCallback] = None,
+             on_client_connect_failure: Optional[
+                 ClientConnectFailureCallback] = None)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/influxdb1.py#L58)
+
+A connector to sink processed data to InfluxDB v1.
+
+It batches the processed records in memory per topic partition, converts
+them to the InfluxDB format, and flushes them to InfluxDB at the checkpoint.
+
+The InfluxDB sink transparently handles backpressure if the destination instance
+cannot accept more data at the moment
+(e.g., when InfluxDB returns an HTTP 429 error with the "retry_after" header set).
+When this happens, the sink will notify the Application to pause consuming
+from the backpressured topic partition until the "retry_after" timeout elapses.
+
+>***NOTE***: InfluxDB1Sink can accept only dictionaries.
+> If the record values are not dicts, you need to convert them to dicts before
+> sinking.
+
+
+<br>
+***Arguments:***
+
+- `host`: InfluxDB host in format "https://<host>"
+- `database`: database name
+- `measurement`: measurement name as a string.
+Also accepts a single-argument callable that receives the current message
+data as a dict and returns a string.
+- `username`: database username
+- `password`: database password
+- `fields_keys`: an iterable (list) of strings used as InfluxDB "fields".
+Also accepts a single-argument callable that receives the current message
+data as a dict and returns an iterable of strings.
+- If present, it must not overlap with "tags_keys".
+- If empty, the whole record value will be used.
+>***NOTE*** The fields' values can only be strings, floats, integers, or booleans.
+Default - `()`.
+- `tags_keys`: an iterable (list) of strings used as InfluxDB "tags".
+Also accepts a single-argument callable that receives the current message
+data as a dict and returns an iterable of strings.
+- If present, it must not overlap with "fields_keys".
+- Given keys are popped from the value dictionary since the same key
+cannot be both a tag and field.
+- If empty, no tags will be sent.
+>***NOTE***: InfluxDB client always converts tag values to strings.
+Default - `()`.
+- `time_setter`: an optional column name to use as "time" for InfluxDB.
+Also accepts a callable which receives the current message data and
+returns either the desired time or `None` (use default).
+The time can be an `int`, `string` (RFC3339 format), or `datetime`.
+The time must match the `time_precision` argument if not a `datetime` object, else raises.
+By default, a record's kafka timestamp with "ms" time precision is used.
+- `time_precision`: a time precision to use when writing to InfluxDB.
+Possible values: "ms", "ns", "us", "s".
+Default - `"ms"`.
+- `allow_missing_fields`: if `True`, skip the missing fields keys, else raise `KeyError`.
+Default - `False`
+- `include_metadata_tags`: if True, includes record's key, topic,
+and partition as tags.
+Default - `False`.
+- `convert_ints_to_floats`: if True, converts all integer values to floats.
+Default - `False`.
+- `batch_size`: how many records to write to InfluxDB in one request.
+Note that it only affects the size of one write request, and not the number
+of records flushed on each checkpoint.
+Default - `1000`.
+- `request_timeout_ms`: an HTTP request timeout in milliseconds.
+Default - `10000`.
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
 
