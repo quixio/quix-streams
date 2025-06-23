@@ -82,9 +82,6 @@ class FileMetadata(TypedDict):
     created_at: int
 
 
-BufferKey = tuple[str, int, bytes]  # (topic, partition, key)
-
-
 class QuixDatalakeSink(BaseSink):
     """
     Sink for persisting raw Kafka topic data to Blob Storage in Avro format, with Hive-style partitioning and Parquet metadata for Quix DataLake (DuckDB-compatible).
