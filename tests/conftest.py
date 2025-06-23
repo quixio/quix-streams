@@ -11,6 +11,7 @@ from .logging import LOGGING_CONFIG, patch_logger_class
 # Define list of files with fixtures for pytest autodiscovery
 pytest_plugins = [
     "tests.test_quixstreams.test_dataframe.fixtures",
+    "tests.test_quixstreams.test_dataframe.test_joins.fixtures",
     "tests.test_quixstreams.fixtures",
     "tests.test_quixstreams.test_models.test_serializers.fixtures",
     "tests.test_quixstreams.test_platforms.test_quix.fixtures",

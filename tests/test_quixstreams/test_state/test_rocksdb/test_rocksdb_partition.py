@@ -10,7 +10,7 @@ from quixstreams.state.rocksdb import (
     RocksDBStorePartition,
 )
 from quixstreams.state.rocksdb.exceptions import RocksDBCorruptedError
-from quixstreams.state.rocksdb.windowed.serialization import append_integer
+from quixstreams.state.serialization import append_integer
 
 
 class TestRocksDBStorePartition:

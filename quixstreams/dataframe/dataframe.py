@@ -39,6 +39,7 @@ from quixstreams.core.stream import (
     UpdateWithMetadataCallback,
     VoidExecutor,
 )
+from quixstreams.core.stream.exceptions import InvalidOperation
 from quixstreams.models import (
     HeadersTuples,
     MessageContext,
@@ -58,8 +59,7 @@ from quixstreams.utils.printing import (
 )
 from quixstreams.utils.stream_id import stream_id_from_strings
 
-from .exceptions import InvalidOperation
-from .joins import JoinAsOf, JoinAsOfHow, OnOverlap
+from .joins import AsOfJoin, AsOfJoinHow, IntervalJoin, IntervalJoinHow, OnOverlap
 from .joins.lookups import BaseField, BaseLookup
 from .registry import DataFrameRegistry
 from .series import StreamingSeries
@@ -606,6 +606,10 @@ class StreamingDataFrame:
         )
 
         self.to_topic(topic=groupby_topic, key=self._groupby_key(key))
+        # Filter the outputs of the original SDF
+        # after sending data to the repartition topic
+        self.filter(lambda _: False)
+
         groupby_sdf = self.__dataframe_clone__(groupby_topic)
         self._registry.register_groupby(source_sdf=self, new_sdf=groupby_sdf)
         return groupby_sdf
@@ -1657,7 +1661,7 @@ class StreamingDataFrame:
     def join_asof(
         self,
         right: "StreamingDataFrame",
-        how: JoinAsOfHow = "inner",
+        how: AsOfJoinHow = "inner",
         on_merge: Union[OnOverlap, Callable[[Any, Any], Any]] = "raise",
         grace_ms: Union[int, timedelta] = timedelta(days=7),
         name: Optional[str] = None,
@@ -1684,8 +1688,8 @@ class StreamingDataFrame:
         :param right: a StreamingDataFrame to join with.
 
         :param how: the join strategy. Can be one of:
-          - "inner" - emits the result when the match on the right side is found for the left record.
-          - "left" - emits the result for each left record even if there is no match on the right side.
+          - "inner" - emit the output for the left record only when the match is found (default)
+          - "left" - emit the result for each left record even without matches on the right side
           Default - `"inner"`.
 
         :param on_merge: how to merge the matched records together assuming they are dictionaries:
@@ -1694,6 +1698,8 @@ class StreamingDataFrame:
             - "keep-right" - prefer the keys from the right record
             - callback - a callback in form "(<left>, <right>) -> <new record>" to merge the records manually.
               Use it to customize the merging logic or when one of the records is not a dictionary.
+              WARNING: Custom merge functions must not mutate the input values as this will lead to
+              inconsistencies in the state store. Always return a new object instead.
 
         :param grace_ms: how long to keep the right records in the store in event time.
             (the time is taken from the records' timestamps).
@@ -1724,8 +1730,113 @@ class StreamingDataFrame:
         ```
 
         """
-        return JoinAsOf(
+        return AsOfJoin(
             how=how, on_merge=on_merge, grace_ms=grace_ms, store_name=name
+        ).join(self, right)
+
+    def join_interval(
+        self,
+        right: "StreamingDataFrame",
+        how: IntervalJoinHow = "inner",
+        on_merge: Union[OnOverlap, Callable[[Any, Any], Any]] = "raise",
+        grace_ms: Union[int, timedelta] = timedelta(days=7),
+        name: Optional[str] = None,
+        backward_ms: Union[int, timedelta] = 0,
+        forward_ms: Union[int, timedelta] = 0,
+    ) -> "StreamingDataFrame":
+        """
+        Join the left dataframe with records from the right dataframe that fall within
+        specified time intervals. This join is useful for matching records that occur
+        within a specific time window of each other, rather than just the latest record.
+
+        To be joined, the underlying topics of the dataframes must have the same number of partitions
+        and use the same partitioner (all keys should be distributed across partitions using the same algorithm).
+
+        Joining dataframes belonging to the same topics (aka "self-join") is not supported.
+
+        Note:
+            When both `backward_ms` and `forward_ms` are set to 0 (default), the join will only match
+            records with exactly the same timestamp.
+
+        How it works:
+            - Records from both sides are stored in the state store
+            - For each record on the left side:
+              - Look for matching records on the right side that fall within the specified time interval
+              - If matches are found, merge the records according to the `on_merge` logic
+              - For inner joins, only emit if matches are found
+              - For left joins, emit even without matches
+            - For each record on the right side:
+              - Look for matching records on the left side that fall within the specified time interval
+              - Merge all matching records according to the `on_merge` logic
+
+        :param right: a StreamingDataFrame to join with.
+
+        :param how: the join strategy. Can be one of:
+          - "inner" - emit the output for the left record only when the match is found (default)
+          - "left" - emit the result for each left record even without matches on the right side
+          - "right" - emit the result for each right record even without matches on the left side
+          - "outer" - emit the output for both left and right records even without matches
+          Default - `"inner"`.
+
+        :param on_merge: how to merge the matched records together assuming they are dictionaries:
+            - "raise" - fail with an error if the same keys are found in both dictionaries
+            - "keep-left" - prefer the keys from the left record
+            - "keep-right" - prefer the keys from the right record
+            - callback - a callback in form "(<left>, <right>) -> <new record>" to merge the records manually.
+              Use it to customize the merging logic or when one of the records is not a dictionary.
+              WARNING: Custom merge functions must not mutate the input values as this will lead to
+              unexpected exceptions or incorrect data in the joined stream. Always return a new object instead.
+
+        :param grace_ms: how long to keep records in the store in event time.
+            (the time is taken from the records' timestamps).
+            It can be specified as either an `int` representing milliseconds or as a `timedelta` object.
+            The records are expired per key when the new record gets added.
+            Default - 7 days.
+
+        :param name: The unique identifier of the underlying state store.
+            If not provided, it will be generated based on the underlying topic names.
+            Provide a custom name if you need to join the same right dataframe multiple times
+            within the application.
+
+        :param backward_ms: How far back in time to look for matches from the right side.
+            Can be specified as either an `int` representing milliseconds or as a `timedelta` object.
+            Must not be greater than `grace_ms`. Default - 0.
+
+        :param forward_ms: How far forward in time to look for matches from the right side.
+            Can be specified as either an `int` representing milliseconds or as a `timedelta` object.
+            Default - 0.
+
+        Example:
+
+        ```python
+        from datetime import timedelta
+        from quixstreams import Application
+
+        app = Application()
+
+        sdf_measurements = app.dataframe(app.topic("measurements"))
+        sdf_events = app.dataframe(app.topic("events"))
+
+        # Join records from the topic "measurements"
+        # with records from "events" that occur within a 5-minute window
+        # before and after each measurement
+        sdf_joined = sdf_measurements.join_interval(
+            right=sdf_events,
+            how="inner",
+            on_merge="keep-left",
+            grace_ms=timedelta(days=7),
+            backward_ms=timedelta(minutes=5),
+            forward_ms=timedelta(minutes=5)
+        )
+        ```
+        """
+        return IntervalJoin(
+            how=how,
+            on_merge=on_merge,
+            grace_ms=grace_ms,
+            store_name=name,
+            backward_ms=backward_ms,
+            forward_ms=forward_ms,
         ).join(self, right)
 
     def join_lookup(

@@ -1,112 +1,51 @@
-import typing
 from datetime import timedelta
-from typing import Any, Callable, Literal, Optional, Union, cast, get_args
+from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Union, get_args
 
-from quixstreams.context import message_context
-from quixstreams.dataframe.utils import ensure_milliseconds
-from quixstreams.models.topics.manager import TopicManager
-from quixstreams.state.rocksdb.timestamped import TimestampedPartitionTransaction
+from .base import Join, OnOverlap
 
-from .utils import keep_left_merger, keep_right_merger, raise_merger
-
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     from quixstreams.dataframe.dataframe import StreamingDataFrame
 
+__all__ = ("AsOfJoin",)
 
-__all__ = ("JoinAsOfHow", "OnOverlap", "JoinAsOf")
+AsOfJoinHow = Literal["inner", "left"]
 
 DISCARDED = object()
-JoinAsOfHow = Literal["inner", "left"]
-JoinAsOfHow_choices = get_args(JoinAsOfHow)
-
-OnOverlap = Literal["keep-left", "keep-right", "raise"]
-OnOverlap_choices = get_args(OnOverlap)
+block_all = lambda value: False
+block_discarded = lambda value: value is not DISCARDED
 
 
-class JoinAsOf:
+class AsOfJoin(Join):
     def __init__(
         self,
-        how: JoinAsOfHow,
+        how: AsOfJoinHow,
         on_merge: Union[OnOverlap, Callable[[Any, Any], Any]],
         grace_ms: Union[int, timedelta],
         store_name: Optional[str] = None,
-    ):
-        if how not in JoinAsOfHow_choices:
-            raise ValueError(
-                f'Invalid "how" value: {how}. '
-                f"Valid choices are: {', '.join(JoinAsOfHow_choices)}."
-            )
-        self._how = how
+    ) -> None:
+        if how not in get_args(AsOfJoinHow):
+            raise ValueError(f"Join type not supported: {how}")
+        super().__init__(how, on_merge, grace_ms, store_name)
 
-        if callable(on_merge):
-            self._merger = on_merge
-        elif on_merge == "keep-left":
-            self._merger = keep_left_merger
-        elif on_merge == "keep-right":
-            self._merger = keep_right_merger
-        elif on_merge == "raise":
-            self._merger = raise_merger
-        else:
-            raise ValueError(
-                f'Invalid "on_merge" value: {on_merge}. '
-                f"Provide either one of {', '.join(OnOverlap_choices)} or "
-                f"a callable to merge records manually."
-            )
-
-        self._grace_ms = ensure_milliseconds(grace_ms)
-        self._store_name = store_name or "join"
-
-    def join(
+    def _prepare_join(
         self,
         left: "StreamingDataFrame",
         right: "StreamingDataFrame",
     ) -> "StreamingDataFrame":
-        if left.stream_id == right.stream_id:
-            raise ValueError(
-                "Joining dataframes originating from "
-                "the same topic is not yet supported.",
-            )
-        TopicManager.ensure_topics_copartitioned(*left.topics, *right.topics)
+        self._register_store(right, keep_duplicates=False)
 
-        changelog_config = TopicManager.derive_topic_config(right.topics)
-        right.processing_context.state_manager.register_timestamped_store(
-            stream_id=right.stream_id,
-            store_name=self._store_name,
-            grace_ms=self._grace_ms,
-            keep_duplicates=False,
-            changelog_config=changelog_config,
-        )
-
+        tx = self._get_transaction
         is_inner_join = self._how == "inner"
+        merger = self._merger
 
         def left_func(value, key, timestamp, headers):
-            tx = cast(
-                TimestampedPartitionTransaction,
-                right.processing_context.checkpoint.get_store_transaction(
-                    stream_id=right.stream_id,
-                    partition=message_context().partition,
-                    store_name=self._store_name,
-                ),
-            )
-
-            right_value = tx.get_latest(timestamp=timestamp, prefix=key)
-            if is_inner_join and not right_value:
-                return DISCARDED
-            return self._merger(value, right_value)
+            if right_value := tx(right).get_latest(timestamp=timestamp, prefix=key):
+                return merger(value, right_value)
+            return DISCARDED if is_inner_join else merger(value, None)
 
         def right_func(value, key, timestamp, headers):
-            tx = cast(
-                TimestampedPartitionTransaction,
-                right.processing_context.checkpoint.get_store_transaction(
-                    stream_id=right.stream_id,
-                    partition=message_context().partition,
-                    store_name=self._store_name,
-                ),
-            )
-            tx.set_for_timestamp(timestamp=timestamp, value=value, prefix=key)
+            tx(right).set_for_timestamp(timestamp=timestamp, value=value, prefix=key)
 
-        right = right.update(right_func, metadata=True).filter(lambda value: False)
-        left = left.apply(left_func, metadata=True).filter(
-            lambda value: value is not DISCARDED
-        )
+        right = right.update(right_func, metadata=True).filter(block_all)
+        left = left.apply(left_func, metadata=True).filter(block_discarded)
         return left.concat(right)

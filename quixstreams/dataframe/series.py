@@ -13,6 +13,7 @@ from typing import (
 from typing_extensions import ParamSpec
 
 from quixstreams.context import set_message_context
+from quixstreams.core.stream.exceptions import InvalidOperation
 from quixstreams.core.stream.functions import (
     ApplyCallback,
     ApplyFunction,
@@ -23,7 +24,7 @@ from quixstreams.core.stream.functions import (
 from quixstreams.core.stream.stream import Stream
 from quixstreams.models.messagecontext import MessageContext
 
-from .exceptions import ColumnDoesNotExist, InvalidColumnReference, InvalidOperation
+from .exceptions import ColumnDoesNotExist, InvalidColumnReference
 
 __all__ = ("StreamingSeries",)
 

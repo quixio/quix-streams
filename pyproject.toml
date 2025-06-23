@@ -43,10 +43,12 @@ all = [
     "pymongo>=4.11,<5",
     "pandas>=1.0.0,<3.0",
     "elasticsearch>=8.17,<9",
+    "influxdb>=5.3,<6"
 ]
 
 avro = ["fastavro>=1.8,<2.0"]
 protobuf = ["protobuf>=5.27.2,<7.0"]
+influxdb1 = ["influxdb>=5.3,<6"]
 influxdb3 = ["influxdb3-python[pandas]>=0.7,<1.0"]
 iceberg = ["pyiceberg[pyarrow]>=0.7"]
 iceberg_aws = ["pyiceberg[pyarrow,glue]>=0.7"]

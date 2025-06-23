@@ -73,7 +73,7 @@ class TestKafkaReplicatorSource(Base):
         app.add_source(source, destination_topic)
 
         with pytest.raises(SourceException) as exc:
-            app._run()
+            app.run()
 
         assert isinstance(exc.value.__cause__, ValueError)
         assert str(exc.value.__cause__) == f"Source topic {source_topic.name} not found"
@@ -89,7 +89,7 @@ class TestKafkaReplicatorSource(Base):
         app.add_source(source, destination_topic)
 
         with pytest.raises(SourceException) as exc:
-            app._run()
+            app.run()
 
         assert isinstance(exc.value.__cause__, ValueError)
         assert (
@@ -105,7 +105,7 @@ class TestKafkaReplicatorSource(Base):
         app.add_source(source, destination_topic)
 
         with pytest.raises(SourceException) as exc:
-            app._run()
+            app.run()
 
         assert isinstance(exc.value.__cause__, ValueError)
         assert (
@@ -121,7 +121,7 @@ class TestKafkaReplicatorSource(Base):
         app.add_source(source, destination_topic)
 
         with pytest.raises(SourceException) as exc:
-            app._run()
+            app.run()
 
         assert isinstance(exc.value.__cause__, RuntimeError)
         assert (
@@ -142,7 +142,7 @@ class TestKafkaReplicatorSource(Base):
         app.add_source(source, destination_topic)
 
         with pytest.raises(SourceException) as exc:
-            app._run()
+            app.run()
 
         assert isinstance(exc.value.__cause__, RuntimeError)
         assert (
@@ -213,7 +213,7 @@ class TestKafkaReplicatorSource(Base):
                 raise
 
         executor.submit(_consume, app.config)
-        app._run()
+        app.run()
 
         assert results == data
 
@@ -286,7 +286,7 @@ class TestKafkaReplicatorSource(Base):
                 raise
 
         executor.submit(_consume, app.config)
-        app._run()
+        app.run()
 
         assert results == data[start_offset:]
 
@@ -404,6 +404,6 @@ class TestQuixEnvironmentSource(Base):
                 raise
 
         executor.submit(_consume, app.config)
-        app._run()
+        app.run()
 
         assert results == data

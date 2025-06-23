@@ -6,7 +6,8 @@ from typing import Any, Callable, Mapping, Optional, Union
 try:
     import psycopg2
     from psycopg2 import sql
-    from psycopg2.extras import execute_values
+    from psycopg2.extensions import register_adapter
+    from psycopg2.extras import Json, execute_values
 except ImportError as exc:
     raise ImportError(
         f"Package `{exc.name}` is missing: "
@@ -97,6 +98,8 @@ class PostgreSQLSink(BatchingSink):
             on_client_connect_success=on_client_connect_success,
             on_client_connect_failure=on_client_connect_failure,
         )
+        for t in (dict, list, tuple):
+            register_adapter(t, Json)
         self._table_name = _table_name_setter(table_name)
         self._tables = set()
         self._schema_name = schema_name

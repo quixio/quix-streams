@@ -350,7 +350,7 @@ a clone with this operation added (assign to keep its effect).
 def contains(keys: Union[str, list[str]]) -> StreamingSeries
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L636)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L640)
 
 Check if keys are present in the Row value.
 
@@ -392,7 +392,7 @@ def to_topic(
         key: Optional[Callable[[Any], Any]] = None) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L666)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L670)
 
 Produce current value to a topic. You can optionally specify a new key.
 
@@ -446,7 +446,7 @@ def set_timestamp(
         func: Callable[[Any, Any, int, Any], int]) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L711)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L715)
 
 Set a new timestamp based on the current message value and its metadata.
 
@@ -499,7 +499,7 @@ def set_headers(
 ) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L754)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L758)
 
 Set new message headers based on the current message value and metadata.
 
@@ -548,7 +548,7 @@ a new StreamingDataFrame instance
 def print(pretty: bool = True, metadata: bool = False) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L805)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L809)
 
 Print out the current message value (and optionally, the message metadata) to
 
@@ -611,7 +611,7 @@ def print_table(
                                      int]] = None) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L851)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L855)
 
 Print a table with the most recent records.
 
@@ -704,7 +704,7 @@ sdf.print_table(size=5, title="Live Records", slowdown=1)
 def compose(sink: Optional[VoidExecutor] = None) -> dict[str, VoidExecutor]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L967)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L971)
 
 Compose all functions of this StreamingDataFrame into one big closure.
 
@@ -758,7 +758,7 @@ def test(value: Any,
          topic: Optional[Topic] = None) -> List[Any]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1001)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1005)
 
 A shorthand to test `StreamingDataFrame` with provided value
 
@@ -798,7 +798,7 @@ def tumbling_window(
 ) -> TumblingTimeWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1040)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1044)
 
 Create a time-based tumbling window transformation on this StreamingDataFrame.
 
@@ -890,7 +890,7 @@ def tumbling_count_window(
         name: Optional[str] = None) -> TumblingCountWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1129)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1133)
 
 Create a count-based tumbling window transformation on this StreamingDataFrame.
 
@@ -963,7 +963,7 @@ def hopping_window(
 ) -> HoppingTimeWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1179)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1183)
 
 Create a time-based hopping window transformation on this StreamingDataFrame.
 
@@ -1066,7 +1066,7 @@ def hopping_count_window(
         name: Optional[str] = None) -> HoppingCountWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1282)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1286)
 
 Create a count-based hopping window transformation on this StreamingDataFrame.
 
@@ -1144,7 +1144,7 @@ def sliding_window(
 ) -> SlidingTimeWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1339)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1343)
 
 Create a time-based sliding window transformation on this StreamingDataFrame.
 
@@ -1242,7 +1242,7 @@ def sliding_count_window(
         name: Optional[str] = None) -> SlidingCountWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1434)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1438)
 
 Create a count-based sliding window transformation on this StreamingDataFrame.
 
@@ -1312,7 +1312,7 @@ sdf = (
 def fill(*columns: str, **mapping: Any) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1487)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1491)
 
 Fill missing values in the message value with a constant value.
 
@@ -1369,7 +1369,7 @@ def drop(columns: Union[str, List[str]],
          errors: Literal["ignore", "raise"] = "raise") -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1539)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1543)
 
 Drop column(s) from the message value (value must support `del`, like a dict).
 
@@ -1413,7 +1413,7 @@ a new StreamingDataFrame instance
 def sink(sink: BaseSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1583)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1587)
 
 Sink the processed data to the specified destination.
 
@@ -1441,7 +1441,7 @@ operations, but branches can still be generated from its originating SDF.
 def concat(other: "StreamingDataFrame") -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1621)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1625)
 
 Concatenate two StreamingDataFrames together and return a new one.
 
@@ -1476,13 +1476,13 @@ a new StreamingDataFrame
 
 ```python
 def join_asof(right: "StreamingDataFrame",
-              how: JoinAsOfHow = "inner",
+              how: AsOfJoinHow = "inner",
               on_merge: Union[OnOverlap, Callable[[Any, Any], Any]] = "raise",
               grace_ms: Union[int, timedelta] = timedelta(days=7),
               name: Optional[str] = None) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1657)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1661)
 
 Join the left dataframe with the records of the right dataframe with
 
@@ -1509,8 +1509,8 @@ a newly added "right" record expires other values with the same key with timesta
 
 - `right`: a StreamingDataFrame to join with.
 - `how`: the join strategy. Can be one of:
-- "inner" - emits the result when the match on the right side is found for the left record.
-- "left" - emits the result for each left record even if there is no match on the right side.
+- "inner" - emit the output for the left record only when the match is found (default)
+- "left" - emit the result for each left record even without matches on the right side
 Default - `"inner"`.
 - `on_merge`: how to merge the matched records together assuming they are dictionaries:
 - "raise" - fail with an error if the same keys are found in both dictionaries
@@ -1518,6 +1518,8 @@ Default - `"inner"`.
 - "keep-right" - prefer the keys from the right record
 - callback - a callback in form "(<left>, <right>) -> <new record>" to merge the records manually.
 Use it to customize the merging logic or when one of the records is not a dictionary.
+WARNING: Custom merge functions must not mutate the input values as this will lead to
+inconsistencies in the state store. Always return a new object instead.
 - `grace_ms`: how long to keep the right records in the store in event time.
 (the time is taken from the records' timestamps).
 It can be specified as either an `int` representing milliseconds or as a `timedelta` object.
@@ -1546,6 +1548,112 @@ sdf_metadata = app.dataframe(app.topic("metadata"))
 sdf_joined = sdf_measurements.join_asof(sdf_metadata, how="inner", grace_ms=timedelta(days=14))
 ```
 
+<a id="quixstreams.dataframe.dataframe.StreamingDataFrame.join_interval"></a>
+
+<br><br>
+
+#### StreamingDataFrame.join\_interval
+
+```python
+def join_interval(
+        right: "StreamingDataFrame",
+        how: IntervalJoinHow = "inner",
+        on_merge: Union[OnOverlap, Callable[[Any, Any], Any]] = "raise",
+        grace_ms: Union[int, timedelta] = timedelta(days=7),
+        name: Optional[str] = None,
+        backward_ms: Union[int, timedelta] = 0,
+        forward_ms: Union[int, timedelta] = 0) -> "StreamingDataFrame"
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1737)
+
+Join the left dataframe with records from the right dataframe that fall within
+
+specified time intervals. This join is useful for matching records that occur
+within a specific time window of each other, rather than just the latest record.
+
+To be joined, the underlying topics of the dataframes must have the same number of partitions
+and use the same partitioner (all keys should be distributed across partitions using the same algorithm).
+
+Joining dataframes belonging to the same topics (aka "self-join") is not supported.
+
+**Notes**:
+
+  When both `backward_ms` and `forward_ms` are set to 0 (default), the join will only match
+  records with exactly the same timestamp.
+  
+  How it works:
+  - Records from both sides are stored in the state store
+  - For each record on the left side:
+  - Look for matching records on the right side that fall within the specified time interval
+  - If matches are found, merge the records according to the `on_merge` logic
+  - For inner joins, only emit if matches are found
+  - For left joins, emit even without matches
+  - For each record on the right side:
+  - Look for matching records on the left side that fall within the specified time interval
+  - Merge all matching records according to the `on_merge` logic
+  
+  
+<br>
+***Arguments:***
+  
+  - `right`: a StreamingDataFrame to join with.
+  - `how`: the join strategy. Can be one of:
+  - "inner" - emit the output for the left record only when the match is found (default)
+  - "left" - emit the result for each left record even without matches on the right side
+  - "right" - emit the result for each right record even without matches on the left side
+  - "outer" - emit the output for both left and right records even without matches
+  Default - `"inner"`.
+  - `on_merge`: how to merge the matched records together assuming they are dictionaries:
+  - "raise" - fail with an error if the same keys are found in both dictionaries
+  - "keep-left" - prefer the keys from the left record
+  - "keep-right" - prefer the keys from the right record
+  - callback - a callback in form "(<left>, <right>) -> <new record>" to merge the records manually.
+  Use it to customize the merging logic or when one of the records is not a dictionary.
+- `WARNING` - Custom merge functions must not mutate the input values as this will lead to
+  unexpected exceptions or incorrect data in the joined stream. Always return a new object instead.
+  - `grace_ms`: how long to keep records in the store in event time.
+  (the time is taken from the records' timestamps).
+  It can be specified as either an `int` representing milliseconds or as a `timedelta` object.
+  The records are expired per key when the new record gets added.
+  Default - 7 days.
+  - `name`: The unique identifier of the underlying state store.
+  If not provided, it will be generated based on the underlying topic names.
+  Provide a custom name if you need to join the same right dataframe multiple times
+  within the application.
+  - `backward_ms`: How far back in time to look for matches from the right side.
+  Can be specified as either an `int` representing milliseconds or as a `timedelta` object.
+  Must not be greater than `grace_ms`. Default - 0.
+  - `forward_ms`: How far forward in time to look for matches from the right side.
+  Can be specified as either an `int` representing milliseconds or as a `timedelta` object.
+  Default - 0.
+  
+
+**Example**:
+
+  
+```python
+from datetime import timedelta
+from quixstreams import Application
+
+app = Application()
+
+sdf_measurements = app.dataframe(app.topic("measurements"))
+sdf_events = app.dataframe(app.topic("events"))
+
+# Join records from the topic "measurements"
+# with records from "events" that occur within a 5-minute window
+# before and after each measurement
+sdf_joined = sdf_measurements.join_interval(
+    right=sdf_events,
+    how="inner",
+    on_merge="keep-left",
+    grace_ms=timedelta(days=7),
+    backward_ms=timedelta(minutes=5),
+    forward_ms=timedelta(minutes=5)
+)
+```
+
 <a id="quixstreams.dataframe.dataframe.StreamingDataFrame.join_lookup"></a>
 
 <br><br>
@@ -1560,7 +1668,7 @@ def join_lookup(
 ) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1731)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1842)
 
 Note: This is an experimental feature, and its API is likely to change in the future.
 
@@ -1621,7 +1729,7 @@ sdf = sdf.join_lookup(lookup, fields)
 def register_store(store_type: Optional[StoreTypes] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1820)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1931)
 
 Register the default store for the current stream_id in StateStoreManager.
 
@@ -1637,7 +1745,7 @@ Register the default store for the current stream_id in StateStoreManager.
 class StreamingSeries()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L58)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L59)
 
 `StreamingSeries` are typically generated by `StreamingDataframes` when getting
 elements from, or performing certain operations on, a `StreamingDataframe`,
@@ -1704,7 +1812,7 @@ def from_apply_callback(cls, func: ApplyWithMetadataCallback,
                         sdf_id: int) -> "StreamingSeries"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L124)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L125)
 
 Create a StreamingSeries from a function.
 
@@ -1733,7 +1841,7 @@ instance of `StreamingSeries`
 def apply(func: ApplyCallback) -> "StreamingSeries"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L151)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L152)
 
 Add a callable to the execution list for this series.
 
@@ -1785,7 +1893,7 @@ a new `StreamingSeries` with the new callable added
 def compose_returning() -> ReturningExecutor
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L185)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L186)
 
 Compose a list of functions from this StreamingSeries and its parents into one
 
@@ -1818,7 +1926,7 @@ def test(value: Any,
          ctx: Optional[MessageContext] = None) -> Any
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L200)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L201)
 
 A shorthand to test `StreamingSeries` with provided value
 
@@ -1850,7 +1958,7 @@ result of `StreamingSeries`
 def isin(other: Container) -> "StreamingSeries"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L265)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L266)
 
 Check if series value is in "other".
 
@@ -1895,7 +2003,7 @@ new StreamingSeries
 def contains(other: Union["StreamingSeries", object]) -> "StreamingSeries"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L296)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L297)
 
 Check if series value contains "other"
 
@@ -1940,7 +2048,7 @@ new StreamingSeries
 def is_(other: Union["StreamingSeries", object]) -> "StreamingSeries"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L321)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L322)
 
 Check if series value refers to the same object as `other`
 
@@ -1982,7 +2090,7 @@ new StreamingSeries
 def isnot(other: Union["StreamingSeries", object]) -> "StreamingSeries"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L344)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L345)
 
 Check if series value does not refer to the same object as `other`
 
@@ -2025,7 +2133,7 @@ new StreamingSeries
 def isnull() -> "StreamingSeries"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L368)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L369)
 
 Check if series value is None.
 
@@ -2062,7 +2170,7 @@ new StreamingSeries
 def notnull() -> "StreamingSeries"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L391)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L392)
 
 Check if series value is not None.
 
@@ -2099,7 +2207,7 @@ new StreamingSeries
 def abs() -> "StreamingSeries"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L414)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L415)
 
 Get absolute value of the series value.
 
