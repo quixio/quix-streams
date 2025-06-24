@@ -7,7 +7,7 @@ from .base import (
     SinkBatch,
     SinkManager,
 )
-from .core.datalake import QuixDatalakeSink, QuixDatalakeSinkConfig
+from .core.datalake import QuixDatalakeSink
 
 __all__ = [
     "BaseSink",
@@ -18,5 +18,4 @@ __all__ = [
     "ClientConnectSuccessCallback",
     "ClientConnectFailureCallback",
     "QuixDatalakeSink",
-    "QuixDatalakeSinkConfig",
 ]

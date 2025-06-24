@@ -1,6 +1,5 @@
-from .sink import QuixDatalakeSink, QuixDatalakeSinkConfig
+from .sink import QuixDatalakeSink
 
 __all__ = [
     "QuixDatalakeSink",
-    "QuixDatalakeSinkConfig",
 ]

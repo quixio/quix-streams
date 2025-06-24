@@ -9,7 +9,6 @@ from fastavro import reader as avro_reader
 
 from quixstreams.sinks.core.datalake.sink import (
     QuixDatalakeSink,
-    QuixDatalakeSinkConfig,
 )
 
 
@@ -42,12 +41,7 @@ def tmp_dir():
 @pytest.fixture
 def sink(tmp_dir):
     """Fixture to create a QuixDatalakeSink instance."""
-    config = QuixDatalakeSinkConfig(
-        storage_url=f"dummy://{tmp_dir}/ws1",
-        storage_options=None,
-        datacatalog_api_url=None,
-    )
-    return QuixDatalakeSink(config)
+    return QuixDatalakeSink(storage_url=f"dummy://{tmp_dir}/ws1")
 
 
 def walk(directory):
@@ -81,16 +75,16 @@ def test_quix_datalake_sink_basic(tmp_dir, sink):
             assert records
             assert len(records) == 1
 
-    # Check Parquet files: only one per topic/partition per flush
-    assert len(parquet_files) == 1
+    # There should be one Parquet file per key
+    assert len(parquet_files) == 2
     for parquet_path in parquet_files:
         table = pq.read_table(parquet_path)
-        # Should have one row per Avro file
-        assert table.num_rows == 2
+        # Each Parquet file should have one row (one Avro file per key)
+        assert table.num_rows == 1
 
 
 def test_quix_datalake_sink_multiple_partitions(tmp_dir, sink):
-    # Add records to two partitions
+    # Add records to two partitions, same key
     sink.add(b"val1", b"key1", 1000, [], "testtopic", 0, 1)
     sink.add(b"val2", b"key1", 2000, [], "testtopic", 1, 2)
     sink.flush()
@@ -104,10 +98,10 @@ def test_quix_datalake_sink_multiple_partitions(tmp_dir, sink):
             assert records
             assert len(records) == 1
 
+    # There should be one Parquet file per key/partition, each with one row (since only one Avro file per partition)
     assert len(parquet_files) == 2
     for parquet_path in parquet_files:
         table = pq.read_table(parquet_path)
-        # Each should have one row (one Avro file per partition)
         assert table.num_rows == 1
 
 
@@ -139,7 +133,7 @@ def test_quix_datalake_sink_headers(tmp_dir, sink):
 
 
 def test_quix_datalake_sink_multiple_records(tmp_dir, sink):
-    # Add multiple records with the same key and partition
+    # Add multiple records with the same key and partition, flush after each
     for i in range(5):
         sink.add(f"val{i}".encode(), b"key1", 1000 + i, [], "testtopic", 0, i)
     sink.flush()
@@ -155,7 +149,7 @@ def test_quix_datalake_sink_multiple_records(tmp_dir, sink):
             for idx, rec in enumerate(records):
                 assert rec["value"] == f"val{idx}".encode()
 
-    # Parquet index should have one file and one row
+    # There should be one Parquet file for the key/partition, with one row (since only one Avro file)
     assert len(parquet_files) == 1
     for parquet_path in parquet_files:
         table = pq.read_table(parquet_path)
@@ -163,7 +157,7 @@ def test_quix_datalake_sink_multiple_records(tmp_dir, sink):
 
 
 def test_quix_datalake_sink_multiple_flush(tmp_dir, sink):
-    # Add records, flush, add more, flush again
+    # Add records, flush, add more, flush again (same key/partition)
     sink.add(b"val1", b"key1", 1000, [], "testtopic", 0, 1)
     sink.flush()
     sink.add(b"val2", b"key1", 2000, [], "testtopic", 0, 2)
@@ -178,8 +172,87 @@ def test_quix_datalake_sink_multiple_flush(tmp_dir, sink):
             records = list(avro_reader(f))
             assert len(records) == 1
 
-    # Parquet index should have two files (one per flush), each with one row
-    assert len(parquet_files) == 2
+    # There should be one Parquet file for the key/partition, with two rows (one for each Avro file)
+    assert len(parquet_files) == 1
     for parquet_path in parquet_files:
         table = pq.read_table(parquet_path)
-        assert table.num_rows == 1
+        assert table.num_rows == 2
+
+
+def test_notify_datacatalog_success(tmp_dir):
+    """Test that _notify_datacatalog sends a POST and logs success."""
+    sink = QuixDatalakeSink(
+        storage_url=f"dummy://{tmp_dir}/ws1",
+        datacatalog_api_url="http://mocked/api",
+        datacatalog_timeout_sec=23,
+    )
+
+    class Resp:
+        def raise_for_status(self):
+            pass
+
+    with mock.patch.object(
+        sink._http_session, "post", return_value=Resp()
+    ) as mock_post:
+        sink.add(b"val1", b"key1", 1000, [], "mytopic", 0, 1)
+        sink.add(b"val2", b"key2", 2000, [], "mytopic", 0, 2)
+        sink.flush()
+
+        mock_post.assert_called_with(
+            "http://mocked/api/mytopic/refresh-cache",
+            timeout=23,
+        )
+
+
+def test_notify_datacatalog_failure(tmp_dir, caplog):
+    """Test that _notify_datacatalog logs a warning on failure."""
+    sink = QuixDatalakeSink(
+        storage_url=f"dummy://{tmp_dir}/ws1",
+        datacatalog_api_url="http://mocked/api",
+    )
+
+    class Resp:
+        def raise_for_status(self):
+            raise Exception("fail!")
+
+    with mock.patch.object(sink._http_session, "post", return_value=Resp()):
+        sink.add(b"val1", b"key1", 1000, [], "mytopic", 0, 1)
+        sink.add(b"val2", b"key2", 2000, [], "mytopic", 0, 2)
+
+        with caplog.at_level("WARNING"):
+            sink.flush()
+
+    assert any(
+        "Data Catalog notification failed" in r for r in caplog.text.splitlines()
+    )
+
+
+def test_notify_datacatalog_called_on_flush(tmp_dir):
+    """Test that _notify_datacatalog is called once per topic on flush, after all partitions."""
+    sink = QuixDatalakeSink(
+        storage_url=f"dummy://{tmp_dir}/ws1",
+        datacatalog_api_url="http://mocked/api",
+    )
+
+    class Resp:
+        def raise_for_status(self):
+            pass
+
+    with mock.patch.object(
+        sink._http_session, "post", return_value=Resp()
+    ) as mock_post:
+        # Add records for two topics, each with two partitions
+        sink.add(b"val1", b"key1", 1000, [], "topic1", 0, 1)
+        sink.add(b"val2", b"key2", 2000, [], "topic1", 1, 2)
+        sink.add(b"val3", b"key3", 3000, [], "topic2", 0, 3)
+        sink.add(b"val4", b"key4", 4000, [], "topic2", 1, 4)
+        sink.flush()
+
+        # Should be called once per topic
+        assert mock_post.call_count == 2
+        expected_calls = [
+            mock.call("http://mocked/api/topic1/refresh-cache", timeout=5),
+            mock.call("http://mocked/api/topic2/refresh-cache", timeout=5),
+        ]
+        for call in expected_calls:
+            assert call in mock_post.call_args_list

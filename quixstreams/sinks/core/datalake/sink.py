@@ -1,7 +1,6 @@
 import logging
 import time
 from collections import defaultdict
-from dataclasses import dataclass
 from typing import Any, Dict, Optional, TypedDict, Union
 
 import fsspec
@@ -41,15 +40,6 @@ AVRO_SCHEMA = {
 }
 
 
-@dataclass
-class QuixDatalakeSinkConfig:
-    storage_url: str  # fsspec URL (e.g., abfs://, s3://, etc)
-    storage_options: Optional[Dict[str, Any]] = None
-    datacatalog_api_url: Optional[str] = None
-    avro_compression: str = "snappy"
-    datacatalog_timeout_sec: int = 5
-
-
 class AvroItem(TypedDict):
     value: Any
     key: bytes
@@ -82,23 +72,58 @@ class FileMetadata(TypedDict):
     created_at: int
 
 
+class IndexFile(TypedDict):
+    topic: str
+    partition: int
+    start_offset: int
+    key: str
+    files: list[FileMetadata]
+    created_at: int
+
+
 class QuixDatalakeSink(BaseSink):
     """
     Sink for persisting raw Kafka topic data to Blob Storage in Avro format, with Hive-style partitioning and Parquet metadata for Quix DataLake (DuckDB-compatible).
     """
 
-    def __init__(self, config: QuixDatalakeSinkConfig) -> None:
-        super().__init__()
-        self.config = config
+    def __init__(
+        self,
+        storage_url: str,
+        storage_options: Optional[Dict[str, Any]] = None,
+        datacatalog_api_url: Optional[str] = None,
+        avro_compression: str = "snappy",
+        datacatalog_timeout_sec: int = 5,
+    ) -> None:
+        """
+        Initialize the QuixDatalakeSink.
 
-        self.fs: fsspec.AbstractFileSystem = fsspec.filesystem(
-            self._get_protocol(config.storage_url), **(config.storage_options or {})
+        :param storage_url: The root URL for storage (e.g., 's3://bucket/path', 'file:///tmp/path').
+        :param storage_options: Extra options for the fsspec filesystem (e.g., credentials).
+        :param datacatalog_api_url: Optional URL for the Data Catalog API to notify after flush.
+        :param avro_compression: Avro compression codec to use (default: 'snappy').
+        :param datacatalog_timeout_sec: Timeout in seconds for Data Catalog notification (default: 5).
+        """
+        super().__init__()
+        self.storage_url = storage_url
+        self.storage_options = storage_options
+        self.datacatalog_api_url = datacatalog_api_url
+        self.avro_compression = avro_compression
+        self.datacatalog_timeout_sec = datacatalog_timeout_sec
+
+        self._fs: fsspec.AbstractFileSystem = fsspec.filesystem(
+            self._get_protocol(storage_url), **(storage_options or {})
         )
         self._http_session = requests.Session()
-        # Change: topic -> partition -> Batch
         self._topic_partition_data: dict[str, dict[int, Batch]] = defaultdict(dict)
+        self._index: dict[tuple[str, int, str], IndexFile] = {}
 
     def _get_protocol(self, url: str) -> str:
+        """
+        Extract the protocol from a storage URL (e.g., 's3', 'file').
+
+        :param url: The storage URL.
+        :return: The protocol string.
+        """
         return url.split(":")[0]
 
     def add(
@@ -111,6 +136,17 @@ class QuixDatalakeSink(BaseSink):
         partition: int,
         offset: int,
     ) -> None:
+        """
+        Add a record to the sink buffer for a given topic and partition.
+
+        :param value: The record value (bytes or serializable object).
+        :param key: The record key (str or bytes).
+        :param timestamp: The record timestamp (epoch ms).
+        :param headers: List of (key, value) tuples for record headers.
+        :param topic: Kafka topic name.
+        :param partition: Kafka partition number.
+        :param offset: Kafka record offset.
+        """
         if partition not in self._topic_partition_data[topic]:
             self._topic_partition_data[topic][partition] = {
                 "topic": topic,
@@ -139,6 +175,10 @@ class QuixDatalakeSink(BaseSink):
         )
 
     def flush(self) -> None:
+        """
+        Persist all buffered records to Avro and Parquet files, and notify Data Catalog if configured.
+        Clears the buffer after flushing.
+        """
         if not self._topic_partition_data:
             logger.debug("No records to flush")
             return
@@ -146,15 +186,8 @@ class QuixDatalakeSink(BaseSink):
         for topic, partitions in self._topic_partition_data.items():
             for partition, batch in partitions.items():
                 start = time.time()
-
-                created_files = self._flush_batch(batch)
-                self._update_metadata(
-                    topic=topic,
-                    partition=partition,
-                    start_offset=batch["start_offset"],
-                    end_offset=batch["end_offset"],
-                    files=created_files,
-                )
+                for records in batch["keys"].values():
+                    self._persist_records(records, batch)
 
                 elapsed = time.time() - start
                 logger.info(
@@ -165,82 +198,117 @@ class QuixDatalakeSink(BaseSink):
 
         self._topic_partition_data.clear()
 
-    def _flush_batch(self, batch: Batch) -> list[FileMetadata]:
-        created_files = []
-        for key, records in batch["keys"].items():
-            start = time.time()
-            metadata = self._write_avro_file(
-                batch,
-                key,
-                records,
-            )
-            elapsed = time.time() - start
-            logger.debug(
-                f"Flushed {metadata['record_count']} records to {metadata['path']} "
-                f"offsets {metadata['start_offset']}..{metadata['end_offset']} "
-                f"in {elapsed:.3f}s, {metadata['file_size_bytes']} bytes"
-            )
-            created_files.append(metadata)
-        return created_files
+    def _persist_records(self, records: list[AvroItem], batch: Batch) -> None:
+        """
+        Write a batch of records for a single key to Avro and update the Parquet index.
+
+        :param records: List of AvroItem dicts for a single key.
+        :param batch: Batch metadata for the topic/partition.
+        """
+        start = time.time()
+
+        decoded_key = records[0]["key"].decode("utf-8", errors="backslashreplace")
+
+        file = self._write_avro_file(
+            batch,
+            decoded_key,
+            records,
+        )
+
+        index_key = (batch["topic"], batch["partition"], decoded_key)
+        if index_key not in self._index:
+            # Create a new index entry if it doesn't exist
+            self._index[index_key] = {
+                "topic": batch["topic"],
+                "partition": batch["partition"],
+                "start_offset": batch["start_offset"],
+                "key": decoded_key,
+                "files": [],
+                "created_at": round(time.time() * 1000),  # Store as milliseconds
+            }
+
+        index = self._index[index_key]
+        index["files"].append(file)
+        self._write_parquet_index(index)
+
+        if len(index["files"]) >= 100:
+            del self._index[index_key]  # Remove index entry if it has too many files
+
+        elapsed = time.time() - start
+        logger.debug(
+            f"Flushed {file['record_count']} records to {file['path']} "
+            f"offsets {file['start_offset']}..{file['end_offset']} "
+            f"in {elapsed:.3f}s, {file['file_size_bytes']} bytes"
+        )
 
     def _write_avro_file(
         self,
         batch: Batch,
-        key: bytes,
+        key: str,
         records: list[AvroItem],
     ) -> FileMetadata:
-        record_count = len(records)
-        start_date = time.strftime("%Y-%m-%d", time.gmtime(batch["min_ts"] // 1000))
-        decoded_key = key.decode("utf-8", errors="backslashreplace")
-        avro_fname = f"ts_{batch['min_ts']}_{batch['max_ts']}_part_{batch['partition']}_off_{batch['start_offset']}_{batch['end_offset']}.avro.{self.config.avro_compression}"
-        avro_path = f"Raw/Topic={batch['topic']}/Key={decoded_key}/Start={start_date}/{avro_fname}"
-        full_path = f"{self.config.storage_url.rstrip('/')}/{avro_path}"
+        """
+        Write records to an Avro file in the configured storage.
 
-        with self.fs.open(full_path, "wb") as f:
-            avro_writer(f, AVRO_SCHEMA, records, codec=self.config.avro_compression)
+        :param batch: Batch metadata for the topic/partition.
+        :param key: The decoded key string.
+        :param records: List of AvroItem dicts.
+        :return: FileMetadata describing the written Avro file.
+        """
+        start_date = time.strftime("%Y-%m-%d", time.gmtime(batch["min_ts"] // 1000))
+        avro_fname = f"ts_{batch['min_ts']}_{batch['max_ts']}_part_{batch['partition']}_off_{batch['start_offset']}_{batch['end_offset']}.avro.{self.avro_compression}"
+        avro_path = (
+            f"Raw/Topic={batch['topic']}/Key={key}/Start={start_date}/{avro_fname}"
+        )
+        full_path = f"{self.storage_url.rstrip('/')}/{avro_path}"
+
+        with self._fs.open(full_path, "wb") as f:
+            avro_writer(f, AVRO_SCHEMA, records, codec=self.avro_compression)
 
         # Get file size after closing the file
-        file_size: Optional[int] = self.fs.size(full_path)
+        file_size: Optional[int] = self._fs.size(full_path)
 
         file: FileMetadata = {
             "path": avro_path,
             "topic": batch["topic"],
-            "key": decoded_key,
+            "key": key,
             "partition": batch["partition"],
             "timestamp_start": batch["min_ts"],
             "timestamp_end": batch["max_ts"],
             "start_offset": batch["start_offset"],
             "end_offset": batch["end_offset"],
-            "record_count": record_count,
+            "record_count": len(records),
             "file_size_bytes": 0 if file_size is None else file_size,
             "created_at": round(time.time() * 1000),  # Store as milliseconds
         }
         return file
 
-    def _update_metadata(
+    def _write_parquet_index(
         self,
-        topic: str,
-        partition: int,
-        start_offset: int,
-        end_offset: int,
-        files: list[FileMetadata],
+        index: IndexFile,
     ) -> None:
-        index_path = f"Metadata/Topic={topic}/index_{partition}_{start_offset}_{end_offset}.parquet"
-        full_index_path = f"{self.config.storage_url.rstrip('/')}/{index_path}"
+        """
+        Write or update the Parquet index file for a given key/partition.
 
-        # Write all metadata rows at once, overwriting the file
-        with self.fs.open(full_index_path, "wb") as f:
-            pq.write_table(pa.Table.from_pylist(files), f)
+        :param index: IndexFile metadata for the key/partition.
+        """
+        index_path = f"Metadata/Topic={index['topic']}/Key={index['key']}/index_raw_{index['partition']}_{index['start_offset']}.parquet"
+        full_index_path = f"{self.storage_url.rstrip('/')}/{index_path}"
+        with self._fs.open(full_index_path, "wb") as f:
+            pq.write_table(pa.Table.from_pylist(index["files"]), f)
 
     def _notify_datacatalog(self, topic: str) -> None:
-        if not self.config.datacatalog_api_url:
+        """
+        Notify the Data Catalog API to refresh cache for a given topic, if configured.
+
+        :param topic: The Kafka topic name.
+        """
+        if not self.datacatalog_api_url:
             return
         logger.debug(f"Notifying Data Catalog for topic: {topic}")
-        url = f"{self.config.datacatalog_api_url}/{topic}/refresh-cache"
+        url = f"{self.datacatalog_api_url}/{topic}/refresh-cache"
         try:
-            resp = self._http_session.post(
-                url, timeout=self.config.datacatalog_timeout_sec
-            )
+            resp = self._http_session.post(url, timeout=self.datacatalog_timeout_sec)
             resp.raise_for_status()
         except Exception as e:
             logger.warning(f"Data Catalog notification failed: {url} error={e}")
