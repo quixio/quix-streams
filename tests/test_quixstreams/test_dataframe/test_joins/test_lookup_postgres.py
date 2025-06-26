@@ -1,4 +1,6 @@
 import time
+from collections import deque
+from functools import wraps
 from unittest.mock import patch
 
 import psycopg2
@@ -12,50 +14,50 @@ from quixstreams.dataframe.joins.lookups.postgresql import (
 
 
 class MockPostgresConnect:
+    """
+    This allows you to mock out a postgres connection with a single populated table.
+
+    It queues up `MockPostgresCursor`s with mock results based on a given
+    PostgresLookupFields or PostgresLookupQueryFields.
+
+    Simply call `prepare_lookups` (PostgresLookupFields) or `prepare_lookup_queries`
+    (PostgresLookupQueryFields) before each PostgresLookup.join().
+    """
+
     def __init__(self):
-        self._db_data = [
+        self._table_data = [
             {"id": "k1", "col1": "foo", "col2": 1},
             {"id": "k1", "col1": "foo0", "col2": 0},
             {"id": "k1", "col1": "foo5", "col2": 5},
             {"id": "k2", "col1": "bar", "col2": 2},
         ]
-        self._query_result = [(1,)]  # 'SELECT 1' for connect placeholder
-        self._fields_results = {}
-        self._executors = []
+        self._pending_cursors = deque()
+        self._add_cursor([(1,)])  # handles SELECT 1 (initial connect check)
 
     def update_data(self, data):
-        self._db_data = data
+        self._table_data = data
 
-    def _execute_lookup(self, columns, on, order_by, order_dir, on_val):
-        """
-        Since we are assigning what are essentially lambda functions in a
-        loop, the `inner` pattern avoids "late binding" issue that comes from looping.
-        """
-
-        def inner():
-            data = filter(lambda row: row[on] == on_val, self._db_data)
-            if order_by:
-                data = sorted(
-                    data, key=lambda d: d[order_by], reverse=(order_dir != "ASC")
-                )
-            self._query_result = [tuple(row[col] for col in columns) for row in data]
-
-        return inner
+    def _lookup_result(self, columns, on, order_by, order_dir, on_val):
+        data = filter(lambda row: row[on] == on_val, self._table_data)
+        if order_by:
+            data = sorted(data, key=lambda d: d[order_by], reverse=(order_dir != "ASC"))
+        return [tuple(row[col] for col in columns) for row in data]
 
     def prepare_lookups(
         self, fields: dict[str, PostgresLookupField], on_val: str, error=False
     ):
-        self._executors = []
+        """
+        Here we can use the params of PostgresLookupField to translate a postgres query
+        into equivalent python operations. We pack this result onto a mock cursor, which is
+        popped when the PostgresLookup.join is called.
+        """
+        self._pending_cursors.clear()
         if error:
-
-            def _raise():
-                raise psycopg2.Error("mock connection error")
-
-            self._executors.append(_raise)
+            self._add_cursor(psycopg2.Error("mock connection error"))
             return
         for lookup in fields.values():
-            self._executors.append(
-                self._execute_lookup(
+            self._add_cursor(
+                self._lookup_result(
                     lookup.columns,
                     lookup.on,
                     lookup.order_by,
@@ -63,51 +65,74 @@ class MockPostgresConnect:
                     on_val,
                 )
             )
-        self._executors.reverse()
-
-    def _execute_lookup_query(self, result):
-        def inner():
-            self._query_result = result
-
-        return inner
 
     def prepare_lookup_queries(self, results: dict[str, list[tuple]], error=False):
-        self._executors = []
+        """
+        In reality this doesn't really mock much since it's originally supposed to be a
+        user-provided query. Mostly here to confirm the cache works.
+        """
+        self._pending_cursors.clear()
         if error:
-
-            def _raise():
-                raise psycopg2.Error("mock connection error")
-
-            self._executors.append(_raise)
+            self._add_cursor(psycopg2.Error("mock connection error"))
             return
         for result in results.values():
-            self._executors.append(self._execute_lookup_query(result))
-        self._executors.reverse()
+            self._add_cursor(result)
 
-    def execute(self, *args, **kwargs):
-        if self._executors:
-            self._executors.pop()()
+    def _add_cursor(self, result):
+        self._pending_cursors.append(MockPostgresCursor(result))
 
     def cursor(self):
-        return self
+        return self._pending_cursors.popleft()
 
-    def fetchone(self):
-        return self._query_result[0] if self._query_result else None
 
-    def fetchall(self):
-        return self._query_result
+def _is_executed(method):
+    @wraps(method)
+    def wrapper(self, *args, **kwargs):
+        if not getattr(self, "_executed"):
+            raise RuntimeError("Must call .execute() first")
+        return method(self, *args, **kwargs)
+
+    return wrapper
+
+
+class MockPostgresCursor:
+    """
+    A mock cursor, with the expected result already packed on it;
+    `execute` just allows it to return the result.
+    """
+
+    def __init__(self, result):
+        self._result = result
+        self._executed = False
+
+    def set_result(self, result):
+        self._result = result
+
+    def execute(self, *args, **kwargs):
+        if isinstance(self._result, Exception):
+            raise self._result
+        self._executed = True
 
     def close(self):
-        return
+        self._executed = False
 
+    @_is_executed
+    def fetchone(self):
+        return self._result[0] if self._result else None
+
+    @_is_executed
+    def fetchall(self):
+        return self._result
+
+    @_is_executed
     def __iter__(self):
-        return iter(self._query_result)
+        return iter(self._result)
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        return
+        self.close()
 
 
 @pytest.fixture
@@ -131,7 +156,7 @@ def postgres_lookup(mock_postgres):
     )
 
 
-def test_sqlite_lookup_basic(mock_postgres, postgres_lookup):
+def test_postgres_lookup_basic(mock_postgres, postgres_lookup):
     postgres_connection = mock_postgres
     lookup = postgres_lookup
     fields = {"f": PostgresLookupField(table="test", columns=["col1", "col2"], on="id")}
@@ -149,7 +174,7 @@ def test_sqlite_lookup_basic(mock_postgres, postgres_lookup):
     assert value["f"] == {"col1": "bar", "col2": 2}
 
 
-def test_sqlite_lookup_cache(mock_postgres, postgres_lookup):
+def test_postgres_lookup_cache(mock_postgres, postgres_lookup):
     postgres_connection = mock_postgres
     lookup = postgres_lookup
     join_value = "k1"
@@ -195,7 +220,7 @@ def test_sqlite_lookup_cache(mock_postgres, postgres_lookup):
     assert info == {"hits": 1, "misses": 2, "size": 1, "maxsize": 1000}
 
 
-def test_sqlite_lookup_no_ttl(mock_postgres, postgres_lookup):
+def test_postgres_lookup_no_ttl(mock_postgres, postgres_lookup):
     postgres_connection = mock_postgres
     lookup = postgres_lookup
     join_value = "k1"
@@ -227,7 +252,7 @@ def test_sqlite_lookup_no_ttl(mock_postgres, postgres_lookup):
     assert value["f"] == {"col1": "baz"}
 
 
-def test_sqlite_lookup_orderby(mock_postgres, postgres_lookup):
+def test_postgres_lookup_orderby(mock_postgres, postgres_lookup):
     postgres_connection = mock_postgres
     lookup = postgres_lookup
     join_value = "k1"
@@ -263,7 +288,7 @@ def test_sqlite_lookup_orderby(mock_postgres, postgres_lookup):
     }
 
 
-def test_sqlite_lookup_invalid_identifier():
+def test_postgres_lookup_invalid_identifier():
     with pytest.raises(ValueError):
         PostgresLookupField(table="test;DROP TABLE test", columns=["col1"], on="id")
 
@@ -271,7 +296,7 @@ def test_sqlite_lookup_invalid_identifier():
         PostgresLookupField(table="test", columns=["col1;DROP"], on="id")
 
 
-def test_sqlite_lookup_default(mock_postgres, postgres_lookup):
+def test_postgres_lookup_default(mock_postgres, postgres_lookup):
     postgres_connection = mock_postgres
     lookup = postgres_lookup
     join_value = "missing"
@@ -287,7 +312,7 @@ def test_sqlite_lookup_default(mock_postgres, postgres_lookup):
     assert value["f"] == "notfound"
 
 
-def test_sqlite_lookup_error(mock_postgres, postgres_lookup):
+def test_postgres_lookup_error(mock_postgres, postgres_lookup):
     """
     Emulate a closed connection by raising an error during query
     """
@@ -306,7 +331,7 @@ def test_sqlite_lookup_error(mock_postgres, postgres_lookup):
         lookup.join(fields, join_value, {}, key=None, timestamp=0, headers=None)
 
 
-def test_sqlite_lookup_query_field(mock_postgres, postgres_lookup):
+def test_postgres_lookup_query_field(mock_postgres, postgres_lookup):
     postgres_connection = mock_postgres
     lookup = postgres_lookup
     fields = {
@@ -332,7 +357,7 @@ def test_sqlite_lookup_query_field(mock_postgres, postgres_lookup):
     assert value["f"] == (2,)
 
 
-def test_sqlite_lookup_field_all_rows(mock_postgres, postgres_lookup):
+def test_postgres_lookup_field_all_rows(mock_postgres, postgres_lookup):
     postgres_connection = mock_postgres
     lookup = postgres_lookup
     join_value = "k1"
@@ -355,7 +380,7 @@ def test_sqlite_lookup_field_all_rows(mock_postgres, postgres_lookup):
     assert len(value["f"]) == 3
 
 
-def test_sqlite_lookup_query_field_all_rows(mock_postgres, postgres_lookup):
+def test_postgres_lookup_query_field_all_rows(mock_postgres, postgres_lookup):
     postgres_connection = mock_postgres
     lookup = postgres_lookup
 
