@@ -106,7 +106,7 @@ class Producer:
                     "enable.idempotence": True,
                     # Respect the transactional.id if it's passed
                     "transactional.id": self._producer_config.get(
-                        "transcational.id", str(uuid.uuid4())
+                        "transactional.id", str(uuid.uuid4())
                     ),
                 }
             )
