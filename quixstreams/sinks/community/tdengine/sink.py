@@ -17,7 +17,7 @@ from quixstreams.sinks.base import (
     SinkBatch,
 )
 
-from point import Point
+from .point import Point
 
 logger = logging.getLogger(__name__)
 
@@ -42,8 +42,8 @@ class TDengineSink(BatchingSink):
         self,
         host: str,
         database: str,
-        measurement: MeasurementSetter,
-        table_name_key: str,
+        supertable: MeasurementSetter,
+        subtable: Optional[str] = None,
         fields_keys: FieldsSetter = (),
         tags_keys: TagsSetter = (),
         time_key: Optional[str] = None,
@@ -78,13 +78,13 @@ class TDengineSink(BatchingSink):
         :param verify_ssl: if `True`, verifies the SSL certificate.
             Default - `True`.
         :param database: database name
-        :param measurement: measurement name as a string.
+        :param supertable: supertable name as a string.
             Also accepts a single-argument callable that receives the current message
             data as a dict and returns a string.
         :param table_name_key: A tag key whose value is used as the subtable name when writing to TDengine.
             If the data does not contain this tag key, a hash value will be generated from the data as the subtable name.
         :param fields_keys: an iterable (list) of strings used as InfluxDB line protocol "fields".
-            Also accepts a singl e-argument callable that receives the current message
+            Also accepts a single argument callable that receives the current message
             data as a dict and returns an iterable of strings.
             - If present, it must not overlap with "tags_keys".
             - If empty, the whole record value will be used.
@@ -166,12 +166,12 @@ class TDengineSink(BatchingSink):
             )
         else:
             raise ValueError("Either token or username and password must be provided")
-        if table_name_key:
-            if table_name_key not in tags_keys:
+        if subtable:
+            if subtable not in tags_keys:
                 raise ValueError(
-                    f'table_name_key "{table_name_key}" must be present in tags_keys'
+                    f'table_name_key "{subtable}" must be present in tags_keys'
                 )
-            query_params["table_name_key"] = table_name_key
+            query_params["table_name_key"] = subtable
         query_string = urlencode(query_params)
         full_url = f"{base_url}?{query_string}"
         self._client_args = {
@@ -181,7 +181,7 @@ class TDengineSink(BatchingSink):
             "verify_ssl": verify_ssl,
         }
         self._client: Optional[urllib3.PoolManager] = None
-        self._measurement = self._measurement_callable(measurement)
+        self._measurement = self._measurement_callable(supertable)
         self._fields_keys = self._fields_callable(fields_keys)
         self._tags_keys = self._tags_callable(tags_keys)
         self._include_metadata_tags = include_metadata_tags
@@ -241,7 +241,7 @@ class TDengineSink(BatchingSink):
         )
 
     def write(self, batch: SinkBatch):
-        measurement = self._measurement
+        supertable = self._measurement
         fields_keys = self._fields_keys
         tags_keys = self._tags_keys
         time_key = self._time_key
@@ -254,7 +254,7 @@ class TDengineSink(BatchingSink):
             for item in write_batch:
                 value = item.value
                 # Evaluate these before we alter the value
-                _measurement = measurement(value)
+                _measurement = supertable(value)
                 _tags_keys = tags_keys(value)
                 _fields_keys = fields_keys(value)
 
