@@ -5,11 +5,11 @@ import ssl
 import sys
 import time
 from typing import Any, Callable, Iterable, Literal, Mapping, Optional, Union, get_args
-from urllib.parse import urljoin, urlencode
+from urllib.parse import urlencode, urljoin
 
 import urllib3
-from quixstreams.models import HeadersTuples
 
+from quixstreams.models import HeadersTuples
 from quixstreams.sinks.base import (
     BatchingSink,
     ClientConnectFailureCallback,
@@ -38,29 +38,28 @@ SubtableNameSetter = Union[str, SubtableNameCallable]
 
 
 class TDengineSink(BatchingSink):
-
     def __init__(
-            self,
-            host: str,
-            database: str,
-            supertable: SupertableSetter,
-            subtable: SubtableNameSetter,
-            fields_keys: FieldsSetter = (),
-            tags_keys: TagsSetter = (),
-            time_key: Optional[str] = None,
-            time_precision: TimePrecision = "ms",
-            allow_missing_fields: bool = False,
-            include_metadata_tags: bool = False,
-            convert_ints_to_floats: bool = False,
-            batch_size: int = 1000,
-            enable_gzip: bool = True,
-            request_timeout_ms: int = 10_000,
-            on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
-            on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
-            verify_ssl: bool = True,
-            username: str = "",
-            password: str = "",
-            token: str = "",
+        self,
+        host: str,
+        database: str,
+        supertable: SupertableSetter,
+        subtable: SubtableNameSetter,
+        fields_keys: FieldsSetter = (),
+        tags_keys: TagsSetter = (),
+        time_key: Optional[str] = None,
+        time_precision: TimePrecision = "ms",
+        allow_missing_fields: bool = False,
+        include_metadata_tags: bool = False,
+        convert_ints_to_floats: bool = False,
+        batch_size: int = 1000,
+        enable_gzip: bool = True,
+        request_timeout_ms: int = 10_000,
+        on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
+        on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
+        verify_ssl: bool = True,
+        username: str = "",
+        password: str = "",
+        token: str = "",
     ):
         """
         A connector to sink processed data to TDengine.
@@ -155,7 +154,11 @@ class TDengineSink(BatchingSink):
         precision = time_precision
         if precision == "us":
             precision = "u"
-        query_params = {"db": database, "precision": precision, "table_name_key": "__subtable"}
+        query_params = {
+            "db": database,
+            "precision": precision,
+            "table_name_key": "__subtable",
+        }
         header = {
             "Content-Type": "text/plain; charset=utf-8",
         }
@@ -208,7 +211,9 @@ class TDengineSink(BatchingSink):
             return setter
         return lambda value: setter
 
-    def _subtable_name_callable(self, setter: SubtableNameSetter) -> SubtableNameCallable:
+    def _subtable_name_callable(
+        self, setter: SubtableNameSetter
+    ) -> SubtableNameCallable:
         if callable(setter):
             return setter
         return lambda value: setter
@@ -248,14 +253,14 @@ class TDengineSink(BatchingSink):
             raise err
 
     def add(
-            self,
-            value: Any,
-            key: Any,
-            timestamp: int,
-            headers: HeadersTuples,
-            topic: str,
-            partition: int,
-            offset: int,
+        self,
+        value: Any,
+        key: Any,
+        timestamp: int,
+        headers: HeadersTuples,
+        topic: str,
+        partition: int,
+        offset: int,
     ):
         if not isinstance(value, Mapping):
             raise TypeError(
@@ -317,7 +322,11 @@ class TDengineSink(BatchingSink):
                         k: float(v) if isinstance(v, int) else v
                         for k, v in fields.items()
                     }
-                ts = value[time_key] if time_key is not None and time_key in value else item.timestamp
+                ts = (
+                    value[time_key]
+                    if time_key is not None and time_key in value
+                    else item.timestamp
+                )
                 record = {
                     "measurement": _measurement,
                     "tags": tags,

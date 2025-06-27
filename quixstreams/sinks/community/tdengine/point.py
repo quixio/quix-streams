@@ -1,6 +1,6 @@
 import math
 import warnings
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from numbers import Integral
 
@@ -262,7 +262,6 @@ The output Line protocol will be interpret as a comment by InfluxDB. For more in
 def _append_tags(tags):
     _return = []
     for tag_key, tag_value in sorted(tags.items()):
-
         if tag_value is None:
             continue
 
@@ -345,7 +344,6 @@ def _convert_timestamp(timestamp, precision=DEFAULT_WRITE_PRECISION):
         timestamp = date_helper.parse_date(timestamp)
 
     if isinstance(timestamp, timedelta) or isinstance(timestamp, datetime):
-
         if isinstance(timestamp, datetime):
             timestamp = date_helper.to_utc(timestamp) - EPOCH
 

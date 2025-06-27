@@ -5,7 +5,6 @@ import threading
 from datetime import timezone as tz
 from sys import version_info
 
-
 try:
     from dateutil import parser
 except ImportError as exc:
