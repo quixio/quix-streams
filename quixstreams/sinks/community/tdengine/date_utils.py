@@ -5,7 +5,15 @@ import threading
 from datetime import timezone as tz
 from sys import version_info
 
-from dateutil import parser
+
+try:
+    from dateutil import parser
+except ImportError as exc:
+    raise ImportError(
+        'Package "dateutil" is missing: '
+        "run pip install quixstreams[tdengine] to fix it"
+    ) from exc
+
 
 date_helper = None
 

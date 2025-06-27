@@ -9,4 +9,3 @@ jsonschema>=4.3.0
 jsonlines>=4,<5
 rich>=13,<15
 jsonpath_ng>=1.7.0,<2
-python-dateutil
