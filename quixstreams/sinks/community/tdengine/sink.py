@@ -1,14 +1,15 @@
 import base64
+import json
 import logging
 import ssl
 import sys
 import time
 from typing import Any, Callable, Iterable, Literal, Mapping, Optional, Union, get_args
-from urllib.parse import urljoin, urlencode
+from urllib.parse import urlencode, urljoin
 
 import urllib3
-from quixstreams.models import HeadersTuples
 
+from quixstreams.models import HeadersTuples
 from quixstreams.sinks.base import (
     BatchingSink,
     ClientConnectFailureCallback,
@@ -21,29 +22,28 @@ from .point import Point
 
 logger = logging.getLogger(__name__)
 
-
 TimePrecision = Literal["ms", "ns", "us", "s"]
 
 InfluxDBValueMap = dict[str, Union[str, int, float, bool]]
 
 FieldsCallable = Callable[[InfluxDBValueMap], Iterable[str]]
-MeasurementCallable = Callable[[InfluxDBValueMap], str]
+SupertableCallable = Callable[[InfluxDBValueMap], str]
 TagsCallable = Callable[[InfluxDBValueMap], Iterable[str]]
-
+SubtableNameCallable = Callable[[InfluxDBValueMap], str]
 
 FieldsSetter = Union[Iterable[str], FieldsCallable]
-MeasurementSetter = Union[str, MeasurementCallable]
+SupertableSetter = Union[str, SupertableCallable]
 TagsSetter = Union[Iterable[str], TagsCallable]
+SubtableNameSetter = Union[str, SubtableNameCallable]
 
 
 class TDengineSink(BatchingSink):
-
     def __init__(
         self,
         host: str,
         database: str,
-        supertable: MeasurementSetter,
-        subtable: Optional[str] = None,
+        supertable: SupertableSetter,
+        subtable: SubtableNameSetter,
         fields_keys: FieldsSetter = (),
         tags_keys: TagsSetter = (),
         time_key: Optional[str] = None,
@@ -72,7 +72,7 @@ class TDengineSink(BatchingSink):
         > sinking.
 
         :param token: TDengine cloud token
-        :param host: TDengine host in format "https://<host>"
+        :param host: TDengine host in format "http[s]://<host>[:<port>]".
         :param username: TDengine username
         :param password: TDengine password
         :param verify_ssl: if `True`, verifies the SSL certificate.
@@ -81,8 +81,10 @@ class TDengineSink(BatchingSink):
         :param supertable: supertable name as a string.
             Also accepts a single-argument callable that receives the current message
             data as a dict and returns a string.
-        :param table_name_key: A tag key whose value is used as the subtable name when writing to TDengine.
-            If the data does not contain this tag key, a hash value will be generated from the data as the subtable name.
+        :param subtable: subtable name as a string.
+            Also accepts a single-argument callable that receives the current message
+            data as a dict and returns a string.
+            If the subtable name is empty string, a hash value will be generated from the data as the subtable name.
         :param fields_keys: an iterable (list) of strings used as InfluxDB line protocol "fields".
             Also accepts a single argument callable that receives the current message
             data as a dict and returns an iterable of strings.
@@ -148,10 +150,15 @@ class TDengineSink(BatchingSink):
                 )
         url_path = "influxdb/v1/write"
         base_url = urljoin(host, url_path)
+        sql_url = urljoin(host, "rest/sql")
         precision = time_precision
         if precision == "us":
             precision = "u"
-        query_params = {"db": database, "precision": precision}
+        query_params = {
+            "db": database,
+            "precision": precision,
+            "table_name_key": "__subtable",
+        }
         header = {
             "Content-Type": "text/plain; charset=utf-8",
         }
@@ -159,6 +166,7 @@ class TDengineSink(BatchingSink):
             header["Accept-Encoding"] = "gzip"
         if token != "":
             query_params["token"] = token
+            sql_url = urljoin(sql_url, f"?token={token}")
         elif username != "" and password != "":
             basic_auth = f"{username}:{password}"
             header["authorization"] = (
@@ -166,22 +174,19 @@ class TDengineSink(BatchingSink):
             )
         else:
             raise ValueError("Either token or username and password must be provided")
-        if subtable:
-            if subtable not in tags_keys:
-                raise ValueError(
-                    f'table_name_key "{subtable}" must be present in tags_keys'
-                )
-            query_params["table_name_key"] = subtable
         query_string = urlencode(query_params)
         full_url = f"{base_url}?{query_string}"
         self._client_args = {
             "url": full_url,
+            "sql_url": sql_url,
             "header": header,
             "timeout": request_timeout_ms,
             "verify_ssl": verify_ssl,
+            "database": database,
         }
         self._client: Optional[urllib3.PoolManager] = None
-        self._measurement = self._measurement_callable(supertable)
+        self._supertable_name = self._supertable_callable(supertable)
+        self._subtable_name = self._subtable_name_callable(subtable)
         self._fields_keys = self._fields_callable(fields_keys)
         self._tags_keys = self._tags_callable(tags_keys)
         self._include_metadata_tags = include_metadata_tags
@@ -191,7 +196,7 @@ class TDengineSink(BatchingSink):
         self._allow_missing_fields = allow_missing_fields
         self._convert_ints_to_floats = convert_ints_to_floats
 
-    def _measurement_callable(self, setter: MeasurementSetter) -> MeasurementCallable:
+    def _supertable_callable(self, setter: SupertableSetter) -> SupertableCallable:
         if callable(setter):
             return setter
         return lambda value: setter
@@ -206,6 +211,13 @@ class TDengineSink(BatchingSink):
             return setter
         return lambda value: setter
 
+    def _subtable_name_callable(
+        self, setter: SubtableNameSetter
+    ) -> SubtableNameCallable:
+        if callable(setter):
+            return setter
+        return lambda value: setter
+
     def setup(self):
         if self._client_args["verify_ssl"]:
             cert_reqs = ssl.CERT_REQUIRED
@@ -214,6 +226,31 @@ class TDengineSink(BatchingSink):
         self._client = urllib3.PoolManager(
             cert_reqs=cert_reqs,
         )
+        # check if the database is alive
+        database = self._client_args["database"]
+        check_db_sql = f"SHOW `{database}`.alive"
+        timeout = urllib3.Timeout(total=self._client_args["timeout"] / 1_000)
+        logger.debug(f"Sending data to {self._client_args['sql_url']} : {check_db_sql}")
+        resp = self._client.request(
+            "POST",
+            self._client_args["sql_url"],
+            body=check_db_sql,
+            headers=self._client_args["header"],
+            timeout=timeout,
+        )
+        if resp.status != 200:
+            err = urllib3.exceptions.HTTPError(
+                f"Failed to check database status: {resp.status} {resp.data}"
+            )
+            raise err
+        resp_data = json.loads(resp.data.decode("utf-8"))
+        resp_code = resp_data.get("code")
+        if resp_code != 0:
+            error_message = resp_data.get("desc", "Unknown error")
+            err = urllib3.exceptions.HTTPError(
+                f"Failed to check database status, [{resp_code}]:{error_message}"
+            )
+            raise err
 
     def add(
         self,
@@ -241,7 +278,8 @@ class TDengineSink(BatchingSink):
         )
 
     def write(self, batch: SinkBatch):
-        supertable = self._measurement
+        supertable = self._supertable_name
+        subtable = self._subtable_name
         fields_keys = self._fields_keys
         tags_keys = self._tags_keys
         time_key = self._time_key
@@ -257,7 +295,7 @@ class TDengineSink(BatchingSink):
                 _measurement = supertable(value)
                 _tags_keys = tags_keys(value)
                 _fields_keys = fields_keys(value)
-
+                _subtable_name = subtable(item.value)
                 tags = {}
                 for tag_key in _tags_keys:
                     if tag_key in value:
@@ -269,6 +307,7 @@ class TDengineSink(BatchingSink):
                     tags["__topic"] = batch.topic
                     tags["__partition"] = batch.partition
 
+                tags["__subtable"] = _subtable_name
                 if _fields_keys:
                     fields = {
                         f: value[f]
@@ -283,8 +322,11 @@ class TDengineSink(BatchingSink):
                         k: float(v) if isinstance(v, int) else v
                         for k, v in fields.items()
                     }
-
-                ts = value[time_key] if time_key is not None else item.timestamp
+                ts = (
+                    value[time_key]
+                    if time_key is not None and time_key in value
+                    else item.timestamp
+                )
                 record = {
                     "measurement": _measurement,
                     "tags": tags,
