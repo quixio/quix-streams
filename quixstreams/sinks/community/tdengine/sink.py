@@ -228,7 +228,7 @@ class TDengineSink(BatchingSink):
         )
         # check if the database is alive
         database = self._client_args["database"]
-        check_db_sql = f"SHOW `{database}`.alive"
+        check_db_sql = f"SHOW DATABASES"
         timeout = urllib3.Timeout(total=self._client_args["timeout"] / 1_000)
         logger.debug(f"Sending data to {self._client_args['sql_url']} : {check_db_sql}")
         resp = self._client.request(
@@ -240,7 +240,7 @@ class TDengineSink(BatchingSink):
         )
         if resp.status != 200:
             err = urllib3.exceptions.HTTPError(
-                f"Failed to check database status: {resp.status} {resp.data}"
+                f"Failed to get databases: {resp.status} {resp.data}"
             )
             raise err
         resp_data = json.loads(resp.data.decode("utf-8"))
@@ -248,7 +248,13 @@ class TDengineSink(BatchingSink):
         if resp_code != 0:
             error_message = resp_data.get("desc", "Unknown error")
             err = urllib3.exceptions.HTTPError(
-                f"Failed to check database status, [{resp_code}]:{error_message}"
+                f"Failed to get databases, [{resp_code}]:{error_message}"
+            )
+            raise err
+        data = resp_data.get("data")
+        if not (isinstance(data, list) and any(database == sublist[0] for sublist in data if sublist)):
+            err = urllib3.exceptions.HTTPError(
+                f"Database '{database}' not exists"
             )
             raise err
 
