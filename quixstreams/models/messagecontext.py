@@ -16,6 +16,7 @@ class MessageContext:
         "_size",
         "_headers",
         "_leader_epoch",
+        "_heartbeat",
     )
 
     def __init__(
@@ -25,12 +26,14 @@ class MessageContext:
         offset: int,
         size: int,
         leader_epoch: Optional[int] = None,
+        heartbeat: bool = False,
     ):
         self._topic = topic
         self._partition = partition
         self._offset = offset
         self._size = size
         self._leader_epoch = leader_epoch
+        self._heartbeat = heartbeat
 
     @property
     def topic(self) -> str:
@@ -51,3 +54,7 @@ class MessageContext:
     @property
     def leader_epoch(self) -> Optional[int]:
         return self._leader_epoch
+
+    @property
+    def heartbeat(self) -> bool:
+        return self._heartbeat
