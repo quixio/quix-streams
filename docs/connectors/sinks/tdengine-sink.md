@@ -113,13 +113,13 @@ Same interface as subtable:
 ### Database Validation
 - Verifies database exists during setup
 
-- Raises error if missing: `Failed to check database status, [904]:Database does not exist`
+- Raises error if missing: `Database 'your_database' not exists`
 
 
 ### Expected Behavior
 1. Prerequisite: Database must exist before operation
 
-    Error if missing: [904]: Database does not exist
+    Error if missing: Database 'your_database' not exists
 
 2. After successful setup:
 
