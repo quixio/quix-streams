@@ -52,6 +52,8 @@ if __name__ == '__main__':
 ```
 
 ## Configuration
+
+### Parameter Overview
 TDengineSink accepts the following configuration parameters:
 
 - `host` - TDengine host in format `"http[s]://<host>[:<port>]"` (e.g., `"http://localhost:6041"`).
@@ -78,10 +80,10 @@ TDengineSink accepts the following configuration parameters:
 See the [What data can be sent to TDengine](#what-data-can-be-sent-to-tdengine) section for more info on `fields_keys` and `tags_keys`.
 
 
-## Parameters
+### Parameter Examples
 
 
-### `subtable`
+####  `subtable`
 Accepts either:
 - Static name (string)
 - Dynamic generator (callable)
@@ -113,13 +115,13 @@ Same interface as subtable:
 ### Database Validation
 - Verifies database exists during setup
 
-- Raises error if missing: `Database 'your_database' not exists`
+- Raises error if missing: `Database 'your_database' does not exist`
 
 
 ### Expected Behavior
 1. Prerequisite: Database must exist before operation
 
-    Error if missing: Database 'your_database' not exists
+    Error if missing: Database 'your_database' does not exist
 
 2. After successful setup:
 
@@ -151,3 +153,37 @@ taos> select * from cpu;
 ========================================================================
  2025-06-27 15:02:17.125 |     12.5  |    1     | 192.168.1.98      |   EU     |
 ```
+
+
+
+## Testing Locally  
+
+Rather than connect to a hosted TDengine instance, you can alternatively test your 
+application using a local instance of TDengine using Docker:  
+
+1. Execute in terminal:  
+
+    ```bash  
+    docker run --rm -d --name tdengine \  
+    -p 6030:6030 \  
+    -p 6041:6041 \  
+    -p 6043-6060:6043-6060 \  
+    -e TZ=America/New_York \  
+    -e LC_ALL=C.UTF-8 \  
+    tdengine/tdengine:latest  
+    ```  
+
+2. Use the following authentication settings for `TDengineSink` to connect:  
+
+    ```python  
+    TDengineSink(  
+        host="http://localhost:6041",  
+        username="root",  
+        password="taosdata",  
+        ...  
+   )  
+3. When finished, execute in terminal:
+
+    ```bash  
+    docker stop tdengine  
+    ```
