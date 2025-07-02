@@ -105,6 +105,7 @@ doc_map = {
             "quixstreams.dataframe.series",
             "quixstreams.dataframe.joins.lookups.base",
             "quixstreams.dataframe.joins.lookups.sqlite",
+            "quixstreams.dataframe.joins.lookups.postgresql",
             "quixstreams.dataframe.joins.join_asof",
         ]
     },
