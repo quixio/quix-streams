@@ -253,10 +253,11 @@ class TDengineSink(BatchingSink):
             raise err
         data = resp_data.get("data")
         # TODO: create the database if it does not exist
-        if not (isinstance(data, list) and any(database == sublist[0] for sublist in data if sublist)):
-            err = urllib3.exceptions.HTTPError(
-                f"Database '{database}' does not exist"
-            )
+        if not (
+            isinstance(data, list)
+            and any(database == sublist[0] for sublist in data if sublist)
+        ):
+            err = urllib3.exceptions.HTTPError(f"Database '{database}' does not exist")
             raise err
 
     def add(
