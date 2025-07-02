@@ -1,2 +1,2 @@
-# noqa: F403
+# ruff: noqa: F403
 from .sink import *
