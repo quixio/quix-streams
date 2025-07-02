@@ -344,7 +344,7 @@ class PostgresLookup(BaseLookup[Union[PostgresLookupField, PostgresLookupQueryFi
         """
         query, parameters = field.build_query(on, value)
         if self._debug:
-            print(f"QUERY: {query}")
+            logger.debug(f"QUERY: {query}")
             logger.debug(f"Executing SQL: {query}")
 
         cur = self._conn.cursor()
