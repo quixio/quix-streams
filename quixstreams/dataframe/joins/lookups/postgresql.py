@@ -7,9 +7,15 @@ import time
 from collections import OrderedDict
 from typing import Any, Literal, Mapping, Tuple, Union
 
-import psycopg2
-from psycopg2 import sql
-from psycopg2.extensions import cursor as pg_cursor
+try:
+    import psycopg2
+    from psycopg2 import sql
+    from psycopg2.extensions import cursor as pg_cursor
+except ImportError as exc:
+    raise ImportError(
+        f"Package `{exc.name}` is missing: "
+        'run "pip install quixstreams[postgresql]" to fix it'
+    ) from exc
 
 from .base import BaseField, BaseLookup
 from .utils import CacheInfo
