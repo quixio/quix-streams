@@ -54,7 +54,10 @@ class Point(object):
 
     @classmethod
     def from_dict(
-        dictionary: dict, write_precision: str = DEFAULT_WRITE_PRECISION, **kwargs
+        cls, 
+        dictionary: dict, 
+        write_precision: str = DEFAULT_WRITE_PRECISION, 
+        **kwargs
     ):
         """
         Initialize point from 'dict' structure.
