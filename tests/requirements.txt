@@ -1,4 +1,4 @@
-testcontainers==4.10.0
+testcontainers[postgres]==4.10.0
 pytest
 requests>=2.32
 docker>=7.1.0 # Required to use requests>=2.32
@@ -8,3 +8,5 @@ influxdb3-python>=0.7.0,<1.0
 pyiceberg[pyarrow,glue]>=0.7
 redis[hiredis]>=5.2.0,<6
 pandas>=1.0.0,<3.0
+psycopg2-binary>=2.9,<3
+types-psycopg2>=2.9,<3
