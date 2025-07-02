@@ -2914,6 +2914,380 @@ higher precision.
 
 timedelta value in milliseconds as `int`
 
+<a id="quixstreams.dataframe.joins.lookups.postgresql"></a>
+
+## quixstreams.dataframe.joins.lookups.postgresql
+
+<a id="quixstreams.dataframe.joins.lookups.postgresql.BasePostgresLookupField"></a>
+
+### BasePostgresLookupField
+
+```python
+@dataclasses.dataclass(frozen=True)
+class BasePostgresLookupField(BaseField, abc.ABC)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L25)
+
+<a id="quixstreams.dataframe.joins.lookups.postgresql.BasePostgresLookupField.build_query"></a>
+
+#### BasePostgresLookupField.build\_query
+
+```python
+@abc.abstractmethod
+def build_query(
+    on: str, value: dict[str, Any]
+) -> Tuple[sql.Composable, Union[dict[str, Any], Tuple[str, ...]]]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L32)
+
+Build the SQL query string for this field.
+
+**Arguments**:
+
+- `on`: The key to use in the WHERE clause for lookup.
+- `value`: The message value, used to substitute parameters in the query.
+
+**Returns**:
+
+A tuple of the SQL query string and the parameters.
+
+<a id="quixstreams.dataframe.joins.lookups.postgresql.BasePostgresLookupField.result"></a>
+
+#### BasePostgresLookupField.result
+
+```python
+@abc.abstractmethod
+def result(cursor: pg_cursor) -> Union[dict[str, Any], list[dict[str, Any]]]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L46)
+
+Extract the result from the cursor based on the field definition.
+
+**Arguments**:
+
+- `cursor`: The Postgres cursor containing the query results.
+
+**Returns**:
+
+The extracted data, either a single row or a list of rows.
+
+<a id="quixstreams.dataframe.joins.lookups.postgresql.PostgresLookupField"></a>
+
+### PostgresLookupField
+
+```python
+@dataclasses.dataclass(frozen=True)
+class PostgresLookupField(BasePostgresLookupField)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L58)
+
+<a id="quixstreams.dataframe.joins.lookups.postgresql.PostgresLookupField.build_query"></a>
+
+#### PostgresLookupField.build\_query
+
+```python
+def build_query(on: str,
+                value: dict[str, Any]) -> Tuple[sql.Composed, Tuple[str, ...]]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L97)
+
+Build the SQL query string for this field.
+
+**Arguments**:
+
+- `on`: The key to use in the WHERE clause for lookup.
+- `value`: The message value, used to substitute parameters in the query.
+
+**Returns**:
+
+A tuple of the SQL query string and the parameters.
+
+<a id="quixstreams.dataframe.joins.lookups.postgresql.PostgresLookupField.result"></a>
+
+#### PostgresLookupField.result
+
+```python
+def result(cursor: pg_cursor) -> Union[dict[str, Any], list[dict[str, Any]]]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L127)
+
+Extract the result from the cursor based on the field definition.
+
+**Arguments**:
+
+- `cursor`: The SQLite cursor containing the query results.
+
+**Returns**:
+
+The extracted data, either a single row or a list of rows.
+
+<a id="quixstreams.dataframe.joins.lookups.postgresql.PostgresLookupQueryField"></a>
+
+### PostgresLookupQueryField
+
+```python
+@dataclasses.dataclass(frozen=True)
+class PostgresLookupQueryField(BasePostgresLookupField)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L142)
+
+<a id="quixstreams.dataframe.joins.lookups.postgresql.PostgresLookupQueryField.result"></a>
+
+#### PostgresLookupQueryField.result
+
+```python
+def result(cursor: pg_cursor) -> Union[list[Any], Any]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L155)
+
+Extract the result from the cursor based on the field definition.
+
+**Arguments**:
+
+- `cursor`: The Postgres cursor containing the query results.
+
+**Returns**:
+
+The extracted data, either a single row or a list of rows.
+
+<a id="quixstreams.dataframe.joins.lookups.postgresql.PostgresLookup"></a>
+
+### PostgresLookup
+
+```python
+class PostgresLookup(BaseLookup[Union[PostgresLookupField,
+                                      PostgresLookupQueryField]])
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L168)
+
+Lookup join implementation for enriching streaming data with data from a Postgres database.
+
+This class queries a Postgres database for each field, using a persistent connection and per-field caching
+based on a configurable TTL. The cache is a "Least Recently Used" (LRU) cache with a configurable maximum size.
+
+**Example**:
+
+  
+  This is a join on kafka record column `k_colX` with table column `t_col2`
+  (where their values are equal).
+  
+```python
+    lookup = PostgresLookup(**credentials)
+    fields = {"my_field": lookup.field(table="my_table", columns=["t_col2"], on="t_col1")}
+    sdf = sdf.join_lookup(lookup, fields, on="k_colX")
+```
+  Note that `join_lookup` uses `on=<kafka message key>` if a column is not provided.
+
+<a id="quixstreams.dataframe.joins.lookups.postgresql.PostgresLookup.__init__"></a>
+
+#### PostgresLookup.\_\_init\_\_
+
+```python
+def __init__(host: str,
+             port: int,
+             dbname: str,
+             user: str,
+             password: str,
+             connection_timeout_seconds: int = 30,
+             statement_timeout_seconds: int = 30,
+             cache_size: int = 1000,
+             **kwargs)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L188)
+
+**Arguments**:
+
+- `host`: PostgreSQL server address.
+- `port`: PostgreSQL server port.
+- `dbname`: PostgreSQL database name.
+- `user`: Database username.
+- `password`: Database user password.
+- `connection_timeout_seconds`: Timeout for connection.
+- `statement_timeout_seconds`: Timeout for DDL operations such as table
+creation or schema updates.
+- `cache_size`: Maximum number of fields to keep in the LRU cache. Default is 1000.
+- `kwargs`: Additional parameters for `psycopg2.connect`.
+
+<a id="quixstreams.dataframe.joins.lookups.postgresql.PostgresLookup.field"></a>
+
+#### PostgresLookup.field
+
+```python
+def field(table: str,
+          columns: list[str],
+          on: str,
+          order_by: str = "",
+          order_by_direction: Literal["ASC", "DESC"] = "ASC",
+          schema: str = "public",
+          ttl: float = 60.0,
+          default: Any = None,
+          first_match_only: bool = True) -> PostgresLookupField
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L312)
+
+Field definition for use with PostgresLookup in lookup joins.
+
+Table and column names are sanitized to prevent SQL injection.
+Rows will be deserialized into a dictionary with column names as keys.
+
+Example:
+With kafka records formatted as:
+row = {"k_colX": "value_a", "k_colY": "value_b"}
+
+We want to join this to DB table record(s) where table column `t_col2` has the
+same value as kafka row's key `k_colX` (`value_a`).
+
+```python
+    lookup = PostgresLookup(**credentials)
+
+    # Select the value in `db_col1` from the table `my_table` where `col2` matches the `sdf.join_lookup` on parameter.
+    fields = {"my_field": lookup.field(table="my_table", columns=["t_col1", "t_col2"], on="t_col2")}
+
+    # After the lookup the `my_field` column in the message contains:
+    # {"t_col1": <row1 t_col1 value>, "t_col2": <row1 t_col2 value>}
+    sdf = sdf.join_lookup(lookup, fields, on="kafka_col1")
+```
+
+```python
+    lookup = PostgresLookup(**credentials)
+
+    # Select the value in `t_col1` from the table `my_table` where `t_col2` matches the `sdf.join_lookup` on parameter.
+    fields = {"my_field": lookup.field(table="my_table", columns=["t_col1", "t_col2"], on="t_col2", first_match_only=False)}
+
+    # After the lookup the `my_field` column in the message contains:
+    # [
+    #   {"t_col1": <row1 t_col1 value>, "t_col2": <row1 t_col2 value>},
+    #   {"t_col1": <row2 t_col1 value>, "t_col2": <row2 t_col2 value>},
+    #   ...
+    #   {"t_col1": <rowN col1 value>, "t_col2": <rowN t_col2 value>,},
+    # ]
+    sdf = sdf.join_lookup(lookup, fields, on="k_colX")
+```
+
+**Arguments**:
+
+- `table`: Name of the table to query in the Postgres database.
+- `columns`: List of columns to select from the table.
+- `on`: The column name to use in the WHERE clause for matching against the target key.
+- `order_by`: Optional ORDER BY clause to sort the results.
+- `order_by_direction`: Direction of the ORDER BY clause, either "ASC" or "DESC". Default is "ASC".
+- `schema`: the table schema; if unsure leave as default ("public").
+- `ttl`: Time-to-live for cache in seconds. Default is 60.0.
+- `default`: Default value if no result is found. Default is None.
+- `first_match_only`: If True, only the first row is returned; otherwise, all rows are returned.
+
+<a id="quixstreams.dataframe.joins.lookups.postgresql.PostgresLookup.query_field"></a>
+
+#### PostgresLookup.query\_field
+
+```python
+def query_field(query: str,
+                ttl: float = 60.0,
+                default: Any = None,
+                first_match_only: bool = True) -> PostgresLookupQueryField
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L386)
+
+Field definition for use with PostgresLookup in lookup joins.
+
+Enables advanced SQL queries with support for parameter substitution from message columns, allowing dynamic lookups.
+
+The `sdf.join_lookup` `on` parameter is not used in the query itself, but is important for cache management. When caching is enabled, the query is executed once per TTL for each unique target key.
+
+Query results are returned as tuples of values, without additional deserialization.
+
+Example:
+
+```python
+    lookup = PostgresLookup(**credentials)
+
+    # Select all columns from the first row of `my_table` where `col2` matches the value of `field1` in the message.
+    fields = {"my_field": lookup.query_field("SELECT * FROM my_table WHERE col2 = %(field_1)s")}
+
+    # After the lookup, the `my_field` column in the message will contain:
+    # [<row1 col1 value>, <row1 col2 value>, ..., <row1 colN value>]
+    sdf = sdf.join_lookup(lookup, fields)
+```
+
+```python
+    lookup = PostgresLookup(**creds)
+
+    # Select all columns from all rows of `my_table` where `col2` matches the value of `field1` in the message.
+    fields = {"my_field": lookup.query_field("SELECT * FROM my_table WHERE col2 = %(field_1)s", first_match_only=False)}
+
+    # After the lookup, the `my_field` column in the message will contain:
+    # [
+    #   [<row1 col1 value>, <row1 col2 value>, ..., <row1 colN value>],
+    #   [<row2 col1 value>, <row2 col2 value>, ..., <row2 colN value>],
+    #   ...
+    #   [<rowN col1 value>, <rowN col2 value>, ..., <rowN colN value>],
+    # ]
+    sdf = sdf.join_lookup(lookup, fields)
+```
+
+**Arguments**:
+
+- `query`: SQL query to execute.
+- `ttl`: Time-to-live for cache in seconds. Default is 60.0.
+- `default`: Default value if no result is found. Default is None.
+- `first_match_only`: If True, only the first row is returned; otherwise, all rows are returned.
+
+<a id="quixstreams.dataframe.joins.lookups.postgresql.PostgresLookup.join"></a>
+
+#### PostgresLookup.join
+
+```python
+def join(fields: Mapping[str, Union[PostgresLookupField,
+                                    PostgresLookupQueryField]], on: str,
+         value: dict[str,
+                     Any], key: Any, timestamp: int, headers: Any) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L440)
+
+Enrich the message value in-place by querying SQLite for each field and caching results per TTL.
+
+**Arguments**:
+
+- `fields`: Mapping of field names to BaseSQLiteLookupField objects specifying how to extract and map enrichment data.
+- `on`: The key used in the WHERE clause for SQLiteLookupField lookup.
+- `value`: The message value.
+- `key`: The message key.
+- `timestamp`: The message timestamp.
+- `headers`: The message headers.
+
+**Returns**:
+
+None. The input value dictionary is updated in-place with the enriched data.
+
+<a id="quixstreams.dataframe.joins.lookups.postgresql.PostgresLookup.cache_info"></a>
+
+#### PostgresLookup.cache\_info
+
+```python
+def cache_info() -> CacheInfo
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L480)
+
+Get cache statistics for the SQLiteLookup LRU cache.
+
+**Returns**:
+
+A dictionary containing cache statistics: hits, misses, size, maxsize.
+
 <a id="quixstreams.dataframe.joins.lookups"></a>
 
 ## quixstreams.dataframe.joins.lookups
