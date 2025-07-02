@@ -31,9 +31,9 @@ ApplyWithMetadataExpandedCallback = Callable[[Any, Any, int, Any], Iterable[Any]
 UpdateWithMetadataCallback = Callable[[Any, Any, int, Any], None]
 FilterWithMetadataCallback = Callable[[Any, Any, int, Any], SupportsBool]
 
-TransformCallback = Callable[[Any, Any, int, Any], Tuple[Any, Any, int, Any]]
+TransformCallback = Callable[[Any, Any, int, Any, bool], Tuple[Any, Any, int, Any]]
 TransformExpandedCallback = Callable[
-    [Any, Any, int, Any], Iterable[Tuple[Any, Any, int, Any]]
+    [Any, Any, int, Any, bool], Iterable[Tuple[Any, Any, int, Any]]
 ]
 
 StreamCallback = Union[

@@ -619,11 +619,11 @@ class StreamingDataFrame:
     ) -> "StreamingDataFrame":
         if isinstance(key, str):
 
-            def _callback(value, _, timestamp, headers):
+            def _callback(value, _, timestamp, headers, heartbeat):
                 return value, value[key], timestamp, headers
         else:
 
-            def _callback(value, _, timestamp, headers):
+            def _callback(value, _, timestamp, headers, heartbeat):
                 return value, key(value), timestamp, headers
 
         stream = self.stream.add_transform(_callback, expand=False)
@@ -748,6 +748,7 @@ class StreamingDataFrame:
             key: Any,
             timestamp: int,
             headers: Any,
+            heartbeat: bool,
         ) -> Tuple[Any, Any, int, Any]:
             new_timestamp = func(value, key, timestamp, headers)
             return value, key, new_timestamp, headers
@@ -796,6 +797,7 @@ class StreamingDataFrame:
             key: Any,
             timestamp: int,
             headers: HeadersTuples,
+            heartbeat: bool,
         ) -> Tuple[Any, Any, int, HeadersTuples]:
             # Create a shallow copy of original headers to prevent potential mutations
             # of the same collection

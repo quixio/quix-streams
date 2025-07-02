@@ -1,5 +1,7 @@
 from typing import Any, Literal, Union, cast, overload
 
+from quixstreams.context import message_context
+
 from .base import StreamFunction
 from .types import TransformCallback, TransformExpandedCallback, VoidExecutor
 
@@ -23,23 +25,39 @@ class TransformFunction(StreamFunction):
 
     @overload
     def __init__(
-        self, func: TransformCallback, expand: Literal[False] = False
+        self,
+        func: TransformCallback,
+        expand: Literal[False] = False,
+        heartbeat_active: bool = False,
     ) -> None: ...
 
     @overload
     def __init__(
-        self, func: TransformExpandedCallback, expand: Literal[True]
+        self,
+        func: TransformExpandedCallback,
+        expand: Literal[True],
+        heartbeat_active: bool = False,
+    ) -> None: ...
+
+    @overload
+    def __init__(
+        self,
+        func: Union[TransformCallback, TransformExpandedCallback],
+        expand: bool = False,
+        heartbeat_active: bool = False,
     ) -> None: ...
 
     def __init__(
         self,
         func: Union[TransformCallback, TransformExpandedCallback],
         expand: bool = False,
+        heartbeat_active: bool = False,
     ):
         super().__init__(func)
 
         self.func: Union[TransformCallback, TransformExpandedCallback]
         self.expand = expand
+        self.heartbeat_active = heartbeat_active
 
     def get_executor(self, *child_executors: VoidExecutor) -> VoidExecutor:
         child_executor = self._resolve_branching(*child_executors)
@@ -53,7 +71,11 @@ class TransformFunction(StreamFunction):
                 timestamp: int,
                 headers: Any,
             ):
-                result = expanded_func(value, key, timestamp, headers)
+                if not self.heartbeat_active and (
+                    heartbeat := message_context().heartbeat
+                ):
+                    return
+                result = expanded_func(value, key, timestamp, headers, heartbeat)
                 for new_value, new_key, new_timestamp, new_headers in result:
                     child_executor(new_value, new_key, new_timestamp, new_headers)
 
@@ -66,9 +88,12 @@ class TransformFunction(StreamFunction):
                 timestamp: int,
                 headers: Any,
             ):
-                # Execute a function on a single value and return its result
+                if not self.heartbeat_active and (
+                    heartbeat := message_context().heartbeat
+                ):
+                    return
                 new_value, new_key, new_timestamp, new_headers = func(
-                    value, key, timestamp, headers
+                    value, key, timestamp, headers, heartbeat
                 )
                 child_executor(new_value, new_key, new_timestamp, new_headers)
 

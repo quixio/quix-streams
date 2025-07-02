@@ -249,11 +249,23 @@ class Stream:
         return self._add(update_func)
 
     @overload
-    def add_transform(self, func: TransformCallback, *, expand: Literal[False] = False):
+    def add_transform(
+        self,
+        func: TransformCallback,
+        *,
+        expand: Literal[False] = False,
+        heartbeat_active: bool = False,
+    ):
         pass
 
     @overload
-    def add_transform(self, func: TransformExpandedCallback, *, expand: Literal[True]):
+    def add_transform(
+        self,
+        func: TransformExpandedCallback,
+        *,
+        expand: Literal[True],
+        heartbeat_active: bool = False,
+    ):
         pass
 
     def add_transform(
@@ -261,6 +273,7 @@ class Stream:
         func: Union[TransformCallback, TransformExpandedCallback],
         *,
         expand: bool = False,
+        heartbeat_active: bool = False,
     ) -> "Stream":
         """
         Add a "transform" function to the Stream, that will mutate the input value.
@@ -278,7 +291,10 @@ class Stream:
             Default - `False`.
         :return: a new Stream derived from the current one
         """
-        return self._add(TransformFunction(func, expand=expand))  # type: ignore[call-overload]
+        transform_func = TransformFunction(
+            func, expand=expand, heartbeat_active=heartbeat_active
+        )
+        return self._add(transform_func)  # type: ignore[call-overload]
 
     def merge(self, other: "Stream") -> "Stream":
         """
