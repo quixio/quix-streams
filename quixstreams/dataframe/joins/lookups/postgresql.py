@@ -8,6 +8,7 @@ from collections import OrderedDict
 from typing import Any, Literal, Mapping, Tuple, Union
 
 import psycopg2
+from psycopg2 import sql
 from psycopg2.extensions import cursor as pg_cursor
 
 from .base import BaseField, BaseLookup
@@ -30,7 +31,7 @@ class BasePostgresLookupField(BaseField, abc.ABC):
     @abc.abstractmethod
     def build_query(
         self, on: str, value: dict[str, Any]
-    ) -> Tuple[str, Union[dict[str, Any], Tuple[str, ...]]]:
+    ) -> Tuple[sql.Composable, Union[dict[str, Any], Tuple[str, ...]]]:
         """
         Build the SQL query string for this field.
 
@@ -146,7 +147,7 @@ class PostgresLookupField(BasePostgresLookupField):
 
     def build_query(
         self, on: str, value: dict[str, Any]
-    ) -> Tuple[str, Tuple[str, ...]]:
+    ) -> Tuple[sql.Composed, Tuple[str, ...]]:
         """
         Build the SQL query string for this field.
 
@@ -157,11 +158,21 @@ class PostgresLookupField(BasePostgresLookupField):
         """
         # Postgres doesn't support parameterization for SQL identifiers (columns, table names);
         # they are instead validated prior to query building to ensure they are safe.
-        query = f"SELECT {', '.join(self.columns)} FROM {self.schema}.{self.table} WHERE {self.on} = %s"  # noqa: S608
+
+        cols = sql.SQL(",").join([sql.Identifier(col) for col in self.columns])
+        from_ = sql.Identifier(self.schema, self.table)
+        query = sql.SQL("SELECT {cols} FROM {from_} WHERE {on} = %s").format(
+            cols=cols,
+            from_=from_,
+            on=sql.Identifier(self.on),
+        )
+
         if self.order_by:
-            query += f" ORDER BY {self.order_by} {self.order_by_direction}"
+            query += sql.SQL(" ORDER BY {} {}").format(
+                sql.Identifier(self.order_by), sql.SQL(self.order_by_direction)
+            )
         if self.first_match_only:
-            query += " LIMIT 1"
+            query += sql.SQL(" LIMIT 1")
         return query, (on,)
 
     def result(self, cursor: pg_cursor) -> Union[dict[str, Any], list[dict[str, Any]]]:
@@ -231,8 +242,10 @@ class PostgresLookupQueryField(BasePostgresLookupField):
     default: Any = None
     first_match_only: bool = True
 
-    def build_query(self, on: str, value: dict[str, Any]) -> Tuple[str, dict[str, Any]]:
-        return self.query, value
+    def build_query(
+        self, on: str, value: dict[str, Any]
+    ) -> Tuple[sql.Composable, dict[str, Any]]:
+        return sql.SQL(self.query), value
 
     def result(self, cursor: pg_cursor) -> Union[list[Any], Any]:
         """
@@ -343,11 +356,10 @@ class PostgresLookup(BaseLookup[Union[PostgresLookupField, PostgresLookupQueryFi
         :returns: The extracted data, either a single row or a list of rows.
         """
         query, parameters = field.build_query(on, value)
-        if self._debug:
-            logger.debug(f"QUERY: {query}")
-            logger.debug(f"Executing SQL: {query}")
 
         cur = self._conn.cursor()
+        if self._debug:
+            logger.debug(f"Executing SQL: {query.as_string(cur)}")
         try:
             cur.execute(query, parameters)
         except psycopg2.Error as e:
