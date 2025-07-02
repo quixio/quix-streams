@@ -228,7 +228,7 @@ class TDengineSink(BatchingSink):
         )
         # check if the database is alive
         database = self._client_args["database"]
-        check_db_sql = f"SHOW DATABASES"
+        check_db_sql = "SHOW DATABASES"
         timeout = urllib3.Timeout(total=self._client_args["timeout"] / 1_000)
         logger.debug(f"Sending data to {self._client_args['sql_url']} : {check_db_sql}")
         resp = self._client.request(
