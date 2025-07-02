@@ -2927,7 +2927,7 @@ timedelta value in milliseconds as `int`
 class BasePostgresLookupField(BaseField, abc.ABC)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L25)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L31)
 
 <a id="quixstreams.dataframe.joins.lookups.postgresql.BasePostgresLookupField.build_query"></a>
 
@@ -2940,7 +2940,7 @@ def build_query(
 ) -> Tuple[sql.Composable, Union[dict[str, Any], Tuple[str, ...]]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L32)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L38)
 
 Build the SQL query string for this field.
 
@@ -2962,7 +2962,7 @@ A tuple of the SQL query string and the parameters.
 def result(cursor: pg_cursor) -> Union[dict[str, Any], list[dict[str, Any]]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L46)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L52)
 
 Extract the result from the cursor based on the field definition.
 
@@ -2983,7 +2983,7 @@ The extracted data, either a single row or a list of rows.
 class PostgresLookupField(BasePostgresLookupField)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L58)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L64)
 
 <a id="quixstreams.dataframe.joins.lookups.postgresql.PostgresLookupField.build_query"></a>
 
@@ -2994,7 +2994,7 @@ def build_query(on: str,
                 value: dict[str, Any]) -> Tuple[sql.Composed, Tuple[str, ...]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L97)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L103)
 
 Build the SQL query string for this field.
 
@@ -3015,7 +3015,7 @@ A tuple of the SQL query string and the parameters.
 def result(cursor: pg_cursor) -> Union[dict[str, Any], list[dict[str, Any]]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L127)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L133)
 
 Extract the result from the cursor based on the field definition.
 
@@ -3036,7 +3036,7 @@ The extracted data, either a single row or a list of rows.
 class PostgresLookupQueryField(BasePostgresLookupField)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L142)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L148)
 
 <a id="quixstreams.dataframe.joins.lookups.postgresql.PostgresLookupQueryField.result"></a>
 
@@ -3046,7 +3046,7 @@ class PostgresLookupQueryField(BasePostgresLookupField)
 def result(cursor: pg_cursor) -> Union[list[Any], Any]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L155)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L161)
 
 Extract the result from the cursor based on the field definition.
 
@@ -3067,7 +3067,7 @@ class PostgresLookup(BaseLookup[Union[PostgresLookupField,
                                       PostgresLookupQueryField]])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L168)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L174)
 
 Lookup join implementation for enriching streaming data with data from a Postgres database.
 
@@ -3103,7 +3103,7 @@ def __init__(host: str,
              **kwargs)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L188)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L194)
 
 **Arguments**:
 
@@ -3134,7 +3134,7 @@ def field(table: str,
           first_match_only: bool = True) -> PostgresLookupField
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L312)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L318)
 
 Field definition for use with PostgresLookup in lookup joins.
 
@@ -3198,7 +3198,7 @@ def query_field(query: str,
                 first_match_only: bool = True) -> PostgresLookupQueryField
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L386)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L392)
 
 Field definition for use with PostgresLookup in lookup joins.
 
@@ -3255,7 +3255,7 @@ def join(fields: Mapping[str, Union[PostgresLookupField,
                      Any], key: Any, timestamp: int, headers: Any) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L440)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L446)
 
 Enrich the message value in-place by querying SQLite for each field and caching results per TTL.
 
@@ -3280,7 +3280,7 @@ None. The input value dictionary is updated in-place with the enriched data.
 def cache_info() -> CacheInfo
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L480)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L486)
 
 Get cache statistics for the SQLiteLookup LRU cache.
 
