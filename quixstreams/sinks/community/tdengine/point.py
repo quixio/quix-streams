@@ -47,13 +47,12 @@ except ModuleNotFoundError:
 
 
 class Point(object):
-    @staticmethod
-    def measurement(measurement):
+    @classmethod
+    def measurement(cls, measurement):
         """Create a new Point with specified measurement name."""
-        p = Point(measurement)
-        return p
+        return cls(measurement)
 
-    @staticmethod
+    @classmethod
     def from_dict(
         dictionary: dict, write_precision: str = DEFAULT_WRITE_PRECISION, **kwargs
     ):
@@ -137,7 +136,7 @@ class Point(object):
             measurement_ = dictionary[
                 kwargs.get("record_measurement_key", "measurement")
             ]
-        point = Point(measurement_)
+        point = cls(measurement_)
 
         record_tag_keys = kwargs.get("record_tag_keys", None)
         if record_tag_keys is not None:
@@ -168,13 +167,15 @@ class Point(object):
         # - int: 'i'
         # - uint: 'u'
         # - float: ''
-        point._field_types = dict(
-            map(
-                lambda item: (
-                    item[0],
-                    "i" if item[1] == "int" else "u" if item[1] == "uint" else "",
-                ),
-                _field_types.items(),
+        point.field_types(
+            dict(
+                map(
+                    lambda item: (
+                        item[0],
+                        "i" if item[1] == "int" else "u" if item[1] == "uint" else "",
+                    ),
+                    _field_types.items(),
+                )
             )
         )
 
@@ -188,6 +189,10 @@ class Point(object):
         self._time = None
         self._write_precision = DEFAULT_WRITE_PRECISION
         self._field_types = {}
+
+    def field_types(self, field_types: dict):
+        self._field_types = field_types
+        return self
 
     def time(self, time, write_precision=DEFAULT_WRITE_PRECISION):
         """
