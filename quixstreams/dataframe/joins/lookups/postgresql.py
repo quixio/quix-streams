@@ -56,57 +56,6 @@ class BasePostgresLookupField(BaseField, abc.ABC):
 
 @dataclasses.dataclass(frozen=True)
 class PostgresLookupField(BasePostgresLookupField):
-    """
-    Field definition for use with PostgresLookup in lookup joins.
-
-    Table and column names are sanitized to prevent SQL injection.
-    Rows will be deserialized into a dictionary with column names as keys.
-
-    Example:
-    With kafka records formatted as:
-    row = {"k_colX": "value_a", "k_colY": "value_b"}
-
-    We want to join this to DB table record(s) where table column `t_col2` has the
-    same value as kafka row's key `k_colX` (`value_a`).
-
-    ```python
-        lookup = PostgresLookup(**credentials)
-
-        # Select the value in `db_col1` from the table `my_table` where `col2` matches the `sdf.join_lookup` on parameter.
-        fields = {"my_field": PostgresLookupField(table="my_table", columns=["t_col1", "t_col2"], on="t_col2")}
-
-        # After the lookup the `my_field` column in the message contains:
-        # {"t_col1": <row1 t_col1 value>, "t_col2": <row1 t_col2 value>}
-        sdf = sdf.join_lookup(lookup, fields, on="kafka_col1")
-    ```
-
-    ```python
-        lookup = PostgresLookup(**credentials)
-
-        # Select the value in `t_col1` from the table `my_table` where `t_col2` matches the `sdf.join_lookup` on parameter.
-        fields = {"my_field": PostgresLookupField(table="my_table", columns=["t_col1", "t_col2"], on="t_col2", first_match_only=False)}
-
-        # After the lookup the `my_field` column in the message contains:
-        # [
-        #   {"t_col1": <row1 t_col1 value>, "t_col2": <row1 t_col2 value>},
-        #   {"t_col1": <row2 t_col1 value>, "t_col2": <row2 t_col2 value>},
-        #   ...
-        #   {"t_col1": <rowN col1 value>, "t_col2": <rowN t_col2 value>,},
-        # ]
-        sdf = sdf.join_lookup(lookup, fields, on="k_colX")
-    ```
-
-    :param table: Name of the table to query in the Postgres database.
-    :param columns: List of columns to select from the table.
-    :param on: The column name to use in the WHERE clause for matching against the target key.
-    :param order_by: Optional ORDER BY clause to sort the results.
-    :param order_by_direction: Direction of the ORDER BY clause, either "ASC" or "DESC". Default is "ASC".
-    :param schema: the table schema; if unsure leave as default ("public").
-    :param ttl: Time-to-live for cache in seconds. Default is 60.0.
-    :param default: Default value if no result is found. Default is None.
-    :param first_match_only: If True, only the first row is returned; otherwise, all rows are returned.
-    """
-
     table: str
     columns: list[str]
     on: str
@@ -191,51 +140,7 @@ class PostgresLookupField(BasePostgresLookupField):
 
 @dataclasses.dataclass(frozen=True)
 class PostgresLookupQueryField(BasePostgresLookupField):
-    """
-    Field definition for use with PostgresLookup in lookup joins.
-
-    Enables advanced SQL queries with support for parameter substitution from message columns, allowing dynamic lookups.
-
-    The `sdf.join_lookup` `on` parameter is not used in the query itself, but is important for cache management. When caching is enabled, the query is executed once per TTL for each unique target key.
-
-    Query results are returned as tuples of values, without additional deserialization.
-
-    Example:
-
-    ```python
-        lookup = PostgresLookup(**credentials)
-
-        # Select all columns from the first row of `my_table` where `col2` matches the value of `field1` in the message.
-        fields = {"my_field": PostgresLookupQueryField("SELECT * FROM my_table WHERE col2 = %(field_1)s")}
-
-        # After the lookup, the `my_field` column in the message will contain:
-        # [<row1 col1 value>, <row1 col2 value>, ..., <row1 colN value>]
-        sdf = sdf.join_lookup(lookup, fields)
-    ```
-
-    ```python
-        lookup = PostgresLookup(**creds)
-
-        # Select all columns from all rows of `my_table` where `col2` matches the value of `field1` in the message.
-        fields = {"my_field": PostgresLookupQueryField("SELECT * FROM my_table WHERE col2 = %(field_1)s", first_match_only=False)}
-
-        # After the lookup, the `my_field` column in the message will contain:
-        # [
-        #   [<row1 col1 value>, <row1 col2 value>, ..., <row1 colN value>],
-        #   [<row2 col1 value>, <row2 col2 value>, ..., <row2 colN value>],
-        #   ...
-        #   [<rowN col1 value>, <rowN col2 value>, ..., <rowN colN value>],
-        # ]
-        sdf = sdf.join_lookup(lookup, fields)
-    ```
-
-    :param query: SQL query to execute.
-    :param ttl: Time-to-live for cache in seconds. Default is 60.0.
-    :param default: Default value if no result is found. Default is None.
-    :param first_match_only: If True, only the first row is returned; otherwise, all rows are returned.
-    """
-
-    query: str = dataclasses.field()
+    query: str
 
     # TODO: remove on python 3.10+
     ttl: float = 60.0
@@ -274,7 +179,7 @@ class PostgresLookup(BaseLookup[Union[PostgresLookupField, PostgresLookupQueryFi
 
     ```python
         lookup = PostgresLookup(**credentials)
-        fields = {"my_field": PostgresLookupField(table="my_table", columns=["t_col2"], on="t_col1")}
+        fields = {"my_field": lookup.field(table="my_table", columns=["t_col2"], on="t_col1")}
         sdf = sdf.join_lookup(lookup, fields, on="k_colX")
     ```
     Note that `join_lookup` uses `on=<kafka message key>` if a column is not provided.
@@ -403,6 +308,134 @@ class PostgresLookup(BaseLookup[Union[PostgresLookupField, PostgresLookupQueryFi
         self._cache.move_to_end(cache_key)
         if len(self._cache) > self._cache_size:
             self._cache.popitem(last=False)
+
+    def field(
+        self,
+        table: str,
+        columns: list[str],
+        on: str,
+        order_by: str = "",
+        order_by_direction: Literal["ASC", "DESC"] = "ASC",
+        schema: str = "public",
+        ttl: float = 60.0,
+        default: Any = None,
+        first_match_only: bool = True,
+    ) -> PostgresLookupField:
+        """
+        Field definition for use with PostgresLookup in lookup joins.
+
+        Table and column names are sanitized to prevent SQL injection.
+        Rows will be deserialized into a dictionary with column names as keys.
+
+        Example:
+        With kafka records formatted as:
+        row = {"k_colX": "value_a", "k_colY": "value_b"}
+
+        We want to join this to DB table record(s) where table column `t_col2` has the
+        same value as kafka row's key `k_colX` (`value_a`).
+
+        ```python
+            lookup = PostgresLookup(**credentials)
+
+            # Select the value in `db_col1` from the table `my_table` where `col2` matches the `sdf.join_lookup` on parameter.
+            fields = {"my_field": lookup.field(table="my_table", columns=["t_col1", "t_col2"], on="t_col2")}
+
+            # After the lookup the `my_field` column in the message contains:
+            # {"t_col1": <row1 t_col1 value>, "t_col2": <row1 t_col2 value>}
+            sdf = sdf.join_lookup(lookup, fields, on="kafka_col1")
+        ```
+
+        ```python
+            lookup = PostgresLookup(**credentials)
+
+            # Select the value in `t_col1` from the table `my_table` where `t_col2` matches the `sdf.join_lookup` on parameter.
+            fields = {"my_field": lookup.field(table="my_table", columns=["t_col1", "t_col2"], on="t_col2", first_match_only=False)}
+
+            # After the lookup the `my_field` column in the message contains:
+            # [
+            #   {"t_col1": <row1 t_col1 value>, "t_col2": <row1 t_col2 value>},
+            #   {"t_col1": <row2 t_col1 value>, "t_col2": <row2 t_col2 value>},
+            #   ...
+            #   {"t_col1": <rowN col1 value>, "t_col2": <rowN t_col2 value>,},
+            # ]
+            sdf = sdf.join_lookup(lookup, fields, on="k_colX")
+        ```
+
+        :param table: Name of the table to query in the Postgres database.
+        :param columns: List of columns to select from the table.
+        :param on: The column name to use in the WHERE clause for matching against the target key.
+        :param order_by: Optional ORDER BY clause to sort the results.
+        :param order_by_direction: Direction of the ORDER BY clause, either "ASC" or "DESC". Default is "ASC".
+        :param schema: the table schema; if unsure leave as default ("public").
+        :param ttl: Time-to-live for cache in seconds. Default is 60.0.
+        :param default: Default value if no result is found. Default is None.
+        :param first_match_only: If True, only the first row is returned; otherwise, all rows are returned.
+        """
+        return PostgresLookupField(
+            table=table,
+            columns=columns,
+            on=on,
+            order_by=order_by,
+            order_by_direction=order_by_direction,
+            schema=schema,
+            ttl=ttl,
+            default=default,
+            first_match_only=first_match_only,
+        )
+
+    def query_field(
+        self,
+        query: str,
+        ttl: float = 60.0,
+        default: Any = None,
+        first_match_only: bool = True,
+    ) -> PostgresLookupQueryField:
+        """
+        Field definition for use with PostgresLookup in lookup joins.
+
+        Enables advanced SQL queries with support for parameter substitution from message columns, allowing dynamic lookups.
+
+        The `sdf.join_lookup` `on` parameter is not used in the query itself, but is important for cache management. When caching is enabled, the query is executed once per TTL for each unique target key.
+
+        Query results are returned as tuples of values, without additional deserialization.
+
+        Example:
+
+        ```python
+            lookup = PostgresLookup(**credentials)
+
+            # Select all columns from the first row of `my_table` where `col2` matches the value of `field1` in the message.
+            fields = {"my_field": lookup.query_field("SELECT * FROM my_table WHERE col2 = %(field_1)s")}
+
+            # After the lookup, the `my_field` column in the message will contain:
+            # [<row1 col1 value>, <row1 col2 value>, ..., <row1 colN value>]
+            sdf = sdf.join_lookup(lookup, fields)
+        ```
+
+        ```python
+            lookup = PostgresLookup(**creds)
+
+            # Select all columns from all rows of `my_table` where `col2` matches the value of `field1` in the message.
+            fields = {"my_field": lookup.query_field("SELECT * FROM my_table WHERE col2 = %(field_1)s", first_match_only=False)}
+
+            # After the lookup, the `my_field` column in the message will contain:
+            # [
+            #   [<row1 col1 value>, <row1 col2 value>, ..., <row1 colN value>],
+            #   [<row2 col1 value>, <row2 col2 value>, ..., <row2 colN value>],
+            #   ...
+            #   [<rowN col1 value>, <rowN col2 value>, ..., <rowN colN value>],
+            # ]
+            sdf = sdf.join_lookup(lookup, fields)
+        ```
+
+        :param query: SQL query to execute.
+        :param ttl: Time-to-live for cache in seconds. Default is 60.0.
+        :param default: Default value if no result is found. Default is None.
+        :param first_match_only: If True, only the first row is returned; otherwise, all rows are returned.
+        """
+        return PostgresLookupQueryField(
+            query=query, ttl=ttl, default=default, first_match_only=first_match_only
+        )
 
     def join(
         self,

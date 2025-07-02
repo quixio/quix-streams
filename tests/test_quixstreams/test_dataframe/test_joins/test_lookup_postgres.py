@@ -5,11 +5,7 @@ import psycopg2
 import pytest
 from testcontainers.postgres import PostgresContainer
 
-from quixstreams.dataframe.joins.lookups.postgresql import (
-    PostgresLookup,
-    PostgresLookupField,
-    PostgresLookupQueryField,
-)
+from quixstreams.dataframe.joins.lookups.postgresql import PostgresLookup
 
 
 @pytest.fixture(scope="session")
@@ -73,7 +69,9 @@ def postgres_lookup(postgres_connection) -> PostgresLookup:
 
 def test_postgres_lookup_basic(init_table, postgres_lookup):
     init_table(table_name="test")
-    fields = {"f": PostgresLookupField(table="test", columns=["col1", "col2"], on="id")}
+    fields = {
+        "f": postgres_lookup.field(table="test", columns=["col1", "col2"], on="id")
+    }
 
     value = {}
     postgres_lookup.join(
@@ -93,9 +91,7 @@ def test_postgres_lookup_cache(init_table, postgres_lookup):
 
     lookup = postgres_lookup
     join_value = "k1"
-    fields = {
-        "f": PostgresLookupField(table="test", columns=["col1"], on="id", ttl=0.1)
-    }
+    fields = {"f": lookup.field(table="test", columns=["col1"], on="id", ttl=0.1)}
 
     value = {}
     lookup.join(fields, join_value, value, key=None, timestamp=0, headers=None)
@@ -137,7 +133,7 @@ def test_postgres_lookup_no_ttl(init_table, postgres_lookup):
     init_table(table_name="test")
     lookup = postgres_lookup
     join_value = "k1"
-    fields = {"f": PostgresLookupField(table="test", columns=["col1"], on="id", ttl=0)}
+    fields = {"f": lookup.field(table="test", columns=["col1"], on="id", ttl=0)}
 
     value = {}
     lookup.join(fields, join_value, value, key=None, timestamp=0, headers=None)
@@ -169,18 +165,18 @@ def test_postgres_lookup_orderby(init_table, postgres_lookup):
     lookup = postgres_lookup
     join_value = "k1"
     fields = {
-        "normal": PostgresLookupField(table="test", columns=["col1"], on="id"),
-        "orderby": PostgresLookupField(
+        "normal": lookup.field(table="test", columns=["col1"], on="id"),
+        "orderby": lookup.field(
             table="test", columns=["col1"], on="id", order_by="col2"
         ),
-        "asc": PostgresLookupField(
+        "asc": lookup.field(
             table="test",
             columns=["col1"],
             on="id",
             order_by="col2",
             order_by_direction="ASC",
         ),
-        "desc": PostgresLookupField(
+        "desc": lookup.field(
             table="test",
             columns=["col1"],
             on="id",
@@ -199,12 +195,12 @@ def test_postgres_lookup_orderby(init_table, postgres_lookup):
     }
 
 
-def test_postgres_lookup_invalid_identifier():
+def test_postgres_lookup_invalid_identifier(postgres_lookup):
     with pytest.raises(ValueError):
-        PostgresLookupField(table="test;DROP TABLE test", columns=["col1"], on="id")
+        postgres_lookup.field(table="test;DROP TABLE test", columns=["col1"], on="id")
 
     with pytest.raises(ValueError):
-        PostgresLookupField(table="test", columns=["col1;DROP"], on="id")
+        postgres_lookup.field(table="test", columns=["col1;DROP"], on="id")
 
 
 def test_postgres_lookup_default(init_table, postgres_lookup):
@@ -213,9 +209,7 @@ def test_postgres_lookup_default(init_table, postgres_lookup):
     join_value = "missing"
 
     fields = {
-        "f": PostgresLookupField(
-            table="test", columns=["col1"], on="id", default="notfound"
-        )
+        "f": lookup.field(table="test", columns=["col1"], on="id", default="notfound")
     }
     value = {}
     lookup.join(fields, join_value, value, key=None, timestamp=0, headers=None)
@@ -226,7 +220,7 @@ def test_postgres_lookup_query_field(init_table, postgres_lookup):
     init_table(table_name="test")
     lookup = postgres_lookup
     fields = {
-        "f": PostgresLookupQueryField(
+        "f": lookup.query_field(
             query="SELECT col2 FROM test WHERE col1 = %(field1)s",
             first_match_only=True,
         )
@@ -253,7 +247,7 @@ def test_postgres_lookup_field_all_rows(init_table, postgres_lookup):
 
     # first_match_only=False
     fields = {
-        "f": PostgresLookupField(
+        "f": lookup.field(
             table="test", columns=["col1", "col2"], on="id", first_match_only=False
         )
     }
@@ -273,7 +267,7 @@ def test_postgres_lookup_query_field_all_rows(init_table, postgres_lookup):
 
     # first_match_only=False
     fields = {
-        "f": PostgresLookupQueryField(
+        "f": lookup.query_field(
             query="SELECT col1, col2 FROM test WHERE id = %(id)s",
             first_match_only=False,
         )
