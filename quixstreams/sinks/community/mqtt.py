@@ -173,16 +173,10 @@ class MQTTSink(BaseSink):
         headers: HeadersTuples,
     ):
         try:
-            self._publish_to_mqtt(
-                value,
-                key,
-            )
+            self._publish_to_mqtt(value, key)
         except Exception as e:
             self._cleanup()
             raise e
-
-    def on_paused(self):
-        pass
 
     def flush(self):
         if self._pending_acks:
@@ -198,6 +192,9 @@ class MQTTSink(BaseSink):
                 )
         logger.info(f"{self._publish_count} MQTT messages published.")
         self._publish_count = 0
+
+    def on_paused(self):
+        pass
 
     def _cleanup(self):
         self._client.loop_stop()
