@@ -128,6 +128,7 @@ class TimeWindow(Window):
         key: Any,
         timestamp_ms: int,
         transaction: WindowedPartitionTransaction,
+        heartbeat: bool,
     ) -> tuple[Iterable[WindowKeyResult], Iterable[WindowKeyResult]]:
         state = transaction.as_state(prefix=key)
         duration_ms = self._duration_ms

@@ -23,7 +23,11 @@ AGGREGATE_PARAMS = {
 
 def process(window, value, key, transaction, timestamp_ms):
     updated, expired = window.process_window(
-        value=value, key=key, transaction=transaction, timestamp_ms=timestamp_ms
+        value=value,
+        key=key,
+        transaction=transaction,
+        timestamp_ms=timestamp_ms,
+        heartbeat=False,
     )
     return list(updated), list(expired)
 

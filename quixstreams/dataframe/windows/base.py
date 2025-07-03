@@ -38,7 +38,7 @@ Message: TypeAlias = tuple[WindowResult, Any, int, Any]
 WindowAggregateFunc = Callable[[Any, Any], Any]
 
 TransformRecordCallbackExpandedWindowed = Callable[
-    [Any, Any, int, Any, WindowedPartitionTransaction],
+    [Any, Any, int, Any, WindowedPartitionTransaction, bool],
     Iterable[Message],
 ]
 
@@ -66,6 +66,7 @@ class Window(abc.ABC):
         key: Any,
         timestamp_ms: int,
         transaction: WindowedPartitionTransaction,
+        heartbeat: bool,
     ) -> tuple[Iterable[WindowKeyResult], Iterable[WindowKeyResult]]:
         pass
 
@@ -96,7 +97,11 @@ class Window(abc.ABC):
         # to avoid adding "transform" API to it.
         # Transform callbacks can modify record key and timestamp,
         # and it's prone to misuse.
-        stream = self._dataframe.stream.add_transform(func=windowed_func, expand=True)
+        stream = self._dataframe.stream.add_transform(
+            func=windowed_func,
+            expand=True,
+            heartbeat_active=True,  # TODO: take this from the processing context
+        )
         return self._dataframe.__dataframe_clone__(stream=stream)
 
     def final(self) -> "StreamingDataFrame":
@@ -129,12 +134,14 @@ class Window(abc.ABC):
             timestamp_ms: int,
             _headers: Any,
             transaction: WindowedPartitionTransaction,
+            heartbeat: bool,
         ) -> Iterable[Message]:
             _, expired_windows = self.process_window(
                 value=value,
                 key=key,
                 timestamp_ms=timestamp_ms,
                 transaction=transaction,
+                heartbeat=heartbeat,
             )
             # Use window start timestamp as a new record timestamp
             for key, window in expired_windows:
@@ -174,9 +181,14 @@ class Window(abc.ABC):
             timestamp_ms: int,
             _headers: Any,
             transaction: WindowedPartitionTransaction,
+            heartbeat: bool,
         ) -> Iterable[Message]:
             updated_windows, expired_windows = self.process_window(
-                value=value, key=key, timestamp_ms=timestamp_ms, transaction=transaction
+                value=value,
+                key=key,
+                timestamp_ms=timestamp_ms,
+                transaction=transaction,
+                heartbeat=heartbeat,
             )
 
             # loop over the expired_windows generator to ensure the windows
@@ -404,7 +416,11 @@ def _as_windowed(
 ) -> TransformExpandedCallback:
     @functools.wraps(func)
     def wrapper(
-        value: Any, key: Any, timestamp: int, headers: Any
+        value: Any,
+        key: Any,
+        timestamp: int,
+        headers: Any,
+        heartbeat: bool,
     ) -> Iterable[Message]:
         ctx = message_context()
         transaction = cast(
@@ -413,13 +429,13 @@ def _as_windowed(
                 stream_id=stream_id, partition=ctx.partition, store_name=store_name
             ),
         )
-        if key is None:
+        if key is None and not heartbeat:
             logger.warning(
                 f"Skipping window processing for a message because the key is None, "
                 f"partition='{ctx.topic}[{ctx.partition}]' offset='{ctx.offset}'."
             )
             return _noop()
-        return func(value, key, timestamp, headers, transaction)
+        return func(value, key, timestamp, headers, transaction, heartbeat)
 
     return wrapper
 

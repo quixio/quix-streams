@@ -36,6 +36,7 @@ class SlidingWindow(TimeWindow):
         key: Any,
         timestamp_ms: int,
         transaction: WindowedPartitionTransaction,
+        heartbeat: bool,
     ) -> tuple[Iterable[WindowKeyResult], Iterable[WindowKeyResult]]:
         """
         The algorithm is based on the concept that each message

@@ -11,6 +11,7 @@ import pytest
 from confluent_kafka import KafkaException, TopicPartition
 
 from quixstreams.app import Application
+from quixstreams.context import message_context
 from quixstreams.dataframe import StreamingDataFrame
 from quixstreams.dataframe.windows.base import get_window_ranges
 from quixstreams.exceptions import PartitionAssignmentError
@@ -2324,6 +2325,86 @@ class TestApplicationSource:
             assert_state_value=self.MESSAGES_COUNT - 1,
         )
         _run_app(source, finished)
+
+
+class TestApplicationHeartbeat:
+    def test_heartbeat_triggers_processing(self, app_factory):
+        """
+        Test that a heartbeat message can trigger processing logic and emit
+        """
+
+        def func(value, state: State):
+            # On heartbeat, emit the last value for any key on a partition
+            state = state._transaction.as_state(prefix=b"__heartbeat__")
+            if message_context().heartbeat:
+                return {"last_value": state.get("last_value")}
+
+            # A real message, store it and do nothing
+            state.set("last_value", value)
+
+        heartbeat_interval = 0.2
+        app = app_factory(
+            auto_offset_reset="earliest", heartbeat_interval=heartbeat_interval
+        )
+        topic = app.topic("topic", value_deserializer="json")
+        sdf = app.dataframe(topic)
+        sdf = sdf.apply(func, stateful=True).filter(lambda v: v is not None)
+
+        # Produce some messages
+        with app.get_producer() as producer:
+            producer.produce(topic="topic", key=b"key", value=dumps("foo 1"))
+            producer.produce(topic="topic", key=b"key", value=dumps("foo 2"))
+            producer.produce(topic="topic", key=b"key", value=dumps("foo 3"))
+
+        # Run app and wait for the heartbeat to produce a new message.
+        results = app.run(count=1)
+
+        # Assert result
+        assert results == [{"last_value": "foo 3"}]
+
+    def test_heartbeat_all_topics_partitions(self, app_factory):
+        """
+        Test that heartbeat messages are emitted for every partition of every topic
+        """
+        A, B, C = "topic_a", "topic_b", "topic_c"
+
+        def func(value):
+            ctx = message_context()
+            if ctx.heartbeat:
+                return {"topic": ctx.topic, "partition": ctx.partition}
+
+        heartbeat_interval = 0.2
+        app = app_factory(
+            auto_offset_reset="earliest", heartbeat_interval=heartbeat_interval
+        )
+
+        # Create 3 topics with 1, 2 and 3 partitions respectively
+        topic_a = app.topic(
+            A, config=TopicConfig(num_partitions=1, replication_factor=1)
+        )
+        topic_b = app.topic(
+            B, config=TopicConfig(num_partitions=2, replication_factor=1)
+        )
+        topic_c = app.topic(
+            C, config=TopicConfig(num_partitions=3, replication_factor=1)
+        )
+
+        # Apply the function to all topics
+        app.dataframe(topic_a).apply(func).filter(lambda v: v is not None)
+        app.dataframe(topic_b).apply(func).filter(lambda v: v is not None)
+        app.dataframe(topic_c).apply(func).filter(lambda v: v is not None)
+
+        # Run app and wait for the heartbeat to produce a new message.
+        results = app.run(count=6)
+
+        assert results == [
+            {"topic": A, "partition": 0},
+            {"topic": B, "partition": 0},
+            {"topic": B, "partition": 1},
+            {"topic": C, "partition": 0},
+            {"topic": C, "partition": 1},
+            {"topic": C, "partition": 2},
+        ]
 
 
 class TestApplicationMultipleSdf:

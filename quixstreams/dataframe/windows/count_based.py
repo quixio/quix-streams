@@ -59,6 +59,7 @@ class CountWindow(Window):
         key: Any,
         timestamp_ms: int,
         transaction: WindowedPartitionTransaction[str, CountWindowsData],
+        heartbeat: bool,
     ) -> tuple[Iterable[WindowKeyResult], Iterable[WindowKeyResult]]:
         """
         Count based windows are different from time based windows as we don't
