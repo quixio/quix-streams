@@ -76,6 +76,12 @@ class MQTTSink(BaseSink):
             Also accepts a callable that uses the current message value as input.
         :param properties: An optional Properties instance for messages. Default = None.
             Also accepts a callable that uses the current message value as input.
+                :param on_client_connect_success: An optional callback made after successful
+            client authentication, primarily for additional logging.
+        :param on_client_connect_failure: An optional callback made after failed
+            client authentication (which should raise an Exception).
+            Callback should accept the raised Exception as an argument.
+            Callback must resolve (or propagate/re-raise) the Exception.
         """
         super().__init__(
             on_client_connect_success=on_client_connect_success,
