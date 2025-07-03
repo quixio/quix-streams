@@ -14,15 +14,17 @@ Quix Streams is an end-to-end framework for real-time Python data engineering, o
 
 Build data pipelines and event-driven microservice architectures leveraging Kafka's low-level scalability, resiliency and durability features in a lightweight library without server-side clusters to manage.
 
+## Key Features 💎
 Quix Streams provides the following features to make your life easier:
+
 - Pure Python, meaning no wrappers around Java and no cross-language debugging.
-- Sources & Sinks API for building custom connectors that integrate data with Kafka.
 - Streaming DataFrame API for building tabular data processing pipelines.
-- Serializers API supporting JSON, Avro, Protobuf & Schema Registry.
-- State API with built-in RocksDB state object for stateful processing.
-- Application API for managing the Kafka-related setup, teardown and message lifecycle.
-- Operators for common processing tasks like Windowing, Branching, Group By and Reduce.
-- Exactly-once processing guarantees via Kafka transactions.
+- [Sources](https://quix.io/docs/quix-streams/connectors/sources/index.html) & [Sinks](https://quix.io/docs/quix-streams/connectors/sinks/index.html) API for building custom connectors that integrate data with Kafka.
+- [Serializers API](https://quix.io/docs/quix-streams/advanced/serialization.html) supporting JSON, Avro, Protobuf & [Schema Registry](https://quix.io/docs/quix-streams/advanced/schema-registry.html).
+- [Fault-tolerant stateful operations](https://quix.io/docs/quix-streams/advanced/stateful-processing.html).
+- Operators for common processing tasks like [Windowing](https://quix.io/docs/quix-streams/windowing.html), [Branching](https://quix.io/docs/quix-streams/branching.html) and [Group By](https://quix.io/docs/quix-streams/groupby.html).
+- [Exactly-once processing guarantees](https://quix.io/docs/quix-streams/configuration.html#processing-guarantees) via Kafka transactions.
+- [Streaming Joins](https://quix.io/docs/quix-streams/joins.html)
 
 Use Quix Streams to build simple Kafka producer/consumer applications or leverage stream processing to build complex event-driven systems, real-time data pipelines and AI/ML products.
 
@@ -113,23 +115,6 @@ You'll get self-service DevOps, CI/CD and monitoring, all built with best in cla
 
 Please see the [**Connecting to Quix Cloud**](https://quix.io/docs/quix-streams/quix-platform.html) page 
 to learn how to use Quix Streams and Quix Cloud together.
-
-## Roadmap 📍
-
-This library is being actively developed by a full-time team.
-
-Here are some of the planned improvements:
-
-- [x] [Windowed aggregations over Tumbling & Hopping windows](https://quix.io/docs/quix-streams/windowing.html)
-- [x] [Stateful operations and recovery based on Kafka changelog topics](https://quix.io/docs/quix-streams/advanced/stateful-processing.html)
-- [x] [Group-by operation](https://quix.io/docs/quix-streams/groupby.html)
-- [x] ["Exactly Once" delivery guarantees for Kafka message processing (AKA transactions)](https://quix.io/docs/quix-streams/configuration.html#processing-guarantees)
-- [x] Support for [Avro](https://quix.io/docs/quix-streams/advanced/serialization.html#avro) and [Protobuf](https://quix.io/docs/quix-streams/advanced/serialization.html#protobuf) formats
-- [x] [Schema Registry support](https://quix.io/docs/quix-streams/advanced/schema-registry.html)
-- [x] [Windowed aggregations over Sliding windows](https://quix.io/docs/quix-streams/windowing.html)
-- [ ] Joins
-
-For a more detailed overview of the planned features, please look at [the Roadmap Board](https://github.com/orgs/quixio/projects/1).
 
 ## Get Involved 🤝
 
