@@ -24,7 +24,7 @@ Quix Streams provides the following features to make your life easier:
 - [Fault-tolerant stateful operations](https://quix.io/docs/quix-streams/advanced/stateful-processing.html).
 - Operators for common processing tasks like [Windowing](https://quix.io/docs/quix-streams/windowing.html), [Branching](https://quix.io/docs/quix-streams/branching.html) and [Group By](https://quix.io/docs/quix-streams/groupby.html).
 - [Exactly-once processing guarantees](https://quix.io/docs/quix-streams/configuration.html#processing-guarantees) via Kafka transactions.
-- [Streaming Joins](https://quix.io/docs/quix-streams/joins.html)
+- [Streaming Joins](https://quix.io/docs/quix-streams/joins.html).
 
 Use Quix Streams to build simple Kafka producer/consumer applications or leverage stream processing to build complex event-driven systems, real-time data pipelines and AI/ML products.
 
