@@ -401,6 +401,7 @@ def _as_windowed(
     processing_context: "ProcessingContext",
     store_name: str,
     stream_id: str,
+    heartbeat_func,
 ) -> TransformExpandedCallback:
     @functools.wraps(func)
     def wrapper(
@@ -413,6 +414,9 @@ def _as_windowed(
                 stream_id=stream_id, partition=ctx.partition, store_name=store_name
             ),
         )
+        if is_heartbeat_message(key, value):
+            return heartbeat_func(timestamp, transaction)
+
         if key is None:
             logger.warning(
                 f"Skipping window processing for a message because the key is None, "

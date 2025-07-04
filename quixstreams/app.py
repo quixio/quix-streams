@@ -5,6 +5,7 @@ import signal
 import time
 import warnings
 from collections import defaultdict
+from datetime import datetime
 from pathlib import Path
 from typing import Callable, List, Literal, Optional, Protocol, Tuple, Type, Union
 
@@ -28,6 +29,8 @@ from .kafka import AutoOffsetReset, ConnectionConfig, Consumer, Producer
 from .logging import LogLevel, configure_logging
 from .models import (
     DeserializerType,
+    MessageContext,
+    Row,
     SerializerType,
     TimestampExtractor,
     Topic,
@@ -151,6 +154,7 @@ class Application:
         topic_create_timeout: float = 60,
         processing_guarantee: ProcessingGuarantee = "at-least-once",
         max_partition_buffer_size: int = 10000,
+        heartbeat_interval: float = 0.0,
     ):
         """
         :param broker_address: Connection settings for Kafka.
@@ -220,6 +224,11 @@ class Application:
             It is a soft limit, and the actual number of buffered messages can be up to x2 higher.
             Lower value decreases the memory use, but increases the latency.
             Default - `10000`.
+        :param heartbeat_interval: the interval (seconds) at which to send heartbeat messages.
+            The heartbeat timing starts counting from application start.
+            The heartbeat is sent for every partition on every topic.
+            If the value is 0, no heartbeat messages will be sent.
+            Default - `0.0`.
 
         <br><br>***Error Handlers***<br>
         To handle errors, `Application` accepts callbacks triggered when
@@ -362,6 +371,10 @@ class Application:
             producer=producer,
             recovery_manager=recovery_manager,
         )
+
+        self._heartbeat_active = heartbeat_interval > 0
+        self._heartbeat_interval = heartbeat_interval
+        self._heartbeat_last_sent = datetime.now().timestamp()
 
         self._source_manager = SourceManager()
         self._sink_manager = SinkManager()
@@ -879,6 +892,7 @@ class Application:
         processing_context = self._processing_context
         source_manager = self._source_manager
         process_message = self._process_message
+        process_heartbeat = self._process_heartbeat
         printer = self._processing_context.printer
         run_tracker = self._run_tracker
         consumer = self._consumer
@@ -902,6 +916,7 @@ class Application:
                 run_tracker.timeout_refresh()
             else:
                 process_message(dataframes_composed)
+                process_heartbeat(dataframes_composed)
                 processing_context.commit_checkpoint()
                 consumer.resume_backpressured()
                 source_manager.raise_for_error()
@@ -984,6 +999,49 @@ class Application:
 
         if self._on_message_processed is not None:
             self._on_message_processed(topic_name, partition, offset)
+
+    def _process_heartbeat(self, dataframe_composed):
+        if not self._heartbeat_active:
+            return
+
+        now = datetime.now().timestamp()
+        if self._heartbeat_last_sent > now - self._heartbeat_interval:
+            return
+
+        value, key, timestamp, headers = None, None, int(now * 1000), {}
+        non_changelog_topics = self._topic_manager.non_changelog_topics
+
+        for tp in self._consumer.assignment():
+            if (topic := tp.topic) in non_changelog_topics:
+                row = Row(
+                    value=value,
+                    key=key,
+                    timestamp=timestamp,
+                    context=MessageContext(
+                        topic=topic,
+                        partition=tp.partition,
+                        offset=-1,
+                        size=-1,
+                        heartbeat=True,
+                    ),
+                    headers=headers,
+                )
+                context = copy_context()
+                context.run(set_message_context, row.context)
+                try:
+                    context.run(
+                        dataframe_composed[topic],
+                        value,
+                        key,
+                        timestamp,
+                        headers,
+                    )
+                except Exception as exc:
+                    to_suppress = self._on_processing_error(exc, row, logger)
+                    if not to_suppress:
+                        raise
+
+        self._heartbeat_last_sent = now
 
     def _on_assign(self, _, topic_partitions: List[TopicPartition]):
         """

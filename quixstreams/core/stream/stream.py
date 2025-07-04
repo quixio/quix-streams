@@ -25,6 +25,7 @@ from .functions import (
     FilterFunction,
     FilterWithMetadataCallback,
     FilterWithMetadataFunction,
+    HeartbeatFunction,
     ReturningExecutor,
     StreamFunction,
     TransformCallback,
@@ -279,6 +280,10 @@ class Stream:
         :return: a new Stream derived from the current one
         """
         return self._add(TransformFunction(func, expand=expand))  # type: ignore[call-overload]
+
+    def add_heartbeat(self, func) -> "Stream":
+        heartbeat_func = HeartbeatFunction(func)
+        return self._add(heartbeat_func)
 
     def merge(self, other: "Stream") -> "Stream":
         """
