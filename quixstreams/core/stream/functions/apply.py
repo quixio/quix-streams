@@ -1,6 +1,7 @@
 from typing import Any, Literal, Union, overload
 
 from .base import StreamFunction
+from .heartbeat import ignore_heartbeat
 from .types import (
     ApplyCallback,
     ApplyExpandedCallback,
@@ -66,7 +67,7 @@ class ApplyFunction(StreamFunction):
                 result = func(value)
                 child_executor(result, key, timestamp, headers)
 
-        return wrapper
+        return ignore_heartbeat(wrapper)
 
 
 class ApplyWithMetadataFunction(StreamFunction):
@@ -128,4 +129,4 @@ class ApplyWithMetadataFunction(StreamFunction):
                 result = func(value, key, timestamp, headers)
                 child_executor(result, key, timestamp, headers)
 
-        return wrapper
+        return ignore_heartbeat(wrapper)
