@@ -24,9 +24,9 @@ class HeartbeatFunction(StreamFunction):
             timestamp: int,
             headers: Any,
         ):
-            if is_heartbeat_message(key, value):
-                # TODO: Heartbeats may return values (like expired windows)
-                func(timestamp)
+            if is_heartbeat_message(key, value) and (result := func(timestamp)):
+                for new_value, new_key, new_timestamp, new_headers in result:
+                    child_executor(new_value, new_key, new_timestamp, new_headers)
             child_executor(value, key, timestamp, headers)
 
         return wrapper
