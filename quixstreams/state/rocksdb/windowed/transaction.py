@@ -298,6 +298,7 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
         step_ms: int,
         delete: bool = True,
         collect: bool = False,
+        advance_last_expired_timestamp: bool = True,
     ) -> Iterable[ExpiredWindowDetail]:
         """
         Get all expired windows for all prefix from RocksDB up to the specified `max_end_time` timestamp.
@@ -360,9 +361,12 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
                 if collect:
                     self.delete_from_collection(end=start, prefix=prefix)
 
-        self._set_timestamp(
-            prefix=b"", cache=self._last_expired_timestamps, timestamp_ms=last_expired
-        )
+        if advance_last_expired_timestamp:
+            self._set_timestamp(
+                prefix=b"",
+                cache=self._last_expired_timestamps,
+                timestamp_ms=last_expired,
+            )
 
     def delete_windows(
         self, max_start_time: int, delete_values: bool, prefix: bytes

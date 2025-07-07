@@ -69,6 +69,14 @@ class Window(abc.ABC):
     ) -> tuple[Iterable[WindowKeyResult], Iterable[WindowKeyResult]]:
         pass
 
+    @abstractmethod
+    def process_heartbeat(
+        self,
+        timestamp_ms: int,
+        transaction: WindowedPartitionTransaction,
+    ) -> Iterable[WindowKeyResult]:
+        pass
+
     def register_store(self) -> None:
         TopicManager.ensure_topics_copartitioned(*self._dataframe.topics)
         # Create a config for the changelog topic based on the underlying SDF topics
@@ -151,8 +159,9 @@ class Window(abc.ABC):
         def heartbeat_callback(
             timestamp: int, transaction: WindowedPartitionTransaction
         ) -> Iterable[Message]:
-            # TODO: Implement heartbeat callback
-            return []
+            # TODO: Check if this will work for sliding windows
+            for key, window in self.process_heartbeat(timestamp, transaction):
+                yield (window, key, window["start"], None)
 
         return self._apply_window(
             func=window_callback,
