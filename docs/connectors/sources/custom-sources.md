@@ -154,7 +154,7 @@ if __name__ == "__main__":
 [2024-09-25 10:54:38,857] [INFO] [quixstreams] : Validating Kafka topics exist and are configured correctly...
 [2024-09-25 10:54:38,859] [INFO] [quixstreams] : Kafka topics validation complete
 [2024-09-25 10:54:38,860] [INFO] [quixstreams] : Initializing state directory at "<project path>/state/quixstreams-default"
-[2024-09-25 10:54:38,860] [INFO] [quixstreams] : Waiting for incoming messages
+[2024-09-25 10:54:38,860] [INFO] [quixstreams] : The application started and is now processing incoming messages
 [2024-09-25 10:54:39,007] [INFO] [quixstreams] : Starting source mysource
 Traceback (most recent call last):
   File "<string>", line 1, in <module>
