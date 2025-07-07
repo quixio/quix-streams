@@ -894,7 +894,7 @@ class Application:
 
         processing_context.init_checkpoint()
         run_tracker.set_as_running()
-        logger.info("Waiting for incoming messages")
+        logger.info("The application started and is now processing incoming messages")
         # Start polling Kafka for messages and callbacks
         while run_tracker.running:
             if state_manager.recovery_required:
@@ -908,7 +908,7 @@ class Application:
                 printer.print()
                 run_tracker.update_status()
 
-        logger.info("Stop processing of StreamingDataFrame")
+        logger.info("Stopping the application")
         processing_context.commit_checkpoint(force=True)
 
     def _run_sources(self):
