@@ -148,7 +148,9 @@ class Window(abc.ABC):
             for key, window in expired_windows:
                 yield (window, key, window["start"], None)
 
-        def heartbeat_callback(timestamp: int) -> Iterable[Message]:
+        def heartbeat_callback(
+            timestamp: int, transaction: WindowedPartitionTransaction
+        ) -> Iterable[Message]:
             # TODO: Implement heartbeat callback
             return []
 
@@ -201,7 +203,9 @@ class Window(abc.ABC):
             for key, window in updated_windows:
                 yield (window, key, window["start"], None)
 
-        def heartbeat_callback(timestamp: int) -> Iterable[Message]:
+        def heartbeat_callback(
+            timestamp: int, transaction: WindowedPartitionTransaction
+        ) -> Iterable[Message]:
             # TODO: Implement heartbeat callback
             return []
 
