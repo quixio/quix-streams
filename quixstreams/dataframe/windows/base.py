@@ -144,6 +144,7 @@ class Window(abc.ABC):
                 yield (window, key, window["start"], None)
 
         def heartbeat_callback(timestamp: int) -> Iterable[Message]:
+            # TODO: Implement heartbeat callback
             return []
 
         return self._apply_window(
@@ -196,6 +197,7 @@ class Window(abc.ABC):
                 yield (window, key, window["start"], None)
 
         def heartbeat_callback(timestamp: int) -> Iterable[Message]:
+            # TODO: Implement heartbeat callback
             return []
 
         return self._apply_window(
