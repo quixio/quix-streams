@@ -1,7 +1,7 @@
 from typing import Any, Literal, Union, overload
 
 from .base import StreamFunction
-from .heartbeat import ignore_heartbeat
+from .heartbeat import is_heartbeat_message
 from .types import (
     ApplyCallback,
     ApplyExpandedCallback,
@@ -49,6 +49,10 @@ class ApplyFunction(StreamFunction):
                 timestamp: int,
                 headers: Any,
             ) -> None:
+                # Pass heartbeat messages downstream
+                if is_heartbeat_message(key, value):
+                    child_executor(value, key, timestamp, headers)
+
                 # Execute a function on a single value and wrap results into a list
                 # to expand them downstream
                 result = func(value)
@@ -63,11 +67,13 @@ class ApplyFunction(StreamFunction):
                 timestamp: int,
                 headers: Any,
             ) -> None:
-                # Execute a function on a single value and return its result
-                result = func(value)
-                child_executor(result, key, timestamp, headers)
+                # Pass heartbeat messages downstream or execute
+                # a function on a single value and return its result
+                if not is_heartbeat_message(key, value):
+                    value = func(value)
+                child_executor(value, key, timestamp, headers)
 
-        return ignore_heartbeat(wrapper)
+        return wrapper
 
 
 class ApplyWithMetadataFunction(StreamFunction):
@@ -111,6 +117,10 @@ class ApplyWithMetadataFunction(StreamFunction):
                 timestamp: int,
                 headers: Any,
             ):
+                # Pass heartbeat messages downstream
+                if is_heartbeat_message(key, value):
+                    child_executor(value, key, timestamp, headers)
+
                 # Execute a function on a single value and wrap results into a list
                 # to expand them downstream
                 result = func(value, key, timestamp, headers)
@@ -125,8 +135,10 @@ class ApplyWithMetadataFunction(StreamFunction):
                 timestamp: int,
                 headers: Any,
             ):
-                # Execute a function on a single value and return its result
-                result = func(value, key, timestamp, headers)
-                child_executor(result, key, timestamp, headers)
+                # Pass heartbeat messages downstream or execute
+                # a function on a single value and return its result
+                if not is_heartbeat_message(key, value):
+                    value = func(value, key, timestamp, headers)
+                child_executor(value, key, timestamp, headers)
 
-        return ignore_heartbeat(wrapper)
+        return wrapper

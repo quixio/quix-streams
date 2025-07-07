@@ -1,5 +1,7 @@
 from typing import Any
 
+from quixstreams.core.stream.functions.heartbeat import is_heartbeat_message
+
 from .base import StreamFunction
 from .types import UpdateCallback, UpdateWithMetadataCallback, VoidExecutor
 
@@ -28,7 +30,8 @@ class UpdateFunction(StreamFunction):
 
         def wrapper(value: Any, key: Any, timestamp: int, headers: Any):
             # Update a single value and forward it
-            func(value)
+            if not is_heartbeat_message(key, value):
+                func(value)
             child_executor(value, key, timestamp, headers)
 
         return wrapper
@@ -56,7 +59,8 @@ class UpdateWithMetadataFunction(StreamFunction):
 
         def wrapper(value: Any, key: Any, timestamp: int, headers: Any):
             # Update a single value and forward it
-            func(value, key, timestamp, headers)
+            if not is_heartbeat_message(key, value):
+                func(value, key, timestamp, headers)
             child_executor(value, key, timestamp, headers)
 
         return wrapper

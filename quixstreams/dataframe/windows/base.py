@@ -19,6 +19,7 @@ from typing_extensions import TypeAlias
 from quixstreams.context import message_context
 from quixstreams.core.stream import TransformExpandedCallback
 from quixstreams.core.stream.exceptions import InvalidOperation
+from quixstreams.core.stream.functions.heartbeat import is_heartbeat_message
 from quixstreams.models.topics.manager import TopicManager
 from quixstreams.state import WindowedPartitionTransaction
 
@@ -83,6 +84,7 @@ class Window(abc.ABC):
         self,
         func: TransformRecordCallbackExpandedWindowed,
         name: str,
+        heartbeat_func,
     ) -> "StreamingDataFrame":
         self.register_store()
 
@@ -91,6 +93,7 @@ class Window(abc.ABC):
             stream_id=self._dataframe.stream_id,
             processing_context=self._dataframe.processing_context,
             store_name=name,
+            heartbeat_func=heartbeat_func,
         )
         # Manually modify the Stream and clone the source StreamingDataFrame
         # to avoid adding "transform" API to it.
@@ -140,9 +143,13 @@ class Window(abc.ABC):
             for key, window in expired_windows:
                 yield (window, key, window["start"], None)
 
+        def heartbeat_callback(timestamp: int) -> Iterable[Message]:
+            return []
+
         return self._apply_window(
             func=window_callback,
             name=self._name,
+            heartbeat_func=heartbeat_callback,
         )
 
     def current(self) -> "StreamingDataFrame":
@@ -188,7 +195,14 @@ class Window(abc.ABC):
             for key, window in updated_windows:
                 yield (window, key, window["start"], None)
 
-        return self._apply_window(func=window_callback, name=self._name)
+        def heartbeat_callback(timestamp: int) -> Iterable[Message]:
+            return []
+
+        return self._apply_window(
+            func=window_callback,
+            name=self._name,
+            heartbeat_func=heartbeat_callback,
+        )
 
     # Implemented by SingleAggregationWindowMixin and MultiAggregationWindowMixin
     # Single aggregation and multi aggregation windows store aggregations and collections

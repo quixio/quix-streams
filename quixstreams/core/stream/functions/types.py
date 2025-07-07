@@ -36,6 +36,15 @@ TransformExpandedCallback = Callable[
     [Any, Any, int, Any], Iterable[Tuple[Any, Any, int, Any]]
 ]
 
+HeartbeatCallback = Callable[
+    [int],  # timestamp
+    Union[
+        None,
+        Tuple[Any, Any, int, Any],  # single value
+        Iterable[Tuple[Any, Any, int, Any]],  # expanded values
+    ],
+]
+
 StreamCallback = Union[
     ApplyCallback,
     ApplyExpandedCallback,

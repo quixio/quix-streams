@@ -1,5 +1,7 @@
 from typing import Any
 
+from quixstreams.core.stream.functions.heartbeat import is_heartbeat_message
+
 from .base import StreamFunction
 from .types import FilterCallback, FilterWithMetadataCallback, VoidExecutor
 
@@ -30,7 +32,7 @@ class FilterFunction(StreamFunction):
             headers: Any,
         ):
             # Filter a single value
-            if func(value):
+            if is_heartbeat_message(key, value) or func(value):
                 child_executor(value, key, timestamp, headers)
 
         return wrapper
@@ -62,7 +64,7 @@ class FilterWithMetadataFunction(StreamFunction):
             headers: Any,
         ):
             # Filter a single value
-            if func(value, key, timestamp, headers):
+            if is_heartbeat_message(key, value) or func(value, key, timestamp, headers):
                 child_executor(value, key, timestamp, headers)
 
         return wrapper
