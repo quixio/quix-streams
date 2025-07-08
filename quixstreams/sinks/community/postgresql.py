@@ -48,8 +48,14 @@ _POSTGRES_TYPES_MAP: dict[type, str] = {
     bool: "BOOLEAN",
 }
 
+PrimaryKeySetter = Callable[[SinkItem], Optional[Union[str, list[str]]]]
+PrimaryKeys = Union[str, list[str], PrimaryKeySetter]
+
 
 class PostgreSQLSinkException(QuixException): ...
+
+
+class PostgresSQLSinkMissingExistingPK(QuixException): ...
 
 
 class PostgreSQLSink(BatchingSink):
@@ -65,6 +71,8 @@ class PostgreSQLSink(BatchingSink):
         schema_auto_update: bool = True,
         connection_timeout_seconds: int = 30,
         statement_timeout_seconds: int = 30,
+        primary_keys: Optional[PrimaryKeys] = None,
+        upsert_on_primary_keys: bool = False,
         on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
         on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
         **kwargs,
@@ -86,6 +94,14 @@ class PostgreSQLSink(BatchingSink):
         :param connection_timeout_seconds: Timeout for connection.
         :param statement_timeout_seconds: Timeout for DDL operations such as table
             creation or schema updates.
+        :param primary_keys: An optional single (or list of) primary key(s).
+            Can also provide a callable that accepts the message value as input, and returns
+            a similar result (or nothing).
+            Often paired with `upsert_on_primary_keys=True`.
+            It must include all currently defined primary_keys on a given table.
+        :param upsert_on_primary_keys: Upsert based on the given `primary_keys`.
+            If False, every message is treated as an independent entry, and any
+            primary key collisions will consequently raise an exception.
         :param on_client_connect_success: An optional callback made after successful
             client authentication, primarily for additional logging.
         :param on_client_connect_failure: An optional callback made after failed
@@ -107,6 +123,17 @@ class PostgreSQLSink(BatchingSink):
         options = kwargs.pop("options", "")
         if "statement_timeout" not in options:
             options = f"{options} -c statement_timeout={statement_timeout_seconds}s"
+
+        if primary_keys and not upsert_on_primary_keys:
+            logger.warning(
+                "NOTE: `primary_keys` was set but `upsert_on_primary_keys` is False; "
+                "upserting is commonly desired when using primary keys."
+            )
+        self._primary_keys = (
+            _primary_keys_setter(primary_keys) if primary_keys else None
+        )
+        self._do_upsert = upsert_on_primary_keys
+
         self._client_settings = {
             "host": host,
             "port": port,
@@ -125,18 +152,27 @@ class PostgreSQLSink(BatchingSink):
 
     def write(self, batch: SinkBatch):
         tables = {}
+        primary_keys = []
+
         for item in batch:
             table = tables.setdefault(
-                self._table_name(item), {"rows": [], "cols_types": {}}
+                self._table_name(item), {"rows": [], "cols_types": {}, "pks_types": {}}
             )
+            if self._primary_keys:
+                primary_keys = self._primary_keys(item) or []
+                if isinstance(primary_keys, str):
+                    primary_keys = [primary_keys]
+
             row = {}
             if item.key is not None:
                 key_type = type(item.key)
                 table["cols_types"].setdefault(_KEY_COLUMN_NAME, key_type)
                 row[_KEY_COLUMN_NAME] = item.key
-
             for key, value in item.value.items():
-                if value is not None:
+                if key in primary_keys:
+                    table["pks_types"].setdefault(key, type(key))
+                    row[key] = value
+                elif value is not None:
                     table["cols_types"].setdefault(key, type(value))
                     row[key] = value
 
@@ -148,10 +184,18 @@ class PostgreSQLSink(BatchingSink):
                 for name, values in tables.items():
                     if self._schema_auto_update:
                         self._create_table(name)
+                        if self._primary_keys:
+                            self._add_new_primary_keys(name, values["pks_types"])
                         self._add_new_columns(name, values["cols_types"])
-                    self._insert_rows(name, values["rows"])
+                    self._insert_rows(name, values["rows"], values["pks_types"])
         except psycopg2.Error as e:
             self._client.rollback()
+            if "duplicate key value violates unique constraint" in str(e):
+                raise PostgreSQLSinkException(
+                    f"Failed to write batch: attempted insert of new row using an "
+                    f"existing primary key. Try `upsert_on_primary_keys=True` for "
+                    f"upsert functionality. PostgreSQL error info: {str(e)}"
+                ) from e
             raise PostgreSQLSinkException(f"Failed to write batch: {str(e)}") from e
         table_counts = {table: len(values["rows"]) for table, values in tables.items()}
         schema_log = (
@@ -238,20 +282,98 @@ class PostgreSQLSink(BatchingSink):
             with self._client.cursor() as cursor:
                 cursor.execute(query)
 
-    def _insert_rows(self, table_name: str, rows: list[dict]) -> None:
+    def _get_current_primary_keys(self, table) -> list[str]:
+        query = sql.SQL(
+            """
+            SELECT
+                kcu.column_name
+            FROM
+                information_schema.table_constraints tc
+            JOIN
+                information_schema.key_column_usage kcu
+                ON tc.constraint_name = kcu.constraint_name
+            WHERE
+                tc.constraint_type = 'PRIMARY KEY'
+                AND tc.table_name = {table}
+                AND tc.table_schema = {schema};
+            """
+        ).format(
+            schema=sql.Literal(self._schema_name),
+            table=sql.Literal(table),
+        )
+        with self._client.cursor() as cursor:
+            cursor.execute(query)
+            pks = list(sorted(row[0] for row in cursor.fetchall()))
+        return pks
+
+    def _add_new_primary_keys(self, table_name: str, pks: dict[str, type]) -> None:
+        current_pks = self._get_current_primary_keys(table_name)
+        new_pks = list(sorted(pks.keys()))
+        if current_pks == new_pks:
+            return
+
+        logger.debug(
+            f"Identifying new primary keys to add; current: {current_pks}, "
+            f"defined: {new_pks}"
+        )
+        new_pks = set(new_pks)
+        if len(current_pks) != 0:
+            current_pks = set(current_pks)
+            if missing := current_pks - new_pks:
+                raise PostgresSQLSinkMissingExistingPK(
+                    f"the PostgresSQLSink `primary_key` argument does not include the"
+                    f"already existing Primary Key(s): {missing}"
+                )
+            new_pks = new_pks - current_pks
+
+        logger.info(f"Adding new primary key column(s): {new_pks}")
+        self._add_new_columns(table_name, {pk: pks[pk] for pk in new_pks})
+
+        logger.info(f"Setting new primary key(s): {new_pks}")
+        query = sql.SQL(
+            """
+            ALTER TABLE {table}
+            ADD PRIMARY KEY ({pks})
+            """
+        ).format(
+            table=sql.Identifier(self._schema_name, table_name),
+            pks=sql.SQL(", ").join(sql.Identifier(pk) for pk in new_pks),
+        )
+
+        with self._client.cursor() as cursor:
+            cursor.execute(query)
+
+    def _insert_rows(
+        self, table_name: str, rows: list[dict], pks: Optional[dict] = None
+    ) -> None:
         if not rows:
             return
 
         # Collect all column names from the first row
         columns = list(rows[0].keys())
-        # Handle missing keys gracefully
-        values = [[row.get(col, None) for col in columns] for row in rows]
 
         query = sql.SQL("INSERT INTO {table} ({columns}) VALUES %s").format(
             table=sql.Identifier(self._schema_name, table_name),
             columns=sql.SQL(", ").join(map(sql.Identifier, columns)),
         )
+        if pks and self._do_upsert:
+            # we must de-deplicate based on primary keys else an exception is thrown.
+            # We take the "latest" values of each based on original read order.
+            rows = {tuple(row[pk] for pk in pks): row for row in rows}.values()
+            upsert_stub = sql.SQL(
+                "ON CONFLICT ({pks}) DO UPDATE SET {non_pk_cols}"
+            ).format(
+                pks=sql.SQL(", ").join(map(sql.Identifier, pks)),
+                non_pk_cols=sql.SQL(", ").join(
+                    sql.SQL("{col} = EXCLUDED.{col}").format(col=sql.Identifier(col))
+                    for col in columns
+                    if col not in pks
+                ),
+            )
+            query = sql.SQL(" ").join([query, upsert_stub])
 
+        # Handle missing keys gracefully
+        values = [[row.get(col, None) for col in columns] for row in rows]
         with self._client.cursor() as cursor:
             execute_values(cursor, query, values)
 
@@ -262,3 +384,9 @@ def _table_name_setter(
     if isinstance(table_name, str):
         return lambda sink_item: table_name
     return table_name
+
+
+def _primary_keys_setter(primary_keys: Optional[PrimaryKeys]) -> PrimaryKeySetter:
+    if isinstance(primary_keys, (str, list)):
+        return lambda sink_item: primary_keys
+    return primary_keys
