@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from numbers import Integral
 
-from .date_utils import get_date_helper
+from .date_utils import DateHelper
 
 EPOCH = datetime.fromtimestamp(0, tz=timezone.utc)
 
@@ -44,6 +44,9 @@ try:
     _HAS_NUMPY = True
 except ModuleNotFoundError:
     _HAS_NUMPY = False
+
+
+date_helper = DateHelper()
 
 
 class Point(object):
@@ -341,7 +344,6 @@ def _escape_string(value) -> str:
 
 
 def _convert_timestamp(timestamp, precision=DEFAULT_WRITE_PRECISION):
-    date_helper = get_date_helper()
     if isinstance(timestamp, Integral):
         return timestamp  # assume precision is correct if timestamp is int
 
