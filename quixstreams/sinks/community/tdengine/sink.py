@@ -174,6 +174,7 @@ class TDengineSink(BatchingSink):
             )
         else:
             raise ValueError("Either token or username and password must be provided")
+
         query_string = urlencode(query_params)
         full_url = f"{base_url}?{query_string}"
         self._client_args = {
@@ -239,26 +240,23 @@ class TDengineSink(BatchingSink):
             timeout=timeout,
         )
         if resp.status != 200:
-            err = urllib3.exceptions.HTTPError(
+            raise urllib3.exceptions.HTTPError(
                 f"Failed to get databases: {resp.status} {resp.data}"
             )
-            raise err
         resp_data = json.loads(resp.data.decode("utf-8"))
         resp_code = resp_data.get("code")
         if resp_code != 0:
             error_message = resp_data.get("desc", "Unknown error")
-            err = urllib3.exceptions.HTTPError(
+            raise urllib3.exceptions.HTTPError(
                 f"Failed to get databases, [{resp_code}]:{error_message}"
             )
-            raise err
         data = resp_data.get("data")
         # TODO: create the database if it does not exist
         if not (
             isinstance(data, list)
             and any(database == sublist[0] for sublist in data if sublist)
         ):
-            err = urllib3.exceptions.HTTPError(f"Database '{database}' does not exist")
-            raise err
+            raise urllib3.exceptions.HTTPError(f"Database '{database}' does not exist")
 
     def add(
         self,
@@ -373,8 +371,8 @@ class TDengineSink(BatchingSink):
             err = urllib3.exceptions.HTTPError(
                 f"Failed to write data to TDengine: {resp.status} {resp.data}"
             )
-            if resp.status != 204:
-                if resp.status == 503:
-                    retry_after = resp.getheader("Retry-After")
-                    raise SinkBackpressureError(retry_after=int(retry_after)) from err
+            if resp.status == 503:
+                retry_after = resp.getheader("Retry-After")
+                raise SinkBackpressureError(retry_after=int(retry_after)) from err
+            elif resp.status != 204:
                 raise err

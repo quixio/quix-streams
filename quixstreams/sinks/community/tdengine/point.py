@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from numbers import Integral
 
-from .date_utils import get_date_helper
+from .date_utils import DateHelper
 
 EPOCH = datetime.fromtimestamp(0, tz=timezone.utc)
 
@@ -46,11 +46,18 @@ except ModuleNotFoundError:
     _HAS_NUMPY = False
 
 
-class Point(object):
-    @classmethod
-    def measurement(cls, measurement):
-        """Create a new Point with specified measurement name."""
-        return cls(measurement)
+date_helper = DateHelper()
+
+
+class Point:
+    def __init__(self, measurement_name):
+        """Initialize defaults."""
+        self._tags = {}
+        self._fields = {}
+        self._name = measurement_name
+        self._time = None
+        self._write_precision = DEFAULT_WRITE_PRECISION
+        self._field_types = {}
 
     @classmethod
     def from_dict(
@@ -130,7 +137,7 @@ class Point(object):
                             - ``float`` - serialize integers as "**IEEE-754 64-bit floating-point numbers**". Useful for unify number types in your pipeline to avoid field type conflict - ``9223372036854775807``
                           The ``field_types`` can be also specified as part of incoming dictionary. For more info see an example above.
         :return: new data point
-        """  # noqa: E501
+        """
         measurement_ = kwargs.get("record_measurement_name", None)
         if measurement_ is None:
             measurement_ = dictionary[
@@ -138,8 +145,8 @@ class Point(object):
             ]
         point = cls(measurement_)
 
-        record_tag_keys = kwargs.get("record_tag_keys", None)
-        if record_tag_keys is not None:
+        record_tag_keys = kwargs.get("record_tag_keys", [])
+        if record_tag_keys:
             for tag_key in record_tag_keys:
                 if tag_key in dictionary:
                     point.tag(tag_key, dictionary[tag_key])
@@ -147,8 +154,8 @@ class Point(object):
             for tag_key, tag_value in dictionary["tags"].items():
                 point.tag(tag_key, tag_value)
 
-        record_field_keys = kwargs.get("record_field_keys", None)
-        if record_field_keys is not None:
+        record_field_keys = kwargs.get("record_field_keys", [])
+        if record_field_keys:
             for field_key in record_field_keys:
                 if field_key in dictionary:
                     point.field(field_key, dictionary[field_key])
@@ -181,15 +188,6 @@ class Point(object):
 
         return point
 
-    def __init__(self, measurement_name):
-        """Initialize defaults."""
-        self._tags = {}
-        self._fields = {}
-        self._name = measurement_name
-        self._time = None
-        self._write_precision = DEFAULT_WRITE_PRECISION
-        self._field_types = {}
-
     def field_types(self, field_types: dict):
         self._field_types = field_types
         return self
@@ -201,10 +199,10 @@ class Point(object):
         If time doesn't have specified timezone we assume that timezone is UTC.
 
         Examples::
-            Point.measurement("h2o").field("val", 1).time("2009-11-10T23:00:00.123456Z")
-            Point.measurement("h2o").field("val", 1).time(1257894000123456000)
-            Point.measurement("h2o").field("val", 1).time(datetime(2009, 11, 10, 23, 0, 0, 123456))
-            Point.measurement("h2o").field("val", 1).time(1257894000123456000, write_precision=WritePrecision.NS)
+            Point("h2o").field("val", 1).time("2009-11-10T23:00:00.123456Z")
+            Point("h2o").field("val", 1).time(1257894000123456000)
+            Point("h2o").field("val", 1).time(datetime(2009, 11, 10, 23, 0, 0, 123456))
+            Point("h2o").field("val", 1).time(1257894000123456000, write_precision=WritePrecision.NS)
 
 
         :param time: the timestamp for your data
@@ -341,7 +339,6 @@ def _escape_string(value) -> str:
 
 
 def _convert_timestamp(timestamp, precision=DEFAULT_WRITE_PRECISION):
-    date_helper = get_date_helper()
     if isinstance(timestamp, Integral):
         return timestamp  # assume precision is correct if timestamp is int
 

@@ -1,7 +1,6 @@
 """Utils to get right Date parsing function."""
 
 import datetime
-import threading
 from datetime import timezone as tz
 from sys import version_info
 
@@ -14,9 +13,15 @@ except ImportError as exc:
     ) from exc
 
 
-date_helper = None
+try:
+    import ciso8601
 
-lock_ = threading.Lock()
+    _parse_date = ciso8601.parse_datetime
+except ModuleNotFoundError:
+    if (version_info.major, version_info.minor) >= (3, 11):
+        _parse_date = datetime.datetime.fromisoformat
+    else:
+        _parse_date = parser.parse
 
 
 class DateHelper:
@@ -55,7 +60,7 @@ class DateHelper:
         :return: Returns a :class:`datetime.datetime` object or compliant implementation
                  like :class:`class 'pandas._libs.tslibs.timestamps.Timestamp`
         """
-        pass
+        return _parse_date(date_string)
 
     def to_nanoseconds(self, delta):
         """
@@ -81,29 +86,3 @@ class DateHelper:
             return self.to_utc(value.replace(tzinfo=self.timezone))
         else:
             return value.astimezone(tz.utc)
-
-
-def get_date_helper() -> DateHelper:
-    """
-    Return DateHelper with proper implementation.
-
-    If there is a 'ciso8601' than use 'ciso8601.parse_datetime' else use 'dateutil.parse'.
-    """
-    global date_helper
-    if date_helper is None:
-        with lock_:
-            # avoid duplicate initialization
-            if date_helper is None:
-                _date_helper = DateHelper()
-                try:
-                    import ciso8601
-
-                    _date_helper.parse_date = ciso8601.parse_datetime
-                except ModuleNotFoundError:
-                    if (version_info.major, version_info.minor) >= (3, 11):
-                        _date_helper.parse_date = datetime.datetime.fromisoformat
-                    else:
-                        _date_helper.parse_date = parser.parse
-                date_helper = _date_helper
-
-    return date_helper

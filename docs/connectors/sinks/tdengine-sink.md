@@ -163,27 +163,29 @@ application using a local instance of TDengine using Docker:
 
 1. Execute in terminal:  
 
-    ```bash  
-    docker run --rm -d --name tdengine \  
-    -p 6030:6030 \  
-    -p 6041:6041 \  
-    -p 6043-6060:6043-6060 \  
-    -e TZ=America/New_York \  
-    -e LC_ALL=C.UTF-8 \  
-    tdengine/tdengine:latest  
-    ```  
+    ```bash
+    docker run --rm -d --name tdengine \
+    -p 6030:6030 \
+    -p 6041:6041 \
+    -p 6043-6060:6043-6060 \
+    -e TZ=America/New_York \
+    -e LC_ALL=C.UTF-8 \
+    tdengine/tdengine:latest
+    ```
 
 2. Use the following authentication settings for `TDengineSink` to connect:  
 
-    ```python  
-    TDengineSink(  
-        host="http://localhost:6041",  
-        username="root",  
-        password="taosdata",  
-        ...  
-   )  
+    ```python
+    TDengineSink(
+        host="http://localhost:6041",
+        username="root",
+        password="taosdata",
+        ...
+    )
+    ```
+
 3. When finished, execute in terminal:
 
-    ```bash  
-    docker stop tdengine  
+    ```bash
+    docker stop tdengine
     ```
