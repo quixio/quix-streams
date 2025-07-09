@@ -2202,3 +2202,122 @@ client authentication (which should raise an Exception).
 Callback should accept the raised Exception as an argument.
 Callback must resolve (or propagate/re-raise) the Exception.
 
+<a id="quixstreams.sinks.community.tdengine.sink"></a>
+
+## quixstreams.sinks.community.tdengine.sink
+
+<a id="quixstreams.sinks.community.tdengine.sink.TDengineSink"></a>
+
+### TDengineSink
+
+```python
+class TDengineSink(BatchingSink)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/sink.py#L40)
+
+<a id="quixstreams.sinks.community.tdengine.sink.TDengineSink.__init__"></a>
+
+<br><br>
+
+#### TDengineSink.\_\_init\_\_
+
+```python
+def __init__(host: str,
+             database: str,
+             supertable: SupertableSetter,
+             subtable: SubtableNameSetter,
+             fields_keys: FieldsSetter = (),
+             tags_keys: TagsSetter = (),
+             time_key: Optional[str] = None,
+             time_precision: TimePrecision = "ms",
+             allow_missing_fields: bool = False,
+             include_metadata_tags: bool = False,
+             convert_ints_to_floats: bool = False,
+             batch_size: int = 1000,
+             enable_gzip: bool = True,
+             request_timeout_ms: int = 10_000,
+             on_client_connect_success: Optional[
+                 ClientConnectSuccessCallback] = None,
+             on_client_connect_failure: Optional[
+                 ClientConnectFailureCallback] = None,
+             verify_ssl: bool = True,
+             username: str = "",
+             password: str = "",
+             token: str = "")
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/sink.py#L41)
+
+A connector to sink processed data to TDengine.
+
+It batches the processed records in memory per topic partition, converts
+them to the InfluxDB line protocol, and flushes them to TDengine at the checkpoint.
+
+>***NOTE***: TDengineSink can accept only dictionaries.
+> If the record values are not dicts, you need to convert them to dicts before
+> sinking.
+
+
+<br>
+***Arguments:***
+
+- `token`: TDengine cloud token
+- `host`: TDengine host in format "http[s]://<host>[:<port>]".
+- `username`: TDengine username
+- `password`: TDengine password
+- `verify_ssl`: if `True`, verifies the SSL certificate.
+Default - `True`.
+- `database`: database name
+- `supertable`: supertable name as a string.
+Also accepts a single-argument callable that receives the current message
+data as a dict and returns a string.
+- `subtable`: subtable name as a string.
+Also accepts a single-argument callable that receives the current message
+data as a dict and returns a string.
+If the subtable name is empty string, a hash value will be generated from the data as the subtable name.
+- `fields_keys`: an iterable (list) of strings used as InfluxDB line protocol "fields".
+Also accepts a single argument callable that receives the current message
+data as a dict and returns an iterable of strings.
+- If present, it must not overlap with "tags_keys".
+- If empty, the whole record value will be used.
+>***NOTE*** The fields' values can only be strings, floats, integers, or booleans.
+Default - `()`.
+- `tags_keys`: an iterable (list) of strings used as InfluxDB line protocol "tags".
+Also accepts a single-argument callable that receives the current message
+data as a dict and returns an iterable of strings.
+- If present, it must not overlap with "fields_keys".
+- Given keys are popped from the value dictionary since the same key
+cannot be both a tag and field.
+- If empty, no tags will be sent.
+>***NOTE***: always converts tag values to strings.
+Default - `()`.
+- `time_key`: a key to be used as "time" when convert to InfluxDB line protocol.
+By default, the record timestamp will be used with "ms" time precision.
+When using a custom key, you may need to adjust the `time_precision` setting
+to match.
+- `time_precision`: a time precision to use when convert to InfluxDB line protocol.
+Possible values: "ms", "ns", "us", "s".
+Default - `"ms"`.
+- `allow_missing_fields`: if `True`, skip the missing fields keys, else raise `KeyError`.
+Default - `False`
+- `include_metadata_tags`: if True, includes record's key, topic,
+and partition as tags.
+Default - `False`.
+- `convert_ints_to_floats`: if True, converts all integer values to floats.
+Default - `False`.
+- `batch_size`: how many records to write to TDengine in one request.
+Note that it only affects the size of one write request, and not the number
+of records flushed on each checkpoint.
+Default - `1000`.
+- `enable_gzip`: if True, enables gzip compression for writes.
+Default - `True`.
+- `request_timeout_ms`: an HTTP request timeout in milliseconds.
+Default - `10000`.
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
+
