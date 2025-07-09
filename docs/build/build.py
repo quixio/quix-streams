@@ -142,6 +142,7 @@ doc_map = {
             "quixstreams.sinks.community.pubsub",
             "quixstreams.sinks.community.redis",
             "quixstreams.sinks.community.influxdb1",
+            "quixstreams.sinks.community.tdengine.sink",
         ]
     },
     # Order: base, core, community
@@ -163,7 +164,6 @@ doc_map = {
             "quixstreams.sources.community.pubsub.pubsub",
             "quixstreams.sources.community.pandas",
             "quixstreams.sources.community.influxdb3.influxdb3",
-            "quixstreams.sinks.community.tdengine.sink",
         ]
     },
 }
