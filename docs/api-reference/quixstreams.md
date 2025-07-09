@@ -7205,6 +7205,441 @@ if __name__ == "__main__":
 
 This module contains Sinks developed and maintained by the members of Quix Streams community.
 
+<a id="quixstreams.sinks.community.tdengine.sink"></a>
+
+## quixstreams.sinks.community.tdengine.sink
+
+<a id="quixstreams.sinks.community.tdengine.sink.TDengineSink"></a>
+
+### TDengineSink
+
+```python
+class TDengineSink(BatchingSink)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/sink.py#L40)
+
+<a id="quixstreams.sinks.community.tdengine.sink.TDengineSink.__init__"></a>
+
+#### TDengineSink.\_\_init\_\_
+
+```python
+def __init__(host: str,
+             database: str,
+             supertable: SupertableSetter,
+             subtable: SubtableNameSetter,
+             fields_keys: FieldsSetter = (),
+             tags_keys: TagsSetter = (),
+             time_key: Optional[str] = None,
+             time_precision: TimePrecision = "ms",
+             allow_missing_fields: bool = False,
+             include_metadata_tags: bool = False,
+             convert_ints_to_floats: bool = False,
+             batch_size: int = 1000,
+             enable_gzip: bool = True,
+             request_timeout_ms: int = 10_000,
+             on_client_connect_success: Optional[
+                 ClientConnectSuccessCallback] = None,
+             on_client_connect_failure: Optional[
+                 ClientConnectFailureCallback] = None,
+             verify_ssl: bool = True,
+             username: str = "",
+             password: str = "",
+             token: str = "")
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/sink.py#L41)
+
+A connector to sink processed data to TDengine.
+
+It batches the processed records in memory per topic partition, converts
+them to the InfluxDB line protocol, and flushes them to TDengine at the checkpoint.
+
+>***NOTE***: TDengineSink can accept only dictionaries.
+> If the record values are not dicts, you need to convert them to dicts before
+> sinking.
+
+**Arguments**:
+
+- `token`: TDengine cloud token
+- `host`: TDengine host in format "http[s]://<host>[:<port>]".
+- `username`: TDengine username
+- `password`: TDengine password
+- `verify_ssl`: if `True`, verifies the SSL certificate.
+Default - `True`.
+- `database`: database name
+- `supertable`: supertable name as a string.
+Also accepts a single-argument callable that receives the current message
+data as a dict and returns a string.
+- `subtable`: subtable name as a string.
+Also accepts a single-argument callable that receives the current message
+data as a dict and returns a string.
+If the subtable name is empty string, a hash value will be generated from the data as the subtable name.
+- `fields_keys`: an iterable (list) of strings used as InfluxDB line protocol "fields".
+Also accepts a single argument callable that receives the current message
+data as a dict and returns an iterable of strings.
+- If present, it must not overlap with "tags_keys".
+- If empty, the whole record value will be used.
+>***NOTE*** The fields' values can only be strings, floats, integers, or booleans.
+Default - `()`.
+- `tags_keys`: an iterable (list) of strings used as InfluxDB line protocol "tags".
+Also accepts a single-argument callable that receives the current message
+data as a dict and returns an iterable of strings.
+- If present, it must not overlap with "fields_keys".
+- Given keys are popped from the value dictionary since the same key
+cannot be both a tag and field.
+- If empty, no tags will be sent.
+>***NOTE***: always converts tag values to strings.
+Default - `()`.
+- `time_key`: a key to be used as "time" when convert to InfluxDB line protocol.
+By default, the record timestamp will be used with "ms" time precision.
+When using a custom key, you may need to adjust the `time_precision` setting
+to match.
+- `time_precision`: a time precision to use when convert to InfluxDB line protocol.
+Possible values: "ms", "ns", "us", "s".
+Default - `"ms"`.
+- `allow_missing_fields`: if `True`, skip the missing fields keys, else raise `KeyError`.
+Default - `False`
+- `include_metadata_tags`: if True, includes record's key, topic,
+and partition as tags.
+Default - `False`.
+- `convert_ints_to_floats`: if True, converts all integer values to floats.
+Default - `False`.
+- `batch_size`: how many records to write to TDengine in one request.
+Note that it only affects the size of one write request, and not the number
+of records flushed on each checkpoint.
+Default - `1000`.
+- `enable_gzip`: if True, enables gzip compression for writes.
+Default - `True`.
+- `request_timeout_ms`: an HTTP request timeout in milliseconds.
+Default - `10000`.
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
+
+<a id="quixstreams.sinks.community.tdengine.date_utils"></a>
+
+## quixstreams.sinks.community.tdengine.date\_utils
+
+Utils to get right Date parsing function.
+
+<a id="quixstreams.sinks.community.tdengine.date_utils.DateHelper"></a>
+
+### DateHelper
+
+```python
+class DateHelper()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/date_utils.py#L27)
+
+DateHelper to groups different implementations of date operations.
+
+If you would like to serialize the query results to custom timezone, you can use following code:
+
+.. code-block:: python
+
+    from influxdb_client.client.util import date_utils
+    from influxdb_client.client.util.date_utils import DateHelper
+    import dateutil.parser
+    from dateutil import tz
+
+    def parse_date(date_string: str):
+        return dateutil.parser.parse(date_string).astimezone(tz.gettz('ETC/GMT+2'))
+
+    date_utils.date_helper = DateHelper()
+    date_utils.date_helper.parse_date = parse_date
+
+<a id="quixstreams.sinks.community.tdengine.date_utils.DateHelper.__init__"></a>
+
+#### DateHelper.\_\_init\_\_
+
+```python
+def __init__(timezone: datetime.tzinfo = tz.utc) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/date_utils.py#L47)
+
+Initialize defaults.
+
+**Arguments**:
+
+- `timezone`: Default timezone used for serialization "datetime" without "tzinfo".
+Default value is "UTC".
+
+<a id="quixstreams.sinks.community.tdengine.date_utils.DateHelper.parse_date"></a>
+
+#### DateHelper.parse\_date
+
+```python
+def parse_date(date_string: str)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/date_utils.py#L56)
+
+Parse string into Date or Timestamp.
+
+**Returns**:
+
+Returns a :class:`datetime.datetime` object or compliant implementation
+like :class:`class 'pandas._libs.tslibs.timestamps.Timestamp`
+
+<a id="quixstreams.sinks.community.tdengine.date_utils.DateHelper.to_nanoseconds"></a>
+
+#### DateHelper.to\_nanoseconds
+
+```python
+def to_nanoseconds(delta)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/date_utils.py#L65)
+
+Get number of nanoseconds in timedelta.
+
+Solution comes from v1 client. Thx.
+https://github.com/influxdata/influxdb-python/pull/811
+
+<a id="quixstreams.sinks.community.tdengine.date_utils.DateHelper.to_utc"></a>
+
+#### DateHelper.to\_utc
+
+```python
+def to_utc(value: datetime)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/date_utils.py#L78)
+
+Convert datetime to UTC timezone.
+
+**Arguments**:
+
+- `value`: datetime
+
+**Returns**:
+
+datetime in UTC
+
+<a id="quixstreams.sinks.community.tdengine"></a>
+
+## quixstreams.sinks.community.tdengine
+
+<a id="quixstreams.sinks.community.tdengine.point"></a>
+
+## quixstreams.sinks.community.tdengine.point
+
+<a id="quixstreams.sinks.community.tdengine.point.Point"></a>
+
+### Point
+
+```python
+class Point()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/point.py#L52)
+
+<a id="quixstreams.sinks.community.tdengine.point.Point.__init__"></a>
+
+#### Point.\_\_init\_\_
+
+```python
+def __init__(measurement_name)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/point.py#L53)
+
+Initialize defaults.
+
+<a id="quixstreams.sinks.community.tdengine.point.Point.from_dict"></a>
+
+#### Point.from\_dict
+
+```python
+@classmethod
+def from_dict(cls,
+              dictionary: dict,
+              write_precision: str = DEFAULT_WRITE_PRECISION,
+              **kwargs)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/point.py#L63)
+
+Initialize point from 'dict' structure.
+
+The expected dict structure is:
+    - measurement
+    - tags
+    - fields
+    - time
+
+Example:
+    .. code-block:: python
+
+        # Use default dictionary structure
+        dict_structure = {
+            "measurement": "h2o_feet",
+            "tags": {"location": "coyote_creek"},
+            "fields": {"water_level": 1.0},
+            "time": 1
+        }
+        point = Point.from_dict(dict_structure, "ns")
+
+Example:
+    .. code-block:: python
+
+        # Use custom dictionary structure
+        dictionary = {
+            "name": "sensor_pt859",
+            "location": "warehouse_125",
+            "version": "2021.06.05.5874",
+            "pressure": 125,
+            "temperature": 10,
+            "created": 1632208639,
+        }
+        point = Point.from_dict(dictionary,
+                                write_precision=WritePrecision.S,
+                                record_measurement_key="name",
+                                record_time_key="created",
+                                record_tag_keys=["location", "version"],
+                                record_field_keys=["pressure", "temperature"])
+
+Int Types:
+    The following example shows how to configure the types of integers fields.
+    It is useful when you want to serialize integers always as ``float`` to avoid ``field type conflict``
+    or use ``unsigned 64-bit integer`` as the type for serialization.
+
+    .. code-block:: python
+
+        # Use custom dictionary structure
+        dict_structure = {
+            "measurement": "h2o_feet",
+            "tags": {"location": "coyote_creek"},
+            "fields": {
+                "water_level": 1.0,
+                "some_counter": 108913123234
+            },
+            "time": 1
+        }
+
+        point = Point.from_dict(dict_structure, field_types={"some_counter": "uint"})
+
+**Arguments**:
+
+- `dictionary`: dictionary for serialize into data Point
+- `write_precision`: sets the precision for the supplied time values
+- `record_measurement_key`: key of dictionary with specified measurement
+- `record_measurement_name`: static measurement name for data Point
+- `record_time_key`: key of dictionary with specified timestamp
+- `record_tag_keys`: list of dictionary keys to use as a tag
+- `record_field_keys`: list of dictionary keys to use as a field
+- `field_types`: optional dictionary to specify types of serialized fields. Currently, is supported customization for integer types.
+Possible integers types:
+  - ``int`` - serialize integers as "**Signed 64-bit integers**" - ``9223372036854775807i`` (default behaviour)
+  - ``uint`` - serialize integers as "**Unsigned 64-bit integers**" - ``9223372036854775807u``
+  - ``float`` - serialize integers as "**IEEE-754 64-bit floating-point numbers**". Useful for unify number types in your pipeline to avoid field type conflict - ``9223372036854775807``
+The ``field_types`` can be also specified as part of incoming dictionary. For more info see an example above.
+
+**Returns**:
+
+new data point
+
+<a id="quixstreams.sinks.community.tdengine.point.Point.time"></a>
+
+#### Point.time
+
+```python
+def time(time, write_precision=DEFAULT_WRITE_PRECISION)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/point.py#L195)
+
+Specify timestamp for DataPoint with declared precision.
+
+If time doesn't have specified timezone we assume that timezone is UTC.
+
+Examples::
+    Point("h2o").field("val", 1).time("2009-11-10T23:00:00.123456Z")
+    Point("h2o").field("val", 1).time(1257894000123456000)
+    Point("h2o").field("val", 1).time(datetime(2009, 11, 10, 23, 0, 0, 123456))
+    Point("h2o").field("val", 1).time(1257894000123456000, write_precision=WritePrecision.NS)
+
+**Arguments**:
+
+- `time`: the timestamp for your data
+- `write_precision`: sets the precision for the supplied time values
+
+**Returns**:
+
+this point
+
+<a id="quixstreams.sinks.community.tdengine.point.Point.tag"></a>
+
+#### Point.tag
+
+```python
+def tag(key, value)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/point.py#L216)
+
+Add tag with key and value.
+
+<a id="quixstreams.sinks.community.tdengine.point.Point.field"></a>
+
+#### Point.field
+
+```python
+def field(field, value)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/point.py#L221)
+
+Add field with key and value.
+
+<a id="quixstreams.sinks.community.tdengine.point.Point.to_line_protocol"></a>
+
+#### Point.to\_line\_protocol
+
+```python
+def to_line_protocol(precision=None)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/point.py#L226)
+
+Create LineProtocol.
+
+**Arguments**:
+
+- `precision`: required precision of LineProtocol. If it's not set then use the precision from ``Point``.
+
+<a id="quixstreams.sinks.community.tdengine.point.Point.write_precision"></a>
+
+#### Point.write\_precision
+
+```python
+@property
+def write_precision()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/point.py#L251)
+
+Get precision.
+
+<a id="quixstreams.sinks.community.tdengine.point.Point.set_str_rep"></a>
+
+#### Point.set\_str\_rep
+
+```python
+@classmethod
+def set_str_rep(cls, rep_function)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/point.py#L256)
+
+Set the string representation for all Points.
+
 <a id="quixstreams.sinks.community.redis"></a>
 
 ## quixstreams.sinks.community.redis
