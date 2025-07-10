@@ -26,6 +26,8 @@ from quixstreams.state.exceptions import (
 from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER,
+    CHANGELOG_TRANSACTION_END_KEY,
+    CHANGELOG_TRANSACTION_START_KEY,
     DEFAULT_PREFIX,
     SEPARATOR,
     Marker,
@@ -511,6 +513,7 @@ class PartitionTransaction(ABC, Generic[K, V]):
         source_tp_offset_header = json_dumps(processed_offsets)
         column_families = self._update_cache.get_column_families()
 
+        changelog_tx_started = False
         for cf_name in column_families:
             headers: Headers = {
                 CHANGELOG_CF_MESSAGE_HEADER: cf_name,
@@ -520,6 +523,11 @@ class PartitionTransaction(ABC, Generic[K, V]):
             updates = self._update_cache.get_updates(cf_name=cf_name)
             for prefix_update_cache in updates.values():
                 for key, value in prefix_update_cache.items():
+                    if not changelog_tx_started:
+                        self._changelog_producer.produce(
+                            key=CHANGELOG_TRANSACTION_START_KEY
+                        )
+                        changelog_tx_started = True
                     self._changelog_producer.produce(
                         key=key,
                         value=value,
@@ -528,11 +536,19 @@ class PartitionTransaction(ABC, Generic[K, V]):
 
             deletes = self._update_cache.get_deletes(cf_name=cf_name)
             for key in deletes:
+                if not changelog_tx_started:
+                    self._changelog_producer.produce(
+                        key=CHANGELOG_TRANSACTION_START_KEY
+                    )
+                    changelog_tx_started = True
                 self._changelog_producer.produce(
                     key=key,
                     value=None,
                     headers=headers,
                 )
+
+        if changelog_tx_started:
+            self._changelog_producer.produce(key=CHANGELOG_TRANSACTION_END_KEY)
 
     @validate_transaction_status(
         PartitionTransactionStatus.STARTED, PartitionTransactionStatus.PREPARED
