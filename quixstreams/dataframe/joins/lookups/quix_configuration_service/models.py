@@ -74,6 +74,9 @@ class Field(BaseField):
     def __post_init__(self) -> None:
         """
         Compile the JSONPath expression after initialization.
+
+        This method is called automatically after the dataclass is initialized to ensure that the JSONPath expression is compiled and ready for use.
+        Since the dataclass is frozen, we cannot modify its attributes directly in the constructor and must use `__setattr__` to set the `_jsonpath` attribute.
         """
         super().__setattr__("_jsonpath", parse(self.jsonpath))
 
@@ -121,6 +124,11 @@ class ConfigurationVersion:
     """
     Represents a specific version of a configuration.
 
+    This class is designed to be immutable (frozen) and hashable so it can be safely used as a key in an LRU cache.
+    The `retry_count` and `retry_at` attributes are intentionally excluded from the hash calculation and immutability,
+    because they are mutable fields used for tracking API retry logic. These fields are not relevant for caching or equality,
+    and should be updated by calling `__setattr__` directly, since the dataclass is otherwise frozen.
+
     :param id: The configuration ID.
     :param version: The version number.
     :param contentUrl: URL to fetch the configuration content.
@@ -132,7 +140,7 @@ class ConfigurationVersion:
     version: int
     contentUrl: str
     sha256sum: str
-    valid_from: Optional[float]  # timestamp ms
+    valid_from: float  # timestamp ms
     retry_count: int = dataclasses.field(default=0, hash=False, init=False)
     retry_at: int = dataclasses.field(default=sys.maxsize, hash=False, init=False)
 
@@ -148,7 +156,7 @@ class ConfigurationVersion:
 
         raw_valid_from = event["metadata"]["valid_from"]
         if raw_valid_from is None:
-            valid_from: Optional[float] = None
+            valid_from: float = 0
         else:
             # TODO python 3.11: Use `datetime.fromisoformat` when additional format are available
             try:
@@ -251,37 +259,21 @@ class Configuration:
 
         # Check if the next version has become valid (timestamp has moved forward)
         # If so, recalculate all cached versions
-        if self.next_version:
-            # If next version has no valid_from date, it's always valid
-            if self.next_version.valid_from is None:
-                self.previous_version, self.version, self.next_version = (
-                    self._find_versions(timestamp)
-                )
-                return self.version
-            # If next version's valid_from is before or at the timestamp, it's valid
-            if self.next_version.valid_from <= timestamp:
-                self.previous_version, self.version, self.next_version = (
-                    self._find_versions(timestamp)
-                )
-                return self.version
+        if self.next_version and self.next_version.valid_from <= timestamp:
+            self.previous_version, self.version, self.next_version = (
+                self._find_versions(timestamp)
+            )
+            return self.version
 
         # Check if the current cached version is still valid for this timestamp
-        # If version has no valid_from date, it's always valid
-        if self.version.valid_from is None:
-            return self.version
         # If version's valid_from is before or at the timestamp, it's valid
         if self.version.valid_from <= timestamp:
             return self.version
 
         # Fallback: check if the previous version is valid for this timestamp
         # This can happen when messages are out of order and timestamp is before the current version's valid_from
-        if self.previous_version:
-            # If previous version has no valid_from date, it's always valid
-            if self.previous_version.valid_from is None:
-                return self.previous_version
-            # If previous version's valid_from is before or at the timestamp, it's valid
-            if self.previous_version.valid_from <= timestamp:
-                return self.previous_version
+        if self.previous_version and self.previous_version.valid_from <= timestamp:
+            return self.previous_version
 
         # If cached versions don't match, recalculate all versions for this timestamp
         self.previous_version, self.version, self.next_version = self._find_versions(
@@ -317,28 +309,18 @@ class Configuration:
         for _, version in sorted(
             self.versions.items(), reverse=True, key=lambda x: x[0]
         ):
-            # Handle versions with no valid_from timestamp (always valid)
-            if version.valid_from is None:
-                # First version with no valid_from becomes the current version
-                if current_version is None:
-                    current_version = version
-                    return previous_version, current_version, next_version
-                # Second version with no valid_from becomes the previous version
-                elif previous_version is None:
-                    previous_version = version
-                    # Early return since we have current and previous, no next needed for no-timestamp versions
-                    return previous_version, current_version, next_version
-
             # Handle versions that are valid in the future (after the timestamp)
-            elif version.valid_from > timestamp:
+            if version.valid_from > timestamp:
+                # If we already have a current version, if has a higher version number,
+                # so we can skip all future versions
+                if current_version is not None:
+                    continue
+
                 # First future version becomes the next version
                 if next_version is None:
                     next_version = version
                 # If we find an earlier future version, it becomes the new next version
-                elif (
-                    next_version.valid_from is not None
-                    and version.valid_from < next_version.valid_from
-                ):
+                elif version.valid_from < next_version.valid_from:
                     next_version = version
 
             # Handle versions that are valid at or before the timestamp
@@ -346,6 +328,12 @@ class Configuration:
                 # First valid version becomes the current version
                 if current_version is None:
                     current_version = version
+                    # We can short circuit if we find a version that is valid always valid.
+                    # There is no need for a previous_version as the current is valid from the beginning.
+                    # There is no need to look for a next_version either, it will have a lower version number
+                    # since the loop is ordered by version number.
+                    if current_version.valid_from == 0.0:
+                        return previous_version, current_version, next_version
                 # Second valid version becomes the previous version
                 elif previous_version is None:
                     previous_version = version

@@ -45,7 +45,7 @@ def lookup():
 def create_configuration_version(
     id: str = "test-config",
     version: int = 1,
-    valid_from: Optional[float] = None,
+    valid_from: float = 0,
     sha256sum: str = "test-hash",
     content_url: str = "http://example.com/config",
 ) -> ConfigurationVersion:
@@ -147,7 +147,7 @@ class TestConfiguration:
 
     def test_find_valid_version_single_version_no_timestamp(self):
         """Test finding valid version with a single version that has no valid_from timestamp."""
-        version = create_configuration_version(version=1, valid_from=None)
+        version = create_configuration_version(version=1, valid_from=0)
         config = Configuration(versions={1: version})
 
         result = config.find_valid_version(1500)
@@ -259,7 +259,7 @@ class TestConfiguration:
         """Test finding valid version with mix of timestamped and non-timestamped versions."""
         version1 = create_configuration_version(version=1, valid_from=1000.0)
         version2 = create_configuration_version(
-            version=2, valid_from=None
+            version=2, valid_from=0.0
         )  # No timestamp
         version3 = create_configuration_version(version=3, valid_from=3000.0)
 
@@ -316,8 +316,8 @@ class TestConfiguration:
 
     def test_find_versions_with_no_timestamp_versions(self):
         """Test _find_versions with versions that have no valid_from timestamp."""
-        version1 = create_configuration_version(version=1, valid_from=None)
-        version2 = create_configuration_version(version=2, valid_from=None)
+        version1 = create_configuration_version(version=1, valid_from=0.0)
+        version2 = create_configuration_version(version=2, valid_from=0.0)
 
         config = Configuration(versions={1: version1, 2: version2})
 
@@ -407,7 +407,7 @@ class TestConfigurationVersion:
 
         assert version.id == "test-config"
         assert version.version == 1
-        assert version.valid_from is None
+        assert version.valid_from == 0
 
     def test_success_method(self):
         """Test the success method resets retry parameters."""
