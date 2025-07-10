@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Optional
 from unittest.mock import Mock, patch
 
+import orjson
 import pytest
 
 from quixstreams.dataframe.joins.lookups.quix_configuration_service.lookup import Lookup
@@ -11,7 +12,6 @@ from quixstreams.dataframe.joins.lookups.quix_configuration_service.models impor
     Configuration,
     ConfigurationVersion,
     Event,
-    Field,
 )
 
 
@@ -147,7 +147,7 @@ class TestConfiguration:
 
     def test_find_valid_version_single_version_no_timestamp(self):
         """Test finding valid version with a single version that has no valid_from timestamp."""
-        version = create_configuration_version(version=1, valid_from=None)
+        version = create_configuration_version(version=1, valid_from=0)
         config = Configuration(versions={1: version})
 
         result = config.find_valid_version(1500)
@@ -259,7 +259,7 @@ class TestConfiguration:
         """Test finding valid version with mix of timestamped and non-timestamped versions."""
         version1 = create_configuration_version(version=1, valid_from=1000.0)
         version2 = create_configuration_version(
-            version=2, valid_from=None
+            version=2, valid_from=0.0
         )  # No timestamp
         version3 = create_configuration_version(version=3, valid_from=3000.0)
 
@@ -316,8 +316,8 @@ class TestConfiguration:
 
     def test_find_versions_with_no_timestamp_versions(self):
         """Test _find_versions with versions that have no valid_from timestamp."""
-        version1 = create_configuration_version(version=1, valid_from=None)
-        version2 = create_configuration_version(version=2, valid_from=None)
+        version1 = create_configuration_version(version=1, valid_from=0.0)
+        version2 = create_configuration_version(version=2, valid_from=0.0)
 
         config = Configuration(versions={1: version1, 2: version2})
 
@@ -407,7 +407,7 @@ class TestConfigurationVersion:
 
         assert version.id == "test-config"
         assert version.version == 1
-        assert version.valid_from is None
+        assert version.valid_from == 0
 
     def test_success_method(self):
         """Test the success method resets retry parameters."""
@@ -612,10 +612,7 @@ class TestLookupFindVersion:
         wildcard_id = lookup._config_id("user-config", "*")
 
         # All should be different
-        assert config_id1 != config_id2
-        assert config_id1 != config_id3
-        assert config_id1 != wildcard_id
-        assert config_id2 != config_id3
+        assert len({config_id1, config_id2, config_id3, wildcard_id}) == 4
 
         # Same inputs should produce same ID
         assert config_id1 == lookup._config_id("user-config", "user123")
@@ -704,12 +701,14 @@ class TestLookupJoin:
             "permissions": ["read", "write"],
         }
 
-        with patch.object(lookup, "_fetch_version_content", return_value=test_content):
+        with patch.object(
+            lookup, "_fetch_version_content", return_value=orjson.dumps(test_content)
+        ):
             # Define fields to extract
             fields = {
-                "user_name": Field(type="user-config", jsonpath="$.name"),
-                "user_role": Field(type="user-config", jsonpath="$.role"),
-                "user_permissions": Field(
+                "user_name": lookup.json_field(type="user-config", jsonpath="$.name"),
+                "user_role": lookup.json_field(type="user-config", jsonpath="$.role"),
+                "user_permissions": lookup.json_field(
                     type="user-config",
                     jsonpath="$.permissions.[*]",
                     first_match_only=False,
@@ -749,14 +748,16 @@ class TestLookupJoin:
         # Mock the content fetching to return data missing some fields
         test_content = {"name": "John Doe"}  # Missing role and permissions
 
-        with patch.object(lookup, "_fetch_version_content", return_value=test_content):
+        with patch.object(
+            lookup, "_fetch_version_content", return_value=orjson.dumps(test_content)
+        ):
             # Define fields with defaults
             fields = {
-                "user_name": Field(type="user-config", jsonpath="$.name"),
-                "user_role": Field(
+                "user_name": lookup.json_field(type="user-config", jsonpath="$.name"),
+                "user_role": lookup.json_field(
                     type="user-config", jsonpath="$.role", default="guest"
                 ),
-                "user_permissions": Field(
+                "user_permissions": lookup.json_field(
                     type="user-config",
                     jsonpath="$.permissions",
                     default=[],
@@ -789,10 +790,12 @@ class TestLookupJoin:
 
         # Define fields with defaults
         fields = {
-            "user_name": Field(
+            "user_name": lookup.json_field(
                 type="user-config", jsonpath="$.name", default="Unknown"
             ),
-            "user_role": Field(type="user-config", jsonpath="$.role", default="guest"),
+            "user_role": lookup.json_field(
+                type="user-config", jsonpath="$.role", default="guest"
+            ),
         }
 
         # Prepare input data
@@ -827,11 +830,17 @@ class TestLookupJoin:
         # Mock the content fetching
         test_content = {"default_role": "member", "default_quota": 100}
 
-        with patch.object(lookup, "_fetch_version_content", return_value=test_content):
+        with patch.object(
+            lookup, "_fetch_version_content", return_value=orjson.dumps(test_content)
+        ):
             # Define fields
             fields = {
-                "role": Field(type="user-config", jsonpath="$.default_role"),
-                "quota": Field(type="user-config", jsonpath="$.default_quota"),
+                "role": lookup.json_field(
+                    type="user-config", jsonpath="$.default_role"
+                ),
+                "quota": lookup.json_field(
+                    type="user-config", jsonpath="$.default_quota"
+                ),
             }
 
             # Prepare input data
@@ -872,8 +881,10 @@ class TestLookupJoin:
         lookup._configurations[admin_config_id] = admin_config
 
         # Mock content for different configurations
-        user_content = {"name": "John Doe", "department": "Engineering"}
-        admin_content = {"permissions": ["read", "write", "delete"], "level": "super"}
+        user_content = orjson.dumps({"name": "John Doe", "department": "Engineering"})
+        admin_content = orjson.dumps(
+            {"permissions": ["read", "write", "delete"], "level": "super"}
+        )
 
         def mock_fetch_content(version):
             if version.contentUrl == "user":  # user config
@@ -887,13 +898,17 @@ class TestLookupJoin:
         ):
             # Define fields from different types
             fields = {
-                "user_name": Field(type="user-config", jsonpath="$.name"),
-                "department": Field(type="user-config", jsonpath="$.department"),
-                "permissions": Field(
+                "user_name": lookup.json_field(type="user-config", jsonpath="$.name"),
+                "department": lookup.json_field(
+                    type="user-config", jsonpath="$.department"
+                ),
+                "permissions": lookup.json_field(
                     type="admin-config",
                     jsonpath="$.permissions",
                 ),
-                "admin_level": Field(type="admin-config", jsonpath="$.level"),
+                "admin_level": lookup.json_field(
+                    type="admin-config", jsonpath="$.level"
+                ),
             }
 
             # Prepare input data
@@ -928,7 +943,7 @@ class TestLookupJoin:
 
         # Define fields with defaults
         fields = {
-            "user_name": Field(
+            "user_name": lookup.json_field(
                 type="user-config", jsonpath="$.name", default="Unknown"
             ),
         }
@@ -961,9 +976,11 @@ class TestLookupJoin:
 
         test_content = {"name": "John"}
 
-        with patch.object(lookup, "_fetch_version_content", return_value=test_content):
+        with patch.object(
+            lookup, "_fetch_version_content", return_value=orjson.dumps(test_content)
+        ):
             fields = {
-                "user_name": Field(type="user-config", jsonpath="$.name"),
+                "user_name": lookup.json_field(type="user-config", jsonpath="$.name"),
             }
 
             value1 = {}
@@ -1014,10 +1031,14 @@ class TestLookupJoin:
 
         with patch.object(lookup._version_data_cached, "remove") as mock_remove:
             with patch.object(
-                lookup, "_fetch_version_content", return_value={"name": "John"}
+                lookup,
+                "_fetch_version_content",
+                return_value=orjson.dumps({"name": "John"}),
             ) as mock_fetch:
                 fields = {
-                    "user_name": Field(type="user-config", jsonpath="$.name"),
+                    "user_name": lookup.json_field(
+                        type="user-config", jsonpath="$.name"
+                    ),
                 }
 
                 value = {}
@@ -1050,10 +1071,12 @@ class TestLookupJoin:
 
         test_content = {"name": "John", "role": "developer"}
 
-        with patch.object(lookup, "_fetch_version_content", return_value=test_content):
+        with patch.object(
+            lookup, "_fetch_version_content", return_value=orjson.dumps(test_content)
+        ):
             fields = {
-                "user_name": Field(type="user-config", jsonpath="$.name"),
-                "user_role": Field(type="user-config", jsonpath="$.role"),
+                "user_name": lookup.json_field(type="user-config", jsonpath="$.name"),
+                "user_role": lookup.json_field(type="user-config", jsonpath="$.role"),
             }
 
             # Prepare input data with existing values
@@ -1096,9 +1119,11 @@ class TestLookupJoin:
         # Mock content that's missing the required field
         test_content = {"other_field": "value"}
 
-        with patch.object(lookup, "_fetch_version_content", return_value=test_content):
+        with patch.object(
+            lookup, "_fetch_version_content", return_value=orjson.dumps(test_content)
+        ):
             fields = {
-                "user_name": Field(
+                "user_name": lookup.json_field(
                     type="user-config", jsonpath="$.name"
                 ),  # No default, will raise
             }
@@ -1115,3 +1140,133 @@ class TestLookupJoin:
                     timestamp=1500,
                     headers={},
                 )
+
+    def test_join_bytes_field(self, lookup):
+        """Test join method with BytesField for binary content extraction."""
+
+        # Create a configuration version
+        version = create_configuration_version(valid_from=1000.0)
+        config = Configuration(versions={1: version})
+
+        # Set up configuration
+        config_id = lookup._config_id("binary-config", "binary123")
+        lookup._configurations[config_id] = config
+
+        # Mock the content fetching to return binary data
+        test_content = b"\x00\x01\x02\x03\x04"
+
+        with patch.object(lookup, "_fetch_version_content", return_value=test_content):
+            fields = {
+                "binary_data": lookup.bytes_field(type="binary-config"),
+            }
+
+            value = {}
+
+            # Call join method
+            lookup.join(
+                fields=fields,
+                on="binary123",
+                value=value,
+                key="message_key",
+                timestamp=1500,
+                headers={},
+            )
+
+            # Verify new data is added
+            assert value["binary_data"] == test_content
+
+    def test_join_bytes_field_with_default(self, lookup):
+        """Test join method with BytesField and default value."""
+
+        # Create a configuration version
+        version = create_configuration_version(valid_from=1000.0)
+        config = Configuration(versions={1: version})
+
+        # Set up configuration
+        config_id = lookup._config_id("binary-config", "binary123")
+        lookup._configurations[config_id] = config
+
+        # Mock the content fetching to return None (no binary data)
+        with patch.object(lookup, "_fetch_version_content", return_value=None):
+            fields = {
+                "binary_data": lookup.bytes_field(
+                    type="binary-config", default=b"\x00\x00\x00\x00"
+                ),
+            }
+
+            value = {}
+
+            # Call join method
+            lookup.join(
+                fields=fields,
+                on="binary123",
+                value=value,
+                key="message_key",
+                timestamp=1500,
+                headers={},
+            )
+
+            # Verify default value is used
+            assert value["binary_data"] == b"\x00\x00\x00\x00"
+
+    def test_join_bytes_field_with_missing_configuration(self, lookup):
+        """Test join method with BytesField when no configuration is found."""
+
+        # No configurations set up
+
+        fields = {
+            "binary_data": lookup.bytes_field(
+                type="binary-config", default=b"\x00\x00\x00\x00"
+            ),
+        }
+
+        value = {}
+
+        # Call join method
+        lookup.join(
+            fields=fields,
+            on="binary123",
+            value=value,
+            key="message_key",
+            timestamp=1500,
+            headers={},
+        )
+
+        # Verify default value is used
+        assert value["binary_data"] == b"\x00\x00\x00\x00"
+
+    def test_join_bytes_field_with_encoded_string(self, lookup):
+        """Test join method with BytesField and encoded string."""
+
+        # Create a configuration version
+        version = create_configuration_version(valid_from=1000.0)
+        config = Configuration(versions={1: version})
+
+        # Set up configuration
+        config_id = lookup._config_id("binary-config", "binary123")
+        lookup._configurations[config_id] = config
+
+        # Mock the content fetching to return binary data
+        test_content = "hello world"
+
+        with patch.object(
+            lookup, "_fetch_version_content", return_value=test_content.encode("utf-8")
+        ):
+            fields = {
+                "binary_data": lookup.bytes_field(type="binary-config"),
+            }
+
+            value = {}
+
+            # Call join method
+            lookup.join(
+                fields=fields,
+                on="binary123",
+                value=value,
+                key="message_key",
+                timestamp=1500,
+                headers={},
+            )
+
+            # Verify new data is added
+            assert value["binary_data"].decode("utf-8") == test_content

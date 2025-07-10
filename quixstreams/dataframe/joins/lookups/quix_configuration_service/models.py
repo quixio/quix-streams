@@ -2,12 +2,14 @@ import dataclasses
 import logging
 import sys
 import time
+from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any, Optional, Tuple, TypedDict
 
+import orjson
 from jsonpath_ng import JSONPath, parse
 
-from ..base import BaseField
+from ..base import BaseField as LookupBaseField
 from .environment import VERSION_RETRY_BASE_DELAY, VERSION_RETRY_MAX_DELAY
 
 RAISE_ON_MISSING = object()
@@ -54,7 +56,28 @@ class Event(TypedDict):
 
 
 @dataclasses.dataclass(frozen=True)
-class Field(BaseField):
+class BaseField(LookupBaseField, ABC):
+    type: str
+    default: Any = dataclasses.field(default=RAISE_ON_MISSING, hash=False)
+
+    def missing(self) -> Any:
+        """
+        Return the default value for this field, or raise KeyError if no default is set.
+
+        :returns: Any: The default value.
+
+        :raises KeyError: If no default value is set.
+        """
+        if self.default is RAISE_ON_MISSING:
+            raise KeyError(f"Missing field in configuration type: {self.type}")
+        return self.default
+
+    @abstractmethod
+    def parse(self, id: str, version: int, content: Any) -> Any: ...
+
+
+@dataclasses.dataclass(frozen=True)
+class JSONField(BaseField):
     """
     Represents a field to extract from a configuration using JSONPath.
 
@@ -64,9 +87,7 @@ class Field(BaseField):
     :param first_match_only: If True, only the first match is returned; otherwise, all matches are returned.
     """
 
-    type: str
     jsonpath: str = "$"
-    default: Any = dataclasses.field(default=RAISE_ON_MISSING, hash=False)
     first_match_only: bool = True
 
     _jsonpath: JSONPath = dataclasses.field(init=False, hash=False)
@@ -80,21 +101,7 @@ class Field(BaseField):
         """
         super().__setattr__("_jsonpath", parse(self.jsonpath))
 
-    def missing(self) -> Any:
-        """
-        Return the default value for this field, or raise KeyError if no default is set.
-
-        :returns: Any: The default value.
-
-        :raises KeyError: If no default value is set.
-        """
-        if self.default is RAISE_ON_MISSING:
-            raise KeyError(
-                f"Missing field: {self.jsonpath} in configuration type: {self.type}"
-            )
-        return self.default
-
-    def parse(self, id: str, version: int, content: Any) -> Any:
+    def parse(self, id: str, version: int, content: bytes) -> Any:
         """
         Extract the value(s) from the configuration content using JSONPath.
 
@@ -106,9 +113,10 @@ class Field(BaseField):
 
         :raises KeyError: If the field is missing and no default is set.
         """
+        json = orjson.loads(content)
         if self.first_match_only:
             try:
-                return self._jsonpath.find(content)[0].value
+                return self._jsonpath.find(json)[0].value
             except IndexError:
                 if self.default is RAISE_ON_MISSING:
                     raise KeyError(
@@ -116,7 +124,22 @@ class Field(BaseField):
                     )
                 return self.default
         else:
-            return [match.value for match in self._jsonpath.find(content)]
+            return [match.value for match in self._jsonpath.find(json)]
+
+
+@dataclasses.dataclass(frozen=True)
+class BytesField(BaseField):
+    def parse(self, id: str, version: int, content: bytes) -> bytes:
+        """
+        Extract the binary content from the configuration.
+
+        :param id: The configuration ID.
+        :param version: The configuration version.
+        :param content: The binary content (as bytes).
+
+        :returns: The binary content.
+        """
+        return content
 
 
 @dataclasses.dataclass(frozen=True)
@@ -140,7 +163,7 @@ class ConfigurationVersion:
     version: int
     contentUrl: str
     sha256sum: str
-    valid_from: Optional[float]  # timestamp ms
+    valid_from: float  # timestamp ms
     retry_count: int = dataclasses.field(default=0, hash=False, init=False)
     retry_at: int = dataclasses.field(default=sys.maxsize, hash=False, init=False)
 
