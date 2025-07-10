@@ -23,6 +23,8 @@ from .exceptions import (
 from .metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER,
+    CHANGELOG_TRANSACTION_END_KEY,
+    CHANGELOG_TRANSACTION_START_KEY,
 )
 
 logger = logging.getLogger(__name__)
@@ -552,12 +554,27 @@ class RecoveryManager:
 
         A RecoveryPartition is unassigned immediately once fully updated.
         """
+        changelog_tx_started = False
+        changelog_tx_buffer: list[SuccessfulConfluentKafkaMessageProto] = []
         while self.recovering:
             self._log_recovery_progress()
             if (msg := self._consumer.poll(1)) is None:
                 self._update_recovery_status()
+                continue
+
+            msg = raise_for_msg_error(msg)
+
+            if msg.key() == CHANGELOG_TRANSACTION_START_KEY:
+                changelog_tx_started = True
+            elif msg.key() == CHANGELOG_TRANSACTION_END_KEY:
+                for msg in changelog_tx_buffer:
+                    rp = self._recovery_partitions[msg.partition()][msg.topic()]
+                    rp.recover_from_changelog_message(changelog_message=msg)
+                changelog_tx_started = False
+                changelog_tx_buffer = []
+            elif changelog_tx_started:
+                changelog_tx_buffer.append(msg)
             else:
-                msg = raise_for_msg_error(msg)
                 rp = self._recovery_partitions[msg.partition()][msg.topic()]
                 rp.recover_from_changelog_message(changelog_message=msg)
 
