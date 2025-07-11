@@ -29,10 +29,10 @@ __all__ = ("PostgreSQLSink", "PostgreSQLSinkException")
 logger = logging.getLogger(__name__)
 
 # A column name for the records keys
-_KEY_COLUMN_NAME = "__key"
+KEY_COLUMN_NAME = "__key"
 
 # A column name for the records timestamps
-_TIMESTAMP_COLUMN_NAME = "timestamp"
+TIMESTAMP_COLUMN_NAME = "timestamp"
 
 # A mapping of Python types to PostgreSQL column types for schema updates
 _POSTGRES_TYPES_MAP: dict[type, str] = {
@@ -48,6 +48,7 @@ _POSTGRES_TYPES_MAP: dict[type, str] = {
     bool: "BOOLEAN",
 }
 
+TableName = Union[Callable[[SinkItem], str], str]
 PrimaryKeySetter = Callable[[SinkItem], Optional[Union[str, list[str]]]]
 PrimaryKeys = Union[str, list[str], PrimaryKeySetter]
 
@@ -58,6 +59,9 @@ class PostgreSQLSinkException(QuixException): ...
 class PostgresSQLSinkMissingExistingPK(QuixException): ...
 
 
+class PostgresSQLSinkInvalidPK(QuixException): ...
+
+
 class PostgreSQLSink(BatchingSink):
     def __init__(
         self,
@@ -66,13 +70,13 @@ class PostgreSQLSink(BatchingSink):
         dbname: str,
         user: str,
         password: str,
-        table_name: Union[Callable[[SinkItem], str], str],
+        table_name: TableName,
         schema_name: str = "public",
         schema_auto_update: bool = True,
         connection_timeout_seconds: int = 30,
         statement_timeout_seconds: int = 30,
         primary_keys: Optional[PrimaryKeys] = None,
-        upsert_on_primary_keys: bool = False,
+        upsert_on_primary_key: bool = False,
         on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
         on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
         **kwargs,
@@ -94,12 +98,12 @@ class PostgreSQLSink(BatchingSink):
         :param connection_timeout_seconds: Timeout for connection.
         :param statement_timeout_seconds: Timeout for DDL operations such as table
             creation or schema updates.
-        :param primary_keys: An optional single (or list of) primary key(s).
+        :param primary_keys: An optional single or multiple (composite) primary key column(s).
             Can also provide a callable that accepts the message value as input, and returns
             a similar result (or nothing).
-            Often paired with `upsert_on_primary_keys=True`.
+            Often paired with `upsert_on_primary_key=True`.
             It must include all currently defined primary_keys on a given table.
-        :param upsert_on_primary_keys: Upsert based on the given `primary_keys`.
+        :param upsert_on_primary_key: Upsert based on the given `primary_keys`.
             If False, every message is treated as an independent entry, and any
             primary key collisions will consequently raise an exception.
         :param on_client_connect_success: An optional callback made after successful
@@ -124,15 +128,15 @@ class PostgreSQLSink(BatchingSink):
         if "statement_timeout" not in options:
             options = f"{options} -c statement_timeout={statement_timeout_seconds}s"
 
-        if primary_keys and not upsert_on_primary_keys:
+        if primary_keys and not upsert_on_primary_key:
             logger.warning(
-                "NOTE: `primary_keys` was set but `upsert_on_primary_keys` is False; "
+                "NOTE: `primary_keys` was set but `upsert_on_primary_key` is False; "
                 "upserting is commonly desired when using primary keys."
             )
         self._primary_keys = (
             _primary_keys_setter(primary_keys) if primary_keys else None
         )
-        self._do_upsert = upsert_on_primary_keys
+        self._do_upsert = upsert_on_primary_key
 
         self._client_settings = {
             "host": host,
@@ -166,8 +170,8 @@ class PostgreSQLSink(BatchingSink):
             row = {}
             if item.key is not None:
                 key_type = type(item.key)
-                table["cols_types"].setdefault(_KEY_COLUMN_NAME, key_type)
-                row[_KEY_COLUMN_NAME] = item.key
+                table["cols_types"].setdefault(KEY_COLUMN_NAME, key_type)
+                row[KEY_COLUMN_NAME] = item.key
             for key, value in item.value.items():
                 if key in primary_keys:
                     table["pks_types"].setdefault(key, type(key))
@@ -176,7 +180,7 @@ class PostgreSQLSink(BatchingSink):
                     table["cols_types"].setdefault(key, type(value))
                     row[key] = value
 
-            row[_TIMESTAMP_COLUMN_NAME] = datetime.fromtimestamp(item.timestamp / 1000)
+            row[TIMESTAMP_COLUMN_NAME] = datetime.fromtimestamp(item.timestamp / 1000)
             table["rows"].append(row)
 
         try:
@@ -193,7 +197,7 @@ class PostgreSQLSink(BatchingSink):
             if "duplicate key value violates unique constraint" in str(e):
                 raise PostgreSQLSinkException(
                     f"Failed to write batch: attempted insert of new row using an "
-                    f"existing primary key. Try `upsert_on_primary_keys=True` for "
+                    f"existing primary key. Try `upsert_on_primary_key=True` for "
                     f"upsert functionality. PostgreSQL error info: {str(e)}"
                 ) from e
             raise PostgreSQLSinkException(f"Failed to write batch: {str(e)}") from e
@@ -253,8 +257,8 @@ class PostgreSQLSink(BatchingSink):
             """
         ).format(
             table=sql.Identifier(self._schema_name, table_name),
-            timestamp_col=sql.Identifier(_TIMESTAMP_COLUMN_NAME),
-            key_col=sql.Identifier(_KEY_COLUMN_NAME),
+            timestamp_col=sql.Identifier(TIMESTAMP_COLUMN_NAME),
+            key_col=sql.Identifier(KEY_COLUMN_NAME),
         )
 
         with self._client.cursor() as cursor:
@@ -282,7 +286,9 @@ class PostgreSQLSink(BatchingSink):
             with self._client.cursor() as cursor:
                 cursor.execute(query)
 
-    def _get_current_primary_keys(self, table) -> list[str]:
+    def get_current_primary_keys(self, table: str) -> list[str]:
+        if not self._client:
+            self.setup()
         query = sql.SQL(
             """
             SELECT
@@ -307,29 +313,32 @@ class PostgreSQLSink(BatchingSink):
         return pks
 
     def _add_new_primary_keys(self, table_name: str, pks: dict[str, type]) -> None:
-        current_pks = self._get_current_primary_keys(table_name)
-        new_pks = list(sorted(pks.keys()))
-        if current_pks == new_pks:
+        current_pks = self.get_current_primary_keys(table_name)
+        _pks = list(sorted(pks.keys()))
+        if current_pks == _pks:
             return
 
-        logger.debug(
-            f"Identifying new primary keys to add; current: {current_pks}, "
-            f"defined: {new_pks}"
-        )
-        new_pks = set(new_pks)
+        _pks = set(_pks)
         if len(current_pks) != 0:
             current_pks = set(current_pks)
-            if missing := current_pks - new_pks:
+            if missing := current_pks - _pks:
                 raise PostgresSQLSinkMissingExistingPK(
                     f"the PostgresSQLSink `primary_key` argument does not include the"
                     f"already existing Primary Key(s): {missing}"
                 )
-            new_pks = new_pks - current_pks
+            else:
+                # TODO: Provide an option to allow deletion of primary keys
+                raise PostgresSQLSinkInvalidPK(
+                    f"A different {'composite' if len(current_pks) > 1 else ''} "
+                    f"primary key is already defined; to use the provided list as the "
+                    f"new {'composite' if len(pks) > 1 else ''} primary key, remove "
+                    f"the existing first. Current: {current_pks}. Provided: {pks}"
+                )
 
-        logger.info(f"Adding new primary key column(s): {new_pks}")
-        self._add_new_columns(table_name, {pk: pks[pk] for pk in new_pks})
+        logger.info(f"Adding new primary key column(s): {_pks}")
+        self._add_new_columns(table_name, pks)
 
-        logger.info(f"Setting new primary key(s): {new_pks}")
+        logger.info(f"Setting new primary key(s): {_pks}")
         query = sql.SQL(
             """
             ALTER TABLE {table}
@@ -337,7 +346,7 @@ class PostgreSQLSink(BatchingSink):
             """
         ).format(
             table=sql.Identifier(self._schema_name, table_name),
-            pks=sql.SQL(", ").join(sql.Identifier(pk) for pk in new_pks),
+            pks=sql.SQL(", ").join(sql.Identifier(pk) for pk in pks),
         )
 
         with self._client.cursor() as cursor:
