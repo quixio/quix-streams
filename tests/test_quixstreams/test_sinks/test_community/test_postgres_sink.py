@@ -1,8 +1,6 @@
 import datetime
-import random
-import time
 import uuid
-from typing import Generator, Iterable, Optional
+from typing import Generator, Optional
 
 import psycopg2
 import pytest
@@ -56,58 +54,16 @@ def refresh_table(postgres_connection):
     return inner
 
 
-class ResourceEventGenerator:
-    def __init__(
-        self,
-        host_count: int = 2,
-        events_per_host: int = 3,
-        resources: Iterable[str] = ("CPU", "RAM"),
-        events: Iterable[dict] = None,
-    ):
-        self.events = events
-        self._events_per_host = events_per_host
-        self._host_ids = host_count
-        self._resources = resources
-        self._iterator = None
-        if not self.events:
-            self._prepare_events()
-
-    def __iter__(self):
-        self._iterator = iter(self.events)
-        return self
-
-    def __next__(self):
-        try:
-            return next(self._iterator)
-        except StopIteration:
-            self._iterator = None
-            return None
-
-    def _usage_event(self, host_id, resource):
-        return {
-            "resource": resource,
-            "hostname": f"host_{host_id}",
-            "used_percent": round(random.random() * 100, 2),
-            "event_time": int(time.time() * 1000),  # ms
-        }
-
-    def _prepare_events(self):
-        if self.events:
-            return
-        self.events = []
-        for i in range(self._events_per_host):
-            for host_id in range(self._host_ids):
-                for resource in self._resources:
-                    self.events.append(self._usage_event(host_id, resource))
-
-
 class ResourceEventSource(Source):
-    def __init__(
-        self,
-        event_generator: ResourceEventGenerator = ResourceEventGenerator(),
-    ):
+    def __init__(self, events: list[dict]):
         super().__init__(name=f"sink_resource_generator_{uuid.uuid4()}")
-        self._events = iter(event_generator)
+        self._events = iter(events)
+
+    def _next_event(self):
+        try:
+            return next(self._events)
+        except StopIteration:
+            return None
 
     def default_topic(self) -> Topic:
         return Topic(
@@ -129,7 +85,7 @@ class ResourceEventSource(Source):
         `self.serialize` and `self.produce`.
         """
         # either break when the app is stopped, or data is exhausted
-        while self.running and (event := next(self._events)):
+        while self.running and (event := self._next_event()):
             event_serialized = self.serialize(key=event["hostname"], value=event)
             self.produce(key=event_serialized.key, value=event_serialized.value)
 
@@ -193,8 +149,8 @@ def sink_app_factory(app_factory):
 
 @pytest.fixture()
 def resource_source_factory():
-    def inner(data: Optional[list[dict]] = None) -> ResourceEventSource:
-        return ResourceEventSource(event_generator=ResourceEventGenerator(events=data))
+    def inner(data: list[dict]) -> ResourceEventSource:
+        return ResourceEventSource(events=data)
 
     return inner
 
