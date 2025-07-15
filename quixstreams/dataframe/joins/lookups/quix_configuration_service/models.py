@@ -328,7 +328,7 @@ class Configuration:
                 # First valid version becomes the current version
                 if current_version is None:
                     current_version = version
-                    # We can short circuit if we find a version that is valid always valid.
+                    # We can short-circuit if we find a version that is always valid.
                     # There is no need for a previous_version as the current is valid from the beginning.
                     # There is no need to look for a next_version either, it will have a lower version number
                     # since the loop is ordered by version number.
