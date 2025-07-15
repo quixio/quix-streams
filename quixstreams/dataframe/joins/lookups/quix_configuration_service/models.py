@@ -158,7 +158,7 @@ class ConfigurationVersion:
         if raw_valid_from is None:
             valid_from: float = 0
         else:
-            # TODO python 3.11: Use `datetime.fromisoformat` when additional format are available
+            # TODO python 3.11: Use `datetime.fromisoformat` when additional formats are available
             try:
                 parsed = datetime.strptime(raw_valid_from, "%Y-%m-%dT%H:%M:%S.%f%z")
             except ValueError:
