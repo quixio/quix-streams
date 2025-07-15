@@ -258,9 +258,7 @@ class TestConfiguration:
     def test_find_valid_version_mixed_timestamp_and_no_timestamp(self):
         """Test finding valid version with mix of timestamped and non-timestamped versions."""
         version1 = create_configuration_version(version=1, valid_from=1000.0)
-        version2 = create_configuration_version(
-            version=2, valid_from=0.0
-        )  # No timestamp
+        version2 = create_configuration_version(version=2, valid_from=0.0)
         version3 = create_configuration_version(version=3, valid_from=3000.0)
 
         config = Configuration(versions={1: version1, 2: version2, 3: version3})
