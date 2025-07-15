@@ -610,10 +610,7 @@ class TestLookupFindVersion:
         wildcard_id = lookup._config_id("user-config", "*")
 
         # All should be different
-        assert config_id1 != config_id2
-        assert config_id1 != config_id3
-        assert config_id1 != wildcard_id
-        assert config_id2 != config_id3
+        assert len({config_id1, config_id2, config_id3, wildcard_id}) == 4
 
         # Same inputs should produce same ID
         assert config_id1 == lookup._config_id("user-config", "user123")
