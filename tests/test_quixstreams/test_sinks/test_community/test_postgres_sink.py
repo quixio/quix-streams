@@ -45,14 +45,11 @@ def postgres_connection(postgres_container):
         yield conn
 
 
-@pytest.fixture()
+@pytest.fixture(autouse=True)
 def refresh_table(postgres_connection):
-    def inner(table_name: str = DEFAULT_TABLE_NAME):
-        with postgres_connection.cursor() as cursor:
-            cursor.execute(f"DROP TABLE IF EXISTS {table_name}")
-        postgres_connection.commit()
-
-    return inner
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(f"DROP TABLE IF EXISTS {DEFAULT_TABLE_NAME}")
+    postgres_connection.commit()
 
 
 class ResourceEventSource(Source):
@@ -157,14 +154,12 @@ def resource_source_factory():
 
 
 def test_sink(
-    refresh_table,
     sink_app_factory,
     postgres_sink_factory,
     resource_source_factory,
     get_all_table_rows,
 ):
     """Base functionality: each record is treated as an independent entity"""
-    refresh_table()
     data = [
         {
             "event_time": 1752158109872,
@@ -206,13 +201,11 @@ def test_sink(
 
 
 def test_sink_primary_key(
-    refresh_table,
     sink_app_factory,
     postgres_sink_factory,
     resource_source_factory,
     get_all_table_rows,
 ):
-    refresh_table()
     data = [
         {
             "event_time": 1752158109872,
@@ -247,14 +240,12 @@ def test_sink_primary_key(
 
 
 def test_sink_primary_key_collision(
-    refresh_table,
     sink_app_factory,
     postgres_sink_factory,
     resource_source_factory,
     get_all_table_rows,
 ):
     """An error is raised when a primary key is repeated without upsert enabled"""
-    refresh_table()
     data = [
         {
             "event_time": 1752158109872,
@@ -279,14 +270,12 @@ def test_sink_primary_key_collision(
 
 
 def test_sink_composite_primary_key(
-    refresh_table,
     sink_app_factory,
     postgres_sink_factory,
     resource_source_factory,
     get_all_table_rows,
 ):
     """Composite means primary key comprised of multiple columns"""
-    refresh_table()
     data = [
         {
             "event_time": 1752158109872,
@@ -321,13 +310,11 @@ def test_sink_composite_primary_key(
 
 
 def test_sink_primary_key_null_value(
-    refresh_table,
     sink_app_factory,
     postgres_sink_factory,
     resource_source_factory,
     get_all_table_rows,
 ):
-    refresh_table()
     data = [
         {
             "event_time": 1752158109872,
@@ -354,14 +341,12 @@ def test_sink_primary_key_null_value(
 
 
 def test_sink_primary_key_additional_key(
-    refresh_table,
     sink_app_factory,
     postgres_sink_factory,
     resource_source_factory,
     get_all_table_rows,
 ):
     """Primary keys can't be added once others have already been defined."""
-    refresh_table()
     data = [
         {
             "event_time": 1752158109872,
@@ -411,7 +396,6 @@ def test_sink_primary_key_additional_key(
 
 
 def test_sink_primary_key_missing_composite_key(
-    refresh_table,
     sink_app_factory,
     postgres_sink_factory,
     resource_source_factory,
@@ -420,7 +404,6 @@ def test_sink_primary_key_missing_composite_key(
     """
     When defining primary keys, you must specify all existing ones on the table.
     """
-    refresh_table()
     data = [
         {
             "event_time": 1752158109872,
@@ -448,7 +431,6 @@ def test_sink_primary_key_missing_composite_key(
 
 
 def test_sink_primary_key_upsert_dedup(
-    refresh_table,
     sink_app_factory,
     postgres_sink_factory,
     resource_source_factory,
@@ -458,7 +440,6 @@ def test_sink_primary_key_upsert_dedup(
     Upserting works with deduplication (repeat primary key in a given batch of data
     is consolidated to last received version of said message)
     """
-    refresh_table()
     data = [
         {
             "event_time": 1752158109872,
@@ -503,14 +484,12 @@ def test_sink_primary_key_upsert_dedup(
 
 
 def test_sink_primary_key_upsert_split_transactions(
-    refresh_table,
     sink_app_factory,
     postgres_sink_factory,
     resource_source_factory,
     get_all_table_rows,
 ):
     """Upserting works as expected across separate transactions"""
-    refresh_table()
     data = [
         {
             "event_time": 1752158109872,
@@ -572,7 +551,6 @@ def test_sink_primary_key_upsert_split_transactions(
 
 
 def test_sink_composite_primary_key_upsert(
-    refresh_table,
     sink_app_factory,
     postgres_sink_factory,
     resource_source_factory,
@@ -581,7 +559,6 @@ def test_sink_composite_primary_key_upsert(
     """
     Upserting works with a composite primary key.
     """
-    refresh_table()
     data = [
         {
             "event_time": 1752158109872,
