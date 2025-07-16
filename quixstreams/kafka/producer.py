@@ -1,6 +1,5 @@
 import functools
 import logging
-import uuid
 from typing import Callable, List, Optional, Union
 
 from confluent_kafka import (
@@ -88,6 +87,7 @@ class Producer:
             will be passed to `confluent_kafka.Producer` as is.
             Note: values passed as arguments override values in `extra_config`.
         :param flush_timeout: The time the producer is waiting for all messages to be delivered.
+        :param transactional: Whether the producer should use Kafka Transactions API.
         """
         if isinstance(broker_address, str):
             broker_address = ConnectionConfig(bootstrap_servers=broker_address)
@@ -99,17 +99,6 @@ class Producer:
             **broker_address.as_librdkafka_dict(),
             **{"logger": logger, "error_cb": error_callback},
         }
-        # Provide additional config if producer uses transactions
-        if transactional:
-            self._producer_config.update(
-                {
-                    "enable.idempotence": True,
-                    # Respect the transactional.id if it's passed
-                    "transactional.id": self._producer_config.get(
-                        "transactional.id", str(uuid.uuid4())
-                    ),
-                }
-            )
         self._inner_producer: Optional[ConfluentProducer] = None
         self._flush_timeout = flush_timeout or -1
         self._transactional = transactional

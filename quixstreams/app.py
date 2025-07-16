@@ -3,6 +3,7 @@ import functools
 import logging
 import signal
 import time
+import uuid
 import warnings
 from collections import defaultdict
 from pathlib import Path
@@ -264,6 +265,7 @@ class Application:
             self._topic_manager_factory: TopicManagerFactory = TopicManager
             if isinstance(broker_address, str):
                 broker_address = ConnectionConfig(bootstrap_servers=broker_address)
+            consumer_group_prefix = ""
         else:
             self._is_quix_app = True
 
@@ -301,13 +303,24 @@ class Application:
             consumer_group = quix_app_config.consumer_group
             consumer_extra_config.update(quix_app_config.librdkafka_extra_config)
             producer_extra_config.update(quix_app_config.librdkafka_extra_config)
+            consumer_group_prefix = quix_config_builder.workspace_id
+
+        if processing_guarantee == "exactly-once":
+            producer_extra_config["enable.idempotence"] = True
+            transactional_id = producer_extra_config.get(
+                "transactional.id", str(uuid.uuid4())
+            )
+            if consumer_group_prefix:
+                producer_extra_config["transactional.id"] = (
+                    f"{consumer_group_prefix}-{transactional_id}"
+                )
+            else:
+                producer_extra_config["transactional.id"] = transactional_id
 
         self._config = ApplicationConfig(
             broker_address=broker_address,
             consumer_group=consumer_group,
-            consumer_group_prefix=(
-                quix_config_builder.workspace_id if quix_config_builder else ""
-            ),
+            consumer_group_prefix=consumer_group_prefix,
             auto_offset_reset=auto_offset_reset,
             commit_interval=commit_interval,
             commit_every=commit_every,
