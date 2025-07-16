@@ -366,7 +366,7 @@ class PostgreSQLSink(BatchingSink):
             columns=sql.SQL(", ").join(map(sql.Identifier, columns)),
         )
         if pks and self._do_upsert:
-            # we must de-deplicate based on primary keys else an exception is thrown.
+            # We must de-duplicate based on primary keys, else an exception is thrown.
             # We take the "latest" values of each based on original read order.
             rows = {tuple(row[pk] for pk in pks): row for row in rows}.values()
             upsert_stub = sql.SQL(
