@@ -1,6 +1,6 @@
 import datetime
 import uuid
-from typing import Generator, Optional
+from typing import Generator
 
 import psycopg2
 import pytest
@@ -16,7 +16,8 @@ from quixstreams.sinks.community.postgresql import (
     PostgreSQLSinkException,
     PostgresSQLSinkInvalidPK,
     PostgresSQLSinkMissingExistingPK,
-    PrimaryKeys,
+    PostgresSQLSinkPKNullValue,
+    PrimaryKeyColumns,
     TableName,
 )
 from quixstreams.sources.base import Source
@@ -119,7 +120,7 @@ def get_all_table_rows(postgres_connection):
 def postgres_sink_factory(postgres_connection) -> callable:
     def inner(
         table_name: TableName = DEFAULT_TABLE_NAME,
-        primary_keys: Optional[PrimaryKeys] = None,
+        primary_key_columns: PrimaryKeyColumns = (),
         upsert_on_primary_key: bool = False,
     ) -> PostgreSQLSink:
         info = postgres_connection.info
@@ -130,7 +131,7 @@ def postgres_sink_factory(postgres_connection) -> callable:
             password=info.password,
             dbname=info.dbname,
             table_name=table_name,
-            primary_keys=primary_keys,
+            primary_key_columns=primary_key_columns,
             upsert_on_primary_key=upsert_on_primary_key,
         )
 
@@ -226,8 +227,8 @@ def test_sink_primary_key(
             "used_percent": 56.22,
         },
     ]
-    primary_keys = ["hostname"]
-    sink = postgres_sink_factory(primary_keys=primary_keys)
+    primary_key_columns = ["hostname"]
+    sink = postgres_sink_factory(primary_key_columns=primary_key_columns)
     app = sink_app_factory(
         resource_source_factory(data),
         sink,
@@ -240,7 +241,9 @@ def test_sink_primary_key(
             r["_timestamp"] / 1000
         )
     assert data == get_all_table_rows()
-    assert sink.get_current_primary_keys(DEFAULT_TABLE_NAME) == primary_keys
+    assert (
+        sink.get_current_primary_key_columns(DEFAULT_TABLE_NAME) == primary_key_columns
+    )
 
 
 def test_sink_primary_key_collision(
@@ -268,7 +271,7 @@ def test_sink_primary_key_collision(
     ]
     app = sink_app_factory(
         resource_source_factory(data),
-        postgres_sink_factory(primary_keys=["hostname"]),
+        postgres_sink_factory(primary_key_columns=["hostname"]),
     )
     with pytest.raises(PostgreSQLSinkException) as exc_info:
         app.run()
@@ -298,8 +301,8 @@ def test_sink_composite_primary_key(
             "used_percent": 56.22,
         },
     ]
-    primary_keys = ["hostname", "resource"]
-    sink = postgres_sink_factory(primary_keys=primary_keys)
+    primary_key_columns = ["hostname", "resource"]
+    sink = postgres_sink_factory(primary_key_columns=primary_key_columns)
     app = sink_app_factory(
         resource_source_factory(data),
         sink,
@@ -312,7 +315,42 @@ def test_sink_composite_primary_key(
             r["_timestamp"] / 1000
         )
     assert data == get_all_table_rows()
-    assert sink.get_current_primary_keys(DEFAULT_TABLE_NAME) == primary_keys
+    assert (
+        sink.get_current_primary_key_columns(DEFAULT_TABLE_NAME) == primary_key_columns
+    )
+
+
+def test_sink_primary_key_null_value(
+    refresh_table,
+    sink_app_factory,
+    postgres_sink_factory,
+    resource_source_factory,
+    get_all_table_rows,
+):
+    refresh_table()
+    data = [
+        {
+            "event_time": 1752158109872,
+            "hostname": "host_0",
+            "resource": "CPU",
+            "used_percent": 91.61,
+        },
+        {
+            "event_time": 1752158109876,
+            "hostname": "host_1",
+            "resource": None,
+            "used_percent": 56.22,
+        },
+    ]
+    primary_key_columns = ["hostname", "resource"]
+    sink = postgres_sink_factory(primary_key_columns=primary_key_columns)
+    app = sink_app_factory(
+        resource_source_factory(data),
+        sink,
+    )
+    with pytest.raises(PostgresSQLSinkPKNullValue) as exc_info:
+        app.run(count=len(data), metadata=True)
+    assert "resource" in str(exc_info.value)
 
 
 def test_sink_primary_key_additional_key(
@@ -338,8 +376,8 @@ def test_sink_primary_key_additional_key(
             "used_percent": 56.22,
         },
     ]
-    primary_keys = ["hostname"]
-    sink = postgres_sink_factory(primary_keys=primary_keys)
+    primary_key_columns = ["hostname"]
+    sink = postgres_sink_factory(primary_key_columns=primary_key_columns)
     app = sink_app_factory(
         resource_source_factory(data),
         sink,
@@ -352,11 +390,13 @@ def test_sink_primary_key_additional_key(
             r["_timestamp"] / 1000
         )
     assert data == get_all_table_rows()
-    assert sink.get_current_primary_keys(DEFAULT_TABLE_NAME) == primary_keys
+    assert (
+        sink.get_current_primary_key_columns(DEFAULT_TABLE_NAME) == primary_key_columns
+    )
 
     # Now attempt to add a new primary key, "resource"
-    primary_keys = ["hostname", "resource"]
-    sink = postgres_sink_factory(primary_keys=primary_keys)
+    primary_key_columns = ["hostname", "resource"]
+    sink = postgres_sink_factory(primary_key_columns=primary_key_columns)
     app = sink_app_factory(
         resource_source_factory(
             [{"event_time": 1, "hostname": "0", "resource": "0", "used_percent": 0.0}]
@@ -365,7 +405,9 @@ def test_sink_primary_key_additional_key(
     )
     with pytest.raises(PostgresSQLSinkInvalidPK):
         app.run()
-    assert sink.get_current_primary_keys(DEFAULT_TABLE_NAME) != primary_keys
+    assert (
+        sink.get_current_primary_key_columns(DEFAULT_TABLE_NAME) != primary_key_columns
+    )
 
 
 def test_sink_primary_key_missing_composite_key(
@@ -387,17 +429,17 @@ def test_sink_primary_key_missing_composite_key(
             "used_percent": 91.61,
         },
     ]
-    primary_keys = ["hostname", "resource"]
+    primary_key_columns = ["hostname", "resource"]
     app = sink_app_factory(
         resource_source_factory(data),
-        postgres_sink_factory(primary_keys=primary_keys),
+        postgres_sink_factory(primary_key_columns=primary_key_columns),
     )
     app.run(count=len(data))
 
     # run app again, but missing an existing primary key
     app = sink_app_factory(
         resource_source_factory(data),
-        postgres_sink_factory(primary_keys=["hostname"]),
+        postgres_sink_factory(primary_key_columns=["hostname"]),
     )
 
     with pytest.raises(PostgresSQLSinkMissingExistingPK) as exc_info:
@@ -445,7 +487,9 @@ def test_sink_primary_key_upsert_dedup(
     ]
     app = sink_app_factory(
         resource_source_factory(data),
-        postgres_sink_factory(primary_keys=["hostname"], upsert_on_primary_key=True),
+        postgres_sink_factory(
+            primary_key_columns=["hostname"], upsert_on_primary_key=True
+        ),
     )
     result = app.run(count=len(data), metadata=True)
 
@@ -483,7 +527,9 @@ def test_sink_primary_key_upsert_split_transactions(
     ]
     app = sink_app_factory(
         resource_source_factory(data),
-        postgres_sink_factory(primary_keys=["hostname"], upsert_on_primary_key=True),
+        postgres_sink_factory(
+            primary_key_columns=["hostname"], upsert_on_primary_key=True
+        ),
     )
     result = app.run(count=len(data), metadata=True)
 
@@ -511,7 +557,9 @@ def test_sink_primary_key_upsert_split_transactions(
     ]
     app = sink_app_factory(
         resource_source_factory(data),
-        postgres_sink_factory(primary_keys=["hostname"], upsert_on_primary_key=True),
+        postgres_sink_factory(
+            primary_key_columns=["hostname"], upsert_on_primary_key=True
+        ),
     )
     result = app.run(count=len(data), metadata=True)
 
@@ -576,7 +624,7 @@ def test_sink_composite_primary_key_upsert(
     app = sink_app_factory(
         resource_source_factory(data),
         postgres_sink_factory(
-            primary_keys=["hostname", "resource"], upsert_on_primary_key=True
+            primary_key_columns=["hostname", "resource"], upsert_on_primary_key=True
         ),
     )
     result = app.run(count=len(data), metadata=True)

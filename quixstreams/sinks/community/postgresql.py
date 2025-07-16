@@ -49,8 +49,8 @@ _POSTGRES_TYPES_MAP: dict[type, str] = {
 }
 
 TableName = Union[Callable[[SinkItem], str], str]
-PrimaryKeySetter = Callable[[SinkItem], Optional[Union[str, list[str]]]]
-PrimaryKeys = Union[str, list[str], PrimaryKeySetter]
+PrimaryKeySetter = Callable[[SinkItem], Union[str, list[str], tuple[str]]]
+PrimaryKeyColumns = Union[str, list[str], tuple[str], PrimaryKeySetter]
 
 
 class PostgreSQLSinkException(QuixException): ...
@@ -60,6 +60,9 @@ class PostgresSQLSinkMissingExistingPK(QuixException): ...
 
 
 class PostgresSQLSinkInvalidPK(QuixException): ...
+
+
+class PostgresSQLSinkPKNullValue(QuixException): ...
 
 
 class PostgreSQLSink(BatchingSink):
@@ -75,7 +78,7 @@ class PostgreSQLSink(BatchingSink):
         schema_auto_update: bool = True,
         connection_timeout_seconds: int = 30,
         statement_timeout_seconds: int = 30,
-        primary_keys: Optional[PrimaryKeys] = None,
+        primary_key_columns: PrimaryKeyColumns = (),
         upsert_on_primary_key: bool = False,
         on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
         on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
@@ -98,11 +101,13 @@ class PostgreSQLSink(BatchingSink):
         :param connection_timeout_seconds: Timeout for connection.
         :param statement_timeout_seconds: Timeout for DDL operations such as table
             creation or schema updates.
-        :param primary_keys: An optional single or multiple (composite) primary key column(s).
-            Can also provide a callable that accepts the message value as input, and returns
-            a similar result (or nothing).
+        :param primary_key_columns: An optional single (string) or list of primary key
+            column(s); len>1 is a composite key, a non-empty str or len==1 is a primary
+            key, and len<1 or empty string means no primary key.
+            Can instead provide a callable, which uses the message value as input and
+            returns a string or list of strings.
             Often paired with `upsert_on_primary_key=True`.
-            It must include all currently defined primary_keys on a given table.
+            It must include all currently defined primary key columns on a given table.
         :param upsert_on_primary_key: Upsert based on the given `primary_keys`.
             If False, every message is treated as an independent entry, and any
             primary key collisions will consequently raise an exception.
@@ -128,14 +133,12 @@ class PostgreSQLSink(BatchingSink):
         if "statement_timeout" not in options:
             options = f"{options} -c statement_timeout={statement_timeout_seconds}s"
 
-        if primary_keys and not upsert_on_primary_key:
+        if primary_key_columns and not upsert_on_primary_key:
             logger.warning(
-                "NOTE: `primary_keys` was set but `upsert_on_primary_key` is False; "
-                "upserting is commonly desired when using primary keys."
+                "NOTE: `primary_key_columns` was provided but `upsert_on_primary_key` "
+                "is False; upserting is commonly desired when using a primary key."
             )
-        self._primary_keys = (
-            _primary_keys_setter(primary_keys) if primary_keys else None
-        )
+        self._primary_key_setter = _primary_key_setter(primary_key_columns)
         self._do_upsert = upsert_on_primary_key
 
         self._client_settings = {
@@ -156,16 +159,13 @@ class PostgreSQLSink(BatchingSink):
 
     def write(self, batch: SinkBatch):
         tables = {}
-        primary_keys = []
-
         for item in batch:
             table = tables.setdefault(
                 self._table_name(item), {"rows": [], "cols_types": {}, "pks_types": {}}
             )
-            if self._primary_keys:
-                primary_keys = self._primary_keys(item) or []
-                if isinstance(primary_keys, str):
-                    primary_keys = [primary_keys]
+            primary_key_columns = self._primary_key_setter(item) or ()
+            if isinstance(primary_key_columns, str):
+                primary_key_columns = [primary_key_columns]
 
             row = {}
             if item.key is not None:
@@ -173,8 +173,12 @@ class PostgreSQLSink(BatchingSink):
                 table["cols_types"].setdefault(KEY_COLUMN_NAME, key_type)
                 row[KEY_COLUMN_NAME] = item.key
             for key, value in item.value.items():
-                if key in primary_keys:
-                    table["pks_types"].setdefault(key, type(key))
+                if key in primary_key_columns:
+                    if value is None:
+                        raise PostgresSQLSinkPKNullValue(
+                            f"Primary key column '{key}' value cannot be None (null)"
+                        )
+                    table["pks_types"].setdefault(key, type(value))
                     row[key] = value
                 elif value is not None:
                     table["cols_types"].setdefault(key, type(value))
@@ -183,12 +187,14 @@ class PostgreSQLSink(BatchingSink):
             row[TIMESTAMP_COLUMN_NAME] = datetime.fromtimestamp(item.timestamp / 1000)
             table["rows"].append(row)
 
+        table_counts = {}
         try:
             with self._client:
                 for name, values in tables.items():
+                    table_counts[name] = len(values["rows"])
                     if self._schema_auto_update:
                         self._create_table(name)
-                        if self._primary_keys:
+                        if self._primary_key_setter:
                             self._add_new_primary_keys(name, values["pks_types"])
                         self._add_new_columns(name, values["cols_types"])
                     self._insert_rows(name, values["rows"], values["pks_types"])
@@ -201,7 +207,6 @@ class PostgreSQLSink(BatchingSink):
                     f"upsert functionality. PostgreSQL error info: {str(e)}"
                 ) from e
             raise PostgreSQLSinkException(f"Failed to write batch: {str(e)}") from e
-        table_counts = {table: len(values["rows"]) for table, values in tables.items()}
         schema_log = (
             " "
             if self._schema_name == "public"
@@ -286,7 +291,7 @@ class PostgreSQLSink(BatchingSink):
             with self._client.cursor() as cursor:
                 cursor.execute(query)
 
-    def get_current_primary_keys(self, table: str) -> list[str]:
+    def get_current_primary_key_columns(self, table: str) -> list[str]:
         if not self._client:
             self.setup()
         query = sql.SQL(
@@ -309,12 +314,12 @@ class PostgreSQLSink(BatchingSink):
         )
         with self._client.cursor() as cursor:
             cursor.execute(query)
-            pks = list(sorted(row[0] for row in cursor.fetchall()))
+            pks = sorted(row[0] for row in cursor.fetchall())
         return pks
 
     def _add_new_primary_keys(self, table_name: str, pks: dict[str, type]) -> None:
-        current_pks = self.get_current_primary_keys(table_name)
-        _pks = list(sorted(pks.keys()))
+        current_pks = self.get_current_primary_key_columns(table_name)
+        _pks = sorted(pks.keys())
         if current_pks == _pks:
             return
 
@@ -395,7 +400,7 @@ def _table_name_setter(
     return table_name
 
 
-def _primary_keys_setter(primary_keys: Optional[PrimaryKeys]) -> PrimaryKeySetter:
-    if isinstance(primary_keys, (str, list)):
-        return lambda sink_item: primary_keys
-    return primary_keys
+def _primary_key_setter(columns: PrimaryKeyColumns) -> PrimaryKeySetter:
+    if not callable(columns):
+        return lambda sink_item: columns
+    return columns
