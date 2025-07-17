@@ -307,7 +307,6 @@ class Application:
             consumer_group_prefix = quix_config_builder.workspace_id
 
         if processing_guarantee == "exactly-once":
-            producer_extra_config["enable.idempotence"] = True
             transactional_id = producer_extra_config.get(
                 "transactional.id", str(uuid.uuid4())
             )
@@ -647,7 +646,6 @@ class Application:
             extra_config = self._config.producer_extra_config
         else:
             extra_config = copy.deepcopy(self._config.producer_extra_config)
-            extra_config.pop("enable.idempotence", None)
             extra_config.pop("transactional.id", None)
 
         return Producer(
