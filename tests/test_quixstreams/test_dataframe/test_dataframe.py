@@ -17,6 +17,7 @@ from quixstreams.dataframe.registry import DataFrameRegistry
 from quixstreams.dataframe.windows.base import WindowResult
 from quixstreams.models import TopicConfig
 from quixstreams.models.topics.exceptions import TopicPartitionsMismatch
+from quixstreams.models.topics.topic import Topic
 from quixstreams.utils.stream_id import stream_id_from_strings
 from tests.utils import DummySink
 
@@ -778,6 +779,48 @@ class TestStreamingDataFrameToTopic:
         for consumed_row in consumed_rows:
             assert consumed_row.key == key
             assert consumed_row.value == value
+
+    def test_to_topic_dynamic_topic(
+        self,
+        dataframe_factory,
+        internal_consumer_factory,
+        internal_producer_factory,
+        topic_manager_topic_factory,
+        message_context_factory,
+    ):
+        topic_0 = topic_manager_topic_factory(
+            value_serializer="json", value_deserializer="json"
+        )
+        topic_1 = topic_manager_topic_factory(
+            value_serializer="json", value_deserializer="json"
+        )
+
+        def topic_callback(value: Any) -> Topic:
+            return topic_0 if value == 0 else topic_1
+
+        producer = internal_producer_factory()
+
+        sdf = dataframe_factory(producer=producer)
+        sdf = sdf.to_topic(topic_callback)
+
+        key, timestamp = b"key", 10
+        ctx = message_context_factory()
+
+        with producer:
+            sdf.test(value=0, key=key, timestamp=timestamp, ctx=ctx)
+            sdf.test(value=1, key=key, timestamp=timestamp, ctx=ctx)
+
+        with internal_consumer_factory(auto_offset_reset="earliest") as consumer:
+            consumer.subscribe([topic_0])
+            row_0 = consumer.poll_row(timeout=5.0)
+            assert row_0.topic == topic_0.name
+            assert row_0.value == 0
+
+        with internal_consumer_factory(auto_offset_reset="earliest") as consumer:
+            consumer.subscribe([topic_1])
+            row_1 = consumer.poll_row(timeout=5.0)
+            assert row_1.topic == topic_1.name
+            assert row_1.value == 1
 
 
 class TestStreamingDataframeStateful:
