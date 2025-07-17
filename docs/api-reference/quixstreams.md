@@ -3695,7 +3695,7 @@ Represents a field to extract from a configuration using JSONPath.
 def missing() -> Any
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L80)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L83)
 
 Return the default value for this field, or raise KeyError if no default is set.
 
@@ -3715,7 +3715,7 @@ Any: The default value.
 def parse(id: str, version: int, content: Any) -> Any
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L94)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L97)
 
 Extract the value(s) from the configuration content using JSONPath.
 
@@ -3742,9 +3742,14 @@ The extracted value(s).
 class ConfigurationVersion()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L120)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L123)
 
 Represents a specific version of a configuration.
+
+This class is designed to be immutable (frozen) and hashable so it can be safely used as a key in an LRU cache.
+The `retry_count` and `retry_at` attributes are intentionally excluded from the hash calculation and immutability,
+because they are mutable fields used for tracking API retry logic. These fields are not relevant for caching or equality,
+and should be updated by calling `__setattr__` directly, since the dataclass is otherwise frozen.
 
 **Arguments**:
 
@@ -3769,7 +3774,7 @@ timestamp ms
 def from_event(cls, event: Event) -> "ConfigurationVersion"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L140)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L148)
 
 Create a ConfigurationVersion from an Event.
 
@@ -3789,7 +3794,7 @@ ConfigurationVersion: The created configuration version.
 def success() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L159)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L177)
 
 Mark the configuration version fetch as successful.
 
@@ -3803,7 +3808,7 @@ Resets the retry count and retry time, so future fetch attempts will not be dela
 def failed() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L168)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L186)
 
 Mark the configuration version fetch as failed.
 
@@ -3819,7 +3824,7 @@ capped by VERSION_RETRY_MAX_DELAY.
 class Configuration()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L184)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L202)
 
 Represents a configuration with multiple versions and provides logic to select the valid version for a given timestamp.
 
@@ -3839,7 +3844,7 @@ Represents a configuration with multiple versions and provides logic to select t
 def from_event(cls, event: Event) -> "Configuration"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L200)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L218)
 
 Create a Configuration from an Event.
 
@@ -3859,7 +3864,7 @@ Configuration: The created configuration.
 def add_version(version: ConfigurationVersion) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L211)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L229)
 
 Add or update a version in this configuration.
 
@@ -3875,7 +3880,7 @@ Add or update a version in this configuration.
 def find_valid_version(timestamp: int) -> Optional[ConfigurationVersion]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L223)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L241)
 
 Find the valid configuration version for a given timestamp.
 
