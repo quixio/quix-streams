@@ -4,7 +4,7 @@ from typing import Any, Callable, Optional, Tuple
 from quixstreams.utils.pickle import pickle_copier
 
 from ..utils import CacheInfo
-from .models import ConfigurationVersion, Field
+from .models import BaseField, ConfigurationVersion
 
 
 class VersionDataLRU:
@@ -23,7 +23,7 @@ class VersionDataLRU:
 
     def __init__(
         self,
-        func: Callable[[Optional[ConfigurationVersion], dict[str, Field]], Any],
+        func: Callable[[Optional[ConfigurationVersion], dict[str, BaseField]], Any],
         maxsize: int = 128,
     ):
         self.cache: OrderedDict[
@@ -35,7 +35,7 @@ class VersionDataLRU:
         self.misses = 0
 
     def __call__(
-        self, version: Optional[ConfigurationVersion], fields: dict[str, Field]
+        self, version: Optional[ConfigurationVersion], fields: dict[str, BaseField]
     ) -> Any:
         """
         Get cached data for the given version and fields, or compute and cache it.
@@ -60,7 +60,7 @@ class VersionDataLRU:
         return result
 
     def remove(
-        self, version: Optional[ConfigurationVersion], fields: dict[str, Field]
+        self, version: Optional[ConfigurationVersion], fields: dict[str, BaseField]
     ) -> None:
         """
         Remove the cached data for the given version and fields, if present.
