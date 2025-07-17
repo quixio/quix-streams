@@ -668,7 +668,9 @@ class StreamingDataFrame:
         return StreamingSeries.from_apply_callback(callback, sdf_id=id(self))
 
     def to_topic(
-        self, topic: Topic, key: Optional[Callable[[Any], Any]] = None
+        self,
+        topic: Union[Topic, Callable[[Any], Topic]],
+        key: Optional[Callable[[Any], Any]] = None,
     ) -> "StreamingDataFrame":
         """
         Produce current value to a topic. You can optionally specify a new key.
@@ -703,7 +705,7 @@ class StreamingDataFrame:
         """
         return self._add_update(
             lambda value, orig_key, timestamp, headers: self._produce(
-                topic=topic,
+                topic=topic if isinstance(topic, Topic) else topic(value),
                 value=value,
                 key=orig_key if key is None else key(value),
                 timestamp=timestamp,
