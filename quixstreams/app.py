@@ -1,4 +1,5 @@
 import contextlib
+import copy
 import functools
 import logging
 import signal
@@ -613,7 +614,7 @@ class Application:
             transactional=transactional,
         )
 
-    def get_producer(self) -> Producer:
+    def get_producer(self, transactional: bool = False) -> Producer:
         """
         Create and return a pre-configured Producer instance.
         The Producer is initialized with params passed to Application.
@@ -622,6 +623,12 @@ class Application:
         (e.g. to produce test data into a topic).
         Using this within the StreamingDataFrame functions is not recommended, as it creates a new Producer
         instance each time, which is not optimized for repeated use in a streaming pipeline.
+
+        :param transactional: if True, the producer will be configured to use transactions
+            regardless of Application's processing guarantee setting.
+            Mind that in case of transactional=True the transaction will only be committed
+            on context manager exit.
+            Default - False.
 
         Example Snippet:
 
@@ -636,10 +643,17 @@ class Application:
                 producer.produce(topic=topic.name, key=b"key", value=b"value")
         ```
         """
+        if transactional:
+            extra_config = self._config.producer_extra_config
+        else:
+            extra_config = copy.deepcopy(self._config.producer_extra_config)
+            extra_config.pop("enable.idempotence", None)
+            extra_config.pop("transactional.id", None)
 
         return Producer(
             broker_address=self._config.broker_address,
-            extra_config=self._config.producer_extra_config,
+            extra_config=extra_config,
+            transactional=transactional,
         )
 
     def _get_internal_consumer(
