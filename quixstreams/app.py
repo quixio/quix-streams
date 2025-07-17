@@ -624,9 +624,8 @@ class Application:
         instance each time, which is not optimized for repeated use in a streaming pipeline.
 
         :param transactional: if True, the producer will be configured to use transactions
-            regardless of Application's processing guarantee setting.
-            Mind that in case of transactional=True the transaction will only be committed
-            on context manager exit.
+            regardless of Application's processing guarantee setting. But the responsibility
+            for beginning and committing the transaction is on the user.
             Default - False.
 
         Example Snippet:

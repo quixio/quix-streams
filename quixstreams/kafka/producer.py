@@ -236,20 +236,9 @@ class Producer:
         return len(self._producer)
 
     def __enter__(self):
-        if self._transactional:
-            self.begin_transaction()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         logger.debug("Flushing kafka producer")
         self.flush()
         logger.debug("Kafka producer flushed")
-        if self._transactional:
-            if exc_type is not None:
-                # Exception occurred, abort the transaction
-                logger.debug("Aborting transaction due to exception")
-                self.abort_transaction()
-            else:
-                # No exception, commit the transaction
-                logger.debug("Committing transaction")
-                self.commit_transaction()
