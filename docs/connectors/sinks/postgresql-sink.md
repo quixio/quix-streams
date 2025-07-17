@@ -92,8 +92,8 @@ PostgreSQLSink accepts the following configuration parameters:
   not related to the table data, referenced as `<schema_name>.<table_name>`.  
   PostrgeSQL uses "public" by default under the hood.
 - `schema_auto_update`: If `True`, the sink will automatically update the schema by adding new columns when new fields are detected. Default: True.
-- `primary_keys`: A single or multiple (composite) primary key columns.
-  Can also provide a callable that accepts the message value as input, and returns a similar result (or nothing).
+- `primary_key_columns`: A single or multiple (composite) primary key columns.
+  Can also provide a callable that accepts the message value as input, and returns a string or list of strings.
   Often paired with `upsert_on_primary_key=True`.
   It must include all currently defined primary_key columns on a given table.
   Once set, no others can be added; to change, the primary key must be removed manually.

@@ -108,7 +108,7 @@ class PostgreSQLSink(BatchingSink):
             returns a string or list of strings.
             Often paired with `upsert_on_primary_key=True`.
             It must include all currently defined primary key columns on a given table.
-        :param upsert_on_primary_key: Upsert based on the given `primary_keys`.
+        :param upsert_on_primary_key: Upsert based on the given `primary_key_columns`.
             If False, every message is treated as an independent entry, and any
             primary key collisions will consequently raise an exception.
         :param on_client_connect_success: An optional callback made after successful
