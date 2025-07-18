@@ -387,6 +387,54 @@ as an argument.
 
 Similarly to other methods, `.to_topic()` creates a new `StreamingDataFrame` object.
 
+### Splitting data into multiple topics
+
+You can dynamically route messages to different topics based on the message content by providing a callable that returns a `Topic` object to the `StreamingDataFrame.to_topic()` method.
+
+The callable receives four arguments: the current value, message key, timestamp, and headers, and must return a `Topic` object.
+
+**Important Considerations:**
+
+It is strongly advised to declare all `Topic` instances beforehand (before running the application) rather than creating them dynamically within the callable. Creating topics dynamically can lead to accidentally creating numerous topics if there are mistakes in your logic, potentially saturating Kafka's partition limits and degrading cluster performance.
+
+Even when reusing the same topics, declare them once rather than reinstantiating them repeatedly, as each `Topic` initialization checks if the topic exists in the cluster and attempts to create it if it doesn't.
+
+**Example:**
+
+Imagine you process sensor data and want to route high-priority alerts to a different topic based on temperature thresholds:
+
+```python
+from quixstreams import Application
+
+app = Application(broker_address='localhost:9092')
+
+# Pre-declare topics
+input_topic = app.topic('sensor-data', value_deserializer='json')
+normal_topic = app.topic('normal-readings', value_serializer='json')
+alert_topic = app.topic('high-temp-alerts', value_serializer='json')
+
+sdf = app.dataframe(input_topic)
+
+# Route messages to different topics based on temperature
+def route_by_temperature(value, key, timestamp, headers):
+    if value.get('temperature', 0) > 80:
+        return alert_topic
+    else:
+        return normal_topic
+
+sdf = sdf.to_topic(route_by_temperature)
+```
+
+You can also combine this with key transformation:
+
+```python
+# Route to different topics AND change the message key
+sdf = sdf.to_topic(
+    route_by_temperature,
+    key=lambda value: f"sensor-{value['sensor_id']}"
+)
+```
+
 ### Changing Message Key Before Producing
 
 To change the outgoing message key (which defaults to the current consumed key),
