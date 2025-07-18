@@ -795,7 +795,7 @@ class TestStreamingDataFrameToTopic:
             value_serializer="json", value_deserializer="json"
         )
 
-        def topic_callback(value: Any) -> Topic:
+        def topic_callback(value: Any, key: Any, timestamp: int, headers: Any) -> Topic:
             return topic_0 if value == 0 else topic_1
 
         producer = internal_producer_factory()

@@ -669,7 +669,7 @@ class StreamingDataFrame:
 
     def to_topic(
         self,
-        topic: Union[Topic, Callable[[Any], Topic]],
+        topic: Union[Topic, Callable[[Any, Any, int, Any], Topic]],
         key: Optional[Callable[[Any], Any]] = None,
     ) -> "StreamingDataFrame":
         """
@@ -694,9 +694,28 @@ class StreamingDataFrame:
         sdf = sdf.to_topic(output_topic_0)
         # does not require reassigning
         sdf.to_topic(output_topic_1, key=lambda data: data["a_field"])
+
+        # Dynamic topic selection based on message content
+        def select_topic(value, key, timestamp, headers):
+            if value.get("priority") == "high":
+                return output_topic_0
+            else:
+                return output_topic_1
+
+        sdf = sdf.to_topic(select_topic)
         ```
 
-        :param topic: instance of `Topic`
+        :param topic: instance of `Topic` or a callable that returns a `Topic`.
+            If a callable is provided, it will receive four arguments:
+            value, key, timestamp, and headers of the current message.
+            The callable must return a `Topic` object.
+            **Important**: It is strongly advised to declare `Topic` instances
+            beforehand using `app.topic()` rather than creating them dynamically
+            within the callable to avoid accidentally creating numerous topics
+            and saturating Kafka's partition limits. Additionally, even when
+            reusing the same topics, declare them once rather than reinstantiating
+            them repeatedly, as each `Topic` initialization checks if the topic
+            exists in the cluster and attempts to create it if it doesn't.
         :param key: a callable to generate a new message key, optional.
             If passed, the return type of this callable must be serializable
             by `key_serializer` defined for this Topic object.
@@ -705,7 +724,9 @@ class StreamingDataFrame:
         """
         return self._add_update(
             lambda value, orig_key, timestamp, headers: self._produce(
-                topic=topic if isinstance(topic, Topic) else topic(value),
+                topic=topic
+                if isinstance(topic, Topic)
+                else topic(value, orig_key, timestamp, headers),
                 value=value,
                 key=orig_key if key is None else key(value),
                 timestamp=timestamp,
