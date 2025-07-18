@@ -1100,6 +1100,27 @@ class TestQuixApplication:
         )
         assert expected_topic.broker_config.num_partitions == topic_partitions
 
+    def test_transactional_id_prefixed_with_workspace_id(
+        self,
+        quix_app_factory,
+        quix_topic_manager_factory,
+        quix_mock_config_builder_factory,
+    ):
+        workspace_id = "my-workspace"
+        cfg_builder = quix_mock_config_builder_factory(workspace_id=workspace_id)
+        topic_manager = quix_topic_manager_factory(
+            workspace_id=workspace_id, quix_config_builder=cfg_builder
+        )
+        app = quix_app_factory(
+            workspace_id=workspace_id,
+            topic_manager=topic_manager,
+            quix_config_builder=cfg_builder,
+            processing_guarantee="exactly-once",
+        )
+        assert app._config.producer_extra_config["transactional.id"].startswith(
+            workspace_id
+        )
+
 
 @pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
 class TestQuixApplicationWithState:
