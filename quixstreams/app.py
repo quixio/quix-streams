@@ -8,7 +8,7 @@ import uuid
 import warnings
 from collections import defaultdict
 from pathlib import Path
-from typing import Callable, List, Literal, Optional, Protocol, Tuple, Type, Union
+from typing import Any, Callable, List, Literal, Optional, Protocol, Tuple, Type, Union
 
 from confluent_kafka import TopicPartition
 from pydantic import AliasGenerator, Field
@@ -307,15 +307,9 @@ class Application:
             consumer_group_prefix = quix_config_builder.workspace_id
 
         if processing_guarantee == "exactly-once":
-            transactional_id = producer_extra_config.get(
-                "transactional.id", str(uuid.uuid4())
+            producer_extra_config["transactional.id"] = resolve_transactional_id(
+                producer_extra_config, consumer_group_prefix
             )
-            if consumer_group_prefix:
-                producer_extra_config["transactional.id"] = (
-                    f"{consumer_group_prefix}-{transactional_id}"
-                )
-            else:
-                producer_extra_config["transactional.id"] = transactional_id
 
         self._config = ApplicationConfig(
             broker_address=broker_address,
@@ -641,10 +635,12 @@ class Application:
                 producer.produce(topic=topic.name, key=b"key", value=b"value")
         ```
         """
+        extra_config = copy.deepcopy(self._config.producer_extra_config)
         if transactional:
-            extra_config = self._config.producer_extra_config
+            extra_config["transactional.id"] = resolve_transactional_id(
+                extra_config, self._config.consumer_group_prefix
+            )
         else:
-            extra_config = copy.deepcopy(self._config.producer_extra_config)
             extra_config.pop("transactional.id", None)
 
         return Producer(
@@ -1194,3 +1190,12 @@ class ApplicationConfig(BaseSettings):
     @property
     def exactly_once(self) -> bool:
         return self.processing_guarantee == "exactly-once"
+
+
+def resolve_transactional_id(config: dict[str, Any], prefix: str) -> str:
+    """
+    Utility function to resolve the transactional.id based
+    on existing config and provided prefix.
+    """
+    transactional_id = config.get("transactional.id", str(uuid.uuid4()))
+    return f"{prefix}-{transactional_id}" if prefix else transactional_id

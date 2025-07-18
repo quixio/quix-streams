@@ -469,6 +469,23 @@ class TestApplication:
         with app.get_producer() as x:
             assert x._producer_config["linger.ms"] == 10
 
+    @pytest.mark.parametrize(
+        ["processing_guarantee", "transactional", "transactional_id_set"],
+        [
+            ("exactly-once", True, True),
+            ("exactly-once", False, False),
+            ("at-least-once", False, False),
+            ("at-least-once", True, True),
+        ],
+    )
+    def test_get_producer_transactional(
+        self, app_factory, processing_guarantee, transactional, transactional_id_set
+    ):
+        app = app_factory(processing_guarantee=processing_guarantee)
+        with app.get_producer(transactional=transactional) as producer:
+            transactional_id = producer._producer_config.get("transactional.id")
+            assert bool(transactional_id) == transactional
+
     def test_missing_broker_id_raise(self):
         # confirm environment is empty
         with patch.dict(os.environ, {}, clear=True):
