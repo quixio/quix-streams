@@ -470,16 +470,16 @@ class TestApplication:
             assert x._producer_config["linger.ms"] == 10
 
     @pytest.mark.parametrize(
-        ["processing_guarantee", "transactional", "transactional_id_set"],
+        ["processing_guarantee", "transactional"],
         [
-            ("exactly-once", True, True),
-            ("exactly-once", False, False),
-            ("at-least-once", False, False),
-            ("at-least-once", True, True),
+            ("exactly-once", True),
+            ("exactly-once", False),
+            ("at-least-once", False),
+            ("at-least-once", True),
         ],
     )
     def test_get_producer_transactional(
-        self, app_factory, processing_guarantee, transactional, transactional_id_set
+        self, app_factory, processing_guarantee, transactional
     ):
         app = app_factory(processing_guarantee=processing_guarantee)
         with app.get_producer(transactional=transactional) as producer:
