@@ -48,6 +48,10 @@ or a ConnectionConfig object if authentication is required.
 will be passed to `confluent_kafka.Producer` as is.
 Note: values passed as arguments override values in `extra_config`.
 - `flush_timeout`: The time the producer is waiting for all messages to be delivered.
+- `transactional`: if `True`, the Producer will go into the transactional
+mode where you can use the Kafka Transactions API.
+By default, the "transactional.id" is generated randomly on init.
+To customize it, pass it via the `extra_config` parameter.
 
 <a id="quixstreams.kafka.producer.Producer.produce"></a>
 
@@ -67,7 +71,7 @@ def produce(topic: str,
             on_delivery: Optional[DeliveryCallback] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L117)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L121)
 
 Produce a message to a topic.
 
@@ -102,7 +106,7 @@ for the produced message.
 def poll(timeout: float = 0)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L178)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L182)
 
 Polls the producer for events and calls `on_delivery` callbacks.
 
@@ -123,7 +127,7 @@ Polls the producer for events and calls `on_delivery` callbacks.
 def flush(timeout: Optional[float] = None) -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L213)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L217)
 
 Wait for all messages in the Producer queue to be delivered.
 
