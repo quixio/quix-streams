@@ -8,7 +8,7 @@ import uuid
 import warnings
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Callable, List, Literal, Optional, Protocol, Tuple, Type, Union
+from typing import Callable, List, Literal, Optional, Protocol, Tuple, Type, Union
 
 from confluent_kafka import TopicPartition
 from pydantic import AliasGenerator, Field
@@ -308,7 +308,7 @@ class Application:
 
         if processing_guarantee == "exactly-once":
             producer_extra_config["transactional.id"] = resolve_transactional_id(
-                producer_extra_config, consumer_group_prefix
+                producer_extra_config.get("transactional.id"), consumer_group_prefix
             )
 
         self._config = ApplicationConfig(
@@ -638,7 +638,7 @@ class Application:
         extra_config = copy.deepcopy(self._config.producer_extra_config)
         if transactional:
             extra_config["transactional.id"] = resolve_transactional_id(
-                extra_config, self._config.consumer_group_prefix
+                extra_config.get("transactional.id"), self._config.consumer_group_prefix
             )
         else:
             extra_config.pop("transactional.id", None)
@@ -1192,10 +1192,10 @@ class ApplicationConfig(BaseSettings):
         return self.processing_guarantee == "exactly-once"
 
 
-def resolve_transactional_id(config: dict[str, Any], prefix: str) -> str:
+def resolve_transactional_id(transactional_id: Optional[str], prefix: str) -> str:
     """
     Utility function to resolve the transactional.id based
     on existing config and provided prefix.
     """
-    transactional_id = config.get("transactional.id", str(uuid.uuid4()))
+    transactional_id = transactional_id or str(uuid.uuid4())
     return f"{prefix}-{transactional_id}" if prefix else transactional_id
