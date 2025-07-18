@@ -527,6 +527,7 @@ def quix_app_factory(
         store_type: Optional[StoreTypes] = store_type,
         topic_manager: Optional[QuixTopicManager] = None,
         quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
+        processing_guarantee: ProcessingGuarantee = "at-least-once",
     ) -> Application:
         state_dir = state_dir or (tmp_path / "state").absolute()
         if bool(topic_manager) ^ bool(quix_config_builder):
@@ -555,6 +556,7 @@ def quix_app_factory(
             use_changelog_topics=use_changelog_topics,
             topic_manager=topic_manager,
             quix_config_builder=quix_config_builder,
+            processing_guarantee=processing_guarantee,
         )
 
     with patch(

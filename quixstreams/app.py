@@ -1,8 +1,10 @@
 import contextlib
+import copy
 import functools
 import logging
 import signal
 import time
+import uuid
 import warnings
 from collections import defaultdict
 from pathlib import Path
@@ -264,6 +266,7 @@ class Application:
             self._topic_manager_factory: TopicManagerFactory = TopicManager
             if isinstance(broker_address, str):
                 broker_address = ConnectionConfig(bootstrap_servers=broker_address)
+            consumer_group_prefix = ""
         else:
             self._is_quix_app = True
 
@@ -301,13 +304,17 @@ class Application:
             consumer_group = quix_app_config.consumer_group
             consumer_extra_config.update(quix_app_config.librdkafka_extra_config)
             producer_extra_config.update(quix_app_config.librdkafka_extra_config)
+            consumer_group_prefix = quix_config_builder.workspace_id
+
+        if processing_guarantee == "exactly-once":
+            producer_extra_config["transactional.id"] = resolve_transactional_id(
+                producer_extra_config.get("transactional.id"), consumer_group_prefix
+            )
 
         self._config = ApplicationConfig(
             broker_address=broker_address,
             consumer_group=consumer_group,
-            consumer_group_prefix=(
-                quix_config_builder.workspace_id if quix_config_builder else ""
-            ),
+            consumer_group_prefix=consumer_group_prefix,
             auto_offset_reset=auto_offset_reset,
             commit_interval=commit_interval,
             commit_every=commit_every,
@@ -600,7 +607,7 @@ class Application:
             transactional=transactional,
         )
 
-    def get_producer(self) -> Producer:
+    def get_producer(self, transactional: bool = False) -> Producer:
         """
         Create and return a pre-configured Producer instance.
         The Producer is initialized with params passed to Application.
@@ -609,6 +616,11 @@ class Application:
         (e.g. to produce test data into a topic).
         Using this within the StreamingDataFrame functions is not recommended, as it creates a new Producer
         instance each time, which is not optimized for repeated use in a streaming pipeline.
+
+        :param transactional: if True, the producer will be configured to use transactions
+            regardless of Application's processing guarantee setting. But the responsibility
+            for beginning and committing the transaction is on the user.
+            Default - False.
 
         Example Snippet:
 
@@ -623,10 +635,18 @@ class Application:
                 producer.produce(topic=topic.name, key=b"key", value=b"value")
         ```
         """
+        extra_config = copy.deepcopy(self._config.producer_extra_config)
+        if transactional:
+            extra_config["transactional.id"] = resolve_transactional_id(
+                extra_config.get("transactional.id"), self._config.consumer_group_prefix
+            )
+        else:
+            extra_config.pop("transactional.id", None)
 
         return Producer(
             broker_address=self._config.broker_address,
-            extra_config=self._config.producer_extra_config,
+            extra_config=extra_config,
+            transactional=transactional,
         )
 
     def _get_internal_consumer(
@@ -1170,3 +1190,12 @@ class ApplicationConfig(BaseSettings):
     @property
     def exactly_once(self) -> bool:
         return self.processing_guarantee == "exactly-once"
+
+
+def resolve_transactional_id(transactional_id: Optional[str], prefix: str) -> str:
+    """
+    Utility function to resolve the transactional.id based
+    on existing config and provided prefix.
+    """
+    transactional_id = transactional_id or str(uuid.uuid4())
+    return f"{prefix}-{transactional_id}" if prefix else transactional_id

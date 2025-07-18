@@ -469,6 +469,23 @@ class TestApplication:
         with app.get_producer() as x:
             assert x._producer_config["linger.ms"] == 10
 
+    @pytest.mark.parametrize(
+        ["processing_guarantee", "transactional"],
+        [
+            ("exactly-once", True),
+            ("exactly-once", False),
+            ("at-least-once", False),
+            ("at-least-once", True),
+        ],
+    )
+    def test_get_producer_transactional(
+        self, app_factory, processing_guarantee, transactional
+    ):
+        app = app_factory(processing_guarantee=processing_guarantee)
+        with app.get_producer(transactional=transactional) as producer:
+            transactional_id = producer._producer_config.get("transactional.id")
+            assert bool(transactional_id) == transactional
+
     def test_missing_broker_id_raise(self):
         # confirm environment is empty
         with patch.dict(os.environ, {}, clear=True):
@@ -1082,6 +1099,27 @@ class TestQuixApplication:
             == topic_manager.default_replication_factor
         )
         assert expected_topic.broker_config.num_partitions == topic_partitions
+
+    def test_transactional_id_prefixed_with_workspace_id(
+        self,
+        quix_app_factory,
+        quix_topic_manager_factory,
+        quix_mock_config_builder_factory,
+    ):
+        workspace_id = "my-workspace"
+        cfg_builder = quix_mock_config_builder_factory(workspace_id=workspace_id)
+        topic_manager = quix_topic_manager_factory(
+            workspace_id=workspace_id, quix_config_builder=cfg_builder
+        )
+        app = quix_app_factory(
+            workspace_id=workspace_id,
+            topic_manager=topic_manager,
+            quix_config_builder=cfg_builder,
+            processing_guarantee="exactly-once",
+        )
+        assert app._config.producer_extra_config["transactional.id"].startswith(
+            workspace_id
+        )
 
 
 @pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
