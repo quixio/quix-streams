@@ -309,8 +309,16 @@ class TDengineSink(BatchingSink):
 
             for item in write_batch:
                 value = item.value
+                copied_value = value.copy()  # Copy to print the original value in case of errors
                 # Evaluate these before we alter the value
                 _measurement = supertable(value)
+                # check if _measurement is empty
+                if _measurement is None or not _measurement.strip():
+                    raise ValueError(
+                        f'Supertable name cannot be empty for record with key "{item.key}" '
+                        f"and topic '{batch.topic}', "
+                        f"record value: {copied_value}"
+                    )
                 _tags_keys = tags_keys(value)
                 _fields_keys = fields_keys(value)
                 _subtable_name = subtable(item.value)
@@ -327,7 +335,6 @@ class TDengineSink(BatchingSink):
                     tags["__topic"] = batch.topic
                     tags["__partition"] = batch.partition
 
-                tags["__subtable"] = _subtable_name
                 if _fields_keys:
                     fields = {
                         f: value[f]
@@ -342,7 +349,25 @@ class TDengineSink(BatchingSink):
                         k: float(v) if isinstance(v, int) else v
                         for k, v in fields.items()
                     }
+                # check if fields is empty
+                if not fields:
+                    raise ValueError(
+                        f'No fields found in the record for supertable "{_measurement}" '
+                        f"and subtable name '{_subtable_name}', "
+                        f"record value: {copied_value}"
+                    )
+                
+                tags["__subtable"] = _subtable_name
 
+                # check if fields and tags overlap
+                fields_tags_overlap = set(fields) & set(tags)
+                if fields_tags_overlap:
+                    overlap_str = ",".join(str(k) for k in fields_tags_overlap)
+                    raise ValueError(
+                        f'Keys {overlap_str} are present in both "fields" and "tags" '
+                        f"for supertable '{_measurement}' and subtable '{_subtable_name}'"
+                    )
+                
                 if ts is None:
                     ts = item.timestamp
 
@@ -371,14 +396,25 @@ class TDengineSink(BatchingSink):
                 min_timestamp = min(ts, min_timestamp or _ts_min_default(ts))
                 max_timestamp = max(ts, max_timestamp or _ts_max_default(ts))
             if not records:
-                logger.debug("No records to write")
+                logger.warning(
+                    f"No records to write for batch with key '{item.key}' "
+                    f"and topic '{batch.topic}', "
+                    f"record value: {copied_value}"
+                )
                 continue
             _start = time.monotonic()
             l: list[bytes] = [b""] * len(records)
             for i, point in enumerate(records):
                 p = Point.from_dict(point, self._write_precision)
                 l[i] = p.to_line_protocol().encode("utf-8")
-            body = b"\n".join(l)
+            body = b"\n".join([item for item in l if item])
+            if body == b"":
+                logger.warning(
+                    f"No valid records to write for batch with key '{item.key}' "
+                    f"and topic '{batch.topic}', "
+                    f"record value: {copied_value}"
+                )
+                continue
             timeout = urllib3.Timeout(total=self._client_args["timeout"] / 1_000)
             logger.debug(f"Sending data to {self._client_args['url']} : {body}")
             resp = self._client.request(
