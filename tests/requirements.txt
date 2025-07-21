@@ -1,4 +1,4 @@
-testcontainers[postgres]==4.10.0
+testcontainers[postgres]==4.12.0
 pytest
 requests>=2.32
 docker>=7.1.0 # Required to use requests>=2.32
