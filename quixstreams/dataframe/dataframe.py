@@ -667,6 +667,20 @@ class StreamingDataFrame:
 
         return StreamingSeries.from_apply_callback(callback, sdf_id=id(self))
 
+    @overload
+    def to_topic(
+        self,
+        topic: Topic,
+        key: Optional[Callable[[Any], Any]] = None,
+    ) -> "StreamingDataFrame": ...
+
+    @overload
+    def to_topic(
+        self,
+        topic: Callable[[Any, Any, int, Any], Topic],
+        key: Optional[Callable[[Any], Any]] = None,
+    ) -> "StreamingDataFrame": ...
+
     def to_topic(
         self,
         topic: Union[Topic, Callable[[Any, Any, int, Any], Topic]],
