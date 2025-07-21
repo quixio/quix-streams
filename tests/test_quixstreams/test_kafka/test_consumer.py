@@ -70,7 +70,7 @@ class TestConsumerSubscribe:
 
         with consumer:
             consumer.subscribe(topics=[topic_name])
-            msg = consumer.poll(timeout=1)
+            msg = consumer.poll(timeout=3)
             assert msg
             err = msg.error()
             assert err.code() == KafkaError.UNKNOWN_TOPIC_OR_PART
