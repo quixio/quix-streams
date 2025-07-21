@@ -138,7 +138,7 @@ class Window(abc.ABC):
             )
             # Use window start timestamp as a new record timestamp
             for key, window in expired_windows:
-                yield (window, key, window["start"], None)
+                yield window, key, window["start"], None
 
         return self._apply_window(
             func=window_callback,
