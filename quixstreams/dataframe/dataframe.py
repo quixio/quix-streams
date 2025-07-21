@@ -667,8 +667,24 @@ class StreamingDataFrame:
 
         return StreamingSeries.from_apply_callback(callback, sdf_id=id(self))
 
+    @overload
     def to_topic(
-        self, topic: Topic, key: Optional[Callable[[Any], Any]] = None
+        self,
+        topic: Topic,
+        key: Optional[Callable[[Any], Any]] = None,
+    ) -> "StreamingDataFrame": ...
+
+    @overload
+    def to_topic(
+        self,
+        topic: Callable[[Any, Any, int, Any], Topic],
+        key: Optional[Callable[[Any], Any]] = None,
+    ) -> "StreamingDataFrame": ...
+
+    def to_topic(
+        self,
+        topic: Union[Topic, Callable[[Any, Any, int, Any], Topic]],
+        key: Optional[Callable[[Any], Any]] = None,
     ) -> "StreamingDataFrame":
         """
         Produce current value to a topic. You can optionally specify a new key.
@@ -692,18 +708,40 @@ class StreamingDataFrame:
         sdf = sdf.to_topic(output_topic_0)
         # does not require reassigning
         sdf.to_topic(output_topic_1, key=lambda data: data["a_field"])
+
+        # Dynamic topic selection based on message content
+        def select_topic(value, key, timestamp, headers):
+            if value.get("priority") == "high":
+                return output_topic_0
+            else:
+                return output_topic_1
+
+        sdf = sdf.to_topic(select_topic)
         ```
 
-        :param topic: instance of `Topic`
+        :param topic: instance of `Topic` or a callable that returns a `Topic`.
+            If a callable is provided, it will receive four arguments:
+            value, key, timestamp, and headers of the current message.
+            The callable must return a `Topic` object.
+            **Important**: We recommend declaring all `Topic` instances before
+            staring the application instead of creating them dynamically
+            within the passed callback. Creating topics dynamically can lead
+            to accidentally creating numerous topics and
+            saturating the broker's partitions limits.
         :param key: a callable to generate a new message key, optional.
             If passed, the return type of this callable must be serializable
             by `key_serializer` defined for this Topic object.
             By default, the current message key will be used.
         :return: the updated StreamingDataFrame instance (reassignment NOT required).
         """
+        if isinstance(topic, Topic):
+            topic_callback = lambda value, orig_key, timestamp, headers: topic
+        else:
+            topic_callback = topic
+
         return self._add_update(
             lambda value, orig_key, timestamp, headers: self._produce(
-                topic=topic,
+                topic=topic_callback(value, orig_key, timestamp, headers),
                 value=value,
                 key=orig_key if key is None else key(value),
                 timestamp=timestamp,
