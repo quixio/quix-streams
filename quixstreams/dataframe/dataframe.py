@@ -722,11 +722,14 @@ class StreamingDataFrame:
             By default, the current message key will be used.
         :return: the updated StreamingDataFrame instance (reassignment NOT required).
         """
+        if isinstance(topic, Topic):
+            topic_callback = lambda value, orig_key, timestamp, headers: topic
+        else:
+            topic_callback = topic
+
         return self._add_update(
             lambda value, orig_key, timestamp, headers: self._produce(
-                topic=topic
-                if isinstance(topic, Topic)
-                else topic(value, orig_key, timestamp, headers),
+                topic=topic_callback(value, orig_key, timestamp, headers),
                 value=value,
                 key=orig_key if key is None else key(value),
                 timestamp=timestamp,
