@@ -709,13 +709,11 @@ class StreamingDataFrame:
             If a callable is provided, it will receive four arguments:
             value, key, timestamp, and headers of the current message.
             The callable must return a `Topic` object.
-            **Important**: It is strongly advised to declare `Topic` instances
-            beforehand using `app.topic()` rather than creating them dynamically
-            within the callable to avoid accidentally creating numerous topics
-            and saturating Kafka's partition limits. Additionally, even when
-            reusing the same topics, declare them once rather than reinstantiating
-            them repeatedly, as each `Topic` initialization checks if the topic
-            exists in the cluster and attempts to create it if it doesn't.
+            **Important**: We recommend declaring all `Topic` instances before
+            staring the application instead of creating them dynamically
+            within the passed callback. Creating topics dynamically can lead
+            to accidentally creating numerous topics and
+            saturating the broker's partitions limits.
         :param key: a callable to generate a new message key, optional.
             If passed, the return type of this callable must be serializable
             by `key_serializer` defined for this Topic object.
