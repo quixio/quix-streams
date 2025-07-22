@@ -328,7 +328,7 @@ def test_schema_registry_serialize_error(
             partial(JSONDeserializer, schema=JSONSCHEMA_TEST_SCHEMA),
             None,
             b'{"id":10}',
-            r"Unexpected magic byte \d+. This message was not produced with a Confluent Schema Registry serializer",
+            r"Invalid magic byte",
         ),
         (
             partial(JSONDeserializer, schema=JSONSCHEMA_TEST_SCHEMA),
@@ -340,7 +340,7 @@ def test_schema_registry_serialize_error(
             partial(ProtobufDeserializer, Root),
             None,
             b"\n\x03foo\x10\x02\x13",
-            "Unknown magic byte. This message was not produced with a Confluent Schema Registry serializer",
+            "Invalid magic byte",
         ),
         (
             partial(ProtobufDeserializer, Nested),
@@ -352,7 +352,7 @@ def test_schema_registry_serialize_error(
             partial(ProtobufDeserializer, Nested),
             Schema(schema_str=get_schema_str(Nested), schema_type="PROTOBUF"),
             b"\x01",
-            "Invalid Protobuf msgidx array length",
+            "Invalid msgidx array length",
         ),
     ],
     indirect=["deserializer"],
