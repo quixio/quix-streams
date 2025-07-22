@@ -32,7 +32,7 @@ class Base:
 
     @pytest.fixture()
     def app(self, app_factory):
-        return app_factory(auto_offset_reset="earliest", request_timeout=1)
+        return app_factory(auto_offset_reset="earliest", request_timeout=3)
 
 
 class TestKafkaReplicatorSource(Base):

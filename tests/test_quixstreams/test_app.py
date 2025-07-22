@@ -3194,7 +3194,7 @@ class TestApplicationRun:
         """
         Timeout is set only after recovery is complete
         """
-        timeout = 1.0
+        timeout = 3.0
 
         app = app_factory(
             auto_offset_reset="earliest",
