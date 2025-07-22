@@ -93,9 +93,15 @@ class TransactionState(State):
     __slots__ = (
         "_transaction",
         "_prefix",
+        "_cf_name",
     )
 
-    def __init__(self, prefix: bytes, transaction: "PartitionTransaction"):
+    def __init__(
+        self,
+        prefix: bytes,
+        transaction: "PartitionTransaction",
+        cf_name: str = "default",  # TODO: Test
+    ):
         """
         Simple key-value state to be provided into `StreamingDataFrame` functions
 
@@ -103,6 +109,11 @@ class TransactionState(State):
         """
         self._prefix = prefix
         self._transaction = transaction
+        self._cf_name = cf_name
+
+    @property
+    def prefix(self) -> bytes:
+        return self._prefix
 
     @overload
     def get(self, key: K, default: Literal[None] = None) -> Optional[V]: ...
@@ -118,7 +129,9 @@ class TransactionState(State):
         :param default: default value to return if the key is not found
         :return: value or None if the key is not found and `default` is not provided
         """
-        return self._transaction.get(key=key, prefix=self._prefix, default=default)
+        return self._transaction.get(
+            key=key, prefix=self._prefix, default=default, cf_name=self._cf_name
+        )
 
     @overload
     def get_bytes(self, key: K, default: Literal[None] = None) -> Optional[bytes]: ...
@@ -135,7 +148,7 @@ class TransactionState(State):
         :return: value or None if the key is not found and `default` is not provided
         """
         return self._transaction.get_bytes(
-            key=key, prefix=self._prefix, default=default
+            key=key, prefix=self._prefix, default=default, cf_name=self._cf_name
         )
 
     def set(self, key: K, value: V) -> None:
@@ -144,7 +157,9 @@ class TransactionState(State):
         :param key: key
         :param value: value
         """
-        return self._transaction.set(key=key, value=value, prefix=self._prefix)
+        return self._transaction.set(
+            key=key, value=value, prefix=self._prefix, cf_name=self._cf_name
+        )
 
     def set_bytes(self, key: K, value: bytes) -> None:
         """
@@ -152,7 +167,12 @@ class TransactionState(State):
         :param key: key
         :param value: value
         """
-        return self._transaction.set_bytes(key=key, value=value, prefix=self._prefix)
+        return self._transaction.set_bytes(
+            key=key,
+            value=value,
+            prefix=self._prefix,
+            cf_name=self._cf_name,
+        )
 
     def delete(self, key: K):
         """
@@ -161,7 +181,9 @@ class TransactionState(State):
         This function always returns `None`, even if value is not found.
         :param key: key
         """
-        return self._transaction.delete(key=key, prefix=self._prefix)
+        return self._transaction.delete(
+            key=key, prefix=self._prefix, cf_name=self._cf_name
+        )
 
     def exists(self, key: K) -> bool:
         """
@@ -170,4 +192,6 @@ class TransactionState(State):
         :return: True if key exists, False otherwise
         """
 
-        return self._transaction.exists(key=key, prefix=self._prefix)
+        return self._transaction.exists(
+            key=key, prefix=self._prefix, cf_name=self._cf_name
+        )

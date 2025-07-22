@@ -63,6 +63,24 @@ class WindowedTransactionState(TransactionState, WindowedState):
             prefix=self._prefix,
         )
 
+    def delete_window(
+        self,
+        start_ms: int,
+        end_ms: int,
+    ) -> None:
+        # TODO: tests
+        """
+        Delete a single window.
+
+        :param start_ms: start of the window in milliseconds
+        :param end_ms: end of the window in milliseconds
+        """
+        return self._transaction.delete_window(
+            start_ms=start_ms,
+            end_ms=end_ms,
+            prefix=self._prefix,
+        )
+
     def add_to_collection(self, value: Any, id: Optional[int]) -> int:
         """
         Collect a value for collection-type window aggregations.

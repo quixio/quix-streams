@@ -1,5 +1,6 @@
 from typing import TYPE_CHECKING, Any, Iterable, Optional, cast
 
+from quixstreams.state.base.state import TransactionState
 from quixstreams.state.base.transaction import (
     PartitionTransactionStatus,
     validate_transaction_status,
@@ -26,6 +27,7 @@ from .metadata import (
     LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY,
     LATEST_TIMESTAMP_KEY,
     LATEST_TIMESTAMPS_CF_NAME,
+    TRIGGERS_CF_NAME,
     VALUES_CF_NAME,
 )
 from .serialization import parse_window_key
@@ -80,6 +82,18 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
                 if isinstance(prefix, bytes)
                 else serialize(prefix, dumps=self._dumps)
             ),
+        )
+
+    def as_trigger_state(
+        self, prefix: bytes, start_ms: int, end_ms: int
+    ) -> TransactionState:
+        # TODO: Tests, docs
+        # TODO: Maybe make the serialization lazy (not every trigger needs the state). Additional serialization drops throughput by ~10%.
+        # TODO: Or maybe pass the already encoded window key as a prefix. Then there's no extra cost unless you call the state.
+        window_key = encode_integer_pair(start_ms, end_ms)
+        prefix = self._serialize_key(key=window_key, prefix=prefix)
+        return TransactionState(
+            transaction=self, prefix=prefix, cf_name=TRIGGERS_CF_NAME
         )
 
     @validate_transaction_status(PartitionTransactionStatus.STARTED)

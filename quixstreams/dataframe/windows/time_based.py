@@ -11,8 +11,10 @@ from .base import (
     Window,
     WindowKeyResult,
     WindowOnLateCallback,
+    WindowResult,
     get_window_ranges,
 )
+from .triggers import TimeWindowTrigger, TriggerAction
 
 if TYPE_CHECKING:
     from quixstreams.dataframe.dataframe import StreamingDataFrame
@@ -122,6 +124,26 @@ class TimeWindow(Window):
         self._closing_strategy = ClosingStrategy.new(closing_strategy)
         return super().current()
 
+    def trigger(self, trigger: TimeWindowTrigger) -> "StreamingDataFrame":
+        def window_callback(
+            value: Any,
+            key: Any,
+            timestamp_ms: int,
+            _headers: Any,
+            transaction: WindowedPartitionTransaction,
+        ) -> Iterable[tuple[WindowResult, Any, int, Any]]:
+            windows = self.process_window_new(
+                value=value,
+                key=key,
+                timestamp_ms=timestamp_ms,
+                transaction=transaction,
+                trigger=trigger,
+            )
+            for key, window in windows:
+                yield window, key, window["start"], None
+
+        return self._apply_window(func=window_callback, name=self._name)
+
     def process_window(
         self,
         value: Any,
@@ -200,6 +222,119 @@ class TimeWindow(Window):
 
         return updated_windows, expired_windows
 
+    def process_window_new(
+        self,
+        value: Any,
+        key: Any,
+        timestamp_ms: int,
+        transaction: WindowedPartitionTransaction,
+        trigger: TimeWindowTrigger,
+    ) -> Iterable[WindowKeyResult]:
+        window_state = transaction.as_state(prefix=key)
+        duration_ms = self._duration_ms
+        grace_ms = self._grace_ms
+
+        collect = self.collect
+        aggregate = self.aggregate
+
+        ranges = get_window_ranges(
+            timestamp_ms=timestamp_ms,
+            duration_ms=duration_ms,
+            step_ms=self._step_ms,
+        )
+
+        if self._closing_strategy == ClosingStrategy.PARTITION:
+            latest_expired_window_end = transaction.get_latest_expired(prefix=b"")
+            latest_timestamp = max(timestamp_ms, latest_expired_window_end)
+        else:
+            state_ts = window_state.get_latest_timestamp() or 0
+            latest_timestamp = max(timestamp_ms, state_ts)
+
+        max_expired_window_end = latest_timestamp - grace_ms
+        max_expired_window_start = max_expired_window_end - duration_ms
+        updated_windows: list[WindowKeyResult] = []
+        for start, end in ranges:
+            if start <= max_expired_window_start:
+                late_by_ms = max_expired_window_end - timestamp_ms
+                self._on_expired_window(
+                    value=value,
+                    key=key,
+                    start=start,
+                    end=end,
+                    timestamp_ms=timestamp_ms,
+                    late_by_ms=late_by_ms,
+                )
+                continue
+
+            # When collecting values, we only mark the window existence with None
+            # since actual values are stored separately and combined into an array
+            # during window expiration.
+            aggregated = None
+            if aggregate:
+                current_window = window_state.get_window(start, end)
+                if current_window is None:
+                    current_window = self._initialize_value()
+
+                aggregated = self._aggregate_value(current_window, value, timestamp_ms)
+
+                updated_window = self._results(aggregated, [], start, end)
+
+                window_state.update_window(
+                    start, end, value=aggregated, timestamp_ms=timestamp_ms
+                )
+
+                trigger_state = transaction.as_trigger_state(
+                    prefix=window_state.prefix, start_ms=start, end_ms=end
+                )
+
+                if (
+                    action := trigger.on_window_updated(
+                        value, start=start, end=end, state=trigger_state
+                    )
+                ) == TriggerAction.EMIT:
+                    updated_windows.append((key, updated_window))
+                elif action == TriggerAction.DELETE:
+                    #     # TODO: Bump the event time here.
+                    #     # TODO: For count-windows, you want to add an element first, and only then emit/delete it.
+                    #     #   But for session-close events, do you want this?
+                    window_state.delete_window(start, end)
+                elif action == TriggerAction.EMIT_AND_DELETE:
+                    # TODO: Bump the event time here.
+                    # TODO: Do not update windows which are supposed to be deleted
+                    # TODO: The deleted window must be returned in the sorted way together with other expired windows.
+                    updated_windows.append((key, updated_window))
+                    window_state.delete_window(start, end)
+
+        if collect:
+            # TODO: Is it correct? Looks like ".collect()" may not skip the late messages
+            # TODO: Create windows when "collect" is used too
+            # TODO: maybe rethink how "collect" is handled to accommodate the triggers
+            window_state.add_to_collection(
+                value=self._collect_value(value),
+                id=timestamp_ms,
+            )
+
+        if self._closing_strategy == ClosingStrategy.PARTITION:
+            expired_windows = self.expire_by_partition(
+                transaction, max_expired_window_end, collect
+            )
+        else:
+            expired_windows = self.expire_by_key(
+                key, window_state, max_expired_window_start, collect
+            )
+
+        for key, window in expired_windows:
+            # Ignore all other actions except "EMIT" and "EMIT_AND_DELETE"
+            # because the time has already moved beyond the window boundaries
+            if trigger.on_window_closed() in (
+                TriggerAction.EMIT,
+                TriggerAction.EMIT_AND_DELETE,
+            ):
+                yield key, window
+
+        for key, window in updated_windows:
+            yield key, window
+
     def expire_by_partition(
         self,
         transaction: WindowedPartitionTransaction,
@@ -231,7 +366,7 @@ class TimeWindow(Window):
             max_start_time=max_expired_start,
             collect=collect,
         ):
-            yield (key, self._results(aggregated, collected, window_start, window_end))
+            yield key, self._results(aggregated, collected, window_start, window_end)
 
     def _on_expired_window(
         self,

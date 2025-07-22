@@ -3,6 +3,8 @@ from typing import Any, Iterable, Optional, Protocol, Tuple
 
 from typing_extensions import TypeAlias, TypeVar, overload
 
+from .base.state import State
+
 logger = logging.getLogger(__name__)
 
 K = TypeVar("K", contravariant=True)
@@ -20,6 +22,9 @@ class WindowedState(Protocol[K, V]):
     """
     A windowed state to be provided into `StreamingDataFrame` window functions.
     """
+
+    @property
+    def prefix(self) -> bytes: ...
 
     @overload
     def get(self, key: K) -> Optional[V]: ...
@@ -99,6 +104,15 @@ class WindowedState(Protocol[K, V]):
         :param end_ms: end of the window in milliseconds
         :param value: value of the window
         :param timestamp_ms: current message timestamp in milliseconds
+        """
+        ...
+
+    def delete_window(self, start_ms: int, end_ms: int) -> Optional[V]:
+        """
+        Delete a single window.
+
+        :param start_ms: start of the window in milliseconds
+        :param end_ms: end of the window in milliseconds
         """
         ...
 
@@ -249,6 +263,8 @@ class WindowedPartitionTransaction(Protocol[K, V]):
         """
 
     def as_state(self, prefix: Any) -> WindowedState[K, V]: ...
+
+    def as_trigger_state(self, prefix: bytes, start_ms: int, end_ms: int) -> State: ...
 
     def get_window(
         self,
