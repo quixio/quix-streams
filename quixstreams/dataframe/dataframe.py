@@ -191,6 +191,10 @@ class StreamingDataFrame:
     def topics(self) -> tuple[Topic, ...]:
         return self._topics
 
+    def heartbeat(self, func) -> "StreamingDataFrame":
+        stream = self.stream.add_heartbeat(func)
+        return self.__dataframe_clone__(stream=stream)
+
     @overload
     def apply(
         self,
