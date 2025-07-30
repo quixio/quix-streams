@@ -30,6 +30,8 @@ from .functions import (
     TransformCallback,
     TransformExpandedCallback,
     TransformFunction,
+    TransformHeartbeatCallback,
+    TransformHeartbeatExpandedCallback,
     UpdateCallback,
     UpdateFunction,
     UpdateWithMetadataCallback,
@@ -249,18 +251,56 @@ class Stream:
         return self._add(update_func)
 
     @overload
-    def add_transform(self, func: TransformCallback, *, expand: Literal[False] = False):
+    def add_transform(
+        self,
+        func: TransformCallback,
+        *,
+        expand: Literal[False] = False,
+        heartbeat: Literal[False] = False,
+    ):
         pass
 
     @overload
-    def add_transform(self, func: TransformExpandedCallback, *, expand: Literal[True]):
+    def add_transform(
+        self,
+        func: TransformExpandedCallback,
+        *,
+        expand: Literal[True],
+        heartbeat: Literal[False] = False,
+    ):
+        pass
+
+    @overload
+    def add_transform(
+        self,
+        func: TransformHeartbeatCallback,
+        *,
+        expand: Literal[False] = False,
+        heartbeat: Literal[True],
+    ):
+        pass
+
+    @overload
+    def add_transform(
+        self,
+        func: TransformHeartbeatExpandedCallback,
+        *,
+        expand: Literal[True],
+        heartbeat: Literal[True],
+    ):
         pass
 
     def add_transform(
         self,
-        func: Union[TransformCallback, TransformExpandedCallback],
+        func: Union[
+            TransformCallback,
+            TransformExpandedCallback,
+            TransformHeartbeatCallback,
+            TransformHeartbeatExpandedCallback,
+        ],
         *,
         expand: bool = False,
+        heartbeat: bool = False,
     ) -> "Stream":
         """
         Add a "transform" function to the Stream, that will mutate the input value.
@@ -276,9 +316,11 @@ class Stream:
         :param expand: if True, expand the returned iterable into individual items
             downstream. If returned value is not iterable, `TypeError` will be raised.
             Default - `False`.
+        :param heartbeat: if True, the callback is expected to accept timestamp only.
+            Default - `False`.
         :return: a new Stream derived from the current one
         """
-        return self._add(TransformFunction(func, expand=expand))  # type: ignore[call-overload]
+        return self._add(TransformFunction(func, expand=expand, heartbeat=heartbeat))  # type: ignore[call-overload]
 
     def merge(self, other: "Stream") -> "Stream":
         """

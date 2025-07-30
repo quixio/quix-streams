@@ -1696,6 +1696,10 @@ class StreamingDataFrame:
                 stream=merged_stream, stream_id=merged_stream_id
             )
 
+    def concat_heartbeat(self, stream: Stream) -> "StreamingDataFrame":
+        self._registry.register_heartbeat(self, stream)
+        return self.__dataframe_clone__(stream=self.stream.merge(stream))
+
     def join_asof(
         self,
         right: "StreamingDataFrame",
