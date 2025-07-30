@@ -1,7 +1,13 @@
 from typing import Any, Literal, Union, cast, overload
 
 from .base import StreamFunction
-from .types import TransformCallback, TransformExpandedCallback, VoidExecutor
+from .types import (
+    TransformCallback,
+    TransformExpandedCallback,
+    TransformHeartbeatCallback,
+    TransformHeartbeatExpandedCallback,
+    VoidExecutor,
+)
 
 __all__ = ("TransformFunction",)
 
@@ -23,28 +29,81 @@ class TransformFunction(StreamFunction):
 
     @overload
     def __init__(
-        self, func: TransformCallback, expand: Literal[False] = False
+        self,
+        func: TransformCallback,
+        expand: Literal[False] = False,
+        heartbeat: Literal[False] = False,
     ) -> None: ...
 
     @overload
     def __init__(
-        self, func: TransformExpandedCallback, expand: Literal[True]
+        self,
+        func: TransformExpandedCallback,
+        expand: Literal[True],
+        heartbeat: Literal[False] = False,
+    ) -> None: ...
+
+    @overload
+    def __init__(
+        self,
+        func: TransformHeartbeatCallback,
+        expand: Literal[False] = False,
+        heartbeat: Literal[True] = True,
+    ) -> None: ...
+
+    @overload
+    def __init__(
+        self,
+        func: TransformHeartbeatExpandedCallback,
+        expand: Literal[True],
+        heartbeat: Literal[True],
     ) -> None: ...
 
     def __init__(
         self,
-        func: Union[TransformCallback, TransformExpandedCallback],
+        func: Union[
+            TransformCallback,
+            TransformExpandedCallback,
+            TransformHeartbeatCallback,
+            TransformHeartbeatExpandedCallback,
+        ],
         expand: bool = False,
+        heartbeat: bool = False,
     ):
         super().__init__(func)
 
-        self.func: Union[TransformCallback, TransformExpandedCallback]
+        self.func: Union[
+            TransformCallback,
+            TransformExpandedCallback,
+            TransformHeartbeatCallback,
+            TransformHeartbeatExpandedCallback,
+        ]
         self.expand = expand
+        self.heartbeat = heartbeat
 
     def get_executor(self, *child_executors: VoidExecutor) -> VoidExecutor:
         child_executor = self._resolve_branching(*child_executors)
 
-        if self.expand:
+        if self.expand and self.heartbeat:
+            heartbeat_expanded_func = cast(
+                TransformHeartbeatExpandedCallback, self.func
+            )
+
+            def wrapper(
+                value: Any,
+                key: Any,
+                timestamp: int,
+                headers: Any,
+            ):
+                for (
+                    new_value,
+                    new_key,
+                    new_timestamp,
+                    new_headers,
+                ) in heartbeat_expanded_func(timestamp):
+                    child_executor(new_value, new_key, new_timestamp, new_headers)
+
+        elif self.expand:
             expanded_func = cast(TransformExpandedCallback, self.func)
 
             def wrapper(
@@ -57,8 +116,22 @@ class TransformFunction(StreamFunction):
                 for new_value, new_key, new_timestamp, new_headers in result:
                     child_executor(new_value, new_key, new_timestamp, new_headers)
 
+        elif self.heartbeat:
+            heartbeat_func = cast(TransformHeartbeatCallback, self.func)
+
+            def wrapper(
+                value: Any,
+                key: Any,
+                timestamp: int,
+                headers: Any,
+            ):
+                new_value, new_key, new_timestamp, new_headers = heartbeat_func(
+                    timestamp
+                )
+                child_executor(new_value, new_key, new_timestamp, new_headers)
+
         else:
-            func = cast(TransformCallback, self.func)
+            regular_func = cast(TransformCallback, self.func)
 
             def wrapper(
                 value: Any,
@@ -67,7 +140,7 @@ class TransformFunction(StreamFunction):
                 headers: Any,
             ):
                 # Execute a function on a single value and return its result
-                new_value, new_key, new_timestamp, new_headers = func(
+                new_value, new_key, new_timestamp, new_headers = regular_func(
                     value, key, timestamp, headers
                 )
                 child_executor(new_value, new_key, new_timestamp, new_headers)

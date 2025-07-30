@@ -22,6 +22,7 @@ class DataFrameRegistry:
 
     def __init__(self) -> None:
         self._registry: dict[str, Stream] = {}
+        self._heartbeat_registry: dict[str, Stream] = {}
         self._topics: list[Topic] = []
         self._repartition_origins: set[str] = set()
         self._topics_to_stream_ids: dict[str, set[str]] = {}
@@ -69,6 +70,20 @@ class DataFrameRegistry:
         self._topics.append(topic)
         self._registry[topic.name] = dataframe.stream
 
+    def register_heartbeat(
+        self, dataframe: "StreamingDataFrame", stream: Stream
+    ) -> None:
+        """
+        Register a heartbeat Stream for the given topic.
+        """
+        topics = dataframe.topics
+        if len(topics) > 1:
+            raise ValueError(
+                f"Expected a StreamingDataFrame with one topic, got {len(topics)}"
+            )
+        topic = topics[0]
+        self._heartbeat_registry[topic.name] = stream
+
     def register_groupby(
         self,
         source_sdf: "StreamingDataFrame",
@@ -113,9 +128,21 @@ class DataFrameRegistry:
         :param sink: callable to accumulate the results of the execution, optional.
         :return: a {topic_name: composed} dict, where composed is a callable
         """
+        return self._compose(registry=self._registry, sink=sink)
+
+    def compose_heartbeats(self) -> dict[str, VoidExecutor]:
+        """
+        Composes all the heartbeat Streams and returns a dict of format {<topic>: <VoidExecutor>}
+        :return: a {topic_name: composed} dict, where composed is a callable
+        """
+        return self._compose(registry=self._heartbeat_registry)
+
+    def _compose(
+        self, registry: dict[str, Stream], sink: Optional[VoidExecutor] = None
+    ) -> dict[str, VoidExecutor]:
         executors = {}
         # Go over the registered topics with root Streams and compose them
-        for topic, root_stream in self._registry.items():
+        for topic, root_stream in registry.items():
             # If a root stream is connected to other roots, ".compose()" will
             # return them all.
             # Use the registered root Stream to filter them out.
