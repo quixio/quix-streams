@@ -1,5 +1,7 @@
 from typing import Any, Literal, Union, cast, overload
 
+from quixstreams.core.stream.functions.heartbeat import is_heartbeat_message
+
 from .base import StreamFunction
 from .types import TransformCallback, TransformExpandedCallback, VoidExecutor
 
@@ -53,9 +55,13 @@ class TransformFunction(StreamFunction):
                 timestamp: int,
                 headers: Any,
             ):
-                result = expanded_func(value, key, timestamp, headers)
-                for new_value, new_key, new_timestamp, new_headers in result:
-                    child_executor(new_value, new_key, new_timestamp, new_headers)
+                # Pass heartbeat messages downstream
+                if is_heartbeat_message(key, value):
+                    child_executor(value, key, timestamp, headers)
+                else:
+                    result = expanded_func(value, key, timestamp, headers)
+                    for new_value, new_key, new_timestamp, new_headers in result:
+                        child_executor(new_value, new_key, new_timestamp, new_headers)
 
         else:
             func = cast(TransformCallback, self.func)
@@ -66,10 +72,13 @@ class TransformFunction(StreamFunction):
                 timestamp: int,
                 headers: Any,
             ):
-                # Execute a function on a single value and return its result
-                new_value, new_key, new_timestamp, new_headers = func(
-                    value, key, timestamp, headers
-                )
-                child_executor(new_value, new_key, new_timestamp, new_headers)
+                # Pass heartbeat messages downstream or execute
+                # a function on a single value and return its result
+                if not is_heartbeat_message(key, value):
+                    value, key, timestamp, headers = func(
+                        value, key, timestamp, headers
+                    )
+
+                child_executor(value, key, timestamp, headers)
 
         return wrapper

@@ -69,6 +69,14 @@ class Window(abc.ABC):
     ) -> tuple[Iterable[WindowKeyResult], Iterable[WindowKeyResult]]:
         pass
 
+    @abstractmethod
+    def process_heartbeat(
+        self,
+        timestamp_ms: int,
+        transaction: WindowedPartitionTransaction,
+    ) -> Iterable[WindowKeyResult]:
+        pass
+
     def register_store(self) -> None:
         TopicManager.ensure_topics_copartitioned(*self._dataframe.topics)
         # Create a config for the changelog topic based on the underlying SDF topics
@@ -83,6 +91,7 @@ class Window(abc.ABC):
         self,
         func: TransformRecordCallbackExpandedWindowed,
         name: str,
+        heartbeat_func,
     ) -> "StreamingDataFrame":
         self.register_store()
 
@@ -92,11 +101,18 @@ class Window(abc.ABC):
             processing_context=self._dataframe.processing_context,
             store_name=name,
         )
+        heartbeat_func = _as_heartbeat(
+            func=heartbeat_func,
+            stream_id=self._dataframe.stream_id,
+            processing_context=self._dataframe.processing_context,
+            store_name=name,
+        )
         # Manually modify the Stream and clone the source StreamingDataFrame
         # to avoid adding "transform" API to it.
         # Transform callbacks can modify record key and timestamp,
         # and it's prone to misuse.
         stream = self._dataframe.stream.add_transform(func=windowed_func, expand=True)
+        stream = stream.add_heartbeat(func=heartbeat_func)
         return self._dataframe.__dataframe_clone__(stream=stream)
 
     def final(self) -> "StreamingDataFrame":
@@ -140,9 +156,17 @@ class Window(abc.ABC):
             for key, window in expired_windows:
                 yield (window, key, window["start"], None)
 
+        def heartbeat_callback(
+            timestamp: int, transaction: WindowedPartitionTransaction
+        ) -> Iterable[Message]:
+            # TODO: Check if this will work for sliding windows
+            for key, window in self.process_heartbeat(timestamp, transaction):
+                yield (window, key, window["start"], None)
+
         return self._apply_window(
             func=window_callback,
             name=self._name,
+            heartbeat_func=heartbeat_callback,
         )
 
     def current(self) -> "StreamingDataFrame":
@@ -188,7 +212,17 @@ class Window(abc.ABC):
             for key, window in updated_windows:
                 yield (window, key, window["start"], None)
 
-        return self._apply_window(func=window_callback, name=self._name)
+        def heartbeat_callback(
+            timestamp: int, transaction: WindowedPartitionTransaction
+        ) -> Iterable[Message]:
+            # TODO: Implement heartbeat callback
+            return []
+
+        return self._apply_window(
+            func=window_callback,
+            name=self._name,
+            heartbeat_func=heartbeat_callback,
+        )
 
     # Implemented by SingleAggregationWindowMixin and MultiAggregationWindowMixin
     # Single aggregation and multi aggregation windows store aggregations and collections
@@ -420,6 +454,26 @@ def _as_windowed(
             )
             return _noop()
         return func(value, key, timestamp, headers, transaction)
+
+    return wrapper
+
+
+def _as_heartbeat(
+    func,  # TODO: typing?
+    processing_context: "ProcessingContext",
+    store_name: str,
+    stream_id: str,
+):  # TODO: typing?
+    @functools.wraps(func)
+    def wrapper(timestamp: int) -> Iterable[Message]:
+        ctx = message_context()
+        transaction = cast(
+            WindowedPartitionTransaction,
+            processing_context.checkpoint.get_store_transaction(
+                stream_id=stream_id, partition=ctx.partition, store_name=store_name
+            ),
+        )
+        return func(timestamp, transaction)
 
     return wrapper
 

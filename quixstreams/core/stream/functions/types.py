@@ -1,4 +1,4 @@
-from typing import Any, Callable, Iterable, Protocol, Tuple, Union
+from typing import Any, Callable, Iterable, Optional, Protocol, Tuple, Union
 
 __all__ = (
     "StreamCallback",
@@ -35,6 +35,8 @@ TransformCallback = Callable[[Any, Any, int, Any], Tuple[Any, Any, int, Any]]
 TransformExpandedCallback = Callable[
     [Any, Any, int, Any], Iterable[Tuple[Any, Any, int, Any]]
 ]
+
+HeartbeatCallback = Callable[[int], Optional[Iterable[Tuple[Any, Any, int, Any]]]]
 
 StreamCallback = Union[
     ApplyCallback,
