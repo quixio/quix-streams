@@ -30,6 +30,8 @@ from .functions import (
     TransformCallback,
     TransformExpandedCallback,
     TransformFunction,
+    TransformWallClockCallback,
+    TransformWallClockExpandedCallback,
     UpdateCallback,
     UpdateFunction,
     UpdateWithMetadataCallback,
@@ -249,18 +251,56 @@ class Stream:
         return self._add(update_func)
 
     @overload
-    def add_transform(self, func: TransformCallback, *, expand: Literal[False] = False):
+    def add_transform(
+        self,
+        func: TransformCallback,
+        *,
+        expand: Literal[False] = False,
+        wall_clock: Literal[False] = False,
+    ):
         pass
 
     @overload
-    def add_transform(self, func: TransformExpandedCallback, *, expand: Literal[True]):
+    def add_transform(
+        self,
+        func: TransformExpandedCallback,
+        *,
+        expand: Literal[True],
+        wall_clock: Literal[False] = False,
+    ):
+        pass
+
+    @overload
+    def add_transform(
+        self,
+        func: TransformWallClockCallback,
+        *,
+        expand: Literal[False] = False,
+        wall_clock: Literal[True],
+    ):
+        pass
+
+    @overload
+    def add_transform(
+        self,
+        func: TransformWallClockExpandedCallback,
+        *,
+        expand: Literal[True],
+        wall_clock: Literal[True],
+    ):
         pass
 
     def add_transform(
         self,
-        func: Union[TransformCallback, TransformExpandedCallback],
+        func: Union[
+            TransformCallback,
+            TransformExpandedCallback,
+            TransformWallClockCallback,
+            TransformWallClockExpandedCallback,
+        ],
         *,
         expand: bool = False,
+        wall_clock: bool = False,
     ) -> "Stream":
         """
         Add a "transform" function to the Stream, that will mutate the input value.
@@ -276,9 +316,11 @@ class Stream:
         :param expand: if True, expand the returned iterable into individual items
             downstream. If returned value is not iterable, `TypeError` will be raised.
             Default - `False`.
+        :param wall_clock: if True, the callback is expected to accept timestamp only.
+            Default - `False`.
         :return: a new Stream derived from the current one
         """
-        return self._add(TransformFunction(func, expand=expand))  # type: ignore[call-overload]
+        return self._add(TransformFunction(func, expand=expand, wall_clock=wall_clock))  # type: ignore[call-overload]
 
     def merge(self, other: "Stream") -> "Stream":
         """

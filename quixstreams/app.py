@@ -7,6 +7,7 @@ import time
 import uuid
 import warnings
 from collections import defaultdict
+from datetime import datetime
 from pathlib import Path
 from typing import Callable, List, Literal, Optional, Protocol, Tuple, Type, Union
 
@@ -30,6 +31,8 @@ from .kafka import AutoOffsetReset, ConnectionConfig, Consumer, Producer
 from .logging import LogLevel, configure_logging
 from .models import (
     DeserializerType,
+    MessageContext,
+    Row,
     SerializerType,
     TimestampExtractor,
     Topic,
@@ -153,6 +156,7 @@ class Application:
         topic_create_timeout: float = 60,
         processing_guarantee: ProcessingGuarantee = "at-least-once",
         max_partition_buffer_size: int = 10000,
+        wall_clock_interval: float = 0.0,
     ):
         """
         :param broker_address: Connection settings for Kafka.
@@ -222,6 +226,12 @@ class Application:
             It is a soft limit, and the actual number of buffered messages can be up to x2 higher.
             Lower value decreases the memory use, but increases the latency.
             Default - `10000`.
+        :param wall_clock_interval: the interval (seconds) at which to invoke
+            the registered wall clock logic.
+            The wall clock timing starts counting from application start.
+            TODO: Save and respect last wall clock timestamp.
+            If the value is 0, no wall clock logic will be invoked.
+            Default - `0.0`.
 
         <br><br>***Error Handlers***<br>
         To handle errors, `Application` accepts callbacks triggered when
@@ -369,6 +379,10 @@ class Application:
             producer=producer,
             recovery_manager=recovery_manager,
         )
+
+        self._wall_clock_active = wall_clock_interval > 0
+        self._wall_clock_interval = wall_clock_interval
+        self._wall_clock_last_sent = datetime.now().timestamp()
 
         self._source_manager = SourceManager()
         self._sink_manager = SinkManager()
@@ -899,6 +913,7 @@ class Application:
         processing_context = self._processing_context
         source_manager = self._source_manager
         process_message = self._process_message
+        process_wall_clock = self._process_wall_clock
         printer = self._processing_context.printer
         run_tracker = self._run_tracker
         consumer = self._consumer
@@ -911,6 +926,9 @@ class Application:
         )
 
         dataframes_composed = self._dataframe_registry.compose_all(sink=sink)
+        wall_clock_executors = self._dataframe_registry.compose_wall_clock()
+        if not wall_clock_executors:
+            self._wall_clock_active = False
 
         processing_context.init_checkpoint()
         run_tracker.set_as_running()
@@ -922,6 +940,7 @@ class Application:
                 run_tracker.timeout_refresh()
             else:
                 process_message(dataframes_composed)
+                process_wall_clock(wall_clock_executors)
                 processing_context.commit_checkpoint()
                 consumer.resume_backpressured()
                 source_manager.raise_for_error()
@@ -1004,6 +1023,41 @@ class Application:
 
         if self._on_message_processed is not None:
             self._on_message_processed(topic_name, partition, offset)
+
+    def _process_wall_clock(self, wall_clock_executors):
+        if not self._wall_clock_active:
+            return
+
+        now = datetime.now().timestamp()
+        if self._wall_clock_last_sent > now - self._wall_clock_interval:
+            return
+
+        value, key, timestamp, headers = None, None, int(now * 1000), {}
+
+        for tp in self._consumer.assignment():
+            if executor := wall_clock_executors.get(tp.topic):
+                row = Row(
+                    value=value,
+                    key=key,
+                    timestamp=timestamp,
+                    context=MessageContext(
+                        topic=tp.topic,
+                        partition=tp.partition,
+                        offset=-1,  # TODO: get correct offsets
+                        size=-1,
+                    ),
+                    headers=headers,
+                )
+                context = copy_context()
+                context.run(set_message_context, row.context)
+                try:
+                    context.run(executor, value, key, timestamp, headers)
+                except Exception as exc:
+                    to_suppress = self._on_processing_error(exc, row, logger)
+                    if not to_suppress:
+                        raise
+
+        self._wall_clock_last_sent = now
 
     def _on_assign(self, _, topic_partitions: List[TopicPartition]):
         """
