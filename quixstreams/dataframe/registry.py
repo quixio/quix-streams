@@ -22,7 +22,7 @@ class DataFrameRegistry:
 
     def __init__(self) -> None:
         self._registry: dict[str, Stream] = {}
-        self._heartbeat_registry: dict[str, Stream] = {}
+        self._wall_clock_registry: dict[str, Stream] = {}
         self._topics: list[Topic] = []
         self._repartition_origins: set[str] = set()
         self._topics_to_stream_ids: dict[str, set[str]] = {}
@@ -70,11 +70,11 @@ class DataFrameRegistry:
         self._topics.append(topic)
         self._registry[topic.name] = dataframe.stream
 
-    def register_heartbeat(
+    def register_wall_clock(
         self, dataframe: "StreamingDataFrame", stream: Stream
     ) -> None:
         """
-        Register a heartbeat Stream for the given topic.
+        Register a wall clock stream for the given topic.
         """
         topics = dataframe.topics
         if len(topics) > 1:
@@ -82,7 +82,7 @@ class DataFrameRegistry:
                 f"Expected a StreamingDataFrame with one topic, got {len(topics)}"
             )
         topic = topics[0]
-        self._heartbeat_registry[topic.name] = stream
+        self._wall_clock_registry[topic.name] = stream
 
     def register_groupby(
         self,
@@ -130,12 +130,12 @@ class DataFrameRegistry:
         """
         return self._compose(registry=self._registry, sink=sink)
 
-    def compose_heartbeats(self) -> dict[str, VoidExecutor]:
+    def compose_wall_clock(self) -> dict[str, VoidExecutor]:
         """
-        Composes all the heartbeat Streams and returns a dict of format {<topic>: <VoidExecutor>}
+        Composes all the wall clock streams and returns a dict of format {<topic>: <VoidExecutor>}
         :return: a {topic_name: composed} dict, where composed is a callable
         """
-        return self._compose(registry=self._heartbeat_registry)
+        return self._compose(registry=self._wall_clock_registry)
 
     def _compose(
         self, registry: dict[str, Stream], sink: Optional[VoidExecutor] = None
