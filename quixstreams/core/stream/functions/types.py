@@ -14,8 +14,8 @@ __all__ = (
     "FilterWithMetadataCallback",
     "TransformCallback",
     "TransformExpandedCallback",
-    "TransformHeartbeatCallback",
-    "TransformHeartbeatExpandedCallback",
+    "TransformWallClockCallback",
+    "TransformWallClockExpandedCallback",
 )
 
 
@@ -37,8 +37,8 @@ TransformCallback = Callable[[Any, Any, int, Any], Tuple[Any, Any, int, Any]]
 TransformExpandedCallback = Callable[
     [Any, Any, int, Any], Iterable[Tuple[Any, Any, int, Any]]
 ]
-TransformHeartbeatCallback = Callable[[int], Tuple[Any, Any, int, Any]]
-TransformHeartbeatExpandedCallback = Callable[
+TransformWallClockCallback = Callable[[int], Tuple[Any, Any, int, Any]]
+TransformWallClockExpandedCallback = Callable[
     [int], Iterable[Tuple[Any, Any, int, Any]]
 ]
 

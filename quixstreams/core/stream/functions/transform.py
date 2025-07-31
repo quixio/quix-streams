@@ -4,8 +4,8 @@ from .base import StreamFunction
 from .types import (
     TransformCallback,
     TransformExpandedCallback,
-    TransformHeartbeatCallback,
-    TransformHeartbeatExpandedCallback,
+    TransformWallClockCallback,
+    TransformWallClockExpandedCallback,
     VoidExecutor,
 )
 
@@ -32,7 +32,7 @@ class TransformFunction(StreamFunction):
         self,
         func: TransformCallback,
         expand: Literal[False] = False,
-        heartbeat: Literal[False] = False,
+        wall_clock: Literal[False] = False,
     ) -> None: ...
 
     @overload
@@ -40,23 +40,23 @@ class TransformFunction(StreamFunction):
         self,
         func: TransformExpandedCallback,
         expand: Literal[True],
-        heartbeat: Literal[False] = False,
+        wall_clock: Literal[False] = False,
     ) -> None: ...
 
     @overload
     def __init__(
         self,
-        func: TransformHeartbeatCallback,
+        func: TransformWallClockCallback,
         expand: Literal[False] = False,
-        heartbeat: Literal[True] = True,
+        wall_clock: Literal[True] = True,
     ) -> None: ...
 
     @overload
     def __init__(
         self,
-        func: TransformHeartbeatExpandedCallback,
+        func: TransformWallClockExpandedCallback,
         expand: Literal[True],
-        heartbeat: Literal[True],
+        wall_clock: Literal[True],
     ) -> None: ...
 
     def __init__(
@@ -64,29 +64,29 @@ class TransformFunction(StreamFunction):
         func: Union[
             TransformCallback,
             TransformExpandedCallback,
-            TransformHeartbeatCallback,
-            TransformHeartbeatExpandedCallback,
+            TransformWallClockCallback,
+            TransformWallClockExpandedCallback,
         ],
         expand: bool = False,
-        heartbeat: bool = False,
+        wall_clock: bool = False,
     ):
         super().__init__(func)
 
         self.func: Union[
             TransformCallback,
             TransformExpandedCallback,
-            TransformHeartbeatCallback,
-            TransformHeartbeatExpandedCallback,
+            TransformWallClockCallback,
+            TransformWallClockExpandedCallback,
         ]
         self.expand = expand
-        self.heartbeat = heartbeat
+        self.wall_clock = wall_clock
 
     def get_executor(self, *child_executors: VoidExecutor) -> VoidExecutor:
         child_executor = self._resolve_branching(*child_executors)
 
-        if self.expand and self.heartbeat:
-            heartbeat_expanded_func = cast(
-                TransformHeartbeatExpandedCallback, self.func
+        if self.expand and self.wall_clock:
+            wall_clock_expanded_func = cast(
+                TransformWallClockExpandedCallback, self.func
             )
 
             def wrapper(
@@ -100,7 +100,7 @@ class TransformFunction(StreamFunction):
                     new_key,
                     new_timestamp,
                     new_headers,
-                ) in heartbeat_expanded_func(timestamp):
+                ) in wall_clock_expanded_func(timestamp):
                     child_executor(new_value, new_key, new_timestamp, new_headers)
 
         elif self.expand:
@@ -116,8 +116,8 @@ class TransformFunction(StreamFunction):
                 for new_value, new_key, new_timestamp, new_headers in result:
                     child_executor(new_value, new_key, new_timestamp, new_headers)
 
-        elif self.heartbeat:
-            heartbeat_func = cast(TransformHeartbeatCallback, self.func)
+        elif self.wall_clock:
+            wall_clock_func = cast(TransformWallClockCallback, self.func)
 
             def wrapper(
                 value: Any,
@@ -125,7 +125,7 @@ class TransformFunction(StreamFunction):
                 timestamp: int,
                 headers: Any,
             ):
-                new_value, new_key, new_timestamp, new_headers = heartbeat_func(
+                new_value, new_key, new_timestamp, new_headers = wall_clock_func(
                     timestamp
                 )
                 child_executor(new_value, new_key, new_timestamp, new_headers)
