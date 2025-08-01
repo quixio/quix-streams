@@ -539,13 +539,13 @@ class SlidingCountWindowDefinition(HoppingCountWindowDefinition):
 class SessionWindowDefinition(WindowDefinition):
     """
     Definition for session windows that group events by activity sessions.
-    
+
     Session windows group events that occur within a specified timeout period.
     A session starts with the first event and extends each time a new event arrives
     within the timeout period. The session closes after the timeout period with no
     new events.
     """
-    
+
     def __init__(
         self,
         timeout_ms: int,
@@ -589,7 +589,8 @@ class SessionWindowDefinition(WindowDefinition):
     ) -> SessionWindow:
         if func_name:
             window_type: Union[
-                type[SessionWindowSingleAggregation], type[SessionWindowMultiAggregation]
+                type[SessionWindowSingleAggregation],
+                type[SessionWindowMultiAggregation],
             ] = SessionWindowSingleAggregation
         else:
             window_type = SessionWindowMultiAggregation
