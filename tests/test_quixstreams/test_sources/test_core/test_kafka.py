@@ -302,6 +302,7 @@ class TestQuixEnvironmentSource(Base):
             auto_offset_reset="earliest",
             quix_sdk_token="my_sdk_token",
             quix_workspace_id=self.QUIX_WORKSPACE_ID,
+            quix_portal_api="http://example.com",
         )
 
     def _get_librdkafka_connection_config(self, *args, **kwargs):

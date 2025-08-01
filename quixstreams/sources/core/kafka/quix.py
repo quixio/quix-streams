@@ -4,7 +4,7 @@ from quixstreams.error_callbacks import ConsumerErrorCallback, default_on_consum
 from quixstreams.kafka import AutoOffsetReset
 from quixstreams.models.serializers import DeserializerType
 from quixstreams.models.topics import Topic
-from quixstreams.platforms.quix import DEFAULT_PORTAL_API_URL, QuixKafkaConfigsBuilder
+from quixstreams.platforms.quix import QuixKafkaConfigsBuilder
 from quixstreams.sources import (
     ClientConnectFailureCallback,
     ClientConnectSuccessCallback,
@@ -57,7 +57,7 @@ class QuixEnvironmentSource(KafkaReplicatorSource):
         topic: str,
         quix_sdk_token: str,
         quix_workspace_id: str,
-        quix_portal_api: Optional[str] = None,
+        quix_portal_api: str,
         auto_offset_reset: Optional[AutoOffsetReset] = None,
         consumer_extra_config: Optional[dict] = None,
         consumer_poll_timeout: Optional[float] = None,
@@ -82,9 +82,10 @@ class QuixEnvironmentSource(KafkaReplicatorSource):
 
         self._short_topic = topic
         self._quix_workspace_id = quix_workspace_id
+
         self._quix_config = QuixKafkaConfigsBuilder.from_credentials(
             quix_sdk_token=quix_sdk_token,
-            quix_portal_api=quix_portal_api or DEFAULT_PORTAL_API_URL,
+            quix_portal_api=quix_portal_api,
             workspace_id=quix_workspace_id,
         )
 

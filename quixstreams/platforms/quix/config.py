@@ -20,12 +20,10 @@ from .exceptions import (
     UndefinedQuixWorkspaceId,
 )
 
-__all__ = ("QuixKafkaConfigsBuilder", "QuixApplicationConfig", "DEFAULT_PORTAL_API_URL")
+__all__ = ("QuixKafkaConfigsBuilder", "QuixApplicationConfig")
 
 logger = logging.getLogger(__name__)
 
-
-DEFAULT_PORTAL_API_URL = "https://portal-api.platform.quix.io/"
 QUIX_CONNECTIONS_MAX_IDLE_MS = 3 * 60 * 1000
 QUIX_METADATA_MAX_AGE_MS = 3 * 60 * 1000
 
@@ -131,7 +129,7 @@ class QuixKafkaConfigsBuilder:
     def from_credentials(
         cls,
         quix_sdk_token: str,
-        quix_portal_api: str = DEFAULT_PORTAL_API_URL,
+        quix_portal_api: str,
         workspace_id: Optional[str] = None,
         timeout: float = 30,
         topic_create_timeout: float = 60,
