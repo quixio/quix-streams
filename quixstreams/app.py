@@ -8,7 +8,7 @@ import uuid
 import warnings
 from collections import defaultdict
 from pathlib import Path
-from typing import Callable, List, Literal, Optional, Protocol, Tuple, Type, Union
+from typing import Callable, List, Literal, Optional, Protocol, Tuple, Type, Union, cast
 
 from confluent_kafka import TopicPartition
 from pydantic import AliasGenerator, Field
@@ -38,7 +38,6 @@ from .models import (
     TopicManager,
 )
 from .platforms.quix import (
-    DEFAULT_PORTAL_API_URL,
     QuixKafkaConfigsBuilder,
     QuixTopicManager,
     check_state_dir,
@@ -171,7 +170,6 @@ class Application:
         :param quix_portal_api: If using the Quix Cloud, the cluster API URL to use.
             Use it to connect to the dedicated Quix Cloud environment.
             Linked Environment Variable: `Quix__Portal__Api`.
-            Default: `https://portal-api.platform.quix.io/`.
               >***NOTE:*** the environment variable is set for you in the Quix Cloud
         :param consumer_group: Kafka consumer group.
             Passed as `group.id` to `confluent_kafka.Consumer`.
@@ -251,11 +249,6 @@ class Application:
         state_dir = Path(state_dir)
 
         broker_address = broker_address or QUIX_ENVIRONMENT.broker_address
-        quix_sdk_token = quix_sdk_token or QUIX_ENVIRONMENT.sdk_token
-        quix_portal_api = (
-            quix_portal_api or QUIX_ENVIRONMENT.portal_api or DEFAULT_PORTAL_API_URL
-        )
-
         consumer_group = (
             consumer_group or QUIX_ENVIRONMENT.consumer_group or "quixstreams-default"
         )
@@ -269,6 +262,7 @@ class Application:
             consumer_group_prefix = ""
         else:
             self._is_quix_app = True
+            quix_sdk_token = quix_sdk_token or QUIX_ENVIRONMENT.sdk_token
 
             if quix_config_builder:
                 quix_app_source = "Quix Config Builder"
@@ -279,8 +273,15 @@ class Application:
                     )
             elif quix_sdk_token:
                 quix_app_source = "Quix SDK Token"
+                quix_portal_api = quix_portal_api or QUIX_ENVIRONMENT.portal_api
+                if not quix_portal_api:
+                    raise ValueError(
+                        'Either "quix_portal_api" must be provided or '
+                        '"Quix__Portal__Api" environment variable must be set'
+                    )
                 quix_config_builder = QuixKafkaConfigsBuilder.from_credentials(
-                    quix_sdk_token=quix_sdk_token, quix_portal_api=quix_portal_api
+                    quix_sdk_token=quix_sdk_token,
+                    quix_portal_api=cast(str, quix_portal_api),  # cast to please mypy
                 )
             else:
                 raise ValueError(
