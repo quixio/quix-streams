@@ -62,7 +62,7 @@ TDengineSink accepts the following configuration parameters:
 - `subtable` - Subtable name as a string, or a callable that receives the current message data and returns a string. If empty, a hash value will be generated from the data as the subtable name.
 - `fields_keys` - Iterable (list) of strings used as TDengine "fields", or a callable that receives the current message data and returns an iterable of strings. If present, must not overlap with `tags_keys`. If empty, the whole record value will be used. Default: `()`.
 - `tags_keys` - Iterable (list) of strings used as TDengine "tags", or a callable that receives the current message data and returns an iterable of strings. If present, must not overlap with `fields_keys`. Given keys are popped from the value dictionary since the same key cannot be both a tag and field. If empty, no tags will be sent. Default: `()`.
-- `time_key` - Optional key to use as the timestamp for TDengine. If not set, the record's Kafka timestamp is used. Default: `None`.
+- `time_setter` - Optional column name to use as the timestamp for TDengine. Also accepts a callable that receives the current message data and returns either the desired time or `None` (use default). The time can be an `int`, `string` (RFC3339 format), or `datetime`. The time must match the `time_precision` argument if not a `datetime` object, else raises. Default: `None`.
 - `time_precision` - Time precision for the timestamp. One of: `"ms"`, `"ns"`, `"us"`, `"s"`. Default: `"ms"`.
 - `allow_missing_fields` - If `True`, skip missing field keys instead of raising `KeyError`. Default: `False`.
 - `include_metadata_tags` - If `True`, includes the record's key, topic, and partition as tags. Default: `False`.
