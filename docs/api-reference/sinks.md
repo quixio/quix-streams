@@ -2229,7 +2229,7 @@ def __init__(host: str,
              subtable: SubtableNameSetter,
              fields_keys: FieldsSetter = (),
              tags_keys: TagsSetter = (),
-             time_key: Optional[str] = None,
+             time_setter: Optional[TimeSetter] = None,
              time_precision: TimePrecision = "ms",
              allow_missing_fields: bool = False,
              include_metadata_tags: bool = False,
@@ -2247,7 +2247,7 @@ def __init__(host: str,
              token: str = "")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/sink.py#L41)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/sink.py#L51)
 
 A connector to sink processed data to TDengine.
 
@@ -2292,10 +2292,12 @@ cannot be both a tag and field.
 - If empty, no tags will be sent.
 >***NOTE***: always converts tag values to strings.
 Default - `()`.
-- `time_key`: a key to be used as "time" when convert to InfluxDB line protocol.
-By default, the record timestamp will be used with "ms" time precision.
-When using a custom key, you may need to adjust the `time_precision` setting
-to match.
+- `time_setter`: an optional column name to use as "time" when convert to InfluxDB line protocol.
+Also accepts a callable which receives the current message data and
+returns either the desired time or `None` (use default).
+The time can be an `int`, `string` (RFC3339 format), or `datetime`.
+The time must match the `time_precision` argument if not a `datetime` object, else raises.
+By default, a record's kafka timestamp with "ms" time precision is used.
 - `time_precision`: a time precision to use when convert to InfluxDB line protocol.
 Possible values: "ms", "ns", "us", "s".
 Default - `"ms"`.

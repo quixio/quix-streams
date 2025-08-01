@@ -56,7 +56,6 @@ class TDengineSink(BatchingSink):
         subtable: SubtableNameSetter,
         fields_keys: FieldsSetter = (),
         tags_keys: TagsSetter = (),
-        time_key: Optional[str] = None,
         time_setter: Optional[TimeSetter] = None,
         time_precision: TimePrecision = "ms",
         allow_missing_fields: bool = False,
@@ -112,24 +111,12 @@ class TDengineSink(BatchingSink):
             - If empty, no tags will be sent.
             >***NOTE***: always converts tag values to strings.
             Default - `()`.
-        :param time_key: a key to be used as "time" when convert to InfluxDB line protocol.
-            By default, the record timestamp will be used with "ms" time precision.
-            When using a custom key, you may need to adjust the `time_precision` setting
-            to match.
-            The time value can be an `int`, `string` (RFC3339 format), or `datetime`.
-            The time value must match the `time_precision` argument if not a `datetime` object, else raises.
-            >***NOTE***: 
-            > - If both `time_key` and `time_setter` are set, raises `ValueError`.
-            > - If time_key is set and the value is not present in the record, the record's kafka timestamp will be used.
         :param time_setter: an optional column name to use as "time" when convert to InfluxDB line protocol.
             Also accepts a callable which receives the current message data and
             returns either the desired time or `None` (use default).
             The time can be an `int`, `string` (RFC3339 format), or `datetime`.
             The time must match the `time_precision` argument if not a `datetime` object, else raises.
             By default, a record's kafka timestamp with "ms" time precision is used.
-            >***NOTE***: 
-            > - If both `time_key` and `time_setter` are set, raises `ValueError`.
-            > - If time_setter is set as string, it behaves like `time_key`, but if the key is not present in the record, it will be raised as `KeyError`.
         :param time_precision: a time precision to use when convert to InfluxDB line protocol.
             Possible values: "ms", "ns", "us", "s".
             Default - `"ms"`.
@@ -160,11 +147,6 @@ class TDengineSink(BatchingSink):
             on_client_connect_success=on_client_connect_success,
             on_client_connect_failure=on_client_connect_failure,
         )
-        # check time_key and time_setter
-        if time_key is not None and time_setter is not None:
-            raise ValueError(
-                "Only one of 'time_key' or 'time_setter' can be set, not both."
-            )
         if time_precision not in (time_args := get_args(TimePrecision)):
             raise ValueError(
                 f"Invalid 'time_precision' argument {time_precision}; "
@@ -219,11 +201,7 @@ class TDengineSink(BatchingSink):
         self._subtable_name = _subtable_name_callable(subtable)
         self._fields_keys = _fields_callable(fields_keys)
         self._tags_keys = _tags_callable(tags_keys)
-        if time_key is not None:
-            # To be compatible with the old behavior, record's Kafka timestamp is used when time_key does not exist
-            self._time_setter = lambda value: value[time_key] if time_key in value else None
-        else:
-            self._time_setter = _time_callable(time_setter)
+        self._time_setter = _time_callable(time_setter)
         self._include_metadata_tags = include_metadata_tags
         self._write_precision = time_precision
         self._batch_size = batch_size
