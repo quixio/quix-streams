@@ -1536,12 +1536,12 @@ class StreamingDataFrame:
     ) -> SessionWindowDefinition:
         """
         Create a session window transformation on this StreamingDataFrame.
-        
+
         Session windows group events that occur within a specified timeout period.
         A session starts with the first event and extends each time a new event arrives
         within the timeout period. The session closes after the timeout period with no
         new events.
-        
+
         Unlike fixed-time windows, session windows have dynamic durations based on the
         actual events and their timing, making them ideal for user activity tracking,
         fraud detection, and other event-driven scenarios.
