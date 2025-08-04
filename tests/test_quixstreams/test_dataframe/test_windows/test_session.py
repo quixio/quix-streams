@@ -549,7 +549,7 @@ class TestSessionWindow:
             assert key2 in expired_keys
 
     def test_session_window_late_events(
-        self, session_window_definition_factory, state_manager
+        self, session_window_definition_factory, state_manager, mock_message_context
     ):
         """Test handling of late events that arrive after session closure"""
         window_def = session_window_definition_factory(

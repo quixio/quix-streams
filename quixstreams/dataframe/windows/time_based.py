@@ -581,17 +581,7 @@ class SessionWindow(Window):
         timestamp_ms: int,
         late_by_ms: int,
     ) -> None:
-        try:
-            ctx = message_context()
-            topic = ctx.topic
-            partition = ctx.partition
-            offset = ctx.offset
-        except:
-            # In test environments, message context might not be available
-            topic = "unknown"
-            partition = -1
-            offset = -1
-
+        ctx = message_context()
         to_log = True
 
         # Trigger the "on_late" callback if provided
@@ -604,9 +594,9 @@ class SessionWindow(Window):
                 start,
                 end,
                 self._name,
-                topic,
-                partition,
-                offset,
+                ctx.topic,
+                ctx.partition,
+                ctx.offset,
             )
         if to_log:
             logger.warning(
@@ -615,8 +605,8 @@ class SessionWindow(Window):
                 f"session={(start, end)} "
                 f"late_by_ms={late_by_ms} "
                 f"store_name={self._name} "
-                f"partition={topic}[{partition}] "
-                f"offset={offset}"
+                f"partition={ctx.topic}[{ctx.partition}] "
+                f"offset={ctx.offset}"
             )
 
 
