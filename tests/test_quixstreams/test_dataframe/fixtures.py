@@ -1,5 +1,5 @@
 from typing import Optional
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -59,3 +59,9 @@ def dataframe_factory(topic_manager_topic_factory, topic_manager_factory):
         return sdf
 
     return factory
+
+
+@pytest.fixture
+def mock_message_context():
+    with patch("quixstreams.dataframe.windows.time_based.message_context"):
+        yield
