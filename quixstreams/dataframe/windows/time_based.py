@@ -402,8 +402,6 @@ class SessionWindow(Window):
             return [], []
 
         # Look for an existing session that can be extended
-        session_start = None
-        session_end = None
         can_extend_session = False
         existing_aggregated = None
         old_window_to_delete = None
@@ -456,10 +454,6 @@ class SessionWindow(Window):
                 current_value = self._initialize_value()
 
             aggregated = self._aggregate_value(current_value, value, timestamp_ms)
-
-        # By this point, session_start and session_end are guaranteed to be set
-        assert session_start is not None  # noqa: S101
-        assert session_end is not None  # noqa: S101
 
         # Output intermediate results for aggregations
         if aggregate:
