@@ -7,12 +7,12 @@ from quixstreams.dataframe.windows.definitions import SessionWindowDefinition
 
 @pytest.fixture()
 def session_window_definition_factory(state_manager, dataframe_factory):
-    def factory(timeout_ms: int, grace_ms: int = 0) -> SessionWindowDefinition:
+    def factory(inactivity_gap_ms: int, grace_ms: int = 0) -> SessionWindowDefinition:
         sdf = dataframe_factory(
             state_manager=state_manager, registry=DataFrameRegistry()
         )
         window_def = SessionWindowDefinition(
-            timeout_ms=timeout_ms, grace_ms=grace_ms, dataframe=sdf
+            inactivity_gap_ms=inactivity_gap_ms, grace_ms=grace_ms, dataframe=sdf
         )
         return window_def
 
@@ -51,7 +51,7 @@ class TestSessionWindow:
         dataframe_factory,
     ):
         swd = SessionWindowDefinition(
-            timeout_ms=timeout,
+            inactivity_gap_ms=timeout,
             grace_ms=grace,
             dataframe=dataframe_factory(),
             name=provided_name,
@@ -64,7 +64,9 @@ class TestSessionWindow:
         session_window_definition_factory,
         state_manager,
     ):
-        window = session_window_definition_factory(timeout_ms=10000, grace_ms=1000).agg(
+        window = session_window_definition_factory(
+            inactivity_gap_ms=10000, grace_ms=1000
+        ).agg(
             count=agg.Count(),
             sum=agg.Sum(),
             mean=agg.Mean(),
@@ -160,7 +162,9 @@ class TestSessionWindow:
     def test_sessionwindow_count(
         self, expiration, session_window_definition_factory, state_manager
     ):
-        window_def = session_window_definition_factory(timeout_ms=10000, grace_ms=1000)
+        window_def = session_window_definition_factory(
+            inactivity_gap_ms=10000, grace_ms=1000
+        )
         window = window_def.count()
         assert window.name == "session_window_10000_count"
 
@@ -185,7 +189,9 @@ class TestSessionWindow:
     def test_sessionwindow_sum(
         self, expiration, session_window_definition_factory, state_manager
     ):
-        window_def = session_window_definition_factory(timeout_ms=10000, grace_ms=1000)
+        window_def = session_window_definition_factory(
+            inactivity_gap_ms=10000, grace_ms=1000
+        )
         window = window_def.sum()
         assert window.name == "session_window_10000_sum"
 
@@ -208,7 +214,9 @@ class TestSessionWindow:
     def test_sessionwindow_mean(
         self, expiration, session_window_definition_factory, state_manager
     ):
-        window_def = session_window_definition_factory(timeout_ms=10000, grace_ms=1000)
+        window_def = session_window_definition_factory(
+            inactivity_gap_ms=10000, grace_ms=1000
+        )
         window = window_def.mean()
         assert window.name == "session_window_10000_mean"
 
@@ -231,7 +239,9 @@ class TestSessionWindow:
     def test_sessionwindow_reduce(
         self, expiration, session_window_definition_factory, state_manager
     ):
-        window_def = session_window_definition_factory(timeout_ms=10000, grace_ms=1000)
+        window_def = session_window_definition_factory(
+            inactivity_gap_ms=10000, grace_ms=1000
+        )
         window = window_def.reduce(
             reducer=lambda agg, current: agg + [current],
             initializer=lambda value: [value],
@@ -257,7 +267,9 @@ class TestSessionWindow:
     def test_sessionwindow_max(
         self, expiration, session_window_definition_factory, state_manager
     ):
-        window_def = session_window_definition_factory(timeout_ms=10000, grace_ms=1000)
+        window_def = session_window_definition_factory(
+            inactivity_gap_ms=10000, grace_ms=1000
+        )
         window = window_def.max()
         assert window.name == "session_window_10000_max"
 
@@ -280,7 +292,9 @@ class TestSessionWindow:
     def test_sessionwindow_min(
         self, expiration, session_window_definition_factory, state_manager
     ):
-        window_def = session_window_definition_factory(timeout_ms=10000, grace_ms=1000)
+        window_def = session_window_definition_factory(
+            inactivity_gap_ms=10000, grace_ms=1000
+        )
         window = window_def.min()
         assert window.name == "session_window_10000_min"
 
@@ -303,7 +317,9 @@ class TestSessionWindow:
     def test_sessionwindow_collect(
         self, expiration, session_window_definition_factory, state_manager
     ):
-        window_def = session_window_definition_factory(timeout_ms=10000, grace_ms=1000)
+        window_def = session_window_definition_factory(
+            inactivity_gap_ms=10000, grace_ms=1000
+        )
         window = window_def.collect()
         assert window.name == "session_window_10000_collect"
 
@@ -335,7 +351,7 @@ class TestSessionWindow:
     ):
         with pytest.raises(ValueError):
             SessionWindowDefinition(
-                timeout_ms=timeout,
+                inactivity_gap_ms=timeout,
                 grace_ms=grace,
                 name=name,
                 dataframe=dataframe_factory(),
@@ -344,7 +360,7 @@ class TestSessionWindow:
     def test_session_window_def_init_invalid_type(self, dataframe_factory):
         with pytest.raises(TypeError):
             SessionWindowDefinition(
-                timeout_ms="invalid",  # should be int
+                inactivity_gap_ms="invalid",  # should be int
                 grace_ms=1000,
                 name="test",
                 dataframe=dataframe_factory(),
@@ -358,7 +374,9 @@ class TestSessionWindow:
         state_manager,
     ):
         """Test that sessions properly timeout and new sessions start correctly"""
-        window_def = session_window_definition_factory(timeout_ms=5000, grace_ms=0)
+        window_def = session_window_definition_factory(
+            inactivity_gap_ms=5000, grace_ms=0
+        )
         window = window_def.sum()
         window.final(closing_strategy=expiration)
         store = state_manager.get_store(stream_id="test", store_name=window.name)
@@ -404,7 +422,9 @@ class TestSessionWindow:
         self, session_window_definition_factory, state_manager
     ):
         """Test that grace period allows late events"""
-        window_def = session_window_definition_factory(timeout_ms=5000, grace_ms=2000)
+        window_def = session_window_definition_factory(
+            inactivity_gap_ms=5000, grace_ms=2000
+        )
         window = window_def.sum()
         window.final(closing_strategy="key")
         store = state_manager.get_store(stream_id="test", store_name=window.name)
@@ -441,7 +461,9 @@ class TestSessionWindow:
         self, session_window_definition_factory, state_manager
     ):
         """Test that different keys maintain separate sessions"""
-        window_def = session_window_definition_factory(timeout_ms=5000, grace_ms=0)
+        window_def = session_window_definition_factory(
+            inactivity_gap_ms=5000, grace_ms=0
+        )
         window = window_def.sum()
         window.final(closing_strategy="key")
         store = state_manager.get_store(stream_id="test", store_name=window.name)
@@ -490,7 +512,9 @@ class TestSessionWindow:
         self, session_window_definition_factory, state_manager
     ):
         """Test partition-level session expiration"""
-        window_def = session_window_definition_factory(timeout_ms=5000, grace_ms=1000)
+        window_def = session_window_definition_factory(
+            inactivity_gap_ms=5000, grace_ms=1000
+        )
         window = window_def.sum()
         window.final(closing_strategy="partition")
         store = state_manager.get_store(stream_id="test", store_name=window.name)
@@ -528,7 +552,9 @@ class TestSessionWindow:
         self, session_window_definition_factory, state_manager
     ):
         """Test handling of late events that arrive after session closure"""
-        window_def = session_window_definition_factory(timeout_ms=5000, grace_ms=1000)
+        window_def = session_window_definition_factory(
+            inactivity_gap_ms=5000, grace_ms=1000
+        )
         window = window_def.sum()
         window.final(closing_strategy="key")
         store = state_manager.get_store(stream_id="test", store_name=window.name)
@@ -560,7 +586,9 @@ class TestSessionWindow:
         self, session_window_definition_factory, state_manager
     ):
         """Test session window with current() mode"""
-        window_def = session_window_definition_factory(timeout_ms=5000, grace_ms=0)
+        window_def = session_window_definition_factory(
+            inactivity_gap_ms=5000, grace_ms=0
+        )
         window = window_def.sum()
         window.current(closing_strategy="key")
         store = state_manager.get_store(stream_id="test", store_name=window.name)
@@ -588,7 +616,9 @@ class TestSessionWindow:
         self, session_window_definition_factory, state_manager
     ):
         """Test that sessions don't overlap for the same key"""
-        window_def = session_window_definition_factory(timeout_ms=10000, grace_ms=0)
+        window_def = session_window_definition_factory(
+            inactivity_gap_ms=10000, grace_ms=0
+        )
         window = window_def.sum()
         window.final(closing_strategy="key")
         store = state_manager.get_store(stream_id="test", store_name=window.name)
@@ -624,7 +654,9 @@ class TestSessionWindow:
         self, session_window_definition_factory, state_manager
     ):
         """Test that an event can merge two previously separate sessions"""
-        window_def = session_window_definition_factory(timeout_ms=10000, grace_ms=1000)
+        window_def = session_window_definition_factory(
+            inactivity_gap_ms=10000, grace_ms=1000
+        )
         window = window_def.sum()
         window.final(closing_strategy="key")
         store = state_manager.get_store(stream_id="test", store_name=window.name)
@@ -707,7 +739,9 @@ class TestSessionWindow:
         Current behavior: Session A gets extended, Session B remains separate
         Ideal behavior: Sessions A and B get merged when bridging event arrives
         """
-        window_def = session_window_definition_factory(timeout_ms=10000, grace_ms=2000)
+        window_def = session_window_definition_factory(
+            inactivity_gap_ms=10000, grace_ms=2000
+        )
         window = window_def.sum()
         window.final(closing_strategy="key")
         store = state_manager.get_store(stream_id="test", store_name=window.name)
@@ -777,7 +811,9 @@ class TestSessionWindow:
         `transaction.delete_window()` was called with a string key instead of
         the properly serialized bytes prefix.
         """
-        window_def = session_window_definition_factory(timeout_ms=10000, grace_ms=1000)
+        window_def = session_window_definition_factory(
+            inactivity_gap_ms=10000, grace_ms=1000
+        )
         window = window_def.sum()
         window.final(closing_strategy="key")
         store = state_manager.get_store(stream_id="test", store_name=window.name)
