@@ -1529,7 +1529,7 @@ class StreamingDataFrame:
 
     def session_window(
         self,
-        timeout_ms: Union[int, timedelta],
+        inactivity_gap_ms: Union[int, timedelta],
         grace_ms: Union[int, timedelta] = 0,
         name: Optional[str] = None,
         on_late: Optional[WindowOnLateCallback] = None,
@@ -1568,7 +1568,7 @@ class StreamingDataFrame:
         sdf = (
             # Define a session window with 30-second timeout and 10-second grace period
             sdf.session_window(
-                timeout_ms=timedelta(seconds=30),
+                inactivity_gap_ms=timedelta(seconds=30),
                 grace_ms=timedelta(seconds=10)
             )
 
@@ -1584,7 +1584,7 @@ class StreamingDataFrame:
         )
         ```
 
-        :param timeout_ms: The session timeout period.
+        :param inactivity_gap_ms: The session timeout period.
             If no new events arrive within this period, the session will be closed.
             Can be specified as either an `int` representing milliseconds
             or a `timedelta` object.
@@ -1613,11 +1613,11 @@ class StreamingDataFrame:
             This object can be further configured with aggregation functions
             like `sum`, `count`, etc. applied to the StreamingDataFrame.
         """
-        timeout_ms = ensure_milliseconds(timeout_ms)
+        inactivity_gap_ms = ensure_milliseconds(inactivity_gap_ms)
         grace_ms = ensure_milliseconds(grace_ms)
 
         return SessionWindowDefinition(
-            timeout_ms=timeout_ms,
+            inactivity_gap_ms=inactivity_gap_ms,
             grace_ms=grace_ms,
             dataframe=self,
             name=name,
