@@ -9,7 +9,7 @@ With windows, you can calculate such aggregations as:
 - Total of website visitors for every hour
 - The average speed of a vehicle over the last 10 minutes
 - Maximum temperature of a sensor observed over 30 second ranges
-- Give an user a reward after 10 succesful actions
+- Give a user a reward after 10 successful actions
 - Track user activity sessions on a website
 - Detect fraud patterns in financial transactions 
 
@@ -205,14 +205,14 @@ Count-based Tumbling Windows slice incoming events into batch of a fixed size.
 For example, a tumbling window configured with a count of 4 will batch and aggregate message 1 to 4, then 5 to 8, 9 to 12 and so on. 
 
 ```
-Count       Tumbing Windows
+Count       Tumbling Windows
 [0, 3]  : ....
 [4, 7]  :     ....
 [8, 11] :         ....
 [12, 15] :            ....
 ```
 
-In a tumbing window each message is only assigned to a **single** interval.
+In a tumbling window each message is only assigned to a **single** interval.
 
 **Example**
 
@@ -358,7 +358,7 @@ Count       Hopping Windows
 [6, 11] :       ......
 ```
 
-In hopping windows each messages can be assigned to multiple windows because the windows overlap.
+In hopping windows each message can be assigned to multiple windows because the windows overlap.
 
 ## Time-based Sliding Windows
 Sliding windows are overlapping time-based windows that advance with each incoming message, rather than at fixed time intervals like hopping windows. They have a fixed 1 ms resolution and perform better and are less resource-intensive than hopping windows with a 1 ms step. Sliding windows do not produce redundant windows; every interval has a distinct aggregation.
@@ -440,7 +440,7 @@ sdf = (
 
 Sliding windows are overlapping windows that advance with each incoming message. They are equal to count-based hopping windows with a step of 1.
 
-For example a sliding window of 4 messagew will generate the followiwng windows:
+For example a sliding window of 4 messages will generate the following windows:
 
 ```
 Count       Sliding Windows
@@ -504,7 +504,7 @@ sdf = (
 
 ## Session Windows
 
-Session windows group events that occur within a specified timeout period. Unlike fixed-time windows (tumbling, hopping, sliding), session windows have dynamic durations based on the actual timing of events, making them ideal for user activity tracking, fraud detection, and other event-driven scenarios.
+Session windows group events that occur within a specified timeout period. Unlike fixed-time windows (tumbling, hopping, sliding), session windows have dynamic durations based on the actual timing of events. This makes them ideal for user activity tracking, fraud detection, and other event-driven scenarios.
 
 A session starts with the first event and extends each time a new event arrives within the timeout period. The session closes after the timeout period with no new events.
 
@@ -525,7 +525,7 @@ Timeout: 10 seconds
 Grace:   2 seconds
 
 Session 1: [0, 20] - Events A, B (B extends the session from A)
-Session 2: [25, 35] - Events C, D (D extends the session from C)  
+Session 2: [25, 40] - Events C, D (D extends the session from C)
 Session 3: [45, 55] - Event E (session will close at 55 if no more events)
 ```
 
@@ -914,7 +914,7 @@ sdf = sdf.tumbling_window(timedelta(seconds=10)).agg(value=Sum()).final(closing_
 An alternative is to use the **partition** closing strategy.  
 In this strategy, messages advance time and close windows for the whole partition to which this key belongs.
 
-If messages aren't ordered accross keys some message can be skipped if the windows are already closed.
+If messages aren't ordered across keys some message can be skipped if the windows are already closed.
 
 ```python
 from datetime import timedelta
