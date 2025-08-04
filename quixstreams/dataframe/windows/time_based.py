@@ -449,9 +449,9 @@ class SessionWindow(Window):
         # Update the session window aggregation
         aggregated = None
         if aggregate:
-            current_value = existing_aggregated if can_extend_session else None
-            if current_value is None:
-                current_value = self._initialize_value()
+            current_value = (
+                existing_aggregated if can_extend_session else self._initialize_value()
+            )
 
             aggregated = self._aggregate_value(current_value, value, timestamp_ms)
 
