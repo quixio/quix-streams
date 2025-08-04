@@ -548,27 +548,23 @@ class SessionWindowDefinition(WindowDefinition):
 
     def __init__(
         self,
-        timeout_ms: int,
+        inactivity_gap_ms: int,
         grace_ms: int,
         dataframe: "StreamingDataFrame",
         name: Optional[str] = None,
         on_late: Optional[WindowOnLateCallback] = None,
     ):
-        if not isinstance(timeout_ms, int):
+        if not isinstance(inactivity_gap_ms, int):
             raise TypeError("Session timeout must be an integer")
-        if timeout_ms < 1:
+        if inactivity_gap_ms < 1:
             raise ValueError("Session timeout cannot be smaller than 1ms")
         if grace_ms < 0:
             raise ValueError("Session grace cannot be smaller than 0ms")
 
         super().__init__(name, dataframe, on_late)
 
-        self._timeout_ms = timeout_ms
+        self._inactivity_gap_ms = inactivity_gap_ms
         self._grace_ms = grace_ms
-
-    @property
-    def timeout_ms(self) -> int:
-        return self._timeout_ms
 
     @property
     def grace_ms(self) -> int:
@@ -577,9 +573,9 @@ class SessionWindowDefinition(WindowDefinition):
     def _get_name(self, func_name: Optional[str]) -> str:
         prefix = f"{self._name}_session_window" if self._name else "session_window"
         if func_name:
-            return f"{prefix}_{self._timeout_ms}_{func_name}"
+            return f"{prefix}_{self._inactivity_gap_ms}_{func_name}"
         else:
-            return f"{prefix}_{self._timeout_ms}"
+            return f"{prefix}_{self._inactivity_gap_ms}"
 
     def _create_window(
         self,
@@ -596,7 +592,7 @@ class SessionWindowDefinition(WindowDefinition):
             window_type = SessionWindowMultiAggregation
 
         return window_type(
-            timeout_ms=self._timeout_ms,
+            timeout_ms=self._inactivity_gap_ms,
             grace_ms=self._grace_ms,
             name=self._get_name(func_name=func_name),
             dataframe=self._dataframe,
