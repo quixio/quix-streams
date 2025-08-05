@@ -55,7 +55,7 @@ True if logging config has been updated, otherwise False.
 def strip_workspace_id_prefix(workspace_id: str, s: str) -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L48)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L46)
 
 Remove the workspace ID from a given string if it starts with it.
 
@@ -78,7 +78,7 @@ the string with workspace_id prefix removed
 def prepend_workspace_id(workspace_id: str, s: str) -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L61)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L59)
 
 Add the workspace ID as a prefix to a given string if it does not have it.
 
@@ -102,7 +102,7 @@ the string with workspace_id prepended
 class QuixApplicationConfig()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L75)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L73)
 
 A convenience container class for Quix Application configs.
 
@@ -114,7 +114,7 @@ A convenience container class for Quix Application configs.
 class QuixKafkaConfigsBuilder()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L85)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L83)
 
 Retrieves all the necessary information from the Quix API and builds all the
 objects required to connect a confluent-kafka client to the Quix Platform.
@@ -139,7 +139,7 @@ def __init__(quix_portal_api_service: QuixPortalApiService,
              topic_create_timeout: float = 60)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L100)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L98)
 
 **Arguments**:
 
@@ -155,13 +155,13 @@ def __init__(quix_portal_api_service: QuixPortalApiService,
 def from_credentials(
         cls,
         quix_sdk_token: str,
-        quix_portal_api: str = DEFAULT_PORTAL_API_URL,
+        quix_portal_api: str,
         workspace_id: Optional[str] = None,
         timeout: float = 30,
         topic_create_timeout: float = 60) -> "QuixKafkaConfigsBuilder"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L131)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L129)
 
 Initialize class using the quix_sdk_token and quix_portal_api params.
 
@@ -174,7 +174,7 @@ Initialize class using the quix_sdk_token and quix_portal_api params.
 def convert_topic_response(cls, api_response: dict) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L193)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L191)
 
 Converts a GET or POST ("create") topic API response to a Topic object
 
@@ -194,7 +194,7 @@ a corresponding Topic object
 def strip_workspace_id_prefix(s: str) -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L226)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L224)
 
 Remove the workspace ID from a given string if it starts with it.
 
@@ -216,7 +216,7 @@ the string with workspace_id prefix removed
 def prepend_workspace_id(s: str) -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L237)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L235)
 
 Add the workspace ID as a prefix to a given string if it does not have it.
 
@@ -239,7 +239,7 @@ def search_for_workspace(workspace_name_or_id: Optional[str] = None,
                          timeout: Optional[float] = None) -> Optional[dict]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L248)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L246)
 
 Search for a workspace given an expected workspace name or id.
 
@@ -261,7 +261,7 @@ def get_workspace_info(known_workspace_topic: Optional[str] = None,
                        timeout: Optional[float] = None) -> dict
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L291)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L289)
 
 Queries for workspace data from the Quix API, regardless of instance cache,
 
@@ -283,7 +283,7 @@ def search_workspace_for_topic(
         timeout: Optional[float] = None) -> Optional[str]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L320)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L318)
 
 Search through all the topics in the given workspace id to see if there is a
 
@@ -309,7 +309,7 @@ def search_for_topic_workspace(
         timeout: Optional[float] = None) -> Optional[dict]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L343)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L341)
 
 Find what workspace a topic belongs to.
 
@@ -333,7 +333,7 @@ workspace data dict if topic search success, else None
 def create_topic(topic: Topic, timeout: Optional[float] = None) -> dict
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L374)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L372)
 
 The actual API call to create the topic.
 
@@ -350,7 +350,7 @@ The actual API call to create the topic.
 def get_or_create_topic(topic: Topic, timeout: Optional[float] = None) -> dict
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L410)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L408)
 
 Get or create topics in a Quix cluster as part of initializing the Topic
 
@@ -372,7 +372,7 @@ def wait_for_topic_ready_statuses(topics: List[Topic],
                                   finalize_timeout: Optional[float] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L438)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L436)
 
 After the broker acknowledges topics for creation, they will be in a
 
@@ -395,7 +395,7 @@ marked as "Ready" (and thus ready to produce to/consume from).
 def get_topic(topic: Topic, timeout: Optional[float] = None) -> dict
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L481)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L479)
 
 return the topic ID (the actual cluster topic name) if it exists, else raise
 
@@ -420,7 +420,7 @@ response dict of the topic info if topic found, else None
 def get_application_config(consumer_group_id: str) -> QuixApplicationConfig
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L513)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L511)
 
 Get all the necessary attributes for an Application to run on Quix Cloud.
 
@@ -14738,7 +14738,7 @@ Default: `None` (infinite).
 class Application()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L89)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L88)
 
 The main Application class.
 
@@ -14809,7 +14809,7 @@ def __init__(broker_address: Optional[Union[str, ConnectionConfig]] = None,
              max_partition_buffer_size: int = 10000)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L127)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L126)
 
 **Arguments**:
 
@@ -14829,7 +14829,6 @@ Default: None (if not run on Quix Cloud)
 - `quix_portal_api`: If using the Quix Cloud, the cluster API URL to use.
 Use it to connect to the dedicated Quix Cloud environment.
 Linked Environment Variable: `Quix__Portal__Api`.
-Default: `https://portal-api.platform.quix.io/`.
   >***NOTE:*** the environment variable is set for you in the Quix Cloud
 - `consumer_group`: Kafka consumer group.
 Passed as `group.id` to `confluent_kafka.Consumer`.
@@ -14906,7 +14905,7 @@ instead of the default one.
 def Quix(cls, *args, **kwargs)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L397)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L398)
 
 RAISES EXCEPTION: DEPRECATED.
 
@@ -14927,7 +14926,7 @@ def topic(name: str,
           timestamp_extractor: Optional[TimestampExtractor] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L429)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L430)
 
 Create a topic definition.
 
@@ -14999,7 +14998,7 @@ def dataframe(topic: Optional[Topic] = None,
               source: Optional[BaseSource] = None) -> StreamingDataFrame
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L509)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L510)
 
 A simple helper method that generates a `StreamingDataFrame`, which is used
 
@@ -15047,7 +15046,7 @@ to be used as an input topic.
 def stop(fail: bool = False)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L565)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L566)
 
 Stop the internal poll loop and the message processing.
 
@@ -15070,7 +15069,7 @@ to unhandled exception, and it shouldn't commit the current checkpoint.
 def get_producer(transactional: bool = False) -> Producer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L610)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L611)
 
 Create and return a pre-configured Producer instance.
 
@@ -15109,7 +15108,7 @@ with app.get_producer() as producer:
 def get_consumer(auto_commit_enable: bool = True) -> Consumer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L678)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L679)
 
 Create and return a pre-configured Consumer instance.
 
@@ -15160,7 +15159,7 @@ Default - True
 def clear_state()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L727)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L728)
 
 Clear the state of the application.
 
@@ -15172,7 +15171,7 @@ Clear the state of the application.
 def add_source(source: BaseSource, topic: Optional[Topic] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L733)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L734)
 
 Add a source to the application.
 
@@ -15199,7 +15198,7 @@ def run(dataframe: Optional[StreamingDataFrame] = None,
         metadata: bool = False) -> list[dict]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L766)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L767)
 
 Start processing data from Kafka using provided `StreamingDataFrame`
 
@@ -15271,7 +15270,7 @@ Default - `False`.
 class ApplicationConfig(BaseSettings)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1124)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1125)
 
 Immutable object holding the application configuration
 
@@ -15292,7 +15291,7 @@ def settings_customise_sources(
 ) -> Tuple[PydanticBaseSettingsSource, ...]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1160)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1161)
 
 Included to ignore reading/setting values from the environment
 
@@ -15304,7 +15303,7 @@ Included to ignore reading/setting values from the environment
 def copy(**kwargs) -> "ApplicationConfig"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1173)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1174)
 
 Update the application config and return a copy
 
@@ -15317,7 +15316,7 @@ def resolve_transactional_id(transactional_id: Optional[str],
                              prefix: str) -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1195)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1196)
 
 Utility function to resolve the transactional.id based
 on existing config and provided prefix.
@@ -15664,7 +15663,7 @@ def __init__(
     topic: str,
     quix_sdk_token: str,
     quix_workspace_id: str,
-    quix_portal_api: Optional[str] = None,
+    quix_portal_api: str,
     auto_offset_reset: Optional[AutoOffsetReset] = None,
     consumer_extra_config: Optional[dict] = None,
     consumer_poll_timeout: Optional[float] = None,

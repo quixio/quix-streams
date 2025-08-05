@@ -841,7 +841,7 @@ def __init__(
     topic: str,
     quix_sdk_token: str,
     quix_workspace_id: str,
-    quix_portal_api: Optional[str] = None,
+    quix_portal_api: str,
     auto_offset_reset: Optional[AutoOffsetReset] = None,
     consumer_extra_config: Optional[dict] = None,
     consumer_poll_timeout: Optional[float] = None,
