@@ -454,9 +454,6 @@ class SessionWindow(Window):
             )
 
             aggregated = self._aggregate_value(current_value, value, timestamp_ms)
-
-        # Output intermediate results for aggregations
-        if aggregate:
             updated_windows.append(
                 (
                     key,
