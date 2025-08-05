@@ -54,8 +54,10 @@ app = Application(broker_address=None)
 ### Outside of Quix Cloud
 
 
-#### 1. Obtain SDK Token
+#### 1. Obtain SDK Token and Quix Portal API URL
 First, [get your SDK Token](https://quix.io/docs/develop/authentication/streaming-token.html#how-to-find).
+
+The **Quix Portal API URL** can be found on the "Settings > API and Tokens" tab inside Quix Platform.
 
 > NOTE: A `Personal Access Token` (PAT) is also accepted, but often requires more configuration 
 > due to raised privileges. We recommend using the `SDK Token`.
@@ -68,8 +70,9 @@ these approaches:
 
 - **Set Environment Variables** (***recommended***):
     - Set `Quix__Sdk__Token` (double underscores!) to your `SDK Token`
-    - Set `Quix__Portal__Api` to `https://portal.cloud.quix.io/`
-  > NOTE: `Quix__Sdk__Token` and `Quix__Portal__Api` are set automatically in Quix Cloud, thus is the recommended approach for an easy migration.
+    - Set `Quix__Portal__Api` to the URL obtained from your Quix Platform project settings. 
+
+  > NOTE: `Quix__Sdk__Token` and `Quix__Portal__Api` are set automatically in Quix Cloud and by [Quix CLI](https://quix.io/docs/quix-cli/overview.html).
   
 OR <br>
 
