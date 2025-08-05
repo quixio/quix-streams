@@ -2,17 +2,15 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any, Iterable, Optional
 
-from quixstreams.context import message_context
 from quixstreams.state import WindowedPartitionTransaction, WindowedState
 
 from .base import (
     MultiAggregationWindowMixin,
     SingleAggregationWindowMixin,
-    Window,
     WindowKeyResult,
     WindowOnLateCallback,
 )
-from .time_based import ClosingStrategy, ClosingStrategyValues
+from .time_based import ClosingStrategy, TimeWindow
 
 if TYPE_CHECKING:
     from quixstreams.dataframe.dataframe import StreamingDataFrame
@@ -20,7 +18,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class SessionWindow(Window):
+class SessionWindow(TimeWindow):
     """
     Session window groups events that occur within a specified timeout period.
 
@@ -40,77 +38,10 @@ class SessionWindow(Window):
         dataframe: "StreamingDataFrame",
         on_late: Optional[WindowOnLateCallback] = None,
     ):
-        super().__init__(
-            name=name,
-            dataframe=dataframe,
-        )
+        super().__init__(name=name, dataframe=dataframe, on_late=on_late)
 
         self._timeout_ms = timeout_ms
         self._grace_ms = grace_ms
-        self._on_late = on_late
-        self._closing_strategy = ClosingStrategy.KEY
-
-    def final(
-        self, closing_strategy: ClosingStrategyValues = "key"
-    ) -> "StreamingDataFrame":
-        """
-        Apply the session window aggregation and return results only when the sessions
-        are closed.
-
-        The format of returned sessions:
-        ```python
-        {
-            "start": <session start time in milliseconds>,
-            "end": <session end time in milliseconds>,
-            "value: <aggregated session value>,
-        }
-        ```
-
-        The individual session is closed when the event time
-        (the maximum observed timestamp across the partition) passes
-        the last event timestamp + timeout + grace period.
-        The closed sessions cannot receive updates anymore and are considered final.
-
-        :param closing_strategy: the strategy to use when closing sessions.
-            Possible values:
-              - `"key"` - messages advance time and close sessions with the same key.
-              If some message keys appear irregularly in the stream, the latest sessions can remain unprocessed until a message with the same key is received.
-              - `"partition"` - messages advance time and close sessions for the whole partition to which this message key belongs.
-              If timestamps between keys are not ordered, it may increase the number of discarded late messages.
-              Default - `"key"`.
-        """
-        self._closing_strategy = ClosingStrategy.new(closing_strategy)
-        return super().final()
-
-    def current(
-        self, closing_strategy: ClosingStrategyValues = "key"
-    ) -> "StreamingDataFrame":
-        """
-        Apply the session window transformation to the StreamingDataFrame to return results
-        for each updated session.
-
-        The format of returned sessions:
-        ```python
-        {
-            "start": <session start time in milliseconds>,
-            "end": <session end time in milliseconds>,
-            "value: <aggregated session value>,
-        }
-        ```
-
-        This method processes streaming data and returns results as they come,
-        regardless of whether the session is closed or not.
-
-        :param closing_strategy: the strategy to use when closing sessions.
-            Possible values:
-              - `"key"` - messages advance time and close sessions with the same key.
-              If some message keys appear irregularly in the stream, the latest sessions can remain unprocessed until a message with the same key is received.
-              - `"partition"` - messages advance time and close sessions for the whole partition to which this message key belongs.
-              If timestamps between keys are not ordered, it may increase the number of discarded late messages.
-              Default - `"key"`.
-        """
-        self._closing_strategy = ClosingStrategy.new(closing_strategy)
-        return super().current()
 
     def process_window(
         self,
@@ -140,7 +71,7 @@ class SessionWindow(Window):
         # Check if the event is too late
         if timestamp_ms < session_expiry_threshold:
             late_by_ms = session_expiry_threshold - timestamp_ms
-            self._on_expired_session(
+            self._on_expired_window(
                 value=value,
                 key=key,
                 start=timestamp_ms,
@@ -216,17 +147,17 @@ class SessionWindow(Window):
 
         # Expire old sessions
         if self._closing_strategy == ClosingStrategy.PARTITION:
-            expired_windows = self.expire_sessions_by_partition(
+            expired_windows = self.expire_by_partition(
                 transaction, session_expiry_threshold, collect
             )
         else:
-            expired_windows = self.expire_sessions_by_key(
+            expired_windows = self.expire_by_key(
                 key, state, session_expiry_threshold, collect
             )
 
         return updated_windows, expired_windows
 
-    def expire_sessions_by_partition(
+    def expire_by_partition(
         self,
         transaction: WindowedPartitionTransaction,
         expiry_threshold: int,
@@ -257,7 +188,7 @@ class SessionWindow(Window):
         for prefix in seen_prefixes:
             state = transaction.as_state(prefix=prefix)
             prefix_expired = list(
-                self.expire_sessions_by_key(prefix, state, expiry_threshold, collect)
+                self.expire_by_key(prefix, state, expiry_threshold, collect)
             )
             expired_results.extend(prefix_expired)
             count += len(prefix_expired)
@@ -271,7 +202,7 @@ class SessionWindow(Window):
 
         return expired_results
 
-    def expire_sessions_by_key(
+    def expire_by_key(
         self,
         key: Any,
         state: WindowedState,
@@ -316,43 +247,6 @@ class SessionWindow(Window):
                 "Expired %s session windows in %ss",
                 count,
                 round(time.monotonic() - start, 2),
-            )
-
-    def _on_expired_session(
-        self,
-        value: Any,
-        key: Any,
-        start: int,
-        end: int,
-        timestamp_ms: int,
-        late_by_ms: int,
-    ) -> None:
-        ctx = message_context()
-        to_log = True
-
-        # Trigger the "on_late" callback if provided
-        if self._on_late:
-            to_log = self._on_late(
-                value,
-                key,
-                timestamp_ms,
-                late_by_ms,
-                start,
-                end,
-                self._name,
-                ctx.topic,
-                ctx.partition,
-                ctx.offset,
-            )
-        if to_log:
-            logger.warning(
-                "Skipping session processing for the closed session "
-                f"timestamp_ms={timestamp_ms} "
-                f"session={(start, end)} "
-                f"late_by_ms={late_by_ms} "
-                f"store_name={self._name} "
-                f"partition={ctx.topic}[{ctx.partition}] "
-                f"offset={ctx.offset}"
             )
 
 
