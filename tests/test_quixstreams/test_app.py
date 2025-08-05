@@ -831,21 +831,20 @@ class TestAppExactlyOnce:
 
 
 class TestQuixApplication:
-    @pytest.mark.parametrize(
-        "quix_portal_api_arg, quix_portal_api_expected",
-        [
-            (None, "https://portal-api.platform.quix.io/"),
-            ("http://example.com", "http://example.com"),
-        ],
-    )
-    def test_init_with_quix_sdk_token_arg(
-        self, quix_portal_api_arg, quix_portal_api_expected
-    ):
+    def test_init_with_no_quix_portal_api(self):
+        with pytest.raises(
+            ValueError,
+            match='Either "quix_portal_api" must be provided or "Quix__Portal__Api" environment variable must be set',
+        ):
+            Application(quix_sdk_token="my_sdk_token")
+
+    def test_init_with_quix_sdk_token_arg(self):
         consumer_group = "c_group"
         expected_workspace_cgroup = f"my_ws-{consumer_group}"
         quix_sdk_token = "my_sdk_token"
         quix_extras = {"quix": "extras"}
         extra_config = {"extra": "config"}
+        quix_portal_api = "http://example.com"
         connection_config = ConnectionConfig.from_librdkafka_dict(
             {
                 "bootstrap.servers": "address1,address2",
@@ -890,7 +889,7 @@ class TestQuixApplication:
             app = Application(
                 consumer_group=consumer_group,
                 quix_sdk_token=quix_sdk_token,
-                quix_portal_api=quix_portal_api_arg,
+                quix_portal_api=quix_portal_api,
                 consumer_extra_config=extra_config,
                 producer_extra_config=extra_config,
             )
@@ -898,7 +897,7 @@ class TestQuixApplication:
 
         # Check that quix_portal_api is passed correctly
         cfg_builder.from_credentials.assert_called_with(
-            quix_sdk_token=quix_sdk_token, quix_portal_api=quix_portal_api_expected
+            quix_sdk_token=quix_sdk_token, quix_portal_api=quix_portal_api
         )
 
         # Check if items from the Quix config have been passed
@@ -912,21 +911,13 @@ class TestQuixApplication:
         assert consumer_call_kwargs["consumer_group"] == expected_workspace_cgroup
         assert consumer_call_kwargs["extra_config"] == expected_consumer_extra_config
 
-    @pytest.mark.parametrize(
-        "quix_portal_api_arg, quix_portal_api_expected",
-        [
-            ("", "https://portal-api.platform.quix.io/"),
-            ("http://example.com", "http://example.com"),
-        ],
-    )
-    def test_init_with_quix_sdk_token_env(
-        self, monkeypatch, quix_portal_api_arg, quix_portal_api_expected
-    ):
+    def test_init_with_quix_sdk_token_env(self, monkeypatch):
         consumer_group = "c_group"
         expected_workspace_cgroup = f"my_ws-{consumer_group}"
         quix_sdk_token = "my_sdk_token"
         extra_config = {"extra": "config"}
         quix_extras = {"quix": "extras"}
+        quix_portal_api = "http://example.com"
         connection_config = ConnectionConfig.from_librdkafka_dict(
             {
                 "bootstrap.servers": "address1,address2",
@@ -963,7 +954,7 @@ class TestQuixApplication:
         cfg_builder.from_credentials.return_value = cfg_builder
 
         monkeypatch.setenv("Quix__Sdk__Token", quix_sdk_token)
-        monkeypatch.setenv("Quix__Portal__Api", quix_portal_api_arg)
+        monkeypatch.setenv("Quix__Portal__Api", quix_portal_api)
         with (
             patch("quixstreams.app.QuixKafkaConfigsBuilder", cfg_builder),
             patch("quixstreams.app.InternalConsumer") as consumer_init_mock,
@@ -977,7 +968,7 @@ class TestQuixApplication:
 
         # Check that quix_portal_api is passed correctly
         cfg_builder.from_credentials.assert_called_with(
-            quix_sdk_token=quix_sdk_token, quix_portal_api=quix_portal_api_expected
+            quix_sdk_token=quix_sdk_token, quix_portal_api=quix_portal_api
         )
 
         # Check if items from the Quix config have been passed
