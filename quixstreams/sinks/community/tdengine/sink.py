@@ -287,15 +287,13 @@ class TDengineSink(BatchingSink):
 
             for item in write_batch:
                 value = item.value
-                copied_value = value.copy()  # Copy to print the original value in case of errors
                 # Evaluate these before we alter the value
                 _measurement = supertable(value)
                 # check if _measurement is empty
                 if _measurement is None or not _measurement.strip():
                     raise ValueError(
                         f'Supertable name cannot be empty for record with key "{item.key}" '
-                        f"and topic '{batch.topic}', "
-                        f"record value: {copied_value}"
+                        f"and topic '{batch.topic}'"
                     )
                 _tags_keys = tags_keys(value)
                 _fields_keys = fields_keys(value)
@@ -331,8 +329,7 @@ class TDengineSink(BatchingSink):
                 if not fields:
                     raise ValueError(
                         f'No fields found in the record for supertable "{_measurement}" '
-                        f"and subtable name '{_subtable_name}', "
-                        f"record value: {copied_value}"
+                        f"and subtable name '{_subtable_name}'"
                     )
                 
                 tags["__subtable"] = _subtable_name
@@ -376,8 +373,7 @@ class TDengineSink(BatchingSink):
             if not records:
                 logger.warning(
                     f"No records to write for batch with key '{item.key}' "
-                    f"and topic '{batch.topic}', "
-                    f"record value: {copied_value}"
+                    f"and topic '{batch.topic}'"
                 )
                 continue
             _start = time.monotonic()
@@ -389,8 +385,7 @@ class TDengineSink(BatchingSink):
             if body == b"":
                 logger.warning(
                     f"No valid records to write for batch with key '{item.key}' "
-                    f"and topic '{batch.topic}', "
-                    f"record value: {copied_value}"
+                    f"and topic '{batch.topic}'"
                 )
                 continue
             timeout = urllib3.Timeout(total=self._client_args["timeout"] / 1_000)
