@@ -70,6 +70,8 @@ class TDengineSink(BatchingSink):
         username: str = "",
         password: str = "",
         token: str = "",
+        max_retries: int = 5,
+        retry_backoff_factor: float = 1.0,
     ):
         """
         A connector to sink processed data to TDengine.
@@ -141,6 +143,11 @@ class TDengineSink(BatchingSink):
             client authentication (which should raise an Exception).
             Callback should accept the raised Exception as an argument.
             Callback must resolve (or propagate/re-raise) the Exception.
+        :param max_retries: maximum number of retries for failed requests.
+            Default - `5`.
+        :param retry_backoff_factor: a backoff factor applied between retry attempts starting from the second retry.
+            The sleep duration between retries is calculated as `{backoff factor} * (2 ** ({number of previous retries}))` seconds.
+            Default - `1.0`.
         """
 
         super().__init__(
@@ -195,6 +202,8 @@ class TDengineSink(BatchingSink):
             "timeout": request_timeout_ms,
             "verify_ssl": verify_ssl,
             "database": database,
+            "max_retries": max_retries,
+            "retry_backoff_factor": retry_backoff_factor,
         }
         self._client: Optional[urllib3.PoolManager] = None
         self._supertable_name = _supertable_callable(supertable)
@@ -213,20 +222,26 @@ class TDengineSink(BatchingSink):
             cert_reqs = ssl.CERT_REQUIRED
         else:
             cert_reqs = ssl.CERT_NONE
+        retry_strategy = urllib3.Retry(
+            total=self._client_args["max_retries"],
+            backoff_factor=self._client_args["retry_backoff_factor"],
+            respect_retry_after_header=False,
+            allowed_methods=["POST"],
+        )
         self._client = urllib3.PoolManager(
             cert_reqs=cert_reqs,
+            timeout=urllib3.Timeout(total=self._client_args["timeout"] / 1_000),
+            retries=retry_strategy,
         )
         # check if the database is alive
         database = self._client_args["database"]
         check_db_sql = "SHOW DATABASES"
-        timeout = urllib3.Timeout(total=self._client_args["timeout"] / 1_000)
         logger.debug(f"Sending data to {self._client_args['sql_url']} : {check_db_sql}")
         resp = self._client.request(
             "POST",
             self._client_args["sql_url"],
             body=check_db_sql,
             headers=self._client_args["header"],
-            timeout=timeout,
         )
         if resp.status != 200:
             raise urllib3.exceptions.HTTPError(
@@ -388,14 +403,12 @@ class TDengineSink(BatchingSink):
                     f"and topic '{batch.topic}'"
                 )
                 continue
-            timeout = urllib3.Timeout(total=self._client_args["timeout"] / 1_000)
             logger.debug(f"Sending data to {self._client_args['url']} : {body}")
             resp = self._client.request(
                 "POST",
                 self._client_args["url"],
                 body=body,
                 headers=self._client_args["header"],
-                timeout=timeout,
             )
             elapsed = round(time.monotonic() - _start, 2)
             logger.info(
