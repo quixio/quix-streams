@@ -33,9 +33,9 @@ from .sliding import (
     SlidingWindowSingleAggregation,
 )
 from .time_based import (
+    FixedTimeWindowMultiAggregation,
+    FixedTimeWindowSingleAggregation,
     TimeWindow,
-    TimeWindowMultiAggregation,
-    TimeWindowSingleAggregation,
 )
 
 if TYPE_CHECKING:
@@ -312,10 +312,11 @@ class HoppingTimeWindowDefinition(TimeWindowDefinition[TimeWindow]):
     ) -> TimeWindow:
         if func_name:
             window_type: Union[
-                type[TimeWindowSingleAggregation], type[TimeWindowMultiAggregation]
-            ] = TimeWindowSingleAggregation
+                type[FixedTimeWindowSingleAggregation],
+                type[FixedTimeWindowMultiAggregation],
+            ] = FixedTimeWindowSingleAggregation
         else:
-            window_type = TimeWindowMultiAggregation
+            window_type = FixedTimeWindowMultiAggregation
 
         return window_type(
             duration_ms=self._duration_ms,
@@ -361,10 +362,11 @@ class TumblingTimeWindowDefinition(TimeWindowDefinition[TimeWindow]):
     ) -> TimeWindow:
         if func_name:
             window_type: Union[
-                type[TimeWindowSingleAggregation], type[TimeWindowMultiAggregation]
-            ] = TimeWindowSingleAggregation
+                type[FixedTimeWindowSingleAggregation],
+                type[FixedTimeWindowMultiAggregation],
+            ] = FixedTimeWindowSingleAggregation
         else:
-            window_type = TimeWindowMultiAggregation
+            window_type = FixedTimeWindowMultiAggregation
 
         return window_type(
             duration_ms=self._duration_ms,

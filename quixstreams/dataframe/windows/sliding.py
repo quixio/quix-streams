@@ -7,13 +7,13 @@ from .base import (
     SingleAggregationWindowMixin,
     WindowKeyResult,
 )
-from .time_based import ClosingStrategyValues, TimeWindow
+from .time_based import ClosingStrategyValues, FixedTimeWindow
 
 if TYPE_CHECKING:
     from quixstreams.dataframe.dataframe import StreamingDataFrame
 
 
-class SlidingWindow(TimeWindow):
+class SlidingWindow(FixedTimeWindow):
     def final(
         self, closing_strategy: ClosingStrategyValues = "key"
     ) -> "StreamingDataFrame":

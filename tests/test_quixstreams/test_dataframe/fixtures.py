@@ -63,8 +63,5 @@ def dataframe_factory(topic_manager_topic_factory, topic_manager_factory):
 
 @pytest.fixture
 def mock_message_context():
-    with (
-        patch("quixstreams.dataframe.windows.time_based.message_context"),
-        patch("quixstreams.dataframe.windows.session.message_context"),
-    ):
+    with patch("quixstreams.dataframe.windows.time_based.message_context"):
         yield
