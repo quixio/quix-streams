@@ -22,15 +22,17 @@ from .count_based import (
     CountWindowMultiAggregation,
     CountWindowSingleAggregation,
 )
+from .session import (
+    SessionWindow,
+    SessionWindowMultiAggregation,
+    SessionWindowSingleAggregation,
+)
 from .sliding import (
     SlidingWindow,
     SlidingWindowMultiAggregation,
     SlidingWindowSingleAggregation,
 )
 from .time_based import (
-    SessionWindow,
-    SessionWindowMultiAggregation,
-    SessionWindowSingleAggregation,
     TimeWindow,
     TimeWindowMultiAggregation,
     TimeWindowSingleAggregation,
