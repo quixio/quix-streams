@@ -62,13 +62,14 @@ First, [get your SDK Token](https://quix.io/docs/develop/authentication/streamin
 
 <br>
 
-#### 2. Pass SDK Token to Application
+#### 2. Pass SDK Token and Portal API URL to the Application
 With your `SDK Token` and a Quix Streams `Application`, you can pass it using one of
 these approaches:
 
-- **Set Environment Variable** (***recommended***):
-    - Simply set `Quix__Sdk__Token` (double underscores!) to your `SDK Token`
-  > NOTE: `Quix__Sdk__Token` is set automatically in Quix Cloud, thus is the recommended approach for an easy migration.
+- **Set Environment Variables** (***recommended***):
+    - Set `Quix__Sdk__Token` (double underscores!) to your `SDK Token`
+    - Set `Quix__Portal__Api` to `https://portal.cloud.quix.io/`
+  > NOTE: `Quix__Sdk__Token` and `Quix__Portal__Api` are set automatically in Quix Cloud, thus is the recommended approach for an easy migration.
   
 OR <br>
 
@@ -77,9 +78,12 @@ OR <br>
       ```python
       from quixstreams import Application
       
-      app = Application(quix_sdk_token="MY_TOKEN")
+      app = Application(
+          quix_sdk_token="MY_TOKEN",
+          quix_portal_api="https://portal.cloud.quix.io/",
+      )
       ```
-  > WARNING: This value is prioritized over `Quix__Sdk__Token`, which may cause ambiguity if both are set.
+  > WARNING: These values are prioritized over `Quix__Sdk__Token` and `Quix__Portal__Api`, which may cause ambiguity if both are set.
 
 <br>
 
