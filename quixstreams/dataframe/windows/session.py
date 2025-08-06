@@ -66,73 +66,56 @@ class SessionWindow(TimeWindow):
             latest_timestamp = max(timestamp_ms, state_ts)
 
         # Calculate session expiry threshold
-        session_expiry_threshold = latest_timestamp - grace_ms
+        expiry_threshold = latest_timestamp - grace_ms
 
         # Check if the event is too late
-        if timestamp_ms < session_expiry_threshold:
-            late_by_ms = session_expiry_threshold - timestamp_ms
+        if timestamp_ms < expiry_threshold:
             self._on_expired_window(
                 value=value,
                 key=key,
                 start=timestamp_ms,
-                end=timestamp_ms,  # End time is the timestamp of the last event
+                end=timestamp_ms,
                 timestamp_ms=timestamp_ms,
-                late_by_ms=late_by_ms,
+                late_by_ms=expiry_threshold - timestamp_ms,
             )
             return [], []
 
-        # Look for an existing session that can be extended
-        can_extend_session = False
-        existing_aggregated = None
-        old_window_to_delete = None
-
         # Search for active sessions that can accommodate the new event
-        search_start = max(0, timestamp_ms - timeout_ms * 2)
-        windows = state.get_windows(
-            search_start, timestamp_ms + timeout_ms + 1, backwards=True
-        )
-
-        for (window_start, window_end), aggregated_value, _ in windows:
+        for (window_start, window_end), aggregated_value, _ in state.get_windows(
+            start_from_ms=max(0, timestamp_ms - timeout_ms * 2),
+            start_to_ms=timestamp_ms + timeout_ms + 1,
+            backwards=True,
+        ):
             # Calculate the time gap between the new event and the session's last activity
             # window_end now directly represents the timestamp of the last event
-            session_last_activity = window_end
-            time_gap = timestamp_ms - session_last_activity
+            time_gap = timestamp_ms - window_end
 
             # Check if this session can be extended
             if time_gap <= timeout_ms + grace_ms and timestamp_ms >= window_start:
+                extend_session = True
                 session_start = window_start
-                # Only update end time if the new event is newer than the current end time
+                # Only update end time if the new event is greater than the current end time
                 session_end = max(window_end, timestamp_ms)
-                can_extend_session = True
                 existing_aggregated = aggregated_value
-                old_window_to_delete = (window_start, window_end)
+                # Delete the old window if extending an existing session
+                state.delete_window(window_start, window_end)
                 break
-
-        # If no extendable session found, start a new one
-        if not can_extend_session:
-            session_start = timestamp_ms
-            session_end = timestamp_ms  # End time is the timestamp of the last event
+        else:
+            # If no extendable session found, start a new one
+            extend_session = False
+            session_start = session_end = timestamp_ms
 
         # Process the event for this session
         updated_windows: list[WindowKeyResult] = []
 
-        # Delete the old window if extending an existing session
-        if can_extend_session and old_window_to_delete:
-            old_start, old_end = old_window_to_delete
-            state.delete_window(old_start, old_end)
-
         # Add to collection if needed
         if collect:
-            state.add_to_collection(
-                value=self._collect_value(value),
-                id=timestamp_ms,
-            )
+            state.add_to_collection(value=self._collect_value(value), id=timestamp_ms)
 
         # Update the session window aggregation
-        aggregated = None
         if aggregate:
             current_value = (
-                existing_aggregated if can_extend_session else self._initialize_value()
+                existing_aggregated if extend_session else self._initialize_value()
             )
 
             aggregated = self._aggregate_value(current_value, value, timestamp_ms)
@@ -142,6 +125,8 @@ class SessionWindow(TimeWindow):
                     self._results(aggregated, [], session_start, session_end),
                 )
             )
+        else:
+            aggregated = None
 
         state.update_window(
             session_start, session_end, value=aggregated, timestamp_ms=timestamp_ms
@@ -150,12 +135,10 @@ class SessionWindow(TimeWindow):
         # Expire old sessions
         if self._closing_strategy == ClosingStrategy.PARTITION:
             expired_windows = self.expire_by_partition(
-                transaction, session_expiry_threshold, collect
+                transaction, expiry_threshold, collect
             )
         else:
-            expired_windows = self.expire_by_key(
-                key, state, session_expiry_threshold, collect
-            )
+            expired_windows = self.expire_by_key(key, state, expiry_threshold, collect)
 
         return updated_windows, expired_windows
 
