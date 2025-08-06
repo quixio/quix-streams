@@ -101,7 +101,8 @@ class SessionWindow(TimeWindow):
             # Check if this session can be extended
             if time_gap <= timeout_ms + grace_ms and timestamp_ms >= window_start:
                 session_start = window_start
-                session_end = timestamp_ms
+                # Only update end time if the new event is newer than the current end time
+                session_end = max(window_end, timestamp_ms)
                 can_extend_session = True
                 existing_aggregated = aggregated_value
                 old_window_to_delete = (window_start, window_end)

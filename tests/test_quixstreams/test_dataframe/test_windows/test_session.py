@@ -883,3 +883,54 @@ class TestSessionWindow:
             assert updated[0][1]["start"] == 30000
             assert updated[0][1]["end"] == 30000  # timestamp of last event
             assert updated[0][1]["value"] == 25
+
+    def test_out_of_order_events_end_time(
+        self, session_window_definition_factory, state_manager
+    ):
+        """Test that out-of-order events correctly maintain the latest timestamp as end time"""
+        window_def = session_window_definition_factory(
+            inactivity_gap_ms=10000, grace_ms=5000
+        )
+        window = window_def.sum()
+        window.final(closing_strategy="key")
+
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
+        store.assign_partition(0)
+
+        with store.start_partition_transaction(0) as tx:
+            key = b"key"
+
+            # 1. Start session with event at timestamp 1000
+            updated, expired = process(
+                window, value=1, key=key, transaction=tx, timestamp_ms=1000
+            )
+            assert updated[0][1]["start"] == 1000
+            assert updated[0][1]["end"] == 1000  # End should be 1000
+            assert updated[0][1]["value"] == 1
+
+            # 2. Add event at timestamp 8000 (in order)
+            updated, expired = process(
+                window, value=2, key=key, transaction=tx, timestamp_ms=8000
+            )
+            assert updated[0][1]["start"] == 1000
+            assert updated[0][1]["end"] == 8000  # End should be 8000 (latest event)
+            assert updated[0][1]["value"] == 3
+
+            # 3. Add OUT-OF-ORDER event at timestamp 3000 (before 8000)
+            # This should be accepted (within grace period) but should NOT change the end time
+            updated, expired = process(
+                window, value=10, key=key, transaction=tx, timestamp_ms=3000
+            )
+            assert updated[0][1]["start"] == 1000
+            # KEY TEST: End time should remain 8000, not become 3000!
+            assert updated[0][1]["end"] == 8000
+            assert updated[0][1]["value"] == 13
+
+            # 4. Add event NEWER than current end (timestamp 9000)
+            updated, expired = process(
+                window, value=4, key=key, transaction=tx, timestamp_ms=9000
+            )
+            assert updated[0][1]["start"] == 1000
+            # NOW the end time should update to 9000
+            assert updated[0][1]["end"] == 9000
+            assert updated[0][1]["value"] == 17
