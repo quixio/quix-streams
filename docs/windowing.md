@@ -578,7 +578,7 @@ sdf = (
 # Expected output (when session expires):
 # {
 #   "start": 1000,
-#   "end": 2000000 + 1800000,  # last event + timeout
+#   "end": 2000000,  # timestamp of last event
 #   "action_count": 4,
 #   "actions": ["page_view", "click", "page_view", "purchase"]
 # }
@@ -587,6 +587,13 @@ sdf = (
 ### Session Window with Current Mode
 
 For real-time monitoring, you can use `.current()` mode to get updates as the session progresses:
+
+Input:
+```json
+{"amount": 25, "timestamp": 1000}
+{"amount": 50, "timestamp": 5000} 
+{"amount": 50, "timestamp": 8000}
+```
 
 ```python
 from datetime import timedelta
@@ -611,9 +618,9 @@ sdf = (
 )
 
 # Output for each incoming event:
-# Event 1: {"start": 1000, "end": 11000, "total_amount": 25, "purchase_count": 1}
-# Event 2: {"start": 1000, "end": 15000, "total_amount": 75, "purchase_count": 2}  # session extended
-# Event 3: {"start": 1000, "end": 18000, "total_amount": 125, "purchase_count": 3} # session extended again
+# Event 1: {"start": 1000, "end": 1000, "total_amount": 25, "purchase_count": 1}
+# Event 2: {"start": 1000, "end": 5000, "total_amount": 75, "purchase_count": 2}
+# Event 3: {"start": 1000, "end": 8000, "total_amount": 125, "purchase_count": 3}
 ```
 
 ### Handling Late Events in Sessions
@@ -710,7 +717,9 @@ sdf = (
 
 **Session Extension**: An existing session is extended when an event arrives within `timeout + grace_period` of the session's last activity.
 
-**Session Closure**: A session closes when the current time exceeds `session_end_time + grace_period`, where `session_end_time = last_event_time + timeout`.
+**Session Closure**: A session closes when the current time exceeds `last_event_time + timeout + grace_period`. The session end time in the output represents the timestamp of the last event in the session.
+
+**Out-of-Order Events**: When out-of-order events arrive within the grace period, they extend the session but do not change the end time if they are older than the current latest event. The end time always represents the timestamp of the chronologically latest event in the session.
 
 **Key Grouping**: Like all windows in Quix Streams, sessions are grouped by message key. Each key maintains its own independent sessions.
 
