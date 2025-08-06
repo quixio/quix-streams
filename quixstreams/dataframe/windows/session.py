@@ -119,7 +119,7 @@ class SessionWindow(TimeWindow):
         # Delete the old window if extending an existing session
         if can_extend_session and old_window_to_delete:
             old_start, old_end = old_window_to_delete
-            transaction.delete_window(old_start, old_end, prefix=state._prefix)  # type: ignore # noqa: SLF001
+            state.delete_window(old_start, old_end)
 
         # Add to collection if needed
         if collect:
@@ -238,11 +238,7 @@ class SessionWindow(TimeWindow):
 
         # Clean up expired windows
         for window_start, window_end in windows_to_delete:
-            state._transaction.delete_window(  # type: ignore # noqa: SLF001
-                window_start,
-                window_end,
-                prefix=state._prefix,  # type: ignore # noqa: SLF001
-            )
+            state.delete_window(window_start, window_end)
             if collect:
                 state.delete_from_collection(window_end, start=window_start)
 
