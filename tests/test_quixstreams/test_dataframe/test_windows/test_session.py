@@ -91,7 +91,7 @@ class TestSessionWindow:
                     key,
                     {
                         "start": 1000,
-                        "end": 11000,  # 1000 + 10000 timeout
+                        "end": 1000,  # timestamp of last event
                         "count": 1,
                         "sum": 1,
                         "mean": 1.0,
@@ -112,7 +112,7 @@ class TestSessionWindow:
                     key,
                     {
                         "start": 1000,
-                        "end": 15000,  # 5000 + 10000 timeout
+                        "end": 5000,  # timestamp of last event
                         "count": 2,
                         "sum": 5,
                         "mean": 2.5,
@@ -132,7 +132,7 @@ class TestSessionWindow:
                     key,
                     {
                         "start": 1000,
-                        "end": 15000,
+                        "end": 5000,  # timestamp of last event
                         "count": 2,
                         "sum": 5,
                         "mean": 2.5,
@@ -147,7 +147,7 @@ class TestSessionWindow:
                     key,
                     {
                         "start": 26000,
-                        "end": 36000,  # 26000 + 10000 timeout
+                        "end": 26000,  # timestamp of last event
                         "count": 1,
                         "sum": 2,
                         "mean": 2.0,
@@ -182,7 +182,7 @@ class TestSessionWindow:
         assert len(updated) == 1
         assert updated[0][1]["value"] == 2
         assert updated[0][1]["start"] == 1000
-        assert updated[0][1]["end"] == 15000  # 5000 + 10000
+        assert updated[0][1]["end"] == 5000  # timestamp of last event
         assert not expired
 
     @pytest.mark.parametrize("expiration", ("key", "partition"))
@@ -207,7 +207,7 @@ class TestSessionWindow:
         assert len(updated) == 1
         assert updated[0][1]["value"] == 5
         assert updated[0][1]["start"] == 1000
-        assert updated[0][1]["end"] == 15000
+        assert updated[0][1]["end"] == 5000  # timestamp of last event
         assert not expired
 
     @pytest.mark.parametrize("expiration", ("key", "partition"))
@@ -232,7 +232,7 @@ class TestSessionWindow:
         assert len(updated) == 1
         assert updated[0][1]["value"] == 3.0
         assert updated[0][1]["start"] == 1000
-        assert updated[0][1]["end"] == 15000
+        assert updated[0][1]["end"] == 5000  # timestamp of last event
         assert not expired
 
     @pytest.mark.parametrize("expiration", ("key", "partition"))
@@ -260,7 +260,7 @@ class TestSessionWindow:
         assert len(updated) == 1
         assert updated[0][1]["value"] == [2, 3]
         assert updated[0][1]["start"] == 1000
-        assert updated[0][1]["end"] == 15000
+        assert updated[0][1]["end"] == 5000  # timestamp of last event
         assert not expired
 
     @pytest.mark.parametrize("expiration", ("key", "partition"))
@@ -285,7 +285,7 @@ class TestSessionWindow:
         assert len(updated) == 1
         assert updated[0][1]["value"] == 5
         assert updated[0][1]["start"] == 1000
-        assert updated[0][1]["end"] == 15000
+        assert updated[0][1]["end"] == 5000  # timestamp of last event
         assert not expired
 
     @pytest.mark.parametrize("expiration", ("key", "partition"))
@@ -310,7 +310,7 @@ class TestSessionWindow:
         assert len(updated) == 1
         assert updated[0][1]["value"] == 2
         assert updated[0][1]["start"] == 1000
-        assert updated[0][1]["end"] == 15000
+        assert updated[0][1]["end"] == 5000  # timestamp of last event
         assert not expired
 
     @pytest.mark.parametrize("expiration", ("key", "partition"))
@@ -336,7 +336,7 @@ class TestSessionWindow:
                 window, value=4, key=key, transaction=tx, timestamp_ms=25000
             )
         assert not updated
-        assert expired == [(key, {"start": 1000, "end": 18000, "value": [1, 2, 3]})]
+        assert expired == [(key, {"start": 1000, "end": 8000, "value": [1, 2, 3]})]
 
     @pytest.mark.parametrize(
         "timeout, grace, name",
@@ -391,7 +391,7 @@ class TestSessionWindow:
             assert len(updated) == 1
             assert updated[0][1]["value"] == 1
             assert updated[0][1]["start"] == 1000
-            assert updated[0][1]["end"] == 6000  # 1000 + 5000
+            assert updated[0][1]["end"] == 1000  # timestamp of last event
             assert not expired
 
             # Add to session 1 (within timeout)
@@ -401,7 +401,7 @@ class TestSessionWindow:
             assert len(updated) == 1
             assert updated[0][1]["value"] == 3
             assert updated[0][1]["start"] == 1000
-            assert updated[0][1]["end"] == 9000  # 4000 + 5000
+            assert updated[0][1]["end"] == 4000  # timestamp of last event
             assert not expired
 
             # Start session 2 (outside timeout) - should expire session 1
@@ -411,12 +411,12 @@ class TestSessionWindow:
             assert len(updated) == 1
             assert updated[0][1]["value"] == 5
             assert updated[0][1]["start"] == 15000
-            assert updated[0][1]["end"] == 20000  # 15000 + 5000
+            assert updated[0][1]["end"] == 15000  # timestamp of last event
 
             assert len(expired) == 1
             assert expired[0][1]["value"] == 3
             assert expired[0][1]["start"] == 1000
-            assert expired[0][1]["end"] == 9000
+            assert expired[0][1]["end"] == 4000  # timestamp of last event
 
     def test_session_window_grace_period(
         self, session_window_definition_factory, state_manager
@@ -670,7 +670,7 @@ class TestSessionWindow:
             )
             assert len(updated) == 1
             assert updated[0][1]["start"] == 1000
-            assert updated[0][1]["end"] == 11000  # 1000 + 10000
+            assert updated[0][1]["end"] == 1000  # timestamp of last event
             assert updated[0][1]["value"] == 1
             assert not expired
 
@@ -683,12 +683,12 @@ class TestSessionWindow:
             # First session should now be expired
             assert len(expired) == 1
             assert expired[0][1]["start"] == 1000
-            assert expired[0][1]["end"] == 11000
+            assert expired[0][1]["end"] == 1000  # timestamp of last event
             assert expired[0][1]["value"] == 1
 
             assert len(updated) == 1
             assert updated[0][1]["start"] == 20000
-            assert updated[0][1]["end"] == 30000  # 20000 + 10000
+            assert updated[0][1]["end"] == 20000  # timestamp of last event
             assert updated[0][1]["value"] == 10
 
             # Add another event to the second session
@@ -697,7 +697,7 @@ class TestSessionWindow:
             )
             assert len(updated) == 1
             assert updated[0][1]["start"] == 20000
-            assert updated[0][1]["end"] == 35000  # 25000 + 10000
+            assert updated[0][1]["end"] == 25000  # timestamp of last event
             assert updated[0][1]["value"] == 15  # 10 + 5
             assert not expired
 
@@ -710,13 +710,13 @@ class TestSessionWindow:
             # Second session should be expired
             assert len(expired) == 1
             assert expired[0][1]["start"] == 20000
-            assert expired[0][1]["end"] == 35000
+            assert expired[0][1]["end"] == 25000  # timestamp of last event
             assert expired[0][1]["value"] == 15
 
             # Third session starts
             assert len(updated) == 1
             assert updated[0][1]["start"] == 50000
-            assert updated[0][1]["end"] == 60000  # 50000 + 10000
+            assert updated[0][1]["end"] == 50000  # timestamp of last event
             assert updated[0][1]["value"] == 100
 
     def test_session_window_bridging_event_scenario(
@@ -755,7 +755,7 @@ class TestSessionWindow:
             )
             assert len(updated) == 1
             assert updated[0][1]["start"] == 1000
-            assert updated[0][1]["end"] == 11000  # 1000 + 10000
+            assert updated[0][1]["end"] == 1000  # timestamp of last event
             assert updated[0][1]["value"] == 5
             assert not expired
 
@@ -770,7 +770,7 @@ class TestSessionWindow:
             # Event at 12000 is before 13000, so it should extend Session A
             assert len(updated) == 1
             assert updated[0][1]["start"] == 1000  # Session A extended
-            assert updated[0][1]["end"] == 22000  # 12000 + 10000
+            assert updated[0][1]["end"] == 12000  # timestamp of last event
             assert updated[0][1]["value"] == 15  # 5 + 10
             assert not expired
 
@@ -781,7 +781,7 @@ class TestSessionWindow:
             # This should extend the already extended Session A further
             assert len(updated) == 1
             assert updated[0][1]["start"] == 1000  # Still Session A
-            assert updated[0][1]["end"] == 25000  # 15000 + 10000
+            assert updated[0][1]["end"] == 15000  # timestamp of last event
             assert updated[0][1]["value"] == 35  # 5 + 10 + 20
             assert not expired
 
@@ -791,7 +791,7 @@ class TestSessionWindow:
             )
             assert len(expired) == 1
             assert expired[0][1]["start"] == 1000
-            assert expired[0][1]["end"] == 25000
+            assert expired[0][1]["end"] == 15000  # timestamp of last event
             assert expired[0][1]["value"] == 35  # All events combined
 
             assert len(updated) == 1
@@ -828,7 +828,7 @@ class TestSessionWindow:
             )
             assert len(updated) == 1
             assert updated[0][1]["start"] == 1000
-            assert updated[0][1]["end"] == 11000  # 1000 + 10000
+            assert updated[0][1]["end"] == 1000  # timestamp of last event
             assert updated[0][1]["value"] == 100
             assert not expired
 
@@ -839,7 +839,7 @@ class TestSessionWindow:
             )
             assert len(updated) == 1
             assert updated[0][1]["start"] == 1000  # Session extended, same start
-            assert updated[0][1]["end"] == 15000  # 5000 + 10000 (new end time)
+            assert updated[0][1]["end"] == 5000  # timestamp of last event
             assert updated[0][1]["value"] == 300  # 100 + 200
             assert not expired
 
@@ -849,7 +849,7 @@ class TestSessionWindow:
             )
             assert len(updated) == 1
             assert updated[0][1]["start"] == 1000  # Session extended again
-            assert updated[0][1]["end"] == 18000  # 8000 + 10000
+            assert updated[0][1]["end"] == 8000  # timestamp of last event
             assert updated[0][1]["value"] == 350  # 100 + 200 + 50
             assert not expired
 
@@ -861,7 +861,7 @@ class TestSessionWindow:
             assert len(updated) == 1
             assert updated[0][0] == key2  # Different key
             assert updated[0][1]["start"] == 9000
-            assert updated[0][1]["end"] == 19000  # 9000 + 10000
+            assert updated[0][1]["end"] == 9000  # timestamp of last event
             assert updated[0][1]["value"] == 75
             assert not expired
 
@@ -874,12 +874,12 @@ class TestSessionWindow:
             assert len(expired) == 1
             assert expired[0][0] == key
             assert expired[0][1]["start"] == 1000
-            assert expired[0][1]["end"] == 18000
+            assert expired[0][1]["end"] == 8000  # timestamp of last event
             assert expired[0][1]["value"] == 350
 
             # Should have started a new session for the first key
             assert len(updated) == 1
             assert updated[0][0] == key
             assert updated[0][1]["start"] == 30000
-            assert updated[0][1]["end"] == 40000
+            assert updated[0][1]["end"] == 30000  # timestamp of last event
             assert updated[0][1]["value"] == 25
