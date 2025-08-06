@@ -75,7 +75,7 @@ class SessionWindow(TimeWindow):
                 value=value,
                 key=key,
                 start=timestamp_ms,
-                end=timestamp_ms + timeout_ms,
+                end=timestamp_ms,  # End time is the timestamp of the last event
                 timestamp_ms=timestamp_ms,
                 late_by_ms=late_by_ms,
             )
@@ -94,13 +94,14 @@ class SessionWindow(TimeWindow):
 
         for (window_start, window_end), aggregated_value, _ in windows:
             # Calculate the time gap between the new event and the session's last activity
-            session_last_activity = window_end - timeout_ms
+            # window_end is stored as last_event_timestamp + 1, so subtract 1 to get actual last event time
+            session_last_activity = window_end - 1
             time_gap = timestamp_ms - session_last_activity
 
             # Check if this session can be extended
             if time_gap <= timeout_ms + grace_ms and timestamp_ms >= window_start:
                 session_start = window_start
-                session_end = timestamp_ms + timeout_ms
+                session_end = timestamp_ms + 1
                 can_extend_session = True
                 existing_aggregated = aggregated_value
                 old_window_to_delete = (window_start, window_end)
@@ -109,7 +110,7 @@ class SessionWindow(TimeWindow):
         # If no extendable session found, start a new one
         if not can_extend_session:
             session_start = timestamp_ms
-            session_end = timestamp_ms + timeout_ms
+            session_end = timestamp_ms + 1
 
         # Process the event for this session
         updated_windows: list[WindowKeyResult] = []
@@ -137,7 +138,7 @@ class SessionWindow(TimeWindow):
             updated_windows.append(
                 (
                     key,
-                    self._results(aggregated, [], session_start, session_end),
+                    self._results(aggregated, [], session_start, session_end - 1),
                 )
             )
 
@@ -219,8 +220,10 @@ class SessionWindow(TimeWindow):
 
         windows_to_delete = []
         for (window_start, window_end), aggregated, _ in all_windows:
-            # Session expires when the session end time has passed the expiry threshold
-            if window_end <= expiry_threshold:
+            # Session expires when the session end time + timeout has passed the expiry threshold
+            # window_end is stored as last_event_timestamp + 1, so we subtract 1 and add timeout_ms
+            last_event_timestamp = window_end - 1
+            if last_event_timestamp + self._timeout_ms <= expiry_threshold:
                 collected = []
                 if collect:
                     collected = state.get_from_collection(window_start, window_end)
@@ -229,7 +232,7 @@ class SessionWindow(TimeWindow):
                 count += 1
                 yield (
                     key,
-                    self._results(aggregated, collected, window_start, window_end),
+                    self._results(aggregated, collected, window_start, window_end - 1),
                 )
 
         # Clean up expired windows
