@@ -524,9 +524,9 @@ Events:  A         B              C    D              E
 Timeout: 10 seconds
 Grace:   2 seconds
 
-Session 1: [0, 20] - Events A, B (B extends the session from A)
-Session 2: [25, 40] - Events C, D (D extends the session from C)
-Session 3: [45, 55] - Event E (session will close at 55 if no more events)
+Session 1: [0, 10] - Events A, B (B extends the session from A)
+Session 2: [25, 30] - Events C, D (D extends the session from C)
+Session 3: [45, 45] - Event E (session will close at 55 if no more events)
 ```
 
 In this example:
