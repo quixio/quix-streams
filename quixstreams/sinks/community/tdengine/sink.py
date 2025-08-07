@@ -4,6 +4,7 @@ import logging
 import ssl
 import sys
 import time
+from datetime import datetime, timezone
 from typing import Any, Callable, Iterable, Literal, Mapping, Optional, Union, get_args
 from urllib.parse import urlencode, urljoin
 
@@ -23,6 +24,13 @@ from .point import Point
 logger = logging.getLogger(__name__)
 
 TimePrecision = Literal["ms", "ns", "us", "s"]
+TIME_PRECISION_LEN = {
+    "s": 10,
+    "ms": 13,
+    "ns": 16,
+    "us": 19,
+}
+
 
 InfluxDBValueMap = dict[str, Union[str, int, float, bool]]
 
@@ -30,11 +38,13 @@ FieldsCallable = Callable[[InfluxDBValueMap], Iterable[str]]
 SupertableCallable = Callable[[InfluxDBValueMap], str]
 TagsCallable = Callable[[InfluxDBValueMap], Iterable[str]]
 SubtableNameCallable = Callable[[InfluxDBValueMap], str]
+TimeCallable = Callable[[InfluxDBValueMap], Optional[Union[str, int, datetime]]]
 
 FieldsSetter = Union[Iterable[str], FieldsCallable]
 SupertableSetter = Union[str, SupertableCallable]
 TagsSetter = Union[Iterable[str], TagsCallable]
 SubtableNameSetter = Union[str, SubtableNameCallable]
+TimeSetter = Union[str, TimeCallable]
 
 
 class TDengineSink(BatchingSink):
@@ -46,7 +56,7 @@ class TDengineSink(BatchingSink):
         subtable: SubtableNameSetter,
         fields_keys: FieldsSetter = (),
         tags_keys: TagsSetter = (),
-        time_key: Optional[str] = None,
+        time_setter: Optional[TimeSetter] = None,
         time_precision: TimePrecision = "ms",
         allow_missing_fields: bool = False,
         include_metadata_tags: bool = False,
@@ -60,6 +70,8 @@ class TDengineSink(BatchingSink):
         username: str = "",
         password: str = "",
         token: str = "",
+        max_retries: int = 5,
+        retry_backoff_factor: float = 1.0,
     ):
         """
         A connector to sink processed data to TDengine.
@@ -101,10 +113,12 @@ class TDengineSink(BatchingSink):
             - If empty, no tags will be sent.
             >***NOTE***: always converts tag values to strings.
             Default - `()`.
-        :param time_key: a key to be used as "time" when convert to InfluxDB line protocol.
-            By default, the record timestamp will be used with "ms" time precision.
-            When using a custom key, you may need to adjust the `time_precision` setting
-            to match.
+        :param time_setter: an optional column name to use as "time" when convert to InfluxDB line protocol.
+            Also accepts a callable which receives the current message data and
+            returns either the desired time or `None` (use default).
+            The time can be an `int`, `string` (RFC3339 format), or `datetime`.
+            The time must match the `time_precision` argument if not a `datetime` object, else raises.
+            By default, a record's kafka timestamp with "ms" time precision is used.
         :param time_precision: a time precision to use when convert to InfluxDB line protocol.
             Possible values: "ms", "ns", "us", "s".
             Default - `"ms"`.
@@ -129,13 +143,17 @@ class TDengineSink(BatchingSink):
             client authentication (which should raise an Exception).
             Callback should accept the raised Exception as an argument.
             Callback must resolve (or propagate/re-raise) the Exception.
+        :param max_retries: maximum number of retries for failed requests.
+            Default - `5`.
+        :param retry_backoff_factor: a backoff factor applied between retry attempts starting from the second retry.
+            The sleep duration between retries is calculated as `{backoff factor} * (2 ** ({number of previous retries}))` seconds.
+            Default - `1.0`.
         """
 
         super().__init__(
             on_client_connect_success=on_client_connect_success,
             on_client_connect_failure=on_client_connect_failure,
         )
-
         if time_precision not in (time_args := get_args(TimePrecision)):
             raise ValueError(
                 f"Invalid 'time_precision' argument {time_precision}; "
@@ -184,60 +202,46 @@ class TDengineSink(BatchingSink):
             "timeout": request_timeout_ms,
             "verify_ssl": verify_ssl,
             "database": database,
+            "max_retries": max_retries,
+            "retry_backoff_factor": retry_backoff_factor,
         }
         self._client: Optional[urllib3.PoolManager] = None
-        self._supertable_name = self._supertable_callable(supertable)
-        self._subtable_name = self._subtable_name_callable(subtable)
-        self._fields_keys = self._fields_callable(fields_keys)
-        self._tags_keys = self._tags_callable(tags_keys)
+        self._supertable_name = _supertable_callable(supertable)
+        self._subtable_name = _subtable_name_callable(subtable)
+        self._fields_keys = _fields_callable(fields_keys)
+        self._tags_keys = _tags_callable(tags_keys)
+        self._time_setter = _time_callable(time_setter)
         self._include_metadata_tags = include_metadata_tags
-        self._time_key = time_key
         self._write_precision = time_precision
         self._batch_size = batch_size
         self._allow_missing_fields = allow_missing_fields
         self._convert_ints_to_floats = convert_ints_to_floats
-
-    def _supertable_callable(self, setter: SupertableSetter) -> SupertableCallable:
-        if callable(setter):
-            return setter
-        return lambda value: setter
-
-    def _fields_callable(self, setter: FieldsSetter) -> FieldsCallable:
-        if callable(setter):
-            return setter
-        return lambda value: setter
-
-    def _tags_callable(self, setter: TagsSetter) -> TagsCallable:
-        if callable(setter):
-            return setter
-        return lambda value: setter
-
-    def _subtable_name_callable(
-        self, setter: SubtableNameSetter
-    ) -> SubtableNameCallable:
-        if callable(setter):
-            return setter
-        return lambda value: setter
 
     def setup(self):
         if self._client_args["verify_ssl"]:
             cert_reqs = ssl.CERT_REQUIRED
         else:
             cert_reqs = ssl.CERT_NONE
+        retry_strategy = urllib3.Retry(
+            total=self._client_args["max_retries"],
+            backoff_factor=self._client_args["retry_backoff_factor"],
+            respect_retry_after_header=False,
+            allowed_methods=["POST"],
+        )
         self._client = urllib3.PoolManager(
             cert_reqs=cert_reqs,
+            timeout=urllib3.Timeout(total=self._client_args["timeout"] / 1_000),
+            retries=retry_strategy,
         )
         # check if the database is alive
         database = self._client_args["database"]
         check_db_sql = "SHOW DATABASES"
-        timeout = urllib3.Timeout(total=self._client_args["timeout"] / 1_000)
         logger.debug(f"Sending data to {self._client_args['sql_url']} : {check_db_sql}")
         resp = self._client.request(
             "POST",
             self._client_args["sql_url"],
             body=check_db_sql,
             headers=self._client_args["header"],
-            timeout=timeout,
         )
         if resp.status != 200:
             raise urllib3.exceptions.HTTPError(
@@ -288,20 +292,29 @@ class TDengineSink(BatchingSink):
         subtable = self._subtable_name
         fields_keys = self._fields_keys
         tags_keys = self._tags_keys
-        time_key = self._time_key
+        time_setter = self._time_setter
+
         for write_batch in batch.iter_chunks(n=self._batch_size):
             records = []
 
-            min_timestamp = sys.maxsize
-            max_timestamp = -1
+            min_timestamp = None
+            max_timestamp = None
 
             for item in write_batch:
                 value = item.value
                 # Evaluate these before we alter the value
                 _measurement = supertable(value)
+                # check if _measurement is empty
+                if _measurement is None or not _measurement.strip():
+                    raise ValueError(
+                        f'Supertable name cannot be empty for record with key "{item.key}" '
+                        f"and topic '{batch.topic}'"
+                    )
                 _tags_keys = tags_keys(value)
                 _fields_keys = fields_keys(value)
                 _subtable_name = subtable(item.value)
+                ts = time_setter(value)
+
                 tags = {}
                 for tag_key in _tags_keys:
                     if tag_key in value:
@@ -313,7 +326,6 @@ class TDengineSink(BatchingSink):
                     tags["__topic"] = batch.topic
                     tags["__partition"] = batch.partition
 
-                tags["__subtable"] = _subtable_name
                 if _fields_keys:
                     fields = {
                         f: value[f]
@@ -328,11 +340,42 @@ class TDengineSink(BatchingSink):
                         k: float(v) if isinstance(v, int) else v
                         for k, v in fields.items()
                     }
-                ts = (
-                    value[time_key]
-                    if time_key is not None and time_key in value
-                    else item.timestamp
-                )
+                # check if fields is empty
+                if not fields:
+                    raise ValueError(
+                        f'No fields found in the record for supertable "{_measurement}" '
+                        f"and subtable name '{_subtable_name}'"
+                    )
+
+                tags["__subtable"] = _subtable_name
+
+                # check if fields and tags overlap
+                fields_tags_overlap = set(fields) & set(tags)
+                if fields_tags_overlap:
+                    overlap_str = ",".join(str(k) for k in fields_tags_overlap)
+                    raise ValueError(
+                        f'Keys {overlap_str} are present in both "fields" and "tags" '
+                        f"for supertable '{_measurement}' and subtable '{_subtable_name}'"
+                    )
+
+                if ts is None:
+                    ts = item.timestamp
+
+                elif not isinstance(ts, valid := (str, int, datetime)):
+                    raise TypeError(
+                        f'TDengine "time" field expects: {valid}, got {type(ts)}'
+                    )
+
+                if isinstance(ts, int):
+                    time_len = len(str(ts))
+                    expected = TIME_PRECISION_LEN[self._write_precision]
+                    if time_len != expected:
+                        raise ValueError(
+                            f'`time_precision` of "{self._write_precision}" '
+                            f"expects a {expected}-digit integer epoch, "
+                            f"got {time_len} (timestamp: {ts})."
+                        )
+
                 record = {
                     "measurement": _measurement,
                     "tags": tags,
@@ -340,25 +383,32 @@ class TDengineSink(BatchingSink):
                     "time": ts,
                 }
                 records.append(record)
-                min_timestamp = min(ts, min_timestamp)
-                max_timestamp = max(ts, max_timestamp)
+                min_timestamp = min(ts, min_timestamp or _ts_min_default(ts))
+                max_timestamp = max(ts, max_timestamp or _ts_max_default(ts))
             if not records:
-                logger.debug("No records to write")
+                logger.warning(
+                    f"No records to write for batch with key '{item.key}' "
+                    f"and topic '{batch.topic}'"
+                )
                 continue
             _start = time.monotonic()
             l: list[bytes] = [b""] * len(records)
             for i, point in enumerate(records):
                 p = Point.from_dict(point, self._write_precision)
                 l[i] = p.to_line_protocol().encode("utf-8")
-            body = b"\n".join(l)
-            timeout = urllib3.Timeout(total=self._client_args["timeout"] / 1_000)
+            body = b"\n".join([item for item in l if item])
+            if body == b"":
+                logger.warning(
+                    f"No valid records to write for batch with key '{item.key}' "
+                    f"and topic '{batch.topic}'"
+                )
+                continue
             logger.debug(f"Sending data to {self._client_args['url']} : {body}")
             resp = self._client.request(
                 "POST",
                 self._client_args["url"],
                 body=body,
                 headers=self._client_args["header"],
-                timeout=timeout,
             )
             elapsed = round(time.monotonic() - _start, 2)
             logger.info(
@@ -376,3 +426,54 @@ class TDengineSink(BatchingSink):
                 raise SinkBackpressureError(retry_after=int(retry_after)) from err
             elif resp.status != 204:
                 raise err
+
+
+def _ts_min_default(timestamp: Union[int, str, datetime]):
+    if isinstance(timestamp, int):
+        return sys.maxsize
+    elif isinstance(timestamp, str):
+        return "~"  # lexicographically largest ASCII char
+    elif isinstance(timestamp, datetime):
+        return datetime.max.replace(tzinfo=timezone.utc)
+
+
+def _ts_max_default(timestamp: Union[int, str, datetime]):
+    if isinstance(timestamp, int):
+        return -1
+    elif isinstance(timestamp, str):
+        return ""
+    elif isinstance(timestamp, datetime):
+        return datetime.min.replace(tzinfo=timezone.utc)
+
+
+def _subtable_name_callable(setter: SubtableNameSetter) -> SubtableNameCallable:
+    if callable(setter):
+        return setter
+    return lambda value: setter
+
+
+def _supertable_callable(setter: SupertableSetter) -> SupertableCallable:
+    if callable(setter):
+        return setter
+    return lambda value: setter
+
+
+def _fields_callable(setter: FieldsSetter) -> FieldsCallable:
+    if callable(setter):
+        return setter
+    return lambda value: setter
+
+
+def _tags_callable(setter: TagsSetter) -> TagsCallable:
+    if callable(setter):
+        return setter
+    return lambda value: setter
+
+
+def _time_callable(setter: Optional[TimeSetter]) -> TimeCallable:
+    if callable(setter):
+        return setter
+    if isinstance(setter, str):
+        # If setter not in value, it will raise KeyError
+        return lambda value: value[setter]
+    return lambda value: None  # the kafka timestamp will be used
