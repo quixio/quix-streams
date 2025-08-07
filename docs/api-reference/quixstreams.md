@@ -7342,7 +7342,7 @@ This module contains Sinks developed and maintained by the members of Quix Strea
 class TDengineSink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/sink.py#L40)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/sink.py#L50)
 
 <a id="quixstreams.sinks.community.tdengine.sink.TDengineSink.__init__"></a>
 
@@ -7355,7 +7355,7 @@ def __init__(host: str,
              subtable: SubtableNameSetter,
              fields_keys: FieldsSetter = (),
              tags_keys: TagsSetter = (),
-             time_key: Optional[str] = None,
+             time_setter: Optional[TimeSetter] = None,
              time_precision: TimePrecision = "ms",
              allow_missing_fields: bool = False,
              include_metadata_tags: bool = False,
@@ -7370,10 +7370,12 @@ def __init__(host: str,
              verify_ssl: bool = True,
              username: str = "",
              password: str = "",
-             token: str = "")
+             token: str = "",
+             max_retries: int = 5,
+             retry_backoff_factor: float = 1.0)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/sink.py#L41)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/sink.py#L51)
 
 A connector to sink processed data to TDengine.
 
@@ -7416,10 +7418,12 @@ cannot be both a tag and field.
 - If empty, no tags will be sent.
 >***NOTE***: always converts tag values to strings.
 Default - `()`.
-- `time_key`: a key to be used as "time" when convert to InfluxDB line protocol.
-By default, the record timestamp will be used with "ms" time precision.
-When using a custom key, you may need to adjust the `time_precision` setting
-to match.
+- `time_setter`: an optional column name to use as "time" when convert to InfluxDB line protocol.
+Also accepts a callable which receives the current message data and
+returns either the desired time or `None` (use default).
+The time can be an `int`, `string` (RFC3339 format), or `datetime`.
+The time must match the `time_precision` argument if not a `datetime` object, else raises.
+By default, a record's kafka timestamp with "ms" time precision is used.
 - `time_precision`: a time precision to use when convert to InfluxDB line protocol.
 Possible values: "ms", "ns", "us", "s".
 Default - `"ms"`.
@@ -7444,6 +7448,11 @@ client authentication, primarily for additional logging.
 client authentication (which should raise an Exception).
 Callback should accept the raised Exception as an argument.
 Callback must resolve (or propagate/re-raise) the Exception.
+- `max_retries`: maximum number of retries for failed requests.
+Default - `5`.
+- `retry_backoff_factor`: a backoff factor applied between retry attempts starting from the second retry.
+The sleep duration between retries is calculated as `{backoff factor} * (2 ** ({number of previous retries}))` seconds.
+Default - `1.0`.
 
 <a id="quixstreams.sinks.community.tdengine.date_utils"></a>
 
