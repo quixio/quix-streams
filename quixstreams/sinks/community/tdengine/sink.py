@@ -346,7 +346,7 @@ class TDengineSink(BatchingSink):
                         f'No fields found in the record for supertable "{_measurement}" '
                         f"and subtable name '{_subtable_name}'"
                     )
-                
+
                 tags["__subtable"] = _subtable_name
 
                 # check if fields and tags overlap
@@ -357,7 +357,7 @@ class TDengineSink(BatchingSink):
                         f'Keys {overlap_str} are present in both "fields" and "tags" '
                         f"for supertable '{_measurement}' and subtable '{_subtable_name}'"
                     )
-                
+
                 if ts is None:
                     ts = item.timestamp
 
@@ -427,6 +427,7 @@ class TDengineSink(BatchingSink):
             elif resp.status != 204:
                 raise err
 
+
 def _ts_min_default(timestamp: Union[int, str, datetime]):
     if isinstance(timestamp, int):
         return sys.maxsize
@@ -444,25 +445,30 @@ def _ts_max_default(timestamp: Union[int, str, datetime]):
     elif isinstance(timestamp, datetime):
         return datetime.min.replace(tzinfo=timezone.utc)
 
-def _subtable_name_callable( setter: SubtableNameSetter) -> SubtableNameCallable:
+
+def _subtable_name_callable(setter: SubtableNameSetter) -> SubtableNameCallable:
     if callable(setter):
         return setter
     return lambda value: setter
-    
+
+
 def _supertable_callable(setter: SupertableSetter) -> SupertableCallable:
     if callable(setter):
         return setter
     return lambda value: setter
+
 
 def _fields_callable(setter: FieldsSetter) -> FieldsCallable:
     if callable(setter):
         return setter
     return lambda value: setter
 
+
 def _tags_callable(setter: TagsSetter) -> TagsCallable:
     if callable(setter):
         return setter
     return lambda value: setter
+
 
 def _time_callable(setter: Optional[TimeSetter]) -> TimeCallable:
     if callable(setter):
