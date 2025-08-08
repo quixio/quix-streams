@@ -2226,7 +2226,7 @@ Callback must resolve (or propagate/re-raise) the Exception.
 class TDengineSink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/sink.py#L40)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/sink.py#L50)
 
 <a id="quixstreams.sinks.community.tdengine.sink.TDengineSink.__init__"></a>
 
@@ -2256,7 +2256,9 @@ def __init__(host: str,
              verify_ssl: bool = True,
              username: str = "",
              password: str = "",
-             token: str = "")
+             token: str = "",
+             max_retries: int = 5,
+             retry_backoff_factor: float = 1.0)
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/sink.py#L51)
@@ -2334,4 +2336,9 @@ client authentication, primarily for additional logging.
 client authentication (which should raise an Exception).
 Callback should accept the raised Exception as an argument.
 Callback must resolve (or propagate/re-raise) the Exception.
+- `max_retries`: maximum number of retries for failed requests.
+Default - `5`.
+- `retry_backoff_factor`: a backoff factor applied between retry attempts starting from the second retry.
+The sleep duration between retries is calculated as `{backoff factor} * (2 ** ({number of previous retries}))` seconds.
+Default - `1.0`.
 
