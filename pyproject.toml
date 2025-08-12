@@ -38,7 +38,7 @@ all = [
     "types-psycopg2>=2.9,<3",
     "boto3>=1.35.65,<2.0",
     "boto3-stubs>=1.35.65,<2.0",
-    "redis[hiredis]>=5.2.0,<6",
+    "redis[hiredis]>=5.2.0,<7",
     "azure-storage-blob>=12.24.0,<12.25",
     "neo4j>=5.27.0,<6",
     "pymongo>=4.11,<5",
@@ -69,7 +69,7 @@ tdengine = ["python-dateutil>=2.8.2,<3"]
 # different requirements in the future.
 kinesis = ["quixstreams[aws]"]
 s3 = ["quixstreams[aws]"]
-redis = ["redis[hiredis]>=5.2.0,<6"]
+redis = ["redis[hiredis]>=5.2.0,<7"]
 azure-file = ["quixstreams[azure]"]
 
 [tool.setuptools.packages.find]
