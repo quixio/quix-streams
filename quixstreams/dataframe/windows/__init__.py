@@ -16,6 +16,7 @@ from .aggregations import (
 from .definitions import (
     HoppingCountWindowDefinition,
     HoppingTimeWindowDefinition,
+    SessionWindowDefinition,
     SlidingCountWindowDefinition,
     SlidingTimeWindowDefinition,
     TumblingCountWindowDefinition,
@@ -38,6 +39,7 @@ __all__ = [
     "Collector",
     "HoppingCountWindowDefinition",
     "HoppingTimeWindowDefinition",
+    "SessionWindowDefinition",
     "SlidingCountWindowDefinition",
     "SlidingTimeWindowDefinition",
     "TumblingCountWindowDefinition",
