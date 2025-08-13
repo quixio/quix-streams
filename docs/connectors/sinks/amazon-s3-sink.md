@@ -113,3 +113,38 @@ Each object is named using the batch's starting offset (padded to 19 digits) and
 ## Delivery Guarantees
 
 `S3FileSink` provides at-least-once guarantees, and the results may contain duplicated data if there were errors during processing.
+
+
+## Testing Locally
+
+Rather than connect to AWS, you can alternatively test your application using a local 
+emulated S3 host via Docker (using minio):
+
+1. Execute in terminal:
+
+    ```bash
+    docker run --rm -d --name minio \
+    -p 9000-9001:9000-9001 \
+    -e MINIO_ROOT_USER=admin \
+    -e MINIO_ROOT_PASSWORD=admin_pw \
+    -v /data \
+    quay.io/minio/minio server /data --console-address ":9001"
+    ```
+
+2. 
+    - Navigate to the UI at `http://localhost:9001`
+    - Authenticate with `username=admin`, `password=admin_pw`
+    - Create a bucket.
+
+3. Connect using the following:
+    ```python
+    from quixstreams.sinks.community.file.s3 import S3FileSink
+    
+    S3FileSink(
+        bucket="<YOUR BUCKET NAME>",
+        aws_access_key_id='admin',
+        aws_secret_access_key='admin_pw',
+        region_name='us-east-1',
+        endpoint_url='http://localhost:9000',
+    )
+    ```
