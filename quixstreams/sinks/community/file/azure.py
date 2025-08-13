@@ -44,8 +44,8 @@ class AzureFileSink(FileSink):
 
     def __init__(
         self,
-        connection_string: str,
-        container: str,
+        azure_connection_string: str,
+        azure_container: str,
         directory: str = "",
         format: Union[FormatName, Format] = "json",
         on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
@@ -54,9 +54,9 @@ class AzureFileSink(FileSink):
         """
         Initialize the Azure File destination.
 
-        :param connection_string: Azure client authentication string.
-        :param container: Azure container name.
-                :param directory: Base directory path for storing files. Defaults to
+        :param azure_connection_string: Azure client authentication string.
+        :param azure_container: Azure container name.
+        :param directory: Base directory path for storing files. Defaults to
             current directory.
         :param format: Data serialization format, either as a string
             ("json", "parquet") or a Format instance.
@@ -76,8 +76,8 @@ class AzureFileSink(FileSink):
             on_client_connect_success=on_client_connect_success,
             on_client_connect_failure=on_client_connect_failure,
         )
-        self._container = container
-        self._auth = connection_string
+        self._container = azure_container
+        self._auth = azure_connection_string
         self._client: Optional[ContainerClient] = None
 
     def _get_client(self) -> ContainerClient:

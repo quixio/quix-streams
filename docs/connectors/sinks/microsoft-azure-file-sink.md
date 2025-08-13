@@ -19,7 +19,7 @@ pip install quixstreams[azure-file]
 
 ## How It Works
 
-`FileSink` with `AzureFileDestination` is a batching sink that writes data directly to Microsoft Azure.  
+`AzureFileSink` is a batching sink that writes data directly to Microsoft Azure.  
 
 It batches processed records in memory per topic partition and writes them to Azure objects in a specified container and prefix structure. Objects are organized by topic and partition, with each batch being written to a separate object named by its starting offset.
 
@@ -31,25 +31,25 @@ Batches are written to Azure during the commit phase of processing. This means t
 
 ## How To Use
 
-Create an instance of `FileSink` with `AzureFileDestination` and pass it to the `StreamingDataFrame.sink()` method.
+Create an instance of `AzureFileSink` and pass it to the `StreamingDataFrame.sink()` method.
 
 ```python
 from quixstreams import Application
-from quixstreams.sinks.community.file import FileSink
+from quixstreams.sinks.community.file.azure import AzureFileSink
 from quixstreams.sinks.community.file.destinations import AzureFileDestination
 
 
 # Configure the sink to write JSON files to Azure
-file_sink = FileSink(
+file_sink = AzureFileSink(
+    azure_container="<YOUR AZURE CONTAINER NAME>",
+    azure_connection_string="<YOUR AZURE CONNECTION STRING>",
+
     # Optional: defaults to current working directory
     directory="data",
+
     # Optional: defaults to "json"
     # Available formats: "json", "parquet" or an instance of Format
     format=JSONFormat(compress=True),
-    destination=AzureFileDestination(
-        container="<YOUR CONTAINER NAME>",
-        connection_string="<YOUR CONNECTION STRING>",
-    )
 )
 
 app = Application(broker_address='localhost:9092', auto_offset_reset="earliest")

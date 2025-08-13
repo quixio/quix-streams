@@ -19,7 +19,7 @@ pip install quixstreams[s3]
 
 ## How It Works
 
-`FileSink` with `S3Destination` is a batching sink that writes data directly to Amazon S3.  
+`S3FileSink` is a batching sink that writes data directly to Amazon S3.  
 
 It batches processed records in memory per topic partition and writes them to S3 objects in a specified bucket and prefix structure. Objects are organized by topic and partition, with each batch being written to a separate object named by its starting offset.
 
@@ -31,30 +31,36 @@ Batches are written to S3 during the commit phase of processing. This means the 
 
 ## How To Use
 
-Create an instance of `FileSink` with `S3Destination` and pass it to the `StreamingDataFrame.sink()` method.
+Create an instance of `S3FileSink` and pass it to the `StreamingDataFrame.sink()` method.
 
 ```python
+import os
+
 from quixstreams import Application
-from quixstreams.sinks.community.file import FileSink
-from quixstreams.sinks.community.file.destinations import S3Destination
+from quixstreams.sinks.community.file.s3 import S3FileSink
+from quixstreams.sinks.community.file.formats import JSONFormat
 
 
 # Configure the sink to write JSON files to S3
-file_sink = FileSink(
+file_sink = S3FileSink(
+    bucket="my-bucket",
+    region_name="eu-west-2",
+
     # Optional: defaults to current working directory
     directory="data",
+    
     # Optional: defaults to "json"
     # Available formats: "json", "parquet" or an instance of Format
     format=JSONFormat(compress=True),
-    destination=S3Destination(
-        bucket="my-bucket",
-        # Optional: AWS credentials
-        aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],
-        aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],
-        region_name="eu-west-2",
-        # Optional: Additional keyword arguments are passed to the boto3 client
-        endpoint_url="http://localhost:4566",  # for LocalStack testing
-    )
+    
+    # Optional: AWS credentials
+    aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],
+    aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],
+    
+    # Optional: For local testing
+    endpoint_url="http://localhost:4566",
+    
+    # Optional: Additional keyword arguments are passed to boto3 client
 )
 
 app = Application(broker_address='localhost:9092', auto_offset_reset="earliest")
@@ -73,10 +79,11 @@ if __name__ == "__main__":
     export AWS_ACCESS_KEY_ID="your_access_key"
     export AWS_SECRET_ACCESS_KEY="your_secret_key"
     export AWS_DEFAULT_REGION="eu-west-2"
+    export AWS_ENDPOINT_URL_S3="http://your.url.here"
     ```
-    Then you can create the destination with just the bucket name:
+    Then you can create the sink with just the bucket name:
     ```python
-    s3_sink = S3Destination(bucket="my-bucket")
+    s3_sink = S3FileSink(bucket="my-bucket")
     ```
 
 ## S3 Object Organization
@@ -105,4 +112,4 @@ Each object is named using the batch's starting offset (padded to 19 digits) and
 
 ## Delivery Guarantees
 
-`FileSink` provides at-least-once guarantees, and the results may contain duplicated data if there were errors during processing.
+`S3FileSink` provides at-least-once guarantees, and the results may contain duplicated data if there were errors during processing.
