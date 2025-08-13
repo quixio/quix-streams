@@ -114,7 +114,7 @@ class AzureFileSink(FileSink):
     def setup(self):
         if not self._client:
             self._client = self._get_client()
-            # self._validate_container()
+            self._validate_container()
 
     def _write(self, data: bytes, batch: SinkBatch) -> None:
         """

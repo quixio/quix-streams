@@ -8,7 +8,6 @@ from quixstreams.sinks import (
     BatchingSink,
     ClientConnectFailureCallback,
     ClientConnectSuccessCallback,
-    SinkBackpressureError,
     SinkBatch,
 )
 
@@ -80,32 +79,27 @@ class FileSink(BatchingSink):
 
     @abstractmethod
     def _write(self, data: bytes, batch: SinkBatch) -> None:
-        """Write the serialized data to storage.
+        """
+        Write the serialized data to storage.
 
         :param data: The serialized data to write.
-        :param batch: The batch information containing topic, partition and offset
-            details.
+        :param batch: The batch object containing topic, partition and offset details.
         """
         ...
 
     def write(self, batch: SinkBatch) -> None:
-        """Write a batch of data using the configured format and destination.
-
-        The method performs the following steps:
-        1. Serializes the batch data using the configured format
-        2. Writes the serialized data to the destination
-        3. Handles any write failures by raising a backpressure error
+        """
+        Write a batch of data using the configured format.
 
         :param batch: The batch of data to write.
-        :raises SinkBackpressureError: If the write operation fails, indicating
-            that the sink needs backpressure with a 5-second retry delay.
         """
         data = self._format.serialize(batch)
 
         try:
             self._write(data, batch)
         except Exception as e:
-            raise SinkBackpressureError(retry_after=5.0) from e
+            logger.error(f"Sink write attempt encountered an error: {e}")
+            raise
 
     def _path(self, batch: SinkBatch) -> Path:
         """Generate the full path where the batch data should be stored.
