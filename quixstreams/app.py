@@ -1035,16 +1035,45 @@ class Application:
 
         value, key, timestamp, headers = None, None, int(now * 1000), {}
 
-        for tp in self._consumer.assignment():
-            if executor := wall_clock_executors.get(tp.topic):
+        # Offsets processed in the current, open checkpoint (in-flight)
+        tp_offsets = self._processing_context.checkpoint.tp_offsets
+        assignment = self._consumer.assignment()
+
+        for topics, executor in wall_clock_executors.items():
+            seen_partitions: set[int] = set()
+            selected_partitions: list[tuple[str, int, int]] = []
+
+            for tp in assignment:
+                if tp.topic in topics and tp.partition not in seen_partitions:
+                    offset = tp_offsets.get((tp.topic, tp.partition))
+                    if offset is None:
+                        # TODO: We can call only once for all required partitions
+                        committed_tp = self._consumer.committed([tp], timeout=30)[0]
+                        if committed_tp.error:
+                            raise RuntimeError(
+                                "Failed to get committed offsets for "
+                                f'"{committed_tp.topic}[{committed_tp.partition}]" '
+                                f"from the broker: {committed_tp.error}"
+                            )
+                        if committed_tp.offset >= 0:
+                            offset = committed_tp.offset - 1
+
+                    # TODO: Handle the case when the offset is None
+                    # This means that the wall clock is triggered before any messages
+                    if offset is not None:
+                        seen_partitions.add(tp.partition)
+                        selected_partitions.append((tp.topic, tp.partition, offset))
+
+            # Execute callback for each selected topic-partition with its offset
+            for topic, partition, offset in selected_partitions:
                 row = Row(
                     value=value,
                     key=key,
                     timestamp=timestamp,
                     context=MessageContext(
-                        topic=tp.topic,
-                        partition=tp.partition,
-                        offset=-1,  # TODO: get correct offsets
+                        topic=topic,
+                        partition=partition,
+                        offset=offset,
                         size=-1,
                     ),
                     headers=headers,
@@ -1058,6 +1087,7 @@ class Application:
                     if not to_suppress:
                         raise
 
+        # TODO: should we use a "new" now or the one from before the processing?
         self._wall_clock_last_sent = now
 
     def _on_assign(self, _, topic_partitions: List[TopicPartition]):
