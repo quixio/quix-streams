@@ -22,7 +22,7 @@ class DataFrameRegistry:
 
     def __init__(self) -> None:
         self._registry: dict[str, Stream] = {}
-        self._wall_clock_registry: dict[str, tuple[tuple[Topic, ...], Stream]] = {}
+        self._wall_clock_registry: dict[Stream, tuple[str, ...]] = {}
         self._topics: list[Topic] = []
         self._repartition_origins: set[str] = set()
         self._topics_to_stream_ids: dict[str, set[str]] = {}
@@ -73,12 +73,8 @@ class DataFrameRegistry:
     def register_wall_clock(
         self, dataframe: "StreamingDataFrame", stream: Stream
     ) -> None:
-        """
-        Register a wall clock stream root for the given dataframe.
-        Stores the Stream itself to be composed later with an optional sink.
-        """
-        # TODO: What if there are more wall clock streams for the same stream_id?
-        self._wall_clock_registry[dataframe.stream_id] = (dataframe.topics, stream)
+        # Store the topic names as an immutable tuple for stable typing
+        self._wall_clock_registry[stream] = tuple(t.name for t in dataframe.topics)
 
     def register_groupby(
         self,
@@ -134,16 +130,15 @@ class DataFrameRegistry:
             executors[topic] = root_executors[root_stream]
         return executors
 
-    def compose_wall_clock(self) -> dict[tuple[str, ...], VoidExecutor]:
+    def compose_wall_clock(self) -> list[tuple[tuple[str, ...], VoidExecutor]]:
         """
         Compose all wall clock Streams and return executors keyed by stream_id.
         Returns mapping: {stream_id: (topics, executor)}
         """
-        executors = {}
-        for _, (topics, root_stream) in self._wall_clock_registry.items():
+        executors = []
+        for root_stream, topics in self._wall_clock_registry.items():
             root_executors = root_stream.compose()
-            _topics = tuple({t.name for t in topics})
-            executors[_topics] = root_executors[root_stream]
+            executors.append((topics, root_executors[root_stream]))
         return executors
 
     def register_stream_id(self, stream_id: str, topic_names: list[str]):

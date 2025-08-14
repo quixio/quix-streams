@@ -8,6 +8,7 @@ import uuid
 import warnings
 from collections import defaultdict
 from datetime import datetime
+from itertools import chain
 from pathlib import Path
 from typing import Callable, List, Literal, Optional, Protocol, Tuple, Type, Union, cast
 
@@ -1026,46 +1027,72 @@ class Application:
             self._on_message_processed(topic_name, partition, offset)
 
     def _process_wall_clock(self, wall_clock_executors):
+        # Emit time-based "ticks" when the wall-clock interval elapses.
+        # For each executor (grouped by topics), select one partition per partition id
+        # and determine an offset to include in MessageContext.
         if not self._wall_clock_active:
             return
 
+        # Rate-limit by interval; skip until enough time has elapsed since last send.
         now = datetime.now().timestamp()
         if self._wall_clock_last_sent > now - self._wall_clock_interval:
             return
 
+        # Synthetic "tick" payload (no value/key, headers empty, timestamp in ms).
         value, key, timestamp, headers = None, None, int(now * 1000), {}
 
-        # Offsets processed in the current, open checkpoint (in-flight)
-        tp_offsets = self._processing_context.checkpoint.tp_offsets
-        assignment = self._consumer.assignment()
+        # In-flight processed offsets within the current (open) checkpoint.
+        processed_offsets = self._processing_context.checkpoint.tp_offsets
+        # Only consider currently assigned topic-partitions.
+        assigned_tps = self._consumer.assignment()
+        # Cache known offsets to avoid resolving them multiple times for different executors.
+        # Keyed by (topic, partition) to avoid relying on TopicPartition instance identity.
+        known_offsets: dict[tuple[str, int], int] = {}
 
-        for topics, executor in wall_clock_executors.items():
-            seen_partitions: set[int] = set()
-            selected_partitions: list[tuple[str, int, int]] = []
+        for topics, executor in wall_clock_executors:
+            # candidate_partitions: partitions still needing an offset resolved
+            candidate_partitions: dict[int, set[TopicPartition]] = defaultdict(set)
+            # selected_partitions: final partition_id -> (topic, offset)
+            selected_partitions: dict[int, tuple[str, int]] = {}
 
-            for tp in assignment:
-                if tp.topic in topics and tp.partition not in seen_partitions:
-                    offset = tp_offsets.get((tp.topic, tp.partition))
-                    if offset is None:
-                        # TODO: We can call only once for all required partitions
-                        committed_tp = self._consumer.committed([tp], timeout=30)[0]
-                        if committed_tp.error:
-                            raise RuntimeError(
-                                "Failed to get committed offsets for "
-                                f'"{committed_tp.topic}[{committed_tp.partition}]" '
-                                f"from the broker: {committed_tp.error}"
-                            )
-                        if committed_tp.offset >= 0:
-                            offset = committed_tp.offset - 1
+            for tp in assigned_tps:
+                known_offset = known_offsets.get((tp.topic, tp.partition))
+                if known_offset is not None:
+                    selected_partitions[tp.partition] = (tp.topic, known_offset)
+                    continue
 
-                    # TODO: Handle the case when the offset is None
-                    # This means that the wall clock is triggered before any messages
-                    if offset is not None:
-                        seen_partitions.add(tp.partition)
-                        selected_partitions.append((tp.topic, tp.partition, offset))
+                if tp.topic in topics and tp.partition not in selected_partitions:
+                    # Prefer the most recent known processed offset if available.
+                    if processed_offset := processed_offsets.get(
+                        (tp.topic, tp.partition)
+                    ):
+                        # Use offset from the in-flight checkpoint.
+                        selected_partitions[tp.partition] = (tp.topic, processed_offset)
+                        known_offsets[(tp.topic, tp.partition)] = processed_offset
+                    else:
+                        # Will resolve via committed offsets below.
+                        candidate_partitions[tp.partition].add(tp)
 
-            # Execute callback for each selected topic-partition with its offset
-            for topic, partition, offset in selected_partitions:
+            if candidate_partitions:
+                # Best-effort: fetch committed offsets in batch for unresolved partitions.
+                committed_tps = self._consumer.committed(
+                    list(chain(*candidate_partitions.values())), timeout=30
+                )
+                for tp in committed_tps:
+                    if tp.error:
+                        raise RuntimeError(
+                            f"Failed to get committed offsets for "
+                            f'"{tp.topic}[{tp.partition}]" from the broker: {tp.error}'
+                        )
+                    if tp.partition not in selected_partitions:
+                        # Committed offset is "next to consume"; last processed is offset - 1.
+                        # The "invalid/unset" broker offset is negative.
+                        offset = tp.offset - 1 if tp.offset >= 0 else tp.offset
+                        selected_partitions[tp.partition] = (tp.topic, offset)
+                        known_offsets[(tp.topic, tp.partition)] = offset
+
+            # Execute callback for each selected topic-partition with its offset.
+            for partition, (topic, offset) in selected_partitions.items():
                 row = Row(
                     value=value,
                     key=key,
@@ -1087,7 +1114,7 @@ class Application:
                     if not to_suppress:
                         raise
 
-        # TODO: should we use a "new" now or the one from before the processing?
+        # Record the emission time for rate-limiting.
         self._wall_clock_last_sent = now
 
     def _on_assign(self, _, topic_partitions: List[TopicPartition]):
