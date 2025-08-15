@@ -11,7 +11,7 @@ By default, the data will include the kafka message key, value, and timestamp.
 
 ## How It Works
 
-`FileSink` with `LocalDestination` is a batching sink that writes data to your local filesystem.
+`LocalFileSink` is a batching sink that writes data to your local filesystem.
 
 It batches processed records in memory per topic partition and writes them to files in a specified directory structure. Files are organized by topic and partition. When append mode is disabled (default), each batch is written to a separate file named by its starting offset. When append mode is enabled, all records for a partition are written to a single file.
 
@@ -19,23 +19,24 @@ The sink can either create new files for each batch or append to existing files 
 
 ## How To Use
 
-Create an instance of `FileSink` and pass it to the `StreamingDataFrame.sink()` method.
+Create an instance of `LocalFileSink` and pass it to the `StreamingDataFrame.sink()` method.
 
 ```python
 from quixstreams import Application
-from quixstreams.sinks.community.file import FileSink
-from quixstreams.sinks.community.file.destinations import LocalDestination
+from quixstreams.sinks.community.file.local import LocalFileSink
 from quixstreams.sinks.community.file.formats import JSONFormat
 
 # Configure the sink to write JSON files
-file_sink = FileSink(
+file_sink = LocalFileSink(
+    # Append can be set to True to dump to a single file per partition
+    append=False,
+    
     # Optional: defaults to current working directory
     directory="data",
+    
     # Optional: defaults to "json"
     # Available formats: "json", "parquet" or an instance of Format
-    format=JSONFormat(compress=True),
-    # Optional: defaults to LocalDestination(append=False)
-    destination=LocalDestination(append=True),
+    format=JSONFormat(compress=True)
 )
 
 app = Application(broker_address='localhost:9092', auto_offset_reset="earliest")
@@ -73,4 +74,4 @@ Each file is named using the batch's starting offset (padded to 19 digits) and t
 
 ## Delivery Guarantees
 
-`FileSink` provides at-least-once guarantees, and the results may contain duplicated data if there were errors during processing.
+`LocalFileSink` provides at-least-once guarantees, and the results may contain duplicated data if there were errors during processing.

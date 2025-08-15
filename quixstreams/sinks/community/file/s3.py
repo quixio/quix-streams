@@ -1,12 +1,21 @@
 import logging
 from os import getenv
-from typing import Optional
+from typing import Optional, Union
 
 import boto3
 from mypy_boto3_s3 import S3Client
 
-from quixstreams.sinks import SinkBatch
-from quixstreams.sinks.community.file.destinations.base import Destination
+from quixstreams.sinks import (
+    ClientConnectFailureCallback,
+    ClientConnectSuccessCallback,
+    SinkBatch,
+)
+
+from .base import FileSink
+from .formats import Format, FormatName
+
+__all__ = ("S3FileSink",)
+
 
 logger = logging.getLogger(__name__)
 
@@ -19,11 +28,18 @@ class S3BucketAccessDeniedError(Exception):
     """Raised when the specified S3 bucket access is denied."""
 
 
-class S3Destination(Destination):
-    """A destination that writes data to Amazon S3.
+class S3FileSink(FileSink):
+    """A sink that writes data batches to files using configurable formats and
+    destinations.
 
-    Handles writing data to S3 buckets using the AWS SDK. Credentials can be
-    provided directly or via environment variables.
+    The sink groups messages by their topic and partition, ensuring data from the
+    same source is stored together. Each batch is serialized using the specified
+    format (e.g., JSON, Parquet) before being written to the configured
+    destination.
+
+    The destination determines the storage location and write behavior. By default,
+    it uses LocalDestination for writing to the local filesystem, but can be
+    configured to use other storage backends (e.g., cloud storage).
     """
 
     def __init__(
@@ -33,9 +49,14 @@ class S3Destination(Destination):
         aws_secret_access_key: Optional[str] = getenv("AWS_SECRET_ACCESS_KEY"),
         region_name: Optional[str] = getenv("AWS_REGION", getenv("AWS_DEFAULT_REGION")),
         endpoint_url: Optional[str] = getenv("AWS_ENDPOINT_URL_S3"),
+        directory: str = "",
+        format: Union[FormatName, Format] = "json",
+        on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
+        on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
         **kwargs,
     ) -> None:
-        """Initialize the S3 destination.
+        """
+        Initialize the S3 destination.
 
         :param bucket: Name of the S3 bucket to write to.
         :param aws_access_key_id: AWS access key ID. Defaults to AWS_ACCESS_KEY_ID
@@ -48,9 +69,17 @@ class S3Destination(Destination):
         to a locally hosted S3.
             NOTE: can alternatively set the AWS_ENDPOINT_URL_S3 environment variable
         :param kwargs: Additional keyword arguments passed to boto3.client.
+
         :raises S3BucketNotFoundError: If the specified bucket doesn't exist.
         :raises S3BucketAccessDeniedError: If access to the bucket is denied.
         """
+        super().__init__(
+            directory=directory,
+            format=format,
+            on_client_connect_success=on_client_connect_success,
+            on_client_connect_failure=on_client_connect_failure,
+        )
+
         self._bucket = bucket
         self._credentials = {
             "region_name": region_name,
@@ -69,7 +98,8 @@ class S3Destination(Destination):
             self._validate_bucket()
 
     def _validate_bucket(self) -> None:
-        """Validate that the bucket exists and is accessible.
+        """
+        Validate that the bucket exists and is accessible.
 
         :raises S3BucketNotFoundError: If the specified bucket doesn't exist.
         :raises S3BucketAccessDeniedError: If access to the bucket is denied.
@@ -86,8 +116,9 @@ class S3Destination(Destination):
                 raise S3BucketNotFoundError(f"S3 bucket not found: {bucket}")
             raise
 
-    def write(self, data: bytes, batch: SinkBatch) -> None:
-        """Write data to S3.
+    def _write(self, data: bytes, batch: SinkBatch) -> None:
+        """
+        Write data to S3.
 
         :param data: The serialized data to write.
         :param batch: The batch information containing topic and partition details.
