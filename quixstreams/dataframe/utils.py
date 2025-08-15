@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Union
 
 
@@ -22,3 +22,8 @@ def ensure_milliseconds(delta: Union[int, timedelta]) -> int:
             f'Timedelta must be either "int" representing milliseconds '
             f'or "datetime.timedelta", got "{type(delta)}"'
         )
+
+
+def now() -> int:
+    # TODO: Should be UTC time
+    return int(datetime.now().timestamp() * 1000)

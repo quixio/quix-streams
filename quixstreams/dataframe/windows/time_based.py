@@ -3,6 +3,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Iterable, Literal, Optional
 
 from quixstreams.context import message_context
+from quixstreams.dataframe.utils import now
 from quixstreams.state import WindowedPartitionTransaction, WindowedState
 
 from .base import (
@@ -200,11 +201,23 @@ class TimeWindow(Window):
 
         return updated_windows, expired_windows
 
+    def process_wall_clock(
+        self,
+        transaction: WindowedPartitionTransaction,
+    ) -> Iterable[WindowKeyResult]:
+        return self.expire_by_partition(
+            transaction=transaction,
+            max_expired_end=now() - self._grace_ms,
+            collect=self.collect,
+            advance_last_expired_timestamp=False,
+        )
+
     def expire_by_partition(
         self,
         transaction: WindowedPartitionTransaction,
         max_expired_end: int,
         collect: bool,
+        advance_last_expired_timestamp: bool = True,
     ) -> Iterable[WindowKeyResult]:
         for (
             window_start,
@@ -214,6 +227,7 @@ class TimeWindow(Window):
             step_ms=self._step_ms if self._step_ms else self._duration_ms,
             collect=collect,
             delete=True,
+            advance_last_expired_timestamp=advance_last_expired_timestamp,
         ):
             yield key, self._results(aggregated, collected, window_start, window_end)
 

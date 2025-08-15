@@ -189,6 +189,12 @@ class CountWindow(Window):
         state.set(key=self.STATE_KEY, value=data)
         return updated_windows, expired_windows
 
+    def process_wall_clock(
+        self,
+        transaction: WindowedPartitionTransaction,
+    ) -> Iterable[WindowKeyResult]:
+        return []
+
     def _get_collection_start_id(self, window: CountWindowData) -> int:
         start_id = window.get("collection_start_id", _MISSING)
         if start_id is _MISSING:
