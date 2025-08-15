@@ -93,13 +93,7 @@ class FileSink(BatchingSink):
 
         :param batch: The batch of data to write.
         """
-        data = self._format.serialize(batch)
-
-        try:
-            self._write(data, batch)
-        except Exception as e:
-            logger.error(f"Sink write attempt encountered an error: {e}")
-            raise
+        self._write(self._format.serialize(batch), batch)
 
     def _path(self, batch: SinkBatch) -> Path:
         """Generate the full path where the batch data should be stored.

@@ -130,8 +130,4 @@ class AzureFileSink(FileSink):
             self._container,
             file_name,
         )
-        try:
-            self._client.get_blob_client(file_name).upload_blob(data)
-        except Exception as e:
-            print(e.__class__, str(e))
-            raise
+        self._client.get_blob_client(file_name).upload_blob(data)
