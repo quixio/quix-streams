@@ -22,6 +22,7 @@ class DataFrameRegistry:
 
     def __init__(self) -> None:
         self._registry: dict[str, Stream] = {}
+        self._wall_clock_registry: dict[Stream, tuple[str, ...]] = {}
         self._topics: list[Topic] = []
         self._repartition_origins: set[str] = set()
         self._topics_to_stream_ids: dict[str, set[str]] = {}
@@ -68,6 +69,12 @@ class DataFrameRegistry:
             )
         self._topics.append(topic)
         self._registry[topic.name] = dataframe.stream
+
+    def register_wall_clock(
+        self, dataframe: "StreamingDataFrame", stream: Stream
+    ) -> None:
+        # Store the topic names as an immutable tuple for stable typing
+        self._wall_clock_registry[stream] = tuple(t.name for t in dataframe.topics)
 
     def register_groupby(
         self,
@@ -121,6 +128,17 @@ class DataFrameRegistry:
             # Use the registered root Stream to filter them out.
             root_executors = root_stream.compose(sink=sink)
             executors[topic] = root_executors[root_stream]
+        return executors
+
+    def compose_wall_clock(self) -> list[tuple[tuple[str, ...], VoidExecutor]]:
+        """
+        Compose all wall clock Streams and return executors keyed by stream_id.
+        Returns mapping: {stream_id: (topics, executor)}
+        """
+        executors = []
+        for root_stream, topics in self._wall_clock_registry.items():
+            root_executors = root_stream.compose()
+            executors.append((topics, root_executors[root_stream]))
         return executors
 
     def register_stream_id(self, stream_id: str, topic_names: list[str]):
