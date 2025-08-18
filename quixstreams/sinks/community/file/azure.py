@@ -1,8 +1,5 @@
 import logging
-from typing import Optional
-
-from quixstreams.sinks import SinkBatch
-from quixstreams.sinks.community.file.destinations.base import Destination
+from typing import Optional, Union
 
 try:
     from azure.core.exceptions import HttpResponseError
@@ -14,8 +11,16 @@ except ImportError as exc:
         'run "pip install quixstreams[azure-file]" to use AzureFileDestination'
     ) from exc
 
+from quixstreams.sinks import (
+    ClientConnectFailureCallback,
+    ClientConnectSuccessCallback,
+    SinkBatch,
+)
 
-__all__ = ("AzureFileDestination",)
+from .base import FileSink
+from .formats import Format, FormatName
+
+__all__ = ("AzureFileSink",)
 
 
 logger = logging.getLogger(__name__)
@@ -29,7 +34,7 @@ class AzureContainerAccessDeniedError(Exception):
     """Raised when the specified Azure File container access is denied."""
 
 
-class AzureFileDestination(Destination):
+class AzureFileSink(FileSink):
     """
     A destination that writes data to Microsoft Azure File.
 
@@ -39,20 +44,40 @@ class AzureFileDestination(Destination):
 
     def __init__(
         self,
-        connection_string: str,
-        container: str,
+        azure_connection_string: str,
+        azure_container: str,
+        directory: str = "",
+        format: Union[FormatName, Format] = "json",
+        on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
+        on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
     ) -> None:
         """
         Initialize the Azure File destination.
 
-        :param connection_string: Azure client authentication string.
-        :param container: Azure container name.
+        :param azure_connection_string: Azure client authentication string.
+        :param azure_container: Azure container name.
+        :param directory: Base directory path for storing files. Defaults to
+            current directory.
+        :param format: Data serialization format, either as a string
+            ("json", "parquet") or a Format instance.
+        :param on_client_connect_success: An optional callback made after successful
+            client authentication, primarily for additional logging.
+        :param on_client_connect_failure: An optional callback made after failed
+            client authentication (which should raise an Exception).
+            Callback should accept the raised Exception as an argument.
+            Callback must resolve (or propagate/re-raise) the Exception.
 
         :raises AzureContainerNotFoundError: If the specified container doesn't exist.
         :raises AzureContainerAccessDeniedError: If access to the container is denied.
         """
-        self._container = container
-        self._auth = connection_string
+        super().__init__(
+            directory=directory,
+            format=format,
+            on_client_connect_success=on_client_connect_success,
+            on_client_connect_failure=on_client_connect_failure,
+        )
+        self._container = azure_container
+        self._auth = azure_connection_string
         self._client: Optional[ContainerClient] = None
 
     def _get_client(self) -> ContainerClient:
@@ -91,7 +116,7 @@ class AzureFileDestination(Destination):
             self._client = self._get_client()
             self._validate_container()
 
-    def write(self, data: bytes, batch: SinkBatch) -> None:
+    def _write(self, data: bytes, batch: SinkBatch) -> None:
         """
         Write data to Azure.
 
