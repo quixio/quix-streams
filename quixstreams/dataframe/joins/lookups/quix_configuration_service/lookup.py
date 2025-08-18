@@ -10,6 +10,7 @@ import orjson
 
 from quixstreams.kafka import ConnectionConfig, Consumer
 from quixstreams.models import HeadersMapping, Topic
+from quixstreams.platforms.quix.env import QUIX_ENVIRONMENT
 
 from ..base import BaseLookup
 from ..utils import CacheInfo
@@ -69,6 +70,7 @@ class Lookup(BaseLookup[BaseField]):
         consumer_group: str = DEFAULT_CONSUMER_GROUP,
         consumer_extra_config: Optional[dict] = None,
         request_timeout: int = DEFAULT_REQUEST_TIMEOUT,
+        quix_sdk_token: Optional[str] = None,
         cache_size: int = 1000,
         fallback: Literal["error", "default"] = "error",
     ):
@@ -98,7 +100,18 @@ class Lookup(BaseLookup[BaseField]):
         self._fallback = fallback
 
         self._started = threading.Event()
-        self._client = httpx.Client(follow_redirects=True)
+
+        headers = {
+            "User-Agent": "quixstreams-lookup",
+        }
+        token = quix_sdk_token or QUIX_ENVIRONMENT.sdk_token
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+
+        self._client = httpx.Client(
+            follow_redirects=True,
+            headers=headers,
+        )
         self._consumer_poll_timeout = consumer_poll_timeout
         self._configurations: dict[str, Configuration] = {}
 
