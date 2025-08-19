@@ -200,11 +200,27 @@ class TimeWindow(Window):
 
         return updated_windows, expired_windows
 
+    def process_heartbeat(
+        self,
+        timestamp_ms: int,
+        transaction: WindowedPartitionTransaction,
+    ) -> Iterable[WindowKeyResult]:
+        latest_expired_window_end = transaction.get_latest_expired(prefix=b"")
+        latest_timestamp = max(timestamp_ms, latest_expired_window_end)
+        max_expired_window_end = latest_timestamp - self._grace_ms
+        return self.expire_by_partition(
+            transaction,
+            max_expired_window_end,
+            self.collect,
+            advance_last_expired_timestamp=False,
+        )
+
     def expire_by_partition(
         self,
         transaction: WindowedPartitionTransaction,
         max_expired_end: int,
         collect: bool,
+        advance_last_expired_timestamp: bool = True,
     ) -> Iterable[WindowKeyResult]:
         for (
             window_start,
@@ -214,6 +230,7 @@ class TimeWindow(Window):
             step_ms=self._step_ms if self._step_ms else self._duration_ms,
             collect=collect,
             delete=True,
+            advance_last_expired_timestamp=advance_last_expired_timestamp,
         ):
             yield key, self._results(aggregated, collected, window_start, window_end)
 
