@@ -3965,7 +3965,7 @@ Optional[ConfigurationVersion]: The valid version, or None if not found.
 class Lookup(BaseLookup[BaseField])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/lookup.py#L38)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/lookup.py#L39)
 
 Lookup join implementation for enriching streaming data with configuration data from a Kafka topic.
 
@@ -4001,7 +4001,7 @@ def json_field(jsonpath: str,
                default: Any = RAISE_ON_MISSING) -> JSONField
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/lookup.py#L123)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/lookup.py#L136)
 
 Create a JSON field for extracting values from configuration content using JSONPath.
 
@@ -4024,7 +4024,7 @@ A JSONField instance.
 def bytes_field(type: str, default: Any = RAISE_ON_MISSING) -> BytesField
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/lookup.py#L147)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/lookup.py#L160)
 
 Create a bytes field for extracting binary content from configuration.
 
@@ -4045,7 +4045,7 @@ A BytesField instance.
 def cache_info() -> CacheInfo
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/lookup.py#L367)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/lookup.py#L380)
 
 Get information about the cache.
 
@@ -4065,7 +4065,7 @@ def join(fields: Mapping[str, BaseField], on: str, value: dict[str, Any],
          key: Any, timestamp: int, headers: HeadersMapping) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/lookup.py#L379)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/lookup.py#L392)
 
 Enrich the message with configuration data from the Quix Configuration Service.
 
