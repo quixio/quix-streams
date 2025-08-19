@@ -11,3 +11,5 @@ LATEST_TIMESTAMPS_CF_NAME = "__latest-timestamps__"
 LATEST_TIMESTAMP_KEY = b"__latest_timestamp__"
 
 VALUES_CF_NAME = "__values__"
+
+TRIGGERS_CF_NAME = "__triggers__"
