@@ -22,15 +22,20 @@ from .count_based import (
     CountWindowMultiAggregation,
     CountWindowSingleAggregation,
 )
+from .session import (
+    SessionWindow,
+    SessionWindowMultiAggregation,
+    SessionWindowSingleAggregation,
+)
 from .sliding import (
     SlidingWindow,
     SlidingWindowMultiAggregation,
     SlidingWindowSingleAggregation,
 )
 from .time_based import (
+    FixedTimeWindowMultiAggregation,
+    FixedTimeWindowSingleAggregation,
     TimeWindow,
-    TimeWindowMultiAggregation,
-    TimeWindowSingleAggregation,
 )
 
 if TYPE_CHECKING:
@@ -43,6 +48,7 @@ __all__ = [
     "HoppingTimeWindowDefinition",
     "SlidingTimeWindowDefinition",
     "TumblingTimeWindowDefinition",
+    "SessionWindowDefinition",
 ]
 
 WindowT = TypeVar("WindowT", bound=Window)
@@ -306,10 +312,11 @@ class HoppingTimeWindowDefinition(TimeWindowDefinition[TimeWindow]):
     ) -> TimeWindow:
         if func_name:
             window_type: Union[
-                type[TimeWindowSingleAggregation], type[TimeWindowMultiAggregation]
-            ] = TimeWindowSingleAggregation
+                type[FixedTimeWindowSingleAggregation],
+                type[FixedTimeWindowMultiAggregation],
+            ] = FixedTimeWindowSingleAggregation
         else:
-            window_type = TimeWindowMultiAggregation
+            window_type = FixedTimeWindowMultiAggregation
 
         return window_type(
             duration_ms=self._duration_ms,
@@ -355,10 +362,11 @@ class TumblingTimeWindowDefinition(TimeWindowDefinition[TimeWindow]):
     ) -> TimeWindow:
         if func_name:
             window_type: Union[
-                type[TimeWindowSingleAggregation], type[TimeWindowMultiAggregation]
-            ] = TimeWindowSingleAggregation
+                type[FixedTimeWindowSingleAggregation],
+                type[FixedTimeWindowMultiAggregation],
+            ] = FixedTimeWindowSingleAggregation
         else:
-            window_type = TimeWindowMultiAggregation
+            window_type = FixedTimeWindowMultiAggregation
 
         return window_type(
             duration_ms=self._duration_ms,
@@ -528,4 +536,71 @@ class SlidingCountWindowDefinition(HoppingCountWindowDefinition):
         )
         if func_name:
             return f"{prefix}_{func_name}"
-        return prefix
+        else:
+            return prefix
+
+
+class SessionWindowDefinition(WindowDefinition):
+    """
+    Definition for session windows that group events by activity sessions.
+
+    Session windows group events that occur within a specified timeout period.
+    A session starts with the first event and extends each time a new event arrives
+    within the timeout period. The session closes after the timeout period with no
+    new events.
+    """
+
+    def __init__(
+        self,
+        inactivity_gap_ms: int,
+        grace_ms: int,
+        dataframe: "StreamingDataFrame",
+        name: Optional[str] = None,
+        on_late: Optional[WindowOnLateCallback] = None,
+    ):
+        if not isinstance(inactivity_gap_ms, int):
+            raise TypeError("Session timeout must be an integer")
+        if inactivity_gap_ms < 1:
+            raise ValueError("Session timeout cannot be smaller than 1ms")
+        if grace_ms < 0:
+            raise ValueError("Session grace cannot be smaller than 0ms")
+
+        super().__init__(name, dataframe, on_late)
+
+        self._inactivity_gap_ms = inactivity_gap_ms
+        self._grace_ms = grace_ms
+
+    @property
+    def grace_ms(self) -> int:
+        return self._grace_ms
+
+    def _get_name(self, func_name: Optional[str]) -> str:
+        prefix = f"{self._name}_session_window" if self._name else "session_window"
+        if func_name:
+            return f"{prefix}_{self._inactivity_gap_ms}_{func_name}"
+        else:
+            return f"{prefix}_{self._inactivity_gap_ms}"
+
+    def _create_window(
+        self,
+        func_name: Optional[str],
+        aggregators: Optional[dict[str, BaseAggregator]] = None,
+        collectors: Optional[dict[str, BaseCollector]] = None,
+    ) -> SessionWindow:
+        if func_name:
+            window_type: Union[
+                type[SessionWindowSingleAggregation],
+                type[SessionWindowMultiAggregation],
+            ] = SessionWindowSingleAggregation
+        else:
+            window_type = SessionWindowMultiAggregation
+
+        return window_type(
+            timeout_ms=self._inactivity_gap_ms,
+            grace_ms=self._grace_ms,
+            name=self._get_name(func_name=func_name),
+            dataframe=self._dataframe,
+            aggregators=aggregators or {},
+            collectors=collectors or {},
+            on_late=self._on_late,
+        )
