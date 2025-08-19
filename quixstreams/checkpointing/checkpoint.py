@@ -1,7 +1,8 @@
 import logging
 import time
 from abc import abstractmethod
-from typing import Dict, Tuple
+from types import MappingProxyType
+from typing import Dict, Mapping, Tuple
 
 from confluent_kafka import KafkaException, TopicPartition
 
@@ -54,6 +55,15 @@ class BaseCheckpoint:
 
         self._commit_every = commit_every
         self._total_offsets_processed = 0
+
+    @property
+    def tp_offsets(self) -> Mapping[Tuple[str, int], int]:
+        """
+        Read-only view of processed (but not yet committed) offsets in the current checkpoint.
+
+        :return: a read-only mapping {(topic, partition): last_processed_offset}
+        """
+        return MappingProxyType(self._tp_offsets)
 
     def expired(self) -> bool:
         """
