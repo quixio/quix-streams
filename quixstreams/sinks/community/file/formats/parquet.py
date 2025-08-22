@@ -1,8 +1,15 @@
 from io import BytesIO
 from typing import Literal
 
-import pyarrow as pa
-import pyarrow.parquet as pq
+try:
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+except ImportError as exc:
+    raise ImportError(
+        f"Package {exc.name} is missing: "
+        'run "pip install quixstreams[parquet]" to use the Parquet file format '
+        '(Note: options can be installed together i.e. "quixstreams[s3,parquet]")'
+    ) from exc
 
 from quixstreams.sinks.base import SinkBatch
 

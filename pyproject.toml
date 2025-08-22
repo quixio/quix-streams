@@ -49,6 +49,7 @@ all = [
 ]
 
 avro = ["fastavro>=1.8,<2.0"]
+parquet = ["pyarrow>=17.0.0"]
 protobuf = ["protobuf>=5.27.2,<7.0"]
 influxdb1 = ["influxdb>=5.3,<6"]
 influxdb3 = ["influxdb3-python[pandas]>=0.7,<1.0"]
