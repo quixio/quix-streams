@@ -2,8 +2,14 @@ import logging
 from os import getenv
 from typing import Optional, Union
 
-import boto3
-from mypy_boto3_s3 import S3Client
+try:
+    import boto3
+    from mypy_boto3_s3 import S3Client
+except ImportError as exc:
+    raise ImportError(
+        f"Package {exc.name} is missing: "
+        'run "pip install quixstreams[s3]" to use S3FileSink'
+    ) from exc
 
 from quixstreams.sinks import (
     ClientConnectFailureCallback,

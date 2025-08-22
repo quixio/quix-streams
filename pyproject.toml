@@ -67,8 +67,8 @@ tdengine = ["python-dateutil>=2.8.2,<3"]
 
 # AWS dependencies are separated by service to support
 # different requirements in the future.
-kinesis = ["quixstreams[aws]"]
-s3 = ["quixstreams[aws]"]
+kinesis = ["quixstreams[aws]", "mypy-boto3-kinesis>=1.35.65,<2.0"]
+s3 = ["quixstreams[aws]", "mypy-boto3-s3>=1.35.65,<2.0"]
 redis = ["redis[hiredis]>=5.2.0,<6"]
 azure-file = ["quixstreams[azure]"]
 
