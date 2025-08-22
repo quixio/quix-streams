@@ -1,16 +1,6 @@
 from io import BytesIO
 from typing import Literal
 
-try:
-    import pyarrow as pa
-    import pyarrow.parquet as pq
-except ImportError as exc:
-    raise ImportError(
-        f"Package {exc.name} is missing: "
-        'run "pip install quixstreams[parquet]" to use the Parquet file format '
-        '(Note: options can be installed together i.e. "quixstreams[s3,parquet]")'
-    ) from exc
-
 from quixstreams.sinks.base import SinkBatch
 
 from .base import Format
@@ -49,6 +39,25 @@ class ParquetFormat(Format):
         """
         self._file_extension = file_extension
         self._compression = compression
+        self._write = self._get_writer()
+
+    def _get_writer(self):
+        try:
+            import pyarrow as pa
+            import pyarrow.parquet as pq
+        except ImportError as exc:
+            raise ImportError(
+                f"Package {exc.name} is missing: "
+                'run "pip install quixstreams[parquet]" to use the Parquet file format '
+                '(Note: options can be installed together i.e. "quixstreams[s3,parquet]")'
+            ) from exc
+
+        def _writer(messages: list[dict], fp: BytesIO):
+            return pq.write_table(
+                pa.Table.from_pylist(messages), fp, compression=self._compression
+            )
+
+        return _writer
 
     @property
     def file_extension(self) -> str:
@@ -90,9 +99,6 @@ class ParquetFormat(Format):
             for item in batch
         ]
 
-        # Convert normalized messages to a PyArrow Table
-        table = pa.Table.from_pylist(normalized_messages)
-
         with BytesIO() as fp:
-            pq.write_table(table, fp, compression=self._compression)
+            self._write(normalized_messages, fp)
             return fp.getvalue()
