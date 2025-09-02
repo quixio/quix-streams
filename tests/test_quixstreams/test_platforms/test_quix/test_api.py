@@ -1,10 +1,11 @@
 import json
 import zipfile
 from io import BytesIO
+from unittest import mock
 from unittest.mock import create_autospec
 
+import httpx
 import pytest
-import requests
 
 from quixstreams.platforms.quix.api import (
     QuixPortalApiService,
@@ -27,13 +28,16 @@ class TestQuixPortalApiService:
             zip_file.writestr("ca.cert", BytesIO(b"my cool cert stuff").getvalue())
 
         ws = "12345"
-        api = QuixPortalApiService(portal_api="http://portal.com", auth_token="token")
-        api.session = create_autospec(requests.Session)
-        api.session.get(
-            f"/workspaces/{ws}/certificates"
-        ).content = zip_in_mem.getvalue()
-
-        result = api.get_workspace_certificate(ws)
+        with mock.patch.object(
+            QuixPortalApiService, "client", create_autospec(httpx.Client)
+        ) as client_mock:
+            client_mock.get(
+                f"/workspaces/{ws}/certificates"
+            ).content = zip_in_mem.getvalue()
+            api = QuixPortalApiService(
+                portal_api="http://portal.com", auth_token="token"
+            )
+            result = api.get_workspace_certificate(ws)
         assert result == b"my cool cert stuff"
 
     def test_response_handler_valid_request(self, mock_response_factory):
@@ -51,8 +55,8 @@ class TestQuixPortalApiService:
                 mock_response_factory(
                     url=url,
                     status_code=code,
-                    response_body=valid_json,
-                    request_exception=requests.exceptions.HTTPError,
+                    content=valid_json,
+                    request_exception=httpx.HTTPStatusError,
                 )
             )
 
@@ -75,8 +79,8 @@ class TestQuixPortalApiService:
                 mock_response_factory(
                     url=url,
                     status_code=code,
-                    response_body=invalid_json,
-                    request_exception=requests.exceptions.HTTPError,
+                    content=invalid_json,
+                    request_exception=httpx.HTTPStatusError,
                 )
             )
 
