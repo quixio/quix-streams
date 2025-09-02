@@ -1,4 +1,4 @@
-import json as jsonlib
+import json
 from io import BytesIO
 from typing import List, Literal, Optional
 from zipfile import ZipFile
@@ -178,8 +178,8 @@ class QuixPortalApiService:
             content = e.response.read()
 
             try:
-                error_text = jsonlib.loads(content)
-            except jsonlib.JSONDecodeError:
+                error_text = json.loads(content)
+            except json.JSONDecodeError:
                 error_text = e.response.text
 
             raise QuixApiRequestFailure(
