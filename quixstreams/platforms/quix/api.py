@@ -36,19 +36,19 @@ class QuixPortalApiService:
         api_version: str = "2.0",
         default_workspace_id: Optional[str] = None,
     ):
-        self._portal_api_url = portal_api
         if not auth_token:
             raise MissingConnectionRequirements(
                 f"A Quix Cloud auth token (SDK or PAT) is required; "
                 f"set with environment variable {QUIX_ENVIRONMENT.SDK_TOKEN}"
             )
 
+        self._api_version = api_version
+        self._auth_token = auth_token
+        self._portal_api_url = portal_api
         self._default_workspace_id = (
             default_workspace_id or QUIX_ENVIRONMENT.workspace_id
         )
         self._request_timeout = 30
-        self._api_version = api_version
-        self._auth_token = auth_token
         self._client: Optional[httpx.Client] = None
 
     @property
@@ -196,7 +196,3 @@ class QuixPortalApiService:
         state = self.__dict__.copy()
         state.pop("_client", None)
         return state
-
-    def __setstate__(self, state):
-        self.__dict__.update(state)
-        self._client = None
