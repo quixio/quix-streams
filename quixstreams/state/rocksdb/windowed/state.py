@@ -182,3 +182,18 @@ class WindowedTransactionState(TransactionState, WindowedState):
             delete_values=delete_values,
             prefix=self._prefix,
         )
+
+    def delete_window(self, start_ms: int, end_ms: int) -> None:
+        """
+        Delete a specific window from the state store.
+
+        This method removes a single window entry with the specified start and end timestamps.
+
+        :param start_ms: The start timestamp of the window to delete
+        :param end_ms: The end timestamp of the window to delete
+        """
+        return self._transaction.delete_window(
+            start_ms=start_ms,
+            end_ms=end_ms,
+            prefix=self._prefix,
+        )
