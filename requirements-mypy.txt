@@ -1,5 +1,5 @@
 mypy==1.17.1
 mypy-extensions==1.1.0
-types-jsonschema==4.25.0.20250720
+types-jsonschema==4.25.1.20250822
 types-protobuf==6.30.2.20250822
 types-psycopg2>=2.9,<3
