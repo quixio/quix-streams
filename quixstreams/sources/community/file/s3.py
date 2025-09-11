@@ -21,7 +21,7 @@ try:
 except ImportError as exc:
     raise ImportError(
         f"Package {exc.name} is missing: "
-        'run "pip install quixstreams[s3]" to use S3Origin'
+        'run "pip install quixstreams[s3]" to use S3FileSource'
     ) from exc
 
 logger = logging.getLogger(__name__)
