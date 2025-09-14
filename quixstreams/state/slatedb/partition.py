@@ -192,6 +192,10 @@ class SlateDBStorePartition(StorePartition):
                 yield k[len(cp) :], v
         except NotImplementedError:
             # Fallback: full scan and filter
+            logger.info(
+                "Falling back to full scan for cf=%s due to unsupported bounded iteration",
+                cf_name,
+            )
             it = self._driver.iter(start=None, end=None, reverse=backwards)
             for k, v in it:
                 if not k.startswith(cp):
