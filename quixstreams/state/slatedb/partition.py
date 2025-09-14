@@ -103,6 +103,11 @@ class SlateDBStorePartition(StorePartition):
             except Exception:
                 pass
 
+    def close(self):
+        logger.debug(f'Closing slatedb partition on "{self._path}"')
+        self._driver.close()
+        self._release_lock_safely()
+
     def recover_from_changelog_message(
         self, key: bytes, value: Optional[bytes], cf_name: str, offset: int
     ):
@@ -205,7 +210,6 @@ class SlateDBStorePartition(StorePartition):
                 yield k[len(cp) :], v
 
     def _encode_cf_key(self, cf_name: str, key: bytes) -> bytes:
-        # __cf::<name>::<key>
         return self._cf_ns(cf_name) + key
 
     def _cf_ns(self, cf_name: str) -> bytes:
@@ -221,9 +225,31 @@ class SlateDBStorePartition(StorePartition):
                 fd = os.open(
                     self._lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644
                 )
-                os.close(fd)
+                try:
+                    # Write PID and timestamp for stale detection
+                    import json
+
+                    payload = {"pid": os.getpid(), "ts": int(time.time())}
+                    os.write(fd, json.dumps(payload).encode("utf-8"))
+                finally:
+                    os.close(fd)
                 return
             except FileExistsError:
+                # Try to detect stale lock and clean it up
+                try:
+                    import json
+
+                    with open(self._lock_path, "r") as f:
+                        data = json.load(f)
+                    pid = int(data.get("pid", -1))
+                except Exception:
+                    pid = -1
+                is_stale = pid > 0 and not _pid_exists(pid)
+                if is_stale:
+                    # Best-effort cleanup of stale lock
+                    self._release_lock_safely()
+                    # Retry immediately without sleeping
+                    continue
                 if max_retries <= 0 or attempt >= max_retries:
                     raise SlateDBLockError(
                         f"Failed to acquire state lock at {self._lock_path}"
@@ -231,11 +257,17 @@ class SlateDBStorePartition(StorePartition):
                 time.sleep(backoff)
                 attempt += 1
 
-    def close(self):
-        logger.debug(f'Closing slatedb partition on "{self._path}"')
-        self._driver.close()
-        # release lock
-        try:
-            os.remove(self._lock_path)
-        except FileNotFoundError:
-            pass
+
+def _pid_exists(pid: int) -> bool:
+    try:
+        # Signal 0 does not actually send a signal; it errors if pid does not exist
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        # PID exists but not permitted; treat as existing
+        return True
+    except Exception:
+        # Conservatively assume exists on unknown errors
+        return True
