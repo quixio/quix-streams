@@ -115,6 +115,16 @@ Serialization
 
 ## Error Handling and Edge Cases
 
+Locking and stale locks
+- Each partition acquires an exclusive lock file `"<db_path>.lock"` at open.
+- The lock contains a small JSON payload: `{ "pid": <process id>, "ts": <unix seconds> }`.
+- On encountering an existing lock, the partition retries with backoff. If the payload PID is not running, the lock is considered stale and is removed before retrying immediately.
+- On any open failure, the lock is released before the error is raised to the caller.
+
+Iteration fallback
+- If the driver does not support bounded iteration, the partition logs an INFO message and falls back to a full scan with in-Python bound filtering. Bounds remain inclusive lower and exclusive upper.
+- Reverse iteration also enforces bounds in Python where necessary.
+
 Corruption handling
 - The SlateDB driver maps open errors that contain corruption-indicative phrases (e.g., "corrupt", "invalid manifest", "invalid sst") to SlateDBCorruptedError.
 - If SlateDBOptions.on_corrupted_recreate is True, the partition removes the DB path and retries open once, logging INFO before and after.

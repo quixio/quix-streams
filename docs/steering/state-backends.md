@@ -56,6 +56,12 @@ This steering document outlines the direction for supporting multiple embedded s
 
 ## Status
 
+Operational notes (Beta)
+- Locking uses a JSON lock with PID and timestamp to detect stale locks; stale locks are cleaned on open.
+- If SlateDB open indicates corruption and `on_corrupted_recreate=True`, the path is cleaned and open is retried once with INFO logs emitted before/after.
+- If bounded iteration is not supported by the driver, an INFO log is emitted and a full scan is used with bounds enforced in Python.
+- CI uses Python 3.12 for smoke testing with `uv`; tests for SlateDB are invoked in a fast subset.
+
 - SlateDB backend: Beta
 - Parity achieved: KV iteration (bounds, fwd/rev), Windowed get_windows and expire semantics (including empty range), Timestamped latest semantics (same-timestamp overwrite when keep_duplicates=False and latest when True), Changelog offsets persistence and recovery, Locking with retry/backoff.
 - Selection: Application(state_backend="slatedb") or StateStoreManager(default_store_type=SlateDBStore). Pass SlateDBOptions(dumps/loads, open_max_retries, open_retry_backoff, on_corrupted_recreate) as needed.
