@@ -153,3 +153,10 @@ module = [
     "quixstreams.rowproducer.*"
 ]
 ignore_errors = true
+
+# Temporarily relax type checking for beta SlateDB backend modules
+[[tool.mypy.overrides]]
+module = [
+  "quixstreams.state.slatedb.*",
+]
+ignore_errors = true

@@ -12,6 +12,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Install uv
         shell: bash
         run: |
@@ -24,11 +29,11 @@ jobs:
           path: ~/.cache/uv
           key: uv-${{ runner.os }}-${{ hashFiles('pyproject.toml', 'uv.lock') }}
 
-      - name: Setup venv and sync deps (with SlateDB extra)
+      - name: Setup venv and sync deps (with SlateDB + test extras)
         shell: bash
         run: |
           uv venv .venv
-          uv sync --extra slatedb
+          uv sync --extra slatedb --extra test
 
       - name: Run SlateDB parity subset (fast)
         shell: bash
