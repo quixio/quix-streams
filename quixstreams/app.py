@@ -371,9 +371,12 @@ class Application:
 
         from .state.rocksdb import RocksDBStore as _RocksDBStore
 
+        default_store_type: type[StateStoreManager.__annotations__.get("default_store_type", _RocksDBStore)]
         default_store_type = _RocksDBStore
         if state_backend == "slatedb":
-            default_store_type = SlateDBStore
+            # Use the generic Store base class type to avoid mypy narrowing to RocksDB only
+            from .state.base import Store as _BaseStore  # local import for typing only
+            default_store_type = SlateDBStore  # type: ignore[assignment]
 
         self._state_manager = StateStoreManager(
             group_id=self._config.consumer_group,

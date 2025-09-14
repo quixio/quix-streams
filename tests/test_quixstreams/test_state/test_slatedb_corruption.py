@@ -133,6 +133,7 @@ def test_slatedb_recreate_cleanup_fail_and_open_fail_logs_and_raises(
     # Simulate cleanup failure and second open failure; should log WARN and re-raise
     import os
     import shutil
+
     from quixstreams.state.slatedb import driver as drv
     from quixstreams.state.slatedb import partition as part_mod
 
@@ -148,9 +149,13 @@ def test_slatedb_recreate_cleanup_fail_and_open_fail_logs_and_raises(
     monkeypatch.setattr(drv.RealSlateDBDriver, "open", two_fail_opens)
     # Force branch that uses shutil.rmtree
     monkeypatch.setattr(os.path, "isdir", lambda p: True)
-    monkeypatch.setattr(shutil, "rmtree", lambda *a, **k: (_ for _ in ()).throw(Exception("rm fail")))
+    monkeypatch.setattr(
+        shutil, "rmtree", lambda *a, **k: (_ for _ in ()).throw(Exception("rm fail"))
+    )
     # Also make os.remove fail if called
-    monkeypatch.setattr(os, "remove", lambda *a, **k: (_ for _ in ()).throw(Exception("rm fail")))
+    monkeypatch.setattr(
+        os, "remove", lambda *a, **k: (_ for _ in ()).throw(Exception("rm fail"))
+    )
 
     import pytest
 

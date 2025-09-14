@@ -239,7 +239,7 @@ class StateStoreManager:
                 f"provide a different name"
             )
         if self._default_store_type == SlateDBStore:
-            store = TimestampedSlateDBStore(
+            store: Store = TimestampedSlateDBStore(
                 name=store_name,
                 stream_id=stream_id,
                 base_dir=str(self._state_dir),

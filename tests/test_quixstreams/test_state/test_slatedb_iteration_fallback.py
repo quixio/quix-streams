@@ -1,7 +1,4 @@
-import logging
 from typing import Iterator, Optional
-
-import pytest
 
 from quixstreams.state.slatedb.partition import SlateDBStorePartition
 
@@ -10,7 +7,9 @@ class FakeDriver:
     def __init__(self):
         self.store: dict[bytes, bytes] = {}
 
-    def open(self, path: str, create_if_missing: bool = True) -> None:  # pragma: no cover
+    def open(
+        self, path: str, create_if_missing: bool = True
+    ) -> None:  # pragma: no cover
         return
 
     def close(self) -> None:  # pragma: no cover
@@ -35,7 +34,9 @@ class FakeDriver:
             else:  # pragma: no cover
                 raise ValueError(op)
 
-    def iter(self, start: Optional[bytes], end: Optional[bytes], reverse: bool = False) -> Iterator[tuple[bytes, bytes]]:
+    def iter(
+        self, start: Optional[bytes], end: Optional[bytes], reverse: bool = False
+    ) -> Iterator[tuple[bytes, bytes]]:
         # Simulate a driver that does not support bounded iteration, only full scan
         if start is not None or end is not None:
             raise NotImplementedError
