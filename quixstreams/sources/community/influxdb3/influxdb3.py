@@ -48,7 +48,7 @@ def with_retry(func):
                     logger.warning(
                         f"{func.__name__} failed and is retrying; "
                         f"backing off for {backoff}s (attempt "
-                        f"{max_attempts-attempts_remaining}/{max_attempts})"
+                        f"{max_attempts - attempts_remaining}/{max_attempts})"
                     )
                     time.sleep(backoff)
                     backoff *= 2  # Exponential backoff

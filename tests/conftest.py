@@ -1,11 +1,29 @@
 import logging.config
+import os
 from collections import namedtuple
 from typing import Generator
 
 import pytest
-from testcontainers.core.network import Network
 
-from .containerhelper import ContainerHelper
+# Make testcontainers optional for local runs and smoke tests
+# Allow forcing skip even if the package is installed via env var
+if os.getenv("SKIP_TESTCONTAINERS", "0") == "1":
+    _HAS_TESTCONTAINERS = False
+
+    class Network:  # type: ignore
+        pass
+else:
+    try:
+        from testcontainers.core.network import Network  # type: ignore
+
+        _HAS_TESTCONTAINERS = True
+    except Exception:  # pragma: no cover - environment-dependent
+        _HAS_TESTCONTAINERS = False
+
+        class Network:  # type: ignore
+            pass
+
+
 from .logging import LOGGING_CONFIG, patch_logger_class
 
 # Define list of files with fixtures for pytest autodiscovery
@@ -44,6 +62,8 @@ def log_test_progress(request: pytest.FixtureRequest):
 
 @pytest.fixture(scope="session")
 def network():
+    if not _HAS_TESTCONTAINERS:
+        pytest.skip("testcontainers not available")
     with Network() as network:
         yield network
 
@@ -52,6 +72,11 @@ def network():
 def schema_registry_container(
     network: Network, kafka_container: KafkaContainer
 ) -> Generator[SchemaRegistryContainer, None, None]:
+    if not _HAS_TESTCONTAINERS:
+        pytest.skip("testcontainers not available")
+    # Import lazily to avoid hard dependency when skipping
+    from .containerhelper import ContainerHelper
+
     container, schema_registry_address = (
         ContainerHelper.create_schema_registry_container(
             network, kafka_container.internal_broker_address
@@ -68,7 +93,13 @@ def schema_registry_container(
 
 @pytest.fixture(scope="session")
 def kafka_container_factory(network: Network) -> KafkaContainer:
+    if not _HAS_TESTCONTAINERS:
+        pytest.skip("testcontainers not available")
+
     def factory():
+        # Import lazily to avoid hard dependency when skipping
+        from .containerhelper import ContainerHelper
+
         (
             kafka_container,
             internal_broker_address,

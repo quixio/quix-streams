@@ -1,0 +1,41 @@
+name: SlateDB Smoke
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  slate-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        shell: bash
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Cache uv
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('pyproject.toml', 'uv.lock') }}
+
+      - name: Setup venv and sync deps (with SlateDB extra)
+        shell: bash
+        run: |
+          uv venv .venv
+          uv sync --extra slatedb
+
+      - name: Run SlateDB parity subset (fast)
+        shell: bash
+        run: |
+          uv run pytest -q tests/test_quixstreams/test_state/test_parity_* tests/test_quixstreams/test_state/test_slatedb_*
+
+      - name: Run backend smoke tests
+        shell: bash
+        run: |
+          uv run pytest -q tests/smoke

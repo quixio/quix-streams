@@ -59,8 +59,7 @@ class WeatherForecastGenerator(Source):
                 timestamp=message.timestamp,
             )
             print(
-                f"Forecast generated "
-                f"at time {timestamp_to_str(forecast['timestamp'])}"
+                f"Forecast generated at time {timestamp_to_str(forecast['timestamp'])}"
             )
 
             # Schedule next forecast in 30s

@@ -8,7 +8,7 @@ dynamic = ["version", "dependencies"]
 description = "Python library for building stream processing applications with Apache Kafka"
 license = {file = "LICENSE"}
 readme = "README.md"
-requires-python = ">=3.9, <4"
+requires-python = ">=3.10, <4"
 keywords = ["streaming", "processing", "pipeline", "event", "real-time", "time series", "DataFrame", "Kafka", "Quix"]
 authors = [
     { name = "Quix Analytics Ltd", email = "devs@quix.io" },
@@ -70,6 +70,14 @@ kinesis = ["quixstreams[aws]"]
 s3 = ["quixstreams[aws]"]
 redis = ["redis[hiredis]>=5.2.0,<6"]
 azure-file = ["quixstreams[azure]"]
+slatedb = ["slatedb>=0.8.1,<1"]
+# Test deps, including containerized integrations used in CI
+# Note: testcontainers requires a running Docker daemon
+test = [
+  "pytest>=7.0,<9.0",
+  "testcontainers[postgres]>=4.12,<5",
+  "docker>=7.1.0",
+]
 
 [tool.setuptools.packages.find]
 include = ["quixstreams*"]
@@ -104,12 +112,17 @@ exclude = [
 "docs/*.py" = ["S311"]
 "examples/*.py" = ["S311"]
 "tests/*.py" = ["S101", "S105", "S106", "S311", "SLF001"]
+"tests/**/*.py" = ["S101", "S105", "S106", "S108", "S311", "SLF001"]
 
 [tool.pytest.ini_options]
 minversion = "6.0"
 filterwarnings = [
   "ignore::Warning:confluent_kafka.schema_registry.*",
 ]
+# Only collect tests from the main tests directory (exclude devtests)
+testpaths = ["tests"]
+# Do not recurse into smoke tests by default
+norecursedirs = ["tests/smoke"]
 # Ignore manual tests by and some loggers by default
 addopts = "--log-disable=urllib3.connectionpool --log-disable=parso --log-disable=docker --log-disable=asyncio"
 # Print debug logs to the console in tests

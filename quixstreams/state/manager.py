@@ -17,6 +17,10 @@ from .recovery import ChangelogProducerFactory, RecoveryManager
 from .rocksdb import RocksDBOptionsType, RocksDBStore
 from .rocksdb.timestamped import TimestampedStore
 from .rocksdb.windowed.store import WindowedRocksDBStore
+from .slatedb.options import SlateDBOptionsType
+from .slatedb.store import SlateDBStore
+from .slatedb.timestamped import TimestampedSlateDBStore
+from .slatedb.windowed.store import WindowedSlateDBStore
 
 __all__ = ("StateStoreManager", "DEFAULT_STATE_STORE_NAME", "StoreTypes")
 
@@ -25,8 +29,11 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_STATE_STORE_NAME = "default"
 
-StoreTypes = Union[Type[RocksDBStore], Type[MemoryStore], Type[TimestampedStore]]
-SUPPORTED_STORES = [RocksDBStore, MemoryStore]
+
+StoreTypes = Union[
+    Type[RocksDBStore], Type[MemoryStore], Type[TimestampedStore], Type[SlateDBStore]
+]
+SUPPORTED_STORES = [RocksDBStore, MemoryStore, SlateDBStore]
 
 
 class StateStoreManager:
@@ -47,6 +54,7 @@ class StateStoreManager:
         producer: Optional[InternalProducer] = None,
         recovery_manager: Optional[RecoveryManager] = None,
         default_store_type: StoreTypes = RocksDBStore,
+        slatedb_options: Optional[SlateDBOptionsType] = None,
     ):
         if state_dir is not None:
             state_dir = Path(state_dir).absolute()
@@ -56,6 +64,7 @@ class StateStoreManager:
 
         self._state_dir = state_dir
         self._rocksdb_options = rocksdb_options
+        self._slatedb_options = slatedb_options
         self._stores: Dict[Optional[str], Dict[str, Store]] = {}
         self._producer = producer
         self._recovery_manager = recovery_manager
@@ -203,6 +212,14 @@ class StateStoreManager:
                     stream_id=stream_id,
                     changelog_producer_factory=changelog_producer_factory,
                 )
+            elif store_type == SlateDBStore:
+                store = SlateDBStore(
+                    name=store_name,
+                    stream_id=stream_id,
+                    base_dir=str(self._state_dir),
+                    changelog_producer_factory=changelog_producer_factory,
+                    options=self._slatedb_options,
+                )
             else:
                 raise ValueError(f"invalid store type: {store_type}")
 
@@ -221,19 +238,34 @@ class StateStoreManager:
                 f'Store "{store_name}" for stream_id "{stream_id}" is already registered; '
                 f"provide a different name"
             )
-        store = TimestampedStore(
-            name=store_name,
-            stream_id=stream_id,
-            base_dir=str(self._state_dir),
-            grace_ms=grace_ms,
-            keep_duplicates=keep_duplicates,
-            changelog_producer_factory=self._setup_changelogs(
+        if self._default_store_type == SlateDBStore:
+            store = TimestampedSlateDBStore(
+                name=store_name,
                 stream_id=stream_id,
-                store_name=store_name,
-                topic_config=changelog_config,
-            ),
-            options=self._rocksdb_options,
-        )
+                base_dir=str(self._state_dir),
+                grace_ms=grace_ms,
+                keep_duplicates=keep_duplicates,
+                changelog_producer_factory=self._setup_changelogs(
+                    stream_id=stream_id,
+                    store_name=store_name,
+                    topic_config=changelog_config,
+                ),
+                options=self._slatedb_options,
+            )
+        else:
+            store = TimestampedStore(
+                name=store_name,
+                stream_id=stream_id,
+                base_dir=str(self._state_dir),
+                grace_ms=grace_ms,
+                keep_duplicates=keep_duplicates,
+                changelog_producer_factory=self._setup_changelogs(
+                    stream_id=stream_id,
+                    store_name=store_name,
+                    topic_config=changelog_config,
+                ),
+                options=self._rocksdb_options,
+            )
         self._stores.setdefault(stream_id, {})[store_name] = store
 
     def register_windowed_store(
@@ -262,17 +294,31 @@ class StateStoreManager:
                 "to use this window, provide a unique name via the `name` parameter."
             )
 
-        self._stores.setdefault(stream_id, {})[store_name] = WindowedRocksDBStore(
-            name=store_name,
-            stream_id=stream_id,
-            base_dir=str(self._state_dir),
-            changelog_producer_factory=self._setup_changelogs(
+        if self._default_store_type == SlateDBStore:
+            store = WindowedSlateDBStore(
+                name=store_name,
                 stream_id=stream_id,
-                store_name=store_name,
-                topic_config=changelog_config,
-            ),
-            options=self._rocksdb_options,
-        )
+                base_dir=str(self._state_dir),
+                changelog_producer_factory=self._setup_changelogs(
+                    stream_id=stream_id,
+                    store_name=store_name,
+                    topic_config=changelog_config,
+                ),
+                options=self._slatedb_options,
+            )
+        else:
+            store = WindowedRocksDBStore(
+                name=store_name,
+                stream_id=stream_id,
+                base_dir=str(self._state_dir),
+                changelog_producer_factory=self._setup_changelogs(
+                    stream_id=stream_id,
+                    store_name=store_name,
+                    topic_config=changelog_config,
+                ),
+                options=self._rocksdb_options,
+            )
+        self._stores.setdefault(stream_id, {})[store_name] = store
 
     def clear_stores(self) -> None:
         """

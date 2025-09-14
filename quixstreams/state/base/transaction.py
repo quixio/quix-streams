@@ -178,7 +178,7 @@ def validate_transaction_status(*allowed: PartitionTransactionStatus):
         def _wrapper(tx: "PartitionTransaction", *args, **kwargs):
             if tx.status not in allowed:
                 raise StateTransactionError(
-                    f"Invalid transaction status {tx.status}, " f"allowed: {allowed}"
+                    f"Invalid transaction status {tx.status}, allowed: {allowed}"
                 )
 
             return func(tx, *args, **kwargs)

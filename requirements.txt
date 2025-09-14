@@ -9,3 +9,4 @@ jsonlines>=4,<5
 rich>=13,<15
 jsonpath_ng>=1.7.0,<2
 httpx>=0.28.1
+slatedb>=0.8.1,<1

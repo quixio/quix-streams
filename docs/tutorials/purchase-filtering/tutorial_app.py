@@ -76,7 +76,7 @@ class PurchaseGenerator(Source):
 
 
 def get_full_name(customer):
-    return f'{customer["First Name"]} {customer["Last Name"]}'
+    return f"{customer['First Name']} {customer['Last Name']}"
 
 
 def get_purchase_totals(items):

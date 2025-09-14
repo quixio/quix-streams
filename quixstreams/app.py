@@ -52,6 +52,8 @@ from .sources import BaseSource, SourceException, SourceManager
 from .state import StateStoreManager
 from .state.recovery import RecoveryManager
 from .state.rocksdb import RocksDBOptionsType
+from .state.slatedb import SlateDBStore
+from .state.slatedb.options import SlateDBOptionsType
 from .utils.settings import BaseSettings
 
 __all__ = ("Application", "ApplicationConfig")
@@ -137,6 +139,8 @@ class Application:
         producer_extra_config: Optional[dict] = None,
         state_dir: Union[None, str, Path] = None,
         rocksdb_options: Optional[RocksDBOptionsType] = None,
+        slatedb_options: Optional[SlateDBOptionsType] = None,
+        state_backend: Literal["rocksdb", "slatedb"] = "rocksdb",
         on_consumer_error: Optional[ConsumerErrorCallback] = None,
         on_processing_error: Optional[ProcessingErrorCallback] = None,
         on_producer_error: Optional[ProducerErrorCallback] = None,
@@ -337,6 +341,8 @@ class Application:
             topic_create_timeout=topic_create_timeout,
             state_dir=state_dir,
             rocksdb_options=rocksdb_options,
+            slatedb_options=slatedb_options,
+            state_backend=state_backend,
             use_changelog_topics=use_changelog_topics,
             max_partition_buffer_size=max_partition_buffer_size,
         )
@@ -363,12 +369,20 @@ class Application:
                 topic_manager=self._topic_manager,
             )
 
+        from .state.rocksdb import RocksDBStore as _RocksDBStore
+
+        default_store_type = _RocksDBStore
+        if state_backend == "slatedb":
+            default_store_type = SlateDBStore
+
         self._state_manager = StateStoreManager(
             group_id=self._config.consumer_group,
             state_dir=self._config.state_dir,
             rocksdb_options=self._config.rocksdb_options,
             producer=producer,
             recovery_manager=recovery_manager,
+            default_store_type=default_store_type,
+            slatedb_options=self._config.slatedb_options,
         )
 
         self._source_manager = SourceManager()
@@ -1154,6 +1168,8 @@ class ApplicationConfig(BaseSettings):
     topic_create_timeout: float = 60
     state_dir: Path = Path("state")
     rocksdb_options: Optional[RocksDBOptionsType] = None
+    slatedb_options: Optional[SlateDBOptionsType] = None
+    state_backend: Literal["rocksdb", "slatedb"] = "rocksdb"
     use_changelog_topics: bool = True
     max_partition_buffer_size: int = 10000
 

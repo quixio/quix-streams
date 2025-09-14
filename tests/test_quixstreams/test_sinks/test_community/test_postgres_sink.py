@@ -5,6 +5,9 @@ from typing import Generator
 import psycopg2
 import pytest
 from psycopg2 import sql
+
+# Skip these tests if testcontainers is unavailable in the environment
+pytest.importorskip("testcontainers", reason="testcontainers not available")
 from testcontainers.postgres import PostgresContainer
 
 from quixstreams.models.topics import Topic

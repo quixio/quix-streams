@@ -22,6 +22,11 @@ from quixstreams.state.rocksdb import (
     RocksDBStorePartition,
 )
 from quixstreams.state.rocksdb.timestamped import TimestampedStore
+from quixstreams.state.slatedb import (
+    SlateDBOptions,
+    SlateDBStore,
+    SlateDBStorePartition,
+)
 
 
 @pytest.fixture()
@@ -106,6 +111,23 @@ def rocksdb_store_factory(tmp_path, cls):
     return factory
 
 
+def slatedb_partition_factory(tmp_path, changelog_producer_mock):
+    def factory(
+        name: str = "",
+        options: Optional[SlateDBOptions] = None,
+        changelog_producer: Optional[ChangelogProducer] = changelog_producer_mock,
+    ) -> SlateDBStorePartition:
+        path = (tmp_path / name).as_posix()
+        _options = options or SlateDBOptions()
+        return SlateDBStorePartition(
+            path,
+            changelog_producer=changelog_producer,
+            options=_options,
+        )
+
+    return factory
+
+
 def timestamped_store_factory(tmp_path):
     def factory(
         topic: Optional[str] = None,
@@ -135,6 +157,8 @@ def store_factory(store_type, tmp_path):
         return timestamped_store_factory(tmp_path)
     elif store_type == MemoryStore:
         return memory_store_factory()
+    elif store_type == SlateDBStore:
+        return rocksdb_store_factory(tmp_path, store_type)
     else:
         raise ValueError(f"invalid store type {store_type}")
 
@@ -180,6 +204,8 @@ def store_partition_factory(store_type, tmp_path, changelog_producer_mock):
         return rocksdb_partition_factory(tmp_path, changelog_producer_mock)
     elif store_type == MemoryStore:
         return memory_partition_factory(changelog_producer_mock)
+    elif store_type == SlateDBStore:
+        return slatedb_partition_factory(tmp_path, changelog_producer_mock)
     else:
         raise ValueError(f"invalid store type {store_type}")
 

@@ -8,8 +8,7 @@ try:
     from dateutil import parser
 except ImportError as exc:
     raise ImportError(
-        'Package "dateutil" is missing: '
-        "run pip install quixstreams[tdengine] to fix it"
+        'Package "dateutil" is missing: run pip install quixstreams[tdengine] to fix it'
     ) from exc
 
 

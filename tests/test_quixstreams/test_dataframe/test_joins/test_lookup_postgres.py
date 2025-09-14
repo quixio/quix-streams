@@ -3,6 +3,9 @@ from typing import Generator, Iterable
 
 import psycopg2
 import pytest
+
+# Skip these tests if testcontainers is unavailable in the environment
+pytest.importorskip("testcontainers", reason="testcontainers not available")
 from testcontainers.postgres import PostgresContainer
 
 from quixstreams.dataframe.joins.lookups.postgresql import PostgresLookup
