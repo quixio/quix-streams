@@ -59,3 +59,37 @@ def test_slatedb_corruption_recreate_and_open(monkeypatch, tmp_path):
     finally:
         part.close()
         monkeypatch.setattr(drv.RealSlateDBDriver, "open", original_open)
+
+
+def test_slatedb_corruption_logs_on_recreate(monkeypatch, tmp_path, caplog):
+    # Verify INFO logs on corruption detection and successful reopen
+    db_root = tmp_path / "corrupt-logs"
+    corrupt_path = db_root.as_posix()
+
+    from quixstreams.state.slatedb import driver as drv
+    from quixstreams.state.slatedb import partition as part_mod
+
+    call_count = {"count": 0}
+    original_open = drv.RealSlateDBDriver.open
+
+    def flaky_open(self, path: str, create_if_missing: bool = True):
+        if call_count["count"] == 0:
+            call_count["count"] += 1
+            raise SlateDBCorruptedError("invalid manifest")
+        else:
+            return original_open(self, path, create_if_missing)
+
+    monkeypatch.setattr(drv.RealSlateDBDriver, "open", flaky_open)
+
+    with caplog.at_level("INFO", logger=part_mod.__name__):
+        p = SlateDBStorePartition(
+            path=corrupt_path, options=SlateDBOptions(on_corrupted_recreate=True)
+        )
+        try:
+            # Detect log messages
+            logs = "\n".join(rec.getMessage() for rec in caplog.records)
+            assert "Detected corrupted SlateDB" in logs
+            assert "Recreated and reopened SlateDB" in logs
+        finally:
+            p.close()
+            monkeypatch.setattr(drv.RealSlateDBDriver, "open", original_open)
