@@ -79,18 +79,29 @@ class SlateDBStorePartition(StorePartition):
                         self._path,
                     )
                 # Retry open
-                self._driver.open(path)
+                try:
+                    self._driver.open(path)
+                except Exception:
+                    # Ensure we release the lock on failure before bubbling up
+                    self._release_lock_safely()
+                    raise
                 logger.info("Recreated and reopened SlateDB at %s", self._path)
             else:
                 # Release lock and re-raise
-                try:
-                    os.remove(self._lock_path)
-                except FileNotFoundError:
-                    pass
+                self._release_lock_safely()
                 raise
         logger.debug("SlateDB opened successfully at %s", self._path)
         self._meta_ns = b"__meta__::"
         self._cf_prefix = b"__cf::"
+
+    def _release_lock_safely(self) -> None:
+        try:
+            os.remove(self._lock_path)
+        except Exception:
+            try:
+                os.unlink(self._lock_path)
+            except Exception:
+                pass
 
     def recover_from_changelog_message(
         self, key: bytes, value: Optional[bytes], cf_name: str, offset: int
