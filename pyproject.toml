@@ -43,7 +43,7 @@ all = [
     "neo4j>=5.27.0,<6",
     "pymongo>=4.11,<5",
     "pandas>=1.0.0,<3.0",
-    "elasticsearch>=8.17,<9",
+    "elasticsearch>=8.17,<10",
     "influxdb>=5.3,<6",
     "python-dateutil>=2.8.2,<3"
 ]
@@ -62,7 +62,7 @@ azure = ["azure-storage-blob>=12.24.0,<12.25"]
 neo4j = ["neo4j>=5.27.0,<6"]
 mongodb = ["pymongo>=4.11,<5"]
 pandas = ["pandas>=1.0.0,<3.0"]
-elasticsearch = ["elasticsearch>=8.17,<9"]
+elasticsearch = ["elasticsearch>=8.17,<10"]
 tdengine = ["python-dateutil>=2.8.2,<3"]
 
 # AWS dependencies are separated by service to support
