@@ -3,9 +3,8 @@ import sys
 import time
 from datetime import datetime, timezone
 from typing import Any, Callable, Iterable, Literal, Mapping, Optional, Union, get_args
-from urllib.parse import urljoin
 
-import requests
+import httpx
 
 from quixstreams.models import HeadersTuples
 
@@ -200,8 +199,8 @@ class InfluxDB3Sink(BatchingSink):
     def _get_influx_version(self):
         # This validates the token is valid regardless of version
         try:
-            r = requests.get(
-                urljoin(self._client_args["host"], "ping"),
+            r = httpx.get(
+                httpx.URL(host=self._client_args["host"], path="ping"),
                 headers={"Authorization": f"Token {self._client_args['token']}"},
                 timeout=self._request_timeout_ms / 1000,
             )

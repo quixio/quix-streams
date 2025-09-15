@@ -5,8 +5,6 @@ import time
 from copy import deepcopy
 from typing import Any, List, Optional
 
-from requests import HTTPError
-
 from quixstreams.kafka.configuration import ConnectionConfig
 from quixstreams.models.topics import Topic, TopicConfig
 
@@ -266,7 +264,7 @@ class QuixKafkaConfigsBuilder:
             return self._api.get_workspace(
                 workspace_id=workspace_name_or_id, timeout=timeout
             )
-        except HTTPError:
+        except QuixApiRequestFailure:
             # check to see if they provided the workspace name instead
             ws_list = self._api.get_workspaces(timeout=timeout)
             for ws in ws_list:
