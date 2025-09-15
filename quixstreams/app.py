@@ -1,12 +1,14 @@
 import contextlib
+import copy
 import functools
 import logging
 import signal
 import time
+import uuid
 import warnings
 from collections import defaultdict
 from pathlib import Path
-from typing import Callable, List, Literal, Optional, Protocol, Tuple, Type, Union
+from typing import Callable, List, Literal, Optional, Protocol, Tuple, Type, Union, cast
 
 from confluent_kafka import TopicPartition
 from pydantic import AliasGenerator, Field
@@ -36,7 +38,6 @@ from .models import (
     TopicManager,
 )
 from .platforms.quix import (
-    DEFAULT_PORTAL_API_URL,
     QuixKafkaConfigsBuilder,
     QuixTopicManager,
     check_state_dir,
@@ -169,7 +170,6 @@ class Application:
         :param quix_portal_api: If using the Quix Cloud, the cluster API URL to use.
             Use it to connect to the dedicated Quix Cloud environment.
             Linked Environment Variable: `Quix__Portal__Api`.
-            Default: `https://portal-api.platform.quix.io/`.
               >***NOTE:*** the environment variable is set for you in the Quix Cloud
         :param consumer_group: Kafka consumer group.
             Passed as `group.id` to `confluent_kafka.Consumer`.
@@ -249,11 +249,6 @@ class Application:
         state_dir = Path(state_dir)
 
         broker_address = broker_address or QUIX_ENVIRONMENT.broker_address
-        quix_sdk_token = quix_sdk_token or QUIX_ENVIRONMENT.sdk_token
-        quix_portal_api = (
-            quix_portal_api or QUIX_ENVIRONMENT.portal_api or DEFAULT_PORTAL_API_URL
-        )
-
         consumer_group = (
             consumer_group or QUIX_ENVIRONMENT.consumer_group or "quixstreams-default"
         )
@@ -264,8 +259,10 @@ class Application:
             self._topic_manager_factory: TopicManagerFactory = TopicManager
             if isinstance(broker_address, str):
                 broker_address = ConnectionConfig(bootstrap_servers=broker_address)
+            consumer_group_prefix = ""
         else:
             self._is_quix_app = True
+            quix_sdk_token = quix_sdk_token or QUIX_ENVIRONMENT.sdk_token
 
             if quix_config_builder:
                 quix_app_source = "Quix Config Builder"
@@ -276,8 +273,15 @@ class Application:
                     )
             elif quix_sdk_token:
                 quix_app_source = "Quix SDK Token"
+                quix_portal_api = quix_portal_api or QUIX_ENVIRONMENT.portal_api
+                if not quix_portal_api:
+                    raise ValueError(
+                        'Either "quix_portal_api" must be provided or '
+                        '"Quix__Portal__Api" environment variable must be set'
+                    )
                 quix_config_builder = QuixKafkaConfigsBuilder.from_credentials(
-                    quix_sdk_token=quix_sdk_token, quix_portal_api=quix_portal_api
+                    quix_sdk_token=quix_sdk_token,
+                    quix_portal_api=cast(str, quix_portal_api),  # cast to please mypy
                 )
             else:
                 raise ValueError(
@@ -301,13 +305,17 @@ class Application:
             consumer_group = quix_app_config.consumer_group
             consumer_extra_config.update(quix_app_config.librdkafka_extra_config)
             producer_extra_config.update(quix_app_config.librdkafka_extra_config)
+            consumer_group_prefix = quix_config_builder.workspace_id
+
+        if processing_guarantee == "exactly-once":
+            producer_extra_config["transactional.id"] = resolve_transactional_id(
+                producer_extra_config.get("transactional.id"), consumer_group_prefix
+            )
 
         self._config = ApplicationConfig(
             broker_address=broker_address,
             consumer_group=consumer_group,
-            consumer_group_prefix=(
-                quix_config_builder.workspace_id if quix_config_builder else ""
-            ),
+            consumer_group_prefix=consumer_group_prefix,
             auto_offset_reset=auto_offset_reset,
             commit_interval=commit_interval,
             commit_every=commit_every,
@@ -600,7 +608,7 @@ class Application:
             transactional=transactional,
         )
 
-    def get_producer(self) -> Producer:
+    def get_producer(self, transactional: bool = False) -> Producer:
         """
         Create and return a pre-configured Producer instance.
         The Producer is initialized with params passed to Application.
@@ -609,6 +617,11 @@ class Application:
         (e.g. to produce test data into a topic).
         Using this within the StreamingDataFrame functions is not recommended, as it creates a new Producer
         instance each time, which is not optimized for repeated use in a streaming pipeline.
+
+        :param transactional: if True, the producer will be configured to use transactions
+            regardless of Application's processing guarantee setting. But the responsibility
+            for beginning and committing the transaction is on the user.
+            Default - False.
 
         Example Snippet:
 
@@ -623,10 +636,18 @@ class Application:
                 producer.produce(topic=topic.name, key=b"key", value=b"value")
         ```
         """
+        extra_config = copy.deepcopy(self._config.producer_extra_config)
+        if transactional:
+            extra_config["transactional.id"] = resolve_transactional_id(
+                extra_config.get("transactional.id"), self._config.consumer_group_prefix
+            )
+        else:
+            extra_config.pop("transactional.id", None)
 
         return Producer(
             broker_address=self._config.broker_address,
-            extra_config=self._config.producer_extra_config,
+            extra_config=extra_config,
+            transactional=transactional,
         )
 
     def _get_internal_consumer(
@@ -894,7 +915,7 @@ class Application:
 
         processing_context.init_checkpoint()
         run_tracker.set_as_running()
-        logger.info("Waiting for incoming messages")
+        logger.info("The application started and is now processing incoming messages")
         # Start polling Kafka for messages and callbacks
         while run_tracker.running:
             if state_manager.recovery_required:
@@ -908,7 +929,7 @@ class Application:
                 printer.print()
                 run_tracker.update_status()
 
-        logger.info("Stop processing of StreamingDataFrame")
+        logger.info("Stopping the application")
         processing_context.commit_checkpoint(force=True)
 
     def _run_sources(self):
@@ -1170,3 +1191,12 @@ class ApplicationConfig(BaseSettings):
     @property
     def exactly_once(self) -> bool:
         return self.processing_guarantee == "exactly-once"
+
+
+def resolve_transactional_id(transactional_id: Optional[str], prefix: str) -> str:
+    """
+    Utility function to resolve the transactional.id based
+    on existing config and provided prefix.
+    """
+    transactional_id = transactional_id or str(uuid.uuid4())
+    return f"{prefix}-{transactional_id}" if prefix else transactional_id

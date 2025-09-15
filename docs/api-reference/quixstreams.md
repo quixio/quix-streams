@@ -55,7 +55,7 @@ True if logging config has been updated, otherwise False.
 def strip_workspace_id_prefix(workspace_id: str, s: str) -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L48)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L46)
 
 Remove the workspace ID from a given string if it starts with it.
 
@@ -78,7 +78,7 @@ the string with workspace_id prefix removed
 def prepend_workspace_id(workspace_id: str, s: str) -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L61)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L59)
 
 Add the workspace ID as a prefix to a given string if it does not have it.
 
@@ -102,7 +102,7 @@ the string with workspace_id prepended
 class QuixApplicationConfig()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L75)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L73)
 
 A convenience container class for Quix Application configs.
 
@@ -114,7 +114,7 @@ A convenience container class for Quix Application configs.
 class QuixKafkaConfigsBuilder()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L85)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L83)
 
 Retrieves all the necessary information from the Quix API and builds all the
 objects required to connect a confluent-kafka client to the Quix Platform.
@@ -139,7 +139,7 @@ def __init__(quix_portal_api_service: QuixPortalApiService,
              topic_create_timeout: float = 60)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L100)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L98)
 
 **Arguments**:
 
@@ -155,13 +155,13 @@ def __init__(quix_portal_api_service: QuixPortalApiService,
 def from_credentials(
         cls,
         quix_sdk_token: str,
-        quix_portal_api: str = DEFAULT_PORTAL_API_URL,
+        quix_portal_api: str,
         workspace_id: Optional[str] = None,
         timeout: float = 30,
         topic_create_timeout: float = 60) -> "QuixKafkaConfigsBuilder"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L131)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L129)
 
 Initialize class using the quix_sdk_token and quix_portal_api params.
 
@@ -174,7 +174,7 @@ Initialize class using the quix_sdk_token and quix_portal_api params.
 def convert_topic_response(cls, api_response: dict) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L193)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L191)
 
 Converts a GET or POST ("create") topic API response to a Topic object
 
@@ -194,7 +194,7 @@ a corresponding Topic object
 def strip_workspace_id_prefix(s: str) -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L226)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L224)
 
 Remove the workspace ID from a given string if it starts with it.
 
@@ -216,7 +216,7 @@ the string with workspace_id prefix removed
 def prepend_workspace_id(s: str) -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L237)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L235)
 
 Add the workspace ID as a prefix to a given string if it does not have it.
 
@@ -239,7 +239,7 @@ def search_for_workspace(workspace_name_or_id: Optional[str] = None,
                          timeout: Optional[float] = None) -> Optional[dict]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L248)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L246)
 
 Search for a workspace given an expected workspace name or id.
 
@@ -261,7 +261,7 @@ def get_workspace_info(known_workspace_topic: Optional[str] = None,
                        timeout: Optional[float] = None) -> dict
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L291)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L289)
 
 Queries for workspace data from the Quix API, regardless of instance cache,
 
@@ -283,7 +283,7 @@ def search_workspace_for_topic(
         timeout: Optional[float] = None) -> Optional[str]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L320)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L318)
 
 Search through all the topics in the given workspace id to see if there is a
 
@@ -309,7 +309,7 @@ def search_for_topic_workspace(
         timeout: Optional[float] = None) -> Optional[dict]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L343)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L341)
 
 Find what workspace a topic belongs to.
 
@@ -333,7 +333,7 @@ workspace data dict if topic search success, else None
 def create_topic(topic: Topic, timeout: Optional[float] = None) -> dict
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L374)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L372)
 
 The actual API call to create the topic.
 
@@ -350,7 +350,7 @@ The actual API call to create the topic.
 def get_or_create_topic(topic: Topic, timeout: Optional[float] = None) -> dict
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L410)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L408)
 
 Get or create topics in a Quix cluster as part of initializing the Topic
 
@@ -372,7 +372,7 @@ def wait_for_topic_ready_statuses(topics: List[Topic],
                                   finalize_timeout: Optional[float] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L438)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L436)
 
 After the broker acknowledges topics for creation, they will be in a
 
@@ -395,7 +395,7 @@ marked as "Ready" (and thus ready to produce to/consume from).
 def get_topic(topic: Topic, timeout: Optional[float] = None) -> dict
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L481)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L479)
 
 return the topic ID (the actual cluster topic name) if it exists, else raise
 
@@ -420,7 +420,7 @@ response dict of the topic info if topic found, else None
 def get_application_config(consumer_group_id: str) -> QuixApplicationConfig
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L513)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L511)
 
 Get all the necessary attributes for an Application to run on Quix Cloud.
 
@@ -1270,11 +1270,11 @@ or False otherwise.
 
 ```python
 def to_topic(
-        topic: Topic,
+        topic: Union[Topic, Callable[[Any, Any, int, Any], Topic]],
         key: Optional[Callable[[Any], Any]] = None) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L670)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L684)
 
 Produce current value to a topic. You can optionally specify a new key.
 
@@ -1297,11 +1297,28 @@ sdf = app.dataframe(input_topic)
 sdf = sdf.to_topic(output_topic_0)
 # does not require reassigning
 sdf.to_topic(output_topic_1, key=lambda data: data["a_field"])
+
+# Dynamic topic selection based on message content
+def select_topic(value, key, timestamp, headers):
+    if value.get("priority") == "high":
+        return output_topic_0
+    else:
+        return output_topic_1
+
+sdf = sdf.to_topic(select_topic)
 ```
 
 **Arguments**:
 
-- `topic`: instance of `Topic`
+- `topic`: instance of `Topic` or a callable that returns a `Topic`.
+If a callable is provided, it will receive four arguments:
+value, key, timestamp, and headers of the current message.
+The callable must return a `Topic` object.
+**Important**: We recommend declaring all `Topic` instances before
+staring the application instead of creating them dynamically
+within the passed callback. Creating topics dynamically can lead
+to accidentally creating numerous topics and
+saturating the broker's partitions limits.
 - `key`: a callable to generate a new message key, optional.
 If passed, the return type of this callable must be serializable
 by `key_serializer` defined for this Topic object.
@@ -1320,7 +1337,7 @@ def set_timestamp(
         func: Callable[[Any, Any, int, Any], int]) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L715)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L753)
 
 Set a new timestamp based on the current message value and its metadata.
 
@@ -1365,7 +1382,7 @@ def set_headers(
 ) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L758)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L796)
 
 Set new message headers based on the current message value and metadata.
 
@@ -1406,7 +1423,7 @@ a new StreamingDataFrame instance
 def print(pretty: bool = True, metadata: bool = False) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L809)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L847)
 
 Print out the current message value (and optionally, the message metadata) to
 
@@ -1461,7 +1478,7 @@ def print_table(
                                      int]] = None) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L855)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L893)
 
 Print a table with the most recent records.
 
@@ -1548,7 +1565,7 @@ automatically based on content. Example: {"name": 20, "id": 10}
 def compose(sink: Optional[VoidExecutor] = None) -> dict[str, VoidExecutor]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L971)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1009)
 
 Compose all functions of this StreamingDataFrame into one big closure.
 
@@ -1594,7 +1611,7 @@ def test(value: Any,
          topic: Optional[Topic] = None) -> List[Any]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1005)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1043)
 
 A shorthand to test `StreamingDataFrame` with provided value
 
@@ -1628,7 +1645,7 @@ def tumbling_window(
 ) -> TumblingTimeWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1044)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1082)
 
 Create a time-based tumbling window transformation on this StreamingDataFrame.
 
@@ -1711,7 +1728,7 @@ def tumbling_count_window(
         name: Optional[str] = None) -> TumblingCountWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1133)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1171)
 
 Create a count-based tumbling window transformation on this StreamingDataFrame.
 
@@ -1774,7 +1791,7 @@ def hopping_window(
 ) -> HoppingTimeWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1183)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1221)
 
 Create a time-based hopping window transformation on this StreamingDataFrame.
 
@@ -1868,7 +1885,7 @@ def hopping_count_window(
         name: Optional[str] = None) -> HoppingCountWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1286)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1324)
 
 Create a count-based hopping window transformation on this StreamingDataFrame.
 
@@ -1936,7 +1953,7 @@ def sliding_window(
 ) -> SlidingTimeWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1343)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1381)
 
 Create a time-based sliding window transformation on this StreamingDataFrame.
 
@@ -2025,7 +2042,7 @@ def sliding_count_window(
         name: Optional[str] = None) -> SlidingCountWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1438)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1476)
 
 Create a count-based sliding window transformation on this StreamingDataFrame.
 
@@ -2085,7 +2102,7 @@ like `sum`, `count`, etc. applied to the StreamingDataFrame.
 def fill(*columns: str, **mapping: Any) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1491)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1529)
 
 Fill missing values in the message value with a constant value.
 
@@ -2136,7 +2153,7 @@ def drop(columns: Union[str, List[str]],
          errors: Literal["ignore", "raise"] = "raise") -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1543)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1581)
 
 Drop column(s) from the message value (value must support `del`, like a dict).
 
@@ -2172,7 +2189,7 @@ a new StreamingDataFrame instance
 def sink(sink: BaseSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1587)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1625)
 
 Sink the processed data to the specified destination.
 
@@ -2198,7 +2215,7 @@ operations, but branches can still be generated from its originating SDF.
 def concat(other: "StreamingDataFrame") -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1625)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1663)
 
 Concatenate two StreamingDataFrames together and return a new one.
 
@@ -2233,7 +2250,7 @@ def join_asof(right: "StreamingDataFrame",
               name: Optional[str] = None) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1661)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1699)
 
 Join the left dataframe with the records of the right dataframe with
 
@@ -2311,7 +2328,7 @@ def join_interval(
         forward_ms: Union[int, timedelta] = 0) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1737)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1775)
 
 Join the left dataframe with records from the right dataframe that fall within
 
@@ -2407,7 +2424,7 @@ def join_lookup(
 ) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1842)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1880)
 
 Note: This is an experimental feature, and its API is likely to change in the future.
 
@@ -2460,7 +2477,7 @@ sdf = sdf.join_lookup(lookup, fields)
 def register_store(store_type: Optional[StoreTypes] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1931)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1969)
 
 Register the default store for the current stream_id in StateStoreManager.
 
@@ -3634,7 +3651,7 @@ Typed dictionary containing cache statistics for the LRU cache.
 class EventMetadata(TypedDict)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L18)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L20)
 
 Metadata describing a configuration event.
 
@@ -3656,7 +3673,7 @@ Metadata describing a configuration event.
 class Event(TypedDict)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L40)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L42)
 
 A configuration event received from the configuration topic.
 
@@ -3667,35 +3684,26 @@ A configuration event received from the configuration topic.
 - `contentUrl`: URL to fetch the configuration content.
 - `metadata`: Metadata about the configuration version.
 
-<a id="quixstreams.dataframe.joins.lookups.quix_configuration_service.models.Field"></a>
+<a id="quixstreams.dataframe.joins.lookups.quix_configuration_service.models.BaseField"></a>
 
-### Field
+### BaseField
 
 ```python
 @dataclasses.dataclass(frozen=True)
-class Field(BaseField)
+class BaseField(LookupBaseField, ABC)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L57)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L59)
 
-Represents a field to extract from a configuration using JSONPath.
+<a id="quixstreams.dataframe.joins.lookups.quix_configuration_service.models.BaseField.missing"></a>
 
-**Arguments**:
-
-- `type`: The type of configuration this field belongs to.
-- `default`: The default value if the field is missing (raises if not set).
-- `jsonpath`: JSONPath expression to extract the value.
-- `first_match_only`: If True, only the first match is returned; otherwise, all matches are returned.
-
-<a id="quixstreams.dataframe.joins.lookups.quix_configuration_service.models.Field.missing"></a>
-
-#### Field.missing
+#### BaseField.missing
 
 ```python
 def missing() -> Any
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L80)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L63)
 
 Return the default value for this field, or raise KeyError if no default is set.
 
@@ -3707,15 +3715,35 @@ Return the default value for this field, or raise KeyError if no default is set.
 
 Any: The default value.
 
-<a id="quixstreams.dataframe.joins.lookups.quix_configuration_service.models.Field.parse"></a>
+<a id="quixstreams.dataframe.joins.lookups.quix_configuration_service.models.JSONField"></a>
 
-#### Field.parse
+### JSONField
 
 ```python
-def parse(id: str, version: int, content: Any) -> Any
+@dataclasses.dataclass(frozen=True)
+class JSONField(BaseField)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L94)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L80)
+
+Represents a field to extract from a configuration using JSONPath.
+
+**Arguments**:
+
+- `type`: The type of configuration this field belongs to.
+- `default`: The default value if the field is missing (raises if not set).
+- `jsonpath`: JSONPath expression to extract the value.
+- `first_match_only`: If True, only the first match is returned; otherwise, all matches are returned.
+
+<a id="quixstreams.dataframe.joins.lookups.quix_configuration_service.models.JSONField.parse"></a>
+
+#### JSONField.parse
+
+```python
+def parse(id: str, version: int, content: bytes) -> Any
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L104)
 
 Extract the value(s) from the configuration content using JSONPath.
 
@@ -3733,6 +3761,39 @@ Extract the value(s) from the configuration content using JSONPath.
 
 The extracted value(s).
 
+<a id="quixstreams.dataframe.joins.lookups.quix_configuration_service.models.BytesField"></a>
+
+### BytesField
+
+```python
+@dataclasses.dataclass(frozen=True)
+class BytesField(BaseField)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L131)
+
+<a id="quixstreams.dataframe.joins.lookups.quix_configuration_service.models.BytesField.parse"></a>
+
+#### BytesField.parse
+
+```python
+def parse(id: str, version: int, content: bytes) -> bytes
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L132)
+
+Extract the binary content from the configuration.
+
+**Arguments**:
+
+- `id`: The configuration ID.
+- `version`: The configuration version.
+- `content`: The binary content (as bytes).
+
+**Returns**:
+
+The binary content.
+
 <a id="quixstreams.dataframe.joins.lookups.quix_configuration_service.models.ConfigurationVersion"></a>
 
 ### ConfigurationVersion
@@ -3742,9 +3803,14 @@ The extracted value(s).
 class ConfigurationVersion()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L120)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L146)
 
 Represents a specific version of a configuration.
+
+This class is designed to be immutable (frozen) and hashable so it can be safely used as a key in an LRU cache.
+The `retry_count` and `retry_at` attributes are intentionally excluded from the hash calculation and immutability,
+because they are mutable fields used for tracking API retry logic. These fields are not relevant for caching or equality,
+and should be updated by calling `__setattr__` directly, since the dataclass is otherwise frozen.
 
 **Arguments**:
 
@@ -3769,7 +3835,7 @@ timestamp ms
 def from_event(cls, event: Event) -> "ConfigurationVersion"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L140)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L171)
 
 Create a ConfigurationVersion from an Event.
 
@@ -3789,7 +3855,7 @@ ConfigurationVersion: The created configuration version.
 def success() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L159)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L200)
 
 Mark the configuration version fetch as successful.
 
@@ -3803,7 +3869,7 @@ Resets the retry count and retry time, so future fetch attempts will not be dela
 def failed() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L168)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L209)
 
 Mark the configuration version fetch as failed.
 
@@ -3819,7 +3885,7 @@ capped by VERSION_RETRY_MAX_DELAY.
 class Configuration()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L184)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L225)
 
 Represents a configuration with multiple versions and provides logic to select the valid version for a given timestamp.
 
@@ -3839,7 +3905,7 @@ Represents a configuration with multiple versions and provides logic to select t
 def from_event(cls, event: Event) -> "Configuration"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L200)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L241)
 
 Create a Configuration from an Event.
 
@@ -3859,7 +3925,7 @@ Configuration: The created configuration.
 def add_version(version: ConfigurationVersion) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L211)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L252)
 
 Add or update a version in this configuration.
 
@@ -3875,7 +3941,7 @@ Add or update a version in this configuration.
 def find_valid_version(timestamp: int) -> Optional[ConfigurationVersion]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L223)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/models.py#L264)
 
 Find the valid configuration version for a given timestamp.
 
@@ -3896,10 +3962,10 @@ Optional[ConfigurationVersion]: The valid version, or None if not found.
 ### Lookup
 
 ```python
-class Lookup(BaseLookup[Field])
+class Lookup(BaseLookup[BaseField])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/lookup.py#L31)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/lookup.py#L39)
 
 Lookup join implementation for enriching streaming data with configuration data from a Kafka topic.
 
@@ -3924,6 +3990,53 @@ Features:
   lookup = Lookup(topic, app_config=app.config)
   sdf = sdf.join_lookup(lookup, fields)
 
+<a id="quixstreams.dataframe.joins.lookups.quix_configuration_service.lookup.Lookup.json_field"></a>
+
+#### Lookup.json\_field
+
+```python
+def json_field(jsonpath: str,
+               type: str,
+               first_match_only: bool = True,
+               default: Any = RAISE_ON_MISSING) -> JSONField
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/lookup.py#L136)
+
+Create a JSON field for extracting values from configuration content using JSONPath.
+
+**Arguments**:
+
+- `jsonpath`: The JSONPath expression to extract the value.
+- `type`: The configuration type.
+- `first_match_only`: If True, only the first match is returned, otherwise all matches are returned.
+- `default`: The default value if the field is missing.
+
+**Returns**:
+
+A JSONField instance.
+
+<a id="quixstreams.dataframe.joins.lookups.quix_configuration_service.lookup.Lookup.bytes_field"></a>
+
+#### Lookup.bytes\_field
+
+```python
+def bytes_field(type: str, default: Any = RAISE_ON_MISSING) -> BytesField
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/lookup.py#L160)
+
+Create a bytes field for extracting binary content from configuration.
+
+**Arguments**:
+
+- `type`: The configuration type.
+- `default`: The default value if the field is missing.
+
+**Returns**:
+
+A BytesField instance.
+
 <a id="quixstreams.dataframe.joins.lookups.quix_configuration_service.lookup.Lookup.cache_info"></a>
 
 #### Lookup.cache\_info
@@ -3932,7 +4045,7 @@ Features:
 def cache_info() -> CacheInfo
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/lookup.py#L316)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/lookup.py#L380)
 
 Get information about the cache.
 
@@ -3948,11 +4061,11 @@ dict[str, int]: A dictionary containing cache information.
 #### Lookup.join
 
 ```python
-def join(fields: Mapping[str, Field], on: str, value: dict[str, Any], key: Any,
-         timestamp: int, headers: HeadersMapping) -> None
+def join(fields: Mapping[str, BaseField], on: str, value: dict[str, Any],
+         key: Any, timestamp: int, headers: HeadersMapping) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/lookup.py#L328)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/lookup.py#L392)
 
 Enrich the message with configuration data from the Quix Configuration Service.
 
@@ -4004,7 +4117,7 @@ and a dictionary of Field objects, and return the computed data.
 
 ```python
 def remove(version: Optional[ConfigurationVersion],
-           fields: dict[str, Field]) -> None
+           fields: dict[str, BaseField]) -> None
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/cache.py#L62)
@@ -5990,7 +6103,7 @@ Default - `json.dumps`.
 class PostgreSQLSink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/postgresql.py#L55)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/postgresql.py#L68)
 
 <a id="quixstreams.sinks.community.postgresql.PostgreSQLSink.__init__"></a>
 
@@ -6002,11 +6115,13 @@ def __init__(host: str,
              dbname: str,
              user: str,
              password: str,
-             table_name: Union[Callable[[SinkItem], str], str],
+             table_name: TableName,
              schema_name: str = "public",
              schema_auto_update: bool = True,
              connection_timeout_seconds: int = 30,
              statement_timeout_seconds: int = 30,
+             primary_key_columns: PrimaryKeyColumns = (),
+             upsert_on_primary_key: bool = False,
              on_client_connect_success: Optional[
                  ClientConnectSuccessCallback] = None,
              on_client_connect_failure: Optional[
@@ -6014,7 +6129,7 @@ def __init__(host: str,
              **kwargs)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/postgresql.py#L56)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/postgresql.py#L69)
 
 A connector to sink topic data to PostgreSQL.
 
@@ -6034,6 +6149,16 @@ PostrgeSQL uses "public" by default under the hood.
 - `connection_timeout_seconds`: Timeout for connection.
 - `statement_timeout_seconds`: Timeout for DDL operations such as table
 creation or schema updates.
+- `primary_key_columns`: An optional single (string) or list of primary key
+column(s); len>1 is a composite key, a non-empty str or len==1 is a primary
+key, and len<1 or empty string means no primary key.
+Can instead provide a callable, which uses the message value as input and
+returns a string or list of strings.
+Often paired with `upsert_on_primary_key=True`.
+It must include all currently defined primary key columns on a given table.
+- `upsert_on_primary_key`: Upsert based on the given `primary_key_columns`.
+If False, every message is treated as an independent entry, and any
+primary key collisions will consequently raise an exception.
 - `on_client_connect_success`: An optional callback made after successful
 client authentication, primarily for additional logging.
 - `on_client_connect_failure`: An optional callback made after failed
@@ -7204,6 +7329,450 @@ if __name__ == "__main__":
 ## quixstreams.sinks.community
 
 This module contains Sinks developed and maintained by the members of Quix Streams community.
+
+<a id="quixstreams.sinks.community.tdengine.sink"></a>
+
+## quixstreams.sinks.community.tdengine.sink
+
+<a id="quixstreams.sinks.community.tdengine.sink.TDengineSink"></a>
+
+### TDengineSink
+
+```python
+class TDengineSink(BatchingSink)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/sink.py#L50)
+
+<a id="quixstreams.sinks.community.tdengine.sink.TDengineSink.__init__"></a>
+
+#### TDengineSink.\_\_init\_\_
+
+```python
+def __init__(host: str,
+             database: str,
+             supertable: SupertableSetter,
+             subtable: SubtableNameSetter,
+             fields_keys: FieldsSetter = (),
+             tags_keys: TagsSetter = (),
+             time_setter: Optional[TimeSetter] = None,
+             time_precision: TimePrecision = "ms",
+             allow_missing_fields: bool = False,
+             include_metadata_tags: bool = False,
+             convert_ints_to_floats: bool = False,
+             batch_size: int = 1000,
+             enable_gzip: bool = True,
+             request_timeout_ms: int = 10_000,
+             on_client_connect_success: Optional[
+                 ClientConnectSuccessCallback] = None,
+             on_client_connect_failure: Optional[
+                 ClientConnectFailureCallback] = None,
+             verify_ssl: bool = True,
+             username: str = "",
+             password: str = "",
+             token: str = "",
+             max_retries: int = 5,
+             retry_backoff_factor: float = 1.0)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/sink.py#L51)
+
+A connector to sink processed data to TDengine.
+
+It batches the processed records in memory per topic partition, converts
+them to the InfluxDB line protocol, and flushes them to TDengine at the checkpoint.
+
+>***NOTE***: TDengineSink can accept only dictionaries.
+> If the record values are not dicts, you need to convert them to dicts before
+> sinking.
+
+**Arguments**:
+
+- `token`: TDengine cloud token
+- `host`: TDengine host in format "http[s]://<host>[:<port>]".
+- `username`: TDengine username
+- `password`: TDengine password
+- `verify_ssl`: if `True`, verifies the SSL certificate.
+Default - `True`.
+- `database`: database name
+- `supertable`: supertable name as a string.
+Also accepts a single-argument callable that receives the current message
+data as a dict and returns a string.
+- `subtable`: subtable name as a string.
+Also accepts a single-argument callable that receives the current message
+data as a dict and returns a string.
+If the subtable name is empty string, a hash value will be generated from the data as the subtable name.
+- `fields_keys`: an iterable (list) of strings used as InfluxDB line protocol "fields".
+Also accepts a single argument callable that receives the current message
+data as a dict and returns an iterable of strings.
+- If present, it must not overlap with "tags_keys".
+- If empty, the whole record value will be used.
+>***NOTE*** The fields' values can only be strings, floats, integers, or booleans.
+Default - `()`.
+- `tags_keys`: an iterable (list) of strings used as InfluxDB line protocol "tags".
+Also accepts a single-argument callable that receives the current message
+data as a dict and returns an iterable of strings.
+- If present, it must not overlap with "fields_keys".
+- Given keys are popped from the value dictionary since the same key
+cannot be both a tag and field.
+- If empty, no tags will be sent.
+>***NOTE***: always converts tag values to strings.
+Default - `()`.
+- `time_setter`: an optional column name to use as "time" when convert to InfluxDB line protocol.
+Also accepts a callable which receives the current message data and
+returns either the desired time or `None` (use default).
+The time can be an `int`, `string` (RFC3339 format), or `datetime`.
+The time must match the `time_precision` argument if not a `datetime` object, else raises.
+By default, a record's kafka timestamp with "ms" time precision is used.
+- `time_precision`: a time precision to use when convert to InfluxDB line protocol.
+Possible values: "ms", "ns", "us", "s".
+Default - `"ms"`.
+- `allow_missing_fields`: if `True`, skip the missing fields keys, else raise `KeyError`.
+Default - `False`
+- `include_metadata_tags`: if True, includes record's key, topic,
+and partition as tags.
+Default - `False`.
+- `convert_ints_to_floats`: if True, converts all integer values to floats.
+Default - `False`.
+- `batch_size`: how many records to write to TDengine in one request.
+Note that it only affects the size of one write request, and not the number
+of records flushed on each checkpoint.
+Default - `1000`.
+- `enable_gzip`: if True, enables gzip compression for writes.
+Default - `True`.
+- `request_timeout_ms`: an HTTP request timeout in milliseconds.
+Default - `10000`.
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
+- `max_retries`: maximum number of retries for failed requests.
+Default - `5`.
+- `retry_backoff_factor`: a backoff factor applied between retry attempts starting from the second retry.
+The sleep duration between retries is calculated as `{backoff factor} * (2 ** ({number of previous retries}))` seconds.
+Default - `1.0`.
+
+<a id="quixstreams.sinks.community.tdengine.date_utils"></a>
+
+## quixstreams.sinks.community.tdengine.date\_utils
+
+Utils to get right Date parsing function.
+
+<a id="quixstreams.sinks.community.tdengine.date_utils.DateHelper"></a>
+
+### DateHelper
+
+```python
+class DateHelper()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/date_utils.py#L27)
+
+DateHelper to groups different implementations of date operations.
+
+If you would like to serialize the query results to custom timezone, you can use following code:
+
+.. code-block:: python
+
+    from influxdb_client.client.util import date_utils
+    from influxdb_client.client.util.date_utils import DateHelper
+    import dateutil.parser
+    from dateutil import tz
+
+    def parse_date(date_string: str):
+        return dateutil.parser.parse(date_string).astimezone(tz.gettz('ETC/GMT+2'))
+
+    date_utils.date_helper = DateHelper()
+    date_utils.date_helper.parse_date = parse_date
+
+<a id="quixstreams.sinks.community.tdengine.date_utils.DateHelper.__init__"></a>
+
+#### DateHelper.\_\_init\_\_
+
+```python
+def __init__(timezone: datetime.tzinfo = tz.utc) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/date_utils.py#L47)
+
+Initialize defaults.
+
+**Arguments**:
+
+- `timezone`: Default timezone used for serialization "datetime" without "tzinfo".
+Default value is "UTC".
+
+<a id="quixstreams.sinks.community.tdengine.date_utils.DateHelper.parse_date"></a>
+
+#### DateHelper.parse\_date
+
+```python
+def parse_date(date_string: str)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/date_utils.py#L56)
+
+Parse string into Date or Timestamp.
+
+**Returns**:
+
+Returns a :class:`datetime.datetime` object or compliant implementation
+like :class:`class 'pandas._libs.tslibs.timestamps.Timestamp`
+
+<a id="quixstreams.sinks.community.tdengine.date_utils.DateHelper.to_nanoseconds"></a>
+
+#### DateHelper.to\_nanoseconds
+
+```python
+def to_nanoseconds(delta)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/date_utils.py#L65)
+
+Get number of nanoseconds in timedelta.
+
+Solution comes from v1 client. Thx.
+https://github.com/influxdata/influxdb-python/pull/811
+
+<a id="quixstreams.sinks.community.tdengine.date_utils.DateHelper.to_utc"></a>
+
+#### DateHelper.to\_utc
+
+```python
+def to_utc(value: datetime)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/date_utils.py#L78)
+
+Convert datetime to UTC timezone.
+
+**Arguments**:
+
+- `value`: datetime
+
+**Returns**:
+
+datetime in UTC
+
+<a id="quixstreams.sinks.community.tdengine"></a>
+
+## quixstreams.sinks.community.tdengine
+
+<a id="quixstreams.sinks.community.tdengine.point"></a>
+
+## quixstreams.sinks.community.tdengine.point
+
+<a id="quixstreams.sinks.community.tdengine.point.Point"></a>
+
+### Point
+
+```python
+class Point()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/point.py#L52)
+
+<a id="quixstreams.sinks.community.tdengine.point.Point.__init__"></a>
+
+#### Point.\_\_init\_\_
+
+```python
+def __init__(measurement_name)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/point.py#L53)
+
+Initialize defaults.
+
+<a id="quixstreams.sinks.community.tdengine.point.Point.from_dict"></a>
+
+#### Point.from\_dict
+
+```python
+@classmethod
+def from_dict(cls,
+              dictionary: dict,
+              write_precision: str = DEFAULT_WRITE_PRECISION,
+              **kwargs)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/point.py#L63)
+
+Initialize point from 'dict' structure.
+
+The expected dict structure is:
+    - measurement
+    - tags
+    - fields
+    - time
+
+Example:
+    .. code-block:: python
+
+        # Use default dictionary structure
+        dict_structure = {
+            "measurement": "h2o_feet",
+            "tags": {"location": "coyote_creek"},
+            "fields": {"water_level": 1.0},
+            "time": 1
+        }
+        point = Point.from_dict(dict_structure, "ns")
+
+Example:
+    .. code-block:: python
+
+        # Use custom dictionary structure
+        dictionary = {
+            "name": "sensor_pt859",
+            "location": "warehouse_125",
+            "version": "2021.06.05.5874",
+            "pressure": 125,
+            "temperature": 10,
+            "created": 1632208639,
+        }
+        point = Point.from_dict(dictionary,
+                                write_precision=WritePrecision.S,
+                                record_measurement_key="name",
+                                record_time_key="created",
+                                record_tag_keys=["location", "version"],
+                                record_field_keys=["pressure", "temperature"])
+
+Int Types:
+    The following example shows how to configure the types of integers fields.
+    It is useful when you want to serialize integers always as ``float`` to avoid ``field type conflict``
+    or use ``unsigned 64-bit integer`` as the type for serialization.
+
+    .. code-block:: python
+
+        # Use custom dictionary structure
+        dict_structure = {
+            "measurement": "h2o_feet",
+            "tags": {"location": "coyote_creek"},
+            "fields": {
+                "water_level": 1.0,
+                "some_counter": 108913123234
+            },
+            "time": 1
+        }
+
+        point = Point.from_dict(dict_structure, field_types={"some_counter": "uint"})
+
+**Arguments**:
+
+- `dictionary`: dictionary for serialize into data Point
+- `write_precision`: sets the precision for the supplied time values
+- `record_measurement_key`: key of dictionary with specified measurement
+- `record_measurement_name`: static measurement name for data Point
+- `record_time_key`: key of dictionary with specified timestamp
+- `record_tag_keys`: list of dictionary keys to use as a tag
+- `record_field_keys`: list of dictionary keys to use as a field
+- `field_types`: optional dictionary to specify types of serialized fields. Currently, is supported customization for integer types.
+Possible integers types:
+  - ``int`` - serialize integers as "**Signed 64-bit integers**" - ``9223372036854775807i`` (default behaviour)
+  - ``uint`` - serialize integers as "**Unsigned 64-bit integers**" - ``9223372036854775807u``
+  - ``float`` - serialize integers as "**IEEE-754 64-bit floating-point numbers**". Useful for unify number types in your pipeline to avoid field type conflict - ``9223372036854775807``
+The ``field_types`` can be also specified as part of incoming dictionary. For more info see an example above.
+
+**Returns**:
+
+new data point
+
+<a id="quixstreams.sinks.community.tdengine.point.Point.time"></a>
+
+#### Point.time
+
+```python
+def time(time, write_precision=DEFAULT_WRITE_PRECISION)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/point.py#L195)
+
+Specify timestamp for DataPoint with declared precision.
+
+If time doesn't have specified timezone we assume that timezone is UTC.
+
+Examples::
+    Point("h2o").field("val", 1).time("2009-11-10T23:00:00.123456Z")
+    Point("h2o").field("val", 1).time(1257894000123456000)
+    Point("h2o").field("val", 1).time(datetime(2009, 11, 10, 23, 0, 0, 123456))
+    Point("h2o").field("val", 1).time(1257894000123456000, write_precision=WritePrecision.NS)
+
+**Arguments**:
+
+- `time`: the timestamp for your data
+- `write_precision`: sets the precision for the supplied time values
+
+**Returns**:
+
+this point
+
+<a id="quixstreams.sinks.community.tdengine.point.Point.tag"></a>
+
+#### Point.tag
+
+```python
+def tag(key, value)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/point.py#L216)
+
+Add tag with key and value.
+
+<a id="quixstreams.sinks.community.tdengine.point.Point.field"></a>
+
+#### Point.field
+
+```python
+def field(field, value)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/point.py#L221)
+
+Add field with key and value.
+
+<a id="quixstreams.sinks.community.tdengine.point.Point.to_line_protocol"></a>
+
+#### Point.to\_line\_protocol
+
+```python
+def to_line_protocol(precision=None)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/point.py#L226)
+
+Create LineProtocol.
+
+**Arguments**:
+
+- `precision`: required precision of LineProtocol. If it's not set then use the precision from ``Point``.
+
+<a id="quixstreams.sinks.community.tdengine.point.Point.write_precision"></a>
+
+#### Point.write\_precision
+
+```python
+@property
+def write_precision()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/point.py#L251)
+
+Get precision.
+
+<a id="quixstreams.sinks.community.tdengine.point.Point.set_str_rep"></a>
+
+#### Point.set\_str\_rep
+
+```python
+@classmethod
+def set_str_rep(cls, rep_function)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/point.py#L256)
+
+Set the string representation for all Points.
 
 <a id="quixstreams.sinks.community.redis"></a>
 
@@ -13479,6 +14048,10 @@ or a ConnectionConfig object if authentication is required.
 will be passed to `confluent_kafka.Producer` as is.
 Note: values passed as arguments override values in `extra_config`.
 - `flush_timeout`: The time the producer is waiting for all messages to be delivered.
+- `transactional`: if `True`, the Producer will go into the transactional
+mode where you can use the Kafka Transactions API.
+By default, the "transactional.id" is generated randomly on init.
+To customize it, pass it via the `extra_config` parameter.
 
 <a id="quixstreams.kafka.producer.Producer.produce"></a>
 
@@ -13496,7 +14069,7 @@ def produce(topic: str,
             on_delivery: Optional[DeliveryCallback] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L117)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L121)
 
 Produce a message to a topic.
 
@@ -13527,7 +14100,7 @@ for the produced message.
 def poll(timeout: float = 0)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L178)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L182)
 
 Polls the producer for events and calls `on_delivery` callbacks.
 
@@ -13544,7 +14117,7 @@ Polls the producer for events and calls `on_delivery` callbacks.
 def flush(timeout: Optional[float] = None) -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L213)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/kafka/producer.py#L217)
 
 Wait for all messages in the Producer queue to be delivered.
 
@@ -14174,7 +14747,7 @@ Default: `None` (infinite).
 class Application()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L87)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L88)
 
 The main Application class.
 
@@ -14245,7 +14818,7 @@ def __init__(broker_address: Optional[Union[str, ConnectionConfig]] = None,
              max_partition_buffer_size: int = 10000)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L125)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L126)
 
 **Arguments**:
 
@@ -14265,7 +14838,6 @@ Default: None (if not run on Quix Cloud)
 - `quix_portal_api`: If using the Quix Cloud, the cluster API URL to use.
 Use it to connect to the dedicated Quix Cloud environment.
 Linked Environment Variable: `Quix__Portal__Api`.
-Default: `https://portal-api.platform.quix.io/`.
   >***NOTE:*** the environment variable is set for you in the Quix Cloud
 - `consumer_group`: Kafka consumer group.
 Passed as `group.id` to `confluent_kafka.Consumer`.
@@ -14342,7 +14914,7 @@ instead of the default one.
 def Quix(cls, *args, **kwargs)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L390)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L398)
 
 RAISES EXCEPTION: DEPRECATED.
 
@@ -14363,7 +14935,7 @@ def topic(name: str,
           timestamp_extractor: Optional[TimestampExtractor] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L422)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L430)
 
 Create a topic definition.
 
@@ -14435,7 +15007,7 @@ def dataframe(topic: Optional[Topic] = None,
               source: Optional[BaseSource] = None) -> StreamingDataFrame
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L502)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L510)
 
 A simple helper method that generates a `StreamingDataFrame`, which is used
 
@@ -14483,7 +15055,7 @@ to be used as an input topic.
 def stop(fail: bool = False)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L558)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L566)
 
 Stop the internal poll loop and the message processing.
 
@@ -14503,18 +15075,26 @@ to unhandled exception, and it shouldn't commit the current checkpoint.
 #### Application.get\_producer
 
 ```python
-def get_producer() -> Producer
+def get_producer(transactional: bool = False) -> Producer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L603)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L611)
 
 Create and return a pre-configured Producer instance.
+
 The Producer is initialized with params passed to Application.
 
 It's useful for producing data to Kafka outside the standard Application processing flow,
 (e.g. to produce test data into a topic).
 Using this within the StreamingDataFrame functions is not recommended, as it creates a new Producer
 instance each time, which is not optimized for repeated use in a streaming pipeline.
+
+**Arguments**:
+
+- `transactional`: if True, the producer will be configured to use transactions
+regardless of Application's processing guarantee setting. But the responsibility
+    for beginning and committing the transaction is on the user.
+    Default - False.
 
 Example Snippet:
 
@@ -14537,7 +15117,7 @@ with app.get_producer() as producer:
 def get_consumer(auto_commit_enable: bool = True) -> Consumer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L658)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L679)
 
 Create and return a pre-configured Consumer instance.
 
@@ -14588,7 +15168,7 @@ Default - True
 def clear_state()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L707)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L728)
 
 Clear the state of the application.
 
@@ -14600,7 +15180,7 @@ Clear the state of the application.
 def add_source(source: BaseSource, topic: Optional[Topic] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L713)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L734)
 
 Add a source to the application.
 
@@ -14627,7 +15207,7 @@ def run(dataframe: Optional[StreamingDataFrame] = None,
         metadata: bool = False) -> list[dict]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L746)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L767)
 
 Start processing data from Kafka using provided `StreamingDataFrame`
 
@@ -14699,7 +15279,7 @@ Default - `False`.
 class ApplicationConfig(BaseSettings)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1104)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1125)
 
 Immutable object holding the application configuration
 
@@ -14720,7 +15300,7 @@ def settings_customise_sources(
 ) -> Tuple[PydanticBaseSettingsSource, ...]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1140)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1161)
 
 Included to ignore reading/setting values from the environment
 
@@ -14732,9 +15312,23 @@ Included to ignore reading/setting values from the environment
 def copy(**kwargs) -> "ApplicationConfig"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1153)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1174)
 
 Update the application config and return a copy
+
+<a id="quixstreams.app.resolve_transactional_id"></a>
+
+#### resolve\_transactional\_id
+
+```python
+def resolve_transactional_id(transactional_id: Optional[str],
+                             prefix: str) -> str
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1196)
+
+Utility function to resolve the transactional.id based
+on existing config and provided prefix.
 
 <a id="quixstreams.runtracker"></a>
 
@@ -15078,7 +15672,7 @@ def __init__(
     topic: str,
     quix_sdk_token: str,
     quix_workspace_id: str,
-    quix_portal_api: Optional[str] = None,
+    quix_portal_api: str,
     auto_offset_reset: Optional[AutoOffsetReset] = None,
     consumer_extra_config: Optional[dict] = None,
     consumer_poll_timeout: Optional[float] = None,

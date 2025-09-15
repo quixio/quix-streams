@@ -10,12 +10,21 @@ import orjson
 
 from quixstreams.kafka import ConnectionConfig, Consumer
 from quixstreams.models import HeadersMapping, Topic
+from quixstreams.platforms.quix.env import QUIX_ENVIRONMENT
 
 from ..base import BaseLookup
 from ..utils import CacheInfo
 from .cache import VersionDataLRU
 from .environment import QUIX_REPLICA_NAME
-from .models import Configuration, ConfigurationVersion, Event, Field
+from .models import (
+    RAISE_ON_MISSING,
+    BaseField,
+    BytesField,
+    Configuration,
+    ConfigurationVersion,
+    Event,
+    JSONField,
+)
 
 if TYPE_CHECKING:
     from quixstreams.app import ApplicationConfig
@@ -23,12 +32,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-FALLBACK_DEFAULT = object()
 DEFAULT_REQUEST_TIMEOUT = 5
 DEFAULT_CONSUMER_GROUP = "enrich"
 
 
-class Lookup(BaseLookup[Field]):
+class Lookup(BaseLookup[BaseField]):
     """
     Lookup join implementation for enriching streaming data with configuration data from a Kafka topic.
 
@@ -62,6 +70,7 @@ class Lookup(BaseLookup[Field]):
         consumer_group: str = DEFAULT_CONSUMER_GROUP,
         consumer_extra_config: Optional[dict] = None,
         request_timeout: int = DEFAULT_REQUEST_TIMEOUT,
+        quix_sdk_token: Optional[str] = None,
         cache_size: int = 1000,
         fallback: Literal["error", "default"] = "error",
     ):
@@ -91,7 +100,18 @@ class Lookup(BaseLookup[Field]):
         self._fallback = fallback
 
         self._started = threading.Event()
-        self._client = httpx.Client(follow_redirects=True)
+
+        headers = {
+            "User-Agent": "quixstreams-lookup",
+        }
+        token = quix_sdk_token or QUIX_ENVIRONMENT.sdk_token
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+
+        self._client = httpx.Client(
+            follow_redirects=True,
+            headers=headers,
+        )
         self._consumer_poll_timeout = consumer_poll_timeout
         self._configurations: dict[str, Configuration] = {}
 
@@ -109,15 +129,59 @@ class Lookup(BaseLookup[Field]):
 
         self._start()
 
-        self._fields_by_type: dict[int, dict[str, dict[str, Field]]] = defaultdict(dict)
+        self._fields_by_type: dict[int, dict[str, dict[str, BaseField]]] = defaultdict(
+            dict
+        )
 
-    def _fetch_version_content(self, version: ConfigurationVersion) -> Optional[Any]:
+    def json_field(
+        self,
+        jsonpath: str,
+        type: str,
+        first_match_only: bool = True,
+        default: Any = RAISE_ON_MISSING,
+    ) -> JSONField:
         """
-        Fetch and parse JSON content from the URL specified in the version's contentUrl attribute.
+        Create a JSON field for extracting values from configuration content using JSONPath.
 
-        :param version: The configuration version containing the contentUrl to fetch JSON content from.
+        :param jsonpath: The JSONPath expression to extract the value.
+        :param type: The configuration type.
+        :param first_match_only: If True, only the first match is returned, otherwise all matches are returned.
+        :param default: The default value if the field is missing.
 
-        :returns: The parsed JSON content, or FALLBACK_DEFAULT if fetching fails and fallback is enabled.
+        :returns: A JSONField instance.
+        """
+        return JSONField(
+            jsonpath=jsonpath,
+            type=type,
+            first_match_only=first_match_only,
+            default=default,
+        )
+
+    def bytes_field(
+        self,
+        type: str,
+        default: Any = RAISE_ON_MISSING,
+    ) -> BytesField:
+        """
+        Create a bytes field for extracting binary content from configuration.
+
+        :param type: The configuration type.
+        :param default: The default value if the field is missing.
+
+        :returns: A BytesField instance.
+        """
+        return BytesField(
+            type=type,
+            default=default,
+        )
+
+    def _fetch_version_content(self, version: ConfigurationVersion) -> Optional[bytes]:
+        """
+        Fetch raw content from the URL specified in the version's contentUrl attribute.
+
+        :param version: The configuration version containing the contentUrl to fetch raw content from.
+
+        :returns: The raw content, or None if fetching fails and fallback is enabled.
 
         :raises: Exception: If fetching fails and fallback is set to "error".
         """
@@ -128,7 +192,7 @@ class Lookup(BaseLookup[Field]):
             )
             response.raise_for_status()
             version.success()
-            return orjson.loads(response.content)
+            return response.content
         except Exception as e:
             logger.error(
                 f"Failed to fetch configuration content from {version.contentUrl}: {e}"
@@ -137,7 +201,7 @@ class Lookup(BaseLookup[Field]):
                 raise
 
             version.failed()
-            return FALLBACK_DEFAULT
+            return None
 
     def _start(self) -> None:
         """
@@ -291,7 +355,7 @@ class Lookup(BaseLookup[Field]):
         return version
 
     def _version_data(
-        self, version: Optional[ConfigurationVersion], fields: dict[str, Field]
+        self, version: Optional[ConfigurationVersion], fields: dict[str, BaseField]
     ) -> dict[str, Any]:
         """
         Retrieve the configuration data for a given version and fields.
@@ -305,7 +369,7 @@ class Lookup(BaseLookup[Field]):
             return {key: field.missing() for key, field in fields.items()}
 
         content = self._fetch_version_content(version)
-        if content is FALLBACK_DEFAULT:
+        if content is None:
             return {key: field.missing() for key, field in fields.items()}
 
         return {
@@ -327,7 +391,7 @@ class Lookup(BaseLookup[Field]):
 
     def join(
         self,
-        fields: Mapping[str, Field],
+        fields: Mapping[str, BaseField],
         on: str,
         value: dict[str, Any],
         key: Any,

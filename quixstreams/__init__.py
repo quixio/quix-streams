@@ -5,4 +5,4 @@ from .state import State
 
 __all__ = ["Application", "message_context", "MessageContext", "State"]
 
-__version__ = "3.18.0"
+__version__ = "3.22.0"

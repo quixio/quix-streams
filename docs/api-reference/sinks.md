@@ -1863,7 +1863,7 @@ if __name__ == "__main__":
 class PostgreSQLSink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/postgresql.py#L55)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/postgresql.py#L68)
 
 <a id="quixstreams.sinks.community.postgresql.PostgreSQLSink.__init__"></a>
 
@@ -1877,11 +1877,13 @@ def __init__(host: str,
              dbname: str,
              user: str,
              password: str,
-             table_name: Union[Callable[[SinkItem], str], str],
+             table_name: TableName,
              schema_name: str = "public",
              schema_auto_update: bool = True,
              connection_timeout_seconds: int = 30,
              statement_timeout_seconds: int = 30,
+             primary_key_columns: PrimaryKeyColumns = (),
+             upsert_on_primary_key: bool = False,
              on_client_connect_success: Optional[
                  ClientConnectSuccessCallback] = None,
              on_client_connect_failure: Optional[
@@ -1889,7 +1891,7 @@ def __init__(host: str,
              **kwargs)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/postgresql.py#L56)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/postgresql.py#L69)
 
 A connector to sink topic data to PostgreSQL.
 
@@ -1911,6 +1913,16 @@ PostrgeSQL uses "public" by default under the hood.
 - `connection_timeout_seconds`: Timeout for connection.
 - `statement_timeout_seconds`: Timeout for DDL operations such as table
 creation or schema updates.
+- `primary_key_columns`: An optional single (string) or list of primary key
+column(s); len>1 is a composite key, a non-empty str or len==1 is a primary
+key, and len<1 or empty string means no primary key.
+Can instead provide a callable, which uses the message value as input and
+returns a string or list of strings.
+Often paired with `upsert_on_primary_key=True`.
+It must include all currently defined primary key columns on a given table.
+- `upsert_on_primary_key`: Upsert based on the given `primary_key_columns`.
+If False, every message is treated as an independent entry, and any
+primary key collisions will consequently raise an exception.
 - `on_client_connect_success`: An optional callback made after successful
 client authentication, primarily for additional logging.
 - `on_client_connect_failure`: An optional callback made after failed
@@ -2201,4 +2213,132 @@ client authentication, primarily for additional logging.
 client authentication (which should raise an Exception).
 Callback should accept the raised Exception as an argument.
 Callback must resolve (or propagate/re-raise) the Exception.
+
+<a id="quixstreams.sinks.community.tdengine.sink"></a>
+
+## quixstreams.sinks.community.tdengine.sink
+
+<a id="quixstreams.sinks.community.tdengine.sink.TDengineSink"></a>
+
+### TDengineSink
+
+```python
+class TDengineSink(BatchingSink)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/sink.py#L50)
+
+<a id="quixstreams.sinks.community.tdengine.sink.TDengineSink.__init__"></a>
+
+<br><br>
+
+#### TDengineSink.\_\_init\_\_
+
+```python
+def __init__(host: str,
+             database: str,
+             supertable: SupertableSetter,
+             subtable: SubtableNameSetter,
+             fields_keys: FieldsSetter = (),
+             tags_keys: TagsSetter = (),
+             time_setter: Optional[TimeSetter] = None,
+             time_precision: TimePrecision = "ms",
+             allow_missing_fields: bool = False,
+             include_metadata_tags: bool = False,
+             convert_ints_to_floats: bool = False,
+             batch_size: int = 1000,
+             enable_gzip: bool = True,
+             request_timeout_ms: int = 10_000,
+             on_client_connect_success: Optional[
+                 ClientConnectSuccessCallback] = None,
+             on_client_connect_failure: Optional[
+                 ClientConnectFailureCallback] = None,
+             verify_ssl: bool = True,
+             username: str = "",
+             password: str = "",
+             token: str = "",
+             max_retries: int = 5,
+             retry_backoff_factor: float = 1.0)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/sink.py#L51)
+
+A connector to sink processed data to TDengine.
+
+It batches the processed records in memory per topic partition, converts
+them to the InfluxDB line protocol, and flushes them to TDengine at the checkpoint.
+
+>***NOTE***: TDengineSink can accept only dictionaries.
+> If the record values are not dicts, you need to convert them to dicts before
+> sinking.
+
+
+<br>
+***Arguments:***
+
+- `token`: TDengine cloud token
+- `host`: TDengine host in format "http[s]://<host>[:<port>]".
+- `username`: TDengine username
+- `password`: TDengine password
+- `verify_ssl`: if `True`, verifies the SSL certificate.
+Default - `True`.
+- `database`: database name
+- `supertable`: supertable name as a string.
+Also accepts a single-argument callable that receives the current message
+data as a dict and returns a string.
+- `subtable`: subtable name as a string.
+Also accepts a single-argument callable that receives the current message
+data as a dict and returns a string.
+If the subtable name is empty string, a hash value will be generated from the data as the subtable name.
+- `fields_keys`: an iterable (list) of strings used as InfluxDB line protocol "fields".
+Also accepts a single argument callable that receives the current message
+data as a dict and returns an iterable of strings.
+- If present, it must not overlap with "tags_keys".
+- If empty, the whole record value will be used.
+>***NOTE*** The fields' values can only be strings, floats, integers, or booleans.
+Default - `()`.
+- `tags_keys`: an iterable (list) of strings used as InfluxDB line protocol "tags".
+Also accepts a single-argument callable that receives the current message
+data as a dict and returns an iterable of strings.
+- If present, it must not overlap with "fields_keys".
+- Given keys are popped from the value dictionary since the same key
+cannot be both a tag and field.
+- If empty, no tags will be sent.
+>***NOTE***: always converts tag values to strings.
+Default - `()`.
+- `time_setter`: an optional column name to use as "time" when convert to InfluxDB line protocol.
+Also accepts a callable which receives the current message data and
+returns either the desired time or `None` (use default).
+The time can be an `int`, `string` (RFC3339 format), or `datetime`.
+The time must match the `time_precision` argument if not a `datetime` object, else raises.
+By default, a record's kafka timestamp with "ms" time precision is used.
+- `time_precision`: a time precision to use when convert to InfluxDB line protocol.
+Possible values: "ms", "ns", "us", "s".
+Default - `"ms"`.
+- `allow_missing_fields`: if `True`, skip the missing fields keys, else raise `KeyError`.
+Default - `False`
+- `include_metadata_tags`: if True, includes record's key, topic,
+and partition as tags.
+Default - `False`.
+- `convert_ints_to_floats`: if True, converts all integer values to floats.
+Default - `False`.
+- `batch_size`: how many records to write to TDengine in one request.
+Note that it only affects the size of one write request, and not the number
+of records flushed on each checkpoint.
+Default - `1000`.
+- `enable_gzip`: if True, enables gzip compression for writes.
+Default - `True`.
+- `request_timeout_ms`: an HTTP request timeout in milliseconds.
+Default - `10000`.
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
+- `max_retries`: maximum number of retries for failed requests.
+Default - `5`.
+- `retry_backoff_factor`: a backoff factor applied between retry attempts starting from the second retry.
+The sleep duration between retries is calculated as `{backoff factor} * (2 ** ({number of previous retries}))` seconds.
+Default - `1.0`.
 

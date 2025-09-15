@@ -469,6 +469,23 @@ class TestApplication:
         with app.get_producer() as x:
             assert x._producer_config["linger.ms"] == 10
 
+    @pytest.mark.parametrize(
+        ["processing_guarantee", "transactional"],
+        [
+            ("exactly-once", True),
+            ("exactly-once", False),
+            ("at-least-once", False),
+            ("at-least-once", True),
+        ],
+    )
+    def test_get_producer_transactional(
+        self, app_factory, processing_guarantee, transactional
+    ):
+        app = app_factory(processing_guarantee=processing_guarantee)
+        with app.get_producer(transactional=transactional) as producer:
+            transactional_id = producer._producer_config.get("transactional.id")
+            assert bool(transactional_id) == transactional
+
     def test_missing_broker_id_raise(self):
         # confirm environment is empty
         with patch.dict(os.environ, {}, clear=True):
@@ -814,21 +831,20 @@ class TestAppExactlyOnce:
 
 
 class TestQuixApplication:
-    @pytest.mark.parametrize(
-        "quix_portal_api_arg, quix_portal_api_expected",
-        [
-            (None, "https://portal-api.platform.quix.io/"),
-            ("http://example.com", "http://example.com"),
-        ],
-    )
-    def test_init_with_quix_sdk_token_arg(
-        self, quix_portal_api_arg, quix_portal_api_expected
-    ):
+    def test_init_with_no_quix_portal_api(self):
+        with pytest.raises(
+            ValueError,
+            match='Either "quix_portal_api" must be provided or "Quix__Portal__Api" environment variable must be set',
+        ):
+            Application(quix_sdk_token="my_sdk_token")
+
+    def test_init_with_quix_sdk_token_arg(self):
         consumer_group = "c_group"
         expected_workspace_cgroup = f"my_ws-{consumer_group}"
         quix_sdk_token = "my_sdk_token"
         quix_extras = {"quix": "extras"}
         extra_config = {"extra": "config"}
+        quix_portal_api = "http://example.com"
         connection_config = ConnectionConfig.from_librdkafka_dict(
             {
                 "bootstrap.servers": "address1,address2",
@@ -873,7 +889,7 @@ class TestQuixApplication:
             app = Application(
                 consumer_group=consumer_group,
                 quix_sdk_token=quix_sdk_token,
-                quix_portal_api=quix_portal_api_arg,
+                quix_portal_api=quix_portal_api,
                 consumer_extra_config=extra_config,
                 producer_extra_config=extra_config,
             )
@@ -881,7 +897,7 @@ class TestQuixApplication:
 
         # Check that quix_portal_api is passed correctly
         cfg_builder.from_credentials.assert_called_with(
-            quix_sdk_token=quix_sdk_token, quix_portal_api=quix_portal_api_expected
+            quix_sdk_token=quix_sdk_token, quix_portal_api=quix_portal_api
         )
 
         # Check if items from the Quix config have been passed
@@ -895,21 +911,13 @@ class TestQuixApplication:
         assert consumer_call_kwargs["consumer_group"] == expected_workspace_cgroup
         assert consumer_call_kwargs["extra_config"] == expected_consumer_extra_config
 
-    @pytest.mark.parametrize(
-        "quix_portal_api_arg, quix_portal_api_expected",
-        [
-            ("", "https://portal-api.platform.quix.io/"),
-            ("http://example.com", "http://example.com"),
-        ],
-    )
-    def test_init_with_quix_sdk_token_env(
-        self, monkeypatch, quix_portal_api_arg, quix_portal_api_expected
-    ):
+    def test_init_with_quix_sdk_token_env(self, monkeypatch):
         consumer_group = "c_group"
         expected_workspace_cgroup = f"my_ws-{consumer_group}"
         quix_sdk_token = "my_sdk_token"
         extra_config = {"extra": "config"}
         quix_extras = {"quix": "extras"}
+        quix_portal_api = "http://example.com"
         connection_config = ConnectionConfig.from_librdkafka_dict(
             {
                 "bootstrap.servers": "address1,address2",
@@ -946,7 +954,7 @@ class TestQuixApplication:
         cfg_builder.from_credentials.return_value = cfg_builder
 
         monkeypatch.setenv("Quix__Sdk__Token", quix_sdk_token)
-        monkeypatch.setenv("Quix__Portal__Api", quix_portal_api_arg)
+        monkeypatch.setenv("Quix__Portal__Api", quix_portal_api)
         with (
             patch("quixstreams.app.QuixKafkaConfigsBuilder", cfg_builder),
             patch("quixstreams.app.InternalConsumer") as consumer_init_mock,
@@ -960,7 +968,7 @@ class TestQuixApplication:
 
         # Check that quix_portal_api is passed correctly
         cfg_builder.from_credentials.assert_called_with(
-            quix_sdk_token=quix_sdk_token, quix_portal_api=quix_portal_api_expected
+            quix_sdk_token=quix_sdk_token, quix_portal_api=quix_portal_api
         )
 
         # Check if items from the Quix config have been passed
@@ -1082,6 +1090,27 @@ class TestQuixApplication:
             == topic_manager.default_replication_factor
         )
         assert expected_topic.broker_config.num_partitions == topic_partitions
+
+    def test_transactional_id_prefixed_with_workspace_id(
+        self,
+        quix_app_factory,
+        quix_topic_manager_factory,
+        quix_mock_config_builder_factory,
+    ):
+        workspace_id = "my-workspace"
+        cfg_builder = quix_mock_config_builder_factory(workspace_id=workspace_id)
+        topic_manager = quix_topic_manager_factory(
+            workspace_id=workspace_id, quix_config_builder=cfg_builder
+        )
+        app = quix_app_factory(
+            workspace_id=workspace_id,
+            topic_manager=topic_manager,
+            quix_config_builder=cfg_builder,
+            processing_guarantee="exactly-once",
+        )
+        assert app._config.producer_extra_config["transactional.id"].startswith(
+            workspace_id
+        )
 
 
 @pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
@@ -3156,7 +3185,7 @@ class TestApplicationRun:
         """
         Timeout is set only after recovery is complete
         """
-        timeout = 1.0
+        timeout = 3.0
 
         app = app_factory(
             auto_offset_reset="earliest",

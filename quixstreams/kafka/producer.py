@@ -88,6 +88,10 @@ class Producer:
             will be passed to `confluent_kafka.Producer` as is.
             Note: values passed as arguments override values in `extra_config`.
         :param flush_timeout: The time the producer is waiting for all messages to be delivered.
+        :param transactional: if `True`, the Producer will go into the transactional
+            mode where you can use the Kafka Transactions API.
+            By default, the "transactional.id" is generated randomly on init.
+            To customize it, pass it via the `extra_config` parameter.
         """
         if isinstance(broker_address, str):
             broker_address = ConnectionConfig(bootstrap_servers=broker_address)

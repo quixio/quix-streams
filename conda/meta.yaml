@@ -15,18 +15,16 @@ requirements:
     - python >=3.9,<3.13
   run:
     - python >=3.9,<3.13
-    - requests >=2.32
     - typing_extensions >=4.8
     - orjson >=3.9,<4
     - pydantic >=2.7,<2.12
-    - pydantic-settings >=2.3,<2.10
+    - pydantic-settings >=2.3,<2.11
     - jsonschema >=4.3.0
     - fastavro >=1.8,<2.0
     - jsonlines >=4,<5
     - google-cloud-bigquery >=3.26.0,<3.27
     - google-cloud-pubsub >=2.23.1,<3
     - psycopg2-binary >=2.9.9,<3
-    - types-psycopg2 >=2.9,<3
     - boto3 >=1.35.65,<2.0
     - boto3-stubs >=1.35.65,<2.0
     - azure-storage-blob >=12.24.0,<12.25
@@ -35,6 +33,8 @@ requirements:
     - pandas >=1.0.0,<3.0
     - elasticsearch >=8.17,<9
     - rich >=13,<15
+    - python-dateutil >=2.8.2,<3
+    - httpx >= 0.28.1
 
 test:
   imports:

@@ -6,8 +6,8 @@ $PREFIX/bin/pip install \
 'influxdb3-python[pandas]>=0.7,<1.0' \
 'pyiceberg[pyarrow,glue]>=0.7' \
 'redis[hiredis]>=5.2.0,<6' \
-'confluent-kafka[avro,json,protobuf,schemaregistry]>=2.8.2,<2.10' \
+'confluent-kafka[avro,json,protobuf,schemaregistry]>=2.8.2,<2.12' \
 'influxdb>=5.3,<6' \
 'jsonpath_ng>=1.7.0,<2' \
-'types-psycopg2>=2.9,<3' \
+'httpx>=0.28.1' \
 'paho-mqtt>=2.1.0,<3'
