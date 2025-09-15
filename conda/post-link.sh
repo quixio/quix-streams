@@ -9,4 +9,4 @@ $PREFIX/bin/pip install \
 'confluent-kafka[avro,json,protobuf,schemaregistry]>=2.8.2,<2.12' \
 'influxdb>=5.3,<6' \
 'jsonpath_ng>=1.7.0,<2' \
-'types-psycopg2>=2.9,<3'
+'httpx>=0.28.1'
