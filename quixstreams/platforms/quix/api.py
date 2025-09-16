@@ -1,4 +1,7 @@
 import json
+import logging
+import time
+from functools import wraps
 from io import BytesIO
 from typing import List, Literal, Optional
 from zipfile import ZipFile
@@ -13,6 +16,40 @@ from .exceptions import (
 )
 
 __all__ = ("QuixPortalApiService",)
+
+logger = logging.getLogger(__name__)
+
+
+def retry_on_connection_error(max_retries: int = 5, base_delay: float = 1.0):
+    """
+    Retry decorator for httpx connection errors with exponential backoff.
+
+    :param max_retries: Maximum number of retry attempts (default: 5)
+    :param base_delay: Base delay in seconds for exponential backoff (default: 1.0)
+    """
+    start = 1
+    stop = max_retries + 1
+
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            for attempt in range(start, stop):
+                try:
+                    return func(*args, **kwargs)
+                except (httpx.ConnectError, httpx.TimeoutException) as e:
+                    delay = base_delay * (2**attempt)
+                    logger.warning(
+                        f"API request failed (attempt {attempt}/{max_retries}): {e}. "
+                        f"Retrying in {delay:.1f} seconds..."
+                    )
+                    time.sleep(delay)
+
+            # Final attempt without retrying
+            return func(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
 
 
 class QuixPortalApiService:
@@ -77,6 +114,7 @@ class QuixPortalApiService:
     def default_workspace_id(self, value):
         self._default_workspace_id = value
 
+    @retry_on_connection_error()
     def get_librdkafka_connection_config(
         self, workspace_id: Optional[str] = None, timeout: float = 30
     ) -> dict:
@@ -86,6 +124,7 @@ class QuixPortalApiService:
             timeout=timeout,
         ).json()
 
+    @retry_on_connection_error()
     def get_workspace_certificate(
         self, workspace_id: Optional[str] = None, timeout: float = 30
     ) -> Optional[bytes]:
@@ -109,19 +148,23 @@ class QuixPortalApiService:
             with z.open("ca.cert") as f:
                 return f.read()
 
+    @retry_on_connection_error()
     def get_auth_token_details(self, timeout: float = 30) -> dict:
         return self.client.get("/auth/token/details", timeout=timeout).json()
 
+    @retry_on_connection_error()
     def get_workspace(
         self, workspace_id: Optional[str] = None, timeout: float = 30
     ) -> dict:
         workspace_id = workspace_id or self.default_workspace_id
         return self.client.get(f"/workspaces/{workspace_id}", timeout=timeout).json()
 
+    @retry_on_connection_error()
     def get_workspaces(self, timeout: float = 30) -> List[dict]:
         # TODO: This seems only return [] with Personal Access Tokens as of Sept 7 '23
         return self.client.get("/workspaces", timeout=timeout).json()
 
+    @retry_on_connection_error()
     def get_topic(
         self, topic_name: str, workspace_id: Optional[str] = None, timeout: float = 30
     ) -> dict:
@@ -130,6 +173,7 @@ class QuixPortalApiService:
             f"/{workspace_id}/topics/{topic_name}", timeout=timeout
         ).json()
 
+    @retry_on_connection_error()
     def get_topics(
         self,
         workspace_id: Optional[str] = None,
