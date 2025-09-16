@@ -158,6 +158,33 @@ class TestTopicManager:
             "retention.ms": "-1",
         }
 
+    def test_derive_topic_config_empty_retention_bytes(self, topic_manager_factory):
+        topic_manager = topic_manager_factory()
+        topic1 = topic_manager.topic(
+            name=str(uuid.uuid4()),
+            create_config=TopicConfig(
+                num_partitions=2,
+                replication_factor=1,
+                extra_config={"retention.ms": "1000"},
+            ),
+        )
+        topic2 = topic_manager.topic(
+            name=str(uuid.uuid4()),
+            create_config=TopicConfig(
+                num_partitions=1,
+                replication_factor=1,
+                extra_config={"retention.bytes": "9999", "retention.ms": "10001"},
+            ),
+        )
+
+        config = topic_manager.derive_topic_config([topic1, topic2])
+        assert config.num_partitions == 2
+        assert config.replication_factor == 1
+        assert config.extra_config == {
+            "retention.bytes": "-1",
+            "retention.ms": "10001",
+        }
+
     def test_changelog_topic(self, topic_manager_factory):
         """
         A changelog `Topic` is created with settings that match the source `Topic`
