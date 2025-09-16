@@ -249,11 +249,21 @@ class Stream:
         return self._add(update_func)
 
     @overload
-    def add_transform(self, func: TransformCallback, *, expand: Literal[False] = False):
+    def add_transform(
+        self,
+        func: TransformCallback,
+        *,
+        expand: Literal[False] = False,
+    ):
         pass
 
     @overload
-    def add_transform(self, func: TransformExpandedCallback, *, expand: Literal[True]):
+    def add_transform(
+        self,
+        func: TransformExpandedCallback,
+        *,
+        expand: Literal[True],
+    ):
         pass
 
     def add_transform(
