@@ -182,7 +182,6 @@ class QuixPortalApiService:
         workspace_id = workspace_id or self.default_workspace_id
         return self.client.get(f"/{workspace_id}/topics", timeout=timeout).json()
 
-    @retry_on_connection_error()
     def post_topic(
         self,
         topic_name: str,
