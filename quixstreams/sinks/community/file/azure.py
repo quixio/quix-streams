@@ -8,7 +8,7 @@ try:
 except ImportError as exc:
     raise ImportError(
         f"Package {exc.name} is missing: "
-        'run "pip install quixstreams[azure-file]" to use AzureFileDestination'
+        'run "pip install quixstreams[azure-file]" to use AzureFileSink'
     ) from exc
 
 from quixstreams.sinks import (
