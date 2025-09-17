@@ -8,3 +8,4 @@ pyiceberg[pyarrow,glue]>=0.7
 redis[hiredis]>=5.2.0,<6
 pandas>=1.0.0,<3.0
 psycopg2-binary>=2.9,<3
+paho-mqtt>=2.1.0,<3

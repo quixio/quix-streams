@@ -46,7 +46,8 @@ all = [
     "pandas>=1.0.0,<3.0",
     "elasticsearch>=8.17,<9",
     "influxdb>=5.3,<6",
-    "python-dateutil>=2.8.2,<3"
+    "python-dateutil>=2.8.2,<3",
+    "paho-mqtt>=2.1.0,<3"
 ]
 
 avro = ["fastavro>=1.8,<2.0"]
@@ -66,6 +67,7 @@ mongodb = ["pymongo>=4.11,<5"]
 pandas = ["pandas>=1.0.0,<3.0"]
 elasticsearch = ["elasticsearch>=8.17,<9"]
 tdengine = ["python-dateutil>=2.8.2,<3"]
+mqtt = ["paho-mqtt>=2.1.0,<3"]
 
 # AWS dependencies are separated by service to support
 # different requirements in the future.
