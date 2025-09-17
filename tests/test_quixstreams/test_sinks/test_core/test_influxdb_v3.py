@@ -568,7 +568,7 @@ class TestInfluxDB3Sink:
         sink._client_args["token"] = test_token
         response_mock = MagicMock(
             status_code=204,
-            headers={"X-Influxdb-Version": f"{test_version}.1.2"}
+            headers={"X-Influxdb-Version": f"{test_version}.1.2"},
         )
         with patch(
             "quixstreams.sinks.core.influxdb3.httpx.get",
