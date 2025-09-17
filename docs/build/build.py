@@ -137,6 +137,7 @@ doc_map = {
             "quixstreams.sinks.community.iceberg",
             "quixstreams.sinks.community.kinesis",
             "quixstreams.sinks.community.mongodb",
+            "quixstreams.sinks.community.mqtt",
             "quixstreams.sinks.community.neo4j",
             "quixstreams.sinks.community.postgresql",
             "quixstreams.sinks.community.pubsub",
