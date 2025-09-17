@@ -73,13 +73,10 @@ class MQTTSource(Source):
         timestamp_setter: MqttTimestampSetter = _default_timestamp_setter,
         payload_deserializer: Optional[Callable[[Any], Any]] = _default_deserializer,
         qos: Literal[0, 1] = 1,
-        properties: Optional[MqttPropertiesHandler] = None,
         on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
         on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
     ):
         """
-        Initialize the MQTTSink.
-
         :param topic: MQTT source topic.
             To consume from a base/prefix, use '#' as a wildcard i.e. my-topic-base/#
         :param client_id: MQTT client identifier.
@@ -111,14 +108,9 @@ class MQTTSource(Source):
             raise ValueError(
                 f"Invalid MQTT version {version}; valid: {get_args(ProtocolVersion)}"
             )
-        if properties and protocol != "5":
-            raise ValueError(
-                "MQTT Properties can only be used with MQTT protocol version 5"
-            )
 
         self._client_id = client_id
         self._protocol = protocol
-        self._version = version
         self._username = username
         self._password = password
         self._server = server
@@ -140,7 +132,7 @@ class MQTTSource(Source):
             client_id=self._client_id,
             userdata=None,
             protocol=self._protocol,
-        ).l
+        )
 
         if self._username:
             self._client.username_pw_set(self._username, self._password)
