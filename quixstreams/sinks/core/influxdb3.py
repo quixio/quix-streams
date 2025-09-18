@@ -200,7 +200,7 @@ class InfluxDB3Sink(BatchingSink):
         # This validates the token is valid regardless of version
         try:
             r = httpx.get(
-                httpx.URL(host=self._client_args["host"], path="ping"),
+                httpx.URL(url=self._client_args["host"], path="/ping"),
                 headers={"Authorization": f"Token {self._client_args['token']}"},
                 timeout=self._request_timeout_ms / 1000,
             )
@@ -209,7 +209,7 @@ class InfluxDB3Sink(BatchingSink):
             logger.error("Ping to InfluxDB failed, likely due to an invalid token.")
             raise
         version = r.headers.get("X-Influxdb-Version") or r.json()["version"]
-        return version.split(".")[0][-1]
+        return version.split(".")[0]
 
     def setup(self):
         self._client = InfluxDBClient3(**self._client_args)

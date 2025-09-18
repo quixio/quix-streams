@@ -1,6 +1,6 @@
 import datetime
 from typing import Optional
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import influxdb_client_3
 import pytest
@@ -551,3 +551,34 @@ class TestInfluxDB3Sink:
         error_str = str(e)
         assert precision in error_str
         assert "got 16" in error_str
+
+    def test_get_influx_version(self, influxdb3_sink_factory):
+        client_mock = MagicMock(spec_set=InfluxDBClient3)
+        measurement = "measurement"
+        sink = influxdb3_sink_factory(
+            client_mock=client_mock,
+            measurement=measurement,
+        )
+
+        test_host = "https://example.org"
+        test_token = "test-token"
+        test_version = 30
+
+        sink._client_args["host"] = test_host
+        sink._client_args["token"] = test_token
+        response_mock = MagicMock(
+            status_code=204,
+            headers={"X-Influxdb-Version": f"{test_version}.1.2"},
+        )
+        with patch(
+            "quixstreams.sinks.core.influxdb3.httpx.get",
+            return_value=response_mock,
+        ) as httpx_get_mock:
+            version = sink._get_influx_version()
+            httpx_get_mock.assert_called_once_with(
+                f"{test_host}/ping",
+                headers={"Authorization": f"Token {test_token}"},
+                timeout=sink._request_timeout_ms / 1000,
+            )
+            response_mock.raise_for_status.assert_called_once_with()
+            assert version == str(test_version)
