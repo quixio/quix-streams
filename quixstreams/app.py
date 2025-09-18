@@ -756,7 +756,7 @@ class Application:
         self._source_manager.register(
             source,
             topic,
-            self._get_internal_producer(transactional=False),
+            self._get_internal_producer(),
             self._get_internal_consumer(
                 extra_config_overrides=consumer_extra_config_overrides
             ),
