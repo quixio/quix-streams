@@ -9,6 +9,7 @@ import httpx
 import orjson
 
 from quixstreams.kafka import ConnectionConfig, Consumer
+from quixstreams.kafka.exceptions import KafkaConsumerException
 from quixstreams.models import HeadersMapping, Topic
 from quixstreams.platforms.quix.env import QUIX_ENVIRONMENT
 
@@ -216,24 +217,16 @@ class Lookup(BaseLookup[BaseField]):
         """
         Background thread for consuming configuration events from Kafka and updating internal state.
         """
-        assigned = False
-
-        def on_assign(consumer: Consumer, partitions: list[tuple[str, int]]) -> None:
-            """
-            Callback for partition assignment.
-            """
-            nonlocal assigned
-            assigned = True
 
         try:
-            self._consumer.subscribe(topics=[self._topic.name], on_assign=on_assign)
+            self._consumer.subscribe(topics=[self._topic.name])
 
             while True:
                 message = self._consumer.poll(timeout=self._consumer_poll_timeout)
                 if message is None:
-                    if assigned and not self._started.is_set():
-                        self._started.set()
                     continue
+                elif message.error():
+                    raise KafkaConsumerException(error=message.error())
 
                 value = message.value()
                 if value is None:
@@ -252,6 +245,8 @@ class Lookup(BaseLookup[BaseField]):
                     logger.exception(
                         f"Failed to process message: {key} at partition: {message.partition()}, offset: {message.offset()}"
                     )
+                if not self._started.is_set() and self._configs_ready():
+                    self._started.set()
         except Exception:
             logger.exception("Error in consumer thread")
 
@@ -431,3 +426,24 @@ class Lookup(BaseLookup[BaseField]):
             value.update(self._version_data_cached(version, fields))
 
         logger.debug("Join took %.2f ms", (time.time() - start) * 1000)
+
+    def _configs_ready(self) -> bool:
+        """
+        Return True if the configs are loaded from the topic until the available HWM.
+        If there are outstanding messages in the config topic or the assignment is not
+        available yet, return False.
+        """
+
+        if not self._consumer.assignment():
+            return False
+        positions = self._consumer.position(self._consumer.assignment())
+
+        for position in positions:
+            _, hwm = self._consumer.get_watermark_offsets(
+                partition=position, cached=True
+            )
+            # TODO: What if all HWMs are empty (-1001)? And what do you get for an empty topic?
+            if position < hwm:
+                return False
+
+        return True
