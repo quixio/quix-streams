@@ -7,8 +7,10 @@ from typing import TYPE_CHECKING, Any, Literal, Mapping, Optional, Union
 
 import httpx
 import orjson
+from confluent_kafka import TopicPartition
 
 from quixstreams.kafka import ConnectionConfig, Consumer
+from quixstreams.kafka.exceptions import KafkaConsumerException
 from quixstreams.models import HeadersMapping, Topic
 from quixstreams.platforms.quix.env import QUIX_ENVIRONMENT
 
@@ -119,7 +121,7 @@ class Lookup(BaseLookup[BaseField]):
             self._version_data, maxsize=cache_size
         )
 
-        self._consumer = Consumer(
+        self._config_consumer = Consumer(
             broker_address=broker_address,
             consumer_group=consumer_group,
             auto_offset_reset="earliest",
@@ -127,7 +129,7 @@ class Lookup(BaseLookup[BaseField]):
             extra_config=consumer_extra_config,
         )
 
-        self._start()
+        self._start_consumer_thread()
 
         self._fields_by_type: dict[int, dict[str, dict[str, BaseField]]] = defaultdict(
             dict
@@ -203,7 +205,7 @@ class Lookup(BaseLookup[BaseField]):
             version.failed()
             return None
 
-    def _start(self) -> None:
+    def _start_consumer_thread(self) -> None:
         """
         Start the enrichment process in a background thread and wait for initialization to complete.
         """
@@ -214,26 +216,31 @@ class Lookup(BaseLookup[BaseField]):
 
     def _consumer_thread(self) -> None:
         """
-        Background thread for consuming configuration events from Kafka and updating internal state.
+        Background thread for consuming configuration events from Kafka
+        and updating internal state.
         """
-        assigned = False
-
-        def on_assign(consumer: Consumer, partitions: list[tuple[str, int]]) -> None:
-            """
-            Callback for partition assignment.
-            """
-            nonlocal assigned
-            assigned = True
-
         try:
-            self._consumer.subscribe(topics=[self._topic.name], on_assign=on_assign)
+            # Assign all available partitions of the config updates topic
+            # bypassing the consumer group protocol.
+            tps = [
+                TopicPartition(topic=self._topic.name, partition=i)
+                for i in range(self._topic.broker_config.num_partitions or 0)
+            ]
+            self._config_consumer.assign(tps)
 
             while True:
-                message = self._consumer.poll(timeout=self._consumer_poll_timeout)
+                # Check if the consumer processed all the available config messages
+                # and set the "started" event.
+                if not self._started.is_set() and self._configs_ready():
+                    self._started.set()
+
+                message = self._config_consumer.poll(
+                    timeout=self._consumer_poll_timeout
+                )
                 if message is None:
-                    if assigned and not self._started.is_set():
-                        self._started.set()
                     continue
+                elif message.error():
+                    raise KafkaConsumerException(error=message.error())
 
                 value = message.value()
                 if value is None:
@@ -431,3 +438,25 @@ class Lookup(BaseLookup[BaseField]):
             value.update(self._version_data_cached(version, fields))
 
         logger.debug("Join took %.2f ms", (time.time() - start) * 1000)
+
+    def _configs_ready(self) -> bool:
+        """
+        Return True if the configs are loaded from the topic until the available HWM.
+        If there are outstanding messages in the config topic or the assignment is not
+        available yet, return False.
+        """
+
+        if not self._config_consumer.assignment():
+            return False
+
+        positions = self._config_consumer.position(self._config_consumer.assignment())
+        for position in positions:
+            # Check if the consumer reached the end of the configuration topic
+            # for each assigned partition.
+            _, hwm = self._config_consumer.get_watermark_offsets(
+                partition=position, cached=True
+            )
+            if hwm and position.offset < hwm:
+                return False
+
+        return True
