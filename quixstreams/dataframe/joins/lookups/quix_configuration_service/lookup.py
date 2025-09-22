@@ -456,7 +456,6 @@ class Lookup(BaseLookup[BaseField]):
             _, hwm = self._config_consumer.get_watermark_offsets(
                 partition=position, cached=True
             )
-            if hwm and position.offset < hwm:
+            if hwm < 0 or (hwm > 0 and position.offset < hwm):
                 return False
-
         return True
