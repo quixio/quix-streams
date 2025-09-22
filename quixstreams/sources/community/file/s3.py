@@ -144,7 +144,9 @@ class S3FileSource(FileSource):
             yield from self.get_file_list(folder["Prefix"])
 
         for file in resp.get("Contents", []):
-            yield Path(file["Key"])
+            # Skip folder-like objects (0-byte objects that represent S3 folder prefixes)
+            if file["Size"] > 0:
+                yield Path(file["Key"])
 
     def read_file(self, filepath: Path) -> BytesIO:
         data = self._client.get_object(Bucket=self._bucket, Key=str(filepath))[
