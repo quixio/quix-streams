@@ -2,7 +2,6 @@ import hashlib
 import logging
 import threading
 import time
-from collections import defaultdict
 from typing import TYPE_CHECKING, Any, Literal, Mapping, Optional, Union
 
 import httpx
@@ -131,9 +130,7 @@ class Lookup(BaseLookup[BaseField]):
 
         self._start_consumer_thread()
 
-        self._fields_by_type: dict[int, dict[str, dict[str, BaseField]]] = defaultdict(
-            dict
-        )
+        self._fields_by_type: dict[int, dict[str, dict[str, BaseField]]] = {}
 
     def json_field(
         self,
@@ -274,7 +271,9 @@ class Lookup(BaseLookup[BaseField]):
 
         :raises: RuntimeError: If the event type is unknown.
         """
-        logger.info(f"Processing event: {event['event']} for ID: {event['id']}")
+        logger.info(
+            f'Processing update for configuration ID "{event["id"]}" ({event["event"]})'
+        )
         if event["event"] in {"created", "updated"}:
             if event["id"] not in self._configurations:
                 logger.debug(f"Creating new configuration for ID: {event['id']}")
@@ -336,28 +335,35 @@ class Lookup(BaseLookup[BaseField]):
 
         :returns: The valid configuration version, or None if not found.
         """
-        logger.debug(
-            f"Fetching data for type: {type}, on: {on}, timestamp: {timestamp}"
-        )
+
         configuration = self._configurations.get(self._config_id(type, on))
-        if not configuration:
+        if configuration is None:
             logger.debug(
-                f"No configuration found for type: {type}, on: {on}. Trying wildcard."
+                "No configuration found for type: %s, on: %s. Trying wildcard.",
+                type,
+                on,
             )
             configuration = self._configurations.get(self._config_id(type, "*"))
-        if not configuration:
-            logger.debug(f"No configuration found for type: {type}, on: *")
+        if configuration is None:
+            logger.debug("No configuration found for type: %s, on: *", type)
             return None
 
         version = configuration.find_valid_version(timestamp)
         if version is None:
             logger.debug(
-                f"No valid version found for type: {type}, on: {on}, timestamp: {timestamp}"
+                "No valid configuration version found for type: %s, on: %s, timestamp: %s",
+                type,
+                on,
+                timestamp,
             )
             return None
 
         logger.debug(
-            f"Found valid version '{version.version}' for type: {type}, on: {on}, timestamp: {timestamp}"
+            "Found valid configuration version '%s' for type: %s, on: %s, timestamp: %s",
+            version.version,
+            type,
+            on,
+            timestamp,
         )
         return version
 
@@ -423,15 +429,18 @@ class Lookup(BaseLookup[BaseField]):
         start = time.time()
         logger.debug(f"Joining message with key: {on}, timestamp: {timestamp}")
 
-        fields_by_type = self._fields_by_type.get(id(fields))
-        if fields_by_type is None:
-            fields_by_type = defaultdict(dict)
-            for key, field in fields.items():
-                fields_by_type[field.type][key] = field
-            self._fields_by_type[id(fields)] = fields_by_type
+        fields_ids = id(fields)
+        fields_by_type = self._fields_by_type.get(fields_ids)
 
-        for type, fields in fields_by_type.items():
-            version = self._find_version(type, on, timestamp)
+        if fields_by_type is None:
+            fields_by_type = {}
+            for key, field in fields.items():
+                fields_by_type.setdefault(field.type, {})[key] = field
+            self._fields_by_type[fields_ids] = fields_by_type
+
+        for type_, fields in fields_by_type.items():
+            version = self._find_version(type_, on, timestamp)
+
             if version is not None and version.retry_at < start:
                 self._version_data_cached.remove(version, fields)
 
