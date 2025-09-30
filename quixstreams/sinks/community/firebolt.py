@@ -7,7 +7,6 @@ from quixstreams.models import HeadersTuples
 try:
     from firebolt.client import Client
     from firebolt.client.auth import UsernamePassword
-    from firebolt.common import Settings
 except ImportError as exc:
     raise ImportError(
         'Package "firebolt-sdk" is missing: '
@@ -38,11 +37,11 @@ ColumnsSetter = Union[Iterable[str], ColumnsCallable]
 class FireboltSink(BatchingSink):
     def __init__(
         self,
+        account_name: str,
         username: str,
         password: str,
         database: DatabaseSetter,
         table: TableSetter,
-        api_endpoint: Optional[str] = None,
         engine_name: Optional[str] = None,
         columns: ColumnsSetter = (),
         batch_size: int = 1000,
@@ -64,6 +63,7 @@ class FireboltSink(BatchingSink):
         > If the record values are not dicts, you need to convert them to dicts before
         > sinking.
 
+        :param account_name: Firebolt account name for authentication
         :param username: Firebolt username for authentication
         :param password: Firebolt password for authentication
         :param database: Firebolt database name as a string.
@@ -72,7 +72,6 @@ class FireboltSink(BatchingSink):
         :param table: Firebolt table name as a string.
             Also accepts a single-argument callable that receives the current message
             data as a dict and returns a string.
-        :param api_endpoint: Firebolt API endpoint URL. If not provided, uses default.
         :param engine_name: Firebolt engine name. If not provided, uses default engine.
         :param columns: an iterable (list) of strings used as column names for insertion.
             Also accepts a single-argument callable that receives the current message
@@ -101,9 +100,8 @@ class FireboltSink(BatchingSink):
             on_client_connect_failure=on_client_connect_failure,
         )
 
-        self._username = username
-        self._password = password
-        self._api_endpoint = api_endpoint
+        self._account_name = account_name
+        self._auth = UsernamePassword(username, password)
         self._engine_name = engine_name
         self._request_timeout_s = request_timeout_s
         self._include_metadata_columns = include_metadata_columns
@@ -117,13 +115,8 @@ class FireboltSink(BatchingSink):
 
     def setup(self):
         """Initialize the Firebolt client and authenticate."""
-        auth = UsernamePassword(self._username, self._password)
-        settings = Settings(
-            server=self._api_endpoint,
-            default_region="us-east-1",  # Default region, can be made configurable
-        )
 
-        self._client = Client(auth=auth, settings=settings)
+        self._client = Client(account_name=self._account_name, auth=self._auth)
 
         # Test connection by attempting to get client info
         try:
