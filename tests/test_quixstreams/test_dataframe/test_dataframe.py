@@ -845,9 +845,7 @@ class TestStreamingDataframeStateful:
         sdf = dataframe_factory(topic, state_manager=state_manager)
         sdf = sdf.apply(stateful_func, stateful=True)
 
-        state_manager.on_partition_assign(
-            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
-        )
+        state_manager.on_partition_assign(stream_id=sdf.stream_id, partition=0)
         values = [
             {"number": 1},
             {"number": 10},
@@ -884,9 +882,7 @@ class TestStreamingDataframeStateful:
         sdf = dataframe_factory(topic, state_manager=state_manager)
         sdf = sdf.update(stateful_func, stateful=True)
 
-        state_manager.on_partition_assign(
-            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
-        )
+        state_manager.on_partition_assign(stream_id=sdf.stream_id, partition=0)
         result = None
         values = [
             {"number": 1},
@@ -924,9 +920,7 @@ class TestStreamingDataframeStateful:
         sdf = sdf.update(stateful_func, stateful=True)
         sdf = sdf.filter(lambda v, state: state.get("max") >= 3, stateful=True)
 
-        state_manager.on_partition_assign(
-            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
-        )
+        state_manager.on_partition_assign(stream_id=sdf.stream_id, partition=0)
         values = [
             {"number": 1},
             {"number": 1},
@@ -965,9 +959,7 @@ class TestStreamingDataframeStateful:
         sdf = sdf.update(stateful_func, stateful=True)
         sdf = sdf[sdf.apply(lambda v, state: state.get("max") >= 3, stateful=True)]
 
-        state_manager.on_partition_assign(
-            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
-        )
+        state_manager.on_partition_assign(stream_id=sdf.stream_id, partition=0)
         values = [
             {"number": 1},
             {"number": 1},
@@ -1036,9 +1028,7 @@ class TestStreamingDataFrameTumblingWindow:
             .current()
         )
 
-        state_manager.on_partition_assign(
-            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
-        )
+        state_manager.on_partition_assign(stream_id=sdf.stream_id, partition=0)
 
         records = [
             # Message early in the window
@@ -1112,9 +1102,7 @@ class TestStreamingDataFrameTumblingWindow:
             .current()
         )
 
-        state_manager.on_partition_assign(
-            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
-        )
+        state_manager.on_partition_assign(stream_id=sdf.stream_id, partition=0)
         records = [
             # Create window [0, 10)
             RecordStub(1, "test", 1),
@@ -1165,9 +1153,7 @@ class TestStreamingDataFrameTumblingWindow:
         sdf = dataframe_factory(topic, state_manager=state_manager)
         sdf = sdf.tumbling_window(duration_ms=10, grace_ms=0).sum().final()
 
-        state_manager.on_partition_assign(
-            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
-        )
+        state_manager.on_partition_assign(stream_id=sdf.stream_id, partition=0)
         records = [
             # Create window [0, 10)
             RecordStub(1, "test", 1),
@@ -1227,9 +1213,7 @@ class TestStreamingDataFrameTumblingWindow:
         sdf = dataframe_factory(topic, state_manager=state_manager)
         sdf = sdf.tumbling_window(duration_ms=10).sum().current()
 
-        state_manager.on_partition_assign(
-            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
-        )
+        state_manager.on_partition_assign(stream_id=sdf.stream_id, partition=0)
         records = [
             # Create window [0,10)
             RecordStub(1, "test", 1),
@@ -1277,9 +1261,7 @@ class TestStreamingDataFrameTumblingWindow:
             .current()
         )
 
-        state_manager.on_partition_assign(
-            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
-        )
+        state_manager.on_partition_assign(stream_id=sdf.stream_id, partition=0)
 
         records = [
             # Message early in the window
@@ -1390,9 +1372,7 @@ class TestStreamingDataFrameHoppingWindow:
         sdf = dataframe_factory(topic, state_manager=state_manager)
         sdf = sdf.hopping_window(duration_ms=10, step_ms=5).sum().current()
 
-        state_manager.on_partition_assign(
-            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
-        )
+        state_manager.on_partition_assign(stream_id=sdf.stream_id, partition=0)
         records = [
             # Create window [0,10)
             RecordStub(1, "test", 1),
@@ -1441,9 +1421,7 @@ class TestStreamingDataFrameHoppingWindow:
         sdf = dataframe_factory(topic, state_manager=state_manager)
         sdf = sdf.hopping_window(duration_ms=10, step_ms=5).sum().current()
 
-        state_manager.on_partition_assign(
-            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
-        )
+        state_manager.on_partition_assign(stream_id=sdf.stream_id, partition=0)
         records = [
             # Create window [0,10)
             RecordStub(1, "test", 1),
@@ -1485,9 +1463,7 @@ class TestStreamingDataFrameHoppingWindow:
         sdf = dataframe_factory(topic, state_manager=state_manager)
         sdf = sdf.hopping_window(duration_ms=10, step_ms=5).sum().final()
 
-        state_manager.on_partition_assign(
-            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
-        )
+        state_manager.on_partition_assign(stream_id=sdf.stream_id, partition=0)
 
         records = [
             # Create window [0,10)
@@ -1552,9 +1528,7 @@ class TestStreamingDataFrameHoppingWindow:
         sdf = dataframe_factory(topic, state_manager=state_manager)
         sdf = sdf.hopping_window(duration_ms=10, step_ms=5).sum().current()
 
-        state_manager.on_partition_assign(
-            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
-        )
+        state_manager.on_partition_assign(stream_id=sdf.stream_id, partition=0)
         records = [
             # Create window [0,10)
             RecordStub(1, "test", 1),
@@ -1599,9 +1573,7 @@ class TestStreamingDataFrameSlidingWindow:
             .current()
         )
 
-        state_manager.on_partition_assign(
-            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
-        )
+        state_manager.on_partition_assign(stream_id=sdf.stream_id, partition=0)
 
         records = [
             RecordStub(1, "key", 1000),
@@ -1672,9 +1644,7 @@ class TestStreamingDataFrameSlidingWindow:
             .current()
         )
 
-        state_manager.on_partition_assign(
-            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
-        )
+        state_manager.on_partition_assign(stream_id=sdf.stream_id, partition=0)
         records = [
             # Create window [0, 1]
             RecordStub(1, "test", 1),
@@ -2699,9 +2669,7 @@ class TestStreamingDataFrameConcat:
         sdf_concatenated = sdf1.concat(sdf2).apply(accumulate, stateful=True)
 
         state_manager.on_partition_assign(
-            stream_id=sdf_concatenated.stream_id,
-            partition=0,
-            committed_offsets={},
+            stream_id=sdf_concatenated.stream_id, partition=0
         )
 
         key, timestamp, headers = b"key", 0, None

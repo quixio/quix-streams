@@ -1,11 +1,7 @@
 import pytest
 
-from quixstreams.state.metadata import (
-    CHANGELOG_CF_MESSAGE_HEADER,
-    CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER,
-)
+from quixstreams.state.metadata import CHANGELOG_CF_MESSAGE_HEADER
 from quixstreams.state.serialization import encode_integer_pair
-from quixstreams.utils.json import dumps
 
 
 class TestWindowedRocksDBPartitionTransaction:
@@ -365,7 +361,6 @@ class TestWindowedRocksDBPartitionTransaction:
         start_ms = 0
         end_ms = 10
         value = 1
-        processed_offsets = {"topic": 1}
 
         with windowed_rocksdb_partition_factory(
             changelog_producer=changelog_producer_mock
@@ -378,7 +373,7 @@ class TestWindowedRocksDBPartitionTransaction:
                 timestamp_ms=2,
                 prefix=prefix,
             )
-            tx.prepare(processed_offsets=processed_offsets)
+            tx.prepare()
             assert tx.prepared
 
         # The transaction is expected to produce 2 keys for each updated one:
@@ -391,10 +386,7 @@ class TestWindowedRocksDBPartitionTransaction:
         changelog_producer_mock.produce.assert_any_call(
             key=expected_produced_key,
             value=expected_produced_value,
-            headers={
-                CHANGELOG_CF_MESSAGE_HEADER: "default",
-                CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER: dumps(processed_offsets),
-            },
+            headers={CHANGELOG_CF_MESSAGE_HEADER: "default"},
         )
 
     def test_delete_window_and_prepare(
@@ -403,14 +395,13 @@ class TestWindowedRocksDBPartitionTransaction:
         prefix = b"__key__"
         start_ms = 0
         end_ms = 10
-        processed_offsets = {"topic": 1}
 
         with windowed_rocksdb_partition_factory(
             changelog_producer=changelog_producer_mock
         ) as store_partition:
             tx = store_partition.begin()
             tx.delete_window(start_ms=start_ms, end_ms=end_ms, prefix=prefix)
-            tx.prepare(processed_offsets=processed_offsets)
+            tx.prepare()
             assert tx.prepared
 
         assert changelog_producer_mock.produce.call_count == 1
@@ -420,8 +411,5 @@ class TestWindowedRocksDBPartitionTransaction:
         changelog_producer_mock.produce.assert_called_with(
             key=expected_produced_key,
             value=None,
-            headers={
-                CHANGELOG_CF_MESSAGE_HEADER: "default",
-                CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER: dumps(processed_offsets),
-            },
+            headers={CHANGELOG_CF_MESSAGE_HEADER: "default"},
         )
