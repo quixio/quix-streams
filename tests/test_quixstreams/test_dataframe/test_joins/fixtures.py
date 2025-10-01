@@ -12,11 +12,7 @@ def create_sdf(dataframe_factory, state_manager):
 @pytest.fixture
 def assign_partition(state_manager):
     def _assign_partition(sdf):
-        state_manager.on_partition_assign(
-            stream_id=sdf.stream_id,
-            partition=0,
-            committed_offsets={},
-        )
+        state_manager.on_partition_assign(stream_id=sdf.stream_id, partition=0)
 
     return _assign_partition
 

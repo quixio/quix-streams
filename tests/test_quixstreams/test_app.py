@@ -1205,9 +1205,7 @@ class TestApplicationWithState:
             )
             state_manager.register_store(stream_id, "default")
             state_manager.on_partition_assign(
-                stream_id=stream_id,
-                partition=partition_index,
-                committed_offsets={stream_id: -1001},
+                stream_id=stream_id, partition=partition_index
             )
             store = state_manager.get_store(stream_id=stream_id, store_name="default")
             with store.start_partition_transaction(partition=partition_index) as tx:
@@ -1336,11 +1334,7 @@ class TestApplicationWithState:
             group_id=consumer_group, state_dir=state_dir
         )
         state_manager.register_store(sdf.stream_id, "default")
-        state_manager.on_partition_assign(
-            stream_id=sdf.stream_id,
-            partition=0,
-            committed_offsets={},
-        )
+        state_manager.on_partition_assign(stream_id=sdf.stream_id, partition=0)
         store = state_manager.get_store(stream_id=sdf.stream_id, store_name="default")
         with store.start_partition_transaction(partition=0) as tx:
             assert tx.get("total", prefix=key) is None
@@ -1453,11 +1447,7 @@ class TestApplicationWithState:
         # Add data to the state store
         with state_manager:
             state_manager.register_store(topic_in_name, "default")
-            state_manager.on_partition_assign(
-                stream_id=topic_in_name,
-                partition=0,
-                committed_offsets={topic_in_name: -1001},
-            )
+            state_manager.on_partition_assign(stream_id=topic_in_name, partition=0)
             store = state_manager.get_store(
                 stream_id=topic_in_name, store_name="default"
             )
@@ -1471,11 +1461,7 @@ class TestApplicationWithState:
         # Check that the date is cleared from the state store
         with state_manager:
             state_manager.register_store(topic_in_name, "default")
-            state_manager.on_partition_assign(
-                stream_id=topic_in_name,
-                partition=0,
-                committed_offsets={topic_in_name: -1001},
-            )
+            state_manager.on_partition_assign(stream_id=topic_in_name, partition=0)
             store = state_manager.get_store(
                 stream_id=topic_in_name, store_name="default"
             )
@@ -1563,9 +1549,7 @@ class TestApplicationRecovery:
                     state_manager.register_store(sdf.stream_id, store_name)
                     for p_num, count in partition_msg_count.items():
                         state_manager.on_partition_assign(
-                            stream_id=sdf.stream_id,
-                            partition=p_num,
-                            committed_offsets={topic.name: -1001},
+                            stream_id=sdf.stream_id, partition=p_num
                         )
                         store = state_manager.get_store(
                             stream_id=sdf.stream_id, store_name=store_name
@@ -1719,9 +1703,7 @@ class TestApplicationRecovery:
                 state_manager.register_windowed_store(sdf.stream_id, actual_store_name)
                 for p_num, windows in expected_window_updates.items():
                     state_manager.on_partition_assign(
-                        stream_id=sdf.stream_id,
-                        partition=p_num,
-                        committed_offsets={topic.name: -1001},
+                        stream_id=sdf.stream_id, partition=p_num
                     )
                     store = state_manager.get_store(
                         stream_id=sdf.stream_id,
@@ -1799,8 +1781,7 @@ class TestApplicationRecovery:
         # State should be the same as before deletion
         validate_state()
 
-    @pytest.mark.parametrize("processing_guarantee", ["at-least-once", "exactly-once"])
-    def test_changelog_recovery_consistent_after_failed_commit(
+    def test_changelog_recovery_consistent_after_failed_commit_exactly_once(
         self,
         store_type,
         app_factory,
@@ -1808,7 +1789,6 @@ class TestApplicationRecovery:
         tmp_path,
         state_manager_factory,
         internal_consumer_factory,
-        processing_guarantee,
     ):
         """
         Scenario: application processes messages and successfully produces changelog
@@ -1822,14 +1802,9 @@ class TestApplicationRecovery:
         topic_name = str(uuid.uuid4())
         store_name = "default"
 
-        if processing_guarantee == "exactly-once":
-            commit_patch = patch.object(
-                InternalProducer, "commit_transaction", side_effect=ValueError("Fail")
-            )
-        else:
-            commit_patch = patch.object(
-                InternalConsumer, "commit", side_effect=ValueError("Fail")
-            )
+        commit_patch = patch.object(
+            InternalProducer, "commit_transaction", side_effect=ValueError("Fail")
+        )
 
         # Messages to be processed successfully
         succeeded_messages = [
@@ -1864,7 +1839,7 @@ class TestApplicationRecovery:
                 on_message_processed=on_message_processed,
                 consumer_group=consumer_group,
                 state_dir=state_dir,
-                processing_guarantee=processing_guarantee,
+                processing_guarantee="exactly-once",
             )
             topic = app.topic(topic_name)
             sdf = app.dataframe(topic)
@@ -1892,18 +1867,11 @@ class TestApplicationRecovery:
                         group_id=consumer_group,
                         state_dir=state_dir,
                     ) as state_manager,
-                    internal_consumer_factory(
-                        consumer_group=consumer_group
-                    ) as consumer,
+                    internal_consumer_factory(consumer_group=consumer_group),
                 ):
-                    committed_offset = consumer.committed(
-                        [TopicPartition(topic=topic_name, partition=0)]
-                    )[0].offset
                     state_manager.register_store(sdf.stream_id, store_name)
                     partition = state_manager.on_partition_assign(
-                        stream_id=sdf.stream_id,
-                        partition=0,
-                        committed_offsets={topic_name: committed_offset},
+                        stream_id=sdf.stream_id, partition=0
                     )["default"]
                     with partition.begin() as tx:
                         _validate_transaction_state(tx)
@@ -2617,9 +2585,7 @@ class TestApplicationMultipleSdf:
                 )
                 state_manager.register_store(stream_id, "default")
                 state_manager.on_partition_assign(
-                    stream_id=stream_id,
-                    partition=partition_num,
-                    committed_offsets={},
+                    stream_id=stream_id, partition=partition_num
                 )
                 store = state_manager.get_store(
                     stream_id=stream_id, store_name="default"

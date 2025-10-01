@@ -80,7 +80,6 @@ class TestRecoveryManager:
                 topic=topic_name,
                 partition=partition_num,
                 store_partitions={store_name: store_partition},
-                committed_offsets={topic_name: -1001},
             )
 
         # No pause or assignments should happen
@@ -131,7 +130,6 @@ class TestRecoveryManager:
         recovery_manager.assign_partition(
             topic=topic_name,
             partition=0,
-            committed_offsets={topic_name: -1001},
             store_partitions={store_name: store_partition},
         )
 
@@ -184,7 +182,6 @@ class TestRecoveryManager:
         recovery_manager.assign_partition(
             topic=topic_name,
             partition=0,
-            committed_offsets={topic_name: -1001},
             store_partitions={store_name: store_partition},
         )
         assert recovery_manager.partitions
@@ -200,7 +197,6 @@ class TestRecoveryManager:
         recovery_manager.assign_partition(
             topic=topic_name,
             partition=1,
-            committed_offsets={topic_name: -1001},
             store_partitions={store_name: store_partition},
         )
         assert recovery_manager.partitions
@@ -262,7 +258,6 @@ class TestRecoveryManager:
             recovery_manager.assign_partition(
                 topic=topic_name,
                 partition=1,
-                committed_offsets={topic_name: -1001},
                 store_partitions={store_name: store_partition},
             )
 
@@ -302,13 +297,11 @@ class TestRecoveryManager:
         recovery_manager.assign_partition(
             topic=topic_name,
             partition=0,
-            committed_offsets={topic_name: -1001},
             store_partitions={store_name: store_partition},
         )
         recovery_manager.assign_partition(
             topic=topic_name,
             partition=1,
-            committed_offsets={topic_name: -1001},
             store_partitions={store_name: store_partition},
         )
         assert len(recovery_manager.partitions) == 2
@@ -408,7 +401,6 @@ class TestRecoveryManagerRecover:
             topic=topic_name,
             partition=partition_num,
             store_partitions=store_partitions,
-            committed_offsets={topic_name: -1001},
         )
 
         # Check that RecoveryPartition is assigned to RecoveryManager
@@ -482,7 +474,6 @@ class TestRecoveryManagerRecover:
         recovery_manager.assign_partition(
             topic=topic_name,
             partition=0,
-            committed_offsets={topic_name: -1001},
             store_partitions={store_name: store_partition},
         )
 

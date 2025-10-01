@@ -95,15 +95,13 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         return sorted(merged_items.items(), key=lambda kv: kv[0], reverse=backwards)
 
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
-    def prepare(self, processed_offsets: Optional[dict[str, int]] = None) -> None:
+    def prepare(self) -> None:
         """
         This method first persists the counter and then calls the parent class's
         `prepare()` to prepare the transaction for flush.
-
-        :param processed_offsets: the dict with <topic: offset> of the latest processed message
         """
         self._persist_counter()
-        super().prepare(processed_offsets=processed_offsets)
+        super().prepare()
 
     def _increment_counter(self) -> int:
         """

@@ -4,11 +4,7 @@ import pytest
 from confluent_kafka import OFFSET_BEGINNING
 
 from quixstreams.state.exceptions import ColumnFamilyHeaderMissing
-from quixstreams.state.metadata import (
-    CHANGELOG_CF_MESSAGE_HEADER,
-    CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER,
-    SEPARATOR,
-)
+from quixstreams.state.metadata import CHANGELOG_CF_MESSAGE_HEADER, SEPARATOR
 from quixstreams.state.rocksdb import RocksDBStorePartition
 from quixstreams.utils.json import dumps
 from tests.utils import ConfluentKafkaMessageStub
@@ -75,7 +71,7 @@ class TestRecoveryPartition:
 
 class TestRecoverFromChangelogMessage:
     @pytest.mark.parametrize("store_value", [10, None])
-    def test_recover_from_changelog_message_no_processed_offset(
+    def test_recover_from_changelog_message_success(
         self, store_partition, store_value, recovery_partition_factory
     ):
         """
@@ -147,104 +143,3 @@ class TestRecoverFromChangelogMessage:
             recovery_partition.recover_from_changelog_message(
                 changelog_message=changelog_msg
             )
-
-    def test_recover_from_changelog_message_with_processed_offset_behind_committed(
-        self, store_partition, recovery_partition_factory
-    ):
-        """
-        Test that changes from the changelog topic are applied if the
-        source topic offset header is present and is smaller than the latest committed
-        offset.
-        """
-        kafka_key = b"my_key"
-        user_store_key = "count"
-
-        # Processed offset is behind the committed offset - the changelog belongs
-        # to an already committed message and should be applied
-        processed_offsets = {"topic": 1}
-        committed_offsets = {"topic": 2}
-
-        recovery_partition = recovery_partition_factory(
-            store_partition=store_partition, committed_offsets=committed_offsets
-        )
-
-        processed_offset_header = (
-            CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER,
-            dumps(processed_offsets),
-        )
-
-        changelog_msg = ConfluentKafkaMessageStub(
-            key=kafka_key + SEPARATOR + dumps(user_store_key),
-            value=dumps(10),
-            headers=[
-                (CHANGELOG_CF_MESSAGE_HEADER, b"default"),
-                processed_offset_header,
-            ],
-        )
-
-        recovery_partition.recover_from_changelog_message(changelog_msg)
-
-        with store_partition.begin() as tx:
-            assert tx.get(user_store_key, prefix=kafka_key) == 10
-        assert store_partition.get_changelog_offset() == changelog_msg.offset()
-
-    @pytest.mark.parametrize(
-        "processed_offsets, committed_offsets",
-        # Processed offsets should be strictly lower than committed offsets for
-        # the change to be applied
-        [
-            ({"topic1": 2}, {"topic1": 1}),
-            ({"topic1": 2}, {"topic1": 2}),
-            ({"topic1": 2, "topic2": 2}, {"topic1": 3, "topic2": 2}),
-            ({"topic1": 2, "topic2": 2}, {"topic1": 1, "topic2": 3}),
-            ({"topic1": 2, "topic2": 2}, {"topic1": 1, "topic2": 1}),
-        ],
-    )
-    def test_recover_from_changelog_message_with_processed_offset_ahead_committed(
-        self,
-        store_partition,
-        recovery_partition_factory,
-        processed_offsets,
-        committed_offsets,
-    ):
-        """
-        Test that changes from the changelog topic are NOT applied if the
-        source topic offset header is present but larger than the latest committed
-        offset.
-        It means that the changelog messages were produced during the checkpoint,
-        but the topic offset was not committed.
-        Possible reasons:
-          - Producer couldn't verify the delivery of every changelog message
-          - Consumer failed to commit the source topic offsets
-        """
-        kafka_key = b"my_key"
-        user_store_key = "count"
-
-        recovery_partition = recovery_partition_factory(
-            store_partition=store_partition, committed_offsets=committed_offsets
-        )
-
-        # Generate the changelog message with processed offset ahead of the committed
-        # one
-        processed_offset_header = (
-            CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER,
-            dumps(processed_offsets),
-        )
-        changelog_msg = ConfluentKafkaMessageStub(
-            key=kafka_key + SEPARATOR + dumps(user_store_key),
-            value=dumps(10),
-            headers=[
-                (CHANGELOG_CF_MESSAGE_HEADER, b"default"),
-                processed_offset_header,
-            ],
-        )
-
-        # Recover from the message
-        recovery_partition.recover_from_changelog_message(changelog_msg)
-
-        # Check that the changes have not been applied, but the changelog offset
-        # increased
-        with store_partition.begin() as tx:
-            assert tx.get(user_store_key, prefix=kafka_key) is None
-
-        assert store_partition.get_changelog_offset() == changelog_msg.offset()
