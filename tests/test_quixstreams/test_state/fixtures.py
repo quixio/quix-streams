@@ -45,19 +45,16 @@ def recovery_partition_factory():
         changelog_name: str = "",
         partition_num: int = 0,
         store_partition: Optional[StorePartition] = None,
-        committed_offsets: Optional[dict[str, int]] = None,
         lowwater: int = 0,
         highwater: int = 0,
     ):
         changelog_name = changelog_name or f"changelog__{str(uuid.uuid4())}"
         if not store_partition:
             store_partition = MagicMock(spec_set=StorePartition)
-        committed_offsets = committed_offsets or {}
         recovery_partition = RecoveryPartition(
             changelog_name=changelog_name,
             partition_num=partition_num,
             store_partition=store_partition,
-            committed_offsets=committed_offsets,
             lowwater=lowwater,
             highwater=highwater,
         )

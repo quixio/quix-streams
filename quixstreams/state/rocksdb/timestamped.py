@@ -171,16 +171,14 @@ class TimestampedPartitionTransaction(RocksDBPartitionTransaction):
         self._set_min_eligible_timestamp(prefix, min_eligible_timestamp)
 
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
-    def prepare(self, processed_offsets: Optional[dict[str, int]] = None) -> None:
+    def prepare(self) -> None:
         """
         This method first calls `_expire()` to remove outdated entries based on
         their timestamps and grace periods, then calls the parent class's
         `prepare()` to prepare the transaction for flush.
-
-        :param processed_offsets: the dict with <topic: offset> of the latest processed message
         """
         self._expire()
-        super().prepare(processed_offsets=processed_offsets)
+        super().prepare()
 
     def _expire(self) -> None:
         """

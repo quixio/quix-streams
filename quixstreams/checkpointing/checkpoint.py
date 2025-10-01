@@ -228,20 +228,12 @@ class Checkpoint(BaseCheckpoint):
             partition,
             store_name,
         ), transaction in self._store_transactions.items():
-            topics = self._dataframe_registry.get_topics_for_stream_id(
-                stream_id=stream_id
-            )
-            processed_offsets = {
-                topic: offset
-                for (topic, partition_), offset in self._tp_offsets.items()
-                if topic in topics and partition_ == partition
-            }
             if transaction.failed:
                 raise StoreTransactionFailed(
                     f'Detected a failed transaction for store "{store_name}", '
                     f"the checkpoint is aborted"
                 )
-            transaction.prepare(processed_offsets=processed_offsets)
+            transaction.prepare()
 
         # Step 3. Flush producer to trigger all delivery callbacks and ensure that
         # all messages are produced

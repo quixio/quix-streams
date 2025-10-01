@@ -6,7 +6,6 @@ import signal
 import time
 import uuid
 import warnings
-from collections import defaultdict
 from pathlib import Path
 from typing import Callable, List, Literal, Optional, Protocol, Tuple, Type, Union, cast
 
@@ -1036,18 +1035,6 @@ class Application:
             non_changelog_tps = [
                 tp for tp in topic_partitions if tp.topic in non_changelog_topics
             ]
-            committed_tps = self._consumer.committed(
-                partitions=non_changelog_tps, timeout=30
-            )
-            committed_offsets: dict[int, dict[str, int]] = defaultdict(dict)
-            for tp in committed_tps:
-                if tp.error:
-                    raise RuntimeError(
-                        f"Failed to get committed offsets for "
-                        f'"{tp.topic}[{tp.partition}]" from the broker: {tp.error}'
-                    )
-                committed_offsets[tp.partition][tp.topic] = tp.offset
-
             # Match the assigned TP with a stream ID via DataFrameRegistry
             for tp in non_changelog_tps:
                 stream_ids = self._dataframe_registry.get_stream_ids(
@@ -1056,9 +1043,7 @@ class Application:
                 # Assign store partitions for the given stream ids
                 for stream_id in stream_ids:
                     self._state_manager.on_partition_assign(
-                        stream_id=stream_id,
-                        partition=tp.partition,
-                        committed_offsets=committed_offsets[tp.partition],
+                        stream_id=stream_id, partition=tp.partition
                     )
         self._run_tracker.timeout_refresh()
 

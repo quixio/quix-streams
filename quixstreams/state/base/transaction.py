@@ -25,13 +25,11 @@ from quixstreams.state.exceptions import (
 )
 from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
-    CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER,
     DEFAULT_PREFIX,
     SEPARATOR,
     Marker,
 )
 from quixstreams.state.serialization import DumpsFunc, LoadsFunc, deserialize, serialize
-from quixstreams.utils.json import dumps as json_dumps
 
 from .state import State, TransactionState
 
@@ -477,7 +475,7 @@ class PartitionTransaction(ABC, Generic[K, V]):
             return self._partition.exists(key_serialized, cf_name=cf_name)
 
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
-    def prepare(self, processed_offsets: Optional[dict[str, int]] = None) -> None:
+    def prepare(self) -> None:
         """
         Produce changelog messages to the changelog topic for all changes accumulated
         in this transaction and prepare transaction to flush its state to the state
@@ -488,18 +486,16 @@ class PartitionTransaction(ABC, Generic[K, V]):
 
         If changelog is disabled for this application, no updates will be produced
         to the changelog topic.
-
-        :param processed_offsets: the dict with <topic: offset> of the latest processed message
         """
 
         try:
-            self._prepare(processed_offsets=processed_offsets)
+            self._prepare()
             self._status = PartitionTransactionStatus.PREPARED
         except Exception:
             self._status = PartitionTransactionStatus.FAILED
             raise
 
-    def _prepare(self, processed_offsets: Optional[dict[str, int]]):
+    def _prepare(self):
         if self._changelog_producer is None:
             return
 
@@ -508,13 +504,11 @@ class PartitionTransaction(ABC, Generic[K, V]):
             f'topic_name="{self._changelog_producer.changelog_name}" '
             f"partition={self._changelog_producer.partition}"
         )
-        source_tp_offset_header = json_dumps(processed_offsets)
         column_families = self._update_cache.get_column_families()
 
         for cf_name in column_families:
             headers: Headers = {
                 CHANGELOG_CF_MESSAGE_HEADER: cf_name,
-                CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER: source_tp_offset_header,
             }
 
             updates = self._update_cache.get_updates(cf_name=cf_name)
