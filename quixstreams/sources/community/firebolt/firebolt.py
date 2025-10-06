@@ -1,5 +1,6 @@
 import contextlib
 import logging
+import re
 import time
 from collections.abc import Generator
 from datetime import datetime, timedelta, timezone
@@ -178,9 +179,17 @@ class FireboltSource(Source):
         self._delay = delay
         self._max_attempts = max_retries + 1
 
+        for field in [time_field, table_name]:
+            _validate_sql_field_name(field)
+
         self._sql_query = (
             sql_query
-            or f"""SELECT * FROM "{table_name}" WHERE {time_field} >= ? AND {time_field} < ?"""  # noqa: S608
+            or f"""
+                SELECT * 
+                FROM "{table_name}" 
+                WHERE "{time_field}" >= ? 
+                AND "{time_field}" < ?
+            """  # noqa: S608
         )
 
     @contextlib.contextmanager
@@ -346,3 +355,11 @@ def _set_default_time_setter(time_col: str) -> Callable[[dict], Optional[int]]:
     """
 
     return partial(_default_time_setter, time_col)
+
+
+def _validate_sql_field_name(field):
+    """
+    Ensure field name does not include any escapes.
+    """
+    if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", field):
+        raise ValueError(f"Unsafe field name: {field}")
