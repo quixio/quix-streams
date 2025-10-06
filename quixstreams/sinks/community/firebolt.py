@@ -129,7 +129,7 @@ class FireboltSink(BatchingSink):
 
         self._db_name = db_name
         self._table_name = _table_name_setter(table_name)
-        self._tables = set()
+        self._tables: dict[str, dict[str, type]] = {}  # stores table + column types
 
         self._client: Optional[Connection] = None
 
@@ -250,13 +250,16 @@ class FireboltSink(BatchingSink):
         """
 
         cursor.execute(query)
-        self._tables.add(table_name)
+        self._tables[table_name] = {}
         logger.debug(f"Created table {table_name}")
 
     def _add_new_columns(
         self, connection: Connection, table_name: str, columns: dict[str, type]
     ) -> None:
         """Add new columns to Firebolt table if they don't exist."""
+        if columns == self._tables[table_name]:
+            return
+
         cursor = connection.cursor()
 
         for col_name, py_type in columns.items():
@@ -274,8 +277,10 @@ class FireboltSink(BatchingSink):
             """
 
             cursor.execute(query)
+            self._tables[table_name] = columns
             logger.debug(
                 f"Added column {col_name} ({firebolt_col_type}) to table {table_name}"
+                f"if not previously present."
             )
 
     def _insert_rows(
