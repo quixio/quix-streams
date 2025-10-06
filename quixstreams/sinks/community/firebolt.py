@@ -1,12 +1,17 @@
+import contextlib
+import json
 import logging
-import time
+import re
+from collections.abc import Generator
+from datetime import datetime
 from typing import Any, Callable, Iterable, Mapping, Optional, Union
 
+from quixstreams.exceptions import QuixException
 from quixstreams.models import HeadersTuples
 
 try:
-    from firebolt.client import Client
-    from firebolt.client.auth import UsernamePassword
+    from firebolt.client.auth import ClientCredentials
+    from firebolt.db import Connection, Cursor, connect
 except ImportError as exc:
     raise ImportError(
         'Package "firebolt-sdk" is missing: '
@@ -20,8 +25,30 @@ from quixstreams.sinks.base import (
     SinkBackpressureError,
     SinkBatch,
 )
+from quixstreams.sinks.base.item import SinkItem
+
+__all__ = ("FireboltSink", "FireboltSinkException")
 
 logger = logging.getLogger(__name__)
+
+# A column name for the records keys
+KEY_COLUMN_NAME = "__key"
+
+# A column name for the records timestamps
+TIMESTAMP_COLUMN_NAME = "__timestamp"
+
+# A mapping of Python types to Firebolt column types for schema updates
+_FIREBOLT_TYPES_MAP: dict[type, str] = {
+    int: "BIGINT",
+    float: "DOUBLE PRECISION",
+    str: "TEXT",
+    bytes: "TEXT",  # Firebolt doesn't have BYTES, use TEXT
+    datetime: "TIMESTAMP",
+    list: "TEXT",
+    dict: "TEXT",
+    tuple: "TEXT",
+    bool: "BOOLEAN",
+}
 
 FireboltValueMap = dict[str, Union[str, int, float, bool]]
 
@@ -29,9 +56,10 @@ TableCallable = Callable[[FireboltValueMap], str]
 DatabaseCallable = Callable[[FireboltValueMap], str]
 ColumnsCallable = Callable[[FireboltValueMap], Iterable[str]]
 
-TableSetter = Union[str, TableCallable]
-DatabaseSetter = Union[str, DatabaseCallable]
-ColumnsSetter = Union[Iterable[str], ColumnsCallable]
+TableName = Union[Callable[[SinkItem], str], str]
+
+
+class FireboltSinkException(QuixException): ...
 
 
 class FireboltSink(BatchingSink):
@@ -40,13 +68,12 @@ class FireboltSink(BatchingSink):
         account_name: str,
         username: str,
         password: str,
-        database: DatabaseSetter,
-        table: TableSetter,
+        db_name: str,
+        table_name: TableName,
         engine_name: Optional[str] = None,
-        columns: ColumnsSetter = (),
+        schema_auto_update: bool = True,
         batch_size: int = 1000,
         request_timeout_s: int = 30,
-        include_metadata_columns: bool = False,
         on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
         on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
     ):
@@ -66,27 +93,19 @@ class FireboltSink(BatchingSink):
         :param account_name: Firebolt account name for authentication
         :param username: Firebolt username for authentication
         :param password: Firebolt password for authentication
-        :param database: Firebolt database name as a string.
+        :param db_name: Firebolt db_name name as a string.
             Also accepts a single-argument callable that receives the current message
             data as a dict and returns a string.
-        :param table: Firebolt table name as a string.
-            Also accepts a single-argument callable that receives the current message
-            data as a dict and returns a string.
+        :param table_name: Firebolt table name as either a string or a callable which
+            receives a SinkItem and returns a string.
         :param engine_name: Firebolt engine name. If not provided, uses default engine.
-        :param columns: an iterable (list) of strings used as column names for insertion.
-            Also accepts a single-argument callable that receives the current message
-            data as a dict and returns an iterable of strings.
-            - If empty, all keys from the record value will be used.
-            Default - `()`.
+        :param schema_auto_update: Automatically update the schema when new columns are detected.
         :param batch_size: how many records to write to Firebolt in one request.
             Note that it only affects the size of one write request, and not the number
             of records flushed on each checkpoint.
             Default - `1000`.
         :param request_timeout_s: request timeout in seconds for Firebolt operations.
             Default - `30`.
-        :param include_metadata_columns: if True, includes record's key, topic,
-            and partition as additional columns.
-            Default - `False`.
         :param on_client_connect_success: An optional callback made after successful
             client authentication, primarily for additional logging.
         :param on_client_connect_failure: An optional callback made after failed
@@ -101,27 +120,40 @@ class FireboltSink(BatchingSink):
         )
 
         self._account_name = account_name
-        self._auth = UsernamePassword(username, password)
+        self._username = username
+        self._password = password
         self._engine_name = engine_name
         self._request_timeout_s = request_timeout_s
-        self._include_metadata_columns = include_metadata_columns
         self._batch_size = batch_size
+        self._schema_auto_update = schema_auto_update
 
-        self._database = _database_callable(database)
-        self._table = _table_callable(table)
-        self._columns = _columns_callable(columns)
+        self._db_name = db_name
+        self._table_name = _table_name_setter(table_name)
+        self._tables = set()
 
-        self._client: Optional[Client] = None
+        self._client: Optional[Connection] = None
+
+    # TODO: with a cleanup method for sinks, we could make a reusable connection
+    #  and spawn cursors as-needed.
+    @contextlib.contextmanager
+    def _connection(self) -> Generator[Connection, None, None]:
+        with connect(
+            account_name=self._account_name,
+            auth=ClientCredentials(self._username, self._password),
+            database=self._db_name,
+            engine_name=self._engine_name,
+        ) as connection:
+            yield connection
 
     def setup(self):
         """Initialize the Firebolt client and authenticate."""
 
-        self._client = Client(account_name=self._account_name, auth=self._auth)
-
-        # Test connection by attempting to get client info
+        # Test connection
         try:
-            # This will validate the connection and authentication
-            self._client.resource_manager.engines.get_many()
+            with self._connection() as connection:
+                cursor: Cursor = connection.cursor()
+                if not cursor.is_db_available(self._db_name):
+                    raise FireboltSinkException("database is not available")
             logger.debug("Successfully authenticated to Firebolt")
         except Exception as e:
             logger.error(f"Failed to authenticate to Firebolt: {e}")
@@ -154,106 +186,126 @@ class FireboltSink(BatchingSink):
 
     def write(self, batch: SinkBatch):
         """Write a batch of records to Firebolt."""
-        database_name = self._database
-        table_name = self._table
-        columns_getter = self._columns
+        tables = {}
+        for item in batch:
+            table = tables.setdefault(
+                self._table_name(item), {"rows": [], "cols_types": {}}
+            )
 
-        for write_batch in batch.iter_chunks(n=self._batch_size):
-            # Group records by database and table
-            db_table_records = {}
+            row = {TIMESTAMP_COLUMN_NAME: datetime.fromtimestamp(item.timestamp / 1000)}
+            if item.key is not None:
+                key_type = type(item.key)
+                table["cols_types"].setdefault(KEY_COLUMN_NAME, key_type)
+                row[KEY_COLUMN_NAME] = item.key
 
-            for item in write_batch:
-                value = item.value.copy()
+            for key, value in item.value.items():
+                if value is not None:
+                    table["cols_types"].setdefault(key, type(value))
+                    # Serialize incompatible types to "TEXT" (strings)
+                    if isinstance(value, (list, dict, tuple)):
+                        row[key] = json.dumps(value)
+                    elif isinstance(value, bytes):
+                        row[key] = value.decode("utf-8")
+                    else:
+                        row[key] = value
 
-                # Evaluate database and table names for this record
-                _database = database_name(value)
-                _table = table_name(value)
-                _columns = columns_getter(value)
+            table["rows"].append(row)
 
-                # Add metadata columns if requested
-                if self._include_metadata_columns:
-                    value["__key"] = item.key
-                    value["__topic"] = batch.topic
-                    value["__partition"] = batch.partition
-                    value["__timestamp"] = item.timestamp
-                    value["__offset"] = item.offset
+        table_counts = {}
+        try:
+            with self._connection() as connection:
+                for name, values in tables.items():
+                    table_counts[name] = len(values["rows"])
+                    if self._schema_auto_update:
+                        self._create_table(connection, name)
+                        self._add_new_columns(connection, name, values["cols_types"])
+                    self._insert_rows(connection, name, values["rows"])
+        except Exception as e:
+            logger.error(f"Failed to write batch: {str(e)}")
+            # Handle potential backpressure or rate limiting
+            if "rate limit" in str(e).lower() or "throttle" in str(e).lower():
+                raise SinkBackpressureError(retry_after=15) from e
+            raise FireboltSinkException(f"Failed to write batch: {str(e)}") from e
 
-                # Filter columns if specified
-                if _columns:
-                    filtered_value = {k: value[k] for k in _columns if k in value}
-                else:
-                    filtered_value = value
+        logger.info(
+            f"Successfully wrote records to tables; "
+            f"table row counts: {table_counts}"
+        )
 
-                # Group by database and table
-                db_table_key = (_database, _table)
-                if db_table_key not in db_table_records:
-                    db_table_records[db_table_key] = {"rows": [], "columns": None}
+    def _create_table(self, connection: Connection, table_name: str):
+        """Create table if it doesn't exist."""
+        if table_name in self._tables:
+            return
 
-                # Determine columns from first record or use all available
-                if db_table_records[db_table_key]["columns"] is None:
-                    db_table_records[db_table_key]["columns"] = list(
-                        filtered_value.keys()
-                    )
+        if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", table_name):
+            raise ValueError(f"Unsafe table name: {table_name}")
 
-                # Create row as list of values in column order
-                row = [
-                    filtered_value.get(col)
-                    for col in db_table_records[db_table_key]["columns"]
-                ]
-                db_table_records[db_table_key]["rows"].append(row)
+        cursor = connection.cursor()
+        # Create table with basic columns - more will be added dynamically
+        query = f"""
+            CREATE TABLE IF NOT EXISTS "{table_name}" (
+                {TIMESTAMP_COLUMN_NAME} TIMESTAMP NOT NULL,
+                {KEY_COLUMN_NAME} TEXT
+            )
+        """
 
-            # Write to each database/table combination
-            for (db_name, tbl_name), record_data in db_table_records.items():
-                try:
-                    _start = time.monotonic()
+        cursor.execute(query)
+        self._tables.add(table_name)
+        logger.debug(f"Created table {table_name}")
 
-                    # Get database and table objects
-                    database = self._client.get_database(db_name)
-                    if self._engine_name:
-                        database.bind_to_engine(self._engine_name)
+    def _add_new_columns(
+        self, connection: Connection, table_name: str, columns: dict[str, type]
+    ) -> None:
+        """Add new columns to Firebolt table if they don't exist."""
+        cursor = connection.cursor()
 
-                    table = database.get_table(tbl_name)
+        for col_name, py_type in columns.items():
+            firebolt_col_type = _FIREBOLT_TYPES_MAP.get(py_type)
+            if firebolt_col_type is None:
+                raise FireboltSinkException(
+                    f'Failed to add new column "{col_name}": '
+                    f'cannot map Python type "{py_type}" to a Firebolt column type'
+                )
 
-                    # Write rows to Firebolt
-                    table.write_rows(record_data["rows"])
+            # Firebolt uses ADD COLUMN IF NOT EXISTS syntax
+            query = f"""
+                ALTER TABLE {table_name}
+                ADD COLUMN IF NOT EXISTS {col_name} {firebolt_col_type}
+            """
 
-                    elapsed = round(time.monotonic() - _start, 2)
-                    logger.info(
-                        f"Sent data to Firebolt; "
-                        f"database={db_name} table={tbl_name} "
-                        f"total_records={len(record_data['rows'])} "
-                        f"time_elapsed={elapsed}s"
-                    )
+            cursor.execute(query)
+            logger.debug(
+                f"Added column {col_name} ({firebolt_col_type}) to table {table_name}"
+            )
 
-                except Exception as exc:
-                    # Handle potential backpressure or rate limiting
-                    if (
-                        "rate limit" in str(exc).lower()
-                        or "throttle" in str(exc).lower()
-                    ):
-                        # Raise backpressure error to pause the partition
-                        raise SinkBackpressureError(retry_after=15) from exc
+    def _insert_rows(
+        self, connection: Connection, table_name: str, rows: list[dict]
+    ) -> None:
+        """Insert rows into Firebolt table."""
+        if not rows:
+            return
 
-                    logger.error(f"Failed to write to Firebolt: {exc}")
-                    raise
+        cursor = connection.cursor()
 
+        # Collect all column names from the first row
+        columns = list(rows[0].keys())
 
-def _database_callable(setter: DatabaseSetter) -> DatabaseCallable:
-    """Convert database setter to callable."""
-    if callable(setter):
-        return setter
-    return lambda value: setter
+        # Build single INSERT query for all rows
+        query = f"""
+        INSERT INTO "{table_name}" 
+        ({', '.join(columns)}) 
+        VALUES ({', '.join(['?']*len(columns))})
+        """  # noqa: S608
 
+        # Execute single batch insert
+        cursor.executemany(
+            query, [[row.get(col, None) for col in columns] for row in rows]
+        )
 
-def _table_callable(setter: TableSetter) -> TableCallable:
-    """Convert table setter to callable."""
-    if callable(setter):
-        return setter
-    return lambda value: setter
+        logger.debug(f"Inserted {len(rows)} rows into {table_name}")
 
 
-def _columns_callable(setter: ColumnsSetter) -> ColumnsCallable:
-    """Convert columns setter to callable."""
-    if callable(setter):
-        return setter
-    return lambda value: setter
+def _table_name_setter(table_name: TableName) -> Callable[[SinkItem], str]:
+    if isinstance(table_name, str):
+        return lambda sink_item: table_name
+    return table_name
