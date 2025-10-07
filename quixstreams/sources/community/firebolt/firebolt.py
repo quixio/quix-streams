@@ -90,7 +90,7 @@ class FireboltSource(Source):
         account_name="your_account",
         username="your_username",
         password="your_password",
-        database="your_database",
+        db_name="your_db_name",
         table_name="events",
         time_field="timestamp",
         start_date=datetime(2024, 1, 1, tzinfo=timezone.utc),
@@ -115,7 +115,7 @@ class FireboltSource(Source):
         account_name: str,
         username: str,
         password: str,
-        database: str,
+        db_name: str,
         table_name: str,
         engine_name: Optional[str] = None,
         time_field: str = TIMESTAMP_COLUMN_NAME,
@@ -136,7 +136,7 @@ class FireboltSource(Source):
         :param account_name: Firebolt account name for authentication
         :param username: Firebolt username for authentication
         :param password: Firebolt password for authentication
-        :param database: Firebolt database name to connect to
+        :param db_name: Firebolt db_name name to connect to
         :param table_name: Firebolt table name to query
         :param engine_name: Specific Firebolt engine name to use. If not provided, uses default.
         :param time_field: The timestamp column name used for time-windowed queries
@@ -157,7 +157,7 @@ class FireboltSource(Source):
         :param on_client_connect_failure: Callback for connection failures.
         """
         super().__init__(
-            name=name or f"firebolt_{database}_{table_name}",
+            name=name or f"firebolt_{db_name}_{table_name}",
             shutdown_timeout=shutdown_timeout,
             on_client_connect_success=on_client_connect_success,
             on_client_connect_failure=on_client_connect_failure,
@@ -166,7 +166,7 @@ class FireboltSource(Source):
         self._account_name = account_name
         self._username = username
         self._password = password
-        self._database = database
+        self._db_name = db_name
         self._table_name = table_name
         self._engine_name = engine_name
         self._start_date = start_date
@@ -197,7 +197,7 @@ class FireboltSource(Source):
         with connect(
             account_name=self._account_name,
             auth=ClientCredentials(self._username, self._password),
-            database=self._database,
+            database=self._db_name,
             engine_name=self._engine_name,
         ) as connection:
             yield connection
@@ -208,12 +208,10 @@ class FireboltSource(Source):
         try:
             with self._connection() as connection:
                 cursor: Cursor = connection.cursor()
-                if not cursor.is_db_available(self._database):
+                if not cursor.is_db_available(self._db_name):
                     raise Exception("database is not available")
                 cursor.execute("SELECT 1")
-            logger.info(
-                f"Successfully connected to Firebolt database: {self._database}"
-            )
+            logger.info(f"Successfully connected to Firebolt database: {self._db_name}")
         except Exception as e:
             logger.error(f"Failed to connect to Firebolt: {e}")
             raise
