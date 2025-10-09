@@ -11,6 +11,7 @@ from .base import (
     Window,
     WindowKeyResult,
     WindowOnLateCallback,
+    WindowOnUpdateCallback,
     get_window_ranges,
 )
 
@@ -46,6 +47,7 @@ class TimeWindow(Window):
         dataframe: "StreamingDataFrame",
         step_ms: Optional[int] = None,
         on_late: Optional[WindowOnLateCallback] = None,
+        on_update: Optional[WindowOnUpdateCallback] = None,
     ):
         super().__init__(
             name=name,
@@ -56,6 +58,7 @@ class TimeWindow(Window):
         self._grace_ms = grace_ms
         self._step_ms = step_ms
         self._on_late = on_late
+        self._on_update = on_update
 
         self._closing_strategy = ClosingStrategy.KEY
 
@@ -152,6 +155,7 @@ class TimeWindow(Window):
         max_expired_window_end = latest_timestamp - grace_ms
         max_expired_window_start = max_expired_window_end - duration_ms
         updated_windows: list[WindowKeyResult] = []
+        triggered_windows: list[WindowKeyResult] = []
         for start, end in ranges:
             if start <= max_expired_window_start:
                 late_by_ms = max_expired_window_end - timestamp_ms
@@ -168,20 +172,23 @@ class TimeWindow(Window):
             # When collecting values, we only mark the window existence with None
             # since actual values are stored separately and combined into an array
             # during window expiration.
-            aggregated = None
+            new_value = None
             if aggregate:
-                current_value = state.get_window(start, end)
-                if current_value is None:
-                    current_value = self._initialize_value()
+                old_value = state.get_window(start, end)
+                if old_value is None:
+                    old_value = self._initialize_value()
 
-                aggregated = self._aggregate_value(current_value, value, timestamp_ms)
-                updated_windows.append(
-                    (
-                        key,
-                        self._results(aggregated, [], start, end),
-                    )
-                )
-            state.update_window(start, end, value=aggregated, timestamp_ms=timestamp_ms)
+                new_value = self._aggregate_value(old_value, value, timestamp_ms)
+                window = self._results(new_value, [], start, end)
+
+                if self._on_update and self._on_update(old_value, new_value):
+                    triggered_windows.append((key, window))
+                    transaction.delete_window(start, end, prefix=key)
+                    continue
+
+                updated_windows.append((key, window))
+
+            state.update_window(start, end, value=new_value, timestamp_ms=timestamp_ms)
 
         if collect:
             state.add_to_collection(
@@ -198,7 +205,10 @@ class TimeWindow(Window):
                 key, state, max_expired_window_start, collect
             )
 
-        return updated_windows, expired_windows
+        # Combine triggered windows with time-expired windows
+        all_expired_windows = triggered_windows + list(expired_windows)
+
+        return updated_windows, iter(all_expired_windows)
 
     def expire_by_partition(
         self,

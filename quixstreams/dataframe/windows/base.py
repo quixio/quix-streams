@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 WindowResult: TypeAlias = dict[str, Any]
 WindowKeyResult: TypeAlias = tuple[Any, WindowResult]
 Message: TypeAlias = tuple[WindowResult, Any, int, Any]
+WindowOnUpdateCallback: TypeAlias = Callable[[Any, Any], bool]
 
 WindowAggregateFunc = Callable[[Any, Any], Any]
 
