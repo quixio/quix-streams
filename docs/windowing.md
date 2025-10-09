@@ -593,6 +593,53 @@ if __name__ == '__main__':
 ```
 
 
+### Early window expiration with triggers
+!!! info New in v3.24.0
+
+To expire windows before their natural expiration time based on custom conditions, you can pass the `on_update` callback to `.tumbling_window()` and `.hopping_window()` methods.
+
+This is useful when you want to emit results as soon as certain conditions are met, rather than waiting for the window to close naturally.
+
+**How it works**:
+
+- The `on_update` callback is invoked every time a window is updated with a new value.
+- It receives `old_value` and `new_value` - the raw aggregated values before and after the update.
+- For `collect()` operations, it receives lists of collected values.
+- If the callback returns `True`, the window is immediately expired and emitted downstream.
+- The expired window is removed from state, but may be "resurrected" if new data arrives within its time range before natural expiration.
+
+**Example**:
+
+```python
+from typing import Any
+
+from datetime import timedelta
+from quixstreams import Application
+
+app = Application(...)
+sdf = app.dataframe(...)
+
+
+def trigger_on_threshold(old_value: int, new_value: int) -> bool:
+    """
+    Expire the window early when the sum exceeds 1000.
+    """
+    return new_value > 1000
+
+
+# Define a 1-hour tumbling window with early expiration trigger
+sdf = (
+    sdf.tumbling_window(timedelta(hours=1), on_update=trigger_on_threshold)
+    .sum()
+    .final()
+)
+
+# Start the application
+if __name__ == '__main__':
+    app.run()
+
+```
+
 
 ## Emitting results
 

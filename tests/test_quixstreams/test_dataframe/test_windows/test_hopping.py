@@ -1,3 +1,5 @@
+import functools
+
 import pytest
 
 import quixstreams.dataframe.windows.aggregations as agg
@@ -12,13 +14,17 @@ from quixstreams.dataframe.windows.time_based import ClosingStrategy
 @pytest.fixture()
 def hopping_window_definition_factory(state_manager, dataframe_factory):
     def factory(
-        duration_ms: int, step_ms: int, grace_ms: int = 0
+        duration_ms: int, step_ms: int, grace_ms: int = 0, on_update=None
     ) -> HoppingTimeWindowDefinition:
         sdf = dataframe_factory(
             state_manager=state_manager, registry=DataFrameRegistry()
         )
         window_def = HoppingTimeWindowDefinition(
-            duration_ms=duration_ms, step_ms=step_ms, grace_ms=grace_ms, dataframe=sdf
+            duration_ms=duration_ms,
+            step_ms=step_ms,
+            grace_ms=grace_ms,
+            dataframe=sdf,
+            on_update=on_update,
         )
         return window_def
 
@@ -33,6 +39,136 @@ def process(window, value, key, transaction, timestamp_ms):
 
 
 class TestHoppingWindow:
+    def test_hopping_window_with_trigger(
+        self, hopping_window_definition_factory, state_manager
+    ):
+        # Define a trigger that expires windows when the sum reaches 100 or more
+        def trigger_on_sum_100(old_value, new_value) -> bool:
+            return new_value >= 100
+
+        window_def = hopping_window_definition_factory(
+            duration_ms=100, step_ms=50, grace_ms=100, on_update=trigger_on_sum_100
+        )
+        window = window_def.sum()
+        window.final(closing_strategy="key")
+
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
+        store.assign_partition(0)
+        key = b"key"
+
+        with store.start_partition_transaction(0) as tx:
+            _process = functools.partial(
+                process, window=window, key=key, transaction=tx
+            )
+
+            # Step 1: Add value=90 at timestamp 50ms
+            # Creates windows [0, 100) and [50, 150) with sum 90 each
+            updated, expired = _process(value=90, timestamp_ms=50)
+            assert len(updated) == 2
+            assert updated[0][1]["value"] == 90
+            assert updated[0][1]["start"] == 0
+            assert updated[0][1]["end"] == 100
+            assert updated[1][1]["value"] == 90
+            assert updated[1][1]["start"] == 50
+            assert updated[1][1]["end"] == 150
+            assert not expired
+
+            # Step 2: Add value=5 at timestamp 110ms
+            # With grace_ms=100, [0, 100) does NOT expire naturally yet
+            # [0, 100): stays 90 (timestamp 110 is outside [0, 100), not updated)
+            # [50, 150): 90 -> 95 (< 100, NOT TRIGGERED)
+            # [100, 200): newly created with sum 5
+            updated, expired = _process(value=5, timestamp_ms=110)
+            assert len(updated) == 2
+            assert updated[0][1]["value"] == 95
+            assert updated[0][1]["start"] == 50
+            assert updated[0][1]["end"] == 150
+            assert updated[1][1]["value"] == 5
+            assert updated[1][1]["start"] == 100
+            assert updated[1][1]["end"] == 200
+            # No windows expired (grace period keeps [0, 100) alive)
+            assert not expired
+
+            # Step 3: Add value=5 at timestamp 90ms (late message)
+            # Timestamp 90 belongs to BOTH [0, 100) and [50, 150)
+            # [0, 100): 90 -> 95 (< 100, NOT TRIGGERED)
+            # [50, 150): 95 -> 100 (>= 100, TRIGGERED!)
+            updated, expired = _process(value=5, timestamp_ms=90)
+            # Only [0, 100) remains in updated (not triggered, 95 < 100)
+            # Only [50, 150) was triggered (100 >= 100)
+            assert len(updated) == 1
+            assert updated[0][1]["value"] == 95
+            assert updated[0][1]["start"] == 0
+            assert updated[0][1]["end"] == 100
+            assert len(expired) == 1
+            assert expired[0][1]["value"] == 100
+            assert expired[0][1]["start"] == 50
+            assert expired[0][1]["end"] == 150
+
+    def test_hopping_window_collect_with_trigger(
+        self, hopping_window_definition_factory, state_manager
+    ):
+        """Test that on_update callback works with collect for hopping windows."""
+
+        # Define a trigger that expires windows when we collect 3 or more items
+        def trigger_on_count_3(old_value, new_value) -> bool:
+            return len(new_value) >= 3
+
+        window_def = hopping_window_definition_factory(
+            duration_ms=100, step_ms=50, grace_ms=100, on_update=trigger_on_count_3
+        )
+        window = window_def.collect()
+        window.final(closing_strategy="key")
+
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
+        store.assign_partition(0)
+        key = b"key"
+
+        with store.start_partition_transaction(0) as tx:
+            _process = functools.partial(
+                process, window=window, key=key, transaction=tx
+            )
+
+            # Step 1: Add first value at timestamp 50ms
+            # Creates windows [0, 100) and [50, 150) with 1 item each
+            updated, expired = _process(value=1, timestamp_ms=50)
+            assert not updated  # collect doesn't emit on updates
+            assert not expired
+
+            # Step 2: Add second value at timestamp 60ms
+            # Both windows now have 2 items
+            updated, expired = _process(value=2, timestamp_ms=60)
+            assert not updated
+            assert not expired
+
+            # Step 3: Add third value at timestamp 70ms
+            # Both windows now have 3 items - BOTH SHOULD TRIGGER
+            updated, expired = _process(value=3, timestamp_ms=70)
+            assert not updated
+            assert len(expired) == 2
+            # Window [0, 100) triggered
+            assert expired[0][1]["value"] == [1, 2, 3]
+            assert expired[0][1]["start"] == 0
+            assert expired[0][1]["end"] == 100
+            # Window [50, 150) triggered
+            assert expired[1][1]["value"] == [1, 2, 3]
+            assert expired[1][1]["start"] == 50
+            assert expired[1][1]["end"] == 150
+
+            # Step 4: Add fourth value at timestamp 110ms
+            # Timestamp 110 belongs to windows [50, 150) and [100, 200)
+            # Window [50, 150) is "resurrected" because collection values weren't deleted
+            # (for hopping windows, we don't delete collection on trigger to preserve
+            # values for overlapping windows)
+            # Window [50, 150) now has [1, 2, 3, 4] = 4 items - TRIGGERS AGAIN!
+            # Window [100, 200) has [4] = 1 item - doesn't trigger
+            updated, expired = _process(value=4, timestamp_ms=110)
+            assert not updated
+            assert len(expired) == 1
+            assert expired[0][1]["value"] == [1, 2, 3, 4]
+            assert expired[0][1]["start"] == 50
+            assert expired[0][1]["end"] == 150
+
     @pytest.mark.parametrize(
         "duration, grace, step, provided_name, func_name, expected_name",
         [

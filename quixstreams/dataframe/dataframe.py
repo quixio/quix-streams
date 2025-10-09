@@ -72,7 +72,7 @@ from .windows import (
     TumblingCountWindowDefinition,
     TumblingTimeWindowDefinition,
 )
-from .windows.base import WindowOnLateCallback
+from .windows.base import WindowOnLateCallback, WindowOnUpdateCallback
 
 if typing.TYPE_CHECKING:
     from quixstreams.processing import ProcessingContext
@@ -1085,6 +1085,7 @@ class StreamingDataFrame:
         grace_ms: Union[int, timedelta] = 0,
         name: Optional[str] = None,
         on_late: Optional[WindowOnLateCallback] = None,
+        on_update: Optional[WindowOnUpdateCallback] = None,
     ) -> TumblingTimeWindowDefinition:
         """
         Create a time-based tumbling window transformation on this StreamingDataFrame.
@@ -1151,6 +1152,14 @@ class StreamingDataFrame:
             (default behavior).
             Otherwise, no message will be logged.
 
+        :param on_update: an optional callback to trigger early window expiration based
+            on custom conditions.
+            The callback receives `old_value` and `new_value` (the raw aggregated values
+            before and after the update). If it returns `True`, the window will be expired
+            immediately, even if it hasn't reached its natural expiration time.
+            For `collect()` operations, the callback receives lists of collected values.
+            Default - `None`.
+
         :return: `TumblingTimeWindowDefinition` instance representing the tumbling window
             configuration.
             This object can be further configured with aggregation functions
@@ -1166,6 +1175,7 @@ class StreamingDataFrame:
             dataframe=self,
             name=name,
             on_late=on_late,
+            on_update=on_update,
         )
 
     def tumbling_count_window(
@@ -1225,6 +1235,7 @@ class StreamingDataFrame:
         grace_ms: Union[int, timedelta] = 0,
         name: Optional[str] = None,
         on_late: Optional[WindowOnLateCallback] = None,
+        on_update: Optional[WindowOnUpdateCallback] = None,
     ) -> HoppingTimeWindowDefinition:
         """
         Create a time-based hopping window transformation on this StreamingDataFrame.
@@ -1302,6 +1313,14 @@ class StreamingDataFrame:
             (default behavior).
             Otherwise, no message will be logged.
 
+        :param on_update: an optional callback to trigger early window expiration based
+            on custom conditions.
+            The callback receives `old_value` and `new_value` (the raw aggregated values
+            before and after the update). If it returns `True`, the window will be expired
+            immediately, even if it hasn't reached its natural expiration time.
+            For `collect()` operations, the callback receives lists of collected values.
+            Default - `None`.
+
         :return: `HoppingTimeWindowDefinition` instance representing the hopping
             window configuration.
             This object can be further configured with aggregation functions
@@ -1319,6 +1338,7 @@ class StreamingDataFrame:
             dataframe=self,
             name=name,
             on_late=on_late,
+            on_update=on_update,
         )
 
     def hopping_count_window(

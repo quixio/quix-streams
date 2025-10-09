@@ -11,12 +11,17 @@ from quixstreams.dataframe.windows.time_based import ClosingStrategy
 
 @pytest.fixture()
 def tumbling_window_definition_factory(state_manager, dataframe_factory):
-    def factory(duration_ms: int, grace_ms: int = 0) -> TumblingTimeWindowDefinition:
+    def factory(
+        duration_ms: int, grace_ms: int = 0, on_update=None
+    ) -> TumblingTimeWindowDefinition:
         sdf = dataframe_factory(
             state_manager=state_manager, registry=DataFrameRegistry()
         )
         window_def = TumblingTimeWindowDefinition(
-            duration_ms=duration_ms, grace_ms=grace_ms, dataframe=sdf
+            duration_ms=duration_ms,
+            grace_ms=grace_ms,
+            dataframe=sdf,
+            on_update=on_update,
         )
         return window_def
 
@@ -31,6 +36,116 @@ def process(window, value, key, transaction, timestamp_ms):
 
 
 class TestTumblingWindow:
+    def test_tumbling_window_with_trigger(
+        self, tumbling_window_definition_factory, state_manager
+    ):
+        # Define a trigger that expires the window when the sum increases by 5 or more
+        def trigger_on_delta_5(old_value, new_value) -> bool:
+            return (new_value - old_value) >= 5
+
+        window_def = tumbling_window_definition_factory(
+            duration_ms=100, grace_ms=0, on_update=trigger_on_delta_5
+        )
+        window = window_def.sum()
+        window.final(closing_strategy="key")
+
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
+        store.assign_partition(0)
+        key = b"key"
+
+        with store.start_partition_transaction(0) as tx:
+            # Add value=2, sum becomes 2, delta from 0 is 2, should not trigger
+            updated, expired = process(
+                window, value=2, key=key, transaction=tx, timestamp_ms=50
+            )
+            assert len(updated) == 1
+            assert updated[0][1]["value"] == 2
+            assert not expired
+
+            # Add value=2, sum becomes 4, delta from 2 is 2, should not trigger
+            updated, expired = process(
+                window, value=2, key=key, transaction=tx, timestamp_ms=60
+            )
+            assert len(updated) == 1
+            assert updated[0][1]["value"] == 4
+            assert not expired
+
+            # Add value=5, sum becomes 9, delta from 4 is 5, should trigger (>= 5)
+            updated, expired = process(
+                window, value=5, key=key, transaction=tx, timestamp_ms=70
+            )
+            assert not updated  # Window was triggered
+            assert len(expired) == 1
+            assert expired[0][1]["value"] == 9
+            assert expired[0][1]["start"] == 0
+            assert expired[0][1]["end"] == 100
+
+            # Next value should start a new window
+            updated, expired = process(
+                window, value=3, key=key, transaction=tx, timestamp_ms=80
+            )
+            assert len(updated) == 1
+            assert updated[0][1]["value"] == 3
+            assert not expired
+
+    def test_tumbling_window_collect_with_trigger(
+        self, tumbling_window_definition_factory, state_manager
+    ):
+        """Test that on_update callback works with collect."""
+
+        # Define a trigger that expires the window when we collect 3 or more items
+        def trigger_on_count_3(old_value, new_value) -> bool:
+            # For collect, old_value and new_value are lists
+            return len(new_value) >= 3
+
+        window_def = tumbling_window_definition_factory(
+            duration_ms=100, grace_ms=0, on_update=trigger_on_count_3
+        )
+        window = window_def.collect()
+        window.final(closing_strategy="key")
+
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
+        store.assign_partition(0)
+        key = b"key"
+
+        with store.start_partition_transaction(0) as tx:
+            # Add first value - should not trigger (count=1)
+            updated, expired = process(
+                window, value=1, key=key, transaction=tx, timestamp_ms=50
+            )
+            assert not updated  # collect doesn't emit on updates
+            assert not expired
+
+            # Add second value - should not trigger (count=2)
+            updated, expired = process(
+                window, value=2, key=key, transaction=tx, timestamp_ms=60
+            )
+            assert not updated
+            assert not expired
+
+            # Add third value - should trigger (count=3)
+            updated, expired = process(
+                window, value=3, key=key, transaction=tx, timestamp_ms=70
+            )
+            assert not updated
+            assert len(expired) == 1
+            assert expired[0][1]["value"] == [1, 2, 3]
+            assert expired[0][1]["start"] == 0
+            assert expired[0][1]["end"] == 100
+
+            # Next value at t=80 still belongs to window [0, 100)
+            # Window is "resurrected" because collection values weren't deleted
+            # (we let normal expiration handle cleanup for simplicity)
+            # Window [0, 100) now has [1, 2, 3, 4] = 4 items - TRIGGERS AGAIN
+            updated, expired = process(
+                window, value=4, key=key, transaction=tx, timestamp_ms=80
+            )
+            assert not updated
+            assert len(expired) == 1
+            assert expired[0][1]["value"] == [1, 2, 3, 4]
+            assert expired[0][1]["start"] == 0
+            assert expired[0][1]["end"] == 100
+
     @pytest.mark.parametrize(
         "duration, grace, provided_name, func_name, expected_name",
         [
