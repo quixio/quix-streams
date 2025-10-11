@@ -388,6 +388,26 @@ def test_delete_windows_with_values(transaction_state, get_value):
         assert get_value(timestamp_ms=2, counter=1) == "b"
 
 
+def test_delete_window(transaction_state):
+    with transaction_state() as state:
+        state.update_window(start_ms=1, end_ms=2, value=1, timestamp_ms=1)
+        state.update_window(start_ms=2, end_ms=3, value=2, timestamp_ms=2)
+        state.update_window(start_ms=3, end_ms=4, value=3, timestamp_ms=3)
+
+    with transaction_state() as state:
+        assert state.get_window(start_ms=1, end_ms=2)
+        assert state.get_window(start_ms=2, end_ms=3)
+        assert state.get_window(start_ms=3, end_ms=4)
+
+        # Delete a specific window
+        state.delete_window(start_ms=2, end_ms=3)
+
+        # Only the specified window should be deleted
+        assert state.get_window(start_ms=1, end_ms=2)
+        assert not state.get_window(start_ms=2, end_ms=3)
+        assert state.get_window(start_ms=3, end_ms=4)
+
+
 @pytest.mark.parametrize("value", [1, "string", None, ["list"], {"dict": "dict"}])
 def test_add_to_collection(transaction_state, get_value, value):
     with transaction_state() as state:

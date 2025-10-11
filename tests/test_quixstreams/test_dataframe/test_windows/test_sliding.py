@@ -2,7 +2,6 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from itertools import chain
 from typing import Any
-from unittest import mock
 
 import pytest
 
@@ -739,12 +738,6 @@ LATE_MESSAGE_EQUAL_TO_EXPIRATION_WATERMARK = [
         ],
     ),
 ]
-
-
-@pytest.fixture
-def mock_message_context():
-    with mock.patch("quixstreams.dataframe.windows.time_based.message_context"):
-        yield
 
 
 @pytest.fixture

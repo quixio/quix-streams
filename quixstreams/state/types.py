@@ -187,6 +187,17 @@ class WindowedState(Protocol[K, V]):
         """
         ...
 
+    def delete_window(self, start_ms: int, end_ms: int) -> None:
+        """
+        Delete a specific window from the state store.
+
+        This method removes a single window entry with the specified start and end timestamps.
+
+        :param start_ms: The start timestamp of the window to delete
+        :param end_ms: The end timestamp of the window to delete
+        """
+        ...
+
     def get_windows(
         self, start_from_ms: int, start_to_ms: int, backwards: bool = False
     ) -> list[WindowDetail[V]]:
@@ -388,6 +399,18 @@ class WindowedPartitionTransaction(Protocol[K, V]):
         :param max_end_time: The timestamp up to which windows are considered expired, inclusive.
         :param delete: If True, expired windows will be deleted.
         :param collect: If True, values will be collected into windows.
+        """
+        ...
+
+    def delete_window(self, start_ms: int, end_ms: int, prefix: bytes) -> None:
+        """
+        Delete a specific window from RocksDB.
+
+        This method removes a single window entry with the specified start and end timestamps.
+
+        :param start_ms: The start timestamp of the window to delete
+        :param end_ms: The end timestamp of the window to delete
+        :param prefix: The key prefix for the window
         """
         ...
 

@@ -485,9 +485,9 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
         )
 
     def _validate_duration(self, start_ms: int, end_ms: int):
-        if end_ms <= start_ms:
+        if end_ms < start_ms:
             raise ValueError(
-                f"Invalid window duration: window end {end_ms} is smaller or equal "
+                f"Invalid window duration: window end {end_ms} is smaller "
                 f"than window start {start_ms}"
             )
 

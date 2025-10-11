@@ -220,62 +220,35 @@ class TestWindowedRocksDBPartitionTransaction:
 
         assert not expired
 
-    @pytest.mark.parametrize(
-        "start_ms, end_ms",
-        [
-            (0, 0),
-            (1, 0),
-        ],
-    )
-    def test_get_window_invalid_duration(
-        self, start_ms, end_ms, windowed_rocksdb_store_factory
-    ):
+    def test_get_window_invalid_duration(self, windowed_rocksdb_store_factory):
         store = windowed_rocksdb_store_factory()
         store.assign_partition(0)
         prefix = b"__key__"
         with store.start_partition_transaction(0) as tx:
             with pytest.raises(ValueError, match="Invalid window duration"):
-                tx.get_window(start_ms=start_ms, end_ms=end_ms, prefix=prefix)
+                tx.get_window(start_ms=1, end_ms=0, prefix=prefix)
 
-    @pytest.mark.parametrize(
-        "start_ms, end_ms",
-        [
-            (0, 0),
-            (1, 0),
-        ],
-    )
-    def test_update_window_invalid_duration(
-        self, start_ms, end_ms, windowed_rocksdb_store_factory
-    ):
+    def test_update_window_invalid_duration(self, windowed_rocksdb_store_factory):
         store = windowed_rocksdb_store_factory()
         store.assign_partition(0)
         prefix = b"__key__"
         with store.start_partition_transaction(0) as tx:
             with pytest.raises(ValueError, match="Invalid window duration"):
                 tx.update_window(
-                    start_ms=start_ms,
-                    end_ms=end_ms,
+                    start_ms=1,
+                    end_ms=0,
                     value=1,
                     timestamp_ms=1,
                     prefix=prefix,
                 )
 
-    @pytest.mark.parametrize(
-        "start_ms, end_ms",
-        [
-            (0, 0),
-            (1, 0),
-        ],
-    )
-    def test_delete_window_invalid_duration(
-        self, start_ms, end_ms, windowed_rocksdb_store_factory
-    ):
+    def test_delete_window_invalid_duration(self, windowed_rocksdb_store_factory):
         store = windowed_rocksdb_store_factory()
         store.assign_partition(0)
         prefix = b"__key__"
         with store.start_partition_transaction(0) as tx:
             with pytest.raises(ValueError, match="Invalid window duration"):
-                tx.delete_window(start_ms=start_ms, end_ms=end_ms, prefix=prefix)
+                tx.delete_window(start_ms=1, end_ms=0, prefix=prefix)
 
     def test_expire_windows_no_expired(self, windowed_rocksdb_store_factory):
         store = windowed_rocksdb_store_factory()
