@@ -249,17 +249,30 @@ class Stream:
         return self._add(update_func)
 
     @overload
-    def add_transform(self, func: TransformCallback, *, expand: Literal[False] = False):
+    def add_transform(
+        self,
+        func: TransformCallback,
+        *,
+        expand: Literal[False] = False,
+        on_watermark: Union[TransformCallback, None] = None,
+    ):
         pass
 
     @overload
-    def add_transform(self, func: TransformExpandedCallback, *, expand: Literal[True]):
+    def add_transform(
+        self,
+        func: TransformExpandedCallback,
+        *,
+        expand: Literal[True],
+        on_watermark: Union[TransformExpandedCallback, None] = None,
+    ):
         pass
 
     def add_transform(
         self,
         func: Union[TransformCallback, TransformExpandedCallback],
         *,
+        on_watermark: Union[TransformCallback, TransformExpandedCallback, None] = None,
         expand: bool = False,
     ) -> "Stream":
         """
@@ -278,7 +291,9 @@ class Stream:
             Default - `False`.
         :return: a new Stream derived from the current one
         """
-        return self._add(TransformFunction(func, expand=expand))  # type: ignore[call-overload]
+        return self._add(
+            TransformFunction(func, expand=expand, on_watermark=on_watermark)  # type: ignore[call-overload]
+        )
 
     def merge(self, other: "Stream") -> "Stream":
         """
@@ -558,5 +573,10 @@ class Stream:
         return new_node
 
     def _default_sink(
-        self, value: Any, key: Any, timestamp: int, headers: Any
+        self,
+        value: Any,
+        key: Any,
+        timestamp: int,
+        headers: Any,
+        is_watermark: bool = False,
     ) -> None: ...

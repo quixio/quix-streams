@@ -1,3 +1,4 @@
+import abc
 import logging
 import time
 from abc import abstractmethod
@@ -26,7 +27,7 @@ from .exceptions import (
 logger = logging.getLogger(__name__)
 
 
-class BaseCheckpoint:
+class BaseCheckpoint(abc.ABC):
     """
     Base class to keep track of state updates and consumer offsets and to checkpoint these
     updates on schedule.
@@ -70,7 +71,7 @@ class BaseCheckpoint:
         Returns `True` if checkpoint doesn't have any offsets stored yet.
         :return:
         """
-        return not bool(self._tp_offsets)
+        return not bool(self._tp_offsets) and not bool(self._store_transactions)
 
     def store_offset(self, topic: str, partition: int, offset: int):
         """
@@ -228,20 +229,12 @@ class Checkpoint(BaseCheckpoint):
             partition,
             store_name,
         ), transaction in self._store_transactions.items():
-            topics = self._dataframe_registry.get_topics_for_stream_id(
-                stream_id=stream_id
-            )
-            processed_offsets = {
-                topic: offset
-                for (topic, partition_), offset in self._tp_offsets.items()
-                if topic in topics and partition_ == partition
-            }
             if transaction.failed:
                 raise StoreTransactionFailed(
                     f'Detected a failed transaction for store "{store_name}", '
                     f"the checkpoint is aborted"
                 )
-            transaction.prepare(processed_offsets=processed_offsets)
+            transaction.prepare()
 
         # Step 3. Flush producer to trigger all delivery callbacks and ensure that
         # all messages are produced
@@ -258,21 +251,25 @@ class Checkpoint(BaseCheckpoint):
             TopicPartition(topic=topic, partition=partition, offset=offset + 1)
             for (topic, partition), offset in self._tp_offsets.items()
         ]
+        if offsets:
+            # TODO: Test, update the exactly-once branch to work without offsets
+            # Checkpoint may have no offsets processed when watermarks are processed
+            if self._exactly_once:
+                self._producer.commit_transaction(
+                    offsets, self._consumer.consumer_group_metadata()
+                )
+            else:
+                logger.debug("Checkpoint: committing consumer")
+                try:
+                    partitions = self._consumer.commit(
+                        offsets=offsets, asynchronous=False
+                    )
+                except KafkaException as e:
+                    raise CheckpointConsumerCommitError(e.args[0]) from None
 
-        if self._exactly_once:
-            self._producer.commit_transaction(
-                offsets, self._consumer.consumer_group_metadata()
-            )
-        else:
-            logger.debug("Checkpoint: committing consumer")
-            try:
-                partitions = self._consumer.commit(offsets=offsets, asynchronous=False)
-            except KafkaException as e:
-                raise CheckpointConsumerCommitError(e.args[0]) from None
-
-            for partition in partitions:
-                if partition.error:
-                    raise CheckpointConsumerCommitError(partition.error)
+                for partition in partitions:
+                    if partition.error:
+                        raise CheckpointConsumerCommitError(partition.error)
 
         # Step 5. Flush state store partitions to the disk together with changelog
         # offsets.

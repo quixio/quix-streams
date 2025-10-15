@@ -13,11 +13,7 @@ from quixstreams.state.exceptions import (
     StateTransactionError,
 )
 from quixstreams.state.manager import SUPPORTED_STORES
-from quixstreams.state.metadata import (
-    CHANGELOG_CF_MESSAGE_HEADER,
-    CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER,
-    Marker,
-)
+from quixstreams.state.metadata import CHANGELOG_CF_MESSAGE_HEADER, Marker
 from quixstreams.state.serialization import serialize
 from quixstreams.utils.json import dumps
 
@@ -345,7 +341,7 @@ class TestPartitionTransaction:
         tx = store_partition.begin()
 
         tx.set(key="key", value="value", prefix=prefix)
-        tx.prepare(processed_offsets={"topic": 1})
+        tx.prepare()
         assert tx.prepared
 
         with pytest.raises(StateTransactionError):
@@ -445,7 +441,6 @@ class TestPartitionTransaction:
         ]
         cf = "default"
         prefix = b"__key__"
-        processed_offsets = {"topic": 1}
 
         with store_partition_factory(
             changelog_producer=changelog_producer_mock
@@ -458,7 +453,7 @@ class TestPartitionTransaction:
                     cf_name=cf,
                     prefix=prefix,
                 )
-            tx.prepare(processed_offsets=processed_offsets)
+            tx.prepare()
 
             assert changelog_producer_mock.produce.call_count == len(data)
 
@@ -467,12 +462,7 @@ class TestPartitionTransaction:
             ):
                 assert call.kwargs["key"] == tx._serialize_key(key=key, prefix=prefix)
                 assert call.kwargs["value"] == tx._serialize_value(value=value)
-                assert call.kwargs["headers"] == {
-                    CHANGELOG_CF_MESSAGE_HEADER: cf,
-                    CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER: dumps(
-                        processed_offsets
-                    ),
-                }
+                assert call.kwargs["headers"] == {CHANGELOG_CF_MESSAGE_HEADER: cf}
 
             assert tx.prepared
 
@@ -480,7 +470,6 @@ class TestPartitionTransaction:
         key = "key"
         cf = "default"
         prefix = b"__key__"
-        processed_offsets = {"topic": 1}
 
         with store_partition_factory(
             changelog_producer=changelog_producer_mock
@@ -488,7 +477,7 @@ class TestPartitionTransaction:
             tx = partition.begin()
             tx.delete(key=key, cf_name=cf, prefix=prefix)
 
-            tx.prepare(processed_offsets=processed_offsets)
+            tx.prepare()
 
             assert tx.prepared
             assert changelog_producer_mock.produce.call_count == 1
@@ -498,10 +487,7 @@ class TestPartitionTransaction:
             key=key, prefix=prefix
         )
         assert delete_changelog.kwargs["value"] is None
-        assert delete_changelog.kwargs["headers"] == {
-            CHANGELOG_CF_MESSAGE_HEADER: cf,
-            CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER: dumps(processed_offsets),
-        }
+        assert delete_changelog.kwargs["headers"] == {CHANGELOG_CF_MESSAGE_HEADER: cf}
 
     def test_set_delete_and_prepare(
         self, store_partition_factory, changelog_producer_mock
@@ -513,7 +499,6 @@ class TestPartitionTransaction:
         key, value = "key", "value"
         cf = "default"
         prefix = b"__key__"
-        processed_offsets = {"topic": 1}
 
         with store_partition_factory(
             changelog_producer=changelog_producer_mock
@@ -522,7 +507,7 @@ class TestPartitionTransaction:
             tx.set(key=key, value=value, cf_name=cf, prefix=prefix)
             tx.delete(key=key, cf_name=cf, prefix=prefix)
 
-            tx.prepare(processed_offsets=processed_offsets)
+            tx.prepare()
 
             assert tx.prepared
             assert changelog_producer_mock.produce.call_count == 1
@@ -532,8 +517,7 @@ class TestPartitionTransaction:
             )
             assert delete_changelog.kwargs["value"] is None
             assert delete_changelog.kwargs["headers"] == {
-                CHANGELOG_CF_MESSAGE_HEADER: cf,
-                CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER: dumps(processed_offsets),
+                CHANGELOG_CF_MESSAGE_HEADER: cf
             }
 
 
