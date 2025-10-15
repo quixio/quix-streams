@@ -55,7 +55,7 @@ True if logging config has been updated, otherwise False.
 def strip_workspace_id_prefix(workspace_id: str, s: str) -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L46)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L44)
 
 Remove the workspace ID from a given string if it starts with it.
 
@@ -78,7 +78,7 @@ the string with workspace_id prefix removed
 def prepend_workspace_id(workspace_id: str, s: str) -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L59)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L57)
 
 Add the workspace ID as a prefix to a given string if it does not have it.
 
@@ -102,7 +102,7 @@ the string with workspace_id prepended
 class QuixApplicationConfig()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L73)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L71)
 
 A convenience container class for Quix Application configs.
 
@@ -114,7 +114,7 @@ A convenience container class for Quix Application configs.
 class QuixKafkaConfigsBuilder()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L83)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L81)
 
 Retrieves all the necessary information from the Quix API and builds all the
 objects required to connect a confluent-kafka client to the Quix Platform.
@@ -139,7 +139,7 @@ def __init__(quix_portal_api_service: QuixPortalApiService,
              topic_create_timeout: float = 60)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L98)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L96)
 
 **Arguments**:
 
@@ -161,7 +161,7 @@ def from_credentials(
         topic_create_timeout: float = 60) -> "QuixKafkaConfigsBuilder"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L129)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L127)
 
 Initialize class using the quix_sdk_token and quix_portal_api params.
 
@@ -174,7 +174,7 @@ Initialize class using the quix_sdk_token and quix_portal_api params.
 def convert_topic_response(cls, api_response: dict) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L191)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L189)
 
 Converts a GET or POST ("create") topic API response to a Topic object
 
@@ -194,7 +194,7 @@ a corresponding Topic object
 def strip_workspace_id_prefix(s: str) -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L224)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L222)
 
 Remove the workspace ID from a given string if it starts with it.
 
@@ -216,7 +216,7 @@ the string with workspace_id prefix removed
 def prepend_workspace_id(s: str) -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L235)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L233)
 
 Add the workspace ID as a prefix to a given string if it does not have it.
 
@@ -239,7 +239,7 @@ def search_for_workspace(workspace_name_or_id: Optional[str] = None,
                          timeout: Optional[float] = None) -> Optional[dict]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L246)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L244)
 
 Search for a workspace given an expected workspace name or id.
 
@@ -261,7 +261,7 @@ def get_workspace_info(known_workspace_topic: Optional[str] = None,
                        timeout: Optional[float] = None) -> dict
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L289)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L287)
 
 Queries for workspace data from the Quix API, regardless of instance cache,
 
@@ -283,7 +283,7 @@ def search_workspace_for_topic(
         timeout: Optional[float] = None) -> Optional[str]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L318)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L316)
 
 Search through all the topics in the given workspace id to see if there is a
 
@@ -309,7 +309,7 @@ def search_for_topic_workspace(
         timeout: Optional[float] = None) -> Optional[dict]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L341)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L339)
 
 Find what workspace a topic belongs to.
 
@@ -333,7 +333,7 @@ workspace data dict if topic search success, else None
 def create_topic(topic: Topic, timeout: Optional[float] = None) -> dict
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L372)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L370)
 
 The actual API call to create the topic.
 
@@ -350,7 +350,7 @@ The actual API call to create the topic.
 def get_or_create_topic(topic: Topic, timeout: Optional[float] = None) -> dict
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L408)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L406)
 
 Get or create topics in a Quix cluster as part of initializing the Topic
 
@@ -372,7 +372,7 @@ def wait_for_topic_ready_statuses(topics: List[Topic],
                                   finalize_timeout: Optional[float] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L436)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L434)
 
 After the broker acknowledges topics for creation, they will be in a
 
@@ -395,7 +395,7 @@ marked as "Ready" (and thus ready to produce to/consume from).
 def get_topic(topic: Topic, timeout: Optional[float] = None) -> dict
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L479)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L477)
 
 return the topic ID (the actual cluster topic name) if it exists, else raise
 
@@ -420,7 +420,7 @@ response dict of the topic info if topic found, else None
 def get_application_config(consumer_group_id: str) -> QuixApplicationConfig
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L511)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/config.py#L509)
 
 Get all the necessary attributes for an Application to run on Quix Cloud.
 
@@ -634,6 +634,23 @@ If it doesn't match, the warning will be logged.
 
 ## quixstreams.platforms.quix.api
 
+<a id="quixstreams.platforms.quix.api.retry_on_connection_error"></a>
+
+#### retry\_on\_connection\_error
+
+```python
+def retry_on_connection_error(max_retries: int = 5, base_delay: float = 1.0)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/api.py#L23)
+
+Retry decorator for httpx connection errors with exponential backoff.
+
+**Arguments**:
+
+- `max_retries`: Maximum number of retry attempts (default: 5)
+- `base_delay`: Base delay in seconds for exponential backoff (default: 1.0)
+
 <a id="quixstreams.platforms.quix.api.QuixPortalApiService"></a>
 
 ### QuixPortalApiService
@@ -642,7 +659,7 @@ If it doesn't match, the warning will be logged.
 class QuixPortalApiService()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/api.py#L18)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/api.py#L55)
 
 A light wrapper around the Quix Portal Api. If used in the Quix Platform, it will
 use that workspaces auth token and portal endpoint, else you must provide it.
@@ -660,11 +677,12 @@ See the swagger documentation for more info about the endpoints.
 #### QuixPortalApiService.get\_workspace\_certificate
 
 ```python
+@retry_on_connection_error()
 def get_workspace_certificate(workspace_id: Optional[str] = None,
                               timeout: float = 30) -> Optional[bytes]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/api.py#L76)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/api.py#L128)
 
 Get a workspace TLS certificate if available.
 
@@ -3965,7 +3983,7 @@ Optional[ConfigurationVersion]: The valid version, or None if not found.
 class Lookup(BaseLookup[BaseField])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/lookup.py#L39)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/lookup.py#L40)
 
 Lookup join implementation for enriching streaming data with configuration data from a Kafka topic.
 
@@ -4001,7 +4019,7 @@ def json_field(jsonpath: str,
                default: Any = RAISE_ON_MISSING) -> JSONField
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/lookup.py#L136)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/lookup.py#L135)
 
 Create a JSON field for extracting values from configuration content using JSONPath.
 
@@ -4024,7 +4042,7 @@ A JSONField instance.
 def bytes_field(type: str, default: Any = RAISE_ON_MISSING) -> BytesField
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/lookup.py#L160)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/lookup.py#L159)
 
 Create a bytes field for extracting binary content from configuration.
 
@@ -4045,7 +4063,7 @@ A BytesField instance.
 def cache_info() -> CacheInfo
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/lookup.py#L380)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/lookup.py#L393)
 
 Get information about the cache.
 
@@ -4065,7 +4083,7 @@ def join(fields: Mapping[str, BaseField], on: str, value: dict[str, Any],
          key: Any, timestamp: int, headers: HeadersMapping) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/lookup.py#L392)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/quix_configuration_service/lookup.py#L405)
 
 Enrich the message with configuration data from the Quix Configuration Service.
 
@@ -5934,7 +5952,7 @@ list_sink[0]        # 1
 class InfluxDB3Sink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/influxdb3.py#L54)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/influxdb3.py#L53)
 
 <a id="quixstreams.sinks.core.influxdb3.InfluxDB3Sink.__init__"></a>
 
@@ -5963,7 +5981,7 @@ def __init__(token: str,
                  ClientConnectFailureCallback] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/influxdb3.py#L62)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/influxdb3.py#L61)
 
 A connector to sink processed data to InfluxDB v3.
 
@@ -6243,7 +6261,7 @@ Callback must resolve (or propagate/re-raise) the Exception.
 class ParquetFormat(Format)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/parquet.py#L16)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/parquet.py#L13)
 
 Serializes batches of messages into Parquet format.
 
@@ -6262,7 +6280,7 @@ def __init__(file_extension: str = ".parquet",
              compression: Compression = "snappy") -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/parquet.py#L29)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/parquet.py#L26)
 
 Initializes the ParquetFormat.
 
@@ -6283,7 +6301,7 @@ or "zstd". Defaults to "snappy".
 def file_extension() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/parquet.py#L47)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/parquet.py#L63)
 
 Returns the file extension used for output files.
 
@@ -6299,7 +6317,7 @@ The file extension as a string.
 def serialize(batch: SinkBatch) -> bytes
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/parquet.py#L55)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/parquet.py#L71)
 
 Serializes a `SinkBatch` into bytes in Parquet format.
 
@@ -6525,19 +6543,189 @@ Serializes a batch of messages into bytes.
 
 The serialized batch as bytes.
 
-<a id="quixstreams.sinks.community.file.sink"></a>
+<a id="quixstreams.sinks.community.file.local"></a>
 
-## quixstreams.sinks.community.file.sink
+## quixstreams.sinks.community.file.local
 
-<a id="quixstreams.sinks.community.file.sink.FileSink"></a>
+<a id="quixstreams.sinks.community.file.local.AppendNotSupported"></a>
 
-### FileSink
+### AppendNotSupported
 
 ```python
-class FileSink(BatchingSink)
+class AppendNotSupported(Exception)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/sink.py#L17)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/local.py#L15)
+
+Raised when append=True but specified format does not support it
+
+<a id="quixstreams.sinks.community.file.local.LocalFileSink"></a>
+
+### LocalFileSink
+
+```python
+class LocalFileSink(FileSink)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/local.py#L19)
+
+A destination that writes data to the local filesystem.
+
+Handles writing data to local files with support for both creating new files
+and appending to existing ones.
+
+<a id="quixstreams.sinks.community.file.local.LocalFileSink.__init__"></a>
+
+#### LocalFileSink.\_\_init\_\_
+
+```python
+def __init__(append: bool = False,
+             directory: str = "",
+             format: Union[FormatName, Format] = "json") -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/local.py#L26)
+
+Initialize the local destination.
+
+**Arguments**:
+
+- `append`: If True, append to existing files instead of creating new
+ones by selecting the lexicographical last file in the given directory
+(or creates one).
+Defaults to False.
+- `directory`: Base directory path for storing files. Defaults to
+current directory.
+- `format`: Data serialization format, either as a string
+("json", "parquet") or a Format instance.
+
+**Raises**:
+
+- `AppendNotSupported`: If append=True but given format does not support it.
+
+<a id="quixstreams.sinks.community.file.azure"></a>
+
+## quixstreams.sinks.community.file.azure
+
+<a id="quixstreams.sinks.community.file.azure.AzureContainerNotFoundError"></a>
+
+### AzureContainerNotFoundError
+
+```python
+class AzureContainerNotFoundError(Exception)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/azure.py#L29)
+
+Raised when the specified Azure File container does not exist.
+
+<a id="quixstreams.sinks.community.file.azure.AzureContainerAccessDeniedError"></a>
+
+### AzureContainerAccessDeniedError
+
+```python
+class AzureContainerAccessDeniedError(Exception)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/azure.py#L33)
+
+Raised when the specified Azure File container access is denied.
+
+<a id="quixstreams.sinks.community.file.azure.AzureFileSink"></a>
+
+### AzureFileSink
+
+```python
+class AzureFileSink(FileSink)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/azure.py#L37)
+
+A destination that writes data to Microsoft Azure File.
+
+Handles writing data to Azure containers using the Azure Blob SDK. Credentials can
+be provided directly or via environment variables.
+
+<a id="quixstreams.sinks.community.file.azure.AzureFileSink.__init__"></a>
+
+#### AzureFileSink.\_\_init\_\_
+
+```python
+def __init__(
+    azure_connection_string: str,
+    azure_container: str,
+    directory: str = "",
+    format: Union[FormatName, Format] = "json",
+    on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
+    on_client_connect_failure: Optional[ClientConnectFailureCallback] = None
+) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/azure.py#L45)
+
+Initialize the Azure File destination.
+
+**Arguments**:
+
+- `azure_connection_string`: Azure client authentication string.
+- `azure_container`: Azure container name.
+- `directory`: Base directory path for storing files. Defaults to
+current directory.
+- `format`: Data serialization format, either as a string
+("json", "parquet") or a Format instance.
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
+
+**Raises**:
+
+- `AzureContainerNotFoundError`: If the specified container doesn't exist.
+- `AzureContainerAccessDeniedError`: If access to the container is denied.
+
+<a id="quixstreams.sinks.community.file"></a>
+
+## quixstreams.sinks.community.file
+
+<a id="quixstreams.sinks.community.file.s3"></a>
+
+## quixstreams.sinks.community.file.s3
+
+<a id="quixstreams.sinks.community.file.s3.S3BucketNotFoundError"></a>
+
+### S3BucketNotFoundError
+
+```python
+class S3BucketNotFoundError(Exception)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/s3.py#L29)
+
+Raised when the specified S3 bucket does not exist.
+
+<a id="quixstreams.sinks.community.file.s3.S3BucketAccessDeniedError"></a>
+
+### S3BucketAccessDeniedError
+
+```python
+class S3BucketAccessDeniedError(Exception)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/s3.py#L33)
+
+Raised when the specified S3 bucket access is denied.
+
+<a id="quixstreams.sinks.community.file.s3.S3FileSink"></a>
+
+### S3FileSink
+
+```python
+class S3FileSink(FileSink)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/s3.py#L37)
 
 A sink that writes data batches to files using configurable formats and
 destinations.
@@ -6551,271 +6739,9 @@ The destination determines the storage location and write behavior. By default,
 it uses LocalDestination for writing to the local filesystem, but can be
 configured to use other storage backends (e.g., cloud storage).
 
-<a id="quixstreams.sinks.community.file.sink.FileSink.__init__"></a>
+<a id="quixstreams.sinks.community.file.s3.S3FileSink.__init__"></a>
 
-#### FileSink.\_\_init\_\_
-
-```python
-def __init__(
-    directory: str = "",
-    format: Union[FormatName, Format] = "json",
-    destination: Optional[Destination] = None,
-    on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
-    on_client_connect_failure: Optional[ClientConnectFailureCallback] = None
-) -> None
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/sink.py#L31)
-
-Initialize the FileSink with the specified configuration.
-
-**Arguments**:
-
-- `directory`: Base directory path for storing files. Defaults to
-current directory.
-- `format`: Data serialization format, either as a string
-("json", "parquet") or a Format instance.
-- `destination`: Storage destination handler. Defaults to
-LocalDestination if not specified.
-- `on_client_connect_success`: An optional callback made after successful
-client authentication, primarily for additional logging.
-- `on_client_connect_failure`: An optional callback made after failed
-client authentication (which should raise an Exception).
-Callback should accept the raised Exception as an argument.
-Callback must resolve (or propagate/re-raise) the Exception.
-
-<a id="quixstreams.sinks.community.file.sink.FileSink.write"></a>
-
-#### FileSink.write
-
-```python
-def write(batch: SinkBatch) -> None
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/sink.py#L67)
-
-Write a batch of data using the configured format and destination.
-
-The method performs the following steps:
-1. Serializes the batch data using the configured format
-2. Writes the serialized data to the destination
-3. Handles any write failures by raising a backpressure error
-
-**Arguments**:
-
-- `batch`: The batch of data to write.
-
-**Raises**:
-
-- `SinkBackpressureError`: If the write operation fails, indicating
-that the sink needs backpressure with a 5-second retry delay.
-
-<a id="quixstreams.sinks.community.file.destinations.local"></a>
-
-## quixstreams.sinks.community.file.destinations.local
-
-<a id="quixstreams.sinks.community.file.destinations.local.LocalDestination"></a>
-
-### LocalDestination
-
-```python
-class LocalDestination(Destination)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/local.py#L15)
-
-A destination that writes data to the local filesystem.
-
-Handles writing data to local files with support for both creating new files
-and appending to existing ones.
-
-<a id="quixstreams.sinks.community.file.destinations.local.LocalDestination.__init__"></a>
-
-#### LocalDestination.\_\_init\_\_
-
-```python
-def __init__(append: bool = False) -> None
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/local.py#L22)
-
-Initialize the local destination.
-
-**Arguments**:
-
-- `append`: If True, append to existing files instead of creating new
-ones. Defaults to False.
-
-<a id="quixstreams.sinks.community.file.destinations.local.LocalDestination.set_extension"></a>
-
-#### LocalDestination.set\_extension
-
-```python
-def set_extension(format: Format) -> None
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/local.py#L35)
-
-Set the file extension and validate append mode compatibility.
-
-**Arguments**:
-
-- `format`: The Format instance that defines the file extension.
-
-**Raises**:
-
-- `ValueError`: If append mode is enabled but the format doesn't
-support appending.
-
-<a id="quixstreams.sinks.community.file.destinations.local.LocalDestination.write"></a>
-
-#### LocalDestination.write
-
-```python
-def write(data: bytes, batch: SinkBatch) -> None
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/local.py#L46)
-
-Write data to a local file.
-
-**Arguments**:
-
-- `data`: The serialized data to write.
-- `batch`: The batch information containing topic and partition details.
-
-<a id="quixstreams.sinks.community.file.destinations.azure"></a>
-
-## quixstreams.sinks.community.file.destinations.azure
-
-<a id="quixstreams.sinks.community.file.destinations.azure.AzureContainerNotFoundError"></a>
-
-### AzureContainerNotFoundError
-
-```python
-class AzureContainerNotFoundError(Exception)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/azure.py#L24)
-
-Raised when the specified Azure File container does not exist.
-
-<a id="quixstreams.sinks.community.file.destinations.azure.AzureContainerAccessDeniedError"></a>
-
-### AzureContainerAccessDeniedError
-
-```python
-class AzureContainerAccessDeniedError(Exception)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/azure.py#L28)
-
-Raised when the specified Azure File container access is denied.
-
-<a id="quixstreams.sinks.community.file.destinations.azure.AzureFileDestination"></a>
-
-### AzureFileDestination
-
-```python
-class AzureFileDestination(Destination)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/azure.py#L32)
-
-A destination that writes data to Microsoft Azure File.
-
-Handles writing data to Azure containers using the Azure Blob SDK. Credentials can
-be provided directly or via environment variables.
-
-<a id="quixstreams.sinks.community.file.destinations.azure.AzureFileDestination.__init__"></a>
-
-#### AzureFileDestination.\_\_init\_\_
-
-```python
-def __init__(connection_string: str, container: str) -> None
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/azure.py#L40)
-
-Initialize the Azure File destination.
-
-**Arguments**:
-
-- `connection_string`: Azure client authentication string.
-- `container`: Azure container name.
-
-**Raises**:
-
-- `AzureContainerNotFoundError`: If the specified container doesn't exist.
-- `AzureContainerAccessDeniedError`: If access to the container is denied.
-
-<a id="quixstreams.sinks.community.file.destinations.azure.AzureFileDestination.write"></a>
-
-#### AzureFileDestination.write
-
-```python
-def write(data: bytes, batch: SinkBatch) -> None
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/azure.py#L94)
-
-Write data to Azure.
-
-**Arguments**:
-
-- `data`: The serialized data to write.
-- `batch`: The batch information containing topic and partition details.
-
-<a id="quixstreams.sinks.community.file.destinations"></a>
-
-## quixstreams.sinks.community.file.destinations
-
-<a id="quixstreams.sinks.community.file.destinations.s3"></a>
-
-## quixstreams.sinks.community.file.destinations.s3
-
-<a id="quixstreams.sinks.community.file.destinations.s3.S3BucketNotFoundError"></a>
-
-### S3BucketNotFoundError
-
-```python
-class S3BucketNotFoundError(Exception)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/s3.py#L14)
-
-Raised when the specified S3 bucket does not exist.
-
-<a id="quixstreams.sinks.community.file.destinations.s3.S3BucketAccessDeniedError"></a>
-
-### S3BucketAccessDeniedError
-
-```python
-class S3BucketAccessDeniedError(Exception)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/s3.py#L18)
-
-Raised when the specified S3 bucket access is denied.
-
-<a id="quixstreams.sinks.community.file.destinations.s3.S3Destination"></a>
-
-### S3Destination
-
-```python
-class S3Destination(Destination)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/s3.py#L22)
-
-A destination that writes data to Amazon S3.
-
-Handles writing data to S3 buckets using the AWS SDK. Credentials can be
-provided directly or via environment variables.
-
-<a id="quixstreams.sinks.community.file.destinations.s3.S3Destination.__init__"></a>
-
-#### S3Destination.\_\_init\_\_
+#### S3FileSink.\_\_init\_\_
 
 ```python
 def __init__(bucket: str,
@@ -6825,10 +6751,16 @@ def __init__(bucket: str,
              region_name: Optional[str] = getenv("AWS_REGION",
                                                  getenv("AWS_DEFAULT_REGION")),
              endpoint_url: Optional[str] = getenv("AWS_ENDPOINT_URL_S3"),
+             directory: str = "",
+             format: Union[FormatName, Format] = "json",
+             on_client_connect_success: Optional[
+                 ClientConnectSuccessCallback] = None,
+             on_client_connect_failure: Optional[
+                 ClientConnectFailureCallback] = None,
              **kwargs) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/s3.py#L29)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/s3.py#L51)
 
 Initialize the S3 destination.
 
@@ -6851,117 +6783,90 @@ NOTE: can alternatively set the AWS_ENDPOINT_URL_S3 environment variable
 - `S3BucketNotFoundError`: If the specified bucket doesn't exist.
 - `S3BucketAccessDeniedError`: If access to the bucket is denied.
 
-<a id="quixstreams.sinks.community.file.destinations.s3.S3Destination.write"></a>
+<a id="quixstreams.sinks.community.file.base"></a>
 
-#### S3Destination.write
+## quixstreams.sinks.community.file.base
+
+<a id="quixstreams.sinks.community.file.base.FileSink"></a>
+
+### FileSink
 
 ```python
-def write(data: bytes, batch: SinkBatch) -> None
+class FileSink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/s3.py#L89)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/base.py#L24)
 
-Write data to S3.
+A sink that writes data batches to files using configurable formats and
+destinations.
+
+The sink groups messages by their topic and partition, ensuring data from the
+same source is stored together. Each batch is serialized using the specified
+format (e.g., JSON, Parquet) before being written to the configured
+destination.
+
+The destination determines the storage location and write behavior. By default,
+it uses LocalDestination for writing to the local filesystem, but can be
+configured to use other storage backends (e.g., cloud storage).
+
+<a id="quixstreams.sinks.community.file.base.FileSink.__init__"></a>
+
+#### FileSink.\_\_init\_\_
+
+```python
+def __init__(
+    directory: str = "",
+    format: Union[FormatName, Format] = "json",
+    on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
+    on_client_connect_failure: Optional[ClientConnectFailureCallback] = None
+) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/base.py#L38)
+
+Initialize the FileSink with the specified configuration.
 
 **Arguments**:
 
-- `data`: The serialized data to write.
-- `batch`: The batch information containing topic and partition details.
+- `directory`: Base directory path for storing files. Defaults to
+current directory.
+- `format`: Data serialization format, either as a string
+("json", "parquet") or a Format instance.
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
 
-<a id="quixstreams.sinks.community.file.destinations.base"></a>
+<a id="quixstreams.sinks.community.file.base.FileSink.setup"></a>
 
-## quixstreams.sinks.community.file.destinations.base
-
-<a id="quixstreams.sinks.community.file.destinations.base.Destination"></a>
-
-### Destination
-
-```python
-class Destination(ABC)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/base.py#L16)
-
-Abstract base class for defining where and how data should be stored.
-
-Destinations handle the storage of serialized data, whether that's to local
-disk, cloud storage, or other locations. They manage the physical writing of
-data while maintaining a consistent directory/path structure based on topics
-and partitions.
-
-<a id="quixstreams.sinks.community.file.destinations.base.Destination.setup"></a>
-
-#### Destination.setup
+#### FileSink.setup
 
 ```python
 @abstractmethod
 def setup()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/base.py#L29)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/base.py#L76)
 
 Authenticate and validate connection here
 
-<a id="quixstreams.sinks.community.file.destinations.base.Destination.write"></a>
+<a id="quixstreams.sinks.community.file.base.FileSink.write"></a>
 
-#### Destination.write
+#### FileSink.write
 
 ```python
-@abstractmethod
-def write(data: bytes, batch: SinkBatch) -> None
+def write(batch: SinkBatch) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/base.py#L34)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/base.py#L90)
 
-Write the serialized data to storage.
+Write a batch of data using the configured format.
 
 **Arguments**:
 
-- `data`: The serialized data to write.
-- `batch`: The batch information containing topic, partition and offset
-details.
-
-<a id="quixstreams.sinks.community.file.destinations.base.Destination.set_directory"></a>
-
-#### Destination.set\_directory
-
-```python
-def set_directory(directory: str) -> None
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/base.py#L43)
-
-Configure the base directory for storing files.
-
-**Arguments**:
-
-- `directory`: The base directory path where files will be stored.
-
-**Raises**:
-
-- `ValueError`: If the directory path contains invalid characters.
-Only alphanumeric characters (a-zA-Z0-9), spaces, dots, slashes, and
-underscores are allowed.
-
-<a id="quixstreams.sinks.community.file.destinations.base.Destination.set_extension"></a>
-
-#### Destination.set\_extension
-
-```python
-def set_extension(format: Format) -> None
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/destinations/base.py#L64)
-
-Set the file extension based on the format.
-
-**Arguments**:
-
-- `format`: The Format instance that defines the file extension.
-
-<a id="quixstreams.sinks.community.file"></a>
-
-## quixstreams.sinks.community.file
+- `batch`: The batch of data to write.
 
 <a id="quixstreams.sinks.community.mongodb"></a>
 
@@ -7773,6 +7678,77 @@ def set_str_rep(cls, rep_function)
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/point.py#L256)
 
 Set the string representation for all Points.
+
+<a id="quixstreams.sinks.community.mqtt"></a>
+
+## quixstreams.sinks.community.mqtt
+
+<a id="quixstreams.sinks.community.mqtt.MQTTSink"></a>
+
+### MQTTSink
+
+```python
+class MQTTSink(BaseSink)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/mqtt.py#L35)
+
+A sink that publishes messages to an MQTT broker.
+
+<a id="quixstreams.sinks.community.mqtt.MQTTSink.__init__"></a>
+
+#### MQTTSink.\_\_init\_\_
+
+```python
+def __init__(client_id: str,
+             server: str,
+             port: int,
+             topic_root: str,
+             username: str = None,
+             password: str = None,
+             version: ProtocolVersion = "3.1.1",
+             tls_enabled: bool = True,
+             key_serializer: Callable[[Any], str] = bytes.decode,
+             value_serializer: Callable[[Any], str] = json.dumps,
+             qos: Literal[0, 1] = 1,
+             mqtt_flush_timeout_seconds: int = 10,
+             retain: Union[bool, Callable[[Any], bool]] = False,
+             properties: Optional[MqttPropertiesHandler] = None,
+             on_client_connect_success: Optional[
+                 ClientConnectSuccessCallback] = None,
+             on_client_connect_failure: Optional[
+                 ClientConnectFailureCallback] = None)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/mqtt.py#L40)
+
+Initialize the MQTTSink.
+
+**Arguments**:
+
+- `client_id`: MQTT client identifier.
+- `server`: MQTT broker server address.
+- `port`: MQTT broker server port.
+- `topic_root`: Root topic to publish messages to.
+- `username`: Username for MQTT broker authentication. Default = None
+- `password`: Password for MQTT broker authentication. Default = None
+- `version`: MQTT protocol version ("3.1", "3.1.1", or "5"). Defaults to 3.1.1
+- `tls_enabled`: Whether to use TLS encryption. Default = True
+- `key_serializer`: How to serialize the MQTT message key for producing.
+- `value_serializer`: How to serialize the MQTT message value for producing.
+- `qos`: Quality of Service level (0 or 1; 2 not yet supported) Default = 1.
+- `mqtt_flush_timeout_seconds`: how long to wait for publish acknowledgment
+of MQTT messages before failing. Default = 10.
+- `retain`: Retain last message for new subscribers. Default = False.
+Also accepts a callable that uses the current message value as input.
+- `properties`: An optional Properties instance for messages. Default = None.
+Also accepts a callable that uses the current message value as input.
+    :param on_client_connect_success: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
 
 <a id="quixstreams.sinks.community.redis"></a>
 
@@ -10076,7 +10052,7 @@ Multiple topics are expected for merged and joins streams.
 def stream_id_from_topics(topics: Sequence[Topic]) -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L350)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/models/topics/manager.py#L352)
 
 Generate a stream_id by combining names of the provided topics.
 
@@ -16562,6 +16538,72 @@ the default topic with optionally altered partition count
 ## quixstreams.sources.community
 
 This module contains Sources developed and maintained by the members of Quix Streams community.
+
+<a id="quixstreams.sources.community.mqtt"></a>
+
+## quixstreams.sources.community.mqtt
+
+<a id="quixstreams.sources.community.mqtt.MQTTSource"></a>
+
+### MQTTSource
+
+```python
+class MQTTSource(Source)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/mqtt.py#L56)
+
+A source that reads messages from an MQTT broker.
+
+<a id="quixstreams.sources.community.mqtt.MQTTSource.__init__"></a>
+
+#### MQTTSource.\_\_init\_\_
+
+```python
+def __init__(
+        topic: str,
+        client_id: str,
+        server: str,
+        port: int,
+        username: str = None,
+        password: str = None,
+        version: ProtocolVersion = "3.1.1",
+        tls_enabled: bool = True,
+        key_setter: MqttKeyValueSetter = _default_key_setter,
+        value_setter: MqttKeyValueSetter = _default_value_setter,
+        timestamp_setter: MqttTimestampSetter = _default_timestamp_setter,
+        payload_deserializer: Optional[Callable[[Any],
+                                                Any]] = _default_deserializer,
+        qos: Literal[0, 1] = 1,
+        on_client_connect_success: Optional[
+            ClientConnectSuccessCallback] = None,
+        on_client_connect_failure: Optional[
+            ClientConnectFailureCallback] = None)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/mqtt.py#L61)
+
+**Arguments**:
+
+- `topic`: MQTT source topic.
+To consume from a base/prefix, use '#' as a wildcard i.e. my-topic-base/#
+- `client_id`: MQTT client identifier.
+- `server`: MQTT broker server address.
+- `port`: MQTT broker server port.
+- `username`: Username for MQTT broker authentication. Default = None
+- `password`: Password for MQTT broker authentication. Default = None
+- `version`: MQTT protocol version ("3.1", "3.1.1", or "5"). Defaults to 3.1.1
+- `tls_enabled`: Whether to use TLS encryption. Default = True
+- `payload_deserializer`: An optional payload deserializer.
+Useful when payloads are used by key, value, or timestamp setters.
+Used with default configuration, but can be set to None if not needed.
+- `qos`: Quality of Service level (0 or 1; 2 not yet supported) Default = 1.
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
 
 <a id="quixstreams.sources.community.pubsub"></a>
 
