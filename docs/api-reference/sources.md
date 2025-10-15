@@ -1476,6 +1476,76 @@ client authentication (which should raise an Exception).
 Callback should accept the raised Exception as an argument.
 Callback must resolve (or propagate/re-raise) the Exception.
 
+<a id="quixstreams.sources.community.mqtt"></a>
+
+## quixstreams.sources.community.mqtt
+
+<a id="quixstreams.sources.community.mqtt.MQTTSource"></a>
+
+### MQTTSource
+
+```python
+class MQTTSource(Source)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/mqtt.py#L56)
+
+A source that reads messages from an MQTT broker.
+
+<a id="quixstreams.sources.community.mqtt.MQTTSource.__init__"></a>
+
+<br><br>
+
+#### MQTTSource.\_\_init\_\_
+
+```python
+def __init__(
+        topic: str,
+        client_id: str,
+        server: str,
+        port: int,
+        username: str = None,
+        password: str = None,
+        version: ProtocolVersion = "3.1.1",
+        tls_enabled: bool = True,
+        key_setter: MqttKeyValueSetter = _default_key_setter,
+        value_setter: MqttKeyValueSetter = _default_value_setter,
+        timestamp_setter: MqttTimestampSetter = _default_timestamp_setter,
+        payload_deserializer: Optional[Callable[[Any],
+                                                Any]] = _default_deserializer,
+        qos: Literal[0, 1] = 1,
+        on_client_connect_success: Optional[
+            ClientConnectSuccessCallback] = None,
+        on_client_connect_failure: Optional[
+            ClientConnectFailureCallback] = None)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/mqtt.py#L61)
+
+
+<br>
+***Arguments:***
+
+- `topic`: MQTT source topic.
+To consume from a base/prefix, use '#' as a wildcard i.e. my-topic-base/#
+- `client_id`: MQTT client identifier.
+- `server`: MQTT broker server address.
+- `port`: MQTT broker server port.
+- `username`: Username for MQTT broker authentication. Default = None
+- `password`: Password for MQTT broker authentication. Default = None
+- `version`: MQTT protocol version ("3.1", "3.1.1", or "5"). Defaults to 3.1.1
+- `tls_enabled`: Whether to use TLS encryption. Default = True
+- `payload_deserializer`: An optional payload deserializer.
+Useful when payloads are used by key, value, or timestamp setters.
+Used with default configuration, but can be set to None if not needed.
+- `qos`: Quality of Service level (0 or 1; 2 not yet supported) Default = 1.
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
+
 <a id="quixstreams.sources.community.pubsub.pubsub"></a>
 
 ## quixstreams.sources.community.pubsub.pubsub
