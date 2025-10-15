@@ -57,6 +57,7 @@ class VoidExecutor(Protocol):
         key: Any,
         timestamp: int,
         headers: Any,
+        is_watermark: bool = False,
     ) -> None: ...
 
 

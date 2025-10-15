@@ -81,22 +81,35 @@ class Window(abc.ABC):
 
     def _apply_window(
         self,
-        func: TransformRecordCallbackExpandedWindowed,
+        on_update: TransformRecordCallbackExpandedWindowed,
+        on_watermark: TransformRecordCallbackExpandedWindowed,
         name: str,
     ) -> "StreamingDataFrame":
         self.register_store()
 
         windowed_func = _as_windowed(
-            func=func,
+            func=on_update,
             stream_id=self._dataframe.stream_id,
             processing_context=self._dataframe.processing_context,
             store_name=name,
         )
+
+        watermark_func = _as_windowed(
+            func=on_watermark,
+            stream_id=self._dataframe.stream_id,
+            processing_context=self._dataframe.processing_context,
+            store_name=name,
+            null_key_ok=True,
+        )
+
         # Manually modify the Stream and clone the source StreamingDataFrame
         # to avoid adding "transform" API to it.
         # Transform callbacks can modify record key and timestamp,
         # and it's prone to misuse.
-        stream = self._dataframe.stream.add_transform(func=windowed_func, expand=True)
+
+        stream = self._dataframe.stream.add_transform(
+            func=windowed_func, expand=True, on_watermark=watermark_func
+        )
         return self._dataframe.__dataframe_clone__(stream=stream)
 
     def final(self) -> "StreamingDataFrame":
@@ -401,6 +414,7 @@ def _as_windowed(
     processing_context: "ProcessingContext",
     store_name: str,
     stream_id: str,
+    null_key_ok: bool = False,  # TODO: Rework?
 ) -> TransformExpandedCallback:
     @functools.wraps(func)
     def wrapper(
@@ -413,7 +427,7 @@ def _as_windowed(
                 stream_id=stream_id, partition=ctx.partition, store_name=store_name
             ),
         )
-        if key is None:
+        if key is None and not null_key_ok:
             logger.warning(
                 f"Skipping window processing for a message because the key is None, "
                 f"partition='{ctx.topic}[{ctx.partition}]' offset='{ctx.offset}'."

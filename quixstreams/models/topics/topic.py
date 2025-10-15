@@ -93,6 +93,7 @@ class TopicType(enum.Enum):
     REGULAR = 1
     REPARTITION = 2
     CHANGELOG = 3
+    WATERMARKS = 4
 
 
 class Topic:
