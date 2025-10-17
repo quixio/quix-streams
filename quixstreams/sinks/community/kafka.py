@@ -23,9 +23,7 @@ class KafkaReplicatorSink(BaseSink):
     """
     A sink that produces data to an external Kafka cluster.
 
-    This sink uses the InternalProducer to serialize Row objects using the same
-    serializers as the Quix Application, making it easy to replicate data to
-    another Kafka cluster.
+    This sink uses the same serialization approach as the Quix Application.
 
     Example Snippet:
 
@@ -122,7 +120,6 @@ class KafkaReplicatorSink(BaseSink):
             f'key_serializer="{self._key_serializer}"'
         )
 
-        # Create the InternalProducer
         self._producer = InternalProducer(
             broker_address=self._broker_address,
             extra_config=self._producer_extra_config,
@@ -130,8 +127,6 @@ class KafkaReplicatorSink(BaseSink):
             transactional=False,
         )
 
-        # Create a Topic object for serialization
-        # The topic is not created on the external cluster by this sink
         self._topic = Topic(
             name=self._topic_name,
             value_serializer=self._value_serializer,
@@ -172,8 +167,6 @@ class KafkaReplicatorSink(BaseSink):
         :param partition: The source partition.
         :param offset: The source offset.
         """
-        # Create a Row object from the provided data
-        # We need a MessageContext for the Row
         context = MessageContext(
             topic=topic,
             partition=partition,
@@ -181,7 +174,6 @@ class KafkaReplicatorSink(BaseSink):
             size=0,
             leader_epoch=None,
         )
-
         row = Row(
             value=value,
             key=key,
@@ -189,8 +181,6 @@ class KafkaReplicatorSink(BaseSink):
             context=context,
             headers=headers,
         )
-
-        # Use InternalProducer to serialize and produce the row
         self._producer.produce_row(
             row=row,
             topic=self._topic,
