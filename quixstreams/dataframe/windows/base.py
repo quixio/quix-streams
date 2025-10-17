@@ -34,7 +34,8 @@ logger = logging.getLogger(__name__)
 WindowResult: TypeAlias = dict[str, Any]
 WindowKeyResult: TypeAlias = tuple[Any, WindowResult]
 Message: TypeAlias = tuple[WindowResult, Any, int, Any]
-WindowOnUpdateCallback: TypeAlias = Callable[[Any, Any], bool]
+WindowBeforeUpdateCallback: TypeAlias = Callable[[Any, Any, Any, int, Any], bool]
+WindowAfterUpdateCallback: TypeAlias = Callable[[Any, Any, Any, int, Any], bool]
 
 WindowAggregateFunc = Callable[[Any, Any], Any]
 
@@ -66,6 +67,7 @@ class Window(abc.ABC):
         value: Any,
         key: Any,
         timestamp_ms: int,
+        headers: Any,
         transaction: WindowedPartitionTransaction,
     ) -> tuple[Iterable[WindowKeyResult], Iterable[WindowKeyResult]]:
         pass
@@ -135,6 +137,7 @@ class Window(abc.ABC):
                 value=value,
                 key=key,
                 timestamp_ms=timestamp_ms,
+                headers=_headers,
                 transaction=transaction,
             )
             # Use window start timestamp as a new record timestamp
@@ -177,7 +180,11 @@ class Window(abc.ABC):
             transaction: WindowedPartitionTransaction,
         ) -> Iterable[Message]:
             updated_windows, expired_windows = self.process_window(
-                value=value, key=key, timestamp_ms=timestamp_ms, transaction=transaction
+                value=value,
+                key=key,
+                timestamp_ms=timestamp_ms,
+                headers=_headers,
+                transaction=transaction,
             )
 
             # loop over the expired_windows generator to ensure the windows

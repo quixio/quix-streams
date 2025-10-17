@@ -9,9 +9,10 @@ from .base import (
     MultiAggregationWindowMixin,
     SingleAggregationWindowMixin,
     Window,
+    WindowAfterUpdateCallback,
+    WindowBeforeUpdateCallback,
     WindowKeyResult,
     WindowOnLateCallback,
-    WindowOnUpdateCallback,
     get_window_ranges,
 )
 
@@ -47,7 +48,8 @@ class TimeWindow(Window):
         dataframe: "StreamingDataFrame",
         step_ms: Optional[int] = None,
         on_late: Optional[WindowOnLateCallback] = None,
-        on_update: Optional[WindowOnUpdateCallback] = None,
+        before_update: Optional[WindowBeforeUpdateCallback] = None,
+        after_update: Optional[WindowAfterUpdateCallback] = None,
     ):
         super().__init__(
             name=name,
@@ -58,7 +60,8 @@ class TimeWindow(Window):
         self._grace_ms = grace_ms
         self._step_ms = step_ms
         self._on_late = on_late
-        self._on_update = on_update
+        self._before_update = before_update
+        self._after_update = after_update
 
         self._closing_strategy = ClosingStrategy.KEY
 
@@ -130,12 +133,14 @@ class TimeWindow(Window):
         value: Any,
         key: Any,
         timestamp_ms: int,
+        headers: Any,
         transaction: WindowedPartitionTransaction,
     ) -> tuple[Iterable[WindowKeyResult], Iterable[WindowKeyResult]]:
         state = transaction.as_state(prefix=key)
         duration_ms = self._duration_ms
         grace_ms = self._grace_ms
-        on_update = self._on_update
+        before_update = self._before_update
+        after_update = self._after_update
 
         collect = self.collect
         aggregate = self.aggregate
@@ -180,9 +185,30 @@ class TimeWindow(Window):
                 if current_value is None:
                     current_value = self._initialize_value()
 
+                # Check before_update trigger
+                if before_update and before_update(
+                    current_value, value, key, timestamp_ms, headers
+                ):
+                    # Get collected values for the result
+                    collected = []
+                    if collect:
+                        collected = state.get_from_collection(start, end)
+                        # Add the current value that's being collected
+                        collected.append(self._collect_value(value))
+
+                    result = self._results(current_value, collected, start, end)
+                    triggered_windows.append((key, result))
+                    transaction.delete_window(start, end, prefix=key)
+                    # Note: We don't delete from collection here - normal expiration
+                    # will handle cleanup for both tumbling and hopping windows
+                    continue
+
                 aggregated = self._aggregate_value(current_value, value, timestamp_ms)
 
-                if on_update and on_update(current_value, aggregated):
+                # Check after_update trigger
+                if after_update and after_update(
+                    aggregated, value, key, timestamp_ms, headers
+                ):
                     # Get collected values for the result
                     collected = []
                     if collect:
@@ -199,18 +225,33 @@ class TimeWindow(Window):
 
                 result = self._results(aggregated, [], start, end)
                 updated_windows.append((key, result))
-            elif collect and on_update:
-                # For collect-only windows, get the old and new collected values
+            elif collect and (before_update or after_update):
+                # For collect-only windows, get the old collected values
                 old_collected = state.get_from_collection(start, end)
-                new_collected = [*old_collected, self._collect_value(value)]
 
-                if on_update(old_collected, new_collected):
-                    result = self._results(None, new_collected, start, end)
+                # Check before_update trigger (before adding new value)
+                if before_update and before_update(
+                    old_collected, value, key, timestamp_ms, headers
+                ):
+                    # Expire with the current collection (WITHOUT the new value)
+                    result = self._results(None, old_collected, start, end)
                     triggered_windows.append((key, result))
                     transaction.delete_window(start, end, prefix=key)
                     # Note: We don't delete from collection here - normal expiration
                     # will handle cleanup for both tumbling and hopping windows
                     continue
+
+                # Check after_update trigger (conceptually after adding new value)
+                # For collect, "after update" means after the value would be added
+                if after_update:
+                    new_collected = [*old_collected, self._collect_value(value)]
+                    if after_update(new_collected, value, key, timestamp_ms, headers):
+                        result = self._results(None, new_collected, start, end)
+                        triggered_windows.append((key, result))
+                        transaction.delete_window(start, end, prefix=key)
+                        # Note: We don't delete from collection here - normal expiration
+                        # will handle cleanup for both tumbling and hopping windows
+                        continue
 
             state.update_window(start, end, value=aggregated, timestamp_ms=timestamp_ms)
 

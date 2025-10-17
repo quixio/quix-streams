@@ -12,7 +12,10 @@ from quixstreams.dataframe.windows.time_based import ClosingStrategy
 @pytest.fixture()
 def tumbling_window_definition_factory(state_manager, dataframe_factory):
     def factory(
-        duration_ms: int, grace_ms: int = 0, on_update=None
+        duration_ms: int,
+        grace_ms: int = 0,
+        before_update=None,
+        after_update=None,
     ) -> TumblingTimeWindowDefinition:
         sdf = dataframe_factory(
             state_manager=state_manager, registry=DataFrameRegistry()
@@ -21,30 +24,35 @@ def tumbling_window_definition_factory(state_manager, dataframe_factory):
             duration_ms=duration_ms,
             grace_ms=grace_ms,
             dataframe=sdf,
-            on_update=on_update,
+            before_update=before_update,
+            after_update=after_update,
         )
         return window_def
 
     return factory
 
 
-def process(window, value, key, transaction, timestamp_ms):
+def process(window, value, key, transaction, timestamp_ms, headers=None):
     updated, expired = window.process_window(
-        value=value, key=key, transaction=transaction, timestamp_ms=timestamp_ms
+        value=value,
+        key=key,
+        timestamp_ms=timestamp_ms,
+        headers=headers,
+        transaction=transaction,
     )
     return list(updated), list(expired)
 
 
 class TestTumblingWindow:
-    def test_tumbling_window_with_trigger(
+    def test_tumbling_window_with_after_update_trigger(
         self, tumbling_window_definition_factory, state_manager
     ):
-        # Define a trigger that expires the window when the sum increases by 5 or more
-        def trigger_on_delta_5(old_value, new_value) -> bool:
-            return (new_value - old_value) >= 5
+        # Define a trigger that expires the window when the sum reaches 9 or more
+        def trigger_on_sum_9(aggregated, value, key, timestamp, headers) -> bool:
+            return aggregated >= 9
 
         window_def = tumbling_window_definition_factory(
-            duration_ms=100, grace_ms=0, on_update=trigger_on_delta_5
+            duration_ms=100, grace_ms=0, after_update=trigger_on_sum_9
         )
         window = window_def.sum()
         window.final(closing_strategy="key")
@@ -88,18 +96,76 @@ class TestTumblingWindow:
             assert updated[0][1]["value"] == 3
             assert not expired
 
-    def test_tumbling_window_collect_with_trigger(
+    def test_tumbling_window_with_before_update_trigger(
         self, tumbling_window_definition_factory, state_manager
     ):
-        """Test that on_update callback works with collect."""
+        """Test that before_update callback works and triggers before aggregation."""
 
-        # Define a trigger that expires the window when we collect 3 or more items
-        def trigger_on_count_3(old_value, new_value) -> bool:
-            # For collect, old_value and new_value are lists
-            return len(new_value) >= 3
+        # Define a trigger that expires the window before adding a value
+        # if the sum would exceed 10
+        def trigger_before_exceeding_10(
+            aggregated, value, key, timestamp, headers
+        ) -> bool:
+            return (aggregated + value) > 10
 
         window_def = tumbling_window_definition_factory(
-            duration_ms=100, grace_ms=0, on_update=trigger_on_count_3
+            duration_ms=100, grace_ms=0, before_update=trigger_before_exceeding_10
+        )
+        window = window_def.sum()
+        window.final(closing_strategy="key")
+
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
+        store.assign_partition(0)
+        key = b"key"
+
+        with store.start_partition_transaction(0) as tx:
+            # Add value=3, sum becomes 3, would not exceed 10, should not trigger
+            updated, expired = process(
+                window, value=3, key=key, transaction=tx, timestamp_ms=50
+            )
+            assert len(updated) == 1
+            assert updated[0][1]["value"] == 3
+            assert not expired
+
+            # Add value=5, sum becomes 8, would not exceed 10, should not trigger
+            updated, expired = process(
+                window, value=5, key=key, transaction=tx, timestamp_ms=60
+            )
+            assert len(updated) == 1
+            assert updated[0][1]["value"] == 8
+            assert not expired
+
+            # Add value=3, would make sum 11 which exceeds 10, should trigger BEFORE adding
+            # So the expired window should have value=8 (not 11)
+            updated, expired = process(
+                window, value=3, key=key, transaction=tx, timestamp_ms=70
+            )
+            assert not updated  # Window was triggered
+            assert len(expired) == 1
+            assert expired[0][1]["value"] == 8  # Before the update (not 11)
+            assert expired[0][1]["start"] == 0
+            assert expired[0][1]["end"] == 100
+
+            # Next value should start a new window
+            updated, expired = process(
+                window, value=2, key=key, transaction=tx, timestamp_ms=80
+            )
+            assert len(updated) == 1
+            assert updated[0][1]["value"] == 2
+            assert not expired
+
+    def test_tumbling_window_collect_with_after_update_trigger(
+        self, tumbling_window_definition_factory, state_manager
+    ):
+        """Test that after_update callback works with collect."""
+
+        # Define a trigger that expires the window when we collect 3 or more items
+        def trigger_on_count_3(aggregated, value, key, timestamp, headers) -> bool:
+            # For collect, aggregated is the list of collected values
+            return len(aggregated) >= 3
+
+        window_def = tumbling_window_definition_factory(
+            duration_ms=100, grace_ms=0, after_update=trigger_on_count_3
         )
         window = window_def.collect()
         window.final(closing_strategy="key")
@@ -143,6 +209,66 @@ class TestTumblingWindow:
             assert not updated
             assert len(expired) == 1
             assert expired[0][1]["value"] == [1, 2, 3, 4]
+            assert expired[0][1]["start"] == 0
+            assert expired[0][1]["end"] == 100
+
+    def test_tumbling_window_collect_with_before_update_trigger(
+        self, tumbling_window_definition_factory, state_manager
+    ):
+        """Test that before_update callback works with collect."""
+
+        # Define a trigger that expires the window before adding a value
+        # if the collection would reach 3 or more items
+        def trigger_before_count_3(aggregated, value, key, timestamp, headers) -> bool:
+            # For collect, aggregated is the list of collected values BEFORE adding the new value
+            return len(aggregated) + 1 >= 3
+
+        window_def = tumbling_window_definition_factory(
+            duration_ms=100, grace_ms=0, before_update=trigger_before_count_3
+        )
+        window = window_def.collect()
+        window.final(closing_strategy="key")
+
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
+        store.assign_partition(0)
+        key = b"key"
+
+        with store.start_partition_transaction(0) as tx:
+            # Add first value - should not trigger (count would be 1)
+            updated, expired = process(
+                window, value=1, key=key, transaction=tx, timestamp_ms=50
+            )
+            assert not updated  # collect doesn't emit on updates
+            assert not expired
+
+            # Add second value - should not trigger (count would be 2)
+            updated, expired = process(
+                window, value=2, key=key, transaction=tx, timestamp_ms=60
+            )
+            assert not updated
+            assert not expired
+
+            # Add third value - should trigger BEFORE adding (count would be 3)
+            # Expired window should have [1, 2] (not [1, 2, 3])
+            updated, expired = process(
+                window, value=3, key=key, transaction=tx, timestamp_ms=70
+            )
+            assert not updated
+            assert len(expired) == 1
+            assert expired[0][1]["value"] == [1, 2]  # Before adding the third value
+            assert expired[0][1]["start"] == 0
+            assert expired[0][1]["end"] == 100
+
+            # Next value should start accumulating in the same window again
+            # (window was deleted but collection values remain until natural expiration)
+            updated, expired = process(
+                window, value=4, key=key, transaction=tx, timestamp_ms=80
+            )
+            assert not updated
+            # Window [0, 100) is "resurrected" with [1, 2, 3]
+            # Adding value 4 would make it 4 items, triggers again
+            assert len(expired) == 1
+            assert expired[0][1]["value"] == [1, 2, 3]  # Before adding 4
             assert expired[0][1]["start"] == 0
             assert expired[0][1]["end"] == 100
 
