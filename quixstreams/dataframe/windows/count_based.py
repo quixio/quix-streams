@@ -58,6 +58,7 @@ class CountWindow(Window):
         value: Any,
         key: Any,
         timestamp_ms: int,
+        headers: Any,
         transaction: WindowedPartitionTransaction[str, CountWindowsData],
     ) -> tuple[Iterable[WindowKeyResult], Iterable[WindowKeyResult]]:
         """

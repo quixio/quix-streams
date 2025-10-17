@@ -593,6 +593,76 @@ if __name__ == '__main__':
 ```
 
 
+### Early window expiration with triggers
+!!! info New in v3.24.0
+
+To expire windows before their natural expiration time based on custom conditions, you can pass `before_update` or `after_update` callbacks to `.tumbling_window()` and `.hopping_window()` methods.
+
+This is useful when you want to emit results as soon as certain conditions are met, rather than waiting for the window to close naturally.
+
+**How it works**:
+
+- The `before_update` callback is invoked before the window aggregation is updated with a new value.
+- The `after_update` callback is invoked after the window aggregation has been updated with a new value.
+- Both callbacks receive: `aggregated` (current or updated aggregated value), `value` (incoming value), `key`, `timestamp`, and `headers`.
+- For `collect()` operations without aggregation, `aggregated` contains the list of collected values.
+- If either callback returns `True`, the window is immediately expired and emitted downstream.
+- The window metadata is deleted from state, but collected values (if using `.collect()`) remain until natural expiration.
+- This means a triggered window can be "resurrected" if new data arrives within its time range - a new window will be created with the previously collected values still present.
+
+**Example with after_update**:
+
+```python
+from typing import Any
+
+from datetime import timedelta
+from quixstreams import Application
+
+app = Application(...)
+sdf = app.dataframe(...)
+
+
+def trigger_on_threshold(
+    aggregated: int, value: Any, key: Any, timestamp: int, headers: Any
+) -> bool:
+    """
+    Expire the window early when the sum exceeds 1000.
+    """
+    return aggregated > 1000
+
+
+# Define a 1-hour tumbling window with early expiration trigger
+sdf = (
+    sdf.tumbling_window(timedelta(hours=1), after_update=trigger_on_threshold)
+    .sum()
+    .final()
+)
+
+# Start the application
+if __name__ == '__main__':
+    app.run()
+
+```
+
+**Example with before_update**:
+
+```python
+def trigger_before_large_value(
+    aggregated: int, value: Any, key: Any, timestamp: int, headers: Any
+) -> bool:
+    """
+    Expire the window before adding a value if it would make the sum too large.
+    """
+    return (aggregated + value) > 1000
+
+
+sdf = (
+    sdf.tumbling_window(timedelta(hours=1), before_update=trigger_before_large_value)
+    .sum()
+    .final()
+)
+```
+
 
 ## Emitting results
 
