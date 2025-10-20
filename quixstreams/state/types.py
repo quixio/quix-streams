@@ -391,6 +391,16 @@ class WindowedPartitionTransaction(Protocol[K, V]):
         """
         ...
 
+    def delete_window(self, start_ms: int, end_ms: int, prefix: bytes) -> None:
+        """
+        Delete a single window defined by start and end timestamps.
+
+        :param start_ms: start of the window in milliseconds
+        :param end_ms: end of the window in milliseconds
+        :param prefix: a key prefix
+        """
+        ...
+
     def delete_windows(
         self, max_start_time: int, delete_values: bool, prefix: bytes
     ) -> None:
