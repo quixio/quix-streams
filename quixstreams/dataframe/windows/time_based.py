@@ -1,3 +1,4 @@
+import itertools
 import logging
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Iterable, Literal, Optional
@@ -269,9 +270,9 @@ class TimeWindow(Window):
             )
 
         # Combine triggered windows with time-expired windows
-        all_expired_windows = triggered_windows + list(expired_windows)
+        all_expired_windows = itertools.chain(expired_windows, triggered_windows)
 
-        return updated_windows, iter(all_expired_windows)
+        return updated_windows, all_expired_windows
 
     def expire_by_partition(
         self,
