@@ -333,6 +333,112 @@ class TestHoppingWindow:
             assert expired[0][1]["start"] == 50
             assert expired[0][1]["end"] == 150
 
+    def test_hopping_window_agg_and_collect_with_before_update_trigger(
+        self, hopping_window_definition_factory, state_manager
+    ):
+        """Test before_update with BOTH aggregation and collect for hopping windows.
+
+        This verifies that:
+        1. The triggered window does NOT include the triggering value in collect
+        2. The triggering value IS still added to collection storage for future windows
+        3. The aggregated value is BEFORE the triggering value
+        4. For hopping windows, overlapping windows share the collection storage
+        """
+        import quixstreams.dataframe.windows.aggregations as agg
+
+        # Trigger when count would reach 3
+        def trigger_before_count_3(agg_dict, value, key, timestamp, headers) -> bool:
+            # In multi-aggregation, keys are like 'count/Count', 'sum/Sum'
+            # Find the count aggregation value
+            for k, v in agg_dict.items():
+                if k.startswith("count"):
+                    return v + 1 >= 3
+            return False
+
+        window_def = hopping_window_definition_factory(
+            duration_ms=100,
+            step_ms=50,
+            grace_ms=100,
+            before_update=trigger_before_count_3,
+        )
+        window = window_def.agg(count=agg.Count(), sum=agg.Sum(), collect=agg.Collect())
+        window.final(closing_strategy="key")
+
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
+        store.assign_partition(0)
+        key = b"key"
+
+        with store.start_partition_transaction(0) as tx:
+            _process = functools.partial(
+                process, window=window, key=key, transaction=tx
+            )
+
+            # Step 1: Add value=1 at timestamp 50ms
+            # Windows [0, 100) and [50, 150) both get count=1
+            updated, expired = _process(value=1, timestamp_ms=50)
+            assert len(updated) == 2
+            assert not expired
+
+            # Step 2: Add value=2 at timestamp 60ms
+            # Both windows get count=2
+            updated, expired = _process(value=2, timestamp_ms=60)
+            assert len(updated) == 2
+            assert not expired
+
+            # Step 3: Add value=3 at timestamp 70ms
+            # Both windows: count would be 3, triggers BEFORE adding
+            updated, expired = _process(value=3, timestamp_ms=70)
+            assert not updated
+            assert len(expired) == 2
+
+            # Window [0, 100)
+            assert expired[0][1]["count"] == 2  # Before the update (not 3)
+            assert expired[0][1]["sum"] == 3  # Before the update (1+2, not 1+2+3)
+            # CRITICAL: collect should NOT include the triggering value (3)
+            assert expired[0][1]["collect"] == [1, 2]
+            assert expired[0][1]["start"] == 0
+            assert expired[0][1]["end"] == 100
+
+            # Window [50, 150)
+            assert expired[1][1]["count"] == 2  # Before the update (not 3)
+            assert expired[1][1]["sum"] == 3  # Before the update (1+2, not 1+2+3)
+            # CRITICAL: collect should NOT include the triggering value (3)
+            assert expired[1][1]["collect"] == [1, 2]
+            assert expired[1][1]["start"] == 50
+            assert expired[1][1]["end"] == 150
+
+            # Step 4: Add value=4 at timestamp 100ms
+            # This belongs to windows [50, 150) and [100, 200)
+            # The triggering value (3) should still be in collection storage
+            updated, expired = _process(value=4, timestamp_ms=100)
+            assert len(updated) == 2
+            assert not expired
+
+            # Step 5: Force natural expiration to verify collection includes triggering value
+            # Windows that were deleted by trigger won't resurrect in hopping windows
+            # since they were explicitly deleted. Let's verify the triggering value
+            # was still added to collection by adding more values to a later window
+            updated, expired = _process(value=5, timestamp_ms=120)
+            assert len(updated) == 2  # Windows [50,150) resurrected and [100,200)
+            assert not expired
+
+            # Force expiration at timestamp 260 (well past grace period)
+            updated, expired = _process(value=6, timestamp_ms=260)
+            # This should expire windows that existed
+            assert len(expired) >= 1
+
+            # The key point: the triggering value (3) WAS added to collection storage
+            # So any window that overlaps with that timestamp includes it
+            # Verify at least one expired window contains the triggering value
+            found_triggering_value = False
+            for _, window_result in expired:
+                if 3 in window_result["collect"]:
+                    found_triggering_value = True
+                    break
+            assert (
+                found_triggering_value
+            ), "Triggering value (3) should be in collection storage"
+
     @pytest.mark.parametrize(
         "duration, grace, step, provided_name, func_name, expected_name",
         [

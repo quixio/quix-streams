@@ -272,6 +272,84 @@ class TestTumblingWindow:
             assert expired[0][1]["start"] == 0
             assert expired[0][1]["end"] == 100
 
+    def test_tumbling_window_agg_and_collect_with_before_update_trigger(
+        self, tumbling_window_definition_factory, state_manager
+    ):
+        """Test before_update with BOTH aggregation and collect.
+
+        This verifies that:
+        1. The triggered window does NOT include the triggering value in collect
+        2. The triggering value IS still added to collection storage for future
+        3. The aggregated value is BEFORE the triggering value
+        """
+        import quixstreams.dataframe.windows.aggregations as agg
+
+        # Trigger when count would reach 3
+        def trigger_before_count_3(agg_dict, value, key, timestamp, headers) -> bool:
+            # In multi-aggregation, keys are like 'count/Count', 'sum/Sum'
+            # Find the count aggregation value
+            for k, v in agg_dict.items():
+                if k.startswith("count"):
+                    return v + 1 >= 3
+            return False
+
+        window_def = tumbling_window_definition_factory(
+            duration_ms=100, grace_ms=0, before_update=trigger_before_count_3
+        )
+        window = window_def.agg(count=agg.Count(), sum=agg.Sum(), collect=agg.Collect())
+        window.final(closing_strategy="key")
+
+        store = state_manager.get_store(stream_id="test", store_name=window.name)
+        store.assign_partition(0)
+        key = b"key"
+
+        with store.start_partition_transaction(0) as tx:
+            # Add value=1, count becomes 1
+            updated, expired = process(
+                window, value=1, key=key, transaction=tx, timestamp_ms=50
+            )
+            assert len(updated) == 1
+            assert not expired
+
+            # Add value=2, count becomes 2
+            updated, expired = process(
+                window, value=2, key=key, transaction=tx, timestamp_ms=60
+            )
+            assert len(updated) == 1
+            assert not expired
+
+            # Add value=3, would make count 3
+            # Should trigger BEFORE adding
+            updated, expired = process(
+                window, value=3, key=key, transaction=tx, timestamp_ms=70
+            )
+            assert not updated  # Window was triggered
+            assert len(expired) == 1
+
+            assert expired[0][1]["count"] == 2  # Before the update (not 3)
+            assert expired[0][1]["sum"] == 3  # Before the update (1+2, not 1+2+3)
+            # CRITICAL: collect should NOT include the triggering value (3)
+            assert expired[0][1]["collect"] == [1, 2]
+            assert expired[0][1]["start"] == 0
+            assert expired[0][1]["end"] == 100
+
+            # Next value should start a new window
+            # But the triggering value (3) should still be in storage
+            updated, expired = process(
+                window, value=4, key=key, transaction=tx, timestamp_ms=80
+            )
+            assert len(updated) == 1
+            assert not expired
+
+            # Force window expiration to see what was collected
+            updated, expired = process(
+                window, value=5, key=key, transaction=tx, timestamp_ms=110
+            )
+            assert len(expired) == 1
+            # The collection should include the triggering value (3) that was added to storage
+            # even though it wasn't in the triggered window result
+            assert expired[0][1]["collect"] == [1, 2, 3, 4]  # All values before t=110
+
     @pytest.mark.parametrize(
         "duration, grace, provided_name, func_name, expected_name",
         [

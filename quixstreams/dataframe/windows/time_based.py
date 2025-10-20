@@ -190,11 +190,9 @@ class TimeWindow(Window):
                     current_value, value, key, timestamp_ms, headers
                 ):
                     # Get collected values for the result
-                    collected = []
-                    if collect:
-                        collected = state.get_from_collection(start, end)
-                        # Add the current value that's being collected
-                        collected.append(self._collect_value(value))
+                    # Do NOT include the current value - before_update means
+                    # we expire BEFORE adding the current value
+                    collected = state.get_from_collection(start, end) if collect else []
 
                     result = self._results(current_value, collected, start, end)
                     triggered_windows.append((key, result))
