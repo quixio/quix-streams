@@ -29,7 +29,7 @@ class KafkaReplicatorSink(BaseSink):
 
     ```python
     from quixstreams import Application
-    from quixstreams.sinks.community.kafka import KafkaSink
+    from quixstreams.sinks.community.kafka import KafkaReplicatorSink
 
     app = Application(
         consumer_group="group",
@@ -38,7 +38,7 @@ class KafkaReplicatorSink(BaseSink):
     topic = app.topic("input-topic")
 
     # Define the external Kafka cluster configuration
-    kafka_sink = KafkaSink(
+    kafka_sink = KafkaReplicatorSink(
         broker_address="external-kafka:9092",
         topic_name="output-topic",
         value_serializer="json",
@@ -206,4 +206,6 @@ class KafkaReplicatorSink(BaseSink):
             )
             raise SinkBackpressureError(retry_after=10.0)
 
-        logger.debug(f'Successfully flushed KafkaSink for topic "{self._topic_name}"')
+        logger.debug(
+            f'Successfully flushed KafkaReplicatorSink for topic "{self._topic_name}"'
+        )
