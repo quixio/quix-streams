@@ -113,7 +113,7 @@ class KafkaReplicatorSink(BaseSink):
         Initialize the InternalProducer and Topic for serialization.
         """
         logger.info(
-            f"Setting up KafkaSink: "
+            f"Setting up KafkaReplicatorSink: "
             f'broker_address="{self._broker_address}" '
             f'topic="{self._topic_name}" '
             f'value_serializer="{self._value_serializer}" '
@@ -194,7 +194,7 @@ class KafkaReplicatorSink(BaseSink):
         This method is triggered by the Checkpoint class when it commits.
         If flush fails, the checkpoint will be aborted.
         """
-        logger.debug(f'Flushing KafkaSink for topic "{self._topic_name}"')
+        logger.debug(f'Flushing KafkaReplicatorSink for topic "{self._topic_name}"')
 
         # Flush all pending messages
         result = self._producer.flush(timeout=self._flush_timeout)
