@@ -7974,6 +7974,151 @@ Implements retry logic to handle concurrent write conflicts.
 
 - `batch`: The batch of data to write.
 
+<a id="quixstreams.sinks.community.kafka"></a>
+
+## quixstreams.sinks.community.kafka
+
+<a id="quixstreams.sinks.community.kafka.KafkaReplicatorSink"></a>
+
+### KafkaReplicatorSink
+
+```python
+class KafkaReplicatorSink(BaseSink)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/kafka.py#L22)
+
+A sink that produces data to an external Kafka cluster.
+
+This sink uses the same serialization approach as the Quix Application.
+
+Example Snippet:
+
+```python
+from quixstreams import Application
+from quixstreams.sinks.community.kafka import KafkaReplicatorSink
+
+app = Application(
+    consumer_group="group",
+)
+
+topic = app.topic("input-topic")
+
+# Define the external Kafka cluster configuration
+kafka_sink = KafkaReplicatorSink(
+    broker_address="external-kafka:9092",
+    topic_name="output-topic",
+    value_serializer="json",
+    key_serializer="bytes",
+)
+
+sdf = app.dataframe(topic=topic)
+sdf.sink(kafka_sink)
+
+app.run()
+```
+
+<a id="quixstreams.sinks.community.kafka.KafkaReplicatorSink.__init__"></a>
+
+#### KafkaReplicatorSink.\_\_init\_\_
+
+```python
+def __init__(
+    broker_address: Union[str, ConnectionConfig],
+    topic_name: str,
+    value_serializer: SerializerType = "json",
+    key_serializer: SerializerType = "bytes",
+    producer_extra_config: Optional[dict] = None,
+    flush_timeout: float = 10.0,
+    origin_topic: Optional[Topic] = None,
+    auto_create_sink_topic: bool = True,
+    on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
+    on_client_connect_failure: Optional[ClientConnectFailureCallback] = None
+) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/kafka.py#L55)
+
+**Arguments**:
+
+- `broker_address`: The connection settings for the external Kafka cluster.
+Accepts string with Kafka broker host and port formatted as `<host>:<port>`,
+or a ConnectionConfig object if authentication is required.
+- `topic_name`: The topic name to produce to on the external Kafka cluster.
+- `value_serializer`: The serializer type for values.
+Default - `json`.
+- `key_serializer`: The serializer type for keys.
+Default - `bytes`.
+- `producer_extra_config`: A dictionary with additional options that
+will be passed to `confluent_kafka.Producer` as is.
+Default - `None`.
+- `flush_timeout`: The time in seconds the producer waits for all messages
+to be delivered during flush.
+Default - 10.0.
+- `origin_topic`: If auto-creating the sink topic, can optionally pass the
+source topic to use its configuration.
+- `auto_create_sink_topic`: Whether to try to create the sink topic upon startup
+Default - True
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
+
+<a id="quixstreams.sinks.community.kafka.KafkaReplicatorSink.setup"></a>
+
+#### KafkaReplicatorSink.setup
+
+```python
+def setup()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/kafka.py#L111)
+
+Initialize the InternalProducer and Topic for serialization.
+
+<a id="quixstreams.sinks.community.kafka.KafkaReplicatorSink.add"></a>
+
+#### KafkaReplicatorSink.add
+
+```python
+def add(value: Any, key: Any, timestamp: int, headers: HeadersTuples,
+        topic: str, partition: int, offset: int) -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/kafka.py#L146)
+
+Add a message to be produced to the external Kafka cluster.
+
+This method converts the provided data into a Row object and uses
+the InternalProducer to serialize and produce it.
+
+**Arguments**:
+
+- `value`: The message value.
+- `key`: The message key.
+- `timestamp`: The message timestamp in milliseconds.
+- `headers`: The message headers.
+- `topic`: The source topic name.
+- `partition`: The source partition.
+- `offset`: The source offset.
+
+<a id="quixstreams.sinks.community.kafka.KafkaReplicatorSink.flush"></a>
+
+#### KafkaReplicatorSink.flush
+
+```python
+def flush() -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/kafka.py#L190)
+
+Flush the producer to ensure all messages are delivered.
+
+This method is triggered by the Checkpoint class when it commits.
+If flush fails, the checkpoint will be aborted.
+
 <a id="quixstreams.sinks.community.pubsub"></a>
 
 ## quixstreams.sinks.community.pubsub
