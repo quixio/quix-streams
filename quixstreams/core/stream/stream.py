@@ -27,6 +27,7 @@ from .functions import (
     FilterWithMetadataFunction,
     ReturningExecutor,
     StreamFunction,
+    StreamSink,
     TransformCallback,
     TransformExpandedCallback,
     TransformFunction,
@@ -249,17 +250,30 @@ class Stream:
         return self._add(update_func)
 
     @overload
-    def add_transform(self, func: TransformCallback, *, expand: Literal[False] = False):
+    def add_transform(
+        self,
+        func: TransformCallback,
+        *,
+        expand: Literal[False] = False,
+        on_watermark: Union[TransformCallback, None] = None,
+    ):
         pass
 
     @overload
-    def add_transform(self, func: TransformExpandedCallback, *, expand: Literal[True]):
+    def add_transform(
+        self,
+        func: TransformExpandedCallback,
+        *,
+        expand: Literal[True],
+        on_watermark: Union[TransformExpandedCallback, None] = None,
+    ):
         pass
 
     def add_transform(
         self,
         func: Union[TransformCallback, TransformExpandedCallback],
         *,
+        on_watermark: Union[TransformCallback, TransformExpandedCallback, None] = None,
         expand: bool = False,
     ) -> "Stream":
         """
@@ -276,9 +290,13 @@ class Stream:
         :param expand: if True, expand the returned iterable into individual items
             downstream. If returned value is not iterable, `TypeError` will be raised.
             Default - `False`.
+        :param on_watermark: a callback to process the watermark messages.
+            They can be used to expire and emit window results.
         :return: a new Stream derived from the current one
         """
-        return self._add(TransformFunction(func, expand=expand))  # type: ignore[call-overload]
+        return self._add(
+            TransformFunction(func, expand=expand, on_watermark=on_watermark)  # type: ignore[call-overload]
+        )
 
     def merge(self, other: "Stream") -> "Stream":
         """
@@ -407,7 +425,7 @@ class Stream:
         allow_expands=True,
         allow_updates=True,
         allow_transforms=True,
-        sink: Optional[VoidExecutor] = None,
+        sink: Optional[StreamSink] = None,
     ) -> dict["Stream", VoidExecutor]:
         """
         Generate an "executor" closure by mapping all relatives of this `Stream` and
@@ -430,7 +448,7 @@ class Stream:
         :param sink: callable to accumulate the results of the execution, optional.
 
         """
-        sink = sink or self._default_sink
+        sink = self._sink_wrapper(sink or self._default_sink)
         executors: dict["Stream", VoidExecutor] = {}
 
         for stream in reversed(self.full_tree()):
@@ -487,10 +505,16 @@ class Stream:
             ),
         )
 
-        def wrapper(value: Any, key: Any, timestamp: int, headers: Any) -> Any:
+        def wrapper(
+            value: Any,
+            key: Any,
+            timestamp: int,
+            headers: Any,
+            is_watermark: bool = False,
+        ) -> Any:
             try:
                 # Execute the stream and return the result from the queue
-                executor(value, key, timestamp, headers)
+                executor(value, key, timestamp, headers, is_watermark)
                 return buffer.popleft()
             finally:
                 # Always clean the queue after the Stream is executed
@@ -504,7 +528,7 @@ class Stream:
         allow_expands=True,
         allow_updates=True,
         allow_transforms=True,
-        sink: Optional[VoidExecutor] = None,
+        sink: Optional[StreamSink] = None,
     ) -> VoidExecutor:
         """
         A helper function to compose a Stream with a single root.
@@ -557,6 +581,23 @@ class Stream:
         self.children.append(new_node)
         return new_node
 
+    def _sink_wrapper(self, sink_func: StreamSink) -> VoidExecutor:
+        def wrapper(
+            value: Any,
+            key: Any,
+            timestamp: int,
+            headers: Any,
+            is_watermark: bool = False,
+        ):
+            if not is_watermark:
+                sink_func(value, key, timestamp, headers)
+
+        return wrapper
+
     def _default_sink(
-        self, value: Any, key: Any, timestamp: int, headers: Any
+        self,
+        value: Any,
+        key: Any,
+        timestamp: int,
+        headers: Any,
     ) -> None: ...

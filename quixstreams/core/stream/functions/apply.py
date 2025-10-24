@@ -47,12 +47,23 @@ class ApplyFunction(StreamFunction):
                 key: Any,
                 timestamp: int,
                 headers: Any,
+                is_watermark: bool = False,
+                on_watermark=self.on_watermark,
             ) -> None:
                 # Execute a function on a single value and wrap results into a list
                 # to expand them downstream
-                result = func(value)
-                for item in result:
-                    child_executor(item, key, timestamp, headers)
+                if is_watermark:
+                    child_executor(
+                        value,
+                        key,
+                        timestamp,
+                        headers,
+                        True,
+                    )
+                else:
+                    result = func(value)
+                    for item in result:
+                        child_executor(item, key, timestamp, headers)
 
         else:
 
@@ -61,10 +72,20 @@ class ApplyFunction(StreamFunction):
                 key: Any,
                 timestamp: int,
                 headers: Any,
+                is_watermark: bool = False,
             ) -> None:
-                # Execute a function on a single value and return its result
-                result = func(value)
-                child_executor(result, key, timestamp, headers)
+                if is_watermark:
+                    child_executor(
+                        value,
+                        key,
+                        timestamp,
+                        headers,
+                        True,
+                    )
+                else:
+                    # Execute a function on a single value and return its result
+                    result = func(value)
+                    child_executor(result, key, timestamp, headers)
 
         return wrapper
 
@@ -109,12 +130,22 @@ class ApplyWithMetadataFunction(StreamFunction):
                 key: Any,
                 timestamp: int,
                 headers: Any,
+                is_watermark: bool = False,
             ):
                 # Execute a function on a single value and wrap results into a list
                 # to expand them downstream
-                result = func(value, key, timestamp, headers)
-                for item in result:
-                    child_executor(item, key, timestamp, headers)
+                if is_watermark:
+                    child_executor(
+                        value,
+                        key,
+                        timestamp,
+                        headers,
+                        True,
+                    )
+                else:
+                    result = func(value, key, timestamp, headers)
+                    for item in result:
+                        child_executor(item, key, timestamp, headers)
 
         else:
 
@@ -123,9 +154,19 @@ class ApplyWithMetadataFunction(StreamFunction):
                 key: Any,
                 timestamp: int,
                 headers: Any,
+                is_watermark: bool = False,
             ):
-                # Execute a function on a single value and return its result
-                result = func(value, key, timestamp, headers)
-                child_executor(result, key, timestamp, headers)
+                if is_watermark:
+                    child_executor(
+                        value,
+                        key,
+                        timestamp,
+                        headers,
+                        True,
+                    )
+                else:
+                    # Execute a function on a single value and return its result
+                    result = func(value, key, timestamp, headers)
+                    child_executor(result, key, timestamp, headers)
 
         return wrapper

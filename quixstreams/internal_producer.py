@@ -315,7 +315,8 @@ class InternalProducer:
         group_metadata: GroupMetadata,
         timeout: Optional[float] = None,
     ):
-        self._send_offsets_to_transaction(positions, group_metadata, timeout)
+        if positions:
+            self._send_offsets_to_transaction(positions, group_metadata, timeout)
         self._commit_transaction(timeout)
 
     def __enter__(self):

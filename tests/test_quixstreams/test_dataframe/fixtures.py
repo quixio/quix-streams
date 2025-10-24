@@ -9,6 +9,7 @@ from quixstreams.internal_consumer import InternalConsumer
 from quixstreams.internal_producer import InternalProducer
 from quixstreams.models.topics import Topic, TopicManager
 from quixstreams.processing import ProcessingContext
+from quixstreams.processing.watermarking import WatermarkManager
 from quixstreams.sinks import SinkManager
 from quixstreams.state import StateStoreManager
 
@@ -37,6 +38,9 @@ def dataframe_factory(topic_manager_topic_factory, topic_manager_factory):
         consumer = MagicMock(spec_set=InternalConsumer)
         sink_manager = SinkManager()
         registry = registry or default_registry
+        watermark_manager = WatermarkManager(
+            topic_manager=topic_manager, producer=producer
+        )
 
         processing_ctx = ProcessingContext(
             producer=producer,
@@ -45,6 +49,7 @@ def dataframe_factory(topic_manager_topic_factory, topic_manager_factory):
             state_manager=state_manager,
             sink_manager=sink_manager,
             dataframe_registry=registry,
+            watermark_manager=watermark_manager,
         )
         processing_ctx.init_checkpoint()
 

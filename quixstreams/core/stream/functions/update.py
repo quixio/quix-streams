@@ -26,10 +26,25 @@ class UpdateFunction(StreamFunction):
         child_executor = self._resolve_branching(*child_executors)
         func = self.func
 
-        def wrapper(value: Any, key: Any, timestamp: int, headers: Any):
-            # Update a single value and forward it
-            func(value)
-            child_executor(value, key, timestamp, headers)
+        def wrapper(
+            value: Any,
+            key: Any,
+            timestamp: int,
+            headers: Any,
+            is_watermark: bool = False,
+        ):
+            if is_watermark:
+                child_executor(
+                    value,
+                    key,
+                    timestamp,
+                    headers,
+                    True,
+                )
+            else:
+                # Update a single value and forward it
+                func(value)
+                child_executor(value, key, timestamp, headers)
 
         return wrapper
 
@@ -54,9 +69,24 @@ class UpdateWithMetadataFunction(StreamFunction):
         child_executor = self._resolve_branching(*child_executors)
         func = self.func
 
-        def wrapper(value: Any, key: Any, timestamp: int, headers: Any):
-            # Update a single value and forward it
-            func(value, key, timestamp, headers)
-            child_executor(value, key, timestamp, headers)
+        def wrapper(
+            value: Any,
+            key: Any,
+            timestamp: int,
+            headers: Any,
+            is_watermark: bool = False,
+        ):
+            if is_watermark:
+                child_executor(
+                    value,
+                    key,
+                    timestamp,
+                    headers,
+                    True,
+                )
+            else:
+                # Update a single value and forward it
+                func(value, key, timestamp, headers)
+                child_executor(value, key, timestamp, headers)
 
         return wrapper

@@ -14,7 +14,7 @@ from pydantic import AliasGenerator, Field
 from pydantic_settings import BaseSettings as PydanticBaseSettings
 from pydantic_settings import PydanticBaseSettingsSource, SettingsConfigDict
 
-from .context import copy_context, set_message_context
+from .context import MessageContext, copy_context, set_message_context
 from .core.stream.functions.types import VoidExecutor
 from .dataframe import DataFrameRegistry, StreamingDataFrame
 from .error_callbacks import (
@@ -45,12 +45,14 @@ from .platforms.quix import (
 )
 from .platforms.quix.env import QUIX_ENVIRONMENT
 from .processing import ProcessingContext
+from .processing.watermarking import WatermarkManager
 from .runtracker import RunTracker
 from .sinks import SinkManager
 from .sources import BaseSource, SourceException, SourceManager
 from .state import StateStoreManager
 from .state.recovery import RecoveryManager
 from .state.rocksdb import RocksDBOptionsType
+from .utils.format import format_timestamp
 from .utils.settings import BaseSettings
 
 __all__ = ("Application", "ApplicationConfig")
@@ -151,6 +153,8 @@ class Application:
         topic_create_timeout: float = 60,
         processing_guarantee: ProcessingGuarantee = "at-least-once",
         max_partition_buffer_size: int = 10000,
+        watermarking_default_assignor_enabled: bool = True,
+        watermarking_interval: float = 1.0,
     ):
         """
         :param broker_address: Connection settings for Kafka.
@@ -219,6 +223,14 @@ class Application:
             It is a soft limit, and the actual number of buffered messages can be up to x2 higher.
             Lower value decreases the memory use, but increases the latency.
             Default - `10000`.
+        :param watermarking_default_assignor_enabled: when True, the applicaiton extracts watermarks
+            from incoming messages by default (respecting the `Topic(timestamp_extractor)` if configured).
+            When disabled, no watermarks will be emitted unless the `StreamingDataFrame.set_timestamp()`
+            is called for each main StreamingDataFrame.
+            Default - `True`.
+
+        :param watermarking_interval: how often to emit watermarks updates for assigned partitions (in seconds).
+            Default - `1.0`s.
 
         <br><br>***Error Handlers***<br>
         To handle errors, `Application` accepts callbacks triggered when
@@ -338,6 +350,7 @@ class Application:
             rocksdb_options=rocksdb_options,
             use_changelog_topics=use_changelog_topics,
             max_partition_buffer_size=max_partition_buffer_size,
+            watermarking_default_assignor_enabled=watermarking_default_assignor_enabled,
         )
 
         self._on_message_processed = on_message_processed
@@ -373,6 +386,11 @@ class Application:
         self._source_manager = SourceManager()
         self._sink_manager = SinkManager()
         self._dataframe_registry = DataFrameRegistry()
+        self._watermark_manager = WatermarkManager(
+            producer=self._producer,
+            topic_manager=self._topic_manager,
+            interval=watermarking_interval,
+        )
         self._processing_context = ProcessingContext(
             commit_interval=self._config.commit_interval,
             commit_every=self._config.commit_every,
@@ -382,6 +400,7 @@ class Application:
             exactly_once=self._config.exactly_once,
             sink_manager=self._sink_manager,
             dataframe_registry=self._dataframe_registry,
+            watermark_manager=self._watermark_manager,
         )
         self._run_tracker = RunTracker()
 
@@ -902,9 +921,19 @@ class Application:
         printer = self._processing_context.printer
         run_tracker = self._run_tracker
         consumer = self._consumer
+        producer = self._producer
+        producer_poll_timeout = self._config.producer_poll_timeout
+        watermark_manager = self._watermark_manager
+
+        # Set the topics to be tracked by the Watermark manager
+        watermark_manager.set_topics(topics=self._dataframe_registry.consumer_topics)
 
         consumer.subscribe(
-            topics=self._dataframe_registry.consumer_topics + changelog_topics,
+            topics=self._dataframe_registry.consumer_topics
+            + changelog_topics
+            + [
+                self._watermark_manager.watermarks_topic
+            ],  # TODO: We subscribe here because otherwise it can't deserialize a message. Maybe it's time to split poll() and deserialization
             on_assign=self._on_assign,
             on_revoke=self._on_revoke,
             on_lost=self._on_lost,
@@ -921,11 +950,14 @@ class Application:
                 state_manager.do_recovery()
                 run_tracker.timeout_refresh()
             else:
+                # Serve producer callbacks
+                producer.poll(producer_poll_timeout)
                 process_message(dataframes_composed)
                 processing_context.commit_checkpoint()
                 consumer.resume_backpressured()
                 source_manager.raise_for_error()
                 printer.print()
+                watermark_manager.produce()
                 run_tracker.update_status()
 
         logger.info("Stopping the application")
@@ -953,9 +985,7 @@ class Application:
         if self._state_manager.stores:
             check_state_management_enabled()
 
-    def _process_message(self, dataframe_composed):
-        # Serve producer callbacks
-        self._producer.poll(self._config.producer_poll_timeout)
+    def _process_message(self, dataframe_composed: dict[str, VoidExecutor]):
         rows = self._consumer.poll_row(
             timeout=self._config.consumer_poll_timeout,
             buffered=self._dataframe_registry.requires_time_alignment,
@@ -977,7 +1007,52 @@ class Application:
             first_row.offset,
         )
 
+        if topic_name == self._watermark_manager.watermarks_topic.name:
+            watermark = self._watermark_manager.receive(message=first_row.value)
+            if watermark is None:
+                return
+
+            data_topics = self._topic_manager.non_changelog_topics
+            data_tps = [
+                tp for tp in self._consumer.assignment() if tp.topic in data_topics
+            ]
+            for tp in data_tps:
+                logger.info(
+                    f"Process watermark {format_timestamp(watermark)}. "
+                    f"topic={tp.topic} partition={tp.partition} timestamp={watermark}"
+                )
+                # Create a MessageContext to process a watermark update
+                # for each assigned TP
+                watermark_ctx = MessageContext(
+                    topic=tp.topic,
+                    partition=tp.partition,
+                    offset=None,
+                    size=0,
+                )
+                context = copy_context()
+                context.run(set_message_context, watermark_ctx)
+                # Execute StreamingDataFrame in a context
+                context.run(
+                    dataframe_composed[tp.topic],
+                    value=None,
+                    key=None,
+                    timestamp=watermark,
+                    headers=[],
+                    is_watermark=True,
+                )
+            return
+
         for row in rows:
+            if self._config.watermarking_default_assignor_enabled:
+                # Update the watermark with the current row's timestamp
+                # if the default watermark assignor is enabled (True by default).
+                self._processing_context.watermark_manager.store(
+                    topic=row.topic,
+                    partition=row.partition,
+                    timestamp=row.timestamp,
+                    default=True,
+                )
+
             context = copy_context()
             context.run(set_message_context, row.context)
             try:
@@ -1023,28 +1098,33 @@ class Application:
         self._source_manager.start_sources()
 
         # Assign partitions manually to pause the changelog topics
-        self._consumer.assign(topic_partitions)
-        # Pause changelog topic+partitions immediately after assignment
-        non_changelog_topics = self._topic_manager.non_changelog_topics
-        changelog_tps = [
-            tp for tp in topic_partitions if tp.topic not in non_changelog_topics
+        watermarks_partitions = [
+            TopicPartition(
+                topic=self._watermark_manager.watermarks_topic.name, partition=i
+            )
+            for i in range(
+                self._watermark_manager.watermarks_topic.broker_config.num_partitions
+            )
         ]
+        # TODO: The set is used because the watermark tp can already be present in the "topic_partitions"
+        #  because we use `subscribe()` earlier. Fix the mess later.
+        # TODO: Also, how to avoid reading the whole WM topic on each restart?
+        #  We really need only the most recent data
+        #  Is it fine to read it from the end? The active partitions must still publish something.
+        #  Or should we commit it?
+        self._consumer.assign(list(set(topic_partitions + watermarks_partitions)))
+
+        # Pause changelog topic+partitions immediately after assignment
+        changelog_topics = {t.name for t in self._topic_manager.changelog_topics_list}
+        changelog_tps = [tp for tp in topic_partitions if tp.topic in changelog_topics]
         self._consumer.pause(changelog_tps)
 
-        if self._state_manager.stores:
-            non_changelog_tps = [
-                tp for tp in topic_partitions if tp.topic in non_changelog_topics
-            ]
-            # Match the assigned TP with a stream ID via DataFrameRegistry
-            for tp in non_changelog_tps:
-                stream_ids = self._dataframe_registry.get_stream_ids(
-                    topic_name=tp.topic
-                )
-                # Assign store partitions for the given stream ids
-                for stream_id in stream_ids:
-                    self._state_manager.on_partition_assign(
-                        stream_id=stream_id, partition=tp.partition
-                    )
+        data_topics = self._topic_manager.non_changelog_topics
+        data_tps = [tp for tp in topic_partitions if tp.topic in data_topics]
+
+        for tp in data_tps:
+            self._assign_state_partitions(topic=tp.topic, partition=tp.partition)
+
         self._run_tracker.timeout_refresh()
 
     def _on_revoke(self, _, topic_partitions: List[TopicPartition]):
@@ -1064,7 +1144,12 @@ class Application:
         else:
             self._processing_context.commit_checkpoint(force=True)
 
-        self._revoke_state_partitions(topic_partitions=topic_partitions)
+        data_topics = self._topic_manager.non_changelog_topics
+        data_tps = [tp for tp in topic_partitions if tp.topic in data_topics]
+        for tp in data_tps:
+            self._watermark_manager.on_revoke(topic=tp.topic, partition=tp.partition)
+            self._revoke_state_partitions(topic=tp.topic, partition=tp.partition)
+
         self._consumer.reset_backpressure()
 
     def _on_lost(self, _, topic_partitions: List[TopicPartition]):
@@ -1073,23 +1158,34 @@ class Application:
         """
         logger.debug("Rebalancing: dropping lost partitions")
 
-        self._revoke_state_partitions(topic_partitions=topic_partitions)
+        data_tps = [
+            tp
+            for tp in topic_partitions
+            if tp.topic in self._topic_manager.non_changelog_topics
+        ]
+        for tp in data_tps:
+            self._watermark_manager.on_revoke(topic=tp.topic, partition=tp.partition)
+            self._revoke_state_partitions(topic=tp.topic, partition=tp.partition)
+
         self._consumer.reset_backpressure()
 
-    def _revoke_state_partitions(self, topic_partitions: List[TopicPartition]):
-        non_changelog_topics = self._topic_manager.non_changelog_topics
-        non_changelog_tps = [
-            tp for tp in topic_partitions if tp.topic in non_changelog_topics
-        ]
-        for tp in non_changelog_tps:
-            if self._state_manager.stores:
-                stream_ids = self._dataframe_registry.get_stream_ids(
-                    topic_name=tp.topic
+    def _assign_state_partitions(self, topic: str, partition: int):
+        if self._state_manager.stores:
+            # Match the assigned TP with a stream ID via DataFrameRegistry
+            stream_ids = self._dataframe_registry.get_stream_ids(topic_name=topic)
+            # Assign store partitions for the given stream ids
+            for stream_id in stream_ids:
+                self._state_manager.on_partition_assign(
+                    stream_id=stream_id, partition=partition
                 )
-                for stream_id in stream_ids:
-                    self._state_manager.on_partition_revoke(
-                        stream_id=stream_id, partition=tp.partition
-                    )
+
+    def _revoke_state_partitions(self, topic: str, partition: int):
+        if self._state_manager.stores:
+            stream_ids = self._dataframe_registry.get_stream_ids(topic_name=topic)
+            for stream_id in stream_ids:
+                self._state_manager.on_partition_revoke(
+                    stream_id=stream_id, partition=partition
+                )
 
     def _setup_signal_handlers(self):
         signal.signal(signal.SIGINT, self._on_sigint)
@@ -1141,6 +1237,7 @@ class ApplicationConfig(BaseSettings):
     rocksdb_options: Optional[RocksDBOptionsType] = None
     use_changelog_topics: bool = True
     max_partition_buffer_size: int = 10000
+    watermarking_default_assignor_enabled: bool = True
 
     @classmethod
     def settings_customise_sources(

@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Any, Iterable
+from typing import Any, Iterable
 
 from quixstreams.state import WindowedPartitionTransaction, WindowedState
 
@@ -7,29 +7,10 @@ from .base import (
     SingleAggregationWindowMixin,
     WindowKeyResult,
 )
-from .time_based import ClosingStrategyValues, TimeWindow
-
-if TYPE_CHECKING:
-    from quixstreams.dataframe.dataframe import StreamingDataFrame
+from .time_based import TimeWindow
 
 
 class SlidingWindow(TimeWindow):
-    def final(
-        self, closing_strategy: ClosingStrategyValues = "key"
-    ) -> "StreamingDataFrame":
-        if closing_strategy != "key":
-            raise TypeError("Sliding window only support the 'key' closing strategy")
-
-        return super().final(closing_strategy=closing_strategy)
-
-    def current(
-        self, closing_strategy: ClosingStrategyValues = "key"
-    ) -> "StreamingDataFrame":
-        if closing_strategy != "key":
-            raise TypeError("Sliding window only support the 'key' closing strategy")
-
-        return super().current(closing_strategy=closing_strategy)
-
     def process_window(
         self,
         value: Any,
@@ -37,7 +18,7 @@ class SlidingWindow(TimeWindow):
         timestamp_ms: int,
         headers: Any,
         transaction: WindowedPartitionTransaction,
-    ) -> tuple[Iterable[WindowKeyResult], Iterable[WindowKeyResult]]:
+    ) -> Iterable[WindowKeyResult]:
         """
         The algorithm is based on the concept that each message
         is associated with a left and a right window.
@@ -89,11 +70,10 @@ class SlidingWindow(TimeWindow):
         # Sliding windows are inclusive on both ends, so values with
         # timestamps equal to latest_timestamp - duration - grace
         # are still eligible for processing.
-        state_ts = state.get_latest_timestamp() or 0
-        latest_timestamp = max(timestamp_ms, state_ts)
-        max_expired_window_end = latest_timestamp - grace - 1
+        max_expired_window_end = max(
+            timestamp_ms - grace - 1, transaction.get_latest_expired(prefix=b"")
+        )
         max_expired_window_start = max_expired_window_end - duration
-        max_deleted_window_start = max_expired_window_start - duration
 
         left_start = max(0, timestamp_ms - duration)
         left_end = timestamp_ms
@@ -105,15 +85,15 @@ class SlidingWindow(TimeWindow):
                 start=left_start,
                 end=left_end,
                 timestamp_ms=timestamp_ms,
-                late_by_ms=max_expired_window_end + 1 - timestamp_ms,
+                late_by_ms=max_expired_window_end - timestamp_ms,
             )
-            return [], []
+            return []
 
         right_start = timestamp_ms + 1
         right_end = right_start + duration
         right_exists = False
 
-        starts = set([left_start])
+        starts = {left_start}
         updated_windows: list[WindowKeyResult] = []
         iterated_windows = state.get_windows(
             # start_from_ms is exclusive, hence -1
@@ -253,7 +233,6 @@ class SlidingWindow(TimeWindow):
                 # At this point, this is the last window that will ever be considered
                 # for existing aggregations. Windows lower than this and lower than
                 # the expiration watermark may be deleted.
-                max_deleted_window_start = min(start - 1, max_expired_window_start)
                 break
 
         else:
@@ -277,29 +256,36 @@ class SlidingWindow(TimeWindow):
         if collect:
             state.add_to_collection(value=self._collect_value(value), id=timestamp_ms)
 
-        # build a complete list otherwise expired windows could be deleted
-        # in state.delete_windows() and never be fetched.
-        expired_windows = list(
-            self._expired_windows(key, state, max_expired_window_start, collect)
-        )
+        return reversed(updated_windows)
 
-        state.delete_windows(
-            max_start_time=max_deleted_window_start,
-            delete_values=collect,
-        )
+    def expire_by_partition(
+        self,
+        transaction: WindowedPartitionTransaction,
+        timestamp_ms: int,
+    ) -> Iterable[WindowKeyResult]:
+        latest_expired_window_end = transaction.get_latest_expired(prefix=b"")
+        latest_timestamp = max(timestamp_ms, latest_expired_window_end)
+        # Subtract 1 because sliding windows are inclusive on the end
+        max_expired_window_end = latest_timestamp - self._grace_ms - 1
 
-        return reversed(updated_windows), expired_windows
-
-    def _expired_windows(self, key, state, max_expired_window_start, collect):
-        for window in state.expire_windows(
-            max_start_time=max_expired_window_start,
+        # First, expire and return windows without deleting them.
+        # Sliding windows use previous updates to calculate the new state.
+        for window in transaction.expire_all_windows(
+            max_end_time=max_expired_window_end,
+            step_ms=1,  # step is 1ms because sliding windows don't have fixed boundaries
+            collect=self.collect,
             delete=False,
-            collect=collect,
             end_inclusive=True,
         ):
-            (start, end), (max_timestamp, aggregated), collected, _ = window
+            (start, end), (max_timestamp, aggregated), collected, key = window
             if end == max_timestamp:
                 yield key, self._results(aggregated, collected, start, end)
+
+        # Second, delete all windows that can't be used by the sliding windows anymore.
+        transaction.delete_all_windows(
+            max_end_time=max_expired_window_end - self._duration_ms,
+            collect=self.collect,
+        )
 
     def _update_window(
         self,
@@ -317,7 +303,7 @@ class SlidingWindow(TimeWindow):
             value=[max_timestamp, value],
             timestamp_ms=timestamp,
         )
-        return (key, self._results(value, [], start, end))
+        return key, self._results(value, [], start, end)
 
 
 class SlidingWindowSingleAggregation(SingleAggregationWindowMixin, SlidingWindow):

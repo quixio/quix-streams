@@ -140,53 +140,6 @@ class WindowedState(Protocol[K, V]):
         """
         ...
 
-    def get_latest_timestamp(self) -> Optional[int]:
-        """
-        Get the latest observed timestamp for the current state partition.
-
-        Use this timestamp to determine if the arriving event is late and should be
-        discarded from the processing.
-
-        :return: latest observed event timestamp in milliseconds
-        """
-        ...
-
-    def expire_windows(
-        self,
-        max_start_time: int,
-        delete: bool = True,
-        collect: bool = False,
-        end_inclusive: bool = False,
-    ) -> Iterable[ExpiredWindowDetail[V]]:
-        """
-        Get all expired windows from RocksDB up to the specified `max_start_time` timestamp.
-
-        This method marks the latest found window as expired in the expiration index,
-        so consecutive calls may yield different results for the same "latest timestamp".
-
-        :param max_start_time: The timestamp up to which windows are considered expired, inclusive.
-        :param delete: If True, expired windows will be deleted.
-        :param collect: If True, values will be collected into windows.
-        :param end_inclusive: If True, the end of the window will be inclusive.
-            Relevant only together with `collect=True`.
-        :return: A sorted list of tuples in the format `((start, end), value)`.
-        """
-        ...
-
-    def delete_windows(self, max_start_time: int, delete_values: bool) -> None:
-        """
-        Delete windows from RocksDB up to the specified `max_start_time` timestamp.
-
-        This method removes all window entries that have a start time less than or equal
-        to the given `max_start_time`. It ensures that expired data is cleaned up
-        efficiently without affecting unexpired windows.
-
-        :param max_start_time: The timestamp up to which windows should be deleted, inclusive.
-        :param delete_values: If True, values with timestamps less than max_start_time
-            will be deleted, as they can no longer belong to any active window.
-        """
-        ...
-
     def get_windows(
         self, start_from_ms: int, start_to_ms: int, backwards: bool = False
     ) -> list[WindowDetail[V]]:
@@ -321,18 +274,6 @@ class WindowedPartitionTransaction(Protocol[K, V]):
         """
         ...
 
-    def get_latest_timestamp(self, prefix: bytes) -> int:
-        """
-        Get the latest observed timestamp for the current state prefix
-        (same as message key).
-
-        Use this timestamp to determine if the arriving event is late and should be
-        discarded from the processing.
-
-        :return: latest observed event timestamp in milliseconds
-        """
-        ...
-
     def get_latest_expired(self, prefix: bytes) -> int:
         """
         Get the latest expired timestamp for the current state prefix
@@ -345,36 +286,13 @@ class WindowedPartitionTransaction(Protocol[K, V]):
         """
         ...
 
-    def expire_windows(
-        self,
-        max_start_time: int,
-        prefix: bytes,
-        delete: bool = True,
-        collect: bool = False,
-        end_inclusive: bool = False,
-    ) -> Iterable[ExpiredWindowDetail[V]]:
-        """
-        Get all expired windows with a set prefix from RocksDB up to the specified `max_start_time` timestamp.
-
-        This method marks the latest found window as expired in the expiration index,
-        so consecutive calls may yield different results for the same "latest timestamp".
-
-        :param max_start_time: The timestamp up to which windows are considered expired, inclusive.
-        :param prefix: The key prefix for filtering windows.
-        :param delete: If True, expired windows will be deleted.
-        :param collect: If True, values will be collected into windows.
-        :param end_inclusive: If True, the end of the window will be inclusive.
-            Relevant only together with `collect=True`.
-        :return: A sorted list of tuples in the format `((start, end), value)`.
-        """
-        ...
-
     def expire_all_windows(
         self,
         max_end_time: int,
         step_ms: int,
         delete: bool = True,
         collect: bool = False,
+        end_inclusive: bool = False,
     ) -> Iterable[ExpiredWindowDetail[V]]:
         """
         Get all expired windows for all prefix from RocksDB up to the specified `max_start_time` timestamp.
@@ -385,33 +303,17 @@ class WindowedPartitionTransaction(Protocol[K, V]):
         :param max_end_time: The timestamp up to which windows are considered expired, inclusive.
         :param delete: If True, expired windows will be deleted.
         :param collect: If True, values will be collected into windows.
+        :param end_inclusive: If True, the end of the window will be inclusive.
+            Relevant only together with `collect=True`.
         """
         ...
 
-    def delete_window(self, start_ms: int, end_ms: int, prefix: bytes) -> None:
-        """
-        Delete a single window defined by start and end timestamps.
-
-        :param start_ms: start of the window in milliseconds
-        :param end_ms: end of the window in milliseconds
-        :param prefix: a key prefix
-        """
-        ...
-
-    def delete_windows(
-        self, max_start_time: int, delete_values: bool, prefix: bytes
-    ) -> None:
+    def delete_all_windows(self, max_end_time: int, collect: bool) -> None:
         """
         Delete windows from RocksDB up to the specified `max_start_time` timestamp.
 
-        This method removes all window entries that have a start time less than or equal
-        to the given `max_start_time`. It ensures that expired data is cleaned up
-        efficiently without affecting unexpired windows.
-
-        :param max_start_time: The timestamp up to which windows should be deleted, inclusive.
-        :param delete_values: If True, values with timestamps less than max_start_time
-            will be deleted, as they can no longer belong to any active window.
-        :param prefix: The key prefix used to identify and filter relevant windows.
+        :param max_end_time: The timestamp up to which windows should be deleted, inclusive.
+        :param collect: If True, the values from collections will be deleted too.
         """
         ...
 
