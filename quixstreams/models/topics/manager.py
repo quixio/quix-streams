@@ -60,6 +60,7 @@ class TopicManager:
         self._consumer_group = consumer_group
         self._regular_topics: Dict[str, Topic] = {}
         self._repartition_topics: Dict[str, Topic] = {}
+        self._watermarks_topics: Dict[str, Topic] = {}
         self._changelog_topics: Dict[Optional[str], Dict[str, Topic]] = {}
         self._timeout = timeout
         self._create_timeout = create_timeout
@@ -284,6 +285,30 @@ class TopicManager:
         self._changelog_topics.setdefault(stream_id, {})[store_name] = topic
         return topic
 
+    def watermarks_topic(self):
+        """
+        The topic to be used to share watermarks across the application instances.
+        It is always prefixed with the consumer group name,
+        and it has only a single partition.
+        """
+        topic = Topic(
+            name=self._internal_name("watermarks", None, "watermarks"),
+            value_deserializer="json",
+            key_deserializer="str",
+            value_serializer="json",
+            key_serializer="str",
+            create_config=TopicConfig(
+                num_partitions=1,  # The waterka
+                replication_factor=self.default_replication_factor,
+                extra_config={"cleanup.policy": "compact,delete"},
+            ),
+            topic_type=TopicType.WATERMARKS,
+        )
+        broker_topic = self._get_or_create_broker_topic(topic)
+        topic = self._configure_topic(topic, broker_topic)
+        self._watermarks_topics[topic.name] = topic
+        return topic
+
     @classmethod
     def derive_topic_config(cls, topics: Iterable[Topic]) -> TopicConfig:
         """
@@ -437,7 +462,7 @@ class TopicManager:
 
     def _internal_name(
         self,
-        topic_type: Literal["changelog", "repartition"],
+        topic_type: Literal["changelog", "repartition", "watermarks"],
         topic_name: Optional[str],
         suffix: str,
     ) -> str:

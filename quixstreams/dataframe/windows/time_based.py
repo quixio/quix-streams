@@ -1,17 +1,15 @@
-import itertools
 import logging
-from enum import Enum
-from typing import TYPE_CHECKING, Any, Iterable, Literal, Optional
+from typing import TYPE_CHECKING, Any, Iterable, Optional
 
 from quixstreams.context import message_context
-from quixstreams.state import WindowedPartitionTransaction, WindowedState
+from quixstreams.state import WindowedPartitionTransaction
+from quixstreams.utils.format import format_timestamp
 
 from .base import (
+    Message,
     MultiAggregationWindowMixin,
     SingleAggregationWindowMixin,
     Window,
-    WindowAfterUpdateCallback,
-    WindowBeforeUpdateCallback,
     WindowKeyResult,
     WindowOnLateCallback,
     get_window_ranges,
@@ -23,23 +21,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class ClosingStrategy(Enum):
-    KEY = "key"
-    PARTITION = "partition"
-
-    @classmethod
-    def new(cls, value: str) -> "ClosingStrategy":
-        try:
-            return ClosingStrategy[value.upper()]
-        except KeyError:
-            raise TypeError(
-                'closing strategy must be one of "key" or "partition'
-            ) from None
-
-
-ClosingStrategyValues = Literal["key", "partition"]
-
-
 class TimeWindow(Window):
     def __init__(
         self,
@@ -49,8 +30,6 @@ class TimeWindow(Window):
         dataframe: "StreamingDataFrame",
         step_ms: Optional[int] = None,
         on_late: Optional[WindowOnLateCallback] = None,
-        before_update: Optional[WindowBeforeUpdateCallback] = None,
-        after_update: Optional[WindowAfterUpdateCallback] = None,
     ):
         super().__init__(
             name=name,
@@ -61,14 +40,8 @@ class TimeWindow(Window):
         self._grace_ms = grace_ms
         self._step_ms = step_ms
         self._on_late = on_late
-        self._before_update = before_update
-        self._after_update = after_update
 
-        self._closing_strategy = ClosingStrategy.KEY
-
-    def final(
-        self, closing_strategy: ClosingStrategyValues = "key"
-    ) -> "StreamingDataFrame":
+    def final(self) -> "StreamingDataFrame":
         """
         Apply the window aggregation and return results only when the windows are
         closed.
@@ -87,20 +60,55 @@ class TimeWindow(Window):
         its end timestamp + grace period.
         The closed windows cannot receive updates anymore and are considered final.
 
-        :param closing_strategy: the strategy to use when closing windows.
-            Possible values:
-              - `"key"` - messages advance time and close windows with the same key.
-              If some message keys appear irregularly in the stream, the latest windows can remain unprocessed until a message with the same key is received.
-              - `"partition"` - messages advance time and close windows for the whole partition to which this message key belongs.
-              If timestamps between keys are not ordered, it may increase the number of discarded late messages.
-              Default - `"key"`.
         """
-        self._closing_strategy = ClosingStrategy.new(closing_strategy)
-        return super().final()
 
-    def current(
-        self, closing_strategy: ClosingStrategyValues = "key"
-    ) -> "StreamingDataFrame":
+        def on_update(
+            value: Any,
+            key: Any,
+            timestamp_ms: int,
+            _headers: Any,
+            transaction: WindowedPartitionTransaction,
+        ):
+            self.process_window(
+                value=value,
+                key=key,
+                timestamp_ms=timestamp_ms,
+                transaction=transaction,
+            )
+            return []
+
+        def on_watermark(
+            _value: Any,
+            _key: Any,
+            timestamp_ms: int,
+            _headers: Any,
+            transaction: WindowedPartitionTransaction,
+        ) -> Iterable[Message]:
+            expired_windows = self.expire_by_partition(
+                transaction=transaction, timestamp_ms=timestamp_ms
+            )
+
+            total_expired = 0
+            # Use window start timestamp as a new record timestamp
+            for key, window in expired_windows:
+                total_expired += 1
+                yield window, key, window["start"], None
+
+            ctx = message_context()
+            logger.info(
+                f"Expired {total_expired} windows after processing "
+                f"the watermark at {format_timestamp(timestamp_ms)}. "
+                f"window_name={self._name} topic={ctx.topic} "
+                f"partition={ctx.partition} timestamp={timestamp_ms}"
+            )
+
+        return self._apply_window(
+            on_update=on_update,
+            on_watermark=on_watermark,
+            name=self._name,
+        )
+
+    def current(self) -> "StreamingDataFrame":
         """
         Apply the window transformation to the StreamingDataFrame to return results
         for each updated window.
@@ -116,32 +124,56 @@ class TimeWindow(Window):
 
         This method processes streaming data and returns results as they come,
         regardless of whether the window is closed or not.
-
-        :param closing_strategy: the strategy to use when closing windows.
-            Possible values:
-              - `"key"` - messages advance time and close windows with the same key.
-              If some message keys appear irregularly in the stream, the latest windows can remain unprocessed until a message with the same key is received.
-              - `"partition"` - messages advance time and close windows for the whole partition to which this message key belongs.
-              If timestamps between keys are not ordered, it may increase the number of discarded late messages.
-              Default - `"key"`.
         """
 
-        self._closing_strategy = ClosingStrategy.new(closing_strategy)
-        return super().current()
+        def on_update(
+            value: Any,
+            key: Any,
+            timestamp_ms: int,
+            _headers: Any,
+            transaction: WindowedPartitionTransaction,
+        ):
+            updated_windows = self.process_window(
+                value=value,
+                key=key,
+                timestamp_ms=timestamp_ms,
+                transaction=transaction,
+            )
+            # Use window start timestamp as a new record timestamp
+            for key, window in updated_windows:
+                yield window, key, window["start"], None
+
+        def on_watermark(
+            _value: Any,
+            _key: Any,
+            timestamp_ms: int,
+            _headers: Any,
+            transaction: WindowedPartitionTransaction,
+        ) -> Iterable[Message]:
+            expired_windows = self.expire_by_partition(
+                transaction=transaction, timestamp_ms=timestamp_ms
+            )
+            # Just exhaust the iterator here
+            for _ in expired_windows:
+                pass
+            return []
+
+        return self._apply_window(
+            on_update=on_update,
+            on_watermark=on_watermark,
+            name=self._name,
+        )
 
     def process_window(
         self,
         value: Any,
         key: Any,
         timestamp_ms: int,
-        headers: Any,
         transaction: WindowedPartitionTransaction,
-    ) -> tuple[Iterable[WindowKeyResult], Iterable[WindowKeyResult]]:
+    ) -> Iterable[WindowKeyResult]:
         state = transaction.as_state(prefix=key)
         duration_ms = self._duration_ms
         grace_ms = self._grace_ms
-        before_update = self._before_update
-        after_update = self._after_update
 
         collect = self.collect
         aggregate = self.aggregate
@@ -152,17 +184,12 @@ class TimeWindow(Window):
             step_ms=self._step_ms,
         )
 
-        if self._closing_strategy == ClosingStrategy.PARTITION:
-            latest_expired_window_end = transaction.get_latest_expired(prefix=b"")
-            latest_timestamp = max(timestamp_ms, latest_expired_window_end)
-        else:
-            state_ts = state.get_latest_timestamp() or 0
-            latest_timestamp = max(timestamp_ms, state_ts)
+        latest_expired_window_end = transaction.get_latest_expired(prefix=b"")
+        latest_timestamp = max(timestamp_ms, latest_expired_window_end)
 
         max_expired_window_end = latest_timestamp - grace_ms
         max_expired_window_start = max_expired_window_end - duration_ms
         updated_windows: list[WindowKeyResult] = []
-        triggered_windows: list[WindowKeyResult] = []
         for start, end in ranges:
             if start <= max_expired_window_start:
                 late_by_ms = max_expired_window_end - timestamp_ms
@@ -180,78 +207,18 @@ class TimeWindow(Window):
             # since actual values are stored separately and combined into an array
             # during window expiration.
             aggregated = None
-
             if aggregate:
                 current_value = state.get_window(start, end)
                 if current_value is None:
                     current_value = self._initialize_value()
 
-                # Check before_update trigger
-                if before_update and before_update(
-                    current_value, value, key, timestamp_ms, headers
-                ):
-                    # Get collected values for the result
-                    # Do NOT include the current value - before_update means
-                    # we expire BEFORE adding the current value
-                    collected = state.get_from_collection(start, end) if collect else []
-
-                    result = self._results(current_value, collected, start, end)
-                    triggered_windows.append((key, result))
-                    transaction.delete_window(start, end, prefix=key)
-                    # Note: We don't delete from collection here - normal expiration
-                    # will handle cleanup for both tumbling and hopping windows
-                    continue
-
                 aggregated = self._aggregate_value(current_value, value, timestamp_ms)
-
-                # Check after_update trigger
-                if after_update and after_update(
-                    aggregated, value, key, timestamp_ms, headers
-                ):
-                    # Get collected values for the result
-                    collected = []
-                    if collect:
-                        collected = state.get_from_collection(start, end)
-                        # Add the current value that's being collected
-                        collected.append(self._collect_value(value))
-
-                    result = self._results(aggregated, collected, start, end)
-                    triggered_windows.append((key, result))
-                    transaction.delete_window(start, end, prefix=key)
-                    # Note: We don't delete from collection here - normal expiration
-                    # will handle cleanup for both tumbling and hopping windows
-                    continue
-
-                result = self._results(aggregated, [], start, end)
-                updated_windows.append((key, result))
-            elif collect and (before_update or after_update):
-                # For collect-only windows, get the old collected values
-                old_collected = state.get_from_collection(start, end)
-
-                # Check before_update trigger (before adding new value)
-                if before_update and before_update(
-                    old_collected, value, key, timestamp_ms, headers
-                ):
-                    # Expire with the current collection (WITHOUT the new value)
-                    result = self._results(None, old_collected, start, end)
-                    triggered_windows.append((key, result))
-                    transaction.delete_window(start, end, prefix=key)
-                    # Note: We don't delete from collection here - normal expiration
-                    # will handle cleanup for both tumbling and hopping windows
-                    continue
-
-                # Check after_update trigger (conceptually after adding new value)
-                # For collect, "after update" means after the value would be added
-                if after_update:
-                    new_collected = [*old_collected, self._collect_value(value)]
-                    if after_update(new_collected, value, key, timestamp_ms, headers):
-                        result = self._results(None, new_collected, start, end)
-                        triggered_windows.append((key, result))
-                        transaction.delete_window(start, end, prefix=key)
-                        # Note: We don't delete from collection here - normal expiration
-                        # will handle cleanup for both tumbling and hopping windows
-                        continue
-
+                updated_windows.append(
+                    (
+                        key,
+                        self._results(aggregated, [], start, end),
+                    )
+                )
             state.update_window(start, end, value=aggregated, timestamp_ms=timestamp_ms)
 
         if collect:
@@ -260,52 +227,33 @@ class TimeWindow(Window):
                 id=timestamp_ms,
             )
 
-        if self._closing_strategy == ClosingStrategy.PARTITION:
-            expired_windows = self.expire_by_partition(
-                transaction, max_expired_window_end, collect
-            )
-        else:
-            expired_windows = self.expire_by_key(
-                key, state, max_expired_window_start, collect
-            )
-
-        # Combine triggered windows with time-expired windows
-        all_expired_windows = itertools.chain(expired_windows, triggered_windows)
-
-        return updated_windows, all_expired_windows
+        return updated_windows
 
     def expire_by_partition(
         self,
         transaction: WindowedPartitionTransaction,
-        max_expired_end: int,
-        collect: bool,
+        timestamp_ms: int,
     ) -> Iterable[WindowKeyResult]:
+        """
+        Expire windows for the whole partition at the given timestamp.
+
+        :param transaction: state transaction object.
+        :param timestamp_ms: the current timestamp (inclusive).
+        """
+        latest_expired_window_end = transaction.get_latest_expired(prefix=b"")
+        latest_timestamp = max(timestamp_ms, latest_expired_window_end)
+        max_expired_window_end = max(latest_timestamp - self._grace_ms, 0)
+
         for (
             window_start,
             window_end,
         ), aggregated, collected, key in transaction.expire_all_windows(
-            max_end_time=max_expired_end,
+            max_end_time=max_expired_window_end,
             step_ms=self._step_ms if self._step_ms else self._duration_ms,
-            collect=collect,
+            collect=self.collect,
             delete=True,
         ):
             yield key, self._results(aggregated, collected, window_start, window_end)
-
-    def expire_by_key(
-        self,
-        key: Any,
-        state: WindowedState,
-        max_expired_start: int,
-        collect: bool,
-    ) -> Iterable[WindowKeyResult]:
-        for (
-            window_start,
-            window_end,
-        ), aggregated, collected, _ in state.expire_windows(
-            max_start_time=max_expired_start,
-            collect=collect,
-        ):
-            yield (key, self._results(aggregated, collected, window_start, window_end))
 
     def _on_expired_window(
         self,
@@ -335,13 +283,12 @@ class TimeWindow(Window):
             )
         if to_log:
             logger.warning(
-                "Skipping window processing for the closed window "
-                f"timestamp_ms={timestamp_ms} "
-                f"window={(start, end)} "
-                f"late_by_ms={late_by_ms} "
+                "Skipping record processing for the closed window. "
+                f"timestamp_ms={format_timestamp(timestamp_ms)} ({timestamp_ms}ms) "
+                f"window=[{format_timestamp(start)}, {format_timestamp(end)}) ([{start}ms, {end}ms)) "
+                f"late_by={late_by_ms}ms "
                 f"store_name={self._name} "
-                f"partition={ctx.topic}[{ctx.partition}] "
-                f"offset={ctx.offset}"
+                f"partition={ctx.topic}[{ctx.partition}]"
             )
 
 

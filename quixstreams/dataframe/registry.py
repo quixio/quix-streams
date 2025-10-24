@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING, Optional
 
-from quixstreams.core.stream import Stream, VoidExecutor
+from quixstreams.core.stream import Stream, StreamSink, VoidExecutor
 from quixstreams.models import Topic
 
 from .exceptions import (
@@ -105,9 +105,7 @@ class DataFrameRegistry:
                     "adjust by setting a unique name with `SDF.group_by(name=<NAME>)` "
                 )
 
-    def compose_all(
-        self, sink: Optional[VoidExecutor] = None
-    ) -> dict[str, VoidExecutor]:
+    def compose_all(self, sink: Optional[StreamSink] = None) -> dict[str, VoidExecutor]:
         """
         Composes all the Streams and returns a dict of format {<topic>: <VoidExecutor>}
         :param sink: callable to accumulate the results of the execution, optional.

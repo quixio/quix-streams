@@ -35,6 +35,7 @@ from quixstreams.core.stream import (
     FilterCallback,
     FilterWithMetadataCallback,
     Stream,
+    StreamSink,
     UpdateCallback,
     UpdateWithMetadataCallback,
     VoidExecutor,
@@ -758,6 +759,8 @@ class StreamingDataFrame:
         self, func: Callable[[Any, Any, int, Any], int]
     ) -> "StreamingDataFrame":
         """
+        # TODO: Document that it overwrites the default watermark.
+
         Set a new timestamp based on the current message value and its metadata.
 
         The new timestamp will be used in windowed aggregations and when producing
@@ -792,6 +795,14 @@ class StreamingDataFrame:
             headers: Any,
         ) -> Tuple[Any, Any, int, Any]:
             new_timestamp = func(value, key, timestamp, headers)
+
+            ctx = message_context()
+            self._processing_context.watermark_manager.store(
+                topic=ctx.topic,
+                partition=ctx.partition,
+                timestamp=new_timestamp,
+                default=False,
+            )
             return value, key, new_timestamp, headers
 
         stream = self.stream.add_transform(_set_timestamp_callback, expand=False)
@@ -1012,7 +1023,7 @@ class StreamingDataFrame:
 
     def compose(
         self,
-        sink: Optional[VoidExecutor] = None,
+        sink: Optional[StreamSink] = None,
     ) -> dict[str, VoidExecutor]:
         """
 
@@ -1052,6 +1063,7 @@ class StreamingDataFrame:
         headers: Optional[Any] = None,
         ctx: Optional[MessageContext] = None,
         topic: Optional[Topic] = None,
+        is_watermark: bool = False,
     ) -> List[Any]:
         """
         A shorthand to test `StreamingDataFrame` with provided value
@@ -1065,6 +1077,8 @@ class StreamingDataFrame:
             has stateful functions or windows.
             Default - `None`.
         :param topic: optionally, a topic branch to test with
+        :param is_watermark: whether the value is a watermark.
+            Default - `False`.
 
         :return: result of `StreamingDataFrame`
         """
@@ -1080,7 +1094,7 @@ class StreamingDataFrame:
                 (value_, key_, timestamp_, headers_)
             )
         )
-        context.run(composed[topic.name], value, key, timestamp, headers)
+        context.run(composed[topic.name], value, key, timestamp, headers, is_watermark)
         return result
 
     def tumbling_window(

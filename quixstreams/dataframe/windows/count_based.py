@@ -1,9 +1,11 @@
 import logging
 from typing import TYPE_CHECKING, Any, Iterable, Optional, TypedDict, Union, cast
 
+from quixstreams.core.stream import InvalidOperation
 from quixstreams.state import WindowedPartitionTransaction
 
 from .base import (
+    Message,
     MultiAggregationWindowMixin,
     SingleAggregationWindowMixin,
     Window,
@@ -53,6 +55,100 @@ class CountWindow(Window):
         self._max_count = count
         self._step = step
 
+    def final(self) -> "StreamingDataFrame":
+        """
+        Apply the window aggregation and return results only when the windows are
+        closed.
+
+        The format of returned windows:
+        ```python
+        {
+            "start": <window start time in milliseconds>,
+            "end": <window end time in milliseconds>,
+            "value: <aggregated window value>,
+        }
+        ```
+
+        The individual window is closed when the event time
+        (the maximum observed timestamp across the partition) passes
+        its end timestamp + grace period.
+        The closed windows cannot receive updates anymore and are considered final.
+
+        >***NOTE:*** Windows can be closed only within the same message key.
+        If some message keys appear irregularly in the stream, the latest windows
+        can remain unprocessed until the message the same key is received.
+        """
+
+        def window_callback(
+            value: Any,
+            key: Any,
+            timestamp_ms: int,
+            _headers: Any,
+            transaction: WindowedPartitionTransaction,
+        ) -> Iterable[Message]:
+            _, expired_windows = self.process_window(
+                value=value,
+                key=key,
+                timestamp_ms=timestamp_ms,
+                transaction=transaction,
+            )
+            # Use window start timestamp as a new record timestamp
+            for key, window in expired_windows:
+                yield window, key, window["start"], None
+
+        return self._apply_window(
+            on_update=window_callback,
+            name=self._name,
+        )
+
+    def current(self) -> "StreamingDataFrame":
+        """
+        Apply the window transformation to the StreamingDataFrame to return results
+        for each updated window.
+
+        The format of returned windows:
+        ```python
+        {
+            "start": <window start time in milliseconds>,
+            "end": <window end time in milliseconds>,
+            "value: <aggregated window value>,
+        }
+        ```
+
+        This method processes streaming data and returns results as they come,
+        regardless of whether the window is closed or not.
+        """
+
+        if self.collect:
+            raise InvalidOperation(
+                "BaseCollectors are not supported by `current` windows"
+            )
+
+        def window_callback(
+            value: Any,
+            key: Any,
+            timestamp_ms: int,
+            _headers: Any,
+            transaction: WindowedPartitionTransaction,
+        ) -> Iterable[Message]:
+            updated_windows, expired_windows = self.process_window(
+                value=value,
+                key=key,
+                timestamp_ms=timestamp_ms,
+                transaction=transaction,
+            )
+
+            # loop over the expired_windows generator to ensure the windows
+            # are expired
+            for key, window in expired_windows:
+                pass
+
+            # Use window start timestamp as a new record timestamp
+            for key, window in updated_windows:
+                yield window, key, window["start"], None
+
+        return self._apply_window(on_update=window_callback, name=self._name)
+
     def process_window(
         self,
         value: Any,
@@ -79,7 +175,7 @@ class CountWindow(Window):
         next free msg id is 35 (32 + 3).
 
         For tumbling windows there is no window overlap so we can't rely on that
-        optimisation. Instead the msg id reset to 0 on every new window.
+        optimisation. Instead, the msg id reset to 0 on every new window.
         """
         state = transaction.as_state(prefix=key)
         data = state.get(key=self.STATE_KEY, default=CountWindowsData(windows=[]))
