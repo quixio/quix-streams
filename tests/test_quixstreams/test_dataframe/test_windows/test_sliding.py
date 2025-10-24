@@ -9,6 +9,7 @@ import pytest
 import quixstreams.dataframe.windows.aggregations as agg
 from quixstreams.dataframe import DataFrameRegistry
 from quixstreams.dataframe.windows import SlidingTimeWindowDefinition
+from quixstreams.dataframe.windows.sliding import SlidingWindow
 
 A, B, C, D = "A", "B", "C", "D"
 
@@ -21,9 +22,12 @@ AGGREGATE_PARAMS = {
 }
 
 
-def process(window, value, key, transaction, timestamp_ms):
-    updated, expired = window.process_window(
+def process(window: SlidingWindow, value, key, transaction, timestamp_ms):
+    updated = window.process_window(
         value=value, key=key, transaction=transaction, timestamp_ms=timestamp_ms
+    )
+    expired = window.expire_by_partition(
+        transaction=transaction, timestamp_ms=timestamp_ms
     )
     return list(updated), list(expired)
 
@@ -350,8 +354,8 @@ DELETION_WATERMARK_SET_BELOW_LAST_ITERATED_WINDOW = [
         value=C,
         updated=[{"start": 15, "end": 25, "value": [A, B, C]}],  # left C
         expired=[{"start": 14, "end": 24, "value": [A, B]}],  # left B
-        deleted=[{"start": 6, "end": 16, "value": [A]}],  # left A
         present=[
+            {"start": 6, "end": 16, "value": [16, [A]]},  # right A
             {"start": 17, "end": 27, "value": [25, [B, C]]},  # right A
             {"start": 25, "end": 35, "value": [25, [C]]},  # right B
         ],
@@ -405,6 +409,7 @@ DELETION_WATERMARK_SET_TO_EXPIRATION_WATERMARK = [
         value=C,
         updated=[{"start": 15, "end": 25, "value": [A, B, C]}],  # left C
         present=[
+            {"start": 6, "end": 16, "value": [16, [A]]},  # left A
             {"start": 14, "end": 24, "value": [24, [A, B]]},  # left  B
             {"start": 17, "end": 27, "value": [25, [B, C]]},  # right A
             {"start": 25, "end": 35, "value": [25, [C]]},  # right B
@@ -652,8 +657,8 @@ EXPIRATION_WITH_GRACE = [
         value=D,
         updated=[{"start": 16, "end": 26, "value": [A, B, C, D]}],  # left D
         expired=[{"start": 12, "end": 22, "value": [A, C]}],  # left A
-        deleted=[{"start": 12, "end": 22, "value": [A, C]}],  # left A
         present=[
+            {"start": 12, "end": 22, "value": [22, [A, C]]},
             {"start": 13, "end": 23, "value": [23, [A, B, C]]},  # left B
             {"start": 18, "end": 28, "value": [26, [A, B, D]]},  # right C
             {"start": 23, "end": 33, "value": [26, [B, D]]},  # right A
@@ -673,7 +678,7 @@ EXPIRATION_WITH_GRACE = [
 # ______________________________________________________________________
 # B 20                     |---------|
 #                          20       30
-#               ^ 9  expiration watermark = 20 - 10 - 0 - 1
+#               ^ 9  expiration watermark = 20 - 10 - 0 - 1c
 # ______________________________________________________________________
 # C 5       C
 #               ^ 9  expiration watermark = 20 - 10 - 0 - 1
@@ -690,12 +695,12 @@ LATE_MESSAGE = [
         value=B,
         updated=[{"start": 10, "end": 20, "value": [B]}],  # left B
         expired=[{"start": 0, "end": 1, "value": [A]}],  # left A
+        deleted=[{"start": 0, "end": 1, "value": [A]}],  # left A
     ),
     Message(
         timestamp=5,
         value=C,
         present=[
-            {"start": 0, "end": 1, "value": [1, [A]]},
             {"start": 10, "end": 20, "value": [20, [B]]},
         ],
     ),
@@ -729,12 +734,12 @@ LATE_MESSAGE_EQUAL_TO_EXPIRATION_WATERMARK = [
         value=B,
         updated=[{"start": 10, "end": 20, "value": [B]}],  # left B
         expired=[{"start": 0, "end": 1, "value": [A]}],  # left A
+        deleted=[{"start": 0, "end": 1, "value": [A]}],
     ),
     Message(
         timestamp=9,
         value=C,
         present=[
-            {"start": 0, "end": 1, "value": [1, [A]]},
             {"start": 10, "end": 20, "value": [20, [B]]},
         ],
     ),
@@ -949,10 +954,8 @@ COLLECTION_AGGREGATION = [
             {"start": 1, "end": 11, "value": [A]},
             {"start": 2, "end": 12, "value": [A, B]},
         ],
-        deleted=[
-            {"start": 1, "end": 11},
-        ],
         present=[
+            {"start": 1, "end": 11, "value": [11, None]},
             {"start": 2, "end": 12, "value": [12, None]},
             {"start": 11, "end": 21, "value": [21, None]},
             {"start": 12, "end": 22, "value": [21, None]},
@@ -975,7 +978,7 @@ COLLECTION_AGGREGATION = [
         present=[
             {"start": 50, "end": 60, "value": [60, None]},
         ],
-        expected_values_in_state=[D],
+        expected_values_in_state=[C, D],
     ),
 ]
 
@@ -1072,7 +1075,21 @@ def test_sliding_window_multiaggregation(
         updated, expired = process(
             window, value=3, key=key, transaction=tx, timestamp_ms=3
         )
-        assert not expired
+        assert expired == [
+            (
+                key,
+                {
+                    "start": 0,
+                    "end": 2,
+                    "count": 1,
+                    "sum": 1,
+                    "mean": 1.0,
+                    "max": 1,
+                    "min": 1,
+                    "collect": [1],
+                },
+            ),
+        ]
         assert updated == [
             (
                 key,
@@ -1093,21 +1110,6 @@ def test_sliding_window_multiaggregation(
             window, value=5, key=key, transaction=tx, timestamp_ms=11
         )
         assert expired == [
-            (
-                key,
-                {
-                    "start": 0,
-                    "end": 2,
-                    "count": 1,
-                    "sum": 1,
-                    "mean": 1.0,
-                    "max": 1,
-                    "min": 1,
-                    "collect": [
-                        1,
-                    ],
-                },
-            ),
             (
                 key,
                 {

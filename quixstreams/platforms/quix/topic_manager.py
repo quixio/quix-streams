@@ -128,7 +128,7 @@ class QuixTopicManager(TopicManager):
 
     def _internal_name(
         self,
-        topic_type: Literal["changelog", "repartition"],
+        topic_type: Literal["changelog", "repartition", "watermarks"],
         topic_name: Optional[str],
         suffix: str,
     ):

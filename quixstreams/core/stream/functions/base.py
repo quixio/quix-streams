@@ -20,6 +20,7 @@ class StreamFunction(abc.ABC):
 
     def __init__(self, func: StreamCallback):
         self.func = func
+        self.on_watermark = None
 
     @abc.abstractmethod
     def get_executor(self, *child_executors: VoidExecutor) -> VoidExecutor:
@@ -49,7 +50,9 @@ class StreamFunction(abc.ABC):
                 key: Any,
                 timestamp: int,
                 headers: Any,
+                is_watermark: bool = False,
             ):
+                # TODO: Handle a watermark in branched operations
                 first_branch_executor, *branch_executors = child_executors
                 copier = pickle_copier(value)
 

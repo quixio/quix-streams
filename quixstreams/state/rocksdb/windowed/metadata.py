@@ -7,7 +7,4 @@ LATEST_DELETED_WINDOW_TIMESTAMP_KEY = b"__deleted_start_gt__"
 LATEST_DELETED_VALUE_CF_NAME = "__value-deletion-index__"
 LATEST_DELETED_VALUE_TIMESTAMP_KEY = b"__value_deleted_start_gt__"
 
-LATEST_TIMESTAMPS_CF_NAME = "__latest-timestamps__"
-LATEST_TIMESTAMP_KEY = b"__latest_timestamp__"
-
 VALUES_CF_NAME = "__values__"

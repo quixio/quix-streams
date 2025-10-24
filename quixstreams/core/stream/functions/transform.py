@@ -1,7 +1,11 @@
 from typing import Any, Literal, Union, cast, overload
 
 from .base import StreamFunction
-from .types import TransformCallback, TransformExpandedCallback, VoidExecutor
+from .types import (
+    TransformCallback,
+    TransformExpandedCallback,
+    VoidExecutor,
+)
 
 __all__ = ("TransformFunction",)
 
@@ -21,24 +25,32 @@ class TransformFunction(StreamFunction):
     The result of the callback will always be passed downstream.
     """
 
+    func: Union[TransformCallback, TransformExpandedCallback]
+
     @overload
     def __init__(
-        self, func: TransformCallback, expand: Literal[False] = False
+        self,
+        func: TransformCallback,
+        expand: Literal[False] = False,
+        on_watermark: Union[TransformCallback, None] = None,
     ) -> None: ...
 
     @overload
     def __init__(
-        self, func: TransformExpandedCallback, expand: Literal[True]
+        self,
+        func: TransformExpandedCallback,
+        expand: Literal[True],
+        on_watermark: Union[TransformExpandedCallback, None] = None,
     ) -> None: ...
 
     def __init__(
         self,
         func: Union[TransformCallback, TransformExpandedCallback],
         expand: bool = False,
+        on_watermark: Union[TransformCallback, TransformExpandedCallback, None] = None,
     ):
-        super().__init__(func)
+        super().__init__(func=func, on_watermark=on_watermark)
 
-        self.func: Union[TransformCallback, TransformExpandedCallback]
         self.expand = expand
 
     def get_executor(self, *child_executors: VoidExecutor) -> VoidExecutor:
@@ -52,10 +64,34 @@ class TransformFunction(StreamFunction):
                 key: Any,
                 timestamp: int,
                 headers: Any,
+                is_watermark: bool = False,
+                on_watermark=self.on_watermark,
             ):
-                result = expanded_func(value, key, timestamp, headers)
-                for new_value, new_key, new_timestamp, new_headers in result:
-                    child_executor(new_value, new_key, new_timestamp, new_headers)
+                if is_watermark:
+                    if on_watermark is not None:
+                        # React on the new watermark if "on_watermark" is defined
+                        result = self.on_watermark(None, None, timestamp, ())
+                        for new_value, new_key, new_timestamp, new_headers in result:
+                            child_executor(
+                                new_value,
+                                new_key,
+                                new_timestamp,
+                                new_headers,
+                                False,
+                            )
+                    # Always pass the watermark downstream so other operators can react
+                    # on it as well.
+                    child_executor(
+                        value,
+                        key,
+                        timestamp,
+                        headers,
+                        True,
+                    )
+                else:
+                    result = expanded_func(value, key, timestamp, headers)
+                    for new_value, new_key, new_timestamp, new_headers in result:
+                        child_executor(new_value, new_key, new_timestamp, new_headers)
 
         else:
             func = cast(TransformCallback, self.func)
@@ -65,11 +101,36 @@ class TransformFunction(StreamFunction):
                 key: Any,
                 timestamp: int,
                 headers: Any,
+                is_watermark: bool = False,
+                on_watermark=self.on_watermark,
             ):
-                # Execute a function on a single value and return its result
-                new_value, new_key, new_timestamp, new_headers = func(
-                    value, key, timestamp, headers
-                )
-                child_executor(new_value, new_key, new_timestamp, new_headers)
+                if is_watermark:
+                    if on_watermark is not None:
+                        # React on the new watermark if "on_watermark" is defined
+                        new_value, new_key, new_timestamp, new_headers = (
+                            self.on_watermark(None, None, timestamp, ())
+                        )
+                        child_executor(
+                            new_value,
+                            new_key,
+                            new_timestamp,
+                            new_headers,
+                            False,
+                        )
+                    # Always pass the watermark downstream so other operators can react
+                    # on it as well.
+                    child_executor(
+                        value,
+                        key,
+                        timestamp,
+                        headers,
+                        True,
+                    )
+                else:
+                    # Execute a function on a single value and return its result
+                    new_value, new_key, new_timestamp, new_headers = func(
+                        value, key, timestamp, headers
+                    )
+                    child_executor(new_value, new_key, new_timestamp, new_headers)
 
         return wrapper

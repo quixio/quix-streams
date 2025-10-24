@@ -8,6 +8,7 @@ from quixstreams.dataframe import DataFrameRegistry
 from quixstreams.exceptions import QuixException
 from quixstreams.internal_consumer import InternalConsumer
 from quixstreams.internal_producer import InternalProducer
+from quixstreams.processing.watermarking import WatermarkManager
 from quixstreams.sinks import SinkManager
 from quixstreams.state import StateStoreManager
 from quixstreams.utils.printing import Printer
@@ -33,6 +34,7 @@ class ProcessingContext:
     state_manager: StateStoreManager
     sink_manager: SinkManager
     dataframe_registry: DataFrameRegistry
+    watermark_manager: WatermarkManager
     commit_every: int = 0
     exactly_once: bool = False
     printer: Printer = Printer()
