@@ -39,7 +39,7 @@ all = [
     "boto3-stubs>=1.35.65,<2.0",
     "mypy-boto3-kinesis>=1.35.65,<2.0",
     "mypy-boto3-s3>=1.35.65,<2.0",
-    "redis[hiredis]>=5.2.0,<6",
+    "redis[hiredis]>=5.2.0,<8",
     "azure-storage-blob>=12.24.0,<12.25",
     "neo4j>=5.27.0,<6",
     "pymongo>=4.11,<5",
@@ -73,7 +73,7 @@ mqtt = ["paho-mqtt>=2.1.0,<3"]
 # different requirements in the future.
 kinesis = ["quixstreams[aws]", "mypy-boto3-kinesis>=1.35.65,<2.0"]
 s3 = ["quixstreams[aws]", "mypy-boto3-s3>=1.35.65,<2.0"]
-redis = ["redis[hiredis]>=5.2.0,<6"]
+redis = ["redis[hiredis]>=5.2.0,<8"]
 azure-file = ["quixstreams[azure]"]
 
 [tool.setuptools.packages.find]
