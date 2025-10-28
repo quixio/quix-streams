@@ -36,7 +36,7 @@ class Row:
         return self.context.partition
 
     @property
-    def offset(self) -> int:
+    def offset(self) -> Optional[int]:
         return self.context.offset
 
     @property

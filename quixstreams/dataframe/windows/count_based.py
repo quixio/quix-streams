@@ -90,6 +90,7 @@ class CountWindow(Window):
                 value=value,
                 key=key,
                 timestamp_ms=timestamp_ms,
+                headers=_headers,
                 transaction=transaction,
             )
             # Use window start timestamp as a new record timestamp
@@ -135,6 +136,7 @@ class CountWindow(Window):
                 value=value,
                 key=key,
                 timestamp_ms=timestamp_ms,
+                headers=_headers,
                 transaction=transaction,
             )
 

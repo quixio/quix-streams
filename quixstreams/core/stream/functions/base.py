@@ -1,5 +1,5 @@
 import abc
-from typing import Any
+from typing import Any, Optional
 
 from quixstreams.utils.pickle import pickle_copier
 
@@ -18,9 +18,11 @@ class StreamFunction(abc.ABC):
 
     expand: bool = False
 
-    def __init__(self, func: StreamCallback):
+    def __init__(
+        self, func: StreamCallback, on_watermark: Optional[StreamCallback] = None
+    ):
         self.func = func
-        self.on_watermark = None
+        self.on_watermark = on_watermark
 
     @abc.abstractmethod
     def get_executor(self, *child_executors: VoidExecutor) -> VoidExecutor:

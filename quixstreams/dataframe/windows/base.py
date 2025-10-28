@@ -33,6 +33,8 @@ logger = logging.getLogger(__name__)
 WindowResult: TypeAlias = dict[str, Any]
 WindowKeyResult: TypeAlias = tuple[Any, WindowResult]
 Message: TypeAlias = tuple[WindowResult, Any, int, Any]
+WindowBeforeUpdateCallback: TypeAlias = Callable[[Any, Any, Any, int, Any], bool]
+WindowAfterUpdateCallback: TypeAlias = Callable[[Any, Any, Any, int, Any], bool]
 
 WindowAggregateFunc = Callable[[Any, Any], Any]
 
@@ -57,6 +59,25 @@ class Window(abc.ABC):
     @property
     def name(self) -> str:
         return self._name
+
+    @abstractmethod
+    def process_window(
+        self,
+        value: Any,
+        key: Any,
+        timestamp_ms: int,
+        headers: Any,
+        transaction: WindowedPartitionTransaction,
+    ) -> tuple[Iterable[WindowKeyResult], Iterable[WindowKeyResult]]:
+        """
+        Process a window update for the given value and key.
+
+        Returns:
+            A tuple of (updated_windows, triggered_windows) where:
+            - updated_windows: Windows that were updated but not expired
+            - triggered_windows: Windows that were expired early due to before_update/after_update callbacks
+        """
+        pass
 
     def register_store(self) -> None:
         TopicManager.ensure_topics_copartitioned(*self._dataframe.topics)
@@ -126,6 +147,7 @@ class Window(abc.ABC):
         If some message keys appear irregularly in the stream, the latest windows
         can remain unprocessed until the message the same key is received.
         """
+        ...
 
     @abstractmethod
     def current(self) -> "StreamingDataFrame":

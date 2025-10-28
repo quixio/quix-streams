@@ -45,7 +45,7 @@ from .platforms.quix import (
 )
 from .platforms.quix.env import QUIX_ENVIRONMENT
 from .processing import ProcessingContext
-from .processing.watermarking import WatermarkManager
+from .processing.watermarking import WatermarkManager, WatermarkMessage
 from .runtracker import RunTracker
 from .sinks import SinkManager
 from .sources import BaseSource, SourceException, SourceManager
@@ -1037,7 +1037,9 @@ class Application:
         )
 
         if topic_name == self._watermark_manager.watermarks_topic.name:
-            watermark = self._watermark_manager.receive(message=first_row.value)
+            watermark = self._watermark_manager.receive(
+                message=cast(WatermarkMessage, first_row.value)
+            )
             if watermark is None:
                 return
 
@@ -1102,14 +1104,14 @@ class Application:
 
         # Store the message offset after it's successfully processed
         self._processing_context.store_offset(
-            topic=topic_name, partition=partition, offset=offset
+            topic=topic_name, partition=partition, offset=offset or 0
         )
         self._run_tracker.set_message_consumed(True)
         self._producer._broker_available()  # noqa: SLF001
         self._consumer._broker_available()  # noqa: SLF001
 
         if self._on_message_processed is not None:
-            self._on_message_processed(topic_name, partition, offset)
+            self._on_message_processed(topic_name, partition, offset or 0)
 
     def _on_assign(self, _, topic_partitions: List[TopicPartition]):
         """
@@ -1135,6 +1137,7 @@ class Application:
             )
             for i in range(
                 self._watermark_manager.watermarks_topic.broker_config.num_partitions
+                or 1
             )
         ]
         # TODO: The set is used because the watermark tp can already be present in the "topic_partitions"

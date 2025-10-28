@@ -48,7 +48,6 @@ class ApplyFunction(StreamFunction):
                 timestamp: int,
                 headers: Any,
                 is_watermark: bool = False,
-                on_watermark=self.on_watermark,
             ) -> None:
                 # Execute a function on a single value and wrap results into a list
                 # to expand them downstream

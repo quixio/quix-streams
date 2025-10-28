@@ -9,7 +9,6 @@ import pytest
 import quixstreams.dataframe.windows.aggregations as agg
 from quixstreams.dataframe import DataFrameRegistry
 from quixstreams.dataframe.windows import SlidingTimeWindowDefinition
-from quixstreams.dataframe.windows.sliding import SlidingWindow
 
 A, B, C, D = "A", "B", "C", "D"
 
@@ -22,14 +21,20 @@ AGGREGATE_PARAMS = {
 }
 
 
-def process(window: SlidingWindow, value, key, transaction, timestamp_ms):
-    updated = window.process_window(
-        value=value, key=key, transaction=transaction, timestamp_ms=timestamp_ms
+def process(window, value, key, transaction, timestamp_ms, headers=None):
+    updated, triggered = window.process_window(
+        value=value,
+        key=key,
+        transaction=transaction,
+        timestamp_ms=timestamp_ms,
+        headers=headers,
     )
     expired = window.expire_by_partition(
         transaction=transaction, timestamp_ms=timestamp_ms
     )
-    return list(updated), list(expired)
+    # Combine triggered windows (from callbacks) with time-expired windows
+    all_expired = list(triggered) + list(expired)
+    return list(updated), all_expired
 
 
 @dataclass

@@ -20,7 +20,11 @@ def process(
     timestamp_ms: int,
 ):
     updated, expired = window.process_window(
-        value=value, key=key, transaction=transaction, timestamp_ms=timestamp_ms
+        value=value,
+        key=key,
+        timestamp_ms=timestamp_ms,
+        headers=[],
+        transaction=transaction,
     )
 
     return list(updated), list(expired)

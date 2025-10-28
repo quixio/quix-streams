@@ -308,9 +308,31 @@ class WindowedPartitionTransaction(Protocol[K, V]):
         """
         ...
 
-    def delete_all_windows(self, max_end_time: int, collect: bool) -> None:
+    def delete_window(self, start_ms: int, end_ms: int, prefix: bytes) -> None:
+        """
+        Delete a single window defined by start and end timestamps.
+
+        :param start_ms: start of the window in milliseconds
+        :param end_ms: end of the window in milliseconds
+        :param prefix: a key prefix
+        """
+        ...
+
+    def delete_windows(
+        self, max_start_time: int, delete_values: bool, prefix: bytes
+    ) -> None:
         """
         Delete windows from RocksDB up to the specified `max_start_time` timestamp.
+
+        :param max_start_time: The timestamp up to which windows should be deleted, inclusive.
+        :param delete_values: If True, the values from collections will be deleted too.
+        :param prefix: a key prefix
+        """
+        ...
+
+    def delete_all_windows(self, max_end_time: int, collect: bool) -> None:
+        """
+        Delete windows from RocksDB up to the specified `max_end_time` timestamp.
 
         :param max_end_time: The timestamp up to which windows should be deleted, inclusive.
         :param collect: If True, the values from collections will be deleted too.
