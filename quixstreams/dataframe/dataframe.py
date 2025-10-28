@@ -1708,7 +1708,7 @@ class StreamingDataFrame:
                 headers=headers,
                 partition=ctx.partition,
                 topic=ctx.topic,
-                offset=ctx.offset,
+                offset=ctx.offset or 0,
             )
 
         # uses apply without returning to make this operation terminal

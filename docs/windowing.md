@@ -594,7 +594,6 @@ if __name__ == '__main__':
 
 
 ### Early window expiration with triggers
-!!! info New in v3.24.0
 
 To expire windows before their natural expiration time based on custom conditions, you can pass `before_update` or `after_update` callbacks to `.tumbling_window()` and `.hopping_window()` methods.
 

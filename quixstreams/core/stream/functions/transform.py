@@ -65,12 +65,14 @@ class TransformFunction(StreamFunction):
                 timestamp: int,
                 headers: Any,
                 is_watermark: bool = False,
-                on_watermark=self.on_watermark,
             ):
                 if is_watermark:
-                    if on_watermark is not None:
+                    if self.on_watermark is not None:
                         # React on the new watermark if "on_watermark" is defined
-                        result = self.on_watermark(None, None, timestamp, ())
+                        watermark_func = cast(
+                            TransformExpandedCallback, self.on_watermark
+                        )
+                        result = watermark_func(None, None, timestamp, ())
                         for new_value, new_key, new_timestamp, new_headers in result:
                             child_executor(
                                 new_value,
@@ -102,13 +104,13 @@ class TransformFunction(StreamFunction):
                 timestamp: int,
                 headers: Any,
                 is_watermark: bool = False,
-                on_watermark=self.on_watermark,
             ):
                 if is_watermark:
-                    if on_watermark is not None:
+                    if self.on_watermark is not None:
                         # React on the new watermark if "on_watermark" is defined
-                        new_value, new_key, new_timestamp, new_headers = (
-                            self.on_watermark(None, None, timestamp, ())
+                        watermark_func = cast(TransformCallback, self.on_watermark)
+                        new_value, new_key, new_timestamp, new_headers = watermark_func(
+                            None, None, timestamp, ()
                         )
                         child_executor(
                             new_value,
