@@ -17,8 +17,8 @@ requirements:
     - python >=3.9,<3.13
     - typing_extensions >=4.8
     - orjson >=3.9,<4
-    - pydantic >=2.7,<2.12
-    - pydantic-settings >=2.3,<2.11
+    - pydantic >=2.7,<2.13
+    - pydantic-settings >=2.3,<2.12
     - jsonschema >=4.3.0
     - fastavro >=1.8,<2.0
     - jsonlines >=4,<5

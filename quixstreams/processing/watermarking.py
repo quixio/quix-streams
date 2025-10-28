@@ -49,7 +49,7 @@ class WatermarkManager:
         self._watermarks = {
             (topic.name, partition): -1
             for topic in topics
-            for partition in range(topic.broker_config.num_partitions)
+            for partition in range(topic.broker_config.num_partitions or 1)
         }
 
     @property

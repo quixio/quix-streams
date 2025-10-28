@@ -73,7 +73,11 @@ from .windows import (
     TumblingCountWindowDefinition,
     TumblingTimeWindowDefinition,
 )
-from .windows.base import WindowOnLateCallback
+from .windows.base import (
+    WindowAfterUpdateCallback,
+    WindowBeforeUpdateCallback,
+    WindowOnLateCallback,
+)
 
 if typing.TYPE_CHECKING:
     from quixstreams.processing import ProcessingContext
@@ -1099,6 +1103,8 @@ class StreamingDataFrame:
         grace_ms: Union[int, timedelta] = 0,
         name: Optional[str] = None,
         on_late: Optional[WindowOnLateCallback] = None,
+        before_update: Optional[WindowBeforeUpdateCallback] = None,
+        after_update: Optional[WindowAfterUpdateCallback] = None,
     ) -> TumblingTimeWindowDefinition:
         """
         Create a time-based tumbling window transformation on this StreamingDataFrame.
@@ -1165,6 +1171,20 @@ class StreamingDataFrame:
             (default behavior).
             Otherwise, no message will be logged.
 
+        :param before_update: an optional callback to trigger early window expiration
+            before the window is updated.
+            The callback receives `aggregated` (current aggregated value or default/None),
+            `value`, `key`, `timestamp`, and `headers`.
+            If it returns `True`, the window will be expired immediately.
+            Default - `None`.
+
+        :param after_update: an optional callback to trigger early window expiration
+            after the window is updated.
+            The callback receives `aggregated` (updated aggregated value), `value`, `key`,
+            `timestamp`, and `headers`.
+            If it returns `True`, the window will be expired immediately.
+            Default - `None`.
+
         :return: `TumblingTimeWindowDefinition` instance representing the tumbling window
             configuration.
             This object can be further configured with aggregation functions
@@ -1180,6 +1200,8 @@ class StreamingDataFrame:
             dataframe=self,
             name=name,
             on_late=on_late,
+            before_update=before_update,
+            after_update=after_update,
         )
 
     def tumbling_count_window(
@@ -1239,6 +1261,8 @@ class StreamingDataFrame:
         grace_ms: Union[int, timedelta] = 0,
         name: Optional[str] = None,
         on_late: Optional[WindowOnLateCallback] = None,
+        before_update: Optional[WindowBeforeUpdateCallback] = None,
+        after_update: Optional[WindowAfterUpdateCallback] = None,
     ) -> HoppingTimeWindowDefinition:
         """
         Create a time-based hopping window transformation on this StreamingDataFrame.
@@ -1316,6 +1340,20 @@ class StreamingDataFrame:
             (default behavior).
             Otherwise, no message will be logged.
 
+        :param before_update: an optional callback to trigger early window expiration
+            before the window is updated.
+            The callback receives `aggregated` (current aggregated value or default/None),
+            `value`, `key`, `timestamp`, and `headers`.
+            If it returns `True`, the window will be expired immediately.
+            Default - `None`.
+
+        :param after_update: an optional callback to trigger early window expiration
+            after the window is updated.
+            The callback receives `aggregated` (updated aggregated value), `value`, `key`,
+            `timestamp`, and `headers`.
+            If it returns `True`, the window will be expired immediately.
+            Default - `None`.
+
         :return: `HoppingTimeWindowDefinition` instance representing the hopping
             window configuration.
             This object can be further configured with aggregation functions
@@ -1333,6 +1371,8 @@ class StreamingDataFrame:
             dataframe=self,
             name=name,
             on_late=on_late,
+            before_update=before_update,
+            after_update=after_update,
         )
 
     def hopping_count_window(
@@ -1668,7 +1708,7 @@ class StreamingDataFrame:
                 headers=headers,
                 partition=ctx.partition,
                 topic=ctx.topic,
-                offset=ctx.offset,
+                offset=ctx.offset or 0,
             )
 
         # uses apply without returning to make this operation terminal

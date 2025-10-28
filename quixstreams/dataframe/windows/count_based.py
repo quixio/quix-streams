@@ -90,6 +90,7 @@ class CountWindow(Window):
                 value=value,
                 key=key,
                 timestamp_ms=timestamp_ms,
+                headers=_headers,
                 transaction=transaction,
             )
             # Use window start timestamp as a new record timestamp
@@ -135,6 +136,7 @@ class CountWindow(Window):
                 value=value,
                 key=key,
                 timestamp_ms=timestamp_ms,
+                headers=_headers,
                 transaction=transaction,
             )
 
@@ -154,6 +156,7 @@ class CountWindow(Window):
         value: Any,
         key: Any,
         timestamp_ms: int,
+        headers: Any,
         transaction: WindowedPartitionTransaction[str, CountWindowsData],
     ) -> tuple[Iterable[WindowKeyResult], Iterable[WindowKeyResult]]:
         """

@@ -16,8 +16,9 @@ class SlidingWindow(TimeWindow):
         value: Any,
         key: Any,
         timestamp_ms: int,
+        headers: Any,
         transaction: WindowedPartitionTransaction,
-    ) -> Iterable[WindowKeyResult]:
+    ) -> tuple[Iterable[WindowKeyResult], Iterable[WindowKeyResult]]:
         """
         The algorithm is based on the concept that each message
         is associated with a left and a right window.
@@ -86,7 +87,7 @@ class SlidingWindow(TimeWindow):
                 timestamp_ms=timestamp_ms,
                 late_by_ms=max_expired_window_end - timestamp_ms,
             )
-            return []
+            return [], []
 
         right_start = timestamp_ms + 1
         right_end = right_start + duration
@@ -255,7 +256,9 @@ class SlidingWindow(TimeWindow):
         if collect:
             state.add_to_collection(value=self._collect_value(value), id=timestamp_ms)
 
-        return reversed(updated_windows)
+        # Sliding windows don't support before_update/after_update callbacks yet,
+        # so triggered_windows is always empty
+        return reversed(updated_windows), []
 
     def expire_by_partition(
         self,
