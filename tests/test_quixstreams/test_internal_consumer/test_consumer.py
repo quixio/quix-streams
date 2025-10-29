@@ -269,6 +269,74 @@ class TestInternalConsumer:
             )
         )
 
+    def test_trigger_backpressure_pauses_and_resumes_watermarks_topic(
+        self, topic_manager_factory, internal_consumer
+    ):
+        """
+        Test that watermarks topics are paused during backpressure
+        (along with data topics but not changelog topics),
+        and properly resumed when backpressure is lifted.
+        """
+        topic_manager = topic_manager_factory()
+        data_topic = topic_manager.topic(
+            name=str(uuid.uuid4()),
+            create_config=TopicConfig(num_partitions=1, replication_factor=1),
+        )
+        # Create a changelog topic
+        changelog = topic_manager.changelog_topic(
+            stream_id=data_topic.name,
+            store_name="default",
+            config=data_topic.broker_config,
+        )
+        # Create a watermarks topic
+        watermarks = topic_manager.watermarks_topic()
+        offset_to_seek = 999
+
+        internal_consumer.subscribe([data_topic, changelog, watermarks])
+        while not internal_consumer.assignment():
+            internal_consumer.poll(0.1)
+
+        # Trigger backpressure with immediate resume (resume_after=0)
+        with patch.object(InternalConsumer, "pause") as pause_mock:
+            internal_consumer.trigger_backpressure(
+                resume_after=0,  # Allow immediate resume for testing
+                offsets_to_seek={(data_topic.name, 0): offset_to_seek},
+            )
+
+        # Verify data topic and watermarks topic are paused, but not changelog
+        paused_topics = {
+            call.kwargs["partitions"][0].topic for call in pause_mock.call_args_list
+        }
+        assert data_topic.name in paused_topics
+        assert watermarks.name in paused_topics
+        assert changelog.name not in paused_topics
+
+        # Verify they're marked as backpressured
+        assert (
+            TopicPartition(topic=data_topic.name, partition=0)
+            in internal_consumer.backpressured_tps
+        )
+        assert (
+            TopicPartition(topic=watermarks.name, partition=0)
+            in internal_consumer.backpressured_tps
+        )
+
+        # Test resuming
+        with patch.object(InternalConsumer, "resume") as resume_mock:
+            internal_consumer.resume_backpressured()
+
+        # Verify both data topic and watermarks topic are resumed
+        resumed_topics = {
+            call.kwargs["partitions"][0].topic for call in resume_mock.call_args_list
+        }
+        assert data_topic.name in resumed_topics
+        assert watermarks.name in resumed_topics
+        # Ensure changelog was never resumed (it was never paused)
+        assert changelog.name not in resumed_topics
+
+        # Verify backpressured set is cleared
+        assert len(internal_consumer.backpressured_tps) == 0
+
     def test_resume_backpressured_nothing_paused(
         self, internal_consumer, topic_manager_factory
     ):
