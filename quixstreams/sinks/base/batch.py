@@ -1,6 +1,6 @@
 from collections import deque
 from itertools import islice
-from typing import Any, Deque, Iterable, Iterator
+from typing import Any, Deque, Iterable, Iterator, Optional
 
 from quixstreams.models import HeadersTuples
 
@@ -39,7 +39,7 @@ class SinkBatch:
         return len(self._buffer)
 
     @property
-    def start_offset(self) -> int:
+    def start_offset(self) -> Optional[int]:
         return self._buffer[0].offset
 
     def append(
@@ -48,7 +48,7 @@ class SinkBatch:
         key: Any,
         timestamp: int,
         headers: HeadersTuples,
-        offset: int,
+        offset: Optional[int],
     ):
         self._buffer.append(
             SinkItem(

@@ -71,7 +71,7 @@ class BaseSink(abc.ABC):
         headers: HeadersTuples,
         topic: str,
         partition: int,
-        offset: int,
+        offset: Optional[int],
     ):
         """
         This method is triggered on every new processed record being sent to this sink.
@@ -164,7 +164,7 @@ class BatchingSink(BaseSink):
         headers: HeadersTuples,
         topic: str,
         partition: int,
-        offset: int,
+        offset: Optional[int],
     ):
         """
         Add a new record to in-memory batch.
