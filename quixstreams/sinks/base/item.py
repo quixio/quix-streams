@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Optional
 
 from quixstreams.models import HeadersTuples
 
@@ -20,7 +20,7 @@ class SinkItem:
         key: Any,
         timestamp: int,
         headers: HeadersTuples,
-        offset: int,
+        offset: Optional[int],
     ):
         self.key = key
         self.value = value

@@ -1,5 +1,5 @@
 from collections import UserList
-from typing import Any
+from typing import Any, Optional
 
 from quixstreams.models import HeadersTuples
 from quixstreams.sinks.base import BaseSink
@@ -63,7 +63,7 @@ class ListSink(BaseSink, UserList):
         headers: HeadersTuples,
         topic: str,
         partition: int,
-        offset: int,
+        offset: Optional[int],
     ):
         if not isinstance(value, dict):
             value = {"value": value}
