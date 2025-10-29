@@ -54,15 +54,21 @@ class StreamFunction(abc.ABC):
                 headers: Any,
                 is_watermark: bool = False,
             ):
-                # TODO: Handle a watermark in branched operations
-                first_branch_executor, *branch_executors = child_executors
-                copier = pickle_copier(value)
+                if is_watermark:
+                    # Watermarks should not be mutated, so no need to copy
+                    # Pass the watermark to all branches
+                    for branch_executor in child_executors:
+                        branch_executor(value, key, timestamp, headers, True)
+                else:
+                    # Regular data: copy for each branch to prevent mutation issues
+                    first_branch_executor, *branch_executors = child_executors
+                    copier = pickle_copier(value)
 
-                # Pass the original value to the first branch to reduce copying
-                first_branch_executor(value, key, timestamp, headers)
-                # Copy the value for the rest of the branches
-                for branch_executor in branch_executors:
-                    branch_executor(copier(), key, timestamp, headers)
+                    # Pass the original value to the first branch to reduce copying
+                    first_branch_executor(value, key, timestamp, headers)
+                    # Copy the value for the rest of the branches
+                    for branch_executor in branch_executors:
+                        branch_executor(copier(), key, timestamp, headers)
 
             return wrapper
 

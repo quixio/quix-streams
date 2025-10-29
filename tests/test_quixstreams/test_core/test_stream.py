@@ -571,6 +571,65 @@ class TestStreamBranching:
         # each operation is only called once (no redundant processing)
         assert sink == expected
 
+    def test_watermark_in_branching(self):
+        """
+        Test that watermarks are properly propagated through all branches.
+        Each branch should receive the watermark.
+        """
+        watermark_calls = []
+
+        def track_watermark(branch_id):
+            def on_watermark(value, key, timestamp, headers):
+                watermark_calls.append((branch_id, timestamp))
+                yield value, key, timestamp, headers
+
+            return on_watermark
+
+        # Create a branching topology with watermark tracking
+        stream = Stream()
+        stream.add_transform(
+            lambda v, k, t, h: [(v + 1, k, t, h)],
+            expand=True,
+            on_watermark=track_watermark("branch1"),
+        )
+        stream.add_transform(
+            lambda v, k, t, h: [(v + 2, k, t, h)],
+            expand=True,
+            on_watermark=track_watermark("branch2"),
+        )
+        stream = stream.add_transform(
+            lambda v, k, t, h: [(v + 3, k, t, h)],
+            expand=True,
+            on_watermark=track_watermark("main"),
+        )
+
+        sink = Sink()
+        key, timestamp, headers = "key", 1000, []
+
+        # Compose and execute with a regular message
+        executor = stream.compose_single(sink=sink.append_record)
+        executor(0, key, timestamp, headers, is_watermark=False)
+
+        # Verify regular message was processed
+        expected_data = [
+            (1, key, timestamp, headers),
+            (2, key, timestamp, headers),
+            (3, key, timestamp, headers),
+        ]
+        assert sink == expected_data
+
+        # Clear the sink and send a watermark
+        sink.clear()
+        watermark_calls.clear()
+        watermark_timestamp = 2000
+        executor(None, None, watermark_timestamp, [], is_watermark=True)
+
+        # Verify watermark was received by all branches
+        assert len(watermark_calls) == 3
+        assert ("branch1", watermark_timestamp) in watermark_calls
+        assert ("branch2", watermark_timestamp) in watermark_calls
+        assert ("main", watermark_timestamp) in watermark_calls
+
 
 class TestStreamMerge:
     def test_merge_different_streams_success(self):
