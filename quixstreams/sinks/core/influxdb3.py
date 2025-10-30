@@ -235,7 +235,7 @@ class InfluxDB3Sink(BatchingSink):
         headers: HeadersTuples,
         topic: str,
         partition: int,
-        offset: int,
+        offset: Optional[int],
     ):
         if not isinstance(value, Mapping):
             raise TypeError(

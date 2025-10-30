@@ -18,7 +18,6 @@ from typing_extensions import TypeAlias
 
 from quixstreams.context import message_context
 from quixstreams.core.stream import TransformExpandedCallback
-from quixstreams.core.stream.exceptions import InvalidOperation
 from quixstreams.models.topics.manager import TopicManager
 from quixstreams.state import WindowedPartitionTransaction
 
@@ -70,6 +69,14 @@ class Window(abc.ABC):
         headers: Any,
         transaction: WindowedPartitionTransaction,
     ) -> tuple[Iterable[WindowKeyResult], Iterable[WindowKeyResult]]:
+        """
+        Process a window update for the given value and key.
+
+        Returns:
+            A tuple of (updated_windows, triggered_windows) where:
+            - updated_windows: Windows that were updated but not expired
+            - triggered_windows: Windows that were expired early due to before_update/after_update callbacks
+        """
         pass
 
     def register_store(self) -> None:
@@ -84,24 +91,39 @@ class Window(abc.ABC):
 
     def _apply_window(
         self,
-        func: TransformRecordCallbackExpandedWindowed,
+        on_update: TransformRecordCallbackExpandedWindowed,
         name: str,
+        on_watermark: Optional[TransformRecordCallbackExpandedWindowed] = None,
     ) -> "StreamingDataFrame":
         self.register_store()
 
         windowed_func = _as_windowed(
-            func=func,
+            func=on_update,
             stream_id=self._dataframe.stream_id,
             processing_context=self._dataframe.processing_context,
             store_name=name,
         )
+        if on_watermark:
+            watermark_func = _as_windowed(
+                func=on_watermark,
+                stream_id=self._dataframe.stream_id,
+                processing_context=self._dataframe.processing_context,
+                store_name=name,
+                allow_null_key=True,
+            )
+        else:
+            watermark_func = None
+
         # Manually modify the Stream and clone the source StreamingDataFrame
         # to avoid adding "transform" API to it.
         # Transform callbacks can modify record key and timestamp,
         # and it's prone to misuse.
-        stream = self._dataframe.stream.add_transform(func=windowed_func, expand=True)
+        stream = self._dataframe.stream.add_transform(
+            func=windowed_func, expand=True, on_watermark=watermark_func
+        )
         return self._dataframe.__dataframe_clone__(stream=stream)
 
+    @abstractmethod
     def final(self) -> "StreamingDataFrame":
         """
         Apply the window aggregation and return results only when the windows are
@@ -125,30 +147,9 @@ class Window(abc.ABC):
         If some message keys appear irregularly in the stream, the latest windows
         can remain unprocessed until the message the same key is received.
         """
+        ...
 
-        def window_callback(
-            value: Any,
-            key: Any,
-            timestamp_ms: int,
-            _headers: Any,
-            transaction: WindowedPartitionTransaction,
-        ) -> Iterable[Message]:
-            _, expired_windows = self.process_window(
-                value=value,
-                key=key,
-                timestamp_ms=timestamp_ms,
-                headers=_headers,
-                transaction=transaction,
-            )
-            # Use window start timestamp as a new record timestamp
-            for key, window in expired_windows:
-                yield (window, key, window["start"], None)
-
-        return self._apply_window(
-            func=window_callback,
-            name=self._name,
-        )
-
+    @abstractmethod
     def current(self) -> "StreamingDataFrame":
         """
         Apply the window transformation to the StreamingDataFrame to return results
@@ -166,37 +167,7 @@ class Window(abc.ABC):
         This method processes streaming data and returns results as they come,
         regardless of whether the window is closed or not.
         """
-
-        if self.collect:
-            raise InvalidOperation(
-                "BaseCollectors are not supported by `current` windows"
-            )
-
-        def window_callback(
-            value: Any,
-            key: Any,
-            timestamp_ms: int,
-            _headers: Any,
-            transaction: WindowedPartitionTransaction,
-        ) -> Iterable[Message]:
-            updated_windows, expired_windows = self.process_window(
-                value=value,
-                key=key,
-                timestamp_ms=timestamp_ms,
-                headers=_headers,
-                transaction=transaction,
-            )
-
-            # loop over the expired_windows generator to ensure the windows
-            # are expired
-            for key, window in expired_windows:
-                pass
-
-            # Use window start timestamp as a new record timestamp
-            for key, window in updated_windows:
-                yield (window, key, window["start"], None)
-
-        return self._apply_window(func=window_callback, name=self._name)
+        ...
 
     # Implemented by SingleAggregationWindowMixin and MultiAggregationWindowMixin
     # Single aggregation and multi aggregation windows store aggregations and collections
@@ -409,6 +380,7 @@ def _as_windowed(
     processing_context: "ProcessingContext",
     store_name: str,
     stream_id: str,
+    allow_null_key: bool = False,
 ) -> TransformExpandedCallback:
     @functools.wraps(func)
     def wrapper(
@@ -421,7 +393,7 @@ def _as_windowed(
                 stream_id=stream_id, partition=ctx.partition, store_name=store_name
             ),
         )
-        if key is None:
+        if key is None and not allow_null_key:
             logger.warning(
                 f"Skipping window processing for a message because the key is None, "
                 f"partition='{ctx.topic}[{ctx.partition}]' offset='{ctx.offset}'."
@@ -444,7 +416,7 @@ class WindowOnLateCallback(Protocol):
         store_name: str,
         topic: str,
         partition: int,
-        offset: int,
+        offset: Optional[int],
     ) -> bool: ...
 
 
