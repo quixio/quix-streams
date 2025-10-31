@@ -1111,11 +1111,11 @@ class Application:
         ]
         # TODO: The set is used because the watermark tp can already be present in the "topic_partitions"
         #  because we use `subscribe()` earlier. Fix the mess later.
-        # TODO: Also, how to avoid reading the whole WM topic on each restart?
-        #  We really need only the most recent data
-        #  Is it fine to read it from the end? The active partitions must still publish something.
-        #  Or should we commit it?
         self._consumer.assign(list(set(topic_partitions + watermarks_partitions)))
+
+        # Bootstrap watermarks by progressively reading the watermarks topic
+        # This uses an exponential backoff strategy to minimize startup time
+        self._watermark_manager.bootstrap_watermarks(self._consumer)
 
         # Pause changelog topic+partitions immediately after assignment
         changelog_topics = {t.name for t in self._topic_manager.changelog_topics_list}
