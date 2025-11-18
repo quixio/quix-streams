@@ -2,7 +2,7 @@ import uuid
 from unittest.mock import MagicMock, patch
 
 import pytest
-from confluent_kafka import TopicPartition
+from confluent_kafka import OFFSET_INVALID, TopicPartition
 from confluent_kafka import TopicPartition as ConfluentPartition
 
 from quixstreams.kafka import Consumer
@@ -349,6 +349,115 @@ class TestRecoveryManager:
 
         # Check that consumer.poll() is not called
         assert not consumer.poll.called
+
+    def test_do_recovery_handles_invalid_offset_during_rebalance(
+        self,
+        recovery_manager_factory,
+        topic_manager_factory,
+    ):
+        """
+        Test that RecoveryManager handles OFFSET_INVALID gracefully when
+        consumer.position() returns invalid offset during rebalancing.
+
+        This reproduces GitHub issue #1067 where recovery gets stuck in infinite
+        loop when partition stays assigned through rebalance but position becomes
+        temporarily invalid.
+        """
+        topic_name = str(uuid.uuid4())
+        store_name = "default"
+        lowwater, highwater = 0, 10
+
+        # Setup topics
+        topic_manager = topic_manager_factory()
+        data_topic = topic_manager.topic(topic_name)
+        changelog_topic = topic_manager.changelog_topic(
+            stream_id=topic_name,
+            store_name=store_name,
+            config=data_topic.broker_config,
+        )
+
+        data_tp = TopicPartition(topic=data_topic.name, partition=0)
+        changelog_tp = TopicPartition(topic=changelog_topic.name, partition=0)
+        assignment = [data_tp, changelog_tp]
+
+        # Create changelog message for recovery
+        # Message at offset (highwater - 1) means after consuming it,
+        # position will be at highwater, completing recovery
+        changelog_message = ConfluentKafkaMessageStub(
+            topic=changelog_topic.name,
+            partition=0,
+            offset=highwater - 1,
+            key=b"key",
+            value=b"value",
+            headers=[(CHANGELOG_CF_MESSAGE_HEADER, b"default")],
+        )
+
+        # Create mocked consumer
+        consumer = MagicMock(spec_set=Consumer)
+        consumer.assignment.return_value = assignment
+
+        # Simulate rebalancing scenario:
+        # 1. First poll returns None → OFFSET_INVALID detected and skipped
+        # 2. Second poll returns message → processes it
+        # 3. Third poll returns None → position check shows recovery complete
+        consumer.poll.side_effect = [None, changelog_message, None]
+
+        # Simulate consumer.position() behavior during rebalance:
+        # 1. First call returns OFFSET_INVALID (mid-rebalance - gets skipped)
+        # 2. Subsequent calls return highwater (recovery complete after message)
+        position_call_count = 0
+
+        def position_side_effect(partitions):
+            nonlocal position_call_count
+            position_call_count += 1
+            if position_call_count == 1:
+                # Mid-rebalance: return OFFSET_INVALID (will be skipped by fix)
+                return [ConfluentPartition(changelog_topic.name, 0, OFFSET_INVALID)]
+            else:
+                # After OFFSET_INVALID resolved, position is at highwater
+                return [ConfluentPartition(changelog_topic.name, 0, highwater)]
+
+        consumer.position.side_effect = position_side_effect
+
+        # Mock store partition
+        store_partition = MagicMock(spec_set=StorePartition)
+        # Stored offset is one before the message we'll recover
+        store_partition.get_changelog_offset.return_value = highwater - 2
+
+        # Setup recovery manager
+        recovery_manager = recovery_manager_factory(
+            consumer=consumer, topic_manager=topic_manager
+        )
+
+        consumer.get_watermark_offsets.return_value = (lowwater, highwater)
+        recovery_manager.assign_partition(
+            topic=topic_name,
+            partition=0,
+            committed_offsets={topic_name: -1001},
+            store_partitions={store_name: store_partition},
+        )
+
+        # Trigger recovery - should complete successfully despite OFFSET_INVALID
+        recovery_manager.do_recovery()
+
+        # Verify recovery completed successfully
+        assert (
+            not recovery_manager.partitions
+        ), "Recovery should complete and unassign all partitions"
+        assert consumer.poll.call_count == 3, (
+            "Should poll three times: "
+            "1) None (OFFSET_INVALID detected and skipped), "
+            "2) message consumed, "
+            "3) None (position==highwater, completes recovery)"
+        )
+        assert position_call_count == 2, (
+            "Should call position twice: "
+            "first returns OFFSET_INVALID (skipped), "
+            "second returns highwater (recovery complete)"
+        )
+
+        # Verify the changelog message was processed
+        store_partition.recover_from_changelog_message.assert_called_once()
 
 
 @pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
