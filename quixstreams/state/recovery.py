@@ -552,6 +552,9 @@ class RecoveryManager:
         )
         for rp in recovery_partitions:
             del self._recovery_partitions[rp.partition_num][rp.changelog_name]
+            # Clean up position cache for revoked partition
+            cache_key = f"{rp.changelog_name}:{rp.partition_num}"
+            self._position_cache.pop(cache_key, None)
         for partition_num in partition_nums:
             if not self._recovery_partitions[partition_num]:
                 del self._recovery_partitions[partition_num]
