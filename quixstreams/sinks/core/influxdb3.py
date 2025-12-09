@@ -78,7 +78,7 @@ class InfluxDB3Sink(BatchingSink):
         debug: bool = False,
         on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
         on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
-        raise_on_retention_violations: bool = False,
+        raise_on_retention_violation: bool = False,
     ):
         """
         A connector to sink processed data to InfluxDB v3.
@@ -151,7 +151,7 @@ class InfluxDB3Sink(BatchingSink):
             client authentication (which should raise an Exception).
             Callback should accept the raised Exception as an argument.
             Callback must resolve (or propagate/re-raise) the Exception.
-        :param raise_on_retention_violations: if True, raises an exception when InfluxDB
+        :param raise_on_retention_violation: if True, raises an exception when InfluxDB
         rejects points due to retention policy violations, stopping the pipeline.
             If False (default), logs a warning and continues processing.
             Keeping this False (default) is recommended for production to handle old
@@ -202,7 +202,7 @@ class InfluxDB3Sink(BatchingSink):
         self._batch_size = batch_size
         self._allow_missing_fields = allow_missing_fields
         self._convert_ints_to_floats = convert_ints_to_floats
-        self._raise_on_retention_violations = raise_on_retention_violations
+        self._raise_on_retention_violation = raise_on_retention_violation
 
     def _get_influx_version(self):
         # This validates the token is valid regardless of version
@@ -357,8 +357,8 @@ class InfluxDB3Sink(BatchingSink):
                     raise SinkBackpressureError(
                         retry_after=int(exc.retry_after)
                     ) from exc
-                if exc.response and exc.response.status == 422:
-                    if self._raise_on_retention_violations:
+                elif exc.response and exc.response.status == 422:
+                    if self._raise_on_retention_violation:
                         raise
 
                     logger.warning(
@@ -370,7 +370,8 @@ class InfluxDB3Sink(BatchingSink):
                         f"error={exc}"
                     )
                     continue
-                raise
+                else:
+                    raise
 
 
 def _ts_min_default(timestamp: Union[int, str, datetime]):
