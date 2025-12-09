@@ -77,8 +77,29 @@ To learn more about schema design and data types in InfluxDB, please read [Influ
 ## Delivery Guarantees
 `InfluxDB3Sink` provides at-least-once guarantees, and the same records may be written multiple times in case of errors during processing.  
 
-## Backpressure Handling
-InfluxDB sink automatically handles events when the database cannot accept new data due to write limits.  
+## Error Handling
+
+### Backpressure Handling
+
+InfluxDB sink automatically handles events when the database cannot accept new data due to write limits.
+
+When this happens, the application loses the accumulated in-memory batch and pauses the corresponding topic partition for a timeout duration returned by InfluxDB API (it returns an HTTP error with 429 status code and a `Retry-After` header with a timeout).  
+When the timeout expires, the app automatically resumes the partition to re-process the data and sink it again.
+
+### Retention Policy Violations
+
+By default, the sink gracefully handles retention policy violations (HTTP 422 errors) by logging a warning and continuing to process subsequent batches. This prevents the pipeline from crashing when attempting to write data that falls outside the configured retention period.
+
+This behavior is recommended for production environments where:
+
+- You may be replaying historical data
+- Messages arrive late due to network issues
+- Clock skew exists between systems
+- Retention policies change over time
+- Different environments use different policies (e.g., test InfluxDB instance has shorter retention than production, but pulls data from the production topic)
+- Incorrect timestamps are inserted into topics
+
+If you need strict error handling (e.g., for testing or data validation), you can set `raise_on_retention_violation=True` to stop the pipeline when retention violations occur.
 
 When this happens, the application loses the accumulated in-memory batch and pauses the corresponding topic partition for a timeout duration returned by InfluxDB API (it returns an HTTP error with 429 status code and a `Retry-After` header with a timeout).  
 When the timeout expires, the app automatically resumes the partition to re-process the data and sink it again.
@@ -139,6 +160,10 @@ Default - `10000`.
 
 - `debug` - if True, print debug logs from InfluxDB client.  
 Default - `False`.
+
+- `raise_on_retention_violation` - if True, raises an exception when InfluxDB 
+  rejects points due to retention policy violations...
+  Default - `False`.
 
 ## Testing Locally
 
