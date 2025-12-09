@@ -357,12 +357,14 @@ class InfluxDB3Sink(BatchingSink):
                     raise SinkBackpressureError(
                         retry_after=int(exc.retry_after)
                     ) from exc
-                elif exc.response and exc.response.status == 422:
-                    if self._raise_on_retention_violation:
-                        raise
-
+                if (
+                    exc.response
+                    and exc.response.status == 422
+                    and "retention policy" in str(exc).lower()
+                    and not self._raise_on_retention_violation
+                ):
                     logger.warning(
-                        f"InfluxDB rejected batch (retention policy or schema violation); "
+                        f"InfluxDB rejected batch (retention policy violation); "
                         f"min_timestamp={min_timestamp} "
                         f"max_timestamp={max_timestamp} "
                         f"topic={batch.topic} "
@@ -370,8 +372,8 @@ class InfluxDB3Sink(BatchingSink):
                         f"error={exc}"
                     )
                     continue
-                else:
-                    raise
+
+                raise
 
 
 def _ts_min_default(timestamp: Union[int, str, datetime]):
