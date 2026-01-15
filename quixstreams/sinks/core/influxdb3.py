@@ -2,7 +2,6 @@ import logging
 import sys
 import time
 from datetime import datetime, timezone
-from importlib import metadata
 from typing import Any, Callable, Iterable, Literal, Mapping, Optional, Union, get_args
 
 import httpx
@@ -172,38 +171,20 @@ class InfluxDB3Sink(BatchingSink):
                     f'Keys {overlap_str} are present in both "fields_keys" and "tags_keys"'
                 )
 
-        major, minor, _ = map(int, metadata.version("influxdb3-python").split("."))
-
-        if (major, minor) >= (0, 17):
-            self._client_args = {
-                "token": token,
-                "host": host,
-                "org": organization_id,
-                "database": database,
-                "debug": debug,
-                "enable_gzip": enable_gzip,
-                "write_client_options": {
-                    "write_options": WriteOptions(
-                        write_type=WriteType.synchronous,
-                        timeout=self._request_timeout_ms,
-                    )
-                },
-            }
-        else:
-            self._client_args = {
-                "token": token,
-                "host": host,
-                "org": organization_id,
-                "database": database,
-                "debug": debug,
-                "enable_gzip": enable_gzip,
-                "timeout": self._request_timeout_ms,
-                "write_client_options": {
-                    "write_options": WriteOptions(
-                        write_type=WriteType.synchronous,
-                    )
-                },
-            }
+        self._client_args = {
+            "token": token,
+            "host": host,
+            "org": organization_id,
+            "database": database,
+            "debug": debug,
+            "enable_gzip": enable_gzip,
+            "write_client_options": {
+                "write_options": WriteOptions(
+                    write_type=WriteType.synchronous,
+                    timeout=self._request_timeout_ms,
+                )
+            },
+        }
         self._client: Optional[InfluxDBClient3] = None
         self._measurement = _measurement_callable(measurement)
         self._fields_keys = _fields_callable(fields_keys)
