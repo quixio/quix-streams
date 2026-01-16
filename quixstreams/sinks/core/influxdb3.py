@@ -185,10 +185,10 @@ class InfluxDB3Sink(BatchingSink):
             "database": database,
             "debug": debug,
             "enable_gzip": enable_gzip,
-            "timeout": self._request_timeout_ms,
             "write_client_options": {
                 "write_options": WriteOptions(
                     write_type=WriteType.synchronous,
+                    timeout=self._request_timeout_ms,
                 )
             },
         }
