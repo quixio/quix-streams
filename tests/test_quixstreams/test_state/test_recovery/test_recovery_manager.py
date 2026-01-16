@@ -437,8 +437,21 @@ class TestRecoveryManager:
             store_partitions={store_name: store_partition},
         )
 
-        # Trigger recovery - should complete successfully despite OFFSET_INVALID
-        recovery_manager.do_recovery()
+        # Mock time.monotonic to simulate time advancing between position calls
+        # This ensures the position cache expires between calls (cache is 1 second)
+        mock_time = 0.0
+
+        def monotonic_side_effect():
+            nonlocal mock_time
+            mock_time += 2.0  # Advance time by 2 seconds each call
+            return mock_time
+
+        with patch(
+            "quixstreams.state.recovery.time.monotonic",
+            side_effect=monotonic_side_effect,
+        ):
+            # Trigger recovery - should complete successfully despite OFFSET_INVALID
+            recovery_manager.do_recovery()
 
         # Verify recovery completed successfully
         assert (
