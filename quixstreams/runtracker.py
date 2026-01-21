@@ -101,14 +101,17 @@ class RunTracker:
         key: Any,
         timestamp: int,
         headers: Any,
+        is_watermark: bool = False,
     ):
+        if is_watermark:
+            return
         ctx = message_context()
         self._collector.add_value_and_metadata(
             key=key,
             value=value,
             timestamp_ms=timestamp,
             headers=headers,
-            offset=ctx.offset,
+            offset=ctx.offset or 0,
             partition=ctx.partition,
             topic=ctx.topic,
         )
@@ -119,7 +122,10 @@ class RunTracker:
         key: Any,
         timestamp: int,
         headers: Any,
+        is_watermark: bool = False,
     ):
+        if is_watermark:
+            return
         self._collector.add_value(value=value)
 
     def increment_count(
@@ -128,7 +134,10 @@ class RunTracker:
         key: Any,
         timestamp: int,
         headers: Any,
+        is_watermark: bool = False,
     ):
+        if is_watermark:
+            return
         self._collector.increment_count()
 
     def stop(self):

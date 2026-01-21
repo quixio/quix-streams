@@ -12,7 +12,6 @@ from confluent_kafka import KafkaException, TopicPartition
 
 from quixstreams.app import Application
 from quixstreams.dataframe import StreamingDataFrame
-from quixstreams.dataframe.windows.base import get_window_ranges
 from quixstreams.exceptions import PartitionAssignmentError
 from quixstreams.internal_consumer import InternalConsumer
 from quixstreams.internal_producer import InternalProducer
@@ -1205,9 +1204,7 @@ class TestApplicationWithState:
             )
             state_manager.register_store(stream_id, "default")
             state_manager.on_partition_assign(
-                stream_id=stream_id,
-                partition=partition_index,
-                committed_offsets={stream_id: -1001},
+                stream_id=stream_id, partition=partition_index
             )
             store = state_manager.get_store(stream_id=stream_id, store_name="default")
             with store.start_partition_transaction(partition=partition_index) as tx:
@@ -1336,11 +1333,7 @@ class TestApplicationWithState:
             group_id=consumer_group, state_dir=state_dir
         )
         state_manager.register_store(sdf.stream_id, "default")
-        state_manager.on_partition_assign(
-            stream_id=sdf.stream_id,
-            partition=0,
-            committed_offsets={},
-        )
+        state_manager.on_partition_assign(stream_id=sdf.stream_id, partition=0)
         store = state_manager.get_store(stream_id=sdf.stream_id, store_name="default")
         with store.start_partition_transaction(partition=0) as tx:
             assert tx.get("total", prefix=key) is None
@@ -1453,11 +1446,7 @@ class TestApplicationWithState:
         # Add data to the state store
         with state_manager:
             state_manager.register_store(topic_in_name, "default")
-            state_manager.on_partition_assign(
-                stream_id=topic_in_name,
-                partition=0,
-                committed_offsets={topic_in_name: -1001},
-            )
+            state_manager.on_partition_assign(stream_id=topic_in_name, partition=0)
             store = state_manager.get_store(
                 stream_id=topic_in_name, store_name="default"
             )
@@ -1471,11 +1460,7 @@ class TestApplicationWithState:
         # Check that the date is cleared from the state store
         with state_manager:
             state_manager.register_store(topic_in_name, "default")
-            state_manager.on_partition_assign(
-                stream_id=topic_in_name,
-                partition=0,
-                committed_offsets={topic_in_name: -1001},
-            )
+            state_manager.on_partition_assign(stream_id=topic_in_name, partition=0)
             store = state_manager.get_store(
                 stream_id=topic_in_name, store_name="default"
             )
@@ -1563,9 +1548,7 @@ class TestApplicationRecovery:
                     state_manager.register_store(sdf.stream_id, store_name)
                     for p_num, count in partition_msg_count.items():
                         state_manager.on_partition_assign(
-                            stream_id=sdf.stream_id,
-                            partition=p_num,
-                            committed_offsets={topic.name: -1001},
+                            stream_id=sdf.stream_id, partition=p_num
                         )
                         store = state_manager.get_store(
                             stream_id=sdf.stream_id, store_name=store_name
@@ -1621,186 +1604,7 @@ class TestApplicationRecovery:
         # State should be the same as before deletion
         validate_state(stores)
 
-    @pytest.mark.parametrize("processing_guarantee", ["at-least-once", "exactly-once"])
-    def test_changelog_recovery_window_store(
-        self,
-        app_factory,
-        executor,
-        tmp_path,
-        state_manager_factory,
-        processing_guarantee,
-    ):
-        consumer_group = str(uuid.uuid4())
-        state_dir = (tmp_path / "state").absolute()
-        topic_name = str(uuid.uuid4())
-        store_name = "window"
-        window_duration_ms = 5000
-        window_step_ms = 2000
-
-        msg_tick_ms = 1000
-        msg_int_value = 10
-
-        partition_timestamps = {
-            0: list(range(10000, 14000, msg_tick_ms)),
-            1: list(range(10000, 12000, msg_tick_ms)),
-        }
-        partition_windows = {
-            p: [
-                w
-                for ts in ts_list
-                for w in get_window_ranges(ts, window_duration_ms, window_step_ms)
-            ]
-            for p, ts_list in partition_timestamps.items()
-        }
-
-        # how many times window updates should occur (1:1 with changelog updates)
-        expected_window_updates = {0: {}, 1: {}}
-        # expired windows should have no values (changelog updates per tx == num_exp_windows + 1)
-        expected_expired_windows = {0: set(), 1: set()}
-
-        for p, windows in partition_windows.items():
-            latest_timestamp = partition_timestamps[p][-1]
-            for w in windows:
-                if latest_timestamp >= w[1]:
-                    expected_expired_windows[p].add(w)
-                expected_window_updates[p][w] = (
-                    expected_window_updates[p].setdefault(w, 0) + 1
-                )
-
-        processed_count = {0: 0, 1: 0}
-        partition_msg_count = {
-            p: len(partition_timestamps[p]) for p in partition_timestamps
-        }
-
-        def on_message_processed(topic_, partition, offset):
-            # Set the callback to track total messages processed
-            # The callback is not triggered if processing fails
-            processed_count[partition] += 1
-            if processed_count == partition_msg_count:
-                done.set_result(True)
-
-        def get_app():
-            app = app_factory(
-                commit_interval=0,  # Commit every processed message
-                auto_offset_reset="earliest",
-                use_changelog_topics=True,
-                consumer_group=consumer_group,
-                on_message_processed=on_message_processed,
-                state_dir=state_dir,
-                processing_guarantee=processing_guarantee,
-            )
-            topic = app.topic(
-                topic_name,
-                config=TopicConfig(
-                    num_partitions=len(partition_msg_count), replication_factor=1
-                ),
-            )
-            # Create a streaming dataframe with a hopping window
-            sdf = (
-                app.dataframe(topic)
-                .apply(lambda row: row["my_value"])
-                .hopping_window(
-                    duration_ms=window_duration_ms,
-                    step_ms=window_step_ms,
-                    name=store_name,
-                )
-                .sum()
-                .final()
-            )
-            return app, sdf, topic
-
-        def validate_state():
-            actual_store_name = (
-                f"{store_name}_hopping_window_{window_duration_ms}_{window_step_ms}_sum"
-            )
-            with state_manager_factory(
-                group_id=consumer_group, state_dir=state_dir
-            ) as state_manager:
-                state_manager.register_windowed_store(sdf.stream_id, actual_store_name)
-                for p_num, windows in expected_window_updates.items():
-                    state_manager.on_partition_assign(
-                        stream_id=sdf.stream_id,
-                        partition=p_num,
-                        committed_offsets={topic.name: -1001},
-                    )
-                    store = state_manager.get_store(
-                        stream_id=sdf.stream_id,
-                        store_name=actual_store_name,
-                    )
-
-                    # Calculate how many messages should be send to the changelog topic
-                    expected_offset = (
-                        # A number of total window updates
-                        sum(expected_window_updates[p_num].values())
-                        # A number of expired windows
-                        + 2 * len(expected_expired_windows[p_num])
-                        # A number of total timestamps
-                        # (each timestamp updates the <LATEST_TIMESTAMPS_CF_NAME>)
-                        + len(partition_timestamps[p_num])
-                        # Correction for zero-based index
-                        - 1
-                    )
-                    if processing_guarantee == "exactly-once":
-                        # In this test, we commit after each message is processed, so
-                        # must add PMC-1 to our offset calculation since each kafka
-                        # to account for transaction commit markers (except last one)
-                        expected_offset += partition_msg_count[p_num] - 1
-                    assert (
-                        expected_offset
-                        == store.partitions[p_num].get_changelog_offset()
-                    )
-
-                    partition = store.partitions[p_num]
-
-                    with partition.begin() as tx:
-                        prefix = b"key"
-                        for window, count in windows.items():
-                            expected = count
-                            if window in expected_expired_windows[p_num]:
-                                expected = None
-                            else:
-                                # each message value was 10
-                                expected *= msg_int_value
-                            assert tx.get_window(*window, prefix=prefix) == expected
-
-        app, sdf, topic = get_app()
-        # Produce messages to the topic and flush
-        with app.get_producer() as producer:
-            for p_num, timestamps in partition_timestamps.items():
-                serialized = topic.serialize(
-                    key=b"key", value={"my_value": msg_int_value}
-                )
-                for ts in timestamps:
-                    producer.produce(
-                        topic=topic.name,
-                        key=serialized.key,
-                        value=serialized.value,
-                        partition=p_num,
-                        timestamp=ts,
-                    )
-
-        # run app to populate state
-        done = Future()
-        executor.submit(_stop_app_on_future, app, done, 10.0)
-        app.run()
-        # validate and then delete the state
-        assert processed_count == partition_msg_count
-        validate_state()
-
-        # run the app again and validate the recovered state
-        processed_count = {0: 0, 1: 0}
-        app, sdf, topic = get_app()
-        app.clear_state()
-        done = Future()
-        executor.submit(_stop_app_on_future, app, done, 10.0)
-        app.run()
-        # no messages should have been processed outside of recovery loop
-        assert processed_count == {0: 0, 1: 0}
-        # State should be the same as before deletion
-        validate_state()
-
-    @pytest.mark.parametrize("processing_guarantee", ["at-least-once", "exactly-once"])
-    def test_changelog_recovery_consistent_after_failed_commit(
+    def test_changelog_recovery_consistent_after_failed_commit_exactly_once(
         self,
         store_type,
         app_factory,
@@ -1808,7 +1612,6 @@ class TestApplicationRecovery:
         tmp_path,
         state_manager_factory,
         internal_consumer_factory,
-        processing_guarantee,
     ):
         """
         Scenario: application processes messages and successfully produces changelog
@@ -1822,14 +1625,9 @@ class TestApplicationRecovery:
         topic_name = str(uuid.uuid4())
         store_name = "default"
 
-        if processing_guarantee == "exactly-once":
-            commit_patch = patch.object(
-                InternalProducer, "commit_transaction", side_effect=ValueError("Fail")
-            )
-        else:
-            commit_patch = patch.object(
-                InternalConsumer, "commit", side_effect=ValueError("Fail")
-            )
+        commit_patch = patch.object(
+            InternalProducer, "commit_transaction", side_effect=ValueError("Fail")
+        )
 
         # Messages to be processed successfully
         succeeded_messages = [
@@ -1864,7 +1662,7 @@ class TestApplicationRecovery:
                 on_message_processed=on_message_processed,
                 consumer_group=consumer_group,
                 state_dir=state_dir,
-                processing_guarantee=processing_guarantee,
+                processing_guarantee="exactly-once",
             )
             topic = app.topic(topic_name)
             sdf = app.dataframe(topic)
@@ -1892,18 +1690,11 @@ class TestApplicationRecovery:
                         group_id=consumer_group,
                         state_dir=state_dir,
                     ) as state_manager,
-                    internal_consumer_factory(
-                        consumer_group=consumer_group
-                    ) as consumer,
+                    internal_consumer_factory(consumer_group=consumer_group),
                 ):
-                    committed_offset = consumer.committed(
-                        [TopicPartition(topic=topic_name, partition=0)]
-                    )[0].offset
                     state_manager.register_store(sdf.stream_id, store_name)
                     partition = state_manager.on_partition_assign(
-                        stream_id=sdf.stream_id,
-                        partition=0,
-                        committed_offsets={topic_name: committed_offset},
+                        stream_id=sdf.stream_id, partition=0
                     )["default"]
                     with partition.begin() as tx:
                         _validate_transaction_state(tx)
@@ -2617,9 +2408,7 @@ class TestApplicationMultipleSdf:
                 )
                 state_manager.register_store(stream_id, "default")
                 state_manager.on_partition_assign(
-                    stream_id=stream_id,
-                    partition=partition_num,
-                    committed_offsets={},
+                    stream_id=stream_id, partition=partition_num
                 )
                 store = state_manager.get_store(
                     stream_id=stream_id, store_name="default"

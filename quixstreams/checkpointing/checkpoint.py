@@ -1,3 +1,4 @@
+import abc
 import logging
 import time
 from abc import abstractmethod
@@ -26,7 +27,7 @@ from .exceptions import (
 logger = logging.getLogger(__name__)
 
 
-class BaseCheckpoint:
+class BaseCheckpoint(abc.ABC):
     """
     Base class to keep track of state updates and consumer offsets and to checkpoint these
     updates on schedule.
@@ -70,7 +71,7 @@ class BaseCheckpoint:
         Returns `True` if checkpoint doesn't have any offsets stored yet.
         :return:
         """
-        return not bool(self._tp_offsets)
+        return not bool(self._tp_offsets) and not bool(self._store_transactions)
 
     def store_offset(self, topic: str, partition: int, offset: int):
         """
@@ -228,20 +229,12 @@ class Checkpoint(BaseCheckpoint):
             partition,
             store_name,
         ), transaction in self._store_transactions.items():
-            topics = self._dataframe_registry.get_topics_for_stream_id(
-                stream_id=stream_id
-            )
-            processed_offsets = {
-                topic: offset
-                for (topic, partition_), offset in self._tp_offsets.items()
-                if topic in topics and partition_ == partition
-            }
             if transaction.failed:
                 raise StoreTransactionFailed(
                     f'Detected a failed transaction for store "{store_name}", '
                     f"the checkpoint is aborted"
                 )
-            transaction.prepare(processed_offsets=processed_offsets)
+            transaction.prepare()
 
         # Step 3. Flush producer to trigger all delivery callbacks and ensure that
         # all messages are produced
@@ -263,7 +256,9 @@ class Checkpoint(BaseCheckpoint):
             self._producer.commit_transaction(
                 offsets, self._consumer.consumer_group_metadata()
             )
-        else:
+        elif offsets:
+            # Checkpoint may have no offsets processed when only watermarks are processed.
+            # In this case we don't have anything to commit to Kafka.
             logger.debug("Checkpoint: committing consumer")
             try:
                 partitions = self._consumer.commit(offsets=offsets, asynchronous=False)

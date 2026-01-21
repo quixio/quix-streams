@@ -571,6 +571,121 @@ class TestStreamBranching:
         # each operation is only called once (no redundant processing)
         assert sink == expected
 
+    def test_watermark_in_branching(self):
+        """
+        Test that watermarks are properly propagated through all branches.
+        Each branch should receive the watermark.
+        """
+        watermark_calls = []
+
+        def track_watermark(branch_id):
+            def on_watermark(value, key, timestamp, headers):
+                watermark_calls.append((branch_id, timestamp))
+                yield value, key, timestamp, headers
+
+            return on_watermark
+
+        # Create a branching topology with watermark tracking
+        stream = Stream()
+        stream.add_transform(
+            lambda v, k, t, h: [(v + 1, k, t, h)],
+            expand=True,
+            on_watermark=track_watermark("branch1"),
+        )
+        stream.add_transform(
+            lambda v, k, t, h: [(v + 2, k, t, h)],
+            expand=True,
+            on_watermark=track_watermark("branch2"),
+        )
+        stream = stream.add_transform(
+            lambda v, k, t, h: [(v + 3, k, t, h)],
+            expand=True,
+            on_watermark=track_watermark("main"),
+        )
+
+        sink = Sink()
+        key, timestamp, headers = "key", 1000, []
+
+        # Compose and execute with a regular message
+        executor = stream.compose_single(sink=sink.append_record)
+        executor(0, key, timestamp, headers, is_watermark=False)
+
+        # Verify regular message was processed
+        expected_data = [
+            (1, key, timestamp, headers),
+            (2, key, timestamp, headers),
+            (3, key, timestamp, headers),
+        ]
+        assert sink == expected_data
+
+        # Clear the sink and send a watermark
+        sink.clear()
+        watermark_calls.clear()
+        watermark_timestamp = 2000
+        executor(None, None, watermark_timestamp, [], is_watermark=True)
+
+        # Verify watermark was received by all branches
+        assert len(watermark_calls) == 3
+        assert ("branch1", watermark_timestamp) in watermark_calls
+        assert ("branch2", watermark_timestamp) in watermark_calls
+        assert ("main", watermark_timestamp) in watermark_calls
+
+    def test_watermarks_not_passed_to_apply_functions(self):
+        """
+        Test that watermarks are not passed to apply/filter/update functions.
+        User functions should only process actual data, not watermarks.
+        """
+        apply_calls = []
+        filter_calls = []
+        update_calls = []
+
+        def track_apply(v):
+            apply_calls.append(v)
+            return v + 1
+
+        def track_filter(v):
+            filter_calls.append(v)
+            return True
+
+        def track_update(v):
+            update_calls.append(v)
+
+        # Create a stream with various function types
+        stream = Stream()
+        stream = stream.add_apply(track_apply)
+        stream = stream.add_filter(track_filter)
+        stream = stream.add_update(track_update)
+
+        sink = Sink()
+        key, timestamp, headers = "key", 1000, []
+
+        # Execute with regular messages
+        executor = stream.compose_single(sink=sink.append_record)
+        executor(10, key, timestamp, headers, is_watermark=False)
+        executor(20, key, timestamp, headers, is_watermark=False)
+
+        # Verify regular messages were processed
+        assert apply_calls == [10, 20]
+        assert filter_calls == [11, 21]
+        assert update_calls == [11, 21]
+        assert len(sink) == 2
+
+        # Clear tracking
+        apply_calls.clear()
+        filter_calls.clear()
+        update_calls.clear()
+        sink.clear()
+
+        # Send watermarks
+        executor(None, None, 2000, [], is_watermark=True)
+        executor(None, None, 3000, [], is_watermark=True)
+
+        # Verify watermarks were NOT processed by user functions
+        assert apply_calls == []
+        assert filter_calls == []
+        assert update_calls == []
+        assert len(sink) == 0  # Watermarks should not reach the sink
+
 
 class TestStreamMerge:
     def test_merge_different_streams_success(self):

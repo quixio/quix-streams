@@ -3,9 +3,8 @@ import operator
 import re
 import uuid
 import warnings
-from collections import namedtuple
 from datetime import timedelta
-from typing import Any
+from typing import Any, NamedTuple
 from unittest import mock
 
 import pytest
@@ -21,7 +20,12 @@ from quixstreams.models.topics.topic import Topic
 from quixstreams.utils.stream_id import stream_id_from_strings
 from tests.utils import DummySink
 
-RecordStub = namedtuple("RecordStub", ("value", "key", "timestamp"))
+
+class RecordStub(NamedTuple):
+    value: Any
+    key: Any
+    timestamp: int
+    is_watermark: bool = False
 
 
 class TestStreamingDataFrame:
@@ -368,16 +372,27 @@ class TestStreamingDataFrame:
         with pytest.raises(InvalidOperation):
             sdf["truth"] = sdf[sdf.apply(lambda x: x["a"] > 0)] or sdf[["b"]]
 
-    def test_set_timestamp(self, dataframe_factory):
+    def test_set_timestamp(
+        self, dataframe_factory, topic_manager_factory, message_context_factory
+    ):
         value, key, timestamp, headers = 1, "key", 0, None
         expected = (1, "key", 100, headers)
-        sdf = dataframe_factory()
+
+        topic_manager = topic_manager_factory()
+        topic = topic_manager.topic(name=str(uuid.uuid4()))
+        sdf = dataframe_factory(topic)
 
         sdf = sdf.set_timestamp(
             lambda value_, key_, timestamp_, headers_: timestamp_ + 100
         )
 
-        result = sdf.test(value=value, key=key, timestamp=timestamp, headers=headers)[0]
+        result = sdf.test(
+            value=value,
+            key=key,
+            timestamp=timestamp,
+            headers=headers,
+            ctx=message_context_factory(topic=topic.name),
+        )[0]
         assert result == expected
 
     @pytest.mark.parametrize(
@@ -845,9 +860,7 @@ class TestStreamingDataframeStateful:
         sdf = dataframe_factory(topic, state_manager=state_manager)
         sdf = sdf.apply(stateful_func, stateful=True)
 
-        state_manager.on_partition_assign(
-            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
-        )
+        state_manager.on_partition_assign(stream_id=sdf.stream_id, partition=0)
         values = [
             {"number": 1},
             {"number": 10},
@@ -884,9 +897,7 @@ class TestStreamingDataframeStateful:
         sdf = dataframe_factory(topic, state_manager=state_manager)
         sdf = sdf.update(stateful_func, stateful=True)
 
-        state_manager.on_partition_assign(
-            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
-        )
+        state_manager.on_partition_assign(stream_id=sdf.stream_id, partition=0)
         result = None
         values = [
             {"number": 1},
@@ -924,9 +935,7 @@ class TestStreamingDataframeStateful:
         sdf = sdf.update(stateful_func, stateful=True)
         sdf = sdf.filter(lambda v, state: state.get("max") >= 3, stateful=True)
 
-        state_manager.on_partition_assign(
-            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
-        )
+        state_manager.on_partition_assign(stream_id=sdf.stream_id, partition=0)
         values = [
             {"number": 1},
             {"number": 1},
@@ -965,9 +974,7 @@ class TestStreamingDataframeStateful:
         sdf = sdf.update(stateful_func, stateful=True)
         sdf = sdf[sdf.apply(lambda v, state: state.get("max") >= 3, stateful=True)]
 
-        state_manager.on_partition_assign(
-            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
-        )
+        state_manager.on_partition_assign(stream_id=sdf.stream_id, partition=0)
         values = [
             {"number": 1},
             {"number": 1},
@@ -1036,9 +1043,7 @@ class TestStreamingDataFrameTumblingWindow:
             .current()
         )
 
-        state_manager.on_partition_assign(
-            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
-        )
+        state_manager.on_partition_assign(stream_id=sdf.stream_id, partition=0)
 
         records = [
             # Message early in the window
@@ -1051,7 +1056,7 @@ class TestStreamingDataFrameTumblingWindow:
         headers = [("key", b"value")]
 
         results = []
-        for value, key, timestamp in records:
+        for value, key, timestamp, _ in records:
             ctx = message_context_factory(topic=topic.name)
             results += sdf.test(
                 value=value, key=key, timestamp=timestamp, headers=headers, ctx=ctx
@@ -1112,14 +1117,14 @@ class TestStreamingDataFrameTumblingWindow:
             .current()
         )
 
-        state_manager.on_partition_assign(
-            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
-        )
+        state_manager.on_partition_assign(stream_id=sdf.stream_id, partition=0)
         records = [
             # Create window [0, 10)
             RecordStub(1, "test", 1),
             # Create window [20,30)
             RecordStub(2, "test", 20),
+            # Send watermark at 20
+            RecordStub(None, None, 20, is_watermark=True),
             # Late message - it belongs to window [0,10) but this window
             # is already closed. This message should be skipped from processing
             RecordStub(3, "test", 19),
@@ -1128,10 +1133,15 @@ class TestStreamingDataFrameTumblingWindow:
 
         results = []
         with caplog.at_level(logging.WARNING, logger="quixstreams"):
-            for value, key, timestamp in records:
+            for value, key, timestamp, is_watermark in records:
                 ctx = message_context_factory(topic=topic.name)
                 result = sdf.test(
-                    value=value, key=key, timestamp=timestamp, headers=headers, ctx=ctx
+                    value=value,
+                    key=key,
+                    timestamp=timestamp,
+                    headers=headers,
+                    is_watermark=is_watermark,
+                    ctx=ctx,
                 )
                 results += result
 
@@ -1140,7 +1150,7 @@ class TestStreamingDataFrameTumblingWindow:
             r
             for r in caplog.records
             if r.levelname == "WARNING"
-            and "Skipping window processing for the closed window" in r.message
+            and "Skipping record processing for the closed window" in r.message
         ]
 
         assert warning_logs if should_log else not warning_logs
@@ -1165,55 +1175,42 @@ class TestStreamingDataFrameTumblingWindow:
         sdf = dataframe_factory(topic, state_manager=state_manager)
         sdf = sdf.tumbling_window(duration_ms=10, grace_ms=0).sum().final()
 
-        state_manager.on_partition_assign(
-            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
-        )
+        state_manager.on_partition_assign(stream_id=sdf.stream_id, partition=0)
         records = [
             # Create window [0, 10)
             RecordStub(1, "test", 1),
             # Update window [0, 10)
             RecordStub(1, "test", 2),
-            # Create window [20,30). Window [0, 10) is expired now.
+            # Create window [20,30).
             RecordStub(2, "test", 20),
-            # Create window [30, 40). Window [20, 30) is expired now.
+            # Send watermark at 20. Window [0, 10) is expired now.
+            RecordStub(None, None, 20, is_watermark=True),
+            # Create window [30, 40).
             RecordStub(3, "test", 39),
+            # Send watermark at 39. Window [20, 30) is expired now.
+            RecordStub(3, "test", 39, is_watermark=True),
             # Update window [30, 40). Nothing should be returned.
             RecordStub(4, "test", 38),
         ]
         headers = [("key", b"value")]
 
         results = []
-        for value, key, timestamp in records:
+        for value, key, timestamp, is_watermark in records:
             ctx = message_context_factory(topic=topic.name)
             results += sdf.test(
-                value=value, key=key, timestamp=timestamp, headers=headers, ctx=ctx
+                value=value,
+                key=key,
+                timestamp=timestamp,
+                headers=headers,
+                is_watermark=is_watermark,
+                ctx=ctx,
             )
 
         assert len(results) == 2
         assert results == [
-            (WindowResult(value=2, start=0, end=10), records[2].key, 0, None),
-            (WindowResult(value=2, start=20, end=30), records[3].key, 20, None),
+            (WindowResult(value=2, start=0, end=10), b'"test"', 0, None),
+            (WindowResult(value=2, start=20, end=30), b'"test"', 20, None),
         ]
-
-    def test_tumbling_window_final_invalid_strategy(
-        self,
-        dataframe_factory,
-        state_manager,
-        message_context_factory,
-        topic_manager_topic_factory,
-    ):
-        topic = topic_manager_topic_factory(
-            name="test",
-        )
-
-        sdf = dataframe_factory(topic, state_manager=state_manager)
-
-        with pytest.raises(TypeError):
-            sdf = (
-                sdf.tumbling_window(duration_ms=10, grace_ms=0)
-                .sum()
-                .final(closing_strategy="foo")
-            )
 
     def test_tumbling_window_none_key_messages(
         self,
@@ -1227,9 +1224,7 @@ class TestStreamingDataFrameTumblingWindow:
         sdf = dataframe_factory(topic, state_manager=state_manager)
         sdf = sdf.tumbling_window(duration_ms=10).sum().current()
 
-        state_manager.on_partition_assign(
-            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
-        )
+        state_manager.on_partition_assign(stream_id=sdf.stream_id, partition=0)
         records = [
             # Create window [0,10)
             RecordStub(1, "test", 1),
@@ -1241,7 +1236,7 @@ class TestStreamingDataFrameTumblingWindow:
         headers = [("key", b"value")]
 
         results = []
-        for value, key, timestamp in records:
+        for value, key, timestamp, _ in records:
             ctx = message_context_factory(topic=topic.name)
             results += sdf.test(
                 value=value, key=key, timestamp=timestamp, headers=headers, ctx=ctx
@@ -1277,9 +1272,7 @@ class TestStreamingDataFrameTumblingWindow:
             .current()
         )
 
-        state_manager.on_partition_assign(
-            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
-        )
+        state_manager.on_partition_assign(stream_id=sdf.stream_id, partition=0)
 
         records = [
             # Message early in the window
@@ -1292,7 +1285,7 @@ class TestStreamingDataFrameTumblingWindow:
         headers = [("key", b"value")]
 
         results = []
-        for value, key, timestamp in records:
+        for value, key, timestamp, _ in records:
             ctx = message_context_factory(topic=topic.name)
             results += sdf.test(
                 value=value, key=key, timestamp=timestamp, headers=headers, ctx=ctx
@@ -1390,9 +1383,7 @@ class TestStreamingDataFrameHoppingWindow:
         sdf = dataframe_factory(topic, state_manager=state_manager)
         sdf = sdf.hopping_window(duration_ms=10, step_ms=5).sum().current()
 
-        state_manager.on_partition_assign(
-            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
-        )
+        state_manager.on_partition_assign(stream_id=sdf.stream_id, partition=0)
         records = [
             # Create window [0,10)
             RecordStub(1, "test", 1),
@@ -1408,7 +1399,7 @@ class TestStreamingDataFrameHoppingWindow:
         headers = [("key", b"value")]
 
         results = []
-        for value, key, timestamp in records:
+        for value, key, timestamp, _ in records:
             ctx = message_context_factory(topic=topic.name)
             results += sdf.test(
                 value=value, key=key, timestamp=timestamp, headers=headers, ctx=ctx
@@ -1441,36 +1432,41 @@ class TestStreamingDataFrameHoppingWindow:
         sdf = dataframe_factory(topic, state_manager=state_manager)
         sdf = sdf.hopping_window(duration_ms=10, step_ms=5).sum().current()
 
-        state_manager.on_partition_assign(
-            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
-        )
+        state_manager.on_partition_assign(stream_id=sdf.stream_id, partition=0)
         records = [
             # Create window [0,10)
-            RecordStub(1, "test", 1),
+            RecordStub(1, b"test", 1),
             # Update window [0,10) and create window [5,15)
-            RecordStub(2, "test", 7),
+            RecordStub(2, b"test", 7),
             # Create windows [30, 40) and [35, 45)
-            RecordStub(4, "test", 35),
+            RecordStub(4, b"test", 35),
+            # Send watermark at 35
+            RecordStub(None, None, 35, is_watermark=True),
             # Timestamp "10" is late and should not be processed
-            RecordStub(3, "test", 26),
+            RecordStub(3, b"test", 26),
         ]
         headers = [("key", b"value")]
 
         results = []
-        for value, key, timestamp in records:
+        for value, key, timestamp, is_watermark in records:
             ctx = message_context_factory(topic=topic.name)
             results += sdf.test(
-                value=value, key=key, timestamp=timestamp, headers=headers, ctx=ctx
+                value=value,
+                key=key,
+                timestamp=timestamp,
+                headers=headers,
+                is_watermark=is_watermark,
+                ctx=ctx,
             )
 
         assert len(results) == 5
         # Ensure that the windows are returned with correct values and order
         assert results == [
-            (WindowResult(value=1, start=0, end=10), records[0].key, 0, None),
-            (WindowResult(value=3, start=0, end=10), records[1].key, 0, None),
-            (WindowResult(value=2, start=5, end=15), records[1].key, 5, None),
-            (WindowResult(value=4, start=30, end=40), records[2].key, 30, None),
-            (WindowResult(value=4, start=35, end=45), records[2].key, 35, None),
+            (WindowResult(value=1, start=0, end=10), b"test", 0, None),
+            (WindowResult(value=3, start=0, end=10), b"test", 0, None),
+            (WindowResult(value=2, start=5, end=15), b"test", 5, None),
+            (WindowResult(value=4, start=30, end=40), b"test", 30, None),
+            (WindowResult(value=4, start=35, end=45), b"test", 35, None),
         ]
 
     def test_hopping_window_final(
@@ -1485,60 +1481,45 @@ class TestStreamingDataFrameHoppingWindow:
         sdf = dataframe_factory(topic, state_manager=state_manager)
         sdf = sdf.hopping_window(duration_ms=10, step_ms=5).sum().final()
 
-        state_manager.on_partition_assign(
-            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
-        )
+        state_manager.on_partition_assign(stream_id=sdf.stream_id, partition=0)
 
         records = [
             # Create window [0,10)
-            RecordStub(1, "test", 1),
+            RecordStub(1, b"test", 1),
             # Update window [0,10) and create window [5,15)
-            RecordStub(2, "test", 7),
+            RecordStub(2, b"test", 7),
             # Update window [5,15) and create window [10,20)
-            RecordStub(3, "test", 10),
+            RecordStub(3, b"test", 10),
             # Create windows [30, 40) and [35, 45).
+            RecordStub(4, b"test", 35),
+            # Send watermark at 35 to expire windows
             # Windows [0,10), [5,15) and [10,20) should be expired
-            RecordStub(4, "test", 35),
+            RecordStub(None, None, 35, is_watermark=True),
             # Update windows [30, 40) and [35, 45)
-            RecordStub(5, "test", 35),
+            RecordStub(5, b"test", 35),
         ]
         headers = [("key", b"value")]
 
         results = []
 
-        for value, key, timestamp in records:
+        for value, key, timestamp, is_watermark in records:
             ctx = message_context_factory(topic=topic.name)
             results += sdf.test(
-                value=value, key=key, timestamp=timestamp, headers=headers, ctx=ctx
+                value=value,
+                key=key,
+                timestamp=timestamp,
+                headers=headers,
+                is_watermark=is_watermark,
+                ctx=ctx,
             )
 
         assert len(results) == 3
         # Ensure that the windows are returned with correct values and order
         assert results == [
-            (WindowResult(value=3, start=0, end=10), records[2].key, 0, None),
-            (WindowResult(value=5, start=5, end=15), records[3].key, 5, None),
-            (WindowResult(value=3, start=10, end=20), records[3].key, 10, None),
+            (WindowResult(value=3, start=0, end=10), b"test", 0, None),
+            (WindowResult(value=5, start=5, end=15), b"test", 5, None),
+            (WindowResult(value=3, start=10, end=20), b"test", 10, None),
         ]
-
-    def test_hopping_window_final_invalid_strategy(
-        self,
-        dataframe_factory,
-        state_manager,
-        message_context_factory,
-        topic_manager_topic_factory,
-    ):
-        topic = topic_manager_topic_factory(
-            name="test",
-        )
-
-        sdf = dataframe_factory(topic, state_manager=state_manager)
-
-        with pytest.raises(TypeError):
-            sdf = (
-                sdf.hopping_window(duration_ms=10, step_ms=5)
-                .sum()
-                .final(closing_strategy="foo")
-            )
 
     def test_hopping_window_none_key_messages(
         self,
@@ -1552,9 +1533,7 @@ class TestStreamingDataFrameHoppingWindow:
         sdf = dataframe_factory(topic, state_manager=state_manager)
         sdf = sdf.hopping_window(duration_ms=10, step_ms=5).sum().current()
 
-        state_manager.on_partition_assign(
-            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
-        )
+        state_manager.on_partition_assign(stream_id=sdf.stream_id, partition=0)
         records = [
             # Create window [0,10)
             RecordStub(1, "test", 1),
@@ -1566,7 +1545,7 @@ class TestStreamingDataFrameHoppingWindow:
         headers = [("key", b"value")]
 
         results = []
-        for value, key, timestamp in records:
+        for value, key, timestamp, _ in records:
             ctx = message_context_factory(topic=topic.name)
             results += sdf.test(
                 value=value, key=key, timestamp=timestamp, headers=headers, ctx=ctx
@@ -1599,9 +1578,7 @@ class TestStreamingDataFrameSlidingWindow:
             .current()
         )
 
-        state_manager.on_partition_assign(
-            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
-        )
+        state_manager.on_partition_assign(stream_id=sdf.stream_id, partition=0)
 
         records = [
             RecordStub(1, "key", 1000),
@@ -1611,7 +1588,7 @@ class TestStreamingDataFrameSlidingWindow:
         headers = [("key", b"value")]
 
         results = []
-        for value, key, timestamp in records:
+        for value, key, timestamp, _ in records:
             ctx = message_context_factory(topic=topic.name)
             results += sdf.test(
                 value=value, key=key, timestamp=timestamp, headers=headers, ctx=ctx
@@ -1672,14 +1649,14 @@ class TestStreamingDataFrameSlidingWindow:
             .current()
         )
 
-        state_manager.on_partition_assign(
-            stream_id=sdf.stream_id, partition=0, committed_offsets={topic.name: -1001}
-        )
+        state_manager.on_partition_assign(stream_id=sdf.stream_id, partition=0)
         records = [
             # Create window [0, 1]
             RecordStub(1, "test", 1),
             # Create window [10,20]
             RecordStub(2, "test", 20),
+            # Watermark to expire windows ending before 20
+            RecordStub(None, None, 20, is_watermark=True),
             # Late message - it belongs to window [0,5] but this window
             # is already closed. This message should be skipped from processing
             RecordStub(3, "test", 5),
@@ -1688,10 +1665,15 @@ class TestStreamingDataFrameSlidingWindow:
 
         results = []
         with caplog.at_level(logging.WARNING, logger="quixstreams"):
-            for value, key, timestamp in records:
+            for value, key, timestamp, is_watermark in records:
                 ctx = message_context_factory(topic=topic.name)
                 result = sdf.test(
-                    value=value, key=key, timestamp=timestamp, headers=headers, ctx=ctx
+                    value=value,
+                    key=key,
+                    timestamp=timestamp,
+                    headers=headers,
+                    ctx=ctx,
+                    is_watermark=is_watermark,
                 )
                 results += result
 
@@ -1700,7 +1682,7 @@ class TestStreamingDataFrameSlidingWindow:
             r
             for r in caplog.records
             if r.levelname == "WARNING"
-            and "Skipping window processing for the closed window" in r.message
+            and "Skipping record processing for the closed window" in r.message
         ]
 
         assert warning_logs if should_log else not warning_logs
@@ -2456,7 +2438,9 @@ class TestStreamingDataFrameBranching:
 
         assert results == expected
 
-    def test_set_timestamp(self, dataframe_factory):
+    def test_set_timestamp(
+        self, dataframe_factory, topic_manager_factory, message_context_factory
+    ):
         """
         "Transform" functions work with split behavior.
         """
@@ -2464,7 +2448,10 @@ class TestStreamingDataFrameBranching:
         def set_ts(n):
             return lambda value, key, timestamp, headers: timestamp + n
 
-        sdf = dataframe_factory().apply(add_n(1))
+        topic_manager = topic_manager_factory()
+        topic = topic_manager.topic(str(uuid.uuid4()))
+
+        sdf = dataframe_factory(topic).apply(add_n(1))
         sdf2 = sdf.apply(add_n(2)).set_timestamp(set_ts(3)).set_timestamp(set_ts(5))  # noqa: F841
         sdf3 = sdf.apply(add_n(3))  # noqa: F841
         sdf = sdf.set_timestamp(set_ts(4)).apply(add_n(7))
@@ -2472,7 +2459,10 @@ class TestStreamingDataFrameBranching:
         _extras = {"key": b"key", "timestamp": 0, "headers": []}
         extras = list(_extras.values())
         expected = [(3, b"key", 8, []), (4, *extras), (8, b"key", 4, [])]
-        results = sdf.test(value=0, **_extras)
+
+        results = sdf.test(
+            value=0, ctx=message_context_factory(topic=topic.name), **_extras
+        )
 
         assert results == expected
 
@@ -2699,9 +2689,7 @@ class TestStreamingDataFrameConcat:
         sdf_concatenated = sdf1.concat(sdf2).apply(accumulate, stateful=True)
 
         state_manager.on_partition_assign(
-            stream_id=sdf_concatenated.stream_id,
-            partition=0,
-            committed_offsets={},
+            stream_id=sdf_concatenated.stream_id, partition=0
         )
 
         key, timestamp, headers = b"key", 0, None

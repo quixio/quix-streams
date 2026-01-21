@@ -28,9 +28,18 @@ class FilterFunction(StreamFunction):
             key: Any,
             timestamp: int,
             headers: Any,
+            is_watermark: bool = False,
         ):
             # Filter a single value
-            if func(value):
+            if is_watermark:
+                child_executor(
+                    value,
+                    key,
+                    timestamp,
+                    headers,
+                    True,
+                )
+            elif func(value):
                 child_executor(value, key, timestamp, headers)
 
         return wrapper
@@ -60,9 +69,18 @@ class FilterWithMetadataFunction(StreamFunction):
             key: Any,
             timestamp: int,
             headers: Any,
+            is_watermark: bool = False,
         ):
+            if is_watermark:
+                child_executor(
+                    value,
+                    key,
+                    timestamp,
+                    headers,
+                    True,
+                )
             # Filter a single value
-            if func(value, key, timestamp, headers):
+            elif func(value, key, timestamp, headers):
                 child_executor(value, key, timestamp, headers)
 
         return wrapper

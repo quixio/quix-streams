@@ -14,6 +14,7 @@ __all__ = (
     "FilterWithMetadataCallback",
     "TransformCallback",
     "TransformExpandedCallback",
+    "StreamSink",
 )
 
 
@@ -57,6 +58,7 @@ class VoidExecutor(Protocol):
         key: Any,
         timestamp: int,
         headers: Any,
+        is_watermark: bool = False,
     ) -> None: ...
 
 
@@ -67,4 +69,15 @@ class ReturningExecutor(Protocol):
         key: Any,
         timestamp: int,
         headers: Any,
+        is_watermark: bool = False,
     ) -> Tuple[Any, Any, int, Any]: ...
+
+
+class StreamSink(Protocol):
+    def __call__(
+        self,
+        value: Any,
+        key: Any,
+        timestamp: int,
+        headers: Any,
+    ) -> None: ...
