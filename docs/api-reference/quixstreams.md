@@ -6006,7 +6006,8 @@ def __init__(token: str,
              on_client_connect_success: Optional[
                  ClientConnectSuccessCallback] = None,
              on_client_connect_failure: Optional[
-                 ClientConnectFailureCallback] = None)
+                 ClientConnectFailureCallback] = None,
+             raise_on_retention_violation: bool = False)
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/influxdb3.py#L61)
@@ -6083,6 +6084,12 @@ client authentication, primarily for additional logging.
 client authentication (which should raise an Exception).
 Callback should accept the raised Exception as an argument.
 Callback must resolve (or propagate/re-raise) the Exception.
+- `raise_on_retention_violation`: if True, raises an exception when InfluxDB
+rejects points due to retention policy violations, stopping the pipeline.
+If False (default), logs a warning and continues processing.
+Keeping this False (default) is recommended for production to handle old
+data gracefully without blocking the pipeline.
+Default - `False`.
 
 <a id="quixstreams.sinks.core"></a>
 
