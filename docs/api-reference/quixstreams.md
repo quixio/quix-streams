@@ -454,6 +454,18 @@ A class to access various Quix Streams environment variables
 
 noqa: S105
 
+<a id="quixstreams.platforms.quix.env.QuixEnvironment.STATE_PATH"></a>
+
+#### STATE\_PATH
+
+Set by Quix platform
+
+<a id="quixstreams.platforms.quix.env.QuixEnvironment.STATE_DIR"></a>
+
+#### STATE\_DIR
+
+User override
+
 <a id="quixstreams.platforms.quix.env.QuixEnvironment.state_management_enabled"></a>
 
 #### QuixEnvironment.state\_management\_enabled
@@ -463,7 +475,7 @@ noqa: S105
 def state_management_enabled() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/env.py#L22)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/env.py#L23)
 
 Check whether "State management" is enabled for the current deployment
 
@@ -480,7 +492,7 @@ True if state management is enabled, otherwise False
 def deployment_id() -> Optional[str]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/env.py#L30)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/env.py#L31)
 
 Return current Quix deployment id.
 
@@ -500,7 +512,7 @@ deployment id or None
 def workspace_id() -> Optional[str]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/env.py#L42)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/env.py#L43)
 
 Return Quix workspace id if set
 
@@ -517,9 +529,12 @@ workspace id or None
 def state_dir() -> Optional[str]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/env.py#L50)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/env.py#L51)
 
 Return application state directory on Quix.
+
+Checks Quix__Deployment__State__Path first (set by platform),
+then falls back to Quix__State__Dir (deprecated user override).
 
 **Returns**:
 
@@ -534,7 +549,7 @@ path to state dir
 def portal_api() -> Optional[str]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/env.py#L58)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/env.py#L69)
 
 Quix Portal API URL
 
@@ -547,7 +562,7 @@ Quix Portal API URL
 def broker_address() -> Optional[str]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/env.py#L65)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/env.py#L76)
 
 Kafka broker address
 
@@ -560,7 +575,7 @@ Kafka broker address
 def sdk_token() -> Optional[str]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/env.py#L72)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/env.py#L83)
 
 Quix SDK token
 
@@ -573,7 +588,7 @@ Quix SDK token
 def consumer_group() -> Optional[str]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/env.py#L79)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/platforms/quix/env.py#L90)
 
 Kafka consumer group
 
