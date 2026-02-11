@@ -75,6 +75,7 @@ kinesis = ["quixstreams[aws]", "mypy-boto3-kinesis>=1.35.65,<2.0"]
 s3 = ["quixstreams[aws]", "mypy-boto3-s3>=1.35.65,<2.0"]
 redis = ["redis[hiredis]>=5.2.0,<6"]
 azure-file = ["quixstreams[azure]"]
+quixdatalake = ["pandas>=1.0.0,<3.0", "pyarrow>=17.0.0", "quixportal>=0.1.0"]
 
 [tool.setuptools.packages.find]
 include = ["quixstreams*"]
@@ -129,6 +130,7 @@ module = [
   "confluent_kafka.*",
   "pyarrow.*",
   "jsonpath_ng.*",
+  "quixportal.*",
 ]
 ignore_missing_imports = true
 
