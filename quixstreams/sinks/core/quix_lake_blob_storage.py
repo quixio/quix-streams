@@ -116,7 +116,9 @@ class QuixLakeBlobStorageSink(BatchingSink):
         # Blob storage client and bucket name will be initialized in setup()
         self._blob_client: Optional[BlobStorageClient] = None
         self._s3_bucket: Optional[str] = None
-        self._ts_hive_columns = {"year", "month", "day", "hour"} & set(self.hive_columns)
+        self._ts_hive_columns = {"year", "month", "day", "hour"} & set(
+            self.hive_columns
+        )
         self._auto_create_bucket = auto_create_bucket
         self._max_workers = max_workers
 
@@ -292,7 +294,8 @@ class QuixLakeBlobStorageSink(BatchingSink):
         parquet_bytes = buf.getvalue().to_pybytes()
 
         # Submit async upload
-        assert self._blob_client is not None, "BlobStorageClient not initialized"
+        if self._blob_client is None:
+            raise RuntimeError("BlobStorageClient not initialized. Call setup() first.")
         future = self._blob_client.put_object_async(storage_key, parquet_bytes)
 
         self._pending_futures.append(
@@ -527,7 +530,9 @@ class QuixLakeBlobStorageSink(BatchingSink):
                 if key.endswith(".parquet"):
                     # Extract path after table prefix
                     relative_path = (
-                        key[len(table_prefix) :] if key.startswith(table_prefix) else key
+                        key[len(table_prefix) :]
+                        if key.startswith(table_prefix)
+                        else key
                     )
                     path_parts = relative_path.split("/")
 
@@ -620,9 +625,13 @@ class QuixLakeBlobStorageSink(BatchingSink):
             )
 
             if response.status_code == 200:
-                logger.info(f"Registered {len(file_entries)} file(s) in catalog manifest")
+                logger.info(
+                    f"Registered {len(file_entries)} file(s) in catalog manifest"
+                )
             else:
-                logger.warning("Failed to register files in manifest: %s", response.text)
+                logger.warning(
+                    "Failed to register files in manifest: %s", response.text
+                )
 
         except Exception as e:
             # Don't fail the write if manifest registration fails

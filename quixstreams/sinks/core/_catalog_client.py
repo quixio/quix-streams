@@ -52,7 +52,9 @@ class CatalogClient:
         url = f"{self.base_url}{path}"
         return self._session.post(url, json=json, timeout=timeout)
 
-    def put(self, path: str, json: Optional[dict] = None, timeout: int = 30) -> requests.Response:
+    def put(
+        self, path: str, json: Optional[dict] = None, timeout: int = 30
+    ) -> requests.Response:
         """
         Make a PUT request to the catalog API.
 
