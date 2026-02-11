@@ -10,7 +10,7 @@ import io
 import sys
 from datetime import datetime, timezone
 from typing import Any, Dict, List
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pyarrow.parquet as pq
@@ -26,9 +26,7 @@ from quixstreams.sinks.core._blob_storage_client import BlobStorageClient
 from quixstreams.sinks.core._catalog_client import CatalogClient
 from quixstreams.sinks.core.quix_lake_blob_storage import (
     QuixLakeBlobStorageSink,
-    TIMESTAMP_COL_MAPPER,
 )
-
 
 # =============================================================================
 # Test Fixtures
@@ -133,13 +131,21 @@ def sample_batch():
         if records is None:
             records = [
                 {
-                    "value": {"field1": "value1", "field2": 100, "ts_ms": 1704067200000},
+                    "value": {
+                        "field1": "value1",
+                        "field2": 100,
+                        "ts_ms": 1704067200000,
+                    },
                     "key": "key1",
                     "timestamp": 1704067200000,
                     "offset": 0,
                 },
                 {
-                    "value": {"field1": "value2", "field2": 200, "ts_ms": 1704067260000},
+                    "value": {
+                        "field1": "value2",
+                        "field2": 200,
+                        "ts_ms": 1704067260000,
+                    },
                     "key": "key2",
                     "timestamp": 1704067260000,
                     "offset": 1,
@@ -573,7 +579,10 @@ class TestPartitionValidation:
 
         # Mock existing files with matching partitions
         mock_blob_client.list_objects.return_value = [
-            {"Key": "test-prefix/test_table/year=2024/month=01/data.parquet", "Size": 100}
+            {
+                "Key": "test-prefix/test_table/year=2024/month=01/data.parquet",
+                "Size": 100,
+            }
         ]
 
         # Should not raise
@@ -604,7 +613,9 @@ class TestPartitionValidation:
         # Should not raise
         sink._validate_existing_table_structure()
 
-    def test_validate_catalog_partition_matches(self, sink_factory, mock_catalog_client):
+    def test_validate_catalog_partition_matches(
+        self, sink_factory, mock_catalog_client
+    ):
         """Test catalog partition validation passes when matching."""
         sink = sink_factory(
             hive_columns=["year", "month"],
@@ -839,7 +850,9 @@ class TestErrorHandling:
 class TestStorageKeyGeneration:
     """Tests for storage key/path generation."""
 
-    def test_storage_key_no_partitions(self, sink_factory, sample_batch, mock_blob_client):
+    def test_storage_key_no_partitions(
+        self, sink_factory, sample_batch, mock_blob_client
+    ):
         """Test storage key without partitions."""
         sink = sink_factory(hive_columns=[])
         batch = sample_batch()
