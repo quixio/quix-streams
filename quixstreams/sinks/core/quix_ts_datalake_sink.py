@@ -107,7 +107,9 @@ class QuixTSDataLakeSink(BatchingSink):
         self.hive_columns = hive_columns or []
         self.timestamp_column = timestamp_column
         self._catalog = (
-            QuixTSDataLakeCatalogClient(catalog_url, catalog_auth_token) if catalog_url else None
+            QuixTSDataLakeCatalogClient(catalog_url, catalog_auth_token)
+            if catalog_url
+            else None
         )
         self.auto_discover = auto_discover
         self.namespace = namespace
