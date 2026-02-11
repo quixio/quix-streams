@@ -32,7 +32,7 @@ from quixstreams.sinks.base import (
 )
 
 from ._blob_storage_client import BlobStorageClient, get_bucket_name
-from ._catalog_client import CatalogClient
+from ._quix_ts_datalake_catalog_client import QuixTSDataLakeCatalogClient
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +107,7 @@ class QuixTSDataLakeSink(BatchingSink):
         self.hive_columns = hive_columns or []
         self.timestamp_column = timestamp_column
         self._catalog = (
-            CatalogClient(catalog_url, catalog_auth_token) if catalog_url else None
+            QuixTSDataLakeCatalogClient(catalog_url, catalog_auth_token) if catalog_url else None
         )
         self.auto_discover = auto_discover
         self.namespace = namespace

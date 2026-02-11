@@ -23,8 +23,10 @@ sys.modules["quixportal.storage.config"] = MagicMock()
 
 from quixstreams.sinks.base import SinkBatch
 from quixstreams.sinks.core._blob_storage_client import BlobStorageClient
-from quixstreams.sinks.core._catalog_client import CatalogClient
-from quixstreams.sinks.core.quix_lake_blob_storage import (
+from quixstreams.sinks.core._quix_ts_datalake_catalog_client import (
+    QuixTSDataLakeCatalogClient,
+)
+from quixstreams.sinks.core.quix_ts_datalake_sink import (
     QuixTSDataLakeSink,
 )
 
@@ -50,8 +52,8 @@ def mock_blob_client():
 
 @pytest.fixture
 def mock_catalog_client():
-    """Mock CatalogClient for unit tests."""
-    client = MagicMock(spec=CatalogClient)
+    """Mock QuixTSDataLakeCatalogClient for unit tests."""
+    client = MagicMock(spec=QuixTSDataLakeCatalogClient)
 
     # Health check response
     health_response = MagicMock()
@@ -96,7 +98,7 @@ def sink_factory(mock_blob_client):
         **kwargs,
     ) -> QuixTSDataLakeSink:
         with patch(
-            "quixstreams.sinks.core.quix_lake_blob_storage.get_bucket_name",
+            "quixstreams.sinks.core.quix_ts_datalake_sink.get_bucket_name",
             return_value="test-bucket",
         ):
             sink = QuixTSDataLakeSink(
@@ -726,12 +728,12 @@ class TestCatalogIntegration:
         )
 
         # Mock failed health check
-        failing_catalog = MagicMock(spec=CatalogClient)
+        failing_catalog = MagicMock(spec=QuixTSDataLakeCatalogClient)
         failing_catalog.get.side_effect = Exception("Connection refused")
         sink._catalog = failing_catalog
 
         with patch(
-            "quixstreams.sinks.core.quix_lake_blob_storage.get_bucket_name",
+            "quixstreams.sinks.core.quix_ts_datalake_sink.get_bucket_name",
             return_value="test-bucket",
         ):
             # setup() should disable auto_discover on catalog failure

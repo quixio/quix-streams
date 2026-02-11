@@ -1,5 +1,5 @@
 """
-REST Catalog Client
+Quix TS DataLake Catalog Client
 
 Simple HTTP client for REST Catalog API interactions.
 """
@@ -9,7 +9,7 @@ from typing import Optional
 import requests
 
 
-class CatalogClient:
+class QuixTSDataLakeCatalogClient:
     """Simple HTTP client for REST Catalog API interactions."""
 
     def __init__(self, base_url: str, auth_token: Optional[str] = None):
