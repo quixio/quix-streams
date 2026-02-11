@@ -102,8 +102,8 @@ class BlobStorageClient:
         :returns: List of dicts with 'Key' and 'Size' keys
         """
         try:
-            result = []
-            found_files = set()
+            result: List[Dict[str, Any]] = []
+            found_files: set[str] = set()
 
             # Build base pattern
             base_pattern = prefix if prefix else ""

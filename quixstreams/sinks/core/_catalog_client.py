@@ -39,7 +39,7 @@ class CatalogClient:
         return self._session.get(url, timeout=timeout)
 
     def post(
-        self, path: str, json: dict = None, timeout: int = 30
+        self, path: str, json: Optional[dict] = None, timeout: int = 30
     ) -> requests.Response:
         """
         Make a POST request to the catalog API.
@@ -52,7 +52,7 @@ class CatalogClient:
         url = f"{self.base_url}{path}"
         return self._session.post(url, json=json, timeout=timeout)
 
-    def put(self, path: str, json: dict = None, timeout: int = 30) -> requests.Response:
+    def put(self, path: str, json: Optional[dict] = None, timeout: int = 30) -> requests.Response:
         """
         Make a PUT request to the catalog API.
 

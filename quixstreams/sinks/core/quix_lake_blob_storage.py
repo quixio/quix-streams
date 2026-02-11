@@ -85,7 +85,7 @@ class QuixLakeBlobStorageSink(BatchingSink):
         s3_prefix: str,
         table_name: str,
         workspace_id: str = "",
-        hive_columns: List[str] = None,
+        hive_columns: Optional[List[str]] = None,
         timestamp_column: str = "ts_ms",
         catalog_url: Optional[str] = None,
         catalog_auth_token: Optional[str] = None,
@@ -121,7 +121,7 @@ class QuixLakeBlobStorageSink(BatchingSink):
         self._max_workers = max_workers
 
         # Batch upload tracking
-        self._pending_futures = []
+        self._pending_futures: List[Dict[str, Any]] = []
 
     @property
     def s3_bucket(self) -> str:
@@ -292,6 +292,7 @@ class QuixLakeBlobStorageSink(BatchingSink):
         parquet_bytes = buf.getvalue().to_pybytes()
 
         # Submit async upload
+        assert self._blob_client is not None, "BlobStorageClient not initialized"
         future = self._blob_client.put_object_async(storage_key, parquet_bytes)
 
         self._pending_futures.append(

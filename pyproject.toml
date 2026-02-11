@@ -131,6 +131,8 @@ module = [
   "pyarrow.*",
   "jsonpath_ng.*",
   "quixportal.*",
+  "requests.*",
+  "pandas.*",
 ]
 ignore_missing_imports = true
 
