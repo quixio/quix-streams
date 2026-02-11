@@ -1,5 +1,5 @@
 """
-Tests for QuixLakeBlobStorageSink
+Tests for QuixTSDataLakeSink
 
 Comprehensive unit and integration tests for the Quix Lake Blob Storage Sink,
 covering initialization, timestamp mapping, partition handling, write operations,
@@ -25,7 +25,7 @@ from quixstreams.sinks.base import SinkBatch
 from quixstreams.sinks.core._blob_storage_client import BlobStorageClient
 from quixstreams.sinks.core._catalog_client import CatalogClient
 from quixstreams.sinks.core.quix_lake_blob_storage import (
-    QuixLakeBlobStorageSink,
+    QuixTSDataLakeSink,
 )
 
 # =============================================================================
@@ -81,7 +81,7 @@ def mock_catalog_client():
 
 @pytest.fixture
 def sink_factory(mock_blob_client):
-    """Factory to create QuixLakeBlobStorageSink with mocked blob client."""
+    """Factory to create QuixTSDataLakeSink with mocked blob client."""
 
     def create(
         s3_prefix: str = "test-prefix",
@@ -94,12 +94,12 @@ def sink_factory(mock_blob_client):
         auto_discover: bool = True,
         namespace: str = "default",
         **kwargs,
-    ) -> QuixLakeBlobStorageSink:
+    ) -> QuixTSDataLakeSink:
         with patch(
             "quixstreams.sinks.core.quix_lake_blob_storage.get_bucket_name",
             return_value="test-bucket",
         ):
-            sink = QuixLakeBlobStorageSink(
+            sink = QuixTSDataLakeSink(
                 s3_prefix=s3_prefix,
                 table_name=table_name,
                 workspace_id=workspace_id,
@@ -171,12 +171,12 @@ def sample_batch():
 # =============================================================================
 
 
-class TestQuixLakeBlobStorageSinkInit:
+class TestQuixTSDataLakeSinkInit:
     """Tests for sink initialization and configuration."""
 
     def test_init_minimal_params(self):
         """Test initialization with only required parameters."""
-        sink = QuixLakeBlobStorageSink(
+        sink = QuixTSDataLakeSink(
             s3_prefix="test-prefix",
             table_name="test_table",
         )
@@ -191,7 +191,7 @@ class TestQuixLakeBlobStorageSinkInit:
 
     def test_init_all_params(self):
         """Test initialization with all parameters provided."""
-        sink = QuixLakeBlobStorageSink(
+        sink = QuixTSDataLakeSink(
             s3_prefix="data/prefix",
             table_name="events",
             workspace_id="ws-123",
@@ -217,7 +217,7 @@ class TestQuixLakeBlobStorageSinkInit:
 
     def test_hive_columns_defaults_to_empty_list(self):
         """Test that hive_columns=None becomes empty list."""
-        sink = QuixLakeBlobStorageSink(
+        sink = QuixTSDataLakeSink(
             s3_prefix="prefix",
             table_name="table",
             hive_columns=None,
@@ -227,7 +227,7 @@ class TestQuixLakeBlobStorageSinkInit:
 
     def test_ts_hive_columns_extraction(self):
         """Test that only time-based hive columns are tracked in _ts_hive_columns."""
-        sink = QuixLakeBlobStorageSink(
+        sink = QuixTSDataLakeSink(
             s3_prefix="prefix",
             table_name="table",
             hive_columns=["year", "month", "custom_col", "hour"],
@@ -237,7 +237,7 @@ class TestQuixLakeBlobStorageSinkInit:
 
     def test_s3_bucket_property_raises_before_setup(self):
         """Test that accessing s3_bucket before setup raises RuntimeError."""
-        sink = QuixLakeBlobStorageSink(
+        sink = QuixTSDataLakeSink(
             s3_prefix="prefix",
             table_name="table",
         )
@@ -810,7 +810,7 @@ class TestErrorHandling:
 
     def test_blob_client_none_raises_in_write(self, sample_batch):
         """Test that write raises if blob client not initialized."""
-        sink = QuixLakeBlobStorageSink(
+        sink = QuixTSDataLakeSink(
             s3_prefix="prefix",
             table_name="table",
         )
@@ -832,7 +832,7 @@ class TestErrorHandling:
 
     def test_cleanup_handles_none_blob_client(self):
         """Test that cleanup handles None blob client gracefully."""
-        sink = QuixLakeBlobStorageSink(
+        sink = QuixTSDataLakeSink(
             s3_prefix="prefix",
             table_name="table",
         )

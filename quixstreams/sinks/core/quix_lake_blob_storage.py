@@ -21,7 +21,7 @@ except ImportError as exc:
     raise ImportError(
         f"Package {exc.name} is missing: "
         'run "pip install quixstreams[quixdatalake]" '
-        "to use QuixLakeBlobStorageSink"
+        "to use QuixTSDataLakeSink"
     ) from exc
 
 from quixstreams.sinks.base import (
@@ -46,7 +46,7 @@ TIMESTAMP_COL_MAPPER = {
 }
 
 
-class QuixLakeBlobStorageSink(BatchingSink):
+class QuixTSDataLakeSink(BatchingSink):
     """
     Writes Kafka batches directly to blob storage as Hive-partitioned Parquet files,
     then optionally registers the table using the REST Catalog.
@@ -55,7 +55,7 @@ class QuixLakeBlobStorageSink(BatchingSink):
     them to Parquet format with Hive-style partitioning, and flushes them to
     blob storage at the checkpoint.
 
-    >***NOTE***: QuixLakeBlobStorageSink can accept only dictionaries.
+    >***NOTE***: QuixTSDataLakeSink can accept only dictionaries.
     > If the record values are not dicts, you need to convert them to dicts before
     > sinking.
 

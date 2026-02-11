@@ -17,7 +17,7 @@ except ImportError as exc:
         f"Package {exc.name} is missing: "
         'run "pip install quixstreams[quixdatalake] '
         '--extra-index-url https://pkgs.dev.azure.com/quix-analytics/53f7fe95-59fe-4307-b479-2473b96de6d1/_packaging/public/pypi/simple/" '
-        "to use QuixLakeBlobStorageSink"
+        "to use QuixTSDataLakeSink"
     ) from exc
 
 logger = logging.getLogger(__name__)
