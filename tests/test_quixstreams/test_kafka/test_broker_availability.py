@@ -288,10 +288,10 @@ class TestAppBrokerAvailability:
 
         assert app._producer._producer._broker_unavailable_since is None
 
-    def test_default_timeout_is_300_seconds(self):
-        """The default broker_availability_timeout should be 300s."""
+    def test_default_timeout_is_120_seconds(self):
+        """The default broker_availability_timeout should be 120s."""
         app = self._make_app()
-        assert app._broker_availability_timeout == 300.0
+        assert app._broker_availability_timeout == 120.0
 
     def test_negative_timeout_raises_value_error(self):
         """A negative broker_availability_timeout should raise ValueError."""

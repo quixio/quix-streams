@@ -152,7 +152,7 @@ class Application:
         topic_create_timeout: float = 60,
         processing_guarantee: ProcessingGuarantee = "at-least-once",
         max_partition_buffer_size: int = 10000,
-        broker_availability_timeout: float = 300.0,
+        broker_availability_timeout: float = 120.0,
     ):
         """
         :param broker_address: Connection settings for Kafka.
@@ -226,7 +226,7 @@ class Application:
             ``KafkaBrokerUnavailableError`` to allow the orchestrator to restart
             the application with fresh connections.
             Set to ``0`` to disable the check.
-            Default - ``300.0``s (5 minutes).
+            Default - ``120.0``s (2 minutes).
 
         <br><br>***Error Handlers***<br>
         To handle errors, `Application` accepts callbacks triggered when
