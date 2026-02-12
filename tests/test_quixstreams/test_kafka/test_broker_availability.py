@@ -408,3 +408,103 @@ class TestConsumerBrokerAvailability:
 
         assert KafkaError._ALL_BROKERS_DOWN in calls
         assert consumer._broker_unavailable_since is not None
+
+
+class TestRecoveryBrokerAvailability:
+    """Tests for broker availability checks during state recovery."""
+
+    def test_recovery_loop_raises_when_broker_unavailable(self):
+        """The recovery loop should raise KafkaBrokerUnavailableError when
+        brokers have been down longer than the configured timeout."""
+        from unittest.mock import MagicMock
+        from unittest.mock import patch as mock_patch
+
+        from quixstreams.kafka.consumer import BaseConsumer
+        from quixstreams.models.topics import TopicManager
+        from quixstreams.state.recovery import RecoveryManager
+
+        consumer = BaseConsumer(
+            broker_address="localhost:9092",
+            consumer_group="test",
+            auto_offset_reset="latest",
+        )
+
+        topic_manager = MagicMock(spec=TopicManager)
+        recovery_manager = RecoveryManager(
+            consumer=consumer,
+            topic_manager=topic_manager,
+            broker_availability_timeout=0.1,
+        )
+
+        # Simulate broker down for a long time
+        consumer._broker_unavailable_since = time.monotonic() - 10.0
+
+        # Make the active metadata probe fail
+        fake_confluent = MagicMock()
+        fake_confluent.list_topics.side_effect = Exception("brokers down")
+        fake_confluent.poll.return_value = None
+        consumer._inner_consumer = fake_confluent
+
+        # Make recovery loop think it has work (so it enters the while loop)
+        fake_rp = MagicMock()
+        recovery_manager._recovery_partitions = {0: {"store": fake_rp}}
+        recovery_manager._running = True
+
+        # Mock _update_recovery_status to isolate the broker check behavior
+        with mock_patch.object(recovery_manager, "_update_recovery_status"):
+            with pytest.raises(KafkaBrokerUnavailableError):
+                recovery_manager._recovery_loop()
+
+    def test_recovery_loop_no_check_when_timeout_disabled(self):
+        """With broker_availability_timeout=0 (disabled), recovery loop should
+        NOT check broker availability."""
+        from unittest.mock import MagicMock
+        from unittest.mock import patch as mock_patch
+
+        from quixstreams.kafka.consumer import BaseConsumer
+        from quixstreams.models.topics import TopicManager
+        from quixstreams.state.recovery import RecoveryManager
+
+        consumer = BaseConsumer(
+            broker_address="localhost:9092",
+            consumer_group="test",
+            auto_offset_reset="latest",
+        )
+
+        topic_manager = MagicMock(spec=TopicManager)
+        recovery_manager = RecoveryManager(
+            consumer=consumer,
+            topic_manager=topic_manager,
+            broker_availability_timeout=0,
+        )
+
+        # Simulate broker down for a long time
+        consumer._broker_unavailable_since = time.monotonic() - 9999.0
+
+        # Make the active metadata probe fail
+        fake_confluent = MagicMock()
+        fake_confluent.list_topics.side_effect = Exception("brokers down")
+        fake_confluent.poll.return_value = None
+        consumer._inner_consumer = fake_confluent
+
+        # Make recovery loop think it has work
+        fake_rp = MagicMock()
+        recovery_manager._recovery_partitions = {0: {"store": fake_rp}}
+        recovery_manager._running = True
+
+        poll_count = 0
+
+        def stop_after_3(*args, **kwargs):
+            nonlocal poll_count
+            poll_count += 1
+            if poll_count >= 3:
+                recovery_manager._running = False
+            return None
+
+        fake_confluent.poll.side_effect = stop_after_3
+
+        # Mock _update_recovery_status to isolate the broker check behavior
+        with mock_patch.object(recovery_manager, "_update_recovery_status"):
+            # Should NOT raise — just loop and stop
+            recovery_manager._recovery_loop()
+        assert poll_count >= 3

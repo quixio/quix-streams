@@ -374,6 +374,7 @@ class Application:
             recovery_manager = RecoveryManager(
                 consumer=self._consumer,
                 topic_manager=self._topic_manager,
+                broker_availability_timeout=self._broker_availability_timeout,
             )
 
         self._state_manager = StateStoreManager(
@@ -774,6 +775,7 @@ class Application:
                 extra_config_overrides=consumer_extra_config_overrides
             ),
             self._get_topic_manager(),
+            broker_availability_timeout=self._broker_availability_timeout,
         )
         return topic
 
