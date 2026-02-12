@@ -614,6 +614,7 @@ class RecoveryManager:
                 msg = raise_for_msg_error(msg)
                 rp = self._recovery_partitions[msg.partition()][msg.topic()]
                 rp.recover_from_changelog_message(changelog_message=msg)
+                self._consumer._broker_available()  # noqa: SLF001
             if self._broker_availability_timeout:
                 self._consumer.raise_if_broker_unavailable(
                     self._broker_availability_timeout

@@ -508,3 +508,65 @@ class TestRecoveryBrokerAvailability:
             # Should NOT raise — just loop and stop
             recovery_manager._recovery_loop()
         assert poll_count >= 3
+
+    def test_recovery_loop_resets_timer_on_changelog_message(self):
+        """Successfully consuming a changelog message during recovery should
+        reset the broker unavailability timer, preventing false positives."""
+        from unittest.mock import MagicMock
+        from unittest.mock import patch as mock_patch
+
+        from quixstreams.kafka.consumer import BaseConsumer
+        from quixstreams.models.topics import TopicManager
+        from quixstreams.state.recovery import RecoveryManager
+
+        consumer = BaseConsumer(
+            broker_address="localhost:9092",
+            consumer_group="test",
+            auto_offset_reset="latest",
+        )
+
+        topic_manager = MagicMock(spec=TopicManager)
+        recovery_manager = RecoveryManager(
+            consumer=consumer,
+            topic_manager=topic_manager,
+            broker_availability_timeout=0.1,
+        )
+
+        # Simulate broker was down (but has since recovered — messages are flowing)
+        consumer._broker_unavailable_since = time.monotonic() - 10.0
+
+        # Make the metadata probe fail — only changelog consumption should reset
+        fake_confluent = MagicMock()
+        fake_confluent.list_topics.side_effect = Exception("brokers down")
+        consumer._inner_consumer = fake_confluent
+
+        # Set up recovery partition
+        fake_rp = MagicMock()
+        fake_rp.changelog_name = "test-changelog"
+        fake_rp.partition_num = 0
+        recovery_manager._recovery_partitions = {0: {"test-changelog": fake_rp}}
+        recovery_manager._running = True
+
+        poll_count = 0
+
+        def poll_then_stop(*args, **kwargs):
+            nonlocal poll_count
+            poll_count += 1
+            if poll_count == 1:
+                # First poll: return a fake changelog message
+                msg = MagicMock()
+                msg.error.return_value = None
+                msg.partition.return_value = 0
+                msg.topic.return_value = "test-changelog"
+                return msg
+            # Second poll: stop the loop
+            recovery_manager._running = False
+            return None
+
+        fake_confluent.poll.side_effect = poll_then_stop
+
+        with mock_patch.object(recovery_manager, "_update_recovery_status"):
+            recovery_manager._recovery_loop()
+
+        # Timer should have been reset by the successful changelog consumption
+        assert consumer._broker_unavailable_since is None
