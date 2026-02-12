@@ -1,5 +1,6 @@
 import functools
 import logging
+import time
 import typing
 from typing import Any, Callable, List, Optional, Tuple, Union, cast
 
@@ -20,7 +21,7 @@ from quixstreams.models.types import (
 )
 
 from .configuration import ConnectionConfig
-from .exceptions import KafkaConsumerException
+from .exceptions import KafkaBrokerUnavailableError, KafkaConsumerException
 
 __all__ = (
     "BaseConsumer",
@@ -124,6 +125,13 @@ class BaseConsumer:
         if isinstance(broker_address, str):
             broker_address = ConnectionConfig(bootstrap_servers=broker_address)
 
+        self._broker_unavailable_since: Optional[float] = None
+
+        # Wrap the user-provided (or default) error callback so that broker
+        # availability tracking always runs, regardless of custom callbacks.
+        self._user_error_cb = error_callback
+        error_callback = self._error_cb
+
         self._consumer_config = {
             # previous Quix Streams defaults
             "enable.auto.offset.store": False,
@@ -142,6 +150,53 @@ class BaseConsumer:
             },
         }
         self._inner_consumer: Optional[ConfluentConsumer] = None
+
+    def _error_cb(self, error: KafkaError):
+        """Instance-level error callback that tracks broker availability
+        and delegates to the user-provided (or default) error callback."""
+        error_code = error.code()
+        if error_code == KafkaError._ALL_BROKERS_DOWN:  # noqa: SLF001
+            if self._broker_unavailable_since is None:
+                self._broker_unavailable_since = time.monotonic()
+        self._user_error_cb(error)
+
+    def _broker_available(self):
+        """Reset the broker unavailability tracker."""
+        self._broker_unavailable_since = None
+
+    def raise_if_broker_unavailable(self, timeout: float):
+        """Raise if all brokers have been unavailable for longer than ``timeout`` seconds.
+
+        Before raising, performs an active metadata probe to confirm the brokers
+        are truly unreachable (avoids false positives for idle applications).
+
+        :param timeout: seconds of continuous unavailability before raising.
+        :raises KafkaBrokerUnavailableError: if the timeout has been exceeded.
+        """
+        if self._broker_unavailable_since is not None:
+            elapsed = time.monotonic() - self._broker_unavailable_since
+            if elapsed >= timeout:
+                try:
+                    self._consumer.list_topics(timeout=5.0)
+                    self._broker_unavailable_since = None
+                    logger.info(
+                        "Consumer broker availability probe succeeded after %.0fs; "
+                        "resetting unavailability timer.",
+                        elapsed,
+                    )
+                    return
+                except Exception:
+                    logger.debug(
+                        "Consumer broker availability probe failed", exc_info=True
+                    )
+                raise KafkaBrokerUnavailableError(
+                    f"All Kafka brokers have been unavailable for "
+                    f"{elapsed:.0f}s (timeout={timeout:.0f}s). "
+                    f"The application cannot recover automatically; "
+                    f"restarting is required. "
+                    f"Adjust via Application(broker_availability_timeout=...) "
+                    f"or set to 0 to disable."
+                )
 
     def poll(
         self, timeout: Optional[float] = None

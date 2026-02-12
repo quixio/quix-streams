@@ -82,7 +82,7 @@ class TestProducerBrokerAvailability:
         self._simulate_all_brokers_down(producer)
         assert producer._broker_unavailable_since is not None
 
-        producer.broker_available()
+        producer._broker_available()
         assert producer._broker_unavailable_since is None
 
     def test_broker_available_prevents_raise_after_reset(self):
@@ -93,7 +93,7 @@ class TestProducerBrokerAvailability:
             self._simulate_all_brokers_down(producer)
 
         # Broker comes back
-        producer.broker_available()
+        producer._broker_available()
 
         # Even with enough elapsed time, should not raise because reset happened
         with patch("time.monotonic", return_value=300.0):
@@ -276,7 +276,7 @@ class TestAppBrokerAvailability:
                 app.run()
 
     def test_internal_producer_broker_available_passthrough(self):
-        """InternalProducer.broker_available() should reset the tracker
+        """InternalProducer._broker_available() should reset the tracker
         on the underlying Producer."""
         app = self._make_app()
 
@@ -284,7 +284,7 @@ class TestAppBrokerAvailability:
         app._producer._producer._broker_unavailable_since = time.monotonic() - 10.0
 
         # Call via InternalProducer passthrough
-        app._producer.broker_available()
+        app._producer._broker_available()
 
         assert app._producer._producer._broker_unavailable_since is None
 
@@ -299,3 +299,112 @@ class TestAppBrokerAvailability:
             ValueError, match="broker_availability_timeout must be >= 0"
         ):
             self._make_app(broker_availability_timeout=-1)
+
+
+class TestConsumerBrokerAvailability:
+    """Tests for BaseConsumer detecting prolonged broker unavailability."""
+
+    def test_all_brokers_down_sets_timestamp(self):
+        """When _ALL_BROKERS_DOWN fires, the consumer should record the timestamp."""
+        from quixstreams.kafka.consumer import BaseConsumer
+
+        consumer = BaseConsumer(
+            broker_address="localhost:9092",
+            consumer_group="test",
+            auto_offset_reset="latest",
+        )
+        assert consumer._broker_unavailable_since is None
+
+        error = KafkaError(KafkaError._ALL_BROKERS_DOWN)
+        consumer._error_cb(error)
+        assert consumer._broker_unavailable_since is not None
+
+    def test_broker_available_resets_timestamp(self):
+        """_broker_available() should reset the unavailable timestamp."""
+        from quixstreams.kafka.consumer import BaseConsumer
+
+        consumer = BaseConsumer(
+            broker_address="localhost:9092",
+            consumer_group="test",
+            auto_offset_reset="latest",
+        )
+        error = KafkaError(KafkaError._ALL_BROKERS_DOWN)
+        consumer._error_cb(error)
+        assert consumer._broker_unavailable_since is not None
+
+        consumer._broker_available()
+        assert consumer._broker_unavailable_since is None
+
+    def test_raise_if_broker_unavailable_raises_after_timeout(self):
+        """Should raise after timeout with failed probe."""
+        from unittest.mock import MagicMock
+
+        from quixstreams.kafka.consumer import BaseConsumer
+
+        consumer = BaseConsumer(
+            broker_address="localhost:9092",
+            consumer_group="test",
+            auto_offset_reset="latest",
+        )
+
+        with patch("time.monotonic", return_value=100.0):
+            error = KafkaError(KafkaError._ALL_BROKERS_DOWN)
+            consumer._error_cb(error)
+
+        fake = MagicMock()
+        fake.list_topics.side_effect = Exception("down")
+        consumer._inner_consumer = fake
+
+        with patch("time.monotonic", return_value=280.0):
+            with pytest.raises(
+                KafkaBrokerUnavailableError,
+                match="broker_availability_timeout",
+            ):
+                consumer.raise_if_broker_unavailable(timeout=120.0)
+
+    def test_active_probe_resets_timer_when_brokers_recover(self):
+        """If the metadata probe succeeds, the timer should reset."""
+        from unittest.mock import MagicMock
+
+        from quixstreams.kafka.consumer import BaseConsumer
+
+        consumer = BaseConsumer(
+            broker_address="localhost:9092",
+            consumer_group="test",
+            auto_offset_reset="latest",
+        )
+
+        with patch("time.monotonic", return_value=100.0):
+            error = KafkaError(KafkaError._ALL_BROKERS_DOWN)
+            consumer._error_cb(error)
+
+        fake = MagicMock()
+        fake.list_topics.return_value = MagicMock()
+        consumer._inner_consumer = fake
+
+        with patch("time.monotonic", return_value=280.0):
+            consumer.raise_if_broker_unavailable(timeout=120.0)
+
+        assert consumer._broker_unavailable_since is None
+
+    def test_custom_error_callback_still_tracks_brokers(self):
+        """Custom error callback should still get broker tracking."""
+        from quixstreams.kafka.consumer import BaseConsumer
+
+        calls = []
+
+        def my_error_cb(error):
+            calls.append(error.code())
+
+        consumer = BaseConsumer(
+            broker_address="localhost:9092",
+            consumer_group="test",
+            auto_offset_reset="latest",
+            error_callback=my_error_cb,
+        )
+
+        error = KafkaError(KafkaError._ALL_BROKERS_DOWN)
+        consumer._error_cb(error)
+
+        assert KafkaError._ALL_BROKERS_DOWN in calls
+        assert consumer._broker_unavailable_since is not None

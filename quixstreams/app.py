@@ -943,6 +943,9 @@ class Application:
                     self._producer.raise_if_broker_unavailable(
                         self._broker_availability_timeout
                     )
+                    self._consumer.raise_if_broker_unavailable(
+                        self._broker_availability_timeout
+                    )
                 printer.print()
                 run_tracker.update_status()
 
@@ -959,6 +962,9 @@ class Application:
             source_manager.raise_for_error()
             if self._broker_availability_timeout:
                 self._producer.raise_if_broker_unavailable(
+                    self._broker_availability_timeout
+                )
+                self._consumer.raise_if_broker_unavailable(
                     self._broker_availability_timeout
                 )
             run_tracker.update_status()
@@ -1023,7 +1029,8 @@ class Application:
             topic=topic_name, partition=partition, offset=offset
         )
         self._run_tracker.set_message_consumed(True)
-        self._producer.broker_available()
+        self._producer._broker_available()  # noqa: SLF001
+        self._consumer._broker_available()  # noqa: SLF001
 
         if self._on_message_processed is not None:
             self._on_message_processed(topic_name, partition, offset)

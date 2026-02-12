@@ -252,12 +252,8 @@ class Producer:
                 self._broker_unavailable_since = time.monotonic()
         self._user_error_cb(error)
 
-    def broker_available(self):
-        """Reset the broker unavailability tracker.
-
-        Should be called when a successful broker interaction is observed
-        (e.g., a message is consumed or a delivery callback succeeds).
-        """
+    def _broker_available(self):
+        """Reset the broker unavailability tracker."""
         self._broker_unavailable_since = None
 
     def raise_if_broker_unavailable(self, timeout: float):
@@ -276,7 +272,7 @@ class Producer:
                 # This avoids false positives when brokers recovered but no
                 # messages flowed to reset the timer (idle apps).
                 try:
-                    self._producer.list_topics(topic="__health_check", timeout=5.0)
+                    self._producer.list_topics(timeout=5.0)
                     # Probe succeeded — brokers are actually reachable.
                     self._broker_unavailable_since = None
                     logger.info(
