@@ -170,6 +170,14 @@ class InternalProducer:
                 return
             raise
 
+    def broker_available(self):
+        """Reset the broker unavailability tracker on the underlying Producer."""
+        self._producer.broker_available()
+
+    def raise_if_broker_unavailable(self, timeout: float):
+        """Raise if all brokers have been unavailable for longer than ``timeout`` seconds."""
+        self._producer.raise_if_broker_unavailable(timeout)
+
     def produce(
         self,
         topic: str,
@@ -203,6 +211,8 @@ class InternalProducer:
         topic, partition, offset = msg.topic(), msg.partition(), msg.offset()
         if err is None:
             self._tp_offsets[(topic, partition)] = offset
+            # Successful delivery confirms broker is reachable
+            self._producer.broker_available()
         else:
             self._error = err
 

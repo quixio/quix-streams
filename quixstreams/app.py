@@ -152,6 +152,7 @@ class Application:
         topic_create_timeout: float = 60,
         processing_guarantee: ProcessingGuarantee = "at-least-once",
         max_partition_buffer_size: int = 10000,
+        broker_availability_timeout: float = 300.0,
     ):
         """
         :param broker_address: Connection settings for Kafka.
@@ -220,6 +221,12 @@ class Application:
             It is a soft limit, and the actual number of buffered messages can be up to x2 higher.
             Lower value decreases the memory use, but increases the latency.
             Default - `10000`.
+        :param broker_availability_timeout: timeout in seconds. If all Kafka brokers
+            are unavailable for longer than this, the Application will raise a
+            ``KafkaBrokerUnavailableError`` to allow the orchestrator to restart
+            the application with fresh connections.
+            Set to ``0`` to disable the check.
+            Default - ``300.0``s (5 minutes).
 
         <br><br>***Error Handlers***<br>
         To handle errors, `Application` accepts callbacks triggered when
@@ -343,6 +350,12 @@ class Application:
 
         self._on_message_processed = on_message_processed
         self._on_processing_error = on_processing_error or default_on_processing_error
+        if broker_availability_timeout < 0:
+            raise ValueError(
+                f"broker_availability_timeout must be >= 0, "
+                f"got {broker_availability_timeout}"
+            )
+        self._broker_availability_timeout = broker_availability_timeout
 
         self._consumer = self._get_internal_consumer(
             on_error=on_consumer_error,
@@ -926,6 +939,10 @@ class Application:
                 processing_context.commit_checkpoint()
                 consumer.resume_backpressured()
                 source_manager.raise_for_error()
+                if self._broker_availability_timeout:
+                    self._producer.raise_if_broker_unavailable(
+                        self._broker_availability_timeout
+                    )
                 printer.print()
                 run_tracker.update_status()
 
@@ -940,6 +957,10 @@ class Application:
         source_manager.start_sources()
         while run_tracker.running and source_manager.is_alive():
             source_manager.raise_for_error()
+            if self._broker_availability_timeout:
+                self._producer.raise_if_broker_unavailable(
+                    self._broker_availability_timeout
+                )
             run_tracker.update_status()
             time.sleep(1)
         self.stop()
@@ -1002,6 +1023,7 @@ class Application:
             topic=topic_name, partition=partition, offset=offset
         )
         self._run_tracker.set_message_consumed(True)
+        self._producer.broker_available()
 
         if self._on_message_processed is not None:
             self._on_message_processed(topic_name, partition, offset)
