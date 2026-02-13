@@ -350,10 +350,16 @@ class RecoveryManager:
     # At 10-second progress logging intervals, 60 attempts = ~10 minutes
     MAX_INVALID_OFFSET_ATTEMPTS = 60
 
-    def __init__(self, consumer: BaseConsumer, topic_manager: TopicManager):
+    def __init__(
+        self,
+        consumer: BaseConsumer,
+        topic_manager: TopicManager,
+        broker_availability_timeout: float = 0,
+    ):
         self._running = False
         self._consumer = consumer
         self._topic_manager = topic_manager
+        self._broker_availability_timeout = broker_availability_timeout
         self._recovery_partitions: Dict[int, Dict[str, RecoveryPartition]] = {}
         self._last_progress_logged_time = time.monotonic()
         # Cache position results to avoid double calls in same iteration
@@ -608,6 +614,11 @@ class RecoveryManager:
                 msg = raise_for_msg_error(msg)
                 rp = self._recovery_partitions[msg.partition()][msg.topic()]
                 rp.recover_from_changelog_message(changelog_message=msg)
+                self._consumer._broker_available()  # noqa: SLF001
+            if self._broker_availability_timeout:
+                self._consumer.raise_if_broker_unavailable(
+                    self._broker_availability_timeout
+                )
 
     def _get_position_with_cache(self, rp: RecoveryPartition) -> ConfluentPartition:
         """
