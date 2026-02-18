@@ -9,7 +9,7 @@ With windows, you can calculate such aggregations as:
 - Total of website visitors for every hour
 - The average speed of a vehicle over the last 10 minutes
 - Maximum temperature of a sensor observed over 30 second ranges
-- Give an user a reward after 10 succesful actions 
+- Give a user a reward after 10 successful actions
 
 
 ## Types of Time in Streaming
@@ -109,7 +109,7 @@ sdf = app.dataframe(...)
 
 sdf = (
     # Define a tumbling window of 10 seconds
-    .tumbling_window(timedelta(seconds=10))
+    sdf.tumbling_window(timedelta(seconds=10))
 
     # Calculate the minimum temperature 
     .agg(minimum_temperature=Min("temperature"))
@@ -185,7 +185,7 @@ sdf = app.dataframe(...)
 sdf = (
     # Define a tumbling window of 1 hour
     # You can also pass duration_ms as an integer of milliseconds
-    .tumbling_window(duration_ms=timedelta(hours=1))
+    sdf.tumbling_window(duration_ms=timedelta(hours=1))
 
     # Specify the "mean" aggregate function
     .agg(avg_temperature=Mean("temperature"))
@@ -198,19 +198,19 @@ sdf = (
 
 ## Count-based Tumbling Windows
 
-Count-based Tumbling Windows slice incoming events into batch of a fixed size.
+Count-based Tumbling Windows slice incoming events into batches of a fixed size.
 
 For example, a tumbling window configured with a count of 4 will batch and aggregate message 1 to 4, then 5 to 8, 9 to 12 and so on. 
 
 ```
-Count       Tumbing Windows
+Count       Tumbling Windows
 [0, 3]  : ....
 [4, 7]  :     ....
 [8, 11] :         ....
 [12, 15] :            ....
 ```
 
-In a tumbing window each message is only assigned to a **single** interval.
+In a tumbling window each message is only assigned to a **single** interval.
 
 **Example**
 
@@ -252,7 +252,7 @@ sdf = app.dataframe(...)
 
 sdf = (
     # Define a count-based tumbling window of 3 events
-    .tumbling_count_window(count=3)
+    sdf.tumbling_count_window(count=3)
 
     # Specify the "collect" aggregate function
     .agg(data=Collect())
@@ -331,7 +331,7 @@ sdf = app.dataframe(...)
 sdf = (
     # Define a hopping window of 1h with 10m step
     # You can also pass duration_ms and step_ms as integers of milliseconds
-    .hopping_window(duration_ms=timedelta(hours=1), step_ms=timedelta(minutes=10))
+    sdf.hopping_window(duration_ms=timedelta(hours=1), step_ms=timedelta(minutes=10))
 
     # Specify the "mean" aggregate function
     .agg(avg_temperature=Mean("temperature"))
@@ -344,7 +344,7 @@ sdf = (
 
 ## Count-based Hopping Windows
 
-Count-based Hopping Windows slice incoming messages into overlapping batch of a fixed size with a fixed step.
+Count-based Hopping Windows slice incoming messages into overlapping batches of a fixed size with a fixed step.
 
 For example, a hopping windows of 6 messages with a step of 2 messages will generate the following windows:
 
@@ -356,7 +356,7 @@ Count       Hopping Windows
 [6, 11] :       ......
 ```
 
-In hopping windows each messages can be assigned to multiple windows because the windows overlap.
+In hopping windows each message can be assigned to multiple windows because the windows overlap.
 
 ## Time-based Sliding Windows
 Sliding windows are overlapping time-based windows that advance with each incoming message, rather than at fixed time intervals like hopping windows. They have a fixed 1 ms resolution and perform better and are less resource-intensive than hopping windows with a 1 ms step. Sliding windows do not produce redundant windows; every interval has a distinct aggregation.
@@ -423,7 +423,7 @@ sdf = app.dataframe(...)
 sdf = (
     # Define a sliding window of 1h
     # You can also pass duration_ms as integer of milliseconds
-    .sliding_window(duration_ms=timedelta(hours=1))
+    sdf.sliding_window(duration_ms=timedelta(hours=1))
 
     # Specify the "mean" aggregate function
     .agg(avg_temperature=Mean("temperature"))
@@ -438,7 +438,7 @@ sdf = (
 
 Sliding windows are overlapping windows that advance with each incoming message. They are equal to count-based hopping windows with a step of 1.
 
-For example a sliding window of 4 messagew will generate the followiwng windows:
+For example a sliding window of 4 messages will generate the following windows:
 
 ```
 Count       Sliding Windows
@@ -489,7 +489,7 @@ sdf = app.dataframe(...)
 
 sdf = (
     # Define a count-based sliding window of 3 events
-    .sliding_count_window(count=3)
+    sdf.sliding_count_window(count=3)
 
     # Specify the "mean" aggregate function
     .agg(average=Mean("amount"))
@@ -694,7 +694,7 @@ sdf = sdf.tumbling_window(timedelta(seconds=10)).agg(value=Sum()).current()
 # -> Timestamp=102, value=1 -> emit {"start": 0, "end": 10000, "value": 3} 
 ```
 
-`.current()` methods instructs the window to return the aggregated result immediately after the message is processed, but the results themselves are not guaranteed to be final for the given interval.
+`.current()` method instructs the window to return the aggregated result immediately after the message is processed, but the results themselves are not guaranteed to be final for the given interval.
 
 The same window may receive another update in the future, and a new value with the same interval will be emitted.
 
@@ -766,7 +766,7 @@ sdf = sdf.tumbling_window(timedelta(seconds=10)).agg(value=Sum()).final(closing_
 An alternative is to use the **partition** closing strategy.  
 In this strategy, messages advance time and close windows for the whole partition to which this key belongs.
 
-If messages aren't ordered accross keys some message can be skipped if the windows are already closed.
+If messages aren't ordered across keys some message can be skipped if the windows are already closed.
 
 ```python
 from datetime import timedelta
@@ -801,7 +801,7 @@ sdf = sdf.tumbling_window(timedelta(seconds=10)).agg(value=Sum()).final(closing_
 Windowed aggregations return aggregated results in the following format/schema:
 
 ```python
-{"start": <window start ms>, "end": <window end ms>, <aggregated result colum>: <aggregated value>}
+{"start": <window start ms>, "end": <window end ms>, <aggregated result column>: <aggregated value>}
 ```
 
 Since it is rather generic, you may need to transform it into your own schema.  

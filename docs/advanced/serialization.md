@@ -36,7 +36,7 @@ app = Application(broker_address='localhost:9092', consumer_group='consumer')
 input_topic = app.topic('input', value_deserializer='json', key_deserializer='string')
 
 # Serializing message values to JSON and message keys to bytes
-output_topic = app.topic('output', value_serializer='json', key_deserializer='bytes')
+output_topic = app.topic('output', value_serializer='json', key_serializer='bytes')
 ```
 
 Passing `Serializer` and `Deserializer` instances directly:
@@ -126,4 +126,4 @@ input_topic = app.topic('input', value_deserializer=ProtobufDeserializer(msg_typ
 output_topic = app.topic('output', value_serializer=ProtobufSerializer(msg_type=OutputProto))
 ```
 
-By default, the Protobuf deserializer will deserialize the message to a Python dictionary. Doing this has a big performance impact. You can disable this behavior by initializing the deserializer with `to_dict` set to `False`. The Protobuf message object will then be used as the message value, limiting the available StreamingDataframe API.
+By default, the Protobuf deserializer will deserialize the message to a Python dictionary. Doing this has a big performance impact. You can disable this behavior by initializing the deserializer with `to_dict` set to `False`. The Protobuf message object will then be used directly as the record value. This means column-based operations like `sdf['field']` and `sdf.drop()` will raise an error at runtime, as they require a Python dictionary. `sdf.fill()` will silently do nothing for non-dict values. You can still use `sdf.apply()` and `sdf.update()` with functions that accept the Protobuf object directly.

@@ -246,7 +246,7 @@ as additional fields as `_{param}`, like so:
 - You can use any number of `ListSink` in an `Application`
   - each one must have its own variable.
 
-- `ListLink` does not limit its own size 
+- `ListSink` does not limit its own size
   - Be sure to use it with `Application.run()` stopping conditions.
 
 - `ListSink` does not "refresh" itself per `.run()`; it collects data indefinitely. 
@@ -259,7 +259,7 @@ to `multiprocessing` `if __name__ == '__main__':` limitations; specifically:
 
 - You cannot run any source-based `Application` "interactively" 
 (i.e. using ListSink to inspect values)
-  - There is potentially a way around this for [Jupiter Notebooks](connectors/sources/custom-sources.md#custom-sources-and-jupyter-notebook)
+  - There is potentially a way around this for [Jupyter Notebooks](connectors/sources/custom-sources.md#custom-sources-and-jupyter-notebook)
 - You can only run a plain source (no SDF) with the `timeout` argument.
 
 ## Using Breakpoints

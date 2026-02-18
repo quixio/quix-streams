@@ -2,8 +2,8 @@
 ## Join as-of
 > _New in [3.15.0](https://github.com/quixio/quix-streams/releases/tag/v3.15.0)_
 
-Use `StreamingDataFrame.join_asof()` to join two topics into a new stream where each left record 
-is merged with the right record with the same key whose timestamp is less than or equal to the left timestamp.
+Use `StreamingDataFrame.join_asof()` to join two topics into a new stream where each left record
+is merged with the most recent right record that shares the same message key and has a timestamp less than or equal to the left record's timestamp.
 
 This join is built with the timeseries enrichment use cases in mind, where the left side represents some measurements and the right side represents events.
 
@@ -23,7 +23,12 @@ To perform a join, the underlying topics must follow these requirements:
 Join is a stateful operation, and it requires partitions of left and right topics to be assigned to the same application during processing.
 
 2. **Keys in both topics must be distributed across partitions using the same algorithm.**
-For example, messages with the key `A` must go to the same partition number for both left and right topics. This is Kafka's default behaviour.  
+For example, messages with the key `A` must go to the same partition number for both left and right topics. This is Kafka's default behaviour.
+
+> **How co-assignment works under the hood:**
+> Quix Streams forces the Kafka consumer `partition.assignment.strategy` to `range`.
+> This guarantees that each consumer in the group receives the same partition number across all subscribed topics — e.g. the consumer that gets partition 0 from topic A will also get partition 0 from topic B.
+> Combined with the equal partition count requirement, this ensures join data always lands on the same consumer instance.
 
 
 ### Example
@@ -63,8 +68,8 @@ Here is a description of the as-of join algorithm:
 - Records from the right side get written to the state store without emitting any updates downstream.
 - Records on the left side query the right store for the values with the same **key** and the timestamp lower or equal to the record's timestamp.
 - If the match is found, the two records are merged together into a new one according to the `on_merge` logic.
-- The size of the right store is controlled by the "grace_ms":
-  a newly added "right" record expires other values with the same key with timestamps below "<current timestamp> - <grace_ms>".
+- The size of the right store is controlled by `grace_ms`:
+  when a new right record is stored, any older right records for the same key whose timestamps are more than `grace_ms` behind the new record's timestamp are expired and removed.
 
 #### Joining strategies
 As-of join supports the following joining strategies:
@@ -316,7 +321,7 @@ For production use cases, consider using the [Quix Dynamic Configuration service
 - **Binary Data Support**: Support for both JSON and binary configuration content
 - **High Performance**: Optimized for high-throughput streaming applications
 
-👉 See the [Dynamic Configuration documentation](https://quix.io/docs/quix-cloud/managed-services/dynamic-configuration.html) for complete setup and usage details.
+See the [Dynamic Configuration documentation](https://quix.io/docs/quix-cloud/managed-services/dynamic-configuration.html) for complete setup and usage details.
 
 ## Interval join
 
@@ -404,7 +409,7 @@ The merging behavior is controlled by the `on_merge` parameter, which works the 
 ### Limitations
 
 - Joining dataframes belonging to the same topic (aka "self-join") is not supported.
-- The `backward_ms` must not be greater than the `grace_ms` to avoid losing data.
+- `backward_ms` must not exceed `grace_ms`. Because `grace_ms` controls how long records are kept in state, setting `backward_ms` larger than `grace_ms` would cause the join to look further back in time than records are actually retained. The application will raise a `ValueError` at startup if this constraint is violated.
 - Interval join does not preserve any headers. If you need headers from any side, consider adding them to the value.
 - The performance of the interval join depends on the density of the data.   
 If both streams have too many matching messages falling within the interval, the performance may drop significantly due to the large number of produced outputs.

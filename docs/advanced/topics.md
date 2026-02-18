@@ -52,7 +52,7 @@ By default, Quix Streams will create topics with one partition and a replication
 
 (Note: when working with Quix Cloud, the default replication factor is set by the Quix Cloud platform given the individual broker.)
 
-In production environments, you will probably want to these parameters to be different.
+In production environments, you will probably want these parameters to be different.
 
 To do that, you can provide a custom configuration to the `Topic` objects.
 
