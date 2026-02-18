@@ -23,7 +23,12 @@ To perform a join, the underlying topics must follow these requirements:
 Join is a stateful operation, and it requires partitions of left and right topics to be assigned to the same application during processing.
 
 2. **Keys in both topics must be distributed across partitions using the same algorithm.**
-For example, messages with the key `A` must go to the same partition number for both left and right topics. This is Kafka's default behaviour.  
+For example, messages with the key `A` must go to the same partition number for both left and right topics. This is Kafka's default behaviour.
+
+> **How co-assignment works under the hood:**
+> Quix Streams forces the Kafka consumer `partition.assignment.strategy` to `range`.
+> This guarantees that each consumer in the group receives the same partition number across all subscribed topics — e.g. the consumer that gets partition 0 from topic A will also get partition 0 from topic B.
+> Combined with the equal partition count requirement, this ensures join data always lands on the same consumer instance.
 
 
 ### Example
