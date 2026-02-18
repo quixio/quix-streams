@@ -182,7 +182,7 @@ def calculate_total(message, state):
     state.set("item_total", current_total)
     return current_total
 
-sdf = StreamingDataFrame()
+sdf = app.dataframe(input_topic)
 sdf = sdf.group_by("item")
 sdf["total_quantity"] = sdf.apply(calculate_total, stateful=True)
 sdf = sdf[["total_quantity"]]
@@ -218,7 +218,7 @@ def calculate_total(message, state):
 def groupby_store_and_item(message):
     return message["store_id"] + "--" + message["item"]
 
-sdf = StreamingDataFrame()
+sdf = app.dataframe(input_topic)
 sdf = sdf.group_by(key=groupby_store_and_item, name="store_item_gb")
 sdf["total_quantity"] = sdf.apply(calculate_total, stateful=True)
 sdf = sdf[["total_quantity"]]
@@ -250,9 +250,11 @@ This can be done by simply passing the `item` column name to `.group_by()`, foll
 a [`tumbling_window()`](windowing.md#time-based-tumbling-windows) [`.sum()`](aggregations.md#built-in-aggregators-and-collectors) over the past `3600` seconds:
 
 ```python
-sdf = StreamingDataFrame()
+from quixstreams.dataframe.windows import Sum
+
+sdf = app.dataframe(input_topic)
 sdf = sdf.group_by("item")
-sdf = sdf.tumbling_window(duration_ms=3600).agg(total_quantity=agg.Sum()).final()
+sdf = sdf.tumbling_window(duration_ms=3600).agg(total_quantity=Sum()).final()
 ```
 which generates data like:
 
@@ -273,7 +275,7 @@ Here is some supplemental information around how
 
 ### GroupBy limitations
 
-`GroupBy` is limited to one use per `StreamingDataFrame`.
+`GroupBy` is limited to one use per `StreamingDataFrame`. This is because each `group_by()` routes messages through an internal repartition topic. Chaining multiple `group_by()` calls would require multiple intermediate topics, which is not currently supported. If you need to regroup by multiple dimensions, create separate `StreamingDataFrame` pipelines.
 
 ### How GroupBy works
 Each `GroupBy` operation is facilitated by a unique, internally managed 

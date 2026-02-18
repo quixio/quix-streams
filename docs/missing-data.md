@@ -12,7 +12,7 @@ Handling missing data is a crucial aspect of data processing, especially in stre
 
 - **Rows with `None` Values**: These rows are ignored during aggregation operations. This means that if a row contains a `None` value, it will not contribute to the aggregation result. This applies to the following aggregations: Count, Sum, Mean, Min, and Max.
 
-- **`NaN` Values**: Unlike `None`, `NaN` values are propagated to the aggregation result. This is because `NaN` is not considered missing data in the same way as `None`. Instead, it represents a numerical value that is undefined or unrepresentable, and it is treated as such in calculations.
+- **`NaN` Values**: Unlike `None`, `NaN` values (Python `float('nan')` or `math.nan`) are treated as numeric values and are included in aggregations. They propagate through operations like `Sum`, `Mean`, `Min`, and `Max`, meaning a single `NaN` input will make the aggregation result `NaN`. Use `sdf.fill()` or filter them out beforehand if this is not the desired behavior.
 
 ## `StreamingDataFrame.fill` Method
 

@@ -4,15 +4,12 @@
 In Quix Streams, aggregation operations are divided into two groups: **Aggregators** and **Collectors**. 
 
 ### Aggregators
-**Aggregators** incrementally combine the current value and the aggregated data and store the result to the state.   
-Use them when the aggregation operation can be performed in incremental way, like counting items. 
-
+**Aggregators** process each incoming message immediately and store only the running result (e.g. a running sum or count). The individual messages are not retained.
+Use them when the result can be computed incrementally without keeping all raw data, like counting items or summing values.
 
 ### Collectors
-**Collectors** accumulate individual values in the state before performing any aggregation.
-
-They can be used to batch items into a collection, or when the aggregation operation needs 
-the full dataset, like calculating a median.
+**Collectors** store every raw message value in state until the window closes, at which point a final computation runs over all collected items.
+Use them when the final calculation requires all data at once, like calculating a median or producing a sorted list.
 
 **Collectors** are optimized for storing individual values to the state and perform significantly better than **Aggregators** when you need to accumulate values into a list.
 

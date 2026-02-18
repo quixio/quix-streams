@@ -81,7 +81,7 @@ if __name__ == '__main__':
 When using `StreamingDataFrame.concat()` to combine different topics, the application's internal consumer goes into a special "buffered" mode.  
 
 In this mode, it buffers messages per partition in order to process them in the timestamp order between different topics.  
-Timestamp alignment is effective only for the partitions **with the same numbers**: partition zero is aligned with other zero partitions, but not with partition one. 
+Timestamp alignment is effective only for the partitions **with the same numbers**: partition zero is aligned with other zero partitions, but not with partition one. This constraint exists because each consumer processes only its assigned partitions — a consumer holding partition 0 of both topics can align those two streams, but has no visibility into partition 1.
 
 Why is this needed?  
 Consider two topics A and B with the following timestamps:
@@ -91,7 +91,7 @@ Consider two topics A and B with the following timestamps:
 
 By default, Kafka does not guarantee the processing order to be **11**, **12**, **15**, **17** because the order is guaranteed only within a single partition.
 
-With timestamp alignment, the order is achievable given that the messages are already present in the topic partitions (i.e. it doesn't handle the cases when the producer is delayed).
+With timestamp alignment, the order is achievable given that the messages are already present in the topic partitions. If one topic's producer is slow and has not yet written messages, the consumer may wait or process the available topic's messages out of order.
 
 
 ## Stateful operations on concatenated dataframes

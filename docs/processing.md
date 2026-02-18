@@ -17,11 +17,12 @@ With `StreamingDataFrame`, you can:
 
 ### How It Works
 
-`StreamingDataFrame` is a lazy object.  
+`StreamingDataFrame` is a lazy object.
 You may think of it as a pipeline containing all transformations for incoming messages.
 
 It doesn't store the actual consumed data in memory, but only declares how the data
-should be transformed.
+should be transformed. Each call to `.apply()`, `.filter()`, etc. builds up a processing
+plan. The plan is only executed when `app.run()` is called and real messages start flowing.
 
 All manipulations to a `StreamingDataFrame` updates its processing pipeline, and 
 operations can be added either individually, or as a chain of them.
@@ -84,7 +85,7 @@ from quixstreams import Application
 # Define an application and input topic with JSON deserialization
 app = Application(broker_address='localhost:9092')
 input_topic = app.topic('temperature', value_deserializer='json')
-output_topic = app.topic('temperature-celsius', value_deserializer='json')
+output_topic = app.topic('temperature-celsius', value_serializer='json')
 
 # Create StreamingDataFrame and connect it to the input topic 
 sdf = app.dataframe(topic=input_topic)
@@ -642,12 +643,10 @@ For example, to log input data, or to update a counter in the State.
 The return of the callback passed to `.update()` will be ignored, and the original input
 will be sent to downstream operations instead.
 
-This operation occurs in-place, meaning reassigning the operation to your `sdf` is 
-entirely OPTIONAL; the original `StreamingDataFrame` is still returned to allow the 
-chaining of commands like `sdf.update().print()`.
-
-> Note: chains that include any non-inplace function will still require reassignment: 
-> `sdf = sdf.update().filter().print()`
+`.update()` returns the same `StreamingDataFrame`, so reassigning to `sdf` is optional
+when chaining only other in-place operations (like `.print()`). However, if the chain
+includes a non-in-place operation such as `.filter()` or `.apply()`, reassignment is
+required: `sdf = sdf.update().filter().print()`.
 
 **Example:**
 
@@ -748,7 +747,7 @@ sdf = sdf.set_headers(
 ## Accessing Kafka Keys, Timestamps and Headers
 By leveraging the power of custom functions in `apply()`, `update()`, and `filter()` methods of `StreamingDataFrame`, you can conveniently access message keys, timestamps and headers of the records.
 
-To get a key and a timestamp in your callback, you need to pass an additional keyword-only parameter, `metadata=True.`
+To receive the key, timestamp, and headers as arguments in your callback, pass `metadata=True` to the `.apply()`, `.update()`, or `.filter()` method — not to the callback itself. Your callback must then accept four positional arguments: `value, key, timestamp, headers`.
 
 
 > **_NOTE:_** You should never mutate keys during processing.  

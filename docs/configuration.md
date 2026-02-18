@@ -279,7 +279,7 @@ Values in the dictionary cannot override settings already defined by other param
 - **`consumer_poll_timeout`** - a timeout in seconds for the internal Consumer `.poll()`.  
 **Default** - `1.0`.
 
-- **`producer_poll_timeout`** - a timeout in seconds for the internal Producer.  
+- **`producer_poll_timeout`** - a timeout in seconds for the internal Producer's poll loop. `0.0` (the default) means non-blocking: the producer will process any immediately available delivery callbacks but will not wait for new ones.
 **Default** - `0.0`.
 
 - **`request_timeout`** - request timeout in seconds for any API-related calls, mostly 

@@ -1,6 +1,6 @@
 # Stateful Applications
 
-Quix Streams provides a RocksDB-based state store that enables the storage of data in a persistent state for use during stream processing.
+Quix Streams provides a local, persistent state store backed by RocksDB. Data stored in state survives application restarts and is backed up to Kafka using changelog topics for fault tolerance.
 
 Here, we will outline how stateful processing works.
 
@@ -10,8 +10,8 @@ Here, we will outline how stateful processing works.
 The most important concept to understand with state is that it depends on the message 
 key due to how Kafka topic partitioning works.
 
-**Every Kafka message key's state is independent and _inaccessible_ from all others; it is
-accessible only while it is the currently active message key**.  
+**Every Kafka message key's state is independent and _inaccessible_ from all others.**
+State for key `A` is only accessible while the application is processing a message with key `A`. You cannot read or write state for key `B` while handling a message with key `A`.  
 
 Each key may belong to different Kafka topic partitions, and partitions are automatically 
 assigned and re-assigned by Kafka broker to consumer apps in the same consumer group.
@@ -161,7 +161,7 @@ While the impact of this is generally minimal and only for a small amount of mes
 
 ## Serialization
 
-By default, the keys and values are serialized to JSON for storage. If you need to change the serialization format, you can do so using the `rocksdb_options` parameter when creating the `Application` object. This change will apply to all state stores created by the application and existing state will be un-readable.
+By default, the keys and values are serialized to JSON for storage. If you need to change the serialization format, you can do so using the `rocksdb_options` parameter when creating the `Application` object. This change will apply to all state stores created by the application and existing state will be un-readable. Before changing the serialization format, call `app.clear_state()` before `app.run()` to delete the existing state stores, otherwise the application will fail to read them.
 
 For example, you can use [python `pickle` module](https://docs.python.org/3/library/pickle.html) to serialize and deserialize all stores data.
 
