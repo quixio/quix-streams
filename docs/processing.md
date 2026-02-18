@@ -42,7 +42,7 @@ to ensure they are applied correctly. For example:
 ```python
 from quixstreams import Application
 
-# Initialize the Appication
+# Initialize the Application
 app = Application(...)
 
 # Create a StreamingDataFrame
@@ -331,7 +331,7 @@ sdf = sdf.update(add_fahrenheit)
 To filter data with `StreamingDataFrame`, you may use:
 
 - DataFrame API with conditional expressions on columns.  
-  Use it if the message value is decode to a dictionary.
+  Use it if the message value is decoded to a dictionary.
 
 - Custom functions using `sdf.filter(...)`
   Use this approach if the value is not a dictionary, or you need to perform a more
@@ -439,7 +439,7 @@ sdf = sdf.to_topic(
 
 !!! warning "Important Considerations"
     
-    We recommend declaring all `Topic` instances before staring the application instead of creating them dynamically within the passed callback.
+    We recommend declaring all `Topic` instances before starting the application instead of creating them dynamically within the passed callback.
     
     Creating topics dynamically can lead to accidentally creating numerous topics and saturating the broker's partitions limits.  
     Also, each `app.topic()` calls checks if the topic exists in the cluster and attempts to create the missing one when `auto_create_topics=True` is passed to the `Application`.
@@ -452,7 +452,7 @@ you can optionally provide a `key` callback generating a new key.
 
 This callback can use the current value and must return a new message key.
 
-The returned key must be compatible with `key_serializer` provided to the `Topic`object.
+The returned key must be compatible with `key_serializer` provided to the `Topic` object.
 
 **Example:**
 
@@ -523,7 +523,7 @@ Here are some examples of the column operations:
 ```python
 sdf = app.dataframe(...)
 
-# Input: {"total": 3, "count" 2}
+# Input: {"total": 3, "count": 2}
 
 # Use columns to filter data based on condition
 sdf = sdf[(sdf['total'] > 0) | (sdf['count'] > 1)]
@@ -542,7 +542,7 @@ sdf['average_is_null'] = sdf["average"].isnull()
 
 ### How it works
 
-Under the good, when you access a column on `StreamingDataFrame` it generates the new `StreamingSeries` instance that refers to the value of the passed key.
+Under the hood, when you access a column on `StreamingDataFrame` it generates the new `StreamingSeries` instance that refers to the value of the passed key.
 
 These objects are also lazy, and they are evaluated only when the `StreamingDataFrame`is
 executed by `app.run()`.

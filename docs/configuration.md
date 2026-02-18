@@ -130,7 +130,7 @@ even this is not a guarantee.
 
 You can minimize the impact of latency somewhat by adjusting the [`commit_interval` of 
 the `Application`](#main-configuration-parameters), but be aware of [the
-performance considerations around `commit_interval`](advanced/checkpointing.md)).
+performance considerations around `commit_interval`](advanced/checkpointing.md).
 
 
 ### Exactly-Once producer buffering
@@ -142,7 +142,7 @@ messages are not immediately readable like with `at-least-once`.
 Basically, the [`commit_interval` of an `Application`](#main-configuration-parameters) 
 can be interpreted as the maximum amount of time before a produced message can be read 
 (depending on how far into the checkpoint a message is processed). If you adjust it, 
-be aware of other [performance considerations around `commit_interval`](advanced/checkpointing.md)).
+be aware of other [performance considerations around `commit_interval`](advanced/checkpointing.md).
 
 > NOTE: `groupby` doubles this effect since it produces to another topic under the hood. 
 

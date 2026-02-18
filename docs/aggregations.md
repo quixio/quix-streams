@@ -138,7 +138,7 @@ sdf = (
 #   'start': <window start>, 
 #   'end': <window end>, 
 #   'min_temperature': 9999  - minimum temperature
-# }****
+# }
 ```
 
 
@@ -241,7 +241,7 @@ Whenever the state key changes, the aggregation's state is reset.
 
 **Example 1. Power sum**
 
-Calculate the sum of the power of incoming data over a 10-minute tumbing window,.
+Calculate the sum of the power of incoming data over a 10-minute tumbling window.
 
 ```python
 from datetime import timedelta
@@ -317,7 +317,7 @@ class TemperatureAggregator(Aggregator):
         return {
             "min_temp": stored["min_temp"],
             "max_temp": stored["max_temp"],
-            "total_events": stored["total_events"]
+            "total_events": stored["total_events"],
             "avg_temp": stored["sum_temp"] / stored["total_events"]
         }
         
@@ -360,7 +360,7 @@ It is called when the window is closed with an iterable of all the collected ite
 
 By default, **Collectors** always store the full message.  
 
-If you only need in a specific column, you can override the [`column`](api-reference/quixstreams.md#basecollectorcolumn) property to specify which column needs to be stored.
+If you only need a specific column, you can override the [`column`](api-reference/quixstreams.md#basecollectorcolumn) property to specify which column needs to be stored.
 
 
 **Example:**

@@ -321,7 +321,7 @@ For production use cases, consider using the [Quix Dynamic Configuration service
 - **Binary Data Support**: Support for both JSON and binary configuration content
 - **High Performance**: Optimized for high-throughput streaming applications
 
-👉 See the [Dynamic Configuration documentation](https://quix.io/docs/quix-cloud/managed-services/dynamic-configuration.html) for complete setup and usage details.
+See the [Dynamic Configuration documentation](https://quix.io/docs/quix-cloud/managed-services/dynamic-configuration.html) for complete setup and usage details.
 
 ## Interval join
 

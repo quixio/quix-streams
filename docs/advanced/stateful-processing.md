@@ -169,6 +169,8 @@ For example, you can use [python `pickle` module](https://docs.python.org/3/libr
 import pickle
 
 from quixstreams import Application
+from quixstreams.state.rocksdb.options import RocksDBOptions
+
 app = Application(
     broker_address='localhost:9092', 
     rocksdb_options=RocksDBOptions(dumps=pickle.dumps, loads=pickle.loads) 

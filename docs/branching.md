@@ -66,7 +66,7 @@ Consolidating may be useful where many similar transformations are repeated in v
 
 ### Generating Branches
 
-Branches are added almost almost exactly like their linear counterparts 
+Branches are added almost exactly like their linear counterparts 
 (which is basically like a branch count of 1).
 
 ***The main difference is how variable assignments are managed.***
@@ -109,7 +109,7 @@ branches just generate additional nodes you can manipulate on them,
 but they are all still part of the same `SDF` (from the user perspective). 
 
 
-### Branch Leafs and Tracking
+### Branch Leaves and Tracking
 
 Also being introduced alongside branching is automated `SDF` tracking.
 
@@ -203,7 +203,7 @@ def car_prize(value):
 
 
 def cash_prize(value):
-    return f"f{message_stub(value)} a chance to win $1 million!"
+    return f"{message_stub(value)} a chance to win $1 million!"
 
 
 app = Application("localhost:9092")
@@ -561,7 +561,7 @@ def car_prize(value):
 
 
 def cash_prize(value):
-    return f"f{message_stub(value)} a chance to win $1 million!"
+    return f"{message_stub(value)} a chance to win $1 million!"
 
 
 app = Application("localhost:9092")

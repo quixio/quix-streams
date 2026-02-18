@@ -16,7 +16,7 @@ Handling missing data is a crucial aspect of data processing, especially in stre
 
 ## `StreamingDataFrame.fill` Method
 
-The `fill` method in the `StreamingDataFrame` class is used to fill missing column and missing value in the message with a constant value.
+The `fill` method in the `StreamingDataFrame` class is used to fill missing columns and missing values in the message with a constant value.
 
 ### Example Usage
 

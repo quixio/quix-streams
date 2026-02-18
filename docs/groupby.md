@@ -172,7 +172,7 @@ what `store_id` it came from).
 
 In this case, we need to get totals based on a single column identifier: `item`.
 
-This can be done by simply passing the `item` column name to `.groupby()`, followed by
+This can be done by simply passing the `item` column name to `.group_by()`, followed by
 a [stateful aggregation](advanced/stateful-processing.md):
 
 ```python
@@ -224,9 +224,9 @@ sdf["total_quantity"] = sdf.apply(calculate_total, stateful=True)
 sdf = sdf[["total_quantity"]]
 ```
 
-Of course, we follow the `.groupby()` with a [stateful aggregation](advanced/stateful-processing.md).
+Of course, we follow the `.group_by()` with a [stateful aggregation](advanced/stateful-processing.md).
 
->***NOTE:*** a `name` is required for a custom `.groupby()` function, as seen here!
+>***NOTE:*** a `name` is required for a custom `.group_by()` function, as seen here!
 
 Together, this generates data like:
 
@@ -246,7 +246,7 @@ what `store_id` it came from) ***over the past hour***.
 
 In this case, we need to get a windowed sum based on a single column identifier: `item`.
 
-This can be done by simply passing the `item` column name to `.groupby()`, followed by 
+This can be done by simply passing the `item` column name to `.group_by()`, followed by 
 a [`tumbling_window()`](windowing.md#time-based-tumbling-windows) [`.sum()`](aggregations.md#built-in-aggregators-and-collectors) over the past `3600` seconds:
 
 ```python
