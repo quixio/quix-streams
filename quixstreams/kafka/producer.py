@@ -37,6 +37,7 @@ _SILENTLY_IGNORED_KAFKA_ERRORS = (
 
 PRODUCER_POLL_TIMEOUT = 30.0
 PRODUCER_ON_ERROR_RETRIES = 10
+_BROKER_PROBE_INTERVAL = 30.0
 
 
 def _default_error_cb(error: KafkaError):
@@ -98,6 +99,7 @@ class Producer:
             broker_address = ConnectionConfig(bootstrap_servers=broker_address)
 
         self._broker_unavailable_since: Optional[float] = None
+        self._last_broker_probe: Optional[float] = None
 
         # Wrap the user-provided (or default) error callback so that broker
         # availability tracking always runs, regardless of custom callbacks.
@@ -254,43 +256,55 @@ class Producer:
 
     def _broker_available(self):
         """Reset the broker unavailability tracker."""
-        self._broker_unavailable_since = None
+        if self._broker_unavailable_since is not None:
+            elapsed = time.monotonic() - self._broker_unavailable_since
+            logger.info(
+                "Kafka producer broker connectivity restored after %.1fs.",
+                elapsed,
+            )
+            self._broker_unavailable_since = None
+            self._last_broker_probe = None
 
     def raise_if_broker_unavailable(self, timeout: float):
         """Raise if all brokers have been unavailable for longer than ``timeout`` seconds.
 
-        Before raising, performs an active metadata probe to confirm the brokers
-        are truly unreachable (avoids false positives for idle applications).
+        Periodically performs an active metadata probe to detect recovery
+        even when no messages are flowing (idle applications).
 
         :param timeout: seconds of continuous unavailability before raising.
         :raises KafkaBrokerUnavailableError: if the timeout has been exceeded.
         """
-        if self._broker_unavailable_since is not None:
-            elapsed = time.monotonic() - self._broker_unavailable_since
-            if elapsed >= timeout:
-                # Active probe: try a lightweight metadata request before raising.
-                # This avoids false positives when brokers recovered but no
-                # messages flowed to reset the timer (idle apps).
-                try:
-                    self._producer.list_topics(timeout=5.0)
-                    # Probe succeeded — brokers are actually reachable.
-                    self._broker_unavailable_since = None
-                    logger.info(
-                        "Broker availability probe succeeded after %.0fs; "
-                        "resetting unavailability timer.",
-                        elapsed,
-                    )
-                    return
-                except Exception:
-                    logger.debug("Broker availability probe failed", exc_info=True)
-                raise KafkaBrokerUnavailableError(
-                    f"All Kafka brokers have been unavailable for "
-                    f"{elapsed:.0f}s (timeout={timeout:.0f}s). "
-                    f"The application cannot recover automatically; "
-                    f"restarting is required. "
-                    f"Adjust via Application(broker_availability_timeout=...) "
-                    f"or set to 0 to disable."
-                )
+        if self._broker_unavailable_since is None:
+            return
+
+        now = time.monotonic()
+        elapsed = now - self._broker_unavailable_since
+
+        # Periodically probe to detect recovery, even before the timeout.
+        since_last_probe = (
+            now - self._last_broker_probe
+            if self._last_broker_probe is not None
+            else float("inf")
+        )
+        if since_last_probe >= _BROKER_PROBE_INTERVAL:
+            self._last_broker_probe = now
+            try:
+                self._producer.list_topics(timeout=5.0)
+                # Probe succeeded — brokers are actually reachable.
+                self._broker_available()
+                return
+            except Exception:
+                logger.debug("Broker availability probe failed", exc_info=True)
+
+        if elapsed >= timeout:
+            raise KafkaBrokerUnavailableError(
+                f"All Kafka brokers have been unavailable for "
+                f"{elapsed:.0f}s (timeout={timeout:.0f}s). "
+                f"The application cannot recover automatically; "
+                f"restarting is required. "
+                f"Adjust via Application(broker_availability_timeout=...) "
+                f"or set to 0 to disable."
+            )
 
     def __len__(self):
         return len(self._producer)
