@@ -1,3 +1,4 @@
+import json
 import time
 import uuid
 from unittest.mock import patch
@@ -5,6 +6,7 @@ from unittest.mock import patch
 import pytest
 from confluent_kafka import KafkaError
 
+from quixstreams.kafka.consumer import BaseConsumer
 from quixstreams.kafka.exceptions import KafkaBrokerUnavailableError
 from quixstreams.kafka.producer import Producer
 
@@ -570,3 +572,388 @@ class TestRecoveryBrokerAvailability:
 
         # Timer should have been reset by the successful changelog consumption
         assert consumer._broker_unavailable_since is None
+
+
+def _make_stats_json(brokers: dict) -> str:
+    """Helper to build a stats JSON string with the given broker entries."""
+    return json.dumps({"brokers": brokers})
+
+
+class TestProducerPerBrokerTracking:
+    """Tests for Producer per-broker connectivity tracking via stats_cb."""
+
+    def test_initial_up_no_log(self, caplog):
+        """First time a broker is seen as UP should not produce a log."""
+        producer = Producer(broker_address="localhost:9092")
+        stats = _make_stats_json(
+            {
+                "broker1:9092/1": {"nodeid": 1, "state": "UP"},
+            }
+        )
+        with caplog.at_level("DEBUG"):
+            producer._stats_cb(stats)
+
+        assert "broker1:9092/1" in producer._brokers_seen_up
+        assert "UP again" not in caplog.text
+        assert "is UP" not in caplog.text
+
+    def test_up_to_down_logs_reassurance_when_others_up(self, caplog):
+        """UP -> non-UP should log INFO with count of remaining brokers."""
+        producer = Producer(broker_address="localhost:9092")
+        # Two brokers UP
+        producer._stats_cb(
+            _make_stats_json(
+                {
+                    "broker1:9092/1": {"nodeid": 1, "state": "UP"},
+                    "broker2:9092/2": {"nodeid": 2, "state": "UP"},
+                }
+            )
+        )
+
+        with caplog.at_level("INFO"):
+            producer._stats_cb(
+                _make_stats_json(
+                    {
+                        "broker1:9092/1": {"nodeid": 1, "state": "DOWN"},
+                        "broker2:9092/2": {"nodeid": 2, "state": "UP"},
+                    }
+                )
+            )
+
+        assert "went down" in caplog.text
+        assert "1 other broker(s) still available" in caplog.text
+
+    def test_up_to_down_no_reassurance_when_all_down(self, caplog):
+        """UP -> non-UP with no other brokers UP should not log reassurance."""
+        producer = Producer(broker_address="localhost:9092")
+        producer._stats_cb(
+            _make_stats_json(
+                {
+                    "broker1:9092/1": {"nodeid": 1, "state": "UP"},
+                }
+            )
+        )
+
+        with caplog.at_level("INFO"):
+            producer._stats_cb(
+                _make_stats_json(
+                    {
+                        "broker1:9092/1": {"nodeid": 1, "state": "DOWN"},
+                    }
+                )
+            )
+
+        assert "went down" not in caplog.text
+
+    def test_down_to_up_after_seen_up_logs_info(self, caplog):
+        """non-UP -> UP for a previously-UP broker should log info."""
+        producer = Producer(broker_address="localhost:9092")
+        # UP -> DOWN -> UP
+        producer._stats_cb(
+            _make_stats_json(
+                {
+                    "broker1:9092/1": {"nodeid": 1, "state": "UP"},
+                }
+            )
+        )
+        producer._stats_cb(
+            _make_stats_json(
+                {
+                    "broker1:9092/1": {"nodeid": 1, "state": "DOWN"},
+                }
+            )
+        )
+
+        with caplog.at_level("INFO"):
+            producer._stats_cb(
+                _make_stats_json(
+                    {
+                        "broker1:9092/1": {"nodeid": 1, "state": "UP"},
+                    }
+                )
+            )
+
+        assert "UP again" in caplog.text
+        assert "was DOWN" in caplog.text
+
+    def test_init_to_up_no_restored_log(self, caplog):
+        """INIT -> UP (never been UP before) should not log "restored"."""
+        producer = Producer(broker_address="localhost:9092")
+        # First seen as INIT
+        producer._stats_cb(
+            _make_stats_json(
+                {
+                    "broker1:9092/1": {"nodeid": 1, "state": "INIT"},
+                }
+            )
+        )
+
+        with caplog.at_level("DEBUG"):
+            producer._stats_cb(
+                _make_stats_json(
+                    {
+                        "broker1:9092/1": {"nodeid": 1, "state": "UP"},
+                    }
+                )
+            )
+
+        assert "UP again" not in caplog.text
+        assert "broker1:9092/1" in producer._brokers_seen_up
+
+    def test_bootstrap_nodeid_minus_1_skipped(self):
+        """Brokers with nodeid -1 should be skipped entirely."""
+        producer = Producer(broker_address="localhost:9092")
+        producer._stats_cb(
+            _make_stats_json(
+                {
+                    "bootstrap:9092": {"nodeid": -1, "state": "UP"},
+                }
+            )
+        )
+
+        assert producer._broker_states == {}
+        assert producer._brokers_seen_up == set()
+
+    def test_user_stats_cb_chained(self):
+        """User-provided stats_cb should be called with the raw JSON."""
+        calls = []
+        producer = Producer(
+            broker_address="localhost:9092",
+            extra_config={"stats_cb": lambda s: calls.append(s)},
+        )
+        stats = _make_stats_json({"broker1:9092/1": {"nodeid": 1, "state": "UP"}})
+        producer._stats_cb(stats)
+
+        assert len(calls) == 1
+        assert calls[0] == stats
+
+    def test_user_stats_cb_called_on_parse_error(self):
+        """User stats_cb should still be called even if JSON parsing fails."""
+        calls = []
+        producer = Producer(
+            broker_address="localhost:9092",
+            extra_config={"stats_cb": lambda s: calls.append(s)},
+        )
+        producer._stats_cb("not valid json {{{")
+
+        assert len(calls) == 1
+        assert calls[0] == "not valid json {{{"
+
+    def test_invalid_json_does_not_crash(self):
+        """Invalid JSON should not raise an exception."""
+        producer = Producer(broker_address="localhost:9092")
+        # Should not raise
+        producer._stats_cb("not valid json {{{")
+
+    def test_statistics_interval_default(self):
+        """Default statistics.interval.ms should be 30000."""
+        producer = Producer(broker_address="localhost:9092")
+        assert producer._producer_config["statistics.interval.ms"] == 30000
+
+    def test_statistics_interval_user_lower_wins(self):
+        """If user sets a lower positive value, theirs should be used."""
+        producer = Producer(
+            broker_address="localhost:9092",
+            extra_config={"statistics.interval.ms": 10000},
+        )
+        assert producer._producer_config["statistics.interval.ms"] == 10000
+
+    def test_statistics_interval_user_zero_disables(self):
+        """If user sets 0, stats are disabled — respected."""
+        producer = Producer(
+            broker_address="localhost:9092",
+            extra_config={"statistics.interval.ms": 0},
+        )
+        assert producer._producer_config["statistics.interval.ms"] == 0
+
+    def test_extra_config_not_mutated(self):
+        """The caller's extra_config dict should not be modified."""
+        original = {"some.setting": "value", "stats_cb": lambda s: None}
+        extra = dict(original)
+        Producer(broker_address="localhost:9092", extra_config=extra)
+
+        assert "stats_cb" in extra
+        assert extra == original
+
+
+class TestConsumerPerBrokerTracking:
+    """Tests for BaseConsumer per-broker connectivity tracking via stats_cb."""
+
+    def _make_consumer(self, **kwargs):
+        defaults = dict(
+            broker_address="localhost:9092",
+            consumer_group="test",
+            auto_offset_reset="latest",
+        )
+        defaults.update(kwargs)
+        return BaseConsumer(**defaults)
+
+    def test_initial_up_no_log(self, caplog):
+        consumer = self._make_consumer()
+        stats = _make_stats_json(
+            {
+                "broker1:9092/1": {"nodeid": 1, "state": "UP"},
+            }
+        )
+        with caplog.at_level("DEBUG"):
+            consumer._stats_cb(stats)
+
+        assert "broker1:9092/1" in consumer._brokers_seen_up
+        assert "UP again" not in caplog.text
+
+    def test_up_to_down_logs_reassurance_when_others_up(self, caplog):
+        consumer = self._make_consumer()
+        consumer._stats_cb(
+            _make_stats_json(
+                {
+                    "broker1:9092/1": {"nodeid": 1, "state": "UP"},
+                    "broker2:9092/2": {"nodeid": 2, "state": "UP"},
+                }
+            )
+        )
+
+        with caplog.at_level("INFO"):
+            consumer._stats_cb(
+                _make_stats_json(
+                    {
+                        "broker1:9092/1": {"nodeid": 1, "state": "DOWN"},
+                        "broker2:9092/2": {"nodeid": 2, "state": "UP"},
+                    }
+                )
+            )
+
+        assert "went down" in caplog.text
+        assert "1 other broker(s) still available" in caplog.text
+
+    def test_up_to_down_no_reassurance_when_all_down(self, caplog):
+        consumer = self._make_consumer()
+        consumer._stats_cb(
+            _make_stats_json(
+                {
+                    "broker1:9092/1": {"nodeid": 1, "state": "UP"},
+                }
+            )
+        )
+
+        with caplog.at_level("INFO"):
+            consumer._stats_cb(
+                _make_stats_json(
+                    {
+                        "broker1:9092/1": {"nodeid": 1, "state": "DOWN"},
+                    }
+                )
+            )
+
+        assert "went down" not in caplog.text
+
+    def test_down_to_up_after_seen_up_logs_info(self, caplog):
+        consumer = self._make_consumer()
+        consumer._stats_cb(
+            _make_stats_json(
+                {
+                    "broker1:9092/1": {"nodeid": 1, "state": "UP"},
+                }
+            )
+        )
+        consumer._stats_cb(
+            _make_stats_json(
+                {
+                    "broker1:9092/1": {"nodeid": 1, "state": "DOWN"},
+                }
+            )
+        )
+
+        with caplog.at_level("INFO"):
+            consumer._stats_cb(
+                _make_stats_json(
+                    {
+                        "broker1:9092/1": {"nodeid": 1, "state": "UP"},
+                    }
+                )
+            )
+
+        assert "UP again" in caplog.text
+        assert "was DOWN" in caplog.text
+
+    def test_init_to_up_no_restored_log(self, caplog):
+        consumer = self._make_consumer()
+        consumer._stats_cb(
+            _make_stats_json(
+                {
+                    "broker1:9092/1": {"nodeid": 1, "state": "INIT"},
+                }
+            )
+        )
+
+        with caplog.at_level("DEBUG"):
+            consumer._stats_cb(
+                _make_stats_json(
+                    {
+                        "broker1:9092/1": {"nodeid": 1, "state": "UP"},
+                    }
+                )
+            )
+
+        assert "UP again" not in caplog.text
+        assert "broker1:9092/1" in consumer._brokers_seen_up
+
+    def test_bootstrap_nodeid_minus_1_skipped(self):
+        consumer = self._make_consumer()
+        consumer._stats_cb(
+            _make_stats_json(
+                {
+                    "bootstrap:9092": {"nodeid": -1, "state": "UP"},
+                }
+            )
+        )
+
+        assert consumer._broker_states == {}
+        assert consumer._brokers_seen_up == set()
+
+    def test_user_stats_cb_chained(self):
+        calls = []
+        consumer = self._make_consumer(
+            extra_config={"stats_cb": lambda s: calls.append(s)},
+        )
+        stats = _make_stats_json({"broker1:9092/1": {"nodeid": 1, "state": "UP"}})
+        consumer._stats_cb(stats)
+
+        assert len(calls) == 1
+        assert calls[0] == stats
+
+    def test_user_stats_cb_called_on_parse_error(self):
+        calls = []
+        consumer = self._make_consumer(
+            extra_config={"stats_cb": lambda s: calls.append(s)},
+        )
+        consumer._stats_cb("not valid json {{{")
+
+        assert len(calls) == 1
+
+    def test_invalid_json_does_not_crash(self):
+        consumer = self._make_consumer()
+        consumer._stats_cb("not valid json {{{")
+
+    def test_statistics_interval_default(self):
+        consumer = self._make_consumer()
+        assert consumer._consumer_config["statistics.interval.ms"] == 30000
+
+    def test_statistics_interval_user_lower_wins(self):
+        consumer = self._make_consumer(
+            extra_config={"statistics.interval.ms": 10000},
+        )
+        assert consumer._consumer_config["statistics.interval.ms"] == 10000
+
+    def test_statistics_interval_user_zero_disables(self):
+        consumer = self._make_consumer(
+            extra_config={"statistics.interval.ms": 0},
+        )
+        assert consumer._consumer_config["statistics.interval.ms"] == 0
+
+    def test_extra_config_not_mutated(self):
+        original = {"some.setting": "value", "stats_cb": lambda s: None}
+        extra = dict(original)
+        self._make_consumer(extra_config=extra)
+
+        assert "stats_cb" in extra
+        assert extra == original
