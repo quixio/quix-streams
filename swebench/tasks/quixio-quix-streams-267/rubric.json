@@ -5,9 +5,14 @@
     "points": 3
   },
   {
+    "id": "naming_consistency",
+    "description": "Parameter and variable names are used consistently throughout the implementation. In particular, the distinction between the source topic name (e.g. 'source_topic_name') and the changelog topic name (e.g. 'changelog') is clear and applied uniformly across RecoveryPartition, RecoveryManager, and any related methods. Mixing 'topic' to mean different things in different contexts is a naming inconsistency that should be avoided.",
+    "points": 3
+  },
+  {
     "id": "state_transition_clarity",
     "description": "The recovery lifecycle state transitions (pending assigns → active partitions → pending revokes → finalization) are clearly modeled. The _recovery_method callable pattern (switching between _rebalance and _recover) makes the state machine easy to follow without requiring deeply nested conditionals.",
-    "points": 3
+    "points": 2
   },
   {
     "id": "exception_as_control_flow",
@@ -16,27 +21,22 @@
   },
   {
     "id": "offset_edge_case_handling",
-    "description": "Edge cases around changelog offsets are handled with clear logic: when stored offset equals highwater (no messages), when stored offset exceeds highwater (bad state, warn), and when lowwater equals highwater (empty topic, only update offset). Each case has a distinct code path.",
+    "description": "Edge cases around changelog offsets are handled with clear logic: when stored offset equals highwater (no messages to replay), when stored offset exceeds highwater (bad state — should warn), and when lowwater equals highwater (empty topic — only update offset). Each case has a distinct, readable code path.",
     "points": 3
   },
   {
-    "id": "type_annotations",
-    "description": "New classes (RecoveryPartition, RecoveryManager) and their methods use proper Python type annotations consistent with the existing codebase style. Parameters, return types, and properties are annotated.",
-    "points": 2
-  },
-  {
     "id": "docstrings_and_comments",
-    "description": "Key classes and non-trivial methods have docstrings that explain their purpose and behavior, particularly for RecoveryPartition properties (needs_recovery, needs_offset_update) and RecoveryManager methods (_handle_pending_assigns, _finalize_recovery). Comments explain non-obvious logic.",
-    "points": 2
+    "description": "Key classes and non-trivial methods have docstrings that explain their purpose and behavior. At minimum: RecoveryPartition class and its properties (needs_recovery, needs_offset_update), RecoveryManager class and its coordination methods (_handle_pending_assigns, _finalize_recovery, _recover), and RocksDBStorePartition.recover. Comments explain non-obvious logic such as the poll countdown mechanism.",
+    "points": 3
   },
   {
     "id": "rocksdb_recovery_transaction_integration",
-    "description": "The RocksDBStorePartition.recover method integrates cleanly with the existing WriteBatch pattern used by the partition. Key/value application from the changelog message and offset tracking are handled atomically within the same write operation.",
+    "description": "The RocksDBStorePartition.recover method integrates cleanly with the existing WriteBatch pattern used by the partition. Key/value application from the changelog message and offset tracking are handled atomically within the same write operation, consistent with how RocksDBPartitionTransaction flushes data.",
     "points": 2
   },
   {
     "id": "codebase_consistency",
-    "description": "The implementation follows existing codebase patterns: naming conventions (snake_case methods, PascalCase classes), module organization, use of Protocol types from types.py, and import style are consistent with the surrounding code in quixstreams/state/.",
+    "description": "The implementation follows existing codebase patterns: snake_case for methods and variables, PascalCase for classes, use of Protocol types from types.py, and import style consistent with the surrounding code in quixstreams/state/. No print statements or debugging artifacts are left in the code.",
     "points": 2
   }
 ]
