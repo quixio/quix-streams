@@ -168,18 +168,11 @@ class QuixTSDataLakeSink(BatchingSink):
 
             # Test Catalog connection if configured
             if self._catalog:
-                try:
-                    response = self._catalog.get("/health", timeout=5)
-                    response.raise_for_status()
-                    logger.info(
-                        "Successfully connected to REST Catalog at %s", self._catalog
-                    )
-                except Exception as e:
-                    logger.warning(
-                        "Could not connect to REST Catalog: %s. Table registration disabled.",
-                        e,
-                    )
-                    self.auto_discover = False
+                response = self._catalog.get("/health", timeout=5)
+                response.raise_for_status()
+                logger.info(
+                    "Successfully connected to REST Catalog at %s", self._catalog
+                )
 
             # Check if table already exists and validate partition strategy
             self._validate_existing_table_structure()
@@ -319,23 +312,30 @@ class QuixTSDataLakeSink(BatchingSink):
         count = len(self._pending_futures)
         logger.debug(f"Waiting for {count} upload(s) to complete...")
 
-        # Wait for all uploads to complete
-        for item in self._pending_futures:
-            try:
-                item["future"].result()  # Wait and raise on error
-                logger.debug("Uploaded %d rows to %s", item["row_count"], item["key"])
-            except Exception as e:
-                logger.error("Failed to upload %s: %s", item["key"], e)
-                raise
+        try:
+            # Wait for all uploads to complete, collecting the first error
+            first_error = None
+            for item in self._pending_futures:
+                try:
+                    item["future"].result()
+                    logger.debug(
+                        "Uploaded %d rows to %s", item["row_count"], item["key"]
+                    )
+                except Exception as e:
+                    logger.error("Failed to upload %s: %s", item["key"], e)
+                    if first_error is None:
+                        first_error = e
 
-        logger.info(f"Successfully uploaded {count} file(s)")
+            if first_error is not None:
+                raise first_error
 
-        # Register all files in catalog manifest if configured
-        if self._catalog and self.table_registered:
-            self._register_files_in_manifest()
+            logger.info(f"Successfully uploaded {count} file(s)")
 
-        # Clear the futures list
-        self._pending_futures.clear()
+            # Register all files in catalog manifest if configured
+            if self._catalog and self.table_registered:
+                self._register_files_in_manifest()
+        finally:
+            self._pending_futures.clear()
 
     def _null_empty_dicts(self, df: pd.DataFrame):
         """
@@ -358,64 +358,59 @@ class QuixTSDataLakeSink(BatchingSink):
         if not self._catalog:
             return
 
-        try:
-            # First check if table already exists
-            check_response = self._catalog.get(
-                f"/namespaces/{self.namespace}/tables/{self.table_name}",
-                timeout=5,
-            )
+        # First check if table already exists
+        check_response = self._catalog.get(
+            f"/namespaces/{self.namespace}/tables/{self.table_name}",
+            timeout=5,
+        )
 
-            if check_response.status_code == 200:
-                logger.info("Table '%s' already exists in catalog", self.table_name)
-                self.table_registered = True
-                # Validate partition strategy matches
-                self._validate_partition_strategy(check_response.json())
-                return
+        if check_response.status_code == 200:
+            logger.info("Table '%s' already exists in catalog", self.table_name)
+            self.table_registered = True
+            # Validate partition strategy matches
+            self._validate_partition_strategy(check_response.json())
+            return
 
-            # Table doesn't exist, create it
-            # Note: Location must be full S3 URI for catalog (API uses this with DuckDB)
-            # Include workspace_id in the path if set (for workspace-scoped storage)
-            if self.workspace_id:
-                location = f"s3://{self.s3_bucket}/{self.workspace_id}/{self.s3_prefix}/{self.table_name}"
-            else:
-                location = f"s3://{self.s3_bucket}/{self.s3_prefix}/{self.table_name}"
+        # Table doesn't exist, create it
+        # Note: Location must be full S3 URI for catalog (API uses this with DuckDB)
+        # Include workspace_id in the path if set (for workspace-scoped storage)
+        if self.workspace_id:
+            location = f"s3://{self.s3_bucket}/{self.workspace_id}/{self.s3_prefix}/{self.table_name}"
+        else:
+            location = f"s3://{self.s3_bucket}/{self.s3_prefix}/{self.table_name}"
 
-            # Define partition spec based on configuration
-            # For dynamic partition discovery, create table without partition spec
-            # The partition spec will be set when first files are added
-            partition_spec = []  # Empty spec for dynamic discovery
+        # Define partition spec based on configuration
+        # For dynamic partition discovery, create table without partition spec
+        # The partition spec will be set when first files are added
+        partition_spec = []  # Empty spec for dynamic discovery
 
-            # Create table with minimal schema (will be inferred from data)
-            create_response = self._catalog.put(
-                f"/namespaces/{self.namespace}/tables/{self.table_name}",
-                json={
-                    "location": location,
-                    "partition_spec": partition_spec,
-                    "properties": {
-                        "created_by": "quixstreams-quix-lake-sink",
-                        "auto_discovered": "false",
-                        "expected_partitions": self.hive_columns.copy(),
-                    },
+        # Create table with minimal schema (will be inferred from data)
+        create_response = self._catalog.put(
+            f"/namespaces/{self.namespace}/tables/{self.table_name}",
+            json={
+                "location": location,
+                "partition_spec": partition_spec,
+                "properties": {
+                    "created_by": "quixstreams-quix-lake-sink",
+                    "auto_discovered": "false",
+                    "expected_partitions": self.hive_columns.copy(),
                 },
-                timeout=30,
+            },
+            timeout=30,
+        )
+
+        if create_response.status_code in [200, 201]:
+            logger.info(
+                "Successfully created table '%s' in REST Catalog. Partitions will be set dynamically to: %s",
+                self.table_name,
+                self.hive_columns,
             )
-
-            if create_response.status_code in [200, 201]:
-                logger.info(
-                    "Successfully created table '%s' in REST Catalog. Partitions will be set dynamically to: %s",
-                    self.table_name,
-                    self.hive_columns,
-                )
-                self.table_registered = True
-            else:
-                logger.warning(
-                    "Failed to create table '%s': %s",
-                    self.table_name,
-                    create_response.text,
-                )
-
-        except Exception as e:
-            logger.warning("Failed to register table '%s': %s", self.table_name, e)
+            self.table_registered = True
+        else:
+            raise RuntimeError(
+                f"Failed to create table '{self.table_name}' in REST Catalog: "
+                f"{create_response.status_code} {create_response.text}"
+            )
 
     def _add_timestamp_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -516,66 +511,57 @@ class QuixTSDataLakeSink(BatchingSink):
         """
         table_prefix = f"{self.s3_prefix}/{self.table_name}/"
 
-        try:
-            # List objects to see if table exists (sample first 100 files)
-            objects = self._blob_client.list_objects(prefix=table_prefix, max_keys=100)
+        # List objects to see if table exists (sample first 100 files)
+        objects = self._blob_client.list_objects(prefix=table_prefix, max_keys=100)
 
-            if not objects:
-                # Table doesn't exist yet, no validation needed
-                return
+        if not objects:
+            # Table doesn't exist yet, no validation needed
+            return
 
-            # Detect existing partition columns from directory structure
-            # We parse the paths to extract partition columns from Hive-style paths
-            detected_partition_columns = []
-            for obj in objects:
-                key = obj["Key"]
-                if key.endswith(".parquet"):
-                    # Extract path after table prefix
-                    relative_path = (
-                        key[len(table_prefix) :]
-                        if key.startswith(table_prefix)
-                        else key
-                    )
-                    path_parts = relative_path.split("/")
-
-                    # Look for Hive-style partitions (col=value format)
-                    for part in path_parts[:-1]:  # Exclude filename
-                        if "=" in part:
-                            # Extract column name from "col=value"
-                            col_name = part.split("=")[0]
-                            # Maintain order of first appearance
-                            if col_name not in detected_partition_columns:
-                                detected_partition_columns.append(col_name)
-
-            if detected_partition_columns:
-                # Build expected partition spec from sink configuration
-                expected_partition_spec = self.hive_columns.copy()
-
-                # Check if partition strategies match
-                # Using set comparison to ignore order first
-                if set(detected_partition_columns) != set(expected_partition_spec):
-                    error_msg = (
-                        f"Partition strategy mismatch for table '{self.table_name}'. "
-                        f"Existing table in storage has partitions: {detected_partition_columns}, "
-                        f"but sink is configured with: {expected_partition_spec}. "
-                        "This would corrupt the folder structure. Please ensure the sink partition "
-                        "configuration matches the existing table."
-                    )
-                    logger.error(error_msg)
-                    raise ValueError(error_msg)
-
-                logger.info(
-                    "Validated partition strategy for existing table '%s'. Partitions: %s",
-                    self.table_name,
-                    detected_partition_columns,
+        # Detect existing partition columns from directory structure
+        # We parse the paths to extract partition columns from Hive-style paths
+        detected_partition_columns = []
+        for obj in objects:
+            key = obj["Key"]
+            if key.endswith(".parquet"):
+                # Extract path after table prefix
+                relative_path = (
+                    key[len(table_prefix) :]
+                    if key.startswith(table_prefix)
+                    else key
                 )
+                path_parts = relative_path.split("/")
 
-        except ValueError:
-            raise
-        except Exception as e:
-            logger.warning(
-                "Could not validate existing table structure: %s. Proceeding with caution.",
-                e,
+                # Look for Hive-style partitions (col=value format)
+                for part in path_parts[:-1]:  # Exclude filename
+                    if "=" in part:
+                        # Extract column name from "col=value"
+                        col_name = part.split("=")[0]
+                        # Maintain order of first appearance
+                        if col_name not in detected_partition_columns:
+                            detected_partition_columns.append(col_name)
+
+        if detected_partition_columns:
+            # Build expected partition spec from sink configuration
+            expected_partition_spec = self.hive_columns.copy()
+
+            # Check if partition strategies match
+            # Using set comparison to ignore order first
+            if set(detected_partition_columns) != set(expected_partition_spec):
+                error_msg = (
+                    f"Partition strategy mismatch for table '{self.table_name}'. "
+                    f"Existing table in storage has partitions: {detected_partition_columns}, "
+                    f"but sink is configured with: {expected_partition_spec}. "
+                    "This would corrupt the folder structure. Please ensure the sink partition "
+                    "configuration matches the existing table."
+                )
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+
+            logger.info(
+                "Validated partition strategy for existing table '%s'. Partitions: %s",
+                self.table_name,
+                detected_partition_columns,
             )
 
     def _register_files_in_manifest(self):
@@ -583,61 +569,57 @@ class QuixTSDataLakeSink(BatchingSink):
         if not (file_items := self._pending_futures):
             return
 
-        try:
-            # Build file entries for all files
-            file_entries = []
-            for item in file_items:
-                storage_key = item["key"]
-                row_count = item["row_count"]
-                file_size = item["file_size"]
-                partition_columns = item["partition_columns"]
-                partition_values = item["partition_values"]
+        # Build file entries for all files
+        file_entries = []
+        for item in file_items:
+            storage_key = item["key"]
+            row_count = item["row_count"]
+            file_size = item["file_size"]
+            partition_columns = item["partition_columns"]
+            partition_values = item["partition_values"]
 
-                # Build file path as full S3 URI for catalog (API uses this with DuckDB)
-                # Include workspace_id if set (for workspace-scoped storage)
-                if self.workspace_id:
-                    file_path = (
-                        f"s3://{self.s3_bucket}/{self.workspace_id}/{storage_key}"
-                    )
-                else:
-                    file_path = f"s3://{self.s3_bucket}/{storage_key}"
-
-                # Build partition values dict
-                partition_dict = {}
-                if partition_columns and partition_values:
-                    for col, val in zip(partition_columns, partition_values):
-                        partition_dict[col] = str(val)
-
-                # Create file entry
-                file_entries.append(
-                    {
-                        "file_path": file_path,
-                        "file_size": file_size,
-                        "last_modified": datetime.now(tz=timezone.utc).isoformat(),
-                        "partition_values": partition_dict,
-                        "row_count": row_count,
-                    }
-                )
-
-            # Send all files to catalog in a single request
-            response = self._catalog.post(
-                f"/namespaces/{self.namespace}/tables/{self.table_name}/manifest/add-files",
-                json={"files": file_entries},
-                timeout=10,
-            )
-
-            if response.status_code == 200:
-                logger.info(
-                    f"Registered {len(file_entries)} file(s) in catalog manifest"
+            # Build file path as full S3 URI for catalog (API uses this with DuckDB)
+            # Include workspace_id if set (for workspace-scoped storage)
+            if self.workspace_id:
+                file_path = (
+                    f"s3://{self.s3_bucket}/{self.workspace_id}/{storage_key}"
                 )
             else:
-                logger.warning(
-                    "Failed to register files in manifest: %s", response.text
-                )
+                file_path = f"s3://{self.s3_bucket}/{storage_key}"
 
-        except Exception as e:
-            # Don't fail the write if manifest registration fails
-            logger.warning("Failed to register files in manifest: %s", e)
+            # Build partition values dict
+            partition_dict = {}
+            if partition_columns and partition_values:
+                for col, val in zip(partition_columns, partition_values):
+                    partition_dict[col] = str(val)
+
+            # Create file entry
+            file_entries.append(
+                {
+                    "file_path": file_path,
+                    "file_size": file_size,
+                    "last_modified": datetime.now(tz=timezone.utc).isoformat(),
+                    "partition_values": partition_dict,
+                    "row_count": row_count,
+                }
+            )
+
+        # Send all files to catalog in a single request
+        response = self._catalog.post(
+            f"/namespaces/{self.namespace}/tables/{self.table_name}/manifest/add-files",
+            json={"files": file_entries},
+            timeout=10,
+        )
+
+        if response.status_code == 200:
+            logger.info(
+                f"Registered {len(file_entries)} file(s) in catalog manifest"
+            )
+        else:
+            raise RuntimeError(
+                f"Failed to register files in catalog manifest: "
+                f"{response.status_code} {response.text}"
+            )
 
     def cleanup(self):
         """Cleanup resources when sink is stopped."""
