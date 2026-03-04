@@ -526,9 +526,7 @@ class QuixTSDataLakeSink(BatchingSink):
             if key.endswith(".parquet"):
                 # Extract path after table prefix
                 relative_path = (
-                    key[len(table_prefix) :]
-                    if key.startswith(table_prefix)
-                    else key
+                    key[len(table_prefix) :] if key.startswith(table_prefix) else key
                 )
                 path_parts = relative_path.split("/")
 
@@ -581,9 +579,7 @@ class QuixTSDataLakeSink(BatchingSink):
             # Build file path as full S3 URI for catalog (API uses this with DuckDB)
             # Include workspace_id if set (for workspace-scoped storage)
             if self.workspace_id:
-                file_path = (
-                    f"s3://{self.s3_bucket}/{self.workspace_id}/{storage_key}"
-                )
+                file_path = f"s3://{self.s3_bucket}/{self.workspace_id}/{storage_key}"
             else:
                 file_path = f"s3://{self.s3_bucket}/{storage_key}"
 
@@ -612,9 +608,7 @@ class QuixTSDataLakeSink(BatchingSink):
         )
 
         if response.status_code == 200:
-            logger.info(
-                f"Registered {len(file_entries)} file(s) in catalog manifest"
-            )
+            logger.info(f"Registered {len(file_entries)} file(s) in catalog manifest")
         else:
             raise RuntimeError(
                 f"Failed to register files in catalog manifest: "
