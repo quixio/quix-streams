@@ -720,8 +720,10 @@ class TestCatalogIntegration:
         assert "ws-123" in location
         assert location == "s3://test-bucket/ws-123/test-prefix/test_table"
 
-    def test_catalog_disabled_when_unreachable(self, sink_factory, mock_blob_client):
-        """Test that catalog is disabled when health check fails."""
+    def test_setup_crashes_on_catalog_health_failure(
+        self, sink_factory, mock_blob_client
+    ):
+        """Test that setup raises when catalog health check fails."""
         sink = sink_factory(
             catalog_url="http://catalog:8080",
             auto_discover=True,
@@ -736,10 +738,8 @@ class TestCatalogIntegration:
             "quixstreams.sinks.core.quix_ts_datalake_sink.get_bucket_name",
             return_value="test-bucket",
         ):
-            # setup() should disable auto_discover on catalog failure
-            sink.setup()
-
-        assert sink.auto_discover is False
+            with pytest.raises(Exception, match="Connection refused"):
+                sink.setup()
 
     def test_manifest_registration_on_write(
         self, sink_factory, sample_batch, mock_blob_client, mock_catalog_client
@@ -763,10 +763,10 @@ class TestCatalogIntegration:
         ]
         assert len(manifest_calls) == 1
 
-    def test_manifest_failure_does_not_fail_write(
-        self, sink_factory, sample_batch, mock_blob_client, mock_catalog_client, caplog
+    def test_manifest_failure_propagates(
+        self, sink_factory, sample_batch, mock_blob_client, mock_catalog_client
     ):
-        """Test that manifest registration failure doesn't fail the write."""
+        """Test that manifest registration failure propagates from write."""
         sink = sink_factory(
             catalog_url="http://catalog:8080",
             auto_discover=True,
@@ -779,11 +779,8 @@ class TestCatalogIntegration:
 
         batch = sample_batch()
 
-        # Should not raise - manifest errors are warnings
-        sink.write(batch)
-
-        # But blob upload should still succeed
-        mock_blob_client.put_object_async.assert_called()
+        with pytest.raises(Exception, match="Manifest error"):
+            sink.write(batch)
 
 
 # =============================================================================
@@ -842,6 +839,78 @@ class TestErrorHandling:
 
         # Should not raise
         sink.cleanup()
+
+    def test_register_table_failure_propagates(
+        self, sink_factory, sample_batch, mock_blob_client, mock_catalog_client
+    ):
+        """Test that table registration failure propagates from write."""
+        sink = sink_factory(
+            catalog_url="http://catalog:8080",
+            auto_discover=True,
+        )
+        failing_catalog = MagicMock(spec=QuixTSDataLakeCatalogClient)
+        failing_catalog.get.side_effect = Exception("Catalog unavailable")
+        sink._catalog = failing_catalog
+
+        batch = sample_batch()
+
+        with pytest.raises(Exception, match="Catalog unavailable"):
+            sink.write(batch)
+
+    def test_register_table_bad_status_raises(
+        self, sink_factory, sample_batch, mock_blob_client, mock_catalog_client
+    ):
+        """Test that non-200/201 table creation response raises RuntimeError."""
+        sink = sink_factory(
+            catalog_url="http://catalog:8080",
+            auto_discover=True,
+        )
+
+        # Table check returns 404 (doesn't exist), create returns 500
+        check_response = MagicMock()
+        check_response.status_code = 404
+        create_response = MagicMock()
+        create_response.status_code = 500
+        create_response.text = "Internal Server Error"
+
+        failing_catalog = MagicMock(spec=QuixTSDataLakeCatalogClient)
+        failing_catalog.get.return_value = check_response
+        failing_catalog.put.return_value = create_response
+        sink._catalog = failing_catalog
+
+        batch = sample_batch()
+
+        with pytest.raises(RuntimeError, match="Failed to create table"):
+            sink.write(batch)
+
+    def test_finalize_writes_clears_futures_on_failure(
+        self, sink_factory, sample_batch, mock_blob_client
+    ):
+        """Test that _pending_futures is cleared even when uploads fail."""
+        sink = sink_factory()
+
+        # Make uploads fail
+        future_mock = MagicMock()
+        future_mock.result.side_effect = Exception("Upload failed")
+        mock_blob_client.put_object_async.return_value = future_mock
+
+        batch = sample_batch()
+
+        with pytest.raises(Exception, match="Upload failed"):
+            sink.write(batch)
+
+        # Futures should be cleared even after failure
+        assert len(sink._pending_futures) == 0
+
+    def test_validate_structure_error_propagates(self, sink_factory, mock_blob_client):
+        """Test that storage errors during structure validation propagate."""
+        sink = sink_factory()
+
+        # Make list_objects raise a storage error
+        mock_blob_client.list_objects.side_effect = OSError("Storage unavailable")
+
+        with pytest.raises(OSError, match="Storage unavailable"):
+            sink._validate_existing_table_structure()
 
 
 # =============================================================================

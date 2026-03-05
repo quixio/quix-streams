@@ -101,49 +101,41 @@ class BlobStorageClient:
         :param max_keys: Maximum number of objects to return
         :returns: List of dicts with 'Key' and 'Size' keys
         """
-        try:
-            result: List[Dict[str, Any]] = []
-            found_files: set[str] = set()
+        result: List[Dict[str, Any]] = []
+        found_files: set[str] = set()
 
-            # Build base pattern
-            base_pattern = prefix if prefix else ""
-            if base_pattern and not base_pattern.endswith("/"):
-                base_pattern = base_pattern + "/"
+        # Build base pattern
+        base_pattern = prefix if prefix else ""
+        if base_pattern and not base_pattern.endswith("/"):
+            base_pattern = base_pattern + "/"
 
-            # Try multiple depth levels (up to 10 levels deep)
-            for depth in range(0, 10):
+        # Try multiple depth levels (up to 10 levels deep)
+        for depth in range(0, 10):
+            if len(result) >= max_keys:
+                break
+
+            if depth == 0:
+                pattern = f"{base_pattern}*" if base_pattern else "*"
+            else:
+                pattern = f"{base_pattern}{'*/' * depth}*"
+
+            files = self._fs.glob(pattern)
+            for f in files:
+                if f in found_files:
+                    continue
                 if len(result) >= max_keys:
                     break
-
-                if depth == 0:
-                    pattern = f"{base_pattern}*" if base_pattern else "*"
-                else:
-                    pattern = f"{base_pattern}{'*/' * depth}*"
-
                 try:
-                    files = self._fs.glob(pattern)
-                    for f in files:
-                        if f in found_files:
-                            continue
-                        if len(result) >= max_keys:
-                            break
-                        try:
-                            if self._fs.exists(f):
-                                size = self._fs.size(f)
-                                result.append(
-                                    {"Key": f, "Size": size if size is not None else 0}
-                                )
-                                found_files.add(f)
-                        except Exception as e:
-                            logger.debug(f"Error processing {f}: {e}")
+                    if self._fs.exists(f):
+                        size = self._fs.size(f)
+                        result.append(
+                            {"Key": f, "Size": size if size is not None else 0}
+                        )
+                        found_files.add(f)
                 except Exception as e:
-                    logger.debug(f"Glob pattern at depth {depth} failed: {e}")
-                    continue
+                    logger.debug(f"Error processing {f}: {e}")
 
-            return result
-        except Exception as e:
-            logger.warning(f"Error listing objects with prefix {prefix}: {e}")
-            return []
+        return result
 
     def put_object(self, key: str, body: bytes) -> None:
         """
@@ -188,14 +180,10 @@ class BlobStorageClient:
         :param key: Object key
         :returns: Dict with 'Key' and 'Size' keys, or None if object doesn't exist
         """
-        try:
-            if self._fs.exists(key):
-                size = self._fs.size(key)
-                return {"Key": key, "Size": size if size is not None else 0}
-            return None
-        except Exception as e:
-            logger.warning(f"Error getting metadata for {key}: {e}")
-            return None
+        if self._fs.exists(key):
+            size = self._fs.size(key)
+            return {"Key": key, "Size": size if size is not None else 0}
+        return None
 
     def exists(self, key: str) -> bool:
         """
@@ -204,11 +192,7 @@ class BlobStorageClient:
         :param key: Object key
         :returns: True if object exists, False otherwise
         """
-        try:
-            return self._fs.exists(key)
-        except Exception as e:
-            logger.warning(f"Error checking existence of {key}: {e}")
-            return False
+        return self._fs.exists(key)
 
     def delete_object(self, key: str) -> None:
         """
@@ -216,15 +200,12 @@ class BlobStorageClient:
 
         :param key: Object key
         """
-        try:
-            if self._fs.exists(key):
-                try:
-                    self._fs.rm_file(key)
-                except (NotImplementedError, AttributeError):
-                    self._fs.rm(key)
-                logger.debug(f"Deleted {key}")
-        except Exception as e:
-            logger.warning(f"Failed to delete {key}: {e}")
+        if self._fs.exists(key):
+            try:
+                self._fs.rm_file(key)
+            except (NotImplementedError, AttributeError):
+                self._fs.rm(key)
+            logger.debug(f"Deleted {key}")
 
     def delete_objects(self, keys: List[str]) -> None:
         """
@@ -254,7 +235,8 @@ class BlobStorageClient:
         Ensure the base path/bucket is accessible, optionally creating it.
 
         :param auto_create: If True, attempt to create the path if it doesn't exist
-        :returns: True if path exists or was created successfully, False otherwise
+        :returns: True if path exists or was created successfully
+        :raises: If storage is inaccessible and cannot be created
         """
         try:
             # Try to list the root to verify access
@@ -263,20 +245,12 @@ class BlobStorageClient:
             return True
         except Exception as e:
             if auto_create:
-                try:
-                    # Try to create the path/bucket
-                    self._fs.mkdir("")
-                    logger.info("Created blob storage path")
-                    return True
-                except Exception as create_error:
-                    logger.warning(
-                        f"Could not create blob storage path: {create_error}. "
-                        "Continuing anyway - path may already exist or be created on first write."
-                    )
-                    return True  # Continue anyway with fallback behavior
+                # Try to create the path/bucket — raises on failure
+                self._fs.mkdir("")
+                logger.info("Created blob storage path")
+                return True
             else:
-                logger.error(f"Failed to access blob storage: {e}")
-                return False
+                raise RuntimeError(f"Failed to access blob storage: {e}") from e
 
     def shutdown(self):
         """Shutdown the thread pool executor."""
