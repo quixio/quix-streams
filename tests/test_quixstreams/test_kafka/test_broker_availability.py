@@ -209,7 +209,6 @@ class TestAppBrokerAvailability:
 
         from quixstreams.internal_consumer import InternalConsumer
         from quixstreams.models.topics.admin import TopicAdmin
-        from quixstreams.models.topics.manager import TopicManager
         from quixstreams.models.topics.topic import TopicConfig
 
         app = self._make_app(broker_availability_timeout=0.1)
