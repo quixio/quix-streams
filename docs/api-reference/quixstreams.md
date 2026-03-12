@@ -6320,7 +6320,7 @@ List of dicts with 'Key' and 'Size' keys
 def put_object(key: str, body: bytes) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/_blob_storage_client.py#L148)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/_blob_storage_client.py#L140)
 
 Put/upload data to blob storage.
 
@@ -6340,7 +6340,7 @@ def put_object_async(
         callback: Optional[Callable] = None) -> concurrent.futures.Future
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/_blob_storage_client.py#L163)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/_blob_storage_client.py#L155)
 
 Asynchronously put/upload data to blob storage.
 
@@ -6362,7 +6362,7 @@ Future object that can be used to wait for completion
 def head_object(key: str) -> Optional[Dict[str, Any]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/_blob_storage_client.py#L184)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/_blob_storage_client.py#L176)
 
 Get metadata about an object without reading its contents.
 
@@ -6382,7 +6382,7 @@ Dict with 'Key' and 'Size' keys, or None if object doesn't exist
 def exists(key: str) -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/_blob_storage_client.py#L200)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/_blob_storage_client.py#L188)
 
 Check if an object exists in blob storage.
 
@@ -6402,7 +6402,7 @@ True if object exists, False otherwise
 def delete_object(key: str) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/_blob_storage_client.py#L213)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/_blob_storage_client.py#L197)
 
 Delete a single object from blob storage.
 
@@ -6418,7 +6418,7 @@ Delete a single object from blob storage.
 def delete_objects(keys: List[str]) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/_blob_storage_client.py#L229)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/_blob_storage_client.py#L210)
 
 Delete multiple objects from blob storage.
 
@@ -6434,7 +6434,7 @@ Delete multiple objects from blob storage.
 def get_object(key: str) -> bytes
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/_blob_storage_client.py#L238)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/_blob_storage_client.py#L219)
 
 Get/download data from blob storage.
 
@@ -6454,7 +6454,7 @@ Object data as bytes
 def ensure_path_exists(auto_create: bool = True) -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/_blob_storage_client.py#L252)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/_blob_storage_client.py#L233)
 
 Ensure the base path/bucket is accessible, optionally creating it.
 
@@ -6462,9 +6462,13 @@ Ensure the base path/bucket is accessible, optionally creating it.
 
 - `auto_create`: If True, attempt to create the path if it doesn't exist
 
+**Raises**:
+
+- `None`: If storage is inaccessible and cannot be created
+
 **Returns**:
 
-True if path exists or was created successfully, False otherwise
+True if path exists or was created successfully
 
 <a id="quixstreams.sinks.core._blob_storage_client.BlobStorageClient.shutdown"></a>
 
@@ -6474,7 +6478,7 @@ True if path exists or was created successfully, False otherwise
 def shutdown()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/_blob_storage_client.py#L281)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/_blob_storage_client.py#L255)
 
 Shutdown the thread pool executor.
 
@@ -6611,7 +6615,7 @@ Initialize blob storage client and test connection.
 def write(batch: SinkBatch)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L199)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L192)
 
 Write batch directly to blob storage.
 
@@ -6623,7 +6627,7 @@ Write batch directly to blob storage.
 def cleanup()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L642)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L618)
 
 Cleanup resources when sink is stopped.
 
