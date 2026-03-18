@@ -940,7 +940,7 @@ class Application:
         producer_poll_timeout = self._config.producer_poll_timeout
         watermark_manager = self._watermark_manager
 
-        # Set the topics to be tracked by the Watermark manager
+        # Set the topics to be tracked by the Watermark manager.
         watermark_manager.set_topics(topics=self._dataframe_registry.consumer_topics)
 
         consumer.subscribe(
@@ -979,7 +979,8 @@ class Application:
                         self._broker_availability_timeout
                     )
                 printer.print()
-                watermark_manager.produce()
+                if watermark_manager.produce():
+                    processing_context.checkpoint.mark_watermarks_produced()
                 run_tracker.update_status()
 
         logger.info("Stopping the application")

@@ -47,3 +47,12 @@ site/
 
 # memories (local development notes)
 memories/
+
+# local watermark test artefacts
+local_watermark_test/
+
+# quixstreams state directory (created at runtime by Application)
+state/
+
+# Claude Code session data
+.claude/

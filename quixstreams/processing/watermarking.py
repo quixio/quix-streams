@@ -97,11 +97,16 @@ class WatermarkManager:
             # if it's tracked and larger than the previous one.
             self._to_produce[tp] = (new_watermark, default)
 
-    def produce(self):
+    def produce(self) -> bool:
         """
         Produce updated watermarks to the watermarks topic.
+
+        :return: ``True`` if any watermarks were actually produced to the topic,
+            ``False`` otherwise (either because the rate-limit interval has not
+            elapsed yet, or because there was nothing new to produce).
         """
         if monotonic() >= self._last_produced + self._interval:
+            produced = bool(self._to_produce)
             # Produce watermarks only for those partitions that are tracked by this application
             # to avoid re-publishing the same watermarks.
             for (topic, partition), (timestamp, _) in self._to_produce.items():
@@ -120,6 +125,8 @@ class WatermarkManager:
                 )
             self._last_produced = monotonic()
             self._to_produce.clear()
+            return produced
+        return False
 
     def receive(self, message: WatermarkMessage) -> Optional[int]:
         """
