@@ -159,9 +159,7 @@ class SourceProcess(process):
         self._consumer.assign([changelog_tp])
 
         store_partitions = state_manager.on_partition_assign(
-            stream_id=None,
-            partition=source.assigned_store_partition,
-            committed_offsets={},
+            stream_id=None, partition=source.assigned_store_partition
         )
 
         if state_manager.recovery_required:

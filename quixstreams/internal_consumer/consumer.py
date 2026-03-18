@@ -232,7 +232,7 @@ class InternalConsumer(BaseConsumer):
 
         changelog_topics = {k for k, v in self._topics.items() if v.is_changelog}
         for tp in self.assignment():
-            # Pause only data TPs excluding changelog TPs
+            # Pause only data and watermarks TPs, excluding changelog TPs
             if tp.topic in changelog_topics:
                 continue
 

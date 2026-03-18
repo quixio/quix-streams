@@ -1,7 +1,7 @@
-from typing import TYPE_CHECKING, Any, Iterable, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from quixstreams.state.base import TransactionState
-from quixstreams.state.types import ExpiredWindowDetail, WindowDetail, WindowedState
+from quixstreams.state.types import WindowDetail, WindowedState
 
 if TYPE_CHECKING:
     from .transaction import WindowedRocksDBPartitionTransaction
@@ -107,46 +107,6 @@ class WindowedTransactionState(TransactionState, WindowedState):
             end=end, start=start, prefix=self._prefix
         )
 
-    def get_latest_timestamp(self) -> Optional[int]:
-        """
-        Get the latest observed timestamp for the current message key.
-
-        Use this timestamp to determine if the arriving event is late and should be
-        discarded from the processing.
-
-        :return: latest observed event timestamp in milliseconds
-        """
-
-        return self._transaction.get_latest_timestamp(prefix=self._prefix)
-
-    def expire_windows(
-        self,
-        max_start_time: int,
-        delete: bool = True,
-        collect: bool = False,
-        end_inclusive: bool = False,
-    ) -> Iterable[ExpiredWindowDetail]:
-        """
-        Get all expired windows from RocksDB up to the specified `max_start_time` timestamp.
-
-        This method marks the latest found window as expired in the expiration index,
-        so consecutive calls may yield different results for the same "latest timestamp".
-
-        :param max_start_time: The timestamp up to which windows are considered expired, inclusive.
-        :param delete: If True, expired windows will be deleted.
-        :param collect: If True, values will be collected into windows.
-        :param end_inclusive: If True, the end of the window will be inclusive.
-            Relevant only together with `collect=True`.
-        :return: A sorted list of tuples in the format `((start, end), value)`.
-        """
-        return self._transaction.expire_windows(
-            max_start_time=max_start_time,
-            prefix=self._prefix,
-            delete=delete,
-            collect=collect,
-            end_inclusive=end_inclusive,
-        )
-
     def get_windows(
         self, start_from_ms: int, start_to_ms: int, backwards: bool = False
     ) -> list[WindowDetail]:
@@ -163,22 +123,4 @@ class WindowedTransactionState(TransactionState, WindowedState):
             start_to_ms=start_to_ms,
             prefix=self._prefix,
             backwards=backwards,
-        )
-
-    def delete_windows(self, max_start_time: int, delete_values: bool) -> None:
-        """
-        Delete windows from RocksDB up to the specified `max_start_time` timestamp.
-
-        This method removes all window entries that have a start time less than or equal
-        to the given `max_start_time`. It ensures that expired data is cleaned up
-        efficiently without affecting unexpired windows.
-
-        :param max_start_time: The timestamp up to which windows should be deleted, inclusive.
-        :param delete_values: If True, values with timestamps less than max_start_time
-            will be deleted, as they can no longer belong to any active window.
-        """
-        return self._transaction.delete_windows(
-            max_start_time=max_start_time,
-            delete_values=delete_values,
-            prefix=self._prefix,
         )

@@ -295,7 +295,6 @@ class StateStoreManager:
         self,
         stream_id: Optional[str],
         partition: int,
-        committed_offsets: dict[str, int],
     ) -> Dict[str, StorePartition]:
         """
         Assign store partitions for each registered store for the given stream_id
@@ -303,8 +302,6 @@ class StateStoreManager:
 
         :param stream_id: stream id
         :param partition: Kafka topic partition number
-        :param committed_offsets: a dict with latest committed offsets
-            of all assigned topics for this partition number.
         :return: list of assigned `StorePartition`
         """
         store_partitions = {}
@@ -315,7 +312,6 @@ class StateStoreManager:
             self._recovery_manager.assign_partition(
                 topic=stream_id,
                 partition=partition,
-                committed_offsets=committed_offsets,
                 store_partitions=store_partitions,
             )
         return store_partitions

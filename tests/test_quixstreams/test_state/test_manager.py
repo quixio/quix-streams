@@ -47,9 +47,7 @@ class TestStateStoreManager:
 
     def test_rebalance_partitions_stores_not_registered(self, state_manager):
         # It's ok to rebalance partitions when there are no stores registered
-        state_manager.on_partition_assign(
-            stream_id="topic", partition=0, committed_offsets={"topic": -1001}
-        )
+        state_manager.on_partition_assign(stream_id="topic", partition=0)
         state_manager.on_partition_revoke(stream_id="topic", partition=0)
 
     def test_register_store(self, state_manager):
@@ -71,13 +69,10 @@ class TestStateStoreManager:
         ]
 
         store_partitions = []
-        committed_offsets = {"topic1": -1001, "topic2": -1001}
         for tp in partitions:
             store_partitions.extend(
                 state_manager.on_partition_assign(
-                    stream_id=tp.topic,
-                    partition=tp.partition,
-                    committed_offsets=committed_offsets,
+                    stream_id=tp.topic, partition=tp.partition
                 )
             )
         assert len(store_partitions) == 3
@@ -141,7 +136,6 @@ class TestStateStoreManager:
             state_manager.on_partition_assign(
                 stream_id=tp.topic,
                 partition=tp.partition,
-                committed_offsets={"topic1": -1001, "topic2": -1001},
             )
 
         # Collect paths of stores to be deleted
@@ -170,9 +164,7 @@ class TestStateStoreManager:
         state_manager.register_store("topic1", store_name="store1")
 
         # Assign the partition
-        state_manager.on_partition_assign(
-            stream_id="topic1", partition=0, committed_offsets={"topic1": -1001}
-        )
+        state_manager.on_partition_assign(stream_id="topic1", partition=0)
 
         # Act - Delete stores
         with pytest.raises(PartitionStoreIsUsed):
@@ -202,9 +194,7 @@ class TestStateStoreManagerWithRecovery:
             producer=producer,
         )
         # It's ok to rebalance partitions when there are no stores registered
-        state_manager.on_partition_assign(
-            stream_id="topic", partition=0, committed_offsets={"topic": -1001}
-        )
+        state_manager.on_partition_assign(stream_id="topic", partition=0)
         state_manager.on_partition_revoke(stream_id="topic", partition=0)
 
     def test_register_store(
@@ -270,11 +260,7 @@ class TestStateStoreManagerWithRecovery:
         consumer.assignment.return_value = [changelog_tp]
 
         # Assign a topic partition
-        state_manager.on_partition_assign(
-            stream_id=topic_name,
-            partition=partition,
-            committed_offsets={"topic1": -1001},
-        )
+        state_manager.on_partition_assign(stream_id=topic_name, partition=partition)
 
         # Check that RecoveryManager has a partition assigned
         assert recovery_manager.partitions

@@ -234,10 +234,11 @@ class TestAppBrokerAvailability:
         def mock_poll_row(self_consumer, *args, **kwargs):
             return None
 
-        with mock_patch.object(InternalConsumer, "poll_row", mock_poll_row):
-            with mock_patch.object(InternalConsumer, "_subscribe"):
-                with pytest.raises(KafkaBrokerUnavailableError):
-                    app.run()
+        with mock_patch.object(TopicAdmin, "inspect_topics", side_effect=fake_inspect):
+            with mock_patch.object(InternalConsumer, "poll_row", mock_poll_row):
+                with mock_patch.object(InternalConsumer, "_subscribe"):
+                    with pytest.raises(KafkaBrokerUnavailableError):
+                        app.run()
 
     def test_app_does_not_raise_when_check_disabled(self):
         """With broker_availability_timeout=0, the app should NOT check
@@ -272,10 +273,11 @@ class TestAppBrokerAvailability:
                 app.stop()
             return None
 
-        with mock_patch.object(InternalConsumer, "poll_row", mock_poll_row):
-            with mock_patch.object(InternalConsumer, "_subscribe"):
-                # Should NOT raise — just run and stop normally
-                app.run()
+        with mock_patch.object(TopicAdmin, "inspect_topics", side_effect=fake_inspect):
+            with mock_patch.object(InternalConsumer, "poll_row", mock_poll_row):
+                with mock_patch.object(InternalConsumer, "_subscribe"):
+                    # Should NOT raise — just run and stop normally
+                    app.run()
 
     def test_internal_producer_broker_available_passthrough(self):
         """InternalProducer._broker_available() should reset the tracker
