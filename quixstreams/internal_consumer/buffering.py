@@ -53,6 +53,19 @@ class PartitionBuffer:
         """
         self._high_watermark = offset
 
+    def set_consumer_position(self, position: int):
+        """
+        Inform the buffer of the consumer's current fetch position.
+
+        When the position is >= the high watermark (consumer is at the end of
+        the log), bump ``_max_offset`` so that ``idleness()`` returns ``IDLE``
+        and the time-aligned buffer does not block on this empty partition.
+
+        :param position: current Kafka consumer fetch offset for this partition.
+        """
+        if position >= 0 and self._high_watermark >= 0 and position >= self._high_watermark:
+            self._max_offset = max(self._max_offset, self._high_watermark - 1)
+
     def idleness(self) -> Idleness:
         """
         Check if the partition is idle or has more data to be consumed from the broker.
@@ -202,6 +215,22 @@ class PartitionBufferGroup:
         for topic, watermark in offsets.items():
             buffer = self._partition_buffers[topic]
             buffer.set_high_watermark(watermark)
+
+    def set_consumer_positions(self, positions: dict[str, int]):
+        """
+        Inform each buffer of the consumer's current fetch position.
+
+        Buffers whose consumer position is at or beyond the high watermark are
+        marked IDLE so the time-aligned ``pop()`` does not block waiting for
+        messages that will never arrive (e.g. a topic fully consumed in a
+        previous run that has no new data this run).
+
+        :param positions: a mapping of {<topic>: <fetch_position>}.
+        """
+        for topic, position in positions.items():
+            buffer = self._partition_buffers.get(topic)
+            if buffer is not None:
+                buffer.set_consumer_position(position)
 
     def append(self, message: SuccessfulConfluentKafkaMessageProto):
         """
@@ -357,12 +386,16 @@ class InternalConsumerBuffer:
         self,
         messages: Iterable[SuccessfulConfluentKafkaMessageProto],
         high_watermarks: dict[tuple[str, int], int],
+        consumer_positions: Optional[dict[tuple[str, int], int]] = None,
     ):
         """
         Feed new batch of messages to the buffer.
 
         :param messages: an iterable with successful `confluent_kafka.Message` objects (`.error()` is expected to be None).
         :param high_watermarks: a dictionary with high watermarks for all assigned topic partitions.
+        :param consumer_positions: optional mapping of (topic, partition) -> current fetch
+            position.  When provided, partitions whose position is at or beyond the high
+            watermark are marked IDLE so the time-aligned pop() does not block on them.
         """
         for message in messages:
             partition_group = self._partition_groups[message.partition()]
@@ -375,6 +408,14 @@ class InternalConsumerBuffer:
                 if partition == partition_group.partition
             }
             partition_group.set_high_watermarks(offsets=group_watermarks)
+
+            if consumer_positions is not None:
+                group_positions = {
+                    topic: pos
+                    for (topic, partition), pos in consumer_positions.items()
+                    if partition == partition_group.partition
+                }
+                partition_group.set_consumer_positions(positions=group_positions)
 
     def pop(self) -> Optional[SuccessfulConfluentKafkaMessageProto]:
         """

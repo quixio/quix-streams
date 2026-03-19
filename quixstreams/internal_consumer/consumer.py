@@ -338,19 +338,35 @@ class InternalConsumer(BaseConsumer):
                 raise
             messages = []
 
-        # Get the recent cached high watermarks
+        # Get the recent cached high watermarks and current consumer positions
         high_watermarks: dict[tuple[str, int], int] = {}
-        for tp in self.assignment():
+        consumer_positions: dict[tuple[str, int], int] = {}
+        assignment = self.assignment()
+        for tp in assignment:
             topic_obj = self._topics[tp.topic]
             if not topic_obj.is_changelog:
                 _, high = self.get_watermark_offsets(partition=tp, cached=True)
                 high_watermarks[(tp.topic, tp.partition)] = high
+        # Fetch current fetch positions so the buffer can mark fully-consumed
+        # partitions as IDLE (avoids time-aligned pop() blocking indefinitely
+        # on partitions that have no new messages in this run).
+        try:
+            positions = self.position(list(assignment))
+            for pos_tp in positions:
+                if pos_tp.offset >= 0:
+                    consumer_positions[(pos_tp.topic, pos_tp.partition)] = pos_tp.offset
+        except Exception:
+            pass  # position() is best-effort; fall back to no positions
 
         # Create a generator to validate messages
         valid_messages = _validate_message_batch(messages, on_error=self._on_error)
 
-        # Feed the batch and the watermarks to the buffer
-        self._buffer.feed(messages=valid_messages, high_watermarks=high_watermarks)
+        # Feed the batch, watermarks and positions to the buffer
+        self._buffer.feed(
+            messages=valid_messages,
+            high_watermarks=high_watermarks,
+            consumer_positions=consumer_positions,
+        )
 
         # Resume partitions with empty buffers
         for topic, partition in self._buffer.resume_empty():

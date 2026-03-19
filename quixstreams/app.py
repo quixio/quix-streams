@@ -9,7 +9,7 @@ import warnings
 from pathlib import Path
 from typing import Callable, List, Literal, Optional, Protocol, Tuple, Type, Union, cast
 
-from confluent_kafka import TopicPartition
+from confluent_kafka import OFFSET_END, TopicPartition
 from pydantic import AliasGenerator, Field
 from pydantic_settings import BaseSettings as PydanticBaseSettings
 from pydantic_settings import PydanticBaseSettingsSource, SettingsConfigDict
@@ -156,6 +156,9 @@ class Application:
         broker_availability_timeout: float = 120.0,
         watermarking_default_assignor_enabled: bool = True,
         watermarking_interval: float = 1.0,
+        watermarks_reset_on_start: bool = False,
+        watermarks_idle_partition_timeout: Optional[float] = None,
+        watermarks_idle_advance_after_ms: Optional[int] = None,
     ):
         """
         :param broker_address: Connection settings for Kafka.
@@ -239,7 +242,33 @@ class Application:
         :param watermarking_interval: how often to emit watermarks updates for assigned partitions (in seconds).
             Default - `1.0`s.
 
-        <br><br>***Error Handlers***<br>
+        :param watermarks_reset_on_start: when True, the watermarks topic is consumed
+            from the end on startup instead of from the beginning.  This discards any
+            watermark history persisted by previous runs and forces the application to
+            build watermarks from scratch in the current run only.
+            Useful when restarting after a long pause where stale watermarks would
+            otherwise prevent new windows from emitting.
+            Default - `False`.
+
+        :param watermarks_idle_partition_timeout: when set (in seconds), topic-partitions
+            that are still at watermark -1 (i.e. have received no data in this run) for
+            longer than this timeout are excluded from the global watermark ``min()``
+            calculation.  This allows the watermark to advance even when some partitions
+            are permanently idle in the current run (e.g. fully-consumed at startup with
+            LAG=0 and no new producers).  Set together with ``watermarks_reset_on_start``
+            to fully unblock stale-watermark deadlocks.
+            Default - `None` (disabled).
+
+        :param watermarks_idle_advance_after_ms: when set (in milliseconds), if the
+            global watermark has not advanced for this many wall-clock milliseconds,
+            the application publishes a heartbeat watermark at the current wall-clock
+            time for every topic-partition it has produced watermarks for.  This forces
+            pending windows to expire and emit even when no new data arrives after the
+            last group of events.  Useful when the producer is done and CB must flush
+            the final data group on its own.
+            Default - `None` (disabled).
+
+<br><br>***Error Handlers***<br>
         To handle errors, `Application` accepts callbacks triggered when
             exceptions occur on different stages of stream processing. If the callback
             returns `True`, the exception will be ignored. Otherwise, the exception
@@ -400,10 +429,15 @@ class Application:
         self._source_manager = SourceManager()
         self._sink_manager = SinkManager()
         self._dataframe_registry = DataFrameRegistry()
+        self._watermarks_reset_on_start = watermarks_reset_on_start
         self._watermark_manager = WatermarkManager(
             producer=self._producer,
             topic_manager=self._topic_manager,
             interval=watermarking_interval,
+            idle_partition_timeout=watermarks_idle_partition_timeout,
+            idle_advance_after=watermarks_idle_advance_after_ms / 1000.0
+            if watermarks_idle_advance_after_ms is not None
+            else None,
         )
         self._processing_context = ProcessingContext(
             commit_interval=self._config.commit_interval,
@@ -979,7 +1013,38 @@ class Application:
                         self._broker_availability_timeout
                     )
                 printer.print()
-                watermark_manager.produce()
+                idle_watermark = watermark_manager.produce()
+                if idle_watermark is not None:
+                    # Idle advance fired: directly trigger window expiry for all
+                    # assigned data TPs (same path as a received Kafka watermark,
+                    # but without a Kafka message so EOS transactions are not involved).
+                    data_topics = self._topic_manager.non_changelog_topics
+                    data_tps = [
+                        tp
+                        for tp in self._consumer.assignment()
+                        if tp.topic in data_topics
+                    ]
+                    for tp in data_tps:
+                        logger.info(
+                            f"Process idle-advance watermark {format_timestamp(idle_watermark)}. "
+                            f"topic={tp.topic} partition={tp.partition}"
+                        )
+                        watermark_ctx = MessageContext(
+                            topic=tp.topic,
+                            partition=tp.partition,
+                            offset=None,
+                            size=0,
+                        )
+                        ctx = copy_context()
+                        ctx.run(set_message_context, watermark_ctx)
+                        ctx.run(
+                            dataframes_composed[tp.topic],
+                            value=None,
+                            key=None,
+                            timestamp=idle_watermark,
+                            headers=[],
+                            is_watermark=True,
+                        )
                 run_tracker.update_status()
 
         logger.info("Stopping the application")
@@ -1130,10 +1195,16 @@ class Application:
         # get the source data.
         self._source_manager.start_sources()
 
-        # Assign partitions manually to pause the changelog topics
+        # Assign partitions manually to pause the changelog topics.
+        # When watermarks_reset_on_start=True, seek to OFFSET_END so stale watermark
+        # history from previous runs is not replayed.  Active replicas will re-publish
+        # their current watermarks within the next watermarking_interval seconds.
+        watermarks_offset = OFFSET_END if self._watermarks_reset_on_start else -1001  # -1001 = OFFSET_INVALID (use stored/auto_offset_reset)
         watermarks_partitions = [
             TopicPartition(
-                topic=self._watermark_manager.watermarks_topic.name, partition=i
+                topic=self._watermark_manager.watermarks_topic.name,
+                partition=i,
+                offset=watermarks_offset,
             )
             for i in range(
                 self._watermark_manager.watermarks_topic.broker_config.num_partitions
@@ -1142,10 +1213,6 @@ class Application:
         ]
         # TODO: The set is used because the watermark tp can already be present in the "topic_partitions"
         #  because we use `subscribe()` earlier. Fix the mess later.
-        # TODO: Also, how to avoid reading the whole WM topic on each restart?
-        #  We really need only the most recent data
-        #  Is it fine to read it from the end? The active partitions must still publish something.
-        #  Or should we commit it?
         self._consumer.assign(list(set(topic_partitions + watermarks_partitions)))
 
         # Pause changelog topic+partitions immediately after assignment

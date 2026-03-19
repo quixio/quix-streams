@@ -1,6 +1,7 @@
 import logging
+import time as _time
 from time import monotonic
-from typing import Optional, TypedDict
+from typing import Optional, Set, TypedDict, Dict, Tuple
 
 from quixstreams.internal_producer import InternalProducer
 from quixstreams.models import Topic
@@ -25,10 +26,17 @@ class WatermarkManager:
         producer: InternalProducer,
         topic_manager: TopicManager,
         interval: float = 1.0,
+        idle_partition_timeout: Optional[float] = None,
+        idle_advance_after: Optional[float] = None,
     ):
         self._interval = interval
         self._last_produced = 0
         self._watermarks: dict[tuple[str, int], int] = {}
+        self._tp_assigned_at: Dict[Tuple[str, int], float] = {}
+        self._idle_partition_timeout = idle_partition_timeout
+        self._idle_advance_after = idle_advance_after
+        self._last_watermark_advanced_wall: float = monotonic()
+        self._ever_stored: Set[Tuple[str, int]] = set()
         self._producer = producer
         self._topic_manager = topic_manager
         self._watermarks_topic: Optional[Topic] = None
@@ -45,12 +53,15 @@ class WatermarkManager:
         """
         # Prime the watermarks with -1 for each expected topic partition
         # to make sure we have all TP watermarks before calculating the main watemark.
-
+        now = monotonic()
         self._watermarks = {
             (topic.name, partition): -1
             for topic in topics
             for partition in range(topic.broker_config.num_partitions or 1)
         }
+        # Record the time each TP was assigned so idle_partition_timeout can detect
+        # partitions that never receive any data in this run (e.g. LAG=0 on startup).
+        self._tp_assigned_at = {tp: now for tp in self._watermarks}
 
     @property
     def watermarks_topic(self) -> Topic:
@@ -83,6 +94,7 @@ class WatermarkManager:
         if timestamp < 0:
             raise ValueError("Watermark cannot be negative.")
         tp = (topic, partition)
+        self._ever_stored.add(tp)
         stored_watermark, stored_default = self._to_produce.get(tp, (-1, True))
         new_watermark = max(stored_watermark, timestamp)
 
@@ -97,11 +109,19 @@ class WatermarkManager:
             # if it's tracked and larger than the previous one.
             self._to_produce[tp] = (new_watermark, default)
 
-    def produce(self):
+    def produce(self) -> Optional[int]:
         """
         Produce updated watermarks to the watermarks topic.
+
+        Also checks if the global watermark has been idle for longer than
+        ``idle_advance_after`` seconds.  If so, directly advances the local
+        watermark state to wall-clock ``now`` for every TP this instance has
+        processed — no Kafka message is produced (avoids EOS transaction issues
+        when the checkpoint is empty).  Returns the new global watermark when
+        it advances via idle-advance, otherwise returns ``None``.
         """
-        if monotonic() >= self._last_produced + self._interval:
+        now_wall = monotonic()
+        if now_wall >= self._last_produced + self._interval:
             # Produce watermarks only for those partitions that are tracked by this application
             # to avoid re-publishing the same watermarks.
             for (topic, partition), (timestamp, _) in self._to_produce.items():
@@ -116,10 +136,34 @@ class WatermarkManager:
                 )
                 key = f"{topic}[{partition}]"
                 self._producer.produce(
-                    topic=self._watermarks_topic.name, value=dumps(msg), key=key
+                    topic=self.watermarks_topic.name, value=dumps(msg), key=key
                 )
-            self._last_produced = monotonic()
+            self._last_produced = now_wall
             self._to_produce.clear()
+
+        # If the global watermark hasn't advanced for idle_advance_after seconds,
+        # advance it locally (no Kafka message — avoids being aborted by EOS empty
+        # checkpoint) so pending windows can be flushed without new incoming data.
+        if (
+            self._idle_advance_after is not None
+            and self._ever_stored
+            and now_wall - self._last_watermark_advanced_wall >= self._idle_advance_after
+        ):
+            now_ms = int(_time.time() * 1000)
+            old_wm = self._get_watermark()
+            for topic, partition in self._ever_stored:
+                tp = (topic, partition)
+                self._watermarks[tp] = max(self._watermarks.get(tp, -1), now_ms)
+            new_wm = self._get_watermark()
+            # Reset timer regardless so we don't fire every loop iteration
+            self._last_watermark_advanced_wall = now_wall
+            if new_wm > old_wm:
+                logger.info(
+                    f"[WM] Idle advance: watermark {old_wm} -> {new_wm} "
+                    f"for {len(self._ever_stored)} TP(s)"
+                )
+                return new_wm
+        return None
 
     def receive(self, message: WatermarkMessage) -> Optional[int]:
         """
@@ -147,11 +191,25 @@ class WatermarkManager:
         # if it does.
         new_watermark = self._get_watermark()
         if new_watermark > current_watermark:
+            self._last_watermark_advanced_wall = monotonic()
             return new_watermark
         return None
 
     def _get_watermark(self) -> int:
-        watermark = -1
-        if watermarks := self._watermarks.values():
-            watermark = min(watermarks)
-        return watermark
+        if not self._watermarks:
+            return -1
+
+        if self._idle_partition_timeout is not None:
+            # Exclude TPs that are still at -1 and have been waiting longer than the
+            # idle timeout.  This allows the global watermark to advance even when some
+            # partitions are permanently idle (e.g. fully-consumed at startup, LAG=0).
+            now = monotonic()
+            active_values = [
+                v
+                for tp, v in self._watermarks.items()
+                if v != -1
+                or (now - self._tp_assigned_at.get(tp, now)) < self._idle_partition_timeout
+            ]
+            return min(active_values) if active_values else -1
+
+        return min(self._watermarks.values())
