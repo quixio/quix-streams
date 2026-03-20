@@ -41,6 +41,13 @@ class WatermarkManager:
         self._topic_manager = topic_manager
         self._watermarks_topic: Optional[Topic] = None
         self._to_produce: dict[tuple[str, int], tuple[int, bool]] = {}
+        # Tracks whether any data has ever been processed by this replica,
+        # used to avoid spurious caught-up advances before processing starts.
+        self._ever_stored: bool = False
+        # TPs that this replica has actually processed (via store()).
+        # _get_watermark() only considers these, so unassigned partitions
+        # from other replicas don't drag down the global min.
+        self._owned_tps: set[tuple[str, int]] = set()
 
     def set_topics(self, topics: list[Topic]):
         """
@@ -53,7 +60,6 @@ class WatermarkManager:
         """
         # Prime the watermarks with -1 for each expected topic partition
         # to make sure we have all TP watermarks before calculating the main watemark.
-        now = monotonic()
         self._watermarks = {
             (topic.name, partition): -1
             for topic in topics
@@ -78,6 +84,8 @@ class WatermarkManager:
         """
         tp = (topic, partition)
         self._to_produce.pop(tp, None)
+        self._owned_tps.discard(tp)
+        self._watermarks.pop(tp, None)
 
     def store(self, topic: str, partition: int, timestamp: int, default: bool):
         """
@@ -94,7 +102,8 @@ class WatermarkManager:
         if timestamp < 0:
             raise ValueError("Watermark cannot be negative.")
         tp = (topic, partition)
-        self._ever_stored.add(tp)
+        self._ever_stored = True
+        self._owned_tps.add(tp)
         stored_watermark, stored_default = self._to_produce.get(tp, (-1, True))
         new_watermark = max(stored_watermark, timestamp)
 
@@ -109,16 +118,15 @@ class WatermarkManager:
             # if it's tracked and larger than the previous one.
             self._to_produce[tp] = (new_watermark, default)
 
-    def produce(self) -> Optional[int]:
+    def produce(self, caught_up: bool = False) -> Optional[int]:
         """
         Produce updated watermarks to the watermarks topic.
 
-        Also checks if the global watermark has been idle for longer than
-        ``idle_advance_after`` seconds.  If so, directly advances the local
-        watermark state to wall-clock ``now`` for every TP this instance has
-        processed — no Kafka message is produced (avoids EOS transaction issues
-        when the checkpoint is empty).  Returns the new global watermark when
-        it advances via idle-advance, otherwise returns ``None``.
+        When ``caught_up=True`` (all assigned data partitions have reached their
+        current end offset), directly advances all tracked TP watermarks to
+        wall-clock now — no Kafka message is produced (avoids EOS transaction
+        issues when the checkpoint is empty).  Returns the new global watermark
+        when it advances, otherwise returns ``None``.
         """
         now_wall = monotonic()
         if now_wall >= self._last_produced + self._interval:
@@ -141,26 +149,21 @@ class WatermarkManager:
             self._last_produced = now_wall
             self._to_produce.clear()
 
-        # If the global watermark hasn't advanced for idle_advance_after seconds,
-        # advance it locally (no Kafka message — avoids being aborted by EOS empty
-        # checkpoint) so pending windows can be flushed without new incoming data.
-        if (
-            self._idle_advance_after is not None
-            and self._ever_stored
-            and now_wall - self._last_watermark_advanced_wall >= self._idle_advance_after
-        ):
+        # When all assigned data partitions are caught up (position >= high watermark),
+        # advance watermarks locally to wall-clock now so pending windows can be flushed.
+        # Advancing ALL tracked TPs (not just locally-processed ones) ensures the global
+        # min is not stuck at past event-time values received from other replicas.
+        if caught_up and self._ever_stored:
+            import time as _time
             now_ms = int(_time.time() * 1000)
             old_wm = self._get_watermark()
-            for topic, partition in self._ever_stored:
-                tp = (topic, partition)
+            for tp in list(self._watermarks.keys()):
                 self._watermarks[tp] = max(self._watermarks.get(tp, -1), now_ms)
             new_wm = self._get_watermark()
-            # Reset timer regardless so we don't fire every loop iteration
-            self._last_watermark_advanced_wall = now_wall
             if new_wm > old_wm:
                 logger.info(
-                    f"[WM] Idle advance: watermark {old_wm} -> {new_wm} "
-                    f"for {len(self._ever_stored)} TP(s)"
+                    f"[WM] Caught-up advance: watermark {format_timestamp(old_wm)} "
+                    f"-> {format_timestamp(new_wm)} for {len(self._watermarks)} TP(s)"
                 )
                 return new_wm
         return None
@@ -196,8 +199,12 @@ class WatermarkManager:
         return None
 
     def _get_watermark(self) -> int:
-        if not self._watermarks:
+        if not self._owned_tps:
             return -1
+        owned = [v for tp, v in self._watermarks.items() if tp in self._owned_tps]
+        if not owned:
+            return -1
+        return min(owned)
 
         if self._idle_partition_timeout is not None:
             # Exclude TPs that are still at -1 and have been waiting longer than the
