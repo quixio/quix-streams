@@ -288,9 +288,17 @@ class TopicManager:
     def watermarks_topic(self):
         """
         The topic to be used to share watermarks across the application instances.
-        It is always prefixed with the consumer group name,
-        and it has only a single partition.
+        It is always prefixed with the consumer group name.
+        The partition count matches the data topics so that each consumer replica
+        receives its own watermarks partition and can advance windows independently.
         """
+        # Derive partition count from registered data topics (max across regular topics),
+        # falling back to 1 when no topics are registered yet.
+        num_partitions = max(
+            (t.broker_config.num_partitions or 1)
+            for t in self._regular_topics.values()
+        ) if self._regular_topics else 1
+
         topic = Topic(
             name=self._internal_name("watermarks", None, "watermarks"),
             value_deserializer="json",
@@ -298,7 +306,7 @@ class TopicManager:
             value_serializer="json",
             key_serializer="str",
             create_config=TopicConfig(
-                num_partitions=1,  # The waterka
+                num_partitions=num_partitions,
                 replication_factor=self.default_replication_factor,
                 extra_config={"cleanup.policy": "compact,delete"},
             ),

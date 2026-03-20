@@ -27,6 +27,7 @@ class PartitionBuffer:
         partition: int,
         topic: str,
         max_size: int,
+        non_blocking: bool = False,
     ):
         """
         A buffer that holds data for a single topic partition.
@@ -35,6 +36,9 @@ class PartitionBuffer:
         :param topic: topic name.
         :param max_size: the maximum size of the buffer when the buffer is considered full.
             It is a soft limit, and it may be exceeded in some cases
+        :param non_blocking: when True, an empty-but-active buffer will not block
+            the group's pop() from returning messages from other partitions.
+            Use for control topics (e.g. watermarks) that should never stall data flow.
         """
         self.partition = partition
         self.topic = topic
@@ -43,6 +47,7 @@ class PartitionBuffer:
         self._max_size = max_size
         self._max_offset = -1
         self._high_watermark = -1001
+        self.non_blocking = non_blocking
         self._messages: deque[SuccessfulConfluentKafkaMessageProto] = deque()
 
     def set_high_watermark(self, offset: int):
@@ -168,15 +173,18 @@ class PartitionBuffer:
 
 
 class PartitionBufferGroup:
-    def __init__(self, partition: int, max_size: int):
+    def __init__(self, partition: int, max_size: int, non_blocking_topics: frozenset = frozenset()):
         """
         A group of individual `PartitionBuffer`s by partition.
 
         :param partition: partition number.
         :param max_size: the maximum size of the underlying `PartitionBuffer`s.
+        :param non_blocking_topics: topic names whose buffers will not block pop()
+            when empty-but-active (e.g. the watermarks topic).
         """
         self._partition = partition
         self._max_size = max_size
+        self._non_blocking_topics = non_blocking_topics
         self._partition_buffers: dict[str, PartitionBuffer] = {}
         self._partition_buffers_values = self._partition_buffers.values()
 
@@ -194,7 +202,10 @@ class PartitionBufferGroup:
             return
         # New partition, need to create a new buffer and add it to the heap
         self._partition_buffers[topic] = PartitionBuffer(
-            partition=self._partition, topic=topic, max_size=self._max_size
+            partition=self._partition,
+            topic=topic,
+            max_size=self._max_size,
+            non_blocking=topic in self._non_blocking_topics,
         )
 
     def revoke_partition(self, topic: str):
@@ -264,8 +275,10 @@ class PartitionBufferGroup:
             # There's more than one partition in the group and one of them is empty
             # but not idle.
             # Wait until new messages are fetched or the highwater is set.
+            # Non-blocking buffers (e.g. watermarks topic) are excluded from this
+            # check so they never stall processing of data partitions.
             for buffer in buffers:
-                if buffer.empty() and buffer.idleness() != Idleness.IDLE:
+                if buffer.empty() and buffer.idleness() != Idleness.IDLE and not buffer.non_blocking:
                     return None
 
             buffer = min(buffers, key=_next_timestamp_getter)
@@ -353,11 +366,13 @@ class InternalConsumerBuffer:
         self._partition_groups: dict[int, PartitionBufferGroup] = {}
         self._max_partition_buffer_size = max_partition_buffer_size
 
-    def assign_partitions(self, topic_partitions: list[TopicPartition]):
+    def assign_partitions(self, topic_partitions: list[TopicPartition], non_blocking_topics: frozenset = frozenset()):
         """
         Assign new partitions to the buffer.
 
         :param topic_partitions: list of `confluent_kafka.TopicPartition`.
+        :param non_blocking_topics: topic names that should not block pop() when
+            their buffer is empty-but-active (e.g. the watermarks topic).
         """
         # Sort partitions by their number to process them
         # in a fixed order when popping the items over
@@ -366,7 +381,9 @@ class InternalConsumerBuffer:
             partition_group = self._partition_groups.setdefault(
                 tp.partition,
                 PartitionBufferGroup(
-                    partition=tp.partition, max_size=self._max_partition_buffer_size
+                    partition=tp.partition,
+                    max_size=self._max_partition_buffer_size,
+                    non_blocking_topics=non_blocking_topics,
                 ),
             )
             partition_group.assign_partition(topic=tp.topic)
@@ -455,6 +472,22 @@ class InternalConsumerBuffer:
         partition_group = self._partition_groups.get(partition)
         if partition_group is not None:
             partition_group.clear(topic)
+
+    def is_empty(self) -> bool:
+        """
+        Return True when every partition buffer across all groups has no messages
+        pending to be popped and processed.
+
+        Used by the caught-up idle-advance check to avoid firing the watermark advance
+        while messages are still buffered-but-unprocessed (which would cause them to
+        arrive at the windowing stage after their windows were already closed and be
+        silently dropped as late data).
+        """
+        return all(
+            buffer.empty()
+            for group in self._partition_groups.values()
+            for buffer in group._partition_buffers_values
+        )
 
     def close(self):
         """

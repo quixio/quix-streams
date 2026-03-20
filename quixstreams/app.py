@@ -1013,7 +1013,40 @@ class Application:
                         self._broker_availability_timeout
                     )
                 printer.print()
-                idle_watermark = watermark_manager.produce()
+                if idle_watermark is not None:
+                    # Idle advance fired: directly trigger window expiry for all
+                    # assigned data TPs (same path as a received Kafka watermark,
+                    # but without a Kafka message so EOS transactions are not involved).
+                    data_topics = self._topic_manager.non_changelog_topics
+                    data_tps = [
+                        tp
+                        for tp in self._consumer.assignment()
+                        if tp.topic in data_topics
+                    ]
+                    for tp in data_tps:
+                        logger.info(
+                            f"Process idle-advance watermark {format_timestamp(idle_watermark)}. "
+                            f"topic={tp.topic} partition={tp.partition}"
+                        )
+                        watermark_ctx = MessageContext(
+                            topic=tp.topic,
+                            partition=tp.partition,
+                            offset=None,
+                            size=0,
+                        )
+                        ctx = copy_context()
+                        ctx.run(set_message_context, watermark_ctx)
+                        ctx.run(
+                            dataframes_composed[tp.topic],
+                            value=None,
+                            key=None,
+                            timestamp=idle_watermark,
+                            headers=[],
+                            is_watermark=True,
+                        )
+                idle_watermark = watermark_manager.produce(
+                    caught_up=self._data_partitions_all_caught_up()
+                )
                 if idle_watermark is not None:
                     # Idle advance fired: directly trigger window expiry for all
                     # assigned data TPs (same path as a received Kafka watermark,
@@ -1078,6 +1111,61 @@ class Application:
         # Ensure that state management is enabled if application is stateful
         if self._state_manager.stores:
             check_state_management_enabled()
+
+    def _data_partitions_all_caught_up(self) -> bool:
+        """
+        Return True when every assigned data partition has been fully consumed
+        (consumer position >= Kafka high watermark, i.e. LAG = 0).
+
+        Rate-limited to once per second using fresh (non-cached) high watermarks
+        to avoid false positives from stale metadata (e.g. with EOS transactions).
+        """
+        from time import monotonic as _monotonic
+
+        now = _monotonic()
+        last_check = getattr(self, "_last_caught_up_check", 0.0)
+        if now < last_check + 1.0:
+            return getattr(self, "_last_caught_up_result", False)
+        self._last_caught_up_check = now
+
+        watermarks_topic_name = self._watermark_manager.watermarks_topic.name
+        data_topics = self._topic_manager.non_changelog_topics
+        data_tps = [
+            tp
+            for tp in self._consumer.assignment()
+            if tp.topic in data_topics and tp.topic != watermarks_topic_name
+        ]
+        if not data_tps:
+            self._last_caught_up_result = False
+            return False
+        for tp in data_tps:
+            try:
+                _, high = self._consumer.get_watermark_offsets(tp, cached=False, timeout=2)
+                if high < 0:
+                    self._last_caught_up_result = False
+                    return False
+                pos_list = self._consumer.position([tp])
+                if not pos_list:
+                    self._last_caught_up_result = False
+                    return False
+                pos = pos_list[0].offset
+                if pos < 0 or pos < high:
+                    self._last_caught_up_result = False
+                    return False
+            except Exception:
+                self._last_caught_up_result = False
+                return False
+        # Also verify the time-alignment buffer is fully drained.
+        # Kafka consumer position advances when messages are polled INTO the buffer,
+        # not when they are popped and processed.  If the idle-advance fires while
+        # messages are still buffered, those messages arrive at the windowing stage
+        # after their windows are already closed and are silently dropped as late data.
+        if not self._consumer.buffer_empty:
+            self._last_caught_up_result = False
+            return False
+
+        self._last_caught_up_result = True
+        return True
 
     def _process_message(self, dataframe_composed: dict[str, VoidExecutor]):
         rows = self._consumer.poll_row(

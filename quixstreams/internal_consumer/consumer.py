@@ -134,7 +134,11 @@ class InternalConsumer(BaseConsumer):
             buffer_partitions = [
                 tp for tp in partitions if not self._topics[tp.topic].is_changelog
             ]
-            self._buffer.assign_partitions(buffer_partitions)
+            non_blocking_topics = frozenset(
+                tp.topic for tp in buffer_partitions
+                if self._topics[tp.topic]._type.name == "WATERMARKS"
+            )
+            self._buffer.assign_partitions(buffer_partitions, non_blocking_topics=non_blocking_topics)
             if on_assign is not None:
                 on_assign(consumer, partitions)
 
@@ -165,6 +169,14 @@ class InternalConsumer(BaseConsumer):
     @property
     def consumer_exists(self) -> bool:
         return self._inner_consumer is not None
+
+    @property
+    def buffer_empty(self) -> bool:
+        """
+        Return True when the time-alignment buffer has no messages pending.
+        Always True when buffered polling is not in use.
+        """
+        return self._buffer.is_empty()
 
     def poll_row(
         self, timeout: Optional[float] = None, buffered: bool = False
