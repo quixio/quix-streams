@@ -9,11 +9,43 @@ __all__ = (
     "set_message_context",
     "message_context",
     "copy_context",
+    "set_fence_watermark",
+    "get_fence_watermark",
+    "_FENCE_NO_LIMIT",
 )
 
 _current_message_context: ContextVar[Optional[MessageContext]] = ContextVar(
     "current_message_context"
 )
+
+# Sentinel: no fence active — expiry threshold is not capped.  Using a very large
+# value means min(timestamp_ms, fence_wm) is always a no-op when no fence is set.
+_FENCE_NO_LIMIT: int = 1 << 62
+
+# Fence watermark: per-TP min watermark injected by Application._process_message
+# before calling the dataframe executor.  TimeWindow.process_window caps the expiry
+# threshold to this value so that:
+#   - a fast replica cannot advance expiry past what the slowest replica has confirmed
+#     (global fence = pre-receive global_watermark); and
+#   - a TP whose own watermark has never been published (-1) causes no expiry at all
+#     (per-TP fence = -1 → min(ts, -1) = -1 → threshold = -1 - grace = very negative).
+# _FENCE_NO_LIMIT means "no fence" (sentinel); any real fence value ≤ is a cap.
+_current_fence_watermark: ContextVar[int] = ContextVar(
+    "current_fence_watermark", default=_FENCE_NO_LIMIT
+)
+
+
+def set_fence_watermark(wm: int) -> None:
+    """Set the fence watermark for the current message context."""
+    _current_fence_watermark.set(wm)
+
+
+def get_fence_watermark() -> int:
+    """
+    Get the fence watermark for the current message context.
+    Returns _FENCE_NO_LIMIT if no fence is set (pass-through, no capping).
+    """
+    return _current_fence_watermark.get()
 
 
 class MessageContextNotSetError(QuixException): ...

@@ -14,7 +14,7 @@ from pydantic import AliasGenerator, Field
 from pydantic_settings import BaseSettings as PydanticBaseSettings
 from pydantic_settings import PydanticBaseSettingsSource, SettingsConfigDict
 
-from .context import MessageContext, copy_context, set_message_context
+from .context import MessageContext, copy_context, set_fence_watermark, set_message_context
 from .core.stream.functions.types import VoidExecutor
 from .dataframe import DataFrameRegistry, StreamingDataFrame
 from .error_callbacks import (
@@ -159,6 +159,7 @@ class Application:
         watermarks_reset_on_start: bool = False,
         watermarks_idle_partition_timeout: Optional[float] = None,
         watermarks_idle_advance_after_ms: Optional[int] = None,
+        eos_stable_seconds: float = 15.0,
     ):
         """
         :param broker_address: Connection settings for Kafka.
@@ -267,6 +268,12 @@ class Application:
             last group of events.  Useful when the producer is done and CB must flush
             the final data group on its own.
             Default - `None` (disabled).
+        :param eos_stable_seconds: seconds a repartition partition must remain
+            EOS-stuck (position < high watermark, buffer empty, no new data) before
+            the consumer seeks past the invisible EOS transaction control record.
+            Must exceed `commit_interval` to avoid premature seeks while another
+            replica is still committing to the same partition.
+            Default - `15.0`.
 
 <br><br>***Error Handlers***<br>
         To handle errors, `Application` accepts callbacks triggered when
@@ -387,6 +394,7 @@ class Application:
             use_changelog_topics=use_changelog_topics,
             max_partition_buffer_size=max_partition_buffer_size,
             watermarking_default_assignor_enabled=watermarking_default_assignor_enabled,
+            eos_stable_seconds=eos_stable_seconds,
         )
 
         self._on_message_processed = on_message_processed
@@ -738,6 +746,7 @@ class Application:
             auto_offset_reset=self._config.auto_offset_reset,
             auto_commit_enable=False,  # Disable auto commit and manage commits manually
             max_partition_buffer_size=self._config.max_partition_buffer_size,
+            eos_stable_seconds=self._config.eos_stable_seconds,
             extra_config=extra_config,
             on_error=on_error,
         )
@@ -993,6 +1002,7 @@ class Application:
         processing_context.init_checkpoint()
         run_tracker.set_as_running()
         logger.info("The application started and is now processing incoming messages")
+        idle_watermark = None
         # Start polling Kafka for messages and callbacks
         while run_tracker.running:
             if state_manager.recovery_required:
@@ -1190,6 +1200,12 @@ class Application:
         )
 
         if topic_name == self._watermark_manager.watermarks_topic.name:
+            # Capture global_watermark BEFORE receive() updates _watermarks so
+            # that on_watermark handlers can use it as a fence.  After receive()
+            # the new TP value is already baked in; using the pre-update snapshot
+            # prevents expire_by_partition from advancing past what the slowest
+            # replica has confirmed.
+            fence_before_receive = self._watermark_manager.global_watermark
             watermark = self._watermark_manager.receive(
                 message=cast(WatermarkMessage, first_row.value)
             )
@@ -1215,6 +1231,19 @@ class Application:
                 )
                 context = copy_context()
                 context.run(set_message_context, watermark_ctx)
+                # Per-TP fence: cap the global fence to this TP's own confirmed
+                # watermark.  If the TP has never published a watermark (-1),
+                # per_tp_fence = -1 → min(ts, -1) = -1 → expiry threshold is
+                # very negative → no windows expire.  This prevents premature
+                # expiry of repartition-topic windows (e.g. carcolours[0]) when
+                # global_watermark is driven by other TPs that have advanced
+                # further (e.g. hw2 TPs) while the repartition TP hasn't yet
+                # received its first EOS-committed batch.
+                tp_own_wm = self._watermark_manager._watermarks.get(
+                    (tp.topic, tp.partition), -1
+                )
+                per_tp_fence = min(fence_before_receive, tp_own_wm)
+                context.run(set_fence_watermark, per_tp_fence)
                 # Execute StreamingDataFrame in a context
                 context.run(
                     dataframe_composed[tp.topic],
@@ -1239,6 +1268,14 @@ class Application:
 
             context = copy_context()
             context.run(set_message_context, row.context)
+            # Inject the global fence watermark so that TimeWindow.process_window
+            # can cap the expiry threshold and avoid dropping messages as "late"
+            # when a fast replica has seen run_N+1 event times before slower
+            # replicas have finished producing run_N to the repartition topic.
+            context.run(
+                set_fence_watermark,
+                self._watermark_manager.global_watermark,
+            )
             try:
                 # Execute StreamingDataFrame in a context
                 context.run(
@@ -1427,6 +1464,7 @@ class ApplicationConfig(BaseSettings):
     use_changelog_topics: bool = True
     max_partition_buffer_size: int = 10000
     watermarking_default_assignor_enabled: bool = True
+    eos_stable_seconds: float = 15.0
 
     @classmethod
     def settings_customise_sources(

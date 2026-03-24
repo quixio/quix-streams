@@ -52,6 +52,7 @@ class InternalConsumer(BaseConsumer):
         extra_config: Optional[dict] = None,
         on_error: Optional[ConsumerErrorCallback] = None,
         max_partition_buffer_size: int = 10000,
+        eos_stable_seconds: float = 15.0,
     ):
         """
         A consumer class that is capable of deserializing Kafka messages to Rows
@@ -85,6 +86,11 @@ class InternalConsumer(BaseConsumer):
             The buffering is used to consume messages in-order between different topics.
             Note that the actual number of buffered messages can be higher
             Default - `10000`.
+        :param eos_stable_seconds: seconds a partition must remain EOS-stuck before
+            seeking past the invisible transaction control record.
+            Must exceed commit_interval to avoid premature seeks while another replica
+            is still committing to the same repartition partition.
+            Default - `15.0`.
         """
         super().__init__(
             broker_address=broker_address,
@@ -98,9 +104,11 @@ class InternalConsumer(BaseConsumer):
         self._topics: dict[str, Topic] = {}
         self._backpressurred_tps: set[TopicPartition] = set()
         self._max_partition_buffer_size = max_partition_buffer_size
+        self._eos_stable_seconds = eos_stable_seconds
         self._buffer = InternalConsumerBuffer(
             max_partition_buffer_size=self._max_partition_buffer_size
         )
+        self._eos_stuck_since: dict[tuple[str, int], float] = {}
         self.reset_backpressure()
 
     def subscribe(
@@ -379,6 +387,47 @@ class InternalConsumer(BaseConsumer):
             high_watermarks=high_watermarks,
             consumer_positions=consumer_positions,
         )
+
+        # Seek past EOS transaction control records that prevent position from advancing.
+        # Under read_committed isolation, EOS markers are invisible: consume() returns
+        # 0 messages but the position does not advance, leaving pos < high permanently.
+        # Detect this state and seek directly to the high watermark so that
+        # _data_partitions_all_caught_up() can return True.
+        #
+        # Debounce: require the stuck condition to persist for _eos_stable_seconds before
+        # seeking.  This avoids a race where another CB instance is still writing to the
+        # same repartition partition: its in-flight commit temporarily looks like an EOS
+        # gap (gap=1) and would cause a premature seek, advancing the watermark before
+        # all data has arrived and silently dropping the late-arriving messages.
+        for tp in assignment:
+            topic_obj = self._topics[tp.topic]
+            if topic_obj.is_changelog:
+                continue
+            pos = consumer_positions.get((tp.topic, tp.partition))
+            hw = high_watermarks.get((tp.topic, tp.partition))
+            key = (tp.topic, tp.partition)
+            if pos is None or hw is None or pos >= hw:
+                self._eos_stuck_since.pop(key, None)
+                continue
+            if self._buffer.is_eos_stuck(tp.topic, tp.partition, pos, hw):
+                if key not in self._eos_stuck_since:
+                    self._eos_stuck_since[key] = monotonic()
+                    logger.debug(
+                        f'EOS-stuck first detected: "{tp.topic}[{tp.partition}]" '
+                        f"position={pos} high_watermark={hw}; "
+                        f"waiting {self._eos_stable_seconds}s before seeking"
+                    )
+                elif monotonic() - self._eos_stuck_since[key] >= self._eos_stable_seconds:
+                    logger.debug(
+                        f'Seeking past EOS record: "{tp.topic}[{tp.partition}]" '
+                        f"position={pos} → {hw} (stable for {self._eos_stable_seconds}s)"
+                    )
+                    self.seek(
+                        TopicPartition(topic=tp.topic, partition=tp.partition, offset=hw)
+                    )
+                    self._eos_stuck_since.pop(key, None)
+            else:
+                self._eos_stuck_since.pop(key, None)
 
         # Resume partitions with empty buffers
         for topic, partition in self._buffer.resume_empty():

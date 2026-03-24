@@ -233,8 +233,8 @@ class PartitionBufferGroup:
 
         Buffers whose consumer position is at or beyond the high watermark are
         marked IDLE so the time-aligned ``pop()`` does not block waiting for
-        messages that will never arrive (e.g. a topic fully consumed in a
-        previous run that has no new data this run).
+        messages that will never arrive (e.g. a topic fully consumed that has
+        no new data).
 
         :param positions: a mapping of {<topic>: <fetch_position>}.
         """
@@ -286,6 +286,11 @@ class PartitionBufferGroup:
         else:
             # The buffer has no partitions yet
             return None
+
+    @property
+    def has_blocking_buffers(self) -> bool:
+        """Return True if this group has at least one non-non_blocking buffer."""
+        return any(not b.non_blocking for b in self._partition_buffers_values)
 
     def pause_full(self) -> list[tuple[str, int]]:
         """
@@ -438,13 +443,24 @@ class InternalConsumerBuffer:
         """
         Pop the next message from the buffer in the timestamp order.
 
+        Data groups (those with at least one blocking buffer) are tried first.
+        Non-blocking-only groups (e.g. a watermarks-only partition group) are
+        tried last so they never starve data processing.
+
         :returns: `None` if all the buffers are empty or if the
         """
-        # Iterate over group buffers and return the first messages we find
-        for partition_group in self._partition_groups.values():
-            message = partition_group.pop()
-            if message is not None:
-                return message
+        groups = self._partition_groups.values()
+        # Try data groups first, then non-blocking-only groups
+        for partition_group in groups:
+            if partition_group.has_blocking_buffers:
+                message = partition_group.pop()
+                if message is not None:
+                    return message
+        for partition_group in groups:
+            if not partition_group.has_blocking_buffers:
+                message = partition_group.pop()
+                if message is not None:
+                    return message
         return None
 
     def pause_full(self) -> list[tuple[str, int]]:
@@ -475,8 +491,11 @@ class InternalConsumerBuffer:
 
     def is_empty(self) -> bool:
         """
-        Return True when every partition buffer across all groups has no messages
+        Return True when every data partition buffer across all groups has no messages
         pending to be popped and processed.
+
+        Non-blocking buffers (e.g. the watermarks topic) are excluded: they are
+        control topics that should never stall data flow or the caught-up check.
 
         Used by the caught-up idle-advance check to avoid firing the watermark advance
         while messages are still buffered-but-unprocessed (which would cause them to
@@ -487,6 +506,53 @@ class InternalConsumerBuffer:
             buffer.empty()
             for group in self._partition_groups.values()
             for buffer in group._partition_buffers_values
+            if not buffer.non_blocking
+        )
+
+    def is_eos_stuck(
+        self, topic: str, partition: int, consumer_position: int, high_watermark: int
+    ) -> bool:
+        """
+        Return True if this partition is stuck on EOS transaction control records.
+
+        Under read_committed isolation, EOS markers are invisible to consumers:
+        consume() returns 0 messages but the consumer position does not advance
+        past the marker, leaving a permanent gap between position and high watermark.
+
+        Three conditions must all hold:
+
+        1. buffer.empty(): all buffered data has been consumed by the application.
+
+        2. not buffer.paused: the partition is not paused at the buffer level.
+           A paused partition gets 0 messages from consume() regardless of whether
+           EOS markers are present; resume_empty() will handle it instead.
+
+        3. consumer_position >= _max_offset + 1: the consumer is at or beyond the
+           next offset after the last data message we ever saw, confirming that
+           the record(s) between here and the high watermark are not data records.
+           Using >= (not ==) handles consecutive EOS markers: after seeking past
+           the first EOS marker, consumer_position advances by 1 but _max_offset
+           stays the same, so we need >= to detect the next EOS marker.
+
+        A gap > 10 guard filters out large gaps that are not EOS-stuck: those
+        indicate new data is arriving (another producer is actively writing) and
+        a seek would skip real messages.  EOS transaction control records produce
+        exactly a gap of 1 (one invisible control record per transaction commit).
+        """
+        gap = high_watermark - consumer_position
+        if gap <= 0 or gap > 10:
+            return False
+        group = self._partition_groups.get(partition)
+        if group is None:
+            return False
+        buffer = group._partition_buffers.get(topic)
+        if buffer is None:
+            return False
+        return (
+            buffer.empty()
+            and not buffer.paused
+            and buffer._max_offset >= 0
+            and consumer_position == buffer._max_offset + 1
         )
 
     def close(self):

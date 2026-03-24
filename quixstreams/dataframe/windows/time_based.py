@@ -1,7 +1,7 @@
 import logging
 from typing import TYPE_CHECKING, Any, Iterable, Optional
 
-from quixstreams.context import message_context
+from quixstreams.context import _FENCE_NO_LIMIT, get_fence_watermark, message_context
 from quixstreams.state import WindowedPartitionTransaction
 from quixstreams.utils.format import format_timestamp
 
@@ -94,8 +94,16 @@ class TimeWindow(Window):
             _headers: Any,
             transaction: WindowedPartitionTransaction,
         ) -> Iterable[Message]:
+            # Cap the expiry timestamp with the fence watermark.
+            # The fence is set to global_watermark BEFORE receive() updates
+            # _watermarks[tp], so it reflects the pre-update state.  Capping
+            # here prevents expire_by_partition from advancing past what the
+            # slowest replica has confirmed and partially expiring windows that
+            # still have unprocessed messages in flight.
+            fence_wm = get_fence_watermark()
+            ts = min(timestamp_ms, fence_wm) if fence_wm < _FENCE_NO_LIMIT else timestamp_ms
             expired_windows = self.expire_by_partition(
-                transaction=transaction, timestamp_ms=timestamp_ms
+                transaction=transaction, timestamp_ms=ts
             )
 
             total_expired = 0
@@ -107,7 +115,8 @@ class TimeWindow(Window):
             ctx = message_context()
             logger.info(
                 f"Expired {total_expired} windows after processing "
-                f"the watermark at {format_timestamp(timestamp_ms)}. "
+                f"the watermark at {format_timestamp(timestamp_ms)} "
+                f"(fenced to {format_timestamp(ts)}). "
                 f"window_name={self._name} topic={ctx.topic} "
                 f"partition={ctx.partition} timestamp={timestamp_ms}"
             )
@@ -165,8 +174,10 @@ class TimeWindow(Window):
             _headers: Any,
             transaction: WindowedPartitionTransaction,
         ) -> Iterable[Message]:
+            fence_wm = get_fence_watermark()
+            ts = min(timestamp_ms, fence_wm) if fence_wm < _FENCE_NO_LIMIT else timestamp_ms
             expired_windows = self.expire_by_partition(
-                transaction=transaction, timestamp_ms=timestamp_ms
+                transaction=transaction, timestamp_ms=ts
             )
             # Just exhaust the iterator here
             for _ in expired_windows:
@@ -211,7 +222,16 @@ class TimeWindow(Window):
         )
 
         latest_expired_window_end = transaction.get_latest_expired(prefix=b"")
-        latest_timestamp = max(timestamp_ms, latest_expired_window_end)
+
+        # Cap the expiry threshold to the global fence watermark so that a fast
+        # replica (which has already seen run_N+1 event times) cannot advance the
+        # threshold beyond what the slowest replica has confirmed via the shared
+        # watermarks topic.  The fence does NOT affect window assignment (ranges are
+        # still computed from the real timestamp_ms) — only the late-data check.
+        fence_wm = get_fence_watermark()
+        ts_for_expiry = min(timestamp_ms, fence_wm) if fence_wm < _FENCE_NO_LIMIT else timestamp_ms
+
+        latest_timestamp = max(ts_for_expiry, latest_expired_window_end)
 
         max_expired_window_end = latest_timestamp - grace_ms
         max_expired_window_start = max_expired_window_end - duration_ms
