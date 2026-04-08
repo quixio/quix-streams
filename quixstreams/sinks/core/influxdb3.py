@@ -79,6 +79,7 @@ class InfluxDB3Sink(BatchingSink):
         on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
         on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
         raise_on_retention_violation: bool = False,
+        verify_ssl: bool = True,
     ):
         """
         A connector to sink processed data to InfluxDB v3.
@@ -157,6 +158,9 @@ class InfluxDB3Sink(BatchingSink):
             Keeping this False (default) is recommended for production to handle old
             data gracefully without blocking the pipeline.
             Default - `False`.
+        :param verify_ssl: if True, verifies SSL certificates when connecting to InfluxDB.
+            Set this to false to skip verifying SSL certificate when calling APIs, useful for environments using self-signed certificates.
+            Default - `True`.
         """
 
         super().__init__(
@@ -185,6 +189,7 @@ class InfluxDB3Sink(BatchingSink):
             "database": database,
             "debug": debug,
             "enable_gzip": enable_gzip,
+            "verify_ssl": verify_ssl,
             "write_client_options": {
                 "write_options": WriteOptions(
                     write_type=WriteType.synchronous,
