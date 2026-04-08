@@ -165,6 +165,10 @@ Default - `False`.
   rejects points due to retention policy violations...
   Default - `False`.
 
+- `verify_ssl` - if True, verifies SSL certificates when connecting to InfluxDB.
+  Set this to false to skip verifying SSL certificate when calling APIs, useful for environments using self-signed certificates.
+  Default = `True`.
+
 ## Testing Locally
 
 Rather than connect to a hosted InfluxDB3 instance, you can alternatively test your 
