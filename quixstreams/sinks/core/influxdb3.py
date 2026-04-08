@@ -216,6 +216,7 @@ class InfluxDB3Sink(BatchingSink):
                 httpx.URL(url=self._client_args["host"], path="/ping"),
                 headers={"Authorization": f"Token {self._client_args['token']}"},
                 timeout=self._request_timeout_ms / 1000,
+                verify=self._client_args["verify_ssl"],
             )
             r.raise_for_status()
         except Exception:
