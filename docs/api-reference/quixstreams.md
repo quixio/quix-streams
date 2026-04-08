@@ -6034,7 +6034,8 @@ def __init__(token: str,
                  ClientConnectSuccessCallback] = None,
              on_client_connect_failure: Optional[
                  ClientConnectFailureCallback] = None,
-             raise_on_retention_violation: bool = False)
+             raise_on_retention_violation: bool = False,
+             verify_ssl: bool = True)
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/influxdb3.py#L61)
@@ -6117,6 +6118,9 @@ If False (default), logs a warning and continues processing.
 Keeping this False (default) is recommended for production to handle old
 data gracefully without blocking the pipeline.
 Default - `False`.
+- `verify_ssl`: if True, verifies SSL certificates when connecting to InfluxDB.
+Set this to false to skip verifying SSL certificate when calling APIs, useful for environments using self-signed certificates.
+Default - `True`.
 
 <a id="quixstreams.sinks.core._quix_ts_datalake_catalog_client"></a>
 
