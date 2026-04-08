@@ -87,6 +87,17 @@ class TimeWindow(Window):
             for key, window in triggered_windows:
                 yield window, key, window["start"], None
 
+            # Also expire windows based on data-message timestamps.
+            # When watermarks are enabled the on_watermark callback handles
+            # this, but when watermarks are disabled this is the only path
+            # that closes windows.  expire_all_windows deletes on emit, so
+            # there is no risk of double-emission even if on_watermark also runs.
+            expired_windows = self.expire_by_partition(
+                transaction=transaction, timestamp_ms=timestamp_ms,
+            )
+            for key, window in expired_windows:
+                yield window, key, window["start"], None
+
         def on_watermark(
             _value: Any,
             _key: Any,

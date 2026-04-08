@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash",
+      "Read",
+      "Grep",
+      "Edit(C:/repos/WatermarkingTest/*)",
+      "Write(C:/repos/WatermarkingTest/*)",
+      "Skill(update-config)",
+      "Bash(start:*)",
+      "Bash(for i:*)",
+      "Bash(do echo:*)",
+      "Bash(done)"
+    ],
+    "deny": [
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
+    ],
+    "additionalDirectories": [
+      "C:/repos/WatermarkingTest"
+    ]
+  }
+}

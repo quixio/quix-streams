@@ -46,6 +46,7 @@ from .platforms.quix import (
 from .platforms.quix.env import QUIX_ENVIRONMENT
 from .processing import ProcessingContext
 from .processing.watermarking import WatermarkManager, WatermarkMessage
+
 from .runtracker import RunTracker
 from .sinks import SinkManager
 from .sources import BaseSource, SourceException, SourceManager
@@ -154,6 +155,7 @@ class Application:
         processing_guarantee: ProcessingGuarantee = "at-least-once",
         max_partition_buffer_size: int = 10000,
         broker_availability_timeout: float = 120.0,
+        watermarking_enabled: bool = True,
         watermarking_default_assignor_enabled: bool = True,
         watermarking_interval: float = 1.0,
     ):
@@ -230,6 +232,11 @@ class Application:
             the application with fresh connections.
             Set to ``0`` to disable the check.
             Default - ``120.0``s (2 minutes).
+        :param watermarking_enabled: when True, the application creates the watermarks topic, a dedicated
+            watermark consumer, and runs the full watermark lifecycle (store / produce / receive / propagate).
+            When False, no watermark infrastructure is created and window expiry relies solely on
+            data-message timestamp advancement (matching quixstreams 3.x behaviour).
+            Default - `True`.
         :param watermarking_default_assignor_enabled: when True, the applicaiton extracts watermarks
             from incoming messages by default (respecting the `Topic(timestamp_extractor)` if configured).
             When disabled, no watermarks will be emitted unless the `StreamingDataFrame.set_timestamp()`
@@ -357,6 +364,7 @@ class Application:
             rocksdb_options=rocksdb_options,
             use_changelog_topics=use_changelog_topics,
             max_partition_buffer_size=max_partition_buffer_size,
+            watermarking_enabled=watermarking_enabled,
             watermarking_default_assignor_enabled=watermarking_default_assignor_enabled,
         )
 
@@ -939,16 +947,23 @@ class Application:
         producer = self._producer
         producer_poll_timeout = self._config.producer_poll_timeout
         watermark_manager = self._watermark_manager
+        wm_enabled = self._config.watermarking_enabled
 
-        # Set the topics to be tracked by the Watermark manager
-        watermark_manager.set_topics(topics=self._dataframe_registry.consumer_topics)
+        subscribe_topics = (
+            self._dataframe_registry.consumer_topics + changelog_topics
+        )
+
+        if wm_enabled:
+            # Set the topics to be tracked by the Watermark manager
+            watermark_manager.set_topics(
+                topics=self._dataframe_registry.consumer_topics
+            )
+            subscribe_topics = subscribe_topics + [
+                self._watermark_manager.watermarks_topic
+            ]
 
         consumer.subscribe(
-            topics=self._dataframe_registry.consumer_topics
-            + changelog_topics
-            + [
-                self._watermark_manager.watermarks_topic
-            ],  # TODO: We subscribe here because otherwise it can't deserialize a message. Maybe it's time to split poll() and deserialization
+            topics=subscribe_topics,
             on_assign=self._on_assign,
             on_revoke=self._on_revoke,
             on_lost=self._on_lost,
@@ -979,7 +994,8 @@ class Application:
                         self._broker_availability_timeout
                     )
                 printer.print()
-                watermark_manager.produce()
+                if wm_enabled:
+                    watermark_manager.produce()
                 run_tracker.update_status()
 
         logger.info("Stopping the application")
@@ -1036,45 +1052,46 @@ class Application:
             first_row.offset,
         )
 
-        if topic_name == self._watermark_manager.watermarks_topic.name:
-            watermark = self._watermark_manager.receive(
-                message=cast(WatermarkMessage, first_row.value)
-            )
-            if watermark is None:
+        # Handle watermark messages received via the main consumer.
+        if self._config.watermarking_enabled:
+            if topic_name == self._watermark_manager.watermarks_topic.name:
+                watermark = self._watermark_manager.receive(
+                    message=cast(WatermarkMessage, first_row.value)
+                )
+                if watermark is None:
+                    return
+
+                data_topics = self._topic_manager.non_changelog_topics
+                data_tps = [
+                    tp
+                    for tp in self._consumer.assignment()
+                    if tp.topic in data_topics
+                ]
+                for tp in data_tps:
+                    logger.info(
+                        f"Process watermark {format_timestamp(watermark)}. "
+                        f"topic={tp.topic} partition={tp.partition} timestamp={watermark}"
+                    )
+                    watermark_ctx = MessageContext(
+                        topic=tp.topic,
+                        partition=tp.partition,
+                        offset=None,
+                        size=0,
+                    )
+                    context = copy_context()
+                    context.run(set_message_context, watermark_ctx)
+                    context.run(
+                        dataframe_composed[tp.topic],
+                        value=None,
+                        key=None,
+                        timestamp=watermark,
+                        headers=[],
+                        is_watermark=True,
+                    )
                 return
 
-            data_topics = self._topic_manager.non_changelog_topics
-            data_tps = [
-                tp for tp in self._consumer.assignment() if tp.topic in data_topics
-            ]
-            for tp in data_tps:
-                logger.info(
-                    f"Process watermark {format_timestamp(watermark)}. "
-                    f"topic={tp.topic} partition={tp.partition} timestamp={watermark}"
-                )
-                # Create a MessageContext to process a watermark update
-                # for each assigned TP
-                watermark_ctx = MessageContext(
-                    topic=tp.topic,
-                    partition=tp.partition,
-                    offset=None,
-                    size=0,
-                )
-                context = copy_context()
-                context.run(set_message_context, watermark_ctx)
-                # Execute StreamingDataFrame in a context
-                context.run(
-                    dataframe_composed[tp.topic],
-                    value=None,
-                    key=None,
-                    timestamp=watermark,
-                    headers=[],
-                    is_watermark=True,
-                )
-            return
-
         for row in rows:
-            if self._config.watermarking_default_assignor_enabled:
+            if self._config.watermarking_enabled and self._config.watermarking_default_assignor_enabled:
                 # Update the watermark with the current row's timestamp
                 # if the default watermark assignor is enabled (True by default).
                 self._processing_context.watermark_manager.store(
@@ -1131,22 +1148,25 @@ class Application:
         self._source_manager.start_sources()
 
         # Assign partitions manually to pause the changelog topics
-        watermarks_partitions = [
-            TopicPartition(
-                topic=self._watermark_manager.watermarks_topic.name, partition=i
-            )
-            for i in range(
-                self._watermark_manager.watermarks_topic.broker_config.num_partitions
-                or 1
-            )
-        ]
-        # TODO: The set is used because the watermark tp can already be present in the "topic_partitions"
-        #  because we use `subscribe()` earlier. Fix the mess later.
-        # TODO: Also, how to avoid reading the whole WM topic on each restart?
-        #  We really need only the most recent data
-        #  Is it fine to read it from the end? The active partitions must still publish something.
-        #  Or should we commit it?
-        self._consumer.assign(list(set(topic_partitions + watermarks_partitions)))
+        if self._config.watermarking_enabled:
+            watermarks_partitions = [
+                TopicPartition(
+                    topic=self._watermark_manager.watermarks_topic.name, partition=i
+                )
+                for i in range(
+                    self._watermark_manager.watermarks_topic.broker_config.num_partitions
+                    or 1
+                )
+            ]
+            # TODO: The set is used because the watermark tp can already be present in the "topic_partitions"
+            #  because we use `subscribe()` earlier. Fix the mess later.
+            # TODO: Also, how to avoid reading the whole WM topic on each restart?
+            #  We really need only the most recent data
+            #  Is it fine to read it from the end? The active partitions must still publish something.
+            #  Or should we commit it?
+            self._consumer.assign(list(set(topic_partitions + watermarks_partitions)))
+        else:
+            self._consumer.assign(topic_partitions)
 
         # Pause changelog topic+partitions immediately after assignment
         changelog_topics = {t.name for t in self._topic_manager.changelog_topics_list}
@@ -1155,6 +1175,22 @@ class Application:
 
         data_topics = self._topic_manager.non_changelog_topics
         data_tps = [tp for tp in topic_partitions if tp.topic in data_topics]
+
+        if self._config.watermarking_enabled and data_tps:
+            # Query Kafka for (low, high) offsets on each data partition so
+            # the WatermarkManager can exclude empty partitions from the
+            # global watermark calculation.
+            high_watermarks: dict[tuple[str, int], tuple[int, int]] = {}
+            for tp in data_tps:
+                try:
+                    low, high = self._consumer.get_watermark_offsets(
+                        tp, cached=False
+                    )
+                    high_watermarks[(tp.topic, tp.partition)] = (low, high)
+                except Exception:
+                    pass
+            if high_watermarks:
+                self._watermark_manager.update_empty_tps(high_watermarks)
 
         for tp in data_tps:
             self._assign_state_partitions(topic=tp.topic, partition=tp.partition)
@@ -1181,7 +1217,8 @@ class Application:
         data_topics = self._topic_manager.non_changelog_topics
         data_tps = [tp for tp in topic_partitions if tp.topic in data_topics]
         for tp in data_tps:
-            self._watermark_manager.on_revoke(topic=tp.topic, partition=tp.partition)
+            if self._config.watermarking_enabled:
+                self._watermark_manager.on_revoke(topic=tp.topic, partition=tp.partition)
             self._revoke_state_partitions(topic=tp.topic, partition=tp.partition)
 
         self._consumer.reset_backpressure()
@@ -1198,7 +1235,8 @@ class Application:
             if tp.topic in self._topic_manager.non_changelog_topics
         ]
         for tp in data_tps:
-            self._watermark_manager.on_revoke(topic=tp.topic, partition=tp.partition)
+            if self._config.watermarking_enabled:
+                self._watermark_manager.on_revoke(topic=tp.topic, partition=tp.partition)
             self._revoke_state_partitions(topic=tp.topic, partition=tp.partition)
 
         self._consumer.reset_backpressure()
@@ -1271,6 +1309,7 @@ class ApplicationConfig(BaseSettings):
     rocksdb_options: Optional[RocksDBOptionsType] = None
     use_changelog_topics: bool = True
     max_partition_buffer_size: int = 10000
+    watermarking_enabled: bool = True
     watermarking_default_assignor_enabled: bool = True
 
     @classmethod

@@ -29,6 +29,7 @@ class WatermarkManager:
         self._interval = interval
         self._last_produced = 0
         self._watermarks: dict[tuple[str, int], int] = {}
+        self._empty_tps: set[tuple[str, int]] = set()
         self._producer = producer
         self._topic_manager = topic_manager
         self._watermarks_topic: Optional[Topic] = None
@@ -61,12 +62,31 @@ class WatermarkManager:
             self._watermarks_topic = self._topic_manager.watermarks_topic()
         return self._watermarks_topic
 
+    def update_empty_tps(
+        self, high_watermarks: dict[tuple[str, int], tuple[int, int]]
+    ):
+        """
+        Update the set of empty topic-partitions based on Kafka offset information.
+
+        Empty TPs (where low offset == high offset) are excluded from the global
+        watermark calculation to prevent them from blocking advancement.
+        Once a TP receives data, it will no longer be marked as empty.
+
+        :param high_watermarks: mapping of (topic, partition) to (low_offset, high_offset).
+        """
+        self._empty_tps = {
+            tp
+            for tp, (low, high) in high_watermarks.items()
+            if low == high and tp in self._watermarks and self._watermarks[tp] < 0
+        }
+
     def on_revoke(self, topic: str, partition: int):
         """
         Remove the TP from tracking (e.g. when partition is revoked).
         """
         tp = (topic, partition)
         self._to_produce.pop(tp, None)
+        self._empty_tps.discard(tp)
 
     def store(self, topic: str, partition: int, timestamp: int, default: bool):
         """
@@ -151,7 +171,12 @@ class WatermarkManager:
         return None
 
     def _get_watermark(self) -> int:
-        watermark = -1
-        if watermarks := self._watermarks.values():
-            watermark = min(watermarks)
-        return watermark
+        # Exclude TPs confirmed empty by Kafka offsets so they don't block advancement.
+        active = [
+            w
+            for tp, w in self._watermarks.items()
+            if tp not in self._empty_tps
+        ]
+        if active:
+            return min(active)
+        return -1
