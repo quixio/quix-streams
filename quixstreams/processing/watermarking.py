@@ -25,10 +25,13 @@ class WatermarkManager:
         producer: InternalProducer,
         topic_manager: TopicManager,
         interval: float = 1.0,
+        idle_timeout: float = 30.0,
     ):
         self._interval = interval
+        self._idle_timeout = idle_timeout
         self._last_produced = 0
         self._watermarks: dict[tuple[str, int], int] = {}
+        self._last_updated: dict[tuple[str, int], float] = {}
         self._producer = producer
         self._topic_manager = topic_manager
         self._watermarks_topic: Optional[Topic] = None
@@ -46,11 +49,13 @@ class WatermarkManager:
         # Prime the watermarks with -1 for each expected topic partition
         # to make sure we have all TP watermarks before calculating the main watemark.
 
+        now = monotonic()
         self._watermarks = {
             (topic.name, partition): -1
             for topic in topics
             for partition in range(topic.broker_config.num_partitions or 1)
         }
+        self._last_updated = {tp: now for tp in self._watermarks}
 
     @property
     def watermarks_topic(self) -> Topic:
@@ -67,6 +72,8 @@ class WatermarkManager:
         """
         tp = (topic, partition)
         self._to_produce.pop(tp, None)
+        self._watermarks.pop(tp, None)
+        self._last_updated.pop(tp, None)
 
     def store(self, topic: str, partition: int, timestamp: int, default: bool):
         """
@@ -96,6 +103,8 @@ class WatermarkManager:
             # Schedule the updated watermark to be produced on the next cycle
             # if it's tracked and larger than the previous one.
             self._to_produce[tp] = (new_watermark, default)
+
+        self._last_updated[tp] = monotonic()
 
     def produce(self) -> bool:
         """
@@ -149,6 +158,7 @@ class WatermarkManager:
         tp = (topic, partition)
         current_tp_watermark = self._watermarks.get(tp, -1)
         self._watermarks[tp] = max(current_tp_watermark, timestamp)
+        self._last_updated[tp] = monotonic()
 
         # Check if the new TP watemark updates the overall watermark, and return it
         # if it does.
@@ -158,7 +168,18 @@ class WatermarkManager:
         return None
 
     def _get_watermark(self) -> int:
-        watermark = -1
-        if watermarks := self._watermarks.values():
-            watermark = min(watermarks)
-        return watermark
+        now = monotonic()
+        active = []
+        for tp, ts in self._watermarks.items():
+            if now - self._last_updated.get(tp, 0) < self._idle_timeout:
+                active.append(ts)
+            elif ts == -1:
+                # Partition was primed but never received any data and has gone
+                # idle — exclude it so it doesn't block the global watermark.
+                logger.debug(
+                    "Excluding idle partition %s from watermark calculation",
+                    tp,
+                )
+        if active:
+            return min(active)
+        return -1

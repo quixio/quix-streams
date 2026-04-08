@@ -6,12 +6,18 @@ from quixstreams.internal_producer import InternalProducer
 from quixstreams.models.topics import Topic, TopicManager
 from quixstreams.processing.watermarking import WatermarkManager
 
+# A large idle_timeout to disable idle detection in tests that don't need it
+_NO_IDLE = 999_999.0
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
-def _make_manager(interval: float = 1.0) -> WatermarkManager:
+def _make_manager(
+    interval: float = 1.0,
+    idle_timeout: float = _NO_IDLE,
+) -> WatermarkManager:
     """Return a WatermarkManager with mocked dependencies."""
     producer = MagicMock(spec=InternalProducer)
     topic_manager = MagicMock(spec=TopicManager)
@@ -24,6 +30,7 @@ def _make_manager(interval: float = 1.0) -> WatermarkManager:
         producer=producer,
         topic_manager=topic_manager,
         interval=interval,
+        idle_timeout=idle_timeout,
     )
     # Force watermarks_topic to be resolved so we don't need to worry about the lazy property
     _ = manager.watermarks_topic
@@ -283,6 +290,17 @@ class TestWatermarkManagerSetTopicsAndRevoke:
         assert ("topic-a", 0) not in mgr._to_produce
         assert ("topic-a", 1) in mgr._to_produce
 
+    def test_on_revoke_removes_tp_from_watermarks(self):
+        mgr = _make_manager()
+        mgr._watermarks = {("topic-a", 0): 100, ("topic-a", 1): 200}
+        mgr._last_updated = {("topic-a", 0): 0, ("topic-a", 1): 0}
+
+        mgr.on_revoke("topic-a", 0)
+
+        assert ("topic-a", 0) not in mgr._watermarks
+        assert ("topic-a", 0) not in mgr._last_updated
+        assert ("topic-a", 1) in mgr._watermarks
+
     def test_on_revoke_missing_tp_is_noop(self):
         mgr = _make_manager()
         # Should not raise even if TP was never tracked
@@ -313,6 +331,152 @@ class TestWatermarkManagerGetWatermark:
         mgr = _make_manager()
         mgr._watermarks = {("topic-a", 0): 42}
         assert mgr._get_watermark() == 42
+
+
+# ---------------------------------------------------------------------------
+# Idle partition detection
+# ---------------------------------------------------------------------------
+
+
+class TestWatermarkManagerIdleDetection:
+    def test_idle_partition_excluded_from_global_watermark(self):
+        mgr = _make_manager(idle_timeout=5.0)
+        # Partition 0 is active, partition 1 is idle (never updated)
+        mgr._watermarks = {("topic-a", 0): 500, ("topic-a", 1): -1}
+        mgr._last_updated = {
+            ("topic-a", 0): 1_000_000.0,  # recent
+            ("topic-a", 1): 0.0,  # ancient
+        }
+
+        with patch(
+            "quixstreams.processing.watermarking.monotonic",
+            return_value=1_000_000.0,
+        ):
+            assert mgr._get_watermark() == 500
+
+    def test_all_active_partitions_use_min(self):
+        mgr = _make_manager(idle_timeout=5.0)
+        mgr._watermarks = {
+            ("topic-a", 0): 500,
+            ("topic-a", 1): 200,
+            ("topic-a", 2): 300,
+        }
+        now = 1_000_000.0
+        mgr._last_updated = {tp: now for tp in mgr._watermarks}
+
+        with patch(
+            "quixstreams.processing.watermarking.monotonic", return_value=now
+        ):
+            assert mgr._get_watermark() == 200
+
+    def test_all_partitions_idle_returns_minus_one(self):
+        mgr = _make_manager(idle_timeout=5.0)
+        mgr._watermarks = {("topic-a", 0): -1, ("topic-a", 1): -1}
+        mgr._last_updated = {("topic-a", 0): 0.0, ("topic-a", 1): 0.0}
+
+        with patch(
+            "quixstreams.processing.watermarking.monotonic",
+            return_value=1_000_000.0,
+        ):
+            assert mgr._get_watermark() == -1
+
+    def test_partition_becomes_idle_after_timeout(self):
+        mgr = _make_manager(idle_timeout=10.0)
+        mgr._watermarks = {("topic-a", 0): 500, ("topic-a", 1): 100}
+        mgr._last_updated = {
+            ("topic-a", 0): 100.0,
+            ("topic-a", 1): 100.0,
+        }
+
+        # At t=105, partition 1 is still within timeout
+        with patch(
+            "quixstreams.processing.watermarking.monotonic", return_value=105.0
+        ):
+            assert mgr._get_watermark() == 100  # both active
+
+        # At t=115, both partitions are past idle timeout
+        # but partition 0 has ts=500, partition 1 has ts=100
+        # both are idle, so neither is active
+        with patch(
+            "quixstreams.processing.watermarking.monotonic", return_value=115.0
+        ):
+            assert mgr._get_watermark() == -1
+
+    def test_receive_resets_idle_timer(self):
+        mgr = _make_manager(idle_timeout=10.0)
+        mgr._watermarks = {("topic-a", 0): 100, ("topic-a", 1): -1}
+        mgr._last_updated = {("topic-a", 0): 50.0, ("topic-a", 1): 0.0}
+
+        # Receiving a watermark for partition 1 should reset its idle timer
+        with patch(
+            "quixstreams.processing.watermarking.monotonic", return_value=55.0
+        ):
+            mgr.receive({"topic": "topic-a", "partition": 1, "timestamp": 200})
+
+        assert mgr._last_updated[("topic-a", 1)] == 55.0
+
+    def test_store_resets_idle_timer(self):
+        mgr = _make_manager(idle_timeout=10.0)
+        mgr._watermarks = {("topic-a", 0): -1}
+        mgr._last_updated = {("topic-a", 0): 0.0}
+
+        with patch(
+            "quixstreams.processing.watermarking.monotonic", return_value=99.0
+        ):
+            mgr.store("topic-a", 0, 100, default=True)
+
+        assert mgr._last_updated[("topic-a", 0)] == 99.0
+
+    def test_set_topics_initializes_last_updated(self):
+        mgr = _make_manager(idle_timeout=10.0)
+        topics = [_make_topic("topic-a", num_partitions=2)]
+
+        with patch(
+            "quixstreams.processing.watermarking.monotonic", return_value=42.0
+        ):
+            mgr.set_topics(topics)
+
+        assert mgr._last_updated == {
+            ("topic-a", 0): 42.0,
+            ("topic-a", 1): 42.0,
+        }
+
+    def test_idle_partition_unblocks_receive(self):
+        """Key scenario: partition 2 has no data, should not block watermark advancement."""
+        mgr = _make_manager(idle_timeout=5.0)
+        mgr._watermarks = {
+            ("topic-a", 0): -1,
+            ("topic-a", 1): -1,
+            ("topic-a", 2): -1,  # will never get data
+        }
+        now = 100.0
+        mgr._last_updated = {tp: now for tp in mgr._watermarks}
+
+        # Receive watermarks for partitions 0 and 1 only
+        with patch(
+            "quixstreams.processing.watermarking.monotonic", return_value=now
+        ):
+            mgr.receive({"topic": "topic-a", "partition": 0, "timestamp": 500})
+            result = mgr.receive(
+                {"topic": "topic-a", "partition": 1, "timestamp": 300}
+            )
+
+        # Partition 2 is still active (within timeout), so it blocks at -1
+        assert result is None
+
+        # After idle timeout, partition 2 is excluded.
+        # The first receive reactivates partition 1 and unblocks the watermark.
+        with patch(
+            "quixstreams.processing.watermarking.monotonic",
+            return_value=now + 6.0,
+        ):
+            result = mgr.receive(
+                {"topic": "topic-a", "partition": 1, "timestamp": 301}
+            )
+
+        # Partition 2 is idle; partition 0 is also idle but partition 1 just
+        # got updated.  Global watermark = min(active) = 301
+        assert result == 301
 
 
 # ---------------------------------------------------------------------------

@@ -156,6 +156,7 @@ class Application:
         broker_availability_timeout: float = 120.0,
         watermarking_default_assignor_enabled: bool = True,
         watermarking_interval: float = 1.0,
+        watermarking_idle_timeout: float = 30.0,
     ):
         """
         :param broker_address: Connection settings for Kafka.
@@ -238,6 +239,11 @@ class Application:
 
         :param watermarking_interval: how often to emit watermarks updates for assigned partitions (in seconds).
             Default - `1.0`s.
+        :param watermarking_idle_timeout: how long (seconds) a partition can go without producing
+            a watermark before it is excluded from the global watermark calculation.
+            This prevents empty or stalled partitions from blocking window expiration
+            for all other partitions.
+            Default - `30.0`s.
 
         <br><br>***Error Handlers***<br>
         To handle errors, `Application` accepts callbacks triggered when
@@ -404,6 +410,7 @@ class Application:
             producer=self._producer,
             topic_manager=self._topic_manager,
             interval=watermarking_interval,
+            idle_timeout=watermarking_idle_timeout,
         )
         self._processing_context = ProcessingContext(
             commit_interval=self._config.commit_interval,
