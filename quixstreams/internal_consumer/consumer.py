@@ -103,6 +103,16 @@ class InternalConsumer(BaseConsumer):
         )
         self.reset_backpressure()
 
+    def register_topic(self, topic: Topic):
+        """
+        Register a topic for deserialization without subscribing to it via the
+        consumer group.
+
+        Use this for topics that are manually assigned (e.g. the watermarks
+        topic) so that ``poll_row()`` can still deserialize their messages.
+        """
+        self._topics[topic.name] = topic
+
     def subscribe(
         self,
         topics: list[Topic],
@@ -130,27 +140,30 @@ class InternalConsumer(BaseConsumer):
         topics_map = {t.name: t for t in topics}
         topics_names = list(topics_map.keys())
 
+        def _is_bufferable(tp: TopicPartition) -> bool:
+            topic_obj = self._topics.get(tp.topic)
+            if topic_obj is None:
+                return True
+            return not (topic_obj.is_changelog or topic_obj.is_watermarks)
+
         def _on_assign(consumer: Consumer, partitions: list[TopicPartition]):
-            buffer_partitions = [
-                tp for tp in partitions if not self._topics[tp.topic].is_changelog
-            ]
-            self._buffer.assign_partitions(buffer_partitions)
+            self._buffer.assign_partitions(
+                [tp for tp in partitions if _is_bufferable(tp)]
+            )
             if on_assign is not None:
                 on_assign(consumer, partitions)
 
         def _on_revoke(consumer: Consumer, partitions: list[TopicPartition]):
-            buffer_partitions = [
-                tp for tp in partitions if not self._topics[tp.topic].is_changelog
-            ]
-            self._buffer.revoke_partitions(buffer_partitions)
+            self._buffer.revoke_partitions(
+                [tp for tp in partitions if _is_bufferable(tp)]
+            )
             if on_revoke is not None:
                 on_revoke(consumer, partitions)
 
         def _on_lost(consumer: Consumer, partitions: list[TopicPartition]):
-            buffer_partitions = [
-                tp for tp in partitions if not self._topics[tp.topic].is_changelog
-            ]
-            self._buffer.revoke_partitions(buffer_partitions)
+            self._buffer.revoke_partitions(
+                [tp for tp in partitions if _is_bufferable(tp)]
+            )
             if on_lost is not None:
                 on_lost(consumer, partitions)
 
@@ -230,10 +243,11 @@ class InternalConsumer(BaseConsumer):
         resume_at = monotonic() + resume_after
         self._backpressure_resume_at = min(self._backpressure_resume_at, resume_at)
 
-        changelog_topics = {k for k, v in self._topics.items() if v.is_changelog}
+        skip_topics = {
+            k for k, v in self._topics.items() if v.is_changelog or v.is_watermarks
+        }
         for tp in self.assignment():
-            # Pause only data and watermarks TPs, excluding changelog TPs
-            if tp.topic in changelog_topics:
+            if tp.topic in skip_topics:
                 continue
 
             position, *_ = self.position([tp])

@@ -952,14 +952,15 @@ class Application:
 
         consumer.subscribe(
             topics=self._dataframe_registry.consumer_topics
-            + changelog_topics
-            + [
-                self._watermark_manager.watermarks_topic
-            ],  # TODO: We subscribe here because otherwise it can't deserialize a message. Maybe it's time to split poll() and deserialization
+            + changelog_topics,
             on_assign=self._on_assign,
             on_revoke=self._on_revoke,
             on_lost=self._on_lost,
         )
+        # Register the watermarks topic for deserialization AFTER subscribe()
+        # (which replaces _topics), without adding it to the consumer group.
+        # The partition is manually assigned in _on_assign() instead.
+        consumer.register_topic(self._watermark_manager.watermarks_topic)
 
         dataframes_composed = self._dataframe_registry.compose_all(sink=sink)
 
@@ -1138,7 +1139,9 @@ class Application:
         # get the source data.
         self._source_manager.start_sources()
 
-        # Assign partitions manually to pause the changelog topics
+        # Manually assign the watermarks topic partition(s) alongside the
+        # group-assigned partitions.  The watermarks topic is NOT part of the
+        # consumer-group subscription so it won't cause rebalance conflicts.
         watermarks_partitions = [
             TopicPartition(
                 topic=self._watermark_manager.watermarks_topic.name, partition=i
@@ -1148,13 +1151,7 @@ class Application:
                 or 1
             )
         ]
-        # TODO: The set is used because the watermark tp can already be present in the "topic_partitions"
-        #  because we use `subscribe()` earlier. Fix the mess later.
-        # TODO: Also, how to avoid reading the whole WM topic on each restart?
-        #  We really need only the most recent data
-        #  Is it fine to read it from the end? The active partitions must still publish something.
-        #  Or should we commit it?
-        self._consumer.assign(list(set(topic_partitions + watermarks_partitions)))
+        self._consumer.assign(topic_partitions + watermarks_partitions)
 
         # Pause changelog topic+partitions immediately after assignment
         changelog_topics = {t.name for t in self._topic_manager.changelog_topics_list}

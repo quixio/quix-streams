@@ -273,9 +273,8 @@ class TestInternalConsumer:
         self, topic_manager_factory, internal_consumer
     ):
         """
-        Test that watermarks topics are paused during backpressure
-        (along with data topics but not changelog topics),
-        and properly resumed when backpressure is lifted.
+        Test that watermarks and changelog topics are NOT paused during
+        backpressure — only data topics are paused.
         """
         topic_manager = topic_manager_factory()
         data_topic = topic_manager.topic(
@@ -303,35 +302,34 @@ class TestInternalConsumer:
                 offsets_to_seek={(data_topic.name, 0): offset_to_seek},
             )
 
-        # Verify data topic and watermarks topic are paused, but not changelog
+        # Verify only data topic is paused; watermarks and changelog are not
         paused_topics = {
             call.kwargs["partitions"][0].topic for call in pause_mock.call_args_list
         }
         assert data_topic.name in paused_topics
-        assert watermarks.name in paused_topics
+        assert watermarks.name not in paused_topics
         assert changelog.name not in paused_topics
 
-        # Verify they're marked as backpressured
+        # Verify only data topic is marked as backpressured
         assert (
             TopicPartition(topic=data_topic.name, partition=0)
             in internal_consumer.backpressured_tps
         )
         assert (
             TopicPartition(topic=watermarks.name, partition=0)
-            in internal_consumer.backpressured_tps
+            not in internal_consumer.backpressured_tps
         )
 
         # Test resuming
         with patch.object(InternalConsumer, "resume") as resume_mock:
             internal_consumer.resume_backpressured()
 
-        # Verify both data topic and watermarks topic are resumed
+        # Verify only data topic is resumed; watermarks was never paused
         resumed_topics = {
             call.kwargs["partitions"][0].topic for call in resume_mock.call_args_list
         }
         assert data_topic.name in resumed_topics
-        assert watermarks.name in resumed_topics
-        # Ensure changelog was never resumed (it was never paused)
+        assert watermarks.name not in resumed_topics
         assert changelog.name not in resumed_topics
 
         # Verify backpressured set is cleared

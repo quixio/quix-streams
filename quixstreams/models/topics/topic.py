@@ -202,6 +202,10 @@ class Topic:
     def is_repartition(self) -> bool:
         return self._type == TopicType.REPARTITION
 
+    @property
+    def is_watermarks(self) -> bool:
+        return self._type == TopicType.WATERMARKS
+
     def row_serialize(self, row: Row, key: Any) -> KafkaMessage:
         """
         Serialize Row to a Kafka message structure
