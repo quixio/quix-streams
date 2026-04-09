@@ -576,11 +576,14 @@ class TestInfluxDB3Sink:
             "quixstreams.sinks.core.influxdb3.httpx.get",
             return_value=response_mock,
         ) as httpx_get_mock:
+            import httpx
+
             version = sink._get_influx_version()
             httpx_get_mock.assert_called_once_with(
-                f"{test_host}/ping",
+                httpx.URL(url=test_host, path="/ping"),
                 headers={"Authorization": f"Token {test_token}"},
                 timeout=sink._request_timeout_ms / 1000,
+                verify=sink._client_args["verify_ssl"],
             )
             response_mock.raise_for_status.assert_called_once_with()
             assert version == str(test_version)
