@@ -600,7 +600,7 @@ class TestProducerPerBrokerTracking:
         assert "is UP" not in caplog.text
 
     def test_up_to_down_logs_reassurance_when_others_up(self, caplog):
-        """UP -> non-UP should log INFO with count of remaining brokers."""
+        """UP -> non-UP should log DEBUG with count of remaining brokers."""
         producer = Producer(broker_address="localhost:9092")
         # Two brokers UP
         producer._stats_cb(
@@ -612,7 +612,7 @@ class TestProducerPerBrokerTracking:
             )
         )
 
-        with caplog.at_level("INFO"):
+        with caplog.at_level("DEBUG"):
             producer._stats_cb(
                 _make_stats_json(
                     {
@@ -636,7 +636,7 @@ class TestProducerPerBrokerTracking:
             )
         )
 
-        with caplog.at_level("INFO"):
+        with caplog.at_level("DEBUG"):
             producer._stats_cb(
                 _make_stats_json(
                     {
@@ -647,8 +647,8 @@ class TestProducerPerBrokerTracking:
 
         assert "went down" not in caplog.text
 
-    def test_down_to_up_after_seen_up_logs_info(self, caplog):
-        """non-UP -> UP for a previously-UP broker should log info."""
+    def test_down_to_up_after_seen_up_logs_debug(self, caplog):
+        """non-UP -> UP for a previously-UP broker should log debug."""
         producer = Producer(broker_address="localhost:9092")
         # UP -> DOWN -> UP
         producer._stats_cb(
@@ -666,7 +666,7 @@ class TestProducerPerBrokerTracking:
             )
         )
 
-        with caplog.at_level("INFO"):
+        with caplog.at_level("DEBUG"):
             producer._stats_cb(
                 _make_stats_json(
                     {
@@ -814,7 +814,7 @@ class TestConsumerPerBrokerTracking:
             )
         )
 
-        with caplog.at_level("INFO"):
+        with caplog.at_level("DEBUG"):
             consumer._stats_cb(
                 _make_stats_json(
                     {
@@ -837,7 +837,7 @@ class TestConsumerPerBrokerTracking:
             )
         )
 
-        with caplog.at_level("INFO"):
+        with caplog.at_level("DEBUG"):
             consumer._stats_cb(
                 _make_stats_json(
                     {
@@ -848,7 +848,7 @@ class TestConsumerPerBrokerTracking:
 
         assert "went down" not in caplog.text
 
-    def test_down_to_up_after_seen_up_logs_info(self, caplog):
+    def test_down_to_up_after_seen_up_logs_debug(self, caplog):
         consumer = self._make_consumer()
         consumer._stats_cb(
             _make_stats_json(
@@ -865,7 +865,7 @@ class TestConsumerPerBrokerTracking:
             )
         )
 
-        with caplog.at_level("INFO"):
+        with caplog.at_level("DEBUG"):
             consumer._stats_cb(
                 _make_stats_json(
                     {

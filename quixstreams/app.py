@@ -920,7 +920,7 @@ class Application:
             f"commit_interval={self._config.commit_interval}s "
             f"commit_every={self._config.commit_every} "
             f'processing_guarantee="{self._config.processing_guarantee}" '
-            f"[wm-fix-v6-keepalive]"
+            f"[wm-fix-v7-quiet]"
         )
         if self.is_quix_app:
             self._quix_runtime_init()

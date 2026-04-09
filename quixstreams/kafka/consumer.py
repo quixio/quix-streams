@@ -203,7 +203,9 @@ class BaseConsumer:
                         if b != broker_name and s == "UP"
                     )
                     if others_up:
-                        logger.info(
+                        # Expected in multi-broker clusters when idle
+                        # connections are closed by connections.max.idle.ms
+                        logger.debug(
                             "Kafka consumer: broker %s (node %d) went down;"
                             " %d other broker(s) still available",
                             broker_name,
@@ -212,7 +214,7 @@ class BaseConsumer:
                         )
                 elif prev_state != "UP" and state == "UP":
                     if broker_name in self._brokers_seen_up:
-                        logger.info(
+                        logger.debug(
                             "Kafka consumer: broker %s (node %d) is UP again (was %s)",
                             broker_name,
                             node_id,

@@ -22,6 +22,7 @@ __all__ = ("QuixKafkaConfigsBuilder", "QuixApplicationConfig")
 
 logger = logging.getLogger(__name__)
 
+QUIX_CONNECTIONS_MAX_IDLE_MS = 3 * 60 * 1000
 QUIX_METADATA_MAX_AGE_MS = 3 * 60 * 1000
 
 _QUIX_CLEANUP_POLICY_MAPPING = {
@@ -173,15 +174,16 @@ class QuixKafkaConfigsBuilder:
     @property
     def librdkafka_extra_config(self) -> dict:
         # Azure LB kills inbound TCP connections after 4 minutes of idleness.
-        # Enable TCP keepalive so that idle broker connections send periodic
-        # probes and remain alive through the load balancer.  With keepalive
-        # enabled, connections.max.idle.ms is no longer needed to preempt the
-        # Azure timeout (previously set to 3 min which caused recurring
-        # "broker went down" log noise in multi-broker clusters).
+        # connections.max.idle.ms (3 min) makes the client close idle
+        # connections *before* the LB does a hard TCP RST.  This is expected
+        # behaviour in multi-broker clusters where some brokers have no active
+        # partition leaders for this client.
+        # socket.keepalive.enable sends TCP keepalive probes as extra safety.
         # More about this issue:
         # - https://github.com/confluentinc/librdkafka/issues/3109
         # - https://learn.microsoft.com/en-us/azure/event-hubs/apache-kafka-configurations#producer-and-consumer-configurations-1
         return {
+            "connections.max.idle.ms": QUIX_CONNECTIONS_MAX_IDLE_MS,
             "metadata.max.age.ms": QUIX_METADATA_MAX_AGE_MS,
             "socket.keepalive.enable": True,
         }
