@@ -728,6 +728,94 @@ class TestAppGroupBy:
 
 
 class TestAppWatermarking:
+    def test_main_consumer_assignment_excludes_watermarks_topic(
+        self,
+        app_factory,
+        executor,
+    ):
+        """
+        The watermarks topic must NOT be part of the main consumer's assignment.
+
+        Adding it via assign() inside on_assign forces the consumer to maintain
+        an extra broker connection to the watermarks-topic leader.  In a
+        multi-broker cluster that connection can go idle (the main poll loop is
+        dominated by data-partition traffic) and get reaped by the broker's
+        connections.max.idle.ms, producing recurring "broker went down" errors
+        and stalling processing.
+        """
+        num_partitions = 2
+        processed_count = 0
+        total_input = num_partitions
+
+        def on_message_processed(*_):
+            nonlocal processed_count
+            processed_count += 1
+            if processed_count >= total_input:
+                done.set_result(True)
+
+        app = app_factory(
+            auto_offset_reset="earliest",
+            on_message_processed=on_message_processed,
+            watermarking_interval=0.1,
+        )
+
+        topic_in = app.topic(
+            str(uuid.uuid4()),
+            value_deserializer="json",
+            value_serializer="json",
+            config=TopicConfig(num_partitions=num_partitions, replication_factor=1),
+        )
+        topic_out = app.topic(
+            str(uuid.uuid4()),
+            value_deserializer="json",
+            value_serializer="json",
+        )
+
+        sdf = app.dataframe(topic_in)
+        sdf = sdf.to_topic(topic_out)
+
+        with app.get_producer() as producer:
+            for partition in range(num_partitions):
+                msg = topic_in.serialize(
+                    key=f"key-{partition}", value={"x": 1}, timestamp_ms=10000
+                )
+                producer.produce(
+                    topic_in.name,
+                    key=msg.key,
+                    value=msg.value,
+                    partition=partition,
+                    timestamp=msg.timestamp,
+                )
+
+        watermarks_topic_name = app._watermark_manager.watermarks_topic.name
+
+        # Capture every partition list the on_assign callback passes to assign()
+        assigned_topics: list[set[str]] = []
+        original_on_assign = app._on_assign
+
+        def tracking_on_assign(consumer, partitions):
+            original_on_assign(consumer, partitions)
+            # Record what the consumer is actually assigned to AFTER on_assign
+            assigned = app._consumer.assignment()
+            assigned_topics.append({tp.topic for tp in assigned})
+
+        app._on_assign = tracking_on_assign
+
+        done = Future()
+        executor.submit(_stop_app_on_future, app, done, 15.0)
+        app.run(sdf)
+
+        assert processed_count >= total_input
+        assert assigned_topics, "on_assign was never called"
+
+        # The watermarks topic must NOT appear in any consumer assignment
+        for topics_in_assignment in assigned_topics:
+            assert watermarks_topic_name not in topics_in_assignment, (
+                f"Watermarks topic '{watermarks_topic_name}' was found in the "
+                f"main consumer assignment — this creates an extra broker "
+                f"connection that can go idle and cause 'broker went down' errors"
+            )
+
     def test_tumbling_window_final_with_watermarks_multi_partition(
         self,
         app_factory,
@@ -1132,7 +1220,7 @@ class TestQuixApplication:
 
         # Check if items from the Quix config have been passed
         # to the low-level configs of producer and consumer
-        producer_call_kwargs = producer_init_mock.call_args.kwargs
+        producer_call_kwargs = producer_init_mock.call_args_list[0].kwargs
         assert producer_call_kwargs["broker_address"] == connection_config
         assert producer_call_kwargs["extra_config"] == expected_producer_extra_config
 
@@ -1203,7 +1291,7 @@ class TestQuixApplication:
 
         # Check if items from the Quix config have been passed
         # to the low-level configs of producer and consumer
-        producer_call_kwargs = producer_init_mock.call_args.kwargs
+        producer_call_kwargs = producer_init_mock.call_args_list[0].kwargs
         assert producer_call_kwargs["broker_address"] == connection_config
         assert producer_call_kwargs["extra_config"] == expected_producer_extra_config
 
@@ -1266,7 +1354,7 @@ class TestQuixApplication:
 
         # Check if items from the Quix config have been passed
         # to the low-level configs of producer and consumer
-        producer_call_kwargs = producer_init_mock.call_args.kwargs
+        producer_call_kwargs = producer_init_mock.call_args_list[0].kwargs
         assert producer_call_kwargs["broker_address"] == connection_config
         assert producer_call_kwargs["extra_config"] == expected_producer_extra_config
 

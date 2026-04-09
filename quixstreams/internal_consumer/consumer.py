@@ -103,16 +103,6 @@ class InternalConsumer(BaseConsumer):
         )
         self.reset_backpressure()
 
-    def register_topic(self, topic: Topic):
-        """
-        Register a topic for deserialization without subscribing to it via the
-        consumer group.
-
-        Use this for topics that are manually assigned (e.g. the watermarks
-        topic) so that ``poll_row()`` can still deserialize their messages.
-        """
-        self._topics[topic.name] = topic
-
     def subscribe(
         self,
         topics: list[Topic],

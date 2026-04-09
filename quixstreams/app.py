@@ -413,7 +413,20 @@ class Application:
         # broker to every commit scope.  If that broker is momentarily slow the
         # whole transaction stalls and can eventually cause a "broker went down"
         # error.
-        self._watermark_producer = self._get_internal_producer(transactional=False)
+        # Build a lightweight, non-transactional, non-idempotent producer for
+        # watermarks.  Stripping "enable.idempotence" avoids PID-acquisition
+        # conflicts with the main transactional producer in exactly-once mode.
+        _wm_extra = {
+            k: v
+            for k, v in self._config.producer_extra_config.items()
+            if k not in ("enable.idempotence", "transactional.id")
+        }
+        self._watermark_producer = InternalProducer(
+            broker_address=self._config.broker_address,
+            extra_config=_wm_extra,
+            flush_timeout=self._config.flush_timeout,
+            transactional=False,
+        )
         self._watermark_manager = WatermarkManager(
             producer=self._watermark_producer,
             topic_manager=self._topic_manager,
@@ -967,10 +980,12 @@ class Application:
             on_revoke=self._on_revoke,
             on_lost=self._on_lost,
         )
-        # Register the watermarks topic for deserialization AFTER subscribe()
-        # (which replaces _topics), without adding it to the consumer group.
-        # The partition is manually assigned in _on_assign() instead.
-        consumer.register_topic(self._watermark_manager.watermarks_topic)
+
+        # Create a separate lightweight consumer dedicated to the watermarks
+        # topic.  This avoids adding the watermarks partition to the main
+        # consumer's assignment which would force an extra broker connection
+        # that can go idle and be reaped in a multi-broker cluster.
+        watermarks_consumer = self._create_watermarks_consumer()
 
         dataframes_composed = self._dataframe_registry.compose_all(sink=sink)
 
@@ -986,6 +1001,9 @@ class Application:
                 # Serve producer callbacks
                 producer.poll(producer_poll_timeout)
                 watermark_producer.poll(0)
+                self._poll_watermarks(
+                    watermarks_consumer, watermark_manager, dataframes_composed
+                )
                 process_message(dataframes_composed)
                 processing_context.commit_checkpoint()
                 consumer.resume_backpressured()
@@ -1003,6 +1021,7 @@ class Application:
 
         logger.info("Stopping the application")
         processing_context.commit_checkpoint(force=True)
+        watermarks_consumer.close()
 
     def _run_sources(self):
         run_tracker = self._run_tracker
@@ -1055,43 +1074,6 @@ class Application:
             first_row.offset,
         )
 
-        if topic_name == self._watermark_manager.watermarks_topic.name:
-            watermark = self._watermark_manager.receive(
-                message=cast(WatermarkMessage, first_row.value)
-            )
-            if watermark is None:
-                return
-
-            data_topics = self._topic_manager.non_changelog_topics
-            data_tps = [
-                tp for tp in self._consumer.assignment() if tp.topic in data_topics
-            ]
-            for tp in data_tps:
-                logger.info(
-                    f"Process watermark {format_timestamp(watermark)}. "
-                    f"topic={tp.topic} partition={tp.partition} timestamp={watermark}"
-                )
-                # Create a MessageContext to process a watermark update
-                # for each assigned TP
-                watermark_ctx = MessageContext(
-                    topic=tp.topic,
-                    partition=tp.partition,
-                    offset=None,
-                    size=0,
-                )
-                context = copy_context()
-                context.run(set_message_context, watermark_ctx)
-                # Execute StreamingDataFrame in a context
-                context.run(
-                    dataframe_composed[tp.topic],
-                    value=None,
-                    key=None,
-                    timestamp=watermark,
-                    headers=[],
-                    is_watermark=True,
-                )
-            return
-
         for row in rows:
             if self._config.watermarking_default_assignor_enabled:
                 # Update the watermark with the current row's timestamp
@@ -1132,6 +1114,85 @@ class Application:
         if self._on_message_processed is not None:
             self._on_message_processed(topic_name, partition, offset or 0)
 
+    def _create_watermarks_consumer(self) -> Consumer:
+        """
+        Create a dedicated consumer for the watermarks topic.
+
+        This consumer is completely independent of the main data consumer
+        and its consumer group — it uses ``assign()`` to read from all
+        watermarks-topic partitions without joining any group.
+
+        Keeping it separate avoids adding the watermarks-topic leader to
+        the main consumer's broker connection set, which prevents idle
+        connections from being reaped in multi-broker clusters.
+        """
+        watermarks_consumer = Consumer(
+            broker_address=self._config.broker_address,
+            consumer_group=f"{self._config.consumer_group}__watermarks",
+            auto_offset_reset="earliest",
+            auto_commit_enable=False,
+            extra_config=self._config.consumer_extra_config,
+        )
+        watermarks_topic = self._watermark_manager.watermarks_topic
+        partitions = [
+            TopicPartition(topic=watermarks_topic.name, partition=i)
+            for i in range(watermarks_topic.broker_config.num_partitions or 1)
+        ]
+        watermarks_consumer.assign(partitions)
+        return watermarks_consumer
+
+    def _poll_watermarks(
+        self,
+        watermarks_consumer: Consumer,
+        watermark_manager: WatermarkManager,
+        dataframes_composed: dict[str, VoidExecutor],
+    ):
+        """
+        Poll the dedicated watermarks consumer and, when the global watermark
+        advances, propagate the update through every assigned data-topic
+        partition in the SDF pipeline (triggering window expiry, etc.).
+        """
+        from .utils.json import loads as json_loads
+
+        msg = watermarks_consumer.poll(timeout=0)
+        if msg is None:
+            return
+        # Ignore broker errors on the watermarks consumer — they are
+        # non-fatal and the connection will be retried automatically.
+        if msg.error():
+            return
+
+        value: WatermarkMessage = json_loads(msg.value())
+        watermark = watermark_manager.receive(message=value)
+        if watermark is None:
+            return
+
+        data_topics = self._topic_manager.non_changelog_topics
+        data_tps = [
+            tp for tp in self._consumer.assignment() if tp.topic in data_topics
+        ]
+        for tp in data_tps:
+            logger.info(
+                f"Process watermark {format_timestamp(watermark)}. "
+                f"topic={tp.topic} partition={tp.partition} timestamp={watermark}"
+            )
+            watermark_ctx = MessageContext(
+                topic=tp.topic,
+                partition=tp.partition,
+                offset=None,
+                size=0,
+            )
+            context = copy_context()
+            context.run(set_message_context, watermark_ctx)
+            context.run(
+                dataframes_composed[tp.topic],
+                value=None,
+                key=None,
+                timestamp=watermark,
+                headers=[],
+                is_watermark=True,
+            )
+
     def _on_assign(self, _, topic_partitions: List[TopicPartition]):
         """
         Assign new topic partitions to consumer and state.
@@ -1149,19 +1210,7 @@ class Application:
         # get the source data.
         self._source_manager.start_sources()
 
-        # Manually assign the watermarks topic partition(s) alongside the
-        # group-assigned partitions.  The watermarks topic is NOT part of the
-        # consumer-group subscription so it won't cause rebalance conflicts.
-        watermarks_partitions = [
-            TopicPartition(
-                topic=self._watermark_manager.watermarks_topic.name, partition=i
-            )
-            for i in range(
-                self._watermark_manager.watermarks_topic.broker_config.num_partitions
-                or 1
-            )
-        ]
-        self._consumer.assign(topic_partitions + watermarks_partitions)
+        self._consumer.assign(topic_partitions)
 
         # Pause changelog topic+partitions immediately after assignment
         changelog_topics = {t.name for t in self._topic_manager.changelog_topics_list}
