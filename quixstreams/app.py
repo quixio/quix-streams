@@ -919,7 +919,8 @@ class Application:
             f'auto_offset_reset="{self._config.auto_offset_reset}" '
             f"commit_interval={self._config.commit_interval}s "
             f"commit_every={self._config.commit_every} "
-            f'processing_guarantee="{self._config.processing_guarantee}"'
+            f'processing_guarantee="{self._config.processing_guarantee}" '
+            f"[wm-fix-v6-keepalive]"
         )
         if self.is_quix_app:
             self._quix_runtime_init()
