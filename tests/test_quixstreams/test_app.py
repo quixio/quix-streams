@@ -727,6 +727,237 @@ class TestAppGroupBy:
         }
 
 
+class TestAppWatermarking:
+    def test_tumbling_window_final_with_watermarks_multi_partition(
+        self,
+        app_factory,
+        internal_consumer_factory,
+        executor,
+    ):
+        """
+        Test that tumbling window .final() correctly expires windows via
+        watermark propagation when using multiple partitions.
+
+        Produces two waves of timestamped messages across 2 partitions:
+        - Wave 1 at ts=10000 falls into window [10000, 15000)
+        - Wave 2 at ts=20000 advances the global watermark past 15000,
+          which triggers expiry of the Wave 1 windows.
+
+        After the app stops, the output topic should contain the expired
+        window results with count=1 per key.
+        """
+        num_partitions = 2
+        window_duration_ms = 5000
+        total_input = num_partitions * 2  # 2 waves × 2 partitions
+        processed_count = 0
+
+        def on_message_processed(*_):
+            nonlocal processed_count
+            processed_count += 1
+
+        app = app_factory(
+            auto_offset_reset="earliest",
+            on_message_processed=on_message_processed,
+            watermarking_interval=0.1,  # Fast propagation for testing
+        )
+
+        topic_in = app.topic(
+            str(uuid.uuid4()),
+            value_deserializer="json",
+            value_serializer="json",
+            config=TopicConfig(num_partitions=num_partitions, replication_factor=1),
+        )
+        topic_out = app.topic(
+            str(uuid.uuid4()),
+            value_deserializer="json",
+            value_serializer="json",
+        )
+
+        sdf = app.dataframe(topic_in)
+        sdf = (
+            sdf.tumbling_window(duration_ms=window_duration_ms, grace_ms=0)
+            .count()
+            .final()
+        )
+        sdf = sdf.to_topic(topic_out)
+
+        # Wave 1: ts=10000 → window [10000, 15000)
+        # Wave 2: ts=20000 → window [20000, 25000), advances watermark past 15000
+        with app.get_producer() as producer:
+            for partition in range(num_partitions):
+                msg = topic_in.serialize(
+                    key=f"key-{partition}", value={"x": 1}, timestamp_ms=10000
+                )
+                producer.produce(
+                    topic_in.name,
+                    key=msg.key,
+                    value=msg.value,
+                    partition=partition,
+                    timestamp=msg.timestamp,
+                )
+            for partition in range(num_partitions):
+                msg = topic_in.serialize(
+                    key=f"key-{partition}", value={"x": 2}, timestamp_ms=20000
+                )
+                producer.produce(
+                    topic_in.name,
+                    key=msg.key,
+                    value=msg.value,
+                    partition=partition,
+                    timestamp=msg.timestamp,
+                )
+
+        def wait_and_stop(app_, timeout_=20.0):
+            deadline = time.time() + timeout_
+            while time.time() < deadline:
+                if processed_count >= total_input:
+                    # Allow watermark propagation and window expiry
+                    time.sleep(3)
+                    break
+                time.sleep(0.1)
+            app_.stop()
+
+        executor.submit(wait_and_stop, app)
+        app.run(sdf)
+
+        assert processed_count >= total_input
+
+        # Consume from output topic to verify expired windows
+        rows_out = []
+        with internal_consumer_factory(
+            auto_offset_reset="earliest"
+        ) as consumer:
+            consumer.subscribe([topic_out])
+            deadline = time.time() + 10
+            while time.time() < deadline:
+                row = consumer.poll_row(timeout=1.0)
+                if row is not None:
+                    rows_out.append(row)
+                elif rows_out:
+                    break
+
+        # Window [10000, 15000) should have expired for each key
+        assert len(rows_out) >= 1
+
+        for row in rows_out:
+            assert row.value["start"] == 10000
+            assert row.value["end"] == 10000 + window_duration_ms
+            assert row.value["value"] == 1  # one message per key in Wave 1
+
+    def test_idle_partition_does_not_block_watermark(
+        self,
+        app_factory,
+        internal_consumer_factory,
+        executor,
+    ):
+        """
+        Test that an idle partition (no data) does not permanently block the
+        global watermark from advancing when idle_timeout is configured.
+
+        Creates a 2-partition topic but only produces data to partition 0.
+        With idle detection, partition 1 should be excluded from the global
+        watermark after idle_timeout, allowing windows to expire.
+        """
+        num_partitions = 2
+        window_duration_ms = 5000
+        total_input = 2  # Only producing to partition 0
+        processed_count = 0
+
+        def on_message_processed(*_):
+            nonlocal processed_count
+            processed_count += 1
+
+        app = app_factory(
+            auto_offset_reset="earliest",
+            on_message_processed=on_message_processed,
+            watermarking_interval=0.1,
+            watermarking_idle_timeout=3.0,  # Short idle timeout for testing
+        )
+
+        topic_in = app.topic(
+            str(uuid.uuid4()),
+            value_deserializer="json",
+            value_serializer="json",
+            config=TopicConfig(num_partitions=num_partitions, replication_factor=1),
+        )
+        topic_out = app.topic(
+            str(uuid.uuid4()),
+            value_deserializer="json",
+            value_serializer="json",
+        )
+
+        sdf = app.dataframe(topic_in)
+        sdf = (
+            sdf.tumbling_window(duration_ms=window_duration_ms, grace_ms=0)
+            .count()
+            .final()
+        )
+        sdf = sdf.to_topic(topic_out)
+
+        # Only produce to partition 0 — partition 1 stays idle
+        # Wave 1: ts=10000 → window [10000, 15000)
+        # Wave 2: ts=20000 → advances watermark past 15000 (once idle partition excluded)
+        with app.get_producer() as producer:
+            msg = topic_in.serialize(
+                key="key-0", value={"x": 1}, timestamp_ms=10000
+            )
+            producer.produce(
+                topic_in.name,
+                key=msg.key,
+                value=msg.value,
+                partition=0,
+                timestamp=msg.timestamp,
+            )
+            msg = topic_in.serialize(
+                key="key-0", value={"x": 2}, timestamp_ms=20000
+            )
+            producer.produce(
+                topic_in.name,
+                key=msg.key,
+                value=msg.value,
+                partition=0,
+                timestamp=msg.timestamp,
+            )
+
+        def wait_and_stop(app_, timeout_=25.0):
+            deadline = time.time() + timeout_
+            while time.time() < deadline:
+                if processed_count >= total_input:
+                    # Wait for idle_timeout (3s) + watermark propagation
+                    time.sleep(5)
+                    break
+                time.sleep(0.1)
+            app_.stop()
+
+        executor.submit(wait_and_stop, app)
+        app.run(sdf)
+
+        assert processed_count >= total_input
+
+        # Consume from output topic — without idle detection this would be empty
+        # because partition 1's watermark would stay at -1, blocking the global min
+        rows_out = []
+        with internal_consumer_factory(
+            auto_offset_reset="earliest"
+        ) as consumer:
+            consumer.subscribe([topic_out])
+            deadline = time.time() + 10
+            while time.time() < deadline:
+                row = consumer.poll_row(timeout=1.0)
+                if row is not None:
+                    rows_out.append(row)
+                elif rows_out:
+                    break
+
+        # The idle partition should have been excluded, allowing the window to expire
+        assert len(rows_out) >= 1
+
+        for row in rows_out:
+            assert row.value["start"] == 10000
+            assert row.value["end"] == 10000 + window_duration_ms
+            assert row.value["value"] == 1
+
+
 class TestAppExactlyOnce:
     def test_exactly_once(
         self,

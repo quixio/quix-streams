@@ -55,19 +55,6 @@ class BaseCheckpoint(abc.ABC):
 
         self._commit_every = commit_every
         self._total_offsets_processed = 0
-        self._watermarks_produced = False
-
-    def mark_watermarks_produced(self):
-        """
-        Signal that watermarks were produced into the current transaction.
-
-        This prevents the checkpoint from being treated as empty (and therefore
-        aborted in EOS mode) when no application messages were processed but
-        watermarks were written to the watermarks topic.  Aborting an empty
-        checkpoint would silently drop those watermark messages, stalling the
-        global watermark and blocking all window expiry.
-        """
-        self._watermarks_produced = True
 
     def expired(self) -> bool:
         """
@@ -81,15 +68,10 @@ class BaseCheckpoint(abc.ABC):
 
     def empty(self) -> bool:
         """
-        Returns `True` if checkpoint doesn't have any offsets stored yet
-        and no watermarks were produced into the current transaction.
+        Returns `True` if checkpoint doesn't have any offsets stored yet.
         :return:
         """
-        return (
-            not bool(self._tp_offsets)
-            and not bool(self._store_transactions)
-            and not self._watermarks_produced
-        )
+        return not bool(self._tp_offsets) and not bool(self._store_transactions)
 
     def store_offset(self, topic: str, partition: int, offset: int):
         """

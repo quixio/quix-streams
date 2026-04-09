@@ -406,8 +406,16 @@ class Application:
         self._source_manager = SourceManager()
         self._sink_manager = SinkManager()
         self._dataframe_registry = DataFrameRegistry()
+        # Use a separate non-transactional producer for watermarks.
+        # Watermarks are informational and idempotent — they don't need EOS
+        # guarantees.  Producing them via the transactional producer couples
+        # watermark delivery to the data transaction, adding the watermarks-topic
+        # broker to every commit scope.  If that broker is momentarily slow the
+        # whole transaction stalls and can eventually cause a "broker went down"
+        # error.
+        self._watermark_producer = self._get_internal_producer(transactional=False)
         self._watermark_manager = WatermarkManager(
-            producer=self._producer,
+            producer=self._watermark_producer,
             topic_manager=self._topic_manager,
             interval=watermarking_interval,
             idle_timeout=watermarking_idle_timeout,
@@ -907,6 +915,7 @@ class Application:
         exit_stack.enter_context(self._processing_context)
         exit_stack.enter_context(self._state_manager)
         exit_stack.enter_context(self._consumer)
+        exit_stack.enter_context(self._watermark_producer)
         exit_stack.enter_context(self._source_manager)
         exit_stack.push(self._exception_handler)
 
@@ -944,6 +953,7 @@ class Application:
         run_tracker = self._run_tracker
         consumer = self._consumer
         producer = self._producer
+        watermark_producer = self._watermark_producer
         producer_poll_timeout = self._config.producer_poll_timeout
         watermark_manager = self._watermark_manager
 
@@ -975,6 +985,7 @@ class Application:
             else:
                 # Serve producer callbacks
                 producer.poll(producer_poll_timeout)
+                watermark_producer.poll(0)
                 process_message(dataframes_composed)
                 processing_context.commit_checkpoint()
                 consumer.resume_backpressured()
@@ -987,8 +998,7 @@ class Application:
                         self._broker_availability_timeout
                     )
                 printer.print()
-                if watermark_manager.produce():
-                    processing_context.checkpoint.mark_watermarks_produced()
+                watermark_manager.produce()
                 run_tracker.update_status()
 
         logger.info("Stopping the application")
