@@ -164,6 +164,11 @@ class WatermarkManager:
         # if it does.
         new_watermark = self._get_watermark()
         if new_watermark > current_watermark:
+            logger.info(
+                f"Global watermark advanced: {format_timestamp(current_watermark)} -> "
+                f"{format_timestamp(new_watermark)}. "
+                f"All TP watermarks: {dict(self._watermarks)}"
+            )
             return new_watermark
         return None
 

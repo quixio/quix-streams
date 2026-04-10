@@ -94,6 +94,22 @@ class TimeWindow(Window):
             _headers: Any,
             transaction: WindowedPartitionTransaction,
         ) -> Iterable[Message]:
+            # Diagnostic: show state store contents before expiration
+            key_count = sum(1 for _ in transaction.keys())
+            latest_exp = transaction.get_latest_expired(prefix=b"")
+            max_exp_end = max(
+                max(timestamp_ms, latest_exp) - self._grace_ms, 0
+            )
+            ctx = message_context()
+            logger.info(
+                f"Watermark expiry check: watermark={format_timestamp(timestamp_ms)} "
+                f"max_expired_window_end={format_timestamp(max_exp_end)} "
+                f"latest_expired={latest_exp} keys_in_store={key_count} "
+                f"grace_ms={self._grace_ms} duration_ms={self._duration_ms} "
+                f"window_name={self._name} topic={ctx.topic} "
+                f"partition={ctx.partition}"
+            )
+
             expired_windows = self.expire_by_partition(
                 transaction=transaction, timestamp_ms=timestamp_ms
             )
@@ -104,7 +120,6 @@ class TimeWindow(Window):
                 total_expired += 1
                 yield window, key, window["start"], None
 
-            ctx = message_context()
             logger.info(
                 f"Expired {total_expired} windows after processing "
                 f"the watermark at {format_timestamp(timestamp_ms)}. "
@@ -195,6 +210,12 @@ class TimeWindow(Window):
             - updated_windows: Windows that were updated but not expired
             - triggered_windows: Windows that were expired early due to before_update/after_update callbacks
         """
+        ctx = message_context()
+        logger.debug(
+            f"Window update: timestamp={format_timestamp(timestamp_ms)} "
+            f"key={key!r} window_name={self._name} "
+            f"topic={ctx.topic} partition={ctx.partition}"
+        )
         state = transaction.as_state(prefix=key)
         duration_ms = self._duration_ms
         grace_ms = self._grace_ms

@@ -920,7 +920,7 @@ class Application:
             f"commit_interval={self._config.commit_interval}s "
             f"commit_every={self._config.commit_every} "
             f'processing_guarantee="{self._config.processing_guarantee}" '
-            f"[wm-fix-v7-quiet]"
+            f"[wm-fix-v8-diag]"
         )
         if self.is_quix_app:
             self._quix_runtime_init()
@@ -1172,6 +1172,12 @@ class Application:
         data_tps = [
             tp for tp in self._consumer.assignment() if tp.topic in data_topics
         ]
+        logger.info(
+            f"Watermark advanced to {format_timestamp(watermark)} "
+            f"(ts={watermark}). Dispatching to {len(data_tps)} TPs: "
+            f"{[(tp.topic, tp.partition) for tp in data_tps]}. "
+            f"composed_topics={list(dataframes_composed.keys())}"
+        )
         for tp in data_tps:
             logger.info(
                 f"Process watermark {format_timestamp(watermark)}. "
