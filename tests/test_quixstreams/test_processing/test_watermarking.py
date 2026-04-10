@@ -71,8 +71,8 @@ class TestWatermarkManagerStore:
         mgr = _make_manager()
         mgr.store("topic-a", 0, 100, default=True)
         mgr.store("topic-a", 0, 50, default=False)
-        # Non-default replaces default; max(100, 50) = 100 but non-default wins
-        assert mgr._to_produce[("topic-a", 0)] == (100, False)
+        # Non-default replaces default; use custom_ts directly (50), not max(100, 50)
+        assert mgr._to_produce[("topic-a", 0)] == (50, False)
 
     def test_store_only_advances_forward(self):
         mgr = _make_manager()

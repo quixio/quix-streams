@@ -91,18 +91,27 @@ class WatermarkManager:
             raise ValueError("Watermark cannot be negative.")
         tp = (topic, partition)
         stored_watermark, stored_default = self._to_produce.get(tp, (-1, True))
-        new_watermark = max(stored_watermark, timestamp)
 
         if default and not stored_default:
             # Skip watermark update if the non-default watermark is set.
             return
         elif not default and stored_default:
-            # Always override the default watermark
-            self._to_produce[tp] = (new_watermark, default)
-        elif new_watermark > stored_watermark:
-            # Schedule the updated watermark to be produced on the next cycle
-            # if it's tracked and larger than the previous one.
-            self._to_produce[tp] = (new_watermark, default)
+            # Override the default watermark with the custom (non-default) timestamp.
+            # Use the custom timestamp directly — do NOT take max with the previous
+            # default watermark, because the custom timestamp reflects the actual event
+            # time used by windows/aggregations, which may be intentionally lower than
+            # the Kafka ingest timestamp.
+            if stored_watermark > timestamp:
+                logger.debug(
+                    f"Watermark override: custom_ts={timestamp} < kafka_ts={stored_watermark} "
+                    f"for {tp}; using custom_ts (delta={stored_watermark - timestamp}ms)"
+                )
+            self._to_produce[tp] = (timestamp, default)
+        else:
+            # Same default-ness: advance to the higher watermark.
+            new_watermark = max(stored_watermark, timestamp)
+            if new_watermark > stored_watermark:
+                self._to_produce[tp] = (new_watermark, default)
 
         self._last_updated[tp] = monotonic()
 
