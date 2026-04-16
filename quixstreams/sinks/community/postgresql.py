@@ -80,6 +80,7 @@ class PostgreSQLSink(BatchingSink):
         statement_timeout_seconds: int = 30,
         primary_key_columns: PrimaryKeyColumns = (),
         upsert_on_primary_key: bool = False,
+        on_conflict_do_nothing: bool = False,
         on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
         on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
         **kwargs,
@@ -111,6 +112,9 @@ class PostgreSQLSink(BatchingSink):
         :param upsert_on_primary_key: Upsert based on the given `primary_key_columns`.
             If False, every message is treated as an independent entry, and any
             primary key collisions will consequently raise an exception.
+        :param on_conflict_do_nothing: If True, duplicate rows are silently ignored
+            using `ON CONFLICT DO NOTHING`. Cannot be used together with
+            `upsert_on_primary_key=True`.            
         :param on_client_connect_success: An optional callback made after successful
             client authentication, primarily for additional logging.
         :param on_client_connect_failure: An optional callback made after failed
@@ -140,6 +144,12 @@ class PostgreSQLSink(BatchingSink):
             )
         self._primary_key_setter = _primary_key_setter(primary_key_columns)
         self._do_upsert = upsert_on_primary_key
+        self._on_conflict_do_nothing = on_conflict_do_nothing
+        if upsert_on_primary_key and on_conflict_do_nothing:
+            raise ValueError(
+                "Cannot use both `upsert_on_primary_key=True` and "
+                "`on_conflict_do_nothing=True` at the same time."
+            )        
 
         self._client_settings = {
             "host": host,
@@ -385,6 +395,8 @@ class PostgreSQLSink(BatchingSink):
                 ),
             )
             query = sql.SQL(" ").join([query, upsert_stub])
+        elif self._on_conflict_do_nothing:
+            query = sql.SQL(" ").join([query, sql.SQL("ON CONFLICT DO NOTHING")])            
 
         # Handle missing keys gracefully
         values = [[row.get(col, None) for col in columns] for row in rows]
