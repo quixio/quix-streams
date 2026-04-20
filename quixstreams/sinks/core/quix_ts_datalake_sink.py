@@ -286,7 +286,16 @@ class QuixTSDataLakeSink(BatchingSink):
         """Write a DataFrame to blob storage as Parquet."""
         # Convert to Arrow table and prepare buffer
         self._null_empty_dicts(df)
-        table = pa.Table.from_pandas(df)
+        # Build Arrow table directly from Python objects to preserve integer
+        # precision.  pa.Table.from_pandas() goes through numpy which can
+        # silently convert int→float64 (losing precision for values > 2^53).
+        # pa.array() on raw Python objects keeps ints exact.
+        columns = {}
+        for col in df.columns:
+            columns[col] = pa.array(
+                [None if pd.isna(v) else v for v in df[col]]
+            )
+        table = pa.table(columns)
 
         buf = pa.BufferOutputStream()
         pq.write_table(table, buf)
