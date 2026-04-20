@@ -228,10 +228,12 @@ class QuixTSDataLakeSink(BatchingSink):
             row["__key"] = item.key
             rows.append(row)
 
-        # Convert to DataFrame for easier manipulation
-        # convert_dtypes() uses nullable types (Int64 instead of float64 for integers
-        # with NaN gaps), which preserves precision for large integers (> 2^53)
-        df = pd.DataFrame(rows).convert_dtypes()
+        # Convert to DataFrame using object dtype to preserve integer precision.
+        # pd.DataFrame(rows) with default dtypes converts int columns to float64
+        # when any row has a missing key (NaN gap), silently rounding integers
+        # larger than 2^53. Using dtype=object keeps values as Python objects,
+        # and PyArrow correctly infers int64 from them during Parquet conversion.
+        df = pd.DataFrame(rows, dtype=object)
 
         # Add time-based partition columns (year/month/day/hour) if they're specified in hive_columns
         # These are extracted from the timestamp_column
