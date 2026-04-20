@@ -7,12 +7,15 @@ catalog integration, and error handling.
 """
 
 import io
+import os
 import sys
+import tempfile
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
+import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
@@ -1009,3 +1012,223 @@ class TestStorageKeyGeneration:
         storage_key = call_args[0][0]
 
         assert "region=us-west" in storage_key
+
+
+# =============================================================================
+# 9. Integer Precision Tests
+# =============================================================================
+
+
+class TestIntegerPrecision:
+    """Tests that large integers (> 2^53) survive the full write-read cycle.
+
+    Float64 can only represent integers exactly up to 2^53 (~9.0e15).
+    Values like nanosecond timestamps (~1.7e18) must be stored as int64
+    in Parquet to avoid silent rounding.
+
+    Every test seeds EXACT values and asserts the EXACT same values come back.
+    No NaN seeding — all rows have identical schemas unless explicitly testing gaps.
+    """
+
+    # These values are deliberately chosen to FAIL under float64:
+    #   float(1773824667000000002) == 1773824667000000000.0  (last digits lost)
+    LARGE_INTS = [
+        1773824667000000002,
+        1773824667000000005,
+        1773824667000000009,
+    ]
+
+    def _capture_parquet_bytes(self, mock_blob_client) -> bytes:
+        """Extract Parquet bytes from the mock blob client's upload call."""
+        call_args = mock_blob_client.put_object_async.call_args
+        return call_args[0][1]
+
+    def _make_records(self, values, extra_fields=None):
+        """Build records with consistent schema — no missing keys, no NaN."""
+        records = []
+        for i, v in enumerate(values):
+            value_dict = {"ts_ns": v, "label": f"row{i}"}
+            if extra_fields:
+                value_dict.update(extra_fields)
+            records.append(
+                {
+                    "value": value_dict,
+                    "key": f"k{i}",
+                    "timestamp": 1704067200000,
+                    "offset": i,
+                }
+            )
+        return records
+
+    def test_large_int_seed_and_query_exact_values(
+        self, sink_factory, sample_batch, mock_blob_client
+    ):
+        """Seed 1773824667000000002, query back 1773824667000000002. No NaN."""
+        sink = sink_factory(hive_columns=[])
+        batch = sample_batch(records=self._make_records(self.LARGE_INTS))
+        sink.write(batch)
+
+        parquet_bytes = self._capture_parquet_bytes(mock_blob_client)
+        table = pq.read_table(io.BytesIO(parquet_bytes))
+
+        # Assert Arrow type is int64, NOT double/float64
+        assert pa.types.is_int64(table.schema.field("ts_ns").type), (
+            f"Expected int64, got {table.schema.field('ts_ns').type}"
+        )
+
+        # Assert exact values — not float-rounded
+        read_values = table.column("ts_ns").to_pylist()
+        for expected, actual in zip(self.LARGE_INTS, read_values):
+            assert actual == expected, (
+                f"Precision lost: seeded {expected}, got back {actual}"
+            )
+
+    def test_large_int_duckdb_query(
+        self, sink_factory, sample_batch, mock_blob_client
+    ):
+        """Write Parquet, query with DuckDB, verify exact int64 values."""
+        duckdb = pytest.importorskip("duckdb")
+
+        sink = sink_factory(hive_columns=[])
+        batch = sample_batch(records=self._make_records(self.LARGE_INTS))
+        sink.write(batch)
+
+        parquet_bytes = self._capture_parquet_bytes(mock_blob_client)
+
+        with tempfile.NamedTemporaryFile(suffix=".parquet", delete=False) as f:
+            f.write(parquet_bytes)
+            tmp_path = f.name
+
+        try:
+            conn = duckdb.connect()
+            result = conn.execute(
+                f"SELECT ts_ns FROM read_parquet('{tmp_path}') ORDER BY ts_ns"
+            ).fetchall()
+            queried_values = [row[0] for row in result]
+
+            for expected, actual in zip(sorted(self.LARGE_INTS), queried_values):
+                assert actual == expected, (
+                    f"DuckDB precision lost: seeded {expected}, got back {actual}"
+                )
+
+            # Also verify DuckDB sees BIGINT, not DOUBLE
+            schema = conn.execute(
+                f"DESCRIBE SELECT ts_ns FROM read_parquet('{tmp_path}')"
+            ).fetchall()
+            col_type = schema[0][1]
+            assert "INT" in col_type.upper(), (
+                f"Expected integer type in DuckDB, got {col_type}"
+            )
+        finally:
+            os.unlink(tmp_path)
+
+    def test_large_int_with_nan_gaps(
+        self, sink_factory, sample_batch, mock_blob_client
+    ):
+        """Large integers stay exact even when other rows are missing the column."""
+        sink = sink_factory(hive_columns=[])
+
+        records = [
+            {
+                "value": {"ts_ns": 1773824667000000002, "label": "has_ts"},
+                "key": "k0",
+                "timestamp": 1704067200000,
+                "offset": 0,
+            },
+            {
+                "value": {"label": "no_ts"},  # ts_ns missing → NaN gap
+                "key": "k1",
+                "timestamp": 1704067200000,
+                "offset": 1,
+            },
+            {
+                "value": {"ts_ns": 1773824667000000009, "label": "has_ts2"},
+                "key": "k2",
+                "timestamp": 1704067200000,
+                "offset": 2,
+            },
+        ]
+        batch = sample_batch(records=records)
+        sink.write(batch)
+
+        parquet_bytes = self._capture_parquet_bytes(mock_blob_client)
+        table = pq.read_table(io.BytesIO(parquet_bytes))
+
+        assert pa.types.is_int64(table.schema.field("ts_ns").type), (
+            f"Expected int64, got {table.schema.field('ts_ns').type}"
+        )
+        assert table.column("ts_ns").to_pylist() == [
+            1773824667000000002,
+            None,
+            1773824667000000009,
+        ]
+
+    def test_large_int_with_partitions(
+        self, sink_factory, sample_batch, mock_blob_client
+    ):
+        """Large integers survive when Hive partitioning is enabled. No NaN."""
+        sink = sink_factory(hive_columns=["year", "month"])
+
+        records = self._make_records(
+            self.LARGE_INTS, extra_fields={"ts_ms": 1704067200000}
+        )
+        batch = sample_batch(records=records)
+        sink.write(batch)
+
+        parquet_bytes = self._capture_parquet_bytes(mock_blob_client)
+        table = pq.read_table(io.BytesIO(parquet_bytes))
+
+        assert pa.types.is_int64(table.schema.field("ts_ns").type)
+        assert table.column("ts_ns").to_pylist() == self.LARGE_INTS
+
+    def test_large_int_parquet_file_roundtrip(
+        self, sink_factory, sample_batch, mock_blob_client
+    ):
+        """Write to real file, read back with PyArrow + pandas. No NaN."""
+        sink = sink_factory(hive_columns=[])
+        batch = sample_batch(records=self._make_records(self.LARGE_INTS))
+        sink.write(batch)
+
+        parquet_bytes = self._capture_parquet_bytes(mock_blob_client)
+
+        with tempfile.NamedTemporaryFile(suffix=".parquet", delete=False) as f:
+            f.write(parquet_bytes)
+            tmp_path = f.name
+
+        try:
+            table = pq.read_table(tmp_path)
+            assert pa.types.is_int64(table.schema.field("ts_ns").type)
+            assert table.column("ts_ns").to_pylist() == self.LARGE_INTS
+
+            df = table.to_pandas()
+            for expected, actual in zip(self.LARGE_INTS, df["ts_ns"]):
+                assert int(actual) == expected, (
+                    f"Precision lost: seeded {expected}, got {int(actual)}"
+                )
+        finally:
+            os.unlink(tmp_path)
+
+    def test_mixed_int_sizes_preserve_precision(
+        self, sink_factory, sample_batch, mock_blob_client
+    ):
+        """Small ints, large ints, zero, negative — all exact. No NaN."""
+        sink = sink_factory(hive_columns=[])
+
+        values = [42, 1773824667000000002, 0, 1773824667000000009, -1]
+        records = [
+            {
+                "value": {"num": v, "label": f"row{i}"},
+                "key": f"k{i}",
+                "timestamp": 1704067200000,
+                "offset": i,
+            }
+            for i, v in enumerate(values)
+        ]
+        batch = sample_batch(records=records)
+        sink.write(batch)
+
+        parquet_bytes = self._capture_parquet_bytes(mock_blob_client)
+        table = pq.read_table(io.BytesIO(parquet_bytes))
+
+        assert pa.types.is_int64(table.schema.field("num").type)
+        assert table.column("num").to_pylist() == values
