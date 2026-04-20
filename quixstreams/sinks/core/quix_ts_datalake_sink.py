@@ -282,6 +282,7 @@ class QuixTSDataLakeSink(BatchingSink):
         """Write a DataFrame to blob storage as Parquet."""
         # Convert to Arrow table and prepare buffer
         self._null_empty_dicts(df)
+        self._preserve_integer_precision(df)
         table = pa.Table.from_pandas(df)
 
         buf = pa.BufferOutputStream()
@@ -336,6 +337,25 @@ class QuixTSDataLakeSink(BatchingSink):
                 self._register_files_in_manifest()
         finally:
             self._pending_futures.clear()
+
+    def _preserve_integer_precision(self, df: pd.DataFrame):
+        """
+        Convert float64 columns that contain only whole numbers back to nullable Int64.
+
+        When pd.DataFrame() is built from rows with inconsistent keys, missing values
+        become NaN, which forces integer columns to float64.  Numbers larger than 2^53
+        (e.g. nanosecond timestamps) lose precision in float64.  Nullable Int64 supports
+        NaN without this conversion.
+        """
+        for col in df.columns:
+            if df[col].dtype != "float64":
+                continue
+            non_null = df[col].dropna()
+            if non_null.empty:
+                continue
+            # Check if every non-null value is a whole number that fits in int64
+            if (non_null == non_null.astype("int64", errors="ignore")).all():
+                df[col] = df[col].astype("Int64")
 
     def _null_empty_dicts(self, df: pd.DataFrame):
         """
