@@ -185,6 +185,21 @@ class QuixTSDataLakeSink(BatchingSink):
             self._last_seen_ms: Optional[int] = None
             self._fired: bool = False
             self._stream_name: Optional[str] = None
+            # v5 loader banner — confirms deployment is running v5 (whole-stream
+            # scalar state) vs. v4 (per-key dict) vs. v3 (registration dict).
+            # If the deployed pod logs "QuixTSDataLakeSink STREAM-TIMEOUT v5"
+            # then the scalar path is live and the callback will always receive
+            # the input-topic name, never a per-record key.
+            logger.info(
+                "QuixTSDataLakeSink STREAM-TIMEOUT v5 loaded "
+                "(scalar state: last_seen_ms=%s, fired=%s, stream_name=%s, "
+                "threshold_ms=%s); callback receives input-topic name once "
+                "per silence period, never a per-record key.",
+                self._last_seen_ms,
+                self._fired,
+                self._stream_name,
+                self._stream_timeout_ms,
+            )
 
     @staticmethod
     def _validate_stream_timeout_params(
@@ -312,8 +327,19 @@ class QuixTSDataLakeSink(BatchingSink):
             return
         now_ms = time.monotonic_ns() // 1_000_000
         if now_ms - self._last_seen_ms >= self._stream_timeout_ms:
+            designation = self._stream_name or ""
+            # v5 fire banner — makes the callback argument explicit in logs so
+            # a mismatch between "what the sink passes" and "what downstream
+            # observes" can be diagnosed without redeploying.
+            logger.info(
+                "QuixTSDataLakeSink STREAM-TIMEOUT v5 FIRE: "
+                "stream_name=%r (input-topic), silence_ms=%s, threshold_ms=%s",
+                designation,
+                now_ms - self._last_seen_ms,
+                self._stream_timeout_ms,
+            )
             try:
-                self._on_stream_timeout(self._stream_name or "")
+                self._on_stream_timeout(designation)
             except Exception:
                 logger.exception("on_stream_timeout callback raised")
             finally:
