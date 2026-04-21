@@ -1009,3 +1009,55 @@ class TestStorageKeyGeneration:
         storage_key = call_args[0][0]
 
         assert "region=us-west" in storage_key
+
+
+# =============================================================================
+# 9. Stream-Finished Timeout Tracking (sc-72221)
+# =============================================================================
+
+
+class TestStreamFinishedTimeout:
+    """Smoke tests for the opt-in per-key silence detector (§6.1–§6.5)."""
+
+    def test_happy_path_fires_once_after_timeout(self, sink_factory, monkeypatch):
+        """Registered key with 100 ms timeout fires exactly once after 150 ms silence."""
+        calls = []
+
+        def cb(key: str) -> None:
+            calls.append(key)
+
+        # monotonic_ns clock advanced by monkeypatching.
+        fake_ns = [0]
+        monkeypatch.setattr(
+            "quixstreams.sinks.core.quix_ts_datalake_sink.time.monotonic_ns",
+            lambda: fake_ns[0],
+        )
+
+        sink = sink_factory(stream_finished={"sensor-a": (100, cb)})
+        assert sink._stream_finished_enabled is True
+
+        # t=0: message arrives for sensor-a.
+        fake_ns[0] = 0
+        sink.add(
+            value={"v": 1},
+            key="sensor-a",
+            timestamp=0,
+            headers=[],
+            topic="t",
+            partition=0,
+            offset=0,
+        )
+        assert sink._last_seen == {"sensor-a": 0}
+        assert sink._fired == set()
+
+        # t=150 ms: flush scans _last_seen; silence exceeds 100 ms → fire.
+        fake_ns[0] = 150_000_000  # ns
+        sink.flush()
+
+        assert calls == ["sensor-a"], f"expected one fire, got {calls}"
+        assert "sensor-a" in sink._fired
+
+        # A second flush inside the same silence period does NOT re-fire.
+        fake_ns[0] = 200_000_000
+        sink.flush()
+        assert calls == ["sensor-a"], "callback must not fire twice per silence"

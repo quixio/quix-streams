@@ -11,7 +11,7 @@ import logging
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 try:
     import pandas as pd
@@ -72,6 +72,32 @@ class QuixTSDataLakeSink(BatchingSink):
     :param namespace: Catalog namespace (default: "default")
     :param auto_create_bucket: If True, attempt to create bucket/path in storage if missing
     :param max_workers: Maximum number of parallel upload threads (default: 10)
+    :param stream_finished: Optional mapping from decoded key string to
+        ``(timeout_ms, callback)``. For each registered key, silence for at least
+        ``timeout_ms`` milliseconds inside the sink's ``add()`` stream will invoke
+        ``callback(decoded_key)`` exactly once per silence period. Any subsequent
+        message for that key re-arms the timer. Keys seen in messages but not in
+        this dict are ignored by the tracker (no side effects). Timers are
+        wall-clock monotonic and per-key independent. Callbacks run synchronously
+        on the sink thread during ``flush()``; exceptions are logged and swallowed
+        so one bad key does not kill the sink. The feature is **disabled with zero
+        overhead** when the parameter is omitted, passed as ``None``, or passed as
+        an empty dict ``{}`` — all three forms are equivalent.
+
+        *Precision floor:* timeouts fire inside ``flush()``, which is driven by
+        the Checkpoint commit interval. Expect fire latency up to
+        ``timeout_ms + commit_interval``. For tight timeout detection (seconds),
+        lower the Application's ``commit_interval`` accordingly. Sub-second
+        timeouts are supported by the API but will not fire faster than the flush
+        cadence.
+
+        *Restart behaviour:* tracking state is in-memory only. On process restart
+        ``_last_seen`` is reset; dormant keys that went silent before the restart
+        do not fire until they are seen again and go silent a second time.
+
+        *Backpressure:* ``on_paused()`` does not touch ``_last_seen`` or
+        ``_fired``. Timeouts reflect "when did we last see data for this key in
+        the stream", independent of write success.
     :param on_client_connect_success: An optional callback made after successful
         client authentication, primarily for additional logging.
     :param on_client_connect_failure: An optional callback made after failed
@@ -93,6 +119,9 @@ class QuixTSDataLakeSink(BatchingSink):
         namespace: str = "default",
         auto_create_bucket: bool = True,
         max_workers: int = 10,
+        stream_finished: Optional[
+            Dict[str, tuple]
+        ] = None,
         on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
         on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
     ):
@@ -127,12 +156,198 @@ class QuixTSDataLakeSink(BatchingSink):
         # Batch upload tracking
         self._pending_futures: List[Dict[str, Any]] = []
 
+        # Stream-finished timeout tracking (opt-in per-key).
+        # Disabled forms — parameter omitted, ``None``, or ``{}`` — are all
+        # zero-overhead: ``_stream_finished_enabled`` stays ``False`` and the
+        # tracker state dicts are never allocated.
+        self._stream_finished_enabled: bool = False
+        if stream_finished:
+            self._validate_stream_finished(stream_finished)
+            # Shallow copy to freeze against external mutation of the caller's
+            # dict after construction.
+            self._stream_finished: Dict[
+                str, tuple
+            ] = dict(stream_finished)
+            self._last_seen: Dict[str, int] = {}
+            self._fired: set = set()
+            self._stream_finished_enabled = True
+
+    @staticmethod
+    def _validate_stream_finished(stream_finished: Any) -> None:
+        """Validate the ``stream_finished`` mapping shape and entry types.
+
+        Called from ``__init__`` only when ``stream_finished`` is a non-empty
+        mapping (``None`` and ``{}`` are short-circuited as the "disabled" form).
+        Raises ``ValueError`` with the exact messages spec'd in §6.1 so operator
+        misconfiguration fails loud at construction time.
+        """
+        if not isinstance(stream_finished, dict):
+            raise ValueError(
+                "stream_finished must be a dict mapping str keys to "
+                "(timeout_ms, callback) tuples"
+            )
+        for k, v in stream_finished.items():
+            if not isinstance(k, str):
+                raise ValueError(
+                    f"stream_finished keys must be str; got "
+                    f"{type(k).__name__} for key {k!r}. "
+                    f"Project bytes keys to str upstream."
+                )
+            if not (isinstance(v, tuple) and len(v) == 2):
+                raise ValueError(
+                    f"stream_finished[{k!r}] must be a "
+                    f"(timeout_ms, callback) tuple of length 2"
+                )
+            timeout_ms, callback = v
+            # ``bool`` is a subclass of ``int`` in Python; reject explicitly.
+            if (
+                not isinstance(timeout_ms, int)
+                or isinstance(timeout_ms, bool)
+                or timeout_ms <= 0
+            ):
+                raise ValueError(
+                    f"stream_finished[{k!r}]: timeout_ms must be a "
+                    f"positive int (milliseconds)"
+                )
+            if not callable(callback):
+                raise ValueError(
+                    f"stream_finished[{k!r}]: callback must be callable"
+                )
+
     @property
     def s3_bucket(self) -> str:
         """Get the S3 bucket name (extracted from quixportal config)."""
         if self._s3_bucket is None:
             raise RuntimeError("s3_bucket not initialized. Call setup() first.")
         return self._s3_bucket
+
+    # ------------------------------------------------------------------
+    # Stream-finished timeout tracking
+    # ------------------------------------------------------------------
+    #
+    # The three hooks below (``add``, ``flush``, ``on_paused``) layer an
+    # opt-in per-key silence detector on top of the parent ``BatchingSink``.
+    # When the feature is disabled (``stream_finished`` omitted, ``None``,
+    # or ``{}``) each hook short-circuits after the ``super()`` call and
+    # adds at most one dict lookup of overhead.
+    #
+    # Concurrency: ``add()`` and ``flush()`` are both called on the sink
+    # thread by the quixstreams runtime; no locking on the tracker state.
+
+    @staticmethod
+    def _decode_key(key: Any) -> str:
+        """Normalize a message key into a ``str`` for tracker lookups.
+
+        Policy (spec §7.1):
+        - ``None`` → ``""``
+        - ``str`` → passed through
+        - ``bytes`` → ``key.decode("utf-8", errors="replace")`` (invalid
+          UTF-8 becomes U+FFFD; operators with binary keys should project
+          to deterministic strings upstream)
+        - any other type → ``str(key)``
+        """
+        if key is None:
+            return ""
+        if isinstance(key, str):
+            return key
+        if isinstance(key, bytes):
+            return key.decode("utf-8", errors="replace")
+        return str(key)
+
+    def add(
+        self,
+        value: Any,
+        key: Any,
+        timestamp: int,
+        headers: Any,
+        topic: str,
+        partition: int,
+        offset: int,
+    ):
+        """Accumulate the record into the parent batch, then (if enabled)
+        stamp the last-seen monotonic timestamp for this key and clear any
+        prior "fired" marker so the next silence period can fire again.
+
+        Messages for unregistered keys pass through untouched — no tracker
+        entry is created.
+        """
+        super().add(value, key, timestamp, headers, topic, partition, offset)
+        if not self._stream_finished_enabled:
+            return
+        decoded = self._decode_key(key)
+        if decoded not in self._stream_finished:
+            return  # unregistered key — do not track
+        now_ms = time.monotonic_ns() // 1_000_000
+        self._last_seen[decoded] = now_ms
+        self._fired.discard(decoded)
+
+    def flush(self):
+        """Flush the parent batch, then (if enabled) scan for silent keys
+        and fire their callbacks.
+
+        The timeout scan runs *after* the parquet write so a callback can
+        trust that everything up to this moment has been committed.
+        """
+        super().flush()
+        if self._stream_finished_enabled:
+            self._check_timeouts()
+
+    def on_paused(self):
+        """Inherit the parent ``on_paused()`` behaviour — drop the pending
+        batches but **do not touch** ``_last_seen`` or ``_fired``.
+
+        Backpressure means the destination rejected a batch, not that the
+        messages were never seen. Timeouts should still fire based on
+        stream silence, independent of write success (spec §7.4).
+        """
+        super().on_paused()
+        # intentional no-op on tracker state
+
+    def _check_timeouts(self) -> None:
+        """For each registered key whose silence has exceeded its per-key
+        threshold and has not already fired for this silence period,
+        invoke the callback exactly once.
+
+        Callback exceptions are logged and swallowed (spec §8.2) — one
+        misbehaving key must not abort the flush or kill the sink. The
+        ``finally`` branch records the fire even on exception so a
+        persistently raising callback is not retried every commit.
+        """
+        now_ms = time.monotonic_ns() // 1_000_000
+        # snapshot keys to avoid mutation during iteration
+        for k, last in list(self._last_seen.items()):
+            if k in self._fired:
+                continue
+            timeout_ms, callback = self._stream_finished[k]
+            if now_ms - last >= timeout_ms:
+                try:
+                    callback(k)
+                except Exception:
+                    logger.exception(
+                        "stream_finished callback raised for key=%r", k
+                    )
+                finally:
+                    self._fired.add(k)
+        self._prune_stale(now_ms)
+
+    def _prune_stale(self, now_ms: int) -> None:
+        """Drop tracker entries whose key has fired and has not been seen
+        for more than ``5 × timeout_ms`` of its own threshold.
+
+        Prevents ``_fired`` from accumulating long-dead keys across days
+        of uptime. Still-alive keys (fresh ``last_seen``, not in
+        ``_fired``) are untouched. Re-arrival of a pruned key re-inserts
+        naturally through ``add()``.
+        """
+        for k in list(self._fired):
+            last = self._last_seen.get(k)
+            if last is None:
+                self._fired.discard(k)
+                continue
+            timeout_ms = self._stream_finished[k][0]
+            if now_ms - last > 5 * timeout_ms:
+                self._last_seen.pop(k, None)
+                self._fired.discard(k)
 
     def setup(self):
         """Initialize blob storage client and test connection."""
