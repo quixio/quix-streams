@@ -1023,8 +1023,8 @@ class TestStreamTimeout:
         """Whole-stream 100 ms timeout fires exactly once after 150 ms silence (spec §8.8 case 2)."""
         calls = []
 
-        def cb(key: str) -> None:
-            calls.append(key)
+        def cb(stream: str) -> None:
+            calls.append(stream)
 
         # monotonic_ns clock advanced by monkeypatching.
         fake_ns = [0]
@@ -1036,7 +1036,8 @@ class TestStreamTimeout:
         sink = sink_factory(stream_timeout_ms=100, on_stream_timeout=cb)
         assert sink._stream_timeout_enabled is True
 
-        # t=0: message arrives for sensor-a.
+        # t=0: a message arrives on topic "t"; stream name is captured from
+        # the first add() call.
         fake_ns[0] = 0
         sink.add(
             value={"v": 1},
@@ -1047,17 +1048,41 @@ class TestStreamTimeout:
             partition=0,
             offset=0,
         )
-        assert sink._last_seen == {"sensor-a": 0}
-        assert sink._fired == set()
+        assert sink._last_seen_ms == 0
+        assert sink._fired is False
+        assert sink._stream_name == "t"
 
-        # t=150 ms: flush scans _last_seen; silence exceeds 100 ms → fire.
+        # t=150 ms: flush reads the scalar last-seen; silence exceeds 100 ms
+        # → fire, passing the stream designation.
         fake_ns[0] = 150_000_000  # ns
         sink.flush()
 
-        assert calls == ["sensor-a"], f"expected one fire, got {calls}"
-        assert "sensor-a" in sink._fired
+        assert calls == ["t"], f"expected one fire for stream 't', got {calls}"
+        assert sink._fired is True
 
         # A second flush inside the same silence period does NOT re-fire.
         fake_ns[0] = 200_000_000
         sink.flush()
-        assert calls == ["sensor-a"], "callback must not fire twice per silence"
+        assert calls == ["t"], "callback must not fire twice per silence"
+
+        # A new message arrives → timer re-arms (_fired=False, _last_seen_ms
+        # refreshed). The next silence period can fire independently.
+        fake_ns[0] = 250_000_000
+        sink.add(
+            value={"v": 2},
+            key="sensor-b",
+            timestamp=0,
+            headers=[],
+            topic="t",
+            partition=0,
+            offset=1,
+        )
+        assert sink._fired is False
+        assert sink._last_seen_ms == 250
+
+        # t=400 ms: another 150 ms of silence → second fire for the same
+        # stream designation.
+        fake_ns[0] = 400_000_000
+        sink.flush()
+        assert calls == ["t", "t"], "re-armed timer should fire again after new silence period"
+        assert sink._fired is True
