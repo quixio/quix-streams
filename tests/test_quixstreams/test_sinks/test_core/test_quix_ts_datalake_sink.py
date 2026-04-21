@@ -1012,15 +1012,15 @@ class TestStorageKeyGeneration:
 
 
 # =============================================================================
-# 9. Stream-Finished Timeout Tracking (sc-72221)
+# 9. Stream-Timeout Tracking (sc-72221)
 # =============================================================================
 
 
-class TestStreamFinishedTimeout:
-    """Smoke tests for the opt-in per-key silence detector (§6.1–§6.5)."""
+class TestStreamTimeout:
+    """Smoke tests for the opt-in whole-stream silence detector (§6.1–§6.5)."""
 
     def test_happy_path_fires_once_after_timeout(self, sink_factory, monkeypatch):
-        """Registered key with 100 ms timeout fires exactly once after 150 ms silence."""
+        """Whole-stream 100 ms timeout fires exactly once after 150 ms silence (spec §8.8 case 2)."""
         calls = []
 
         def cb(key: str) -> None:
@@ -1033,8 +1033,8 @@ class TestStreamFinishedTimeout:
             lambda: fake_ns[0],
         )
 
-        sink = sink_factory(stream_finished={"sensor-a": (100, cb)})
-        assert sink._stream_finished_enabled is True
+        sink = sink_factory(stream_timeout_ms=100, on_stream_timeout=cb)
+        assert sink._stream_timeout_enabled is True
 
         # t=0: message arrives for sensor-a.
         fake_ns[0] = 0
