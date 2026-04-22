@@ -251,7 +251,15 @@ class QuixTSDataLakeSink(BatchingSink):
             # Thread placeholder; the thread is started in setup() after
             # the blob client init so a blob failure still tears down
             # cleanly without leaving an orphan timer thread running.
+            # The thread may also self-terminate after the tracker has
+            # been empty for ``_idle_exit_cycles`` consecutive cycles;
+            # the next ``add()`` respawns it (see ``_timeout_check_loop``).
             self._timer_thread: Optional[threading.Thread] = None
+            # Number of consecutive empty-tracker cycles the timer thread
+            # tolerates before self-terminating. Default: 3 cycles × the
+            # configured check interval ≈ 3 s of idle at 1000 ms cadence.
+            # Cap at 10 as a sanity ceiling.
+            self._idle_exit_cycles: int = 3
 
     @staticmethod
     def _validate_stream_timeout_params(
@@ -399,10 +407,14 @@ class QuixTSDataLakeSink(BatchingSink):
             return
         # Lock-guarded write: the timer thread may be reading/mutating
         # _last_seen_by_key concurrently. Critical section is a single
-        # dict assignment.
+        # dict assignment plus a cheap is-alive check on the timer
+        # thread so we respawn it if it self-terminated during a prior
+        # idle period. Both must happen under the same lock as the
+        # thread's own self-terminate-and-clear, to close the race.
         now_ms = self._now_ms()
         with self._tracker_lock:
             self._last_seen_by_key[stream_name] = now_ms
+            self._ensure_timer_thread_alive()
 
     def flush(self):
         """Flush the parent batch, then (if enabled) check whether any key
@@ -497,20 +509,78 @@ class QuixTSDataLakeSink(BatchingSink):
         """Periodic timeout-check loop for the background daemon thread.
 
         Runs ``_check_timeouts()`` every ``self._check_interval_ms``
-        milliseconds until ``self._stop`` is set. A raising check must
-        NOT kill the thread (else silent keys would go untracked
-        forever), so the body is wrapped in a broad ``try/except`` that
-        logs and continues.
+        milliseconds until either ``self._stop`` is set (cleanup) or
+        the tracker has been empty for ``self._idle_exit_cycles``
+        consecutive cycles (self-terminate on sustained idle). A raising
+        check must NOT kill the thread (else silent keys would go
+        untracked forever), so the body is wrapped in a broad
+        ``try/except`` that logs and continues.
+
+        Self-termination policy: if the tracker has been empty for
+        ``_idle_exit_cycles`` cycles in a row, the thread clears
+        ``self._timer_thread`` under the tracker lock and returns. The
+        next ``add()`` that records a new last-seen stamp re-spawns it
+        via ``_ensure_timer_thread_alive()``. The set-to-None + respawn
+        check both live inside the tracker lock so there is no window
+        where the tracker has entries and no thread is running.
         """
+        empty_cycles = 0
         while not self._stop.is_set():
             try:
                 self._check_timeouts()
             except Exception:
                 logger.exception("Periodic stream-timeout check raised")
+
+            # Decide whether to self-terminate. Done under the lock so a
+            # concurrent add() cannot race an entry in between our empty
+            # check and our exit — if add() wins the lock, empty_cycles
+            # resets; if we win, we clear the thread ref before releasing.
+            with self._tracker_lock:
+                if self._last_seen_by_key:
+                    empty_cycles = 0
+                else:
+                    empty_cycles += 1
+                    if empty_cycles >= self._idle_exit_cycles:
+                        logger.info(
+                            "Stream-timeout thread self-terminating "
+                            "(tracker empty for %d cycles); will be "
+                            "respawned by next add()",
+                            empty_cycles,
+                        )
+                        self._timer_thread = None
+                        return
+
             # Event.wait returns early if the stop event fires — allows
             # a prompt shutdown from cleanup()/tests without waiting out
             # the full interval.
             self._stop.wait(self._check_interval_ms / 1000)
+
+    def _ensure_timer_thread_alive(self) -> None:
+        """Start the timer thread if it's absent or has self-terminated.
+
+        MUST be called with ``self._tracker_lock`` held, so the
+        is-alive check and the new-thread creation are atomic with
+        respect to the loop's own set-to-None under the same lock.
+        """
+        t = self._timer_thread
+        if t is not None and t.is_alive():
+            return
+        # _stop may have been left set by a prior cleanup(); don't
+        # clear it here — cleanup() is terminal. A respawn after
+        # cleanup() is nonsensical, so honor _stop by short-circuiting.
+        if self._stop.is_set():
+            return
+        self._timer_thread = threading.Thread(
+            target=self._timeout_check_loop,
+            daemon=True,
+            name="QuixTSDataLakeSink-timeout-check",
+        )
+        self._timer_thread.start()
+        logger.info(
+            "Stream-timeout thread (re)started by add() "
+            "(interval=%d ms, threshold=%d ms)",
+            self._check_interval_ms, self._stream_timeout_ms,
+        )
 
     def setup(self):
         """Initialize blob storage client and test connection."""
