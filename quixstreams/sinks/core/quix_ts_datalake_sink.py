@@ -427,26 +427,29 @@ class QuixTSDataLakeSink(BatchingSink):
         # intentional no-op on tracker state
 
     def _check_timeouts(self) -> None:
-        """Fire + evict keys whose silence >= threshold; also TTL-sweep any
+        """Fire keys whose silence >= threshold; also TTL-sweep any
         stragglers older than ``3 x stream_timeout_ms``.
 
         Concurrency: callable from two threads — the consumer thread
         (via ``flush()``) and the background timer thread (via
-        ``_timeout_check_loop``). The critical section below acquires
-        ``self._tracker_lock`` to snapshot keys to fire/drop and evict
-        them from the dict atomically; the user callback is then invoked
-        OUTSIDE the lock so a blocking / misbehaving callback cannot
-        stall the consumer thread's ``add()`` path.
+        ``_timeout_check_loop``). The snapshot pass acquires
+        ``self._tracker_lock`` to collect keys to fire/drop; user
+        callbacks run OUTSIDE the lock so a blocking / misbehaving
+        callback cannot stall the consumer thread's ``add()`` path.
 
-        Eviction happens **before** the callback is invoked so that a
-        raising callback still counts as fired — the dict entry is gone
-        regardless. Callback exceptions are logged and swallowed.
+        Eviction policy: a fired key is evicted from the tracker ONLY
+        AFTER its callback returns successfully. If the callback raises,
+        the key remains tracked and will fire again on the next check
+        cycle — giving the caller retry semantics on transient failure.
+        The ``3x`` TTL sweep is the backstop that eventually drops a
+        key whose callback keeps failing. TTL-sweep evictions happen
+        inside the snapshot lock (no callback involved).
         """
         now_ms = self._now_ms()
         timeout = self._stream_timeout_ms
         ttl_evict = 3 * timeout
 
-        # --- Critical section: snapshot + evict under the lock. ---
+        # --- Critical section: snapshot + TTL-sweep evict under the lock. ---
         to_fire: list[tuple[str, int]] = []
         to_drop_silently: list[str] = []
         with self._tracker_lock:
@@ -459,11 +462,9 @@ class QuixTSDataLakeSink(BatchingSink):
                     to_drop_silently.append(stream_name)
                 elif silence >= timeout:
                     to_fire.append((stream_name, silence))
-            # Evict everything we collected inside the same lock hold
-            # so a concurrent add() cannot race an entry back in between
-            # our snapshot and eviction.
-            for stream_name, _ in to_fire:
-                self._last_seen_by_key.pop(stream_name, None)
+            # TTL-sweep entries have no callback, so evict them in-lock
+            # right now. ``to_fire`` entries are NOT evicted here — they
+            # are evicted below, only after the callback succeeds.
             for stream_name in to_drop_silently:
                 self._last_seen_by_key.pop(stream_name, None)
         # --- End of critical section. Callbacks run unlocked below. ---
@@ -479,6 +480,12 @@ class QuixTSDataLakeSink(BatchingSink):
                 logger.exception(
                     "on_stream_timeout callback raised for %r", stream_name
                 )
+                # Leave entry in tracker; retry on next check cycle.
+                continue
+            # Callback succeeded → evict. Lock-guarded for safe dict
+            # mutation against a concurrent add() on the consumer thread.
+            with self._tracker_lock:
+                self._last_seen_by_key.pop(stream_name, None)
 
         for stream_name in to_drop_silently:
             logger.warning(
