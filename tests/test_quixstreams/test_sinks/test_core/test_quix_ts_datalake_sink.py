@@ -1296,9 +1296,9 @@ class TestStreamTimeoutSerial:
         # Verify 3s spacing between fires
         for i in range(1, 4):
             spacing_ms = fire_log[i][1] - fire_log[i - 1][1]
-            assert spacing_ms == 3_000, (
-                f"Spacing between fire {i - 1} and {i}: {spacing_ms}ms, expected 3000ms"
-            )
+            assert (
+                spacing_ms == 3_000
+            ), f"Spacing between fire {i - 1} and {i}: {spacing_ms}ms, expected 3000ms"
 
     def test_serial_keys_no_premature_fire(self):
         """Validates test-spec §5 negative: at t0+5999 only s1 has 5999ms
@@ -1498,18 +1498,18 @@ class TestStreamTimeoutRearm:
 
         # Verify s1 has NOT fired again yet (only 2000ms since re-arm)
         sink._check_timeouts()
-        assert len(fire_log) == 1, (
-            "s1 should not re-fire at t0+12000 (only 2s since re-arm)"
-        )
+        assert (
+            len(fire_log) == 1
+        ), "s1 should not re-fire at t0+12000 (only 2s since re-arm)"
 
         # Step 7: at t0+16001, s1 should fire again (6001ms since re-arm at t0+10000)
         current_time_ms = t0 + 16_001
         sink._now_ms = lambda: current_time_ms
         sink._check_timeouts()
 
-        assert len(fire_log) == 2, (
-            f"Expected 2 fires (s1 re-arm), got {len(fire_log)}: {fire_log}"
-        )
+        assert (
+            len(fire_log) == 2
+        ), f"Expected 2 fires (s1 re-arm), got {len(fire_log)}: {fire_log}"
         assert fire_log[1][0] == "s1"
 
         # At t0+18001, s2/s3/s4 should fire (6001ms since last send at t0+12000)
@@ -1517,9 +1517,9 @@ class TestStreamTimeoutRearm:
         sink._now_ms = lambda: current_time_ms
         sink._check_timeouts()
 
-        assert len(fire_log) == 5, (
-            f"Expected 5 total fires, got {len(fire_log)}: {fire_log}"
-        )
+        assert (
+            len(fire_log) == 5
+        ), f"Expected 5 total fires, got {len(fire_log)}: {fire_log}"
 
         # Verify per-key counts
         from collections import Counter
