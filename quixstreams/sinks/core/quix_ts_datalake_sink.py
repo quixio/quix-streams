@@ -202,12 +202,12 @@ class QuixTSDataLakeSink(BatchingSink):
         # is never allocated.
         self._stream_timeout_enabled: bool = False
         self._validate_stream_timeout_params(stream_timeout_ms, on_stream_timeout)
-        timeout_valid = (
+        if (
             isinstance(stream_timeout_ms, int)
             and not isinstance(stream_timeout_ms, bool)
             and stream_timeout_ms > 0
-        )
-        if timeout_valid and callable(on_stream_timeout):
+            and callable(on_stream_timeout)
+        ):
             self._stream_timeout_enabled = True
             self._stream_timeout_ms: int = stream_timeout_ms
             self._on_stream_timeout: Callable[[str], None] = on_stream_timeout
@@ -245,9 +245,7 @@ class QuixTSDataLakeSink(BatchingSink):
             ):
                 self._check_interval_ms: int = _check_interval_ms
             else:
-                self._check_interval_ms = max(
-                    100, min(1000, stream_timeout_ms // 5)
-                )
+                self._check_interval_ms = max(100, min(1000, stream_timeout_ms // 5))
             # Thread placeholder; the thread is started in setup() after
             # the blob client init so a blob failure still tears down
             # cleanly without leaving an orphan timer thread running.
@@ -297,9 +295,7 @@ class QuixTSDataLakeSink(BatchingSink):
             or isinstance(stream_timeout_ms, bool)
             or stream_timeout_ms <= 0
         ):
-            raise ValueError(
-                "stream_timeout_ms must be a positive int (milliseconds)"
-            )
+            raise ValueError("stream_timeout_ms must be a positive int (milliseconds)")
         if not callable(on_stream_timeout):
             raise ValueError("on_stream_timeout must be callable")
 
@@ -402,7 +398,10 @@ class QuixTSDataLakeSink(BatchingSink):
                 logger.warning(
                     "Skipping stream-timeout tracking for record on topic "
                     "%r partition %d offset %d: key %r is not valid UTF-8",
-                    topic, partition, offset, key,
+                    topic,
+                    partition,
+                    offset,
+                    key,
                 )
             return
         # Lock-guarded write: the timer thread may be reading/mutating
@@ -484,7 +483,9 @@ class QuixTSDataLakeSink(BatchingSink):
         for stream_name, silence in to_fire:
             logger.info(
                 "Stream %r timed out (silence %d ms >= threshold %d ms)",
-                stream_name, silence, timeout,
+                stream_name,
+                silence,
+                timeout,
             )
             try:
                 self._on_stream_timeout(stream_name)
@@ -502,7 +503,8 @@ class QuixTSDataLakeSink(BatchingSink):
         for stream_name in to_drop_silently:
             logger.warning(
                 "Stream %r dropped by TTL sweep (silence >= 3x threshold %d ms)",
-                stream_name, timeout,
+                stream_name,
+                timeout,
             )
 
     def _timeout_check_loop(self) -> None:
@@ -579,7 +581,8 @@ class QuixTSDataLakeSink(BatchingSink):
         logger.info(
             "Stream-timeout thread (re)started by add() "
             "(interval=%d ms, threshold=%d ms)",
-            self._check_interval_ms, self._stream_timeout_ms,
+            self._check_interval_ms,
+            self._stream_timeout_ms,
         )
 
     def setup(self):
@@ -641,9 +644,9 @@ class QuixTSDataLakeSink(BatchingSink):
             )
             self._timer_thread.start()
             logger.info(
-                "Started stream-timeout check thread "
-                "(interval=%d ms, threshold=%d ms)",
-                self._check_interval_ms, self._stream_timeout_ms,
+                "Started stream-timeout check thread (interval=%d ms, threshold=%d ms)",
+                self._check_interval_ms,
+                self._stream_timeout_ms,
             )
 
     def _ensure_bucket(self):

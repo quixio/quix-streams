@@ -1042,8 +1042,13 @@ class TestStreamTimeoutDisabled:
 
         # Feed a record — should not blow up and should not track
         sink.add(
-            value={"v": 1}, key="s1", timestamp=1000,
-            headers=[], topic="t", partition=0, offset=0,
+            value={"v": 1},
+            key="s1",
+            timestamp=1000,
+            headers=[],
+            topic="t",
+            partition=0,
+            offset=0,
         )
 
         # Verify no tracker dict exists
@@ -1107,8 +1112,13 @@ class TestStreamTimeoutSimultaneous:
         sink._now_ms = lambda: 10_000
         for i, key in enumerate(["s1", "s2", "s3", "s4"]):
             sink.add(
-                value={"v": i}, key=key, timestamp=1000,
-                headers=[], topic="t", partition=0, offset=i,
+                value={"v": i},
+                key=key,
+                timestamp=1000,
+                headers=[],
+                topic="t",
+                partition=0,
+                offset=i,
             )
 
         # Verify all 4 keys tracked
@@ -1144,8 +1154,13 @@ class TestStreamTimeoutSimultaneous:
         sink._now_ms = lambda: 10_000
         for i, key in enumerate(["s1", "s2", "s3", "s4"]):
             sink.add(
-                value={"v": i}, key=key, timestamp=1000,
-                headers=[], topic="t", partition=0, offset=i,
+                value={"v": i},
+                key=key,
+                timestamp=1000,
+                headers=[],
+                topic="t",
+                partition=0,
+                offset=i,
             )
 
         # Advance to t=15999 ms — only 5999 ms of silence, < 6000 threshold
@@ -1191,35 +1206,54 @@ class TestStreamTimeoutSerial:
         sink._now_ms = lambda: current_time_ms
 
         sink.add(
-            value={"v": 1}, key="s1", timestamp=1000,
-            headers=[], topic="t", partition=0, offset=0,
+            value={"v": 1},
+            key="s1",
+            timestamp=1000,
+            headers=[],
+            topic="t",
+            partition=0,
+            offset=0,
         )
 
         current_time_ms = t0 + 3_000
         sink._now_ms = lambda: current_time_ms
         sink.add(
-            value={"v": 2}, key="s2", timestamp=1000,
-            headers=[], topic="t", partition=0, offset=1,
+            value={"v": 2},
+            key="s2",
+            timestamp=1000,
+            headers=[],
+            topic="t",
+            partition=0,
+            offset=1,
         )
 
         current_time_ms = t0 + 6_000
         sink._now_ms = lambda: current_time_ms
         sink.add(
-            value={"v": 3}, key="s3", timestamp=1000,
-            headers=[], topic="t", partition=0, offset=2,
+            value={"v": 3},
+            key="s3",
+            timestamp=1000,
+            headers=[],
+            topic="t",
+            partition=0,
+            offset=2,
         )
 
         current_time_ms = t0 + 9_000
         sink._now_ms = lambda: current_time_ms
         sink.add(
-            value={"v": 4}, key="s4", timestamp=1000,
-            headers=[], topic="t", partition=0, offset=3,
+            value={"v": 4},
+            key="s4",
+            timestamp=1000,
+            headers=[],
+            topic="t",
+            partition=0,
+            offset=3,
         )
 
         # Now drive the clock forward in 1s steps and call _check_timeouts each step.
         # Track which keys fire and at what mock time.
         fire_log = []
-        original_callback = callback
 
         def tracking_callback(stream_name):
             fire_log.append((stream_name, current_time_ms))
@@ -1263,7 +1297,7 @@ class TestStreamTimeoutSerial:
         for i in range(1, 4):
             spacing_ms = fire_log[i][1] - fire_log[i - 1][1]
             assert spacing_ms == 3_000, (
-                f"Spacing between fire {i-1} and {i}: {spacing_ms}ms, expected 3000ms"
+                f"Spacing between fire {i - 1} and {i}: {spacing_ms}ms, expected 3000ms"
             )
 
     def test_serial_keys_no_premature_fire(self):
@@ -1283,15 +1317,25 @@ class TestStreamTimeoutSerial:
         current_time_ms = t0
         sink._now_ms = lambda: current_time_ms
         sink.add(
-            value={"v": 1}, key="s1", timestamp=1000,
-            headers=[], topic="t", partition=0, offset=0,
+            value={"v": 1},
+            key="s1",
+            timestamp=1000,
+            headers=[],
+            topic="t",
+            partition=0,
+            offset=0,
         )
 
         current_time_ms = t0 + 3_000
         sink._now_ms = lambda: current_time_ms
         sink.add(
-            value={"v": 2}, key="s2", timestamp=1000,
-            headers=[], topic="t", partition=0, offset=1,
+            value={"v": 2},
+            key="s2",
+            timestamp=1000,
+            headers=[],
+            topic="t",
+            partition=0,
+            offset=1,
         )
 
         # Check at t0+5999: s1 has 5999ms silence, s2 has 2999ms — nobody fires
@@ -1340,8 +1384,13 @@ class TestStreamTimeoutRearm:
         sink._now_ms = lambda: current_time_ms
         for i, key in enumerate(["s1", "s2", "s3", "s4"]):
             sink.add(
-                value={"v": i}, key=key, timestamp=1000,
-                headers=[], topic="t", partition=0, offset=i,
+                value={"v": i},
+                key=key,
+                timestamp=1000,
+                headers=[],
+                topic="t",
+                partition=0,
+                offset=i,
             )
 
         # Step 3: keep s2, s3, s4 alive every 2s; s1 goes silent.
@@ -1350,8 +1399,13 @@ class TestStreamTimeoutRearm:
         sink._now_ms = lambda: current_time_ms
         for key in ["s2", "s3", "s4"]:
             sink.add(
-                value={"v": 1}, key=key, timestamp=1000,
-                headers=[], topic="t", partition=0, offset=10,
+                value={"v": 1},
+                key=key,
+                timestamp=1000,
+                headers=[],
+                topic="t",
+                partition=0,
+                offset=10,
             )
 
         # Keepalive at t0+4000
@@ -1359,8 +1413,13 @@ class TestStreamTimeoutRearm:
         sink._now_ms = lambda: current_time_ms
         for key in ["s2", "s3", "s4"]:
             sink.add(
-                value={"v": 1}, key=key, timestamp=1000,
-                headers=[], topic="t", partition=0, offset=20,
+                value={"v": 1},
+                key=key,
+                timestamp=1000,
+                headers=[],
+                topic="t",
+                partition=0,
+                offset=20,
             )
 
         # Step 4: check at t0+6001 — s1 should fire (silent since t0)
@@ -1376,31 +1435,51 @@ class TestStreamTimeoutRearm:
         sink._now_ms = lambda: current_time_ms
         for key in ["s2", "s3", "s4"]:
             sink.add(
-                value={"v": 1}, key=key, timestamp=1000,
-                headers=[], topic="t", partition=0, offset=30,
+                value={"v": 1},
+                key=key,
+                timestamp=1000,
+                headers=[],
+                topic="t",
+                partition=0,
+                offset=30,
             )
 
         current_time_ms = t0 + 8_000
         sink._now_ms = lambda: current_time_ms
         for key in ["s2", "s3", "s4"]:
             sink.add(
-                value={"v": 1}, key=key, timestamp=1000,
-                headers=[], topic="t", partition=0, offset=40,
+                value={"v": 1},
+                key=key,
+                timestamp=1000,
+                headers=[],
+                topic="t",
+                partition=0,
+                offset=40,
             )
 
         # Step 5: at t0+10000, re-arm s1 (new message on s1)
         current_time_ms = t0 + 10_000
         sink._now_ms = lambda: current_time_ms
         sink.add(
-            value={"v": 99}, key="s1", timestamp=1000,
-            headers=[], topic="t", partition=0, offset=50,
+            value={"v": 99},
+            key="s1",
+            timestamp=1000,
+            headers=[],
+            topic="t",
+            partition=0,
+            offset=50,
         )
 
         # Continue keepalive at t0+10000
         for key in ["s2", "s3", "s4"]:
             sink.add(
-                value={"v": 1}, key=key, timestamp=1000,
-                headers=[], topic="t", partition=0, offset=51,
+                value={"v": 1},
+                key=key,
+                timestamp=1000,
+                headers=[],
+                topic="t",
+                partition=0,
+                offset=51,
             )
 
         # Step 6: at t0+12000, stop all keys (last sends)
@@ -1408,14 +1487,19 @@ class TestStreamTimeoutRearm:
         sink._now_ms = lambda: current_time_ms
         for key in ["s2", "s3", "s4"]:
             sink.add(
-                value={"v": 1}, key=key, timestamp=1000,
-                headers=[], topic="t", partition=0, offset=60,
+                value={"v": 1},
+                key=key,
+                timestamp=1000,
+                headers=[],
+                topic="t",
+                partition=0,
+                offset=60,
             )
 
         # Verify s1 has NOT fired again yet (only 2000ms since re-arm)
         sink._check_timeouts()
         assert len(fire_log) == 1, (
-            f"s1 should not re-fire at t0+12000 (only 2s since re-arm)"
+            "s1 should not re-fire at t0+12000 (only 2s since re-arm)"
         )
 
         # Step 7: at t0+16001, s1 should fire again (6001ms since re-arm at t0+10000)
@@ -1439,6 +1523,7 @@ class TestStreamTimeoutRearm:
 
         # Verify per-key counts
         from collections import Counter
+
         counts = Counter(name for name, _ in fire_log)
         assert counts["s1"] == 2, f"s1 should fire 2 times, got {counts['s1']}"
         assert counts["s2"] == 1, f"s2 should fire 1 time, got {counts['s2']}"
@@ -1472,8 +1557,13 @@ class TestStreamTimeoutRearm:
         current_time_ms = t0
         sink._now_ms = lambda: current_time_ms
         sink.add(
-            value={"v": 1}, key="s1", timestamp=1000,
-            headers=[], topic="t", partition=0, offset=0,
+            value={"v": 1},
+            key="s1",
+            timestamp=1000,
+            headers=[],
+            topic="t",
+            partition=0,
+            offset=0,
         )
 
         # s1 fires at t0+6001
@@ -1485,8 +1575,13 @@ class TestStreamTimeoutRearm:
         current_time_ms = t0 + 10_000
         sink._now_ms = lambda: current_time_ms
         sink.add(
-            value={"v": 2}, key="s1", timestamp=1000,
-            headers=[], topic="t", partition=0, offset=1,
+            value={"v": 2},
+            key="s1",
+            timestamp=1000,
+            headers=[],
+            topic="t",
+            partition=0,
+            offset=1,
         )
 
         # s1 fires again at t0+16001
@@ -1532,8 +1627,13 @@ class TestStreamTimeoutDisabledRearmSequence:
         # Step 2: all 4 keys produce
         for key in ["s1", "s2", "s3", "s4"]:
             sink.add(
-                value={"v": 1}, key=key, timestamp=1000,
-                headers=[], topic="t", partition=0, offset=offset,
+                value={"v": 1},
+                key=key,
+                timestamp=1000,
+                headers=[],
+                topic="t",
+                partition=0,
+                offset=offset,
             )
             offset += 1
 
@@ -1541,28 +1641,41 @@ class TestStreamTimeoutDisabledRearmSequence:
         for _ in range(5):
             for key in ["s2", "s3", "s4"]:
                 sink.add(
-                    value={"v": 1}, key=key, timestamp=1000,
-                    headers=[], topic="t", partition=0, offset=offset,
+                    value={"v": 1},
+                    key=key,
+                    timestamp=1000,
+                    headers=[],
+                    topic="t",
+                    partition=0,
+                    offset=offset,
                 )
                 offset += 1
 
         # Step 5: re-arm s1
         sink.add(
-            value={"v": 99}, key="s1", timestamp=1000,
-            headers=[], topic="t", partition=0, offset=offset,
+            value={"v": 99},
+            key="s1",
+            timestamp=1000,
+            headers=[],
+            topic="t",
+            partition=0,
+            offset=offset,
         )
         offset += 1
 
         # Step 6: more keepalives then stop
         for key in ["s2", "s3", "s4"]:
             sink.add(
-                value={"v": 1}, key=key, timestamp=1000,
-                headers=[], topic="t", partition=0, offset=offset,
+                value={"v": 1},
+                key=key,
+                timestamp=1000,
+                headers=[],
+                topic="t",
+                partition=0,
+                offset=offset,
             )
             offset += 1
 
         # Feature disabled: no tracker, no check, no fire
         assert not hasattr(sink, "_last_seen_by_key")
         callback.assert_not_called()
-
-
