@@ -1012,77 +1012,557 @@ class TestStorageKeyGeneration:
 
 
 # =============================================================================
-# 9. Stream-Timeout Tracking (sc-72221)
+# 9. Stream Timeout — Disabled Feature Tests
 # =============================================================================
 
 
-class TestStreamTimeout:
-    """Smoke tests for the opt-in whole-stream silence detector (§6.1–§6.5)."""
+class TestStreamTimeoutDisabled:
+    """Validates test-spec section 2 (Test 1): when the feature is disabled
+    (stream_timeout_ms=None or on_stream_timeout=None), no callback fires
+    even after prolonged silence.
 
-    def test_happy_path_fires_once_after_timeout(self, sink_factory, monkeypatch):
-        """Whole-stream 100 ms timeout fires exactly once after 150 ms silence (spec §8.8 case 2)."""
-        calls = []
+    Also validates test-spec section 7 (Test 6): the re-arm producer
+    sequence under disabled config produces no callbacks.
 
-        def cb(stream: str) -> None:
-            calls.append(stream)
+    Spec reference: spec v6 section 4 scenario 4; test-spec sections 2 and 7.
+    """
 
-        # monotonic_ns clock advanced by monkeypatching.
-        fake_ns = [0]
-        monkeypatch.setattr(
-            "quixstreams.sinks.core.quix_ts_datalake_sink.time.monotonic_ns",
-            lambda: fake_ns[0],
+    def test_disabled_both_none_no_callback(self):
+        """Validates test-spec §2: stream_timeout_ms=None and
+        on_stream_timeout=None — no callback fires after silence.
+        """
+        callback = MagicMock()
+        sink = QuixTSDataLakeSink(
+            s3_prefix="test-prefix",
+            table_name="test_table",
+            stream_timeout_ms=None,
+            on_stream_timeout=None,
         )
+        assert sink._stream_timeout_enabled is False
 
-        sink = sink_factory(stream_timeout_ms=100, on_stream_timeout=cb)
-        assert sink._stream_timeout_enabled is True
-
-        # t=0: a message arrives on topic "t"; stream name is captured from
-        # the first add() call.
-        fake_ns[0] = 0
+        # Feed a record — should not blow up and should not track
         sink.add(
-            value={"v": 1},
-            key="sensor-a",
-            timestamp=0,
-            headers=[],
-            topic="t",
-            partition=0,
-            offset=0,
+            value={"v": 1}, key="s1", timestamp=1000,
+            headers=[], topic="t", partition=0, offset=0,
         )
-        assert sink._last_seen_ms == 0
-        assert sink._fired is False
-        assert sink._stream_name == "t"
 
-        # t=150 ms: flush reads the scalar last-seen; silence exceeds 100 ms
-        # → fire, passing the stream designation.
-        fake_ns[0] = 150_000_000  # ns
-        sink.flush()
+        # Verify no tracker dict exists
+        assert not hasattr(sink, "_last_seen_by_key")
+        callback.assert_not_called()
 
-        assert calls == ["t"], f"expected one fire for stream 't', got {calls}"
-        assert sink._fired is True
+    def test_disabled_callback_none_no_fire(self):
+        """Validates test-spec §2 variant: stream_timeout_ms set but
+        on_stream_timeout=None raises ValueError (mismatched pair).
+        Spec v6 §6.1: exactly-one-None is a loud error.
+        """
+        with pytest.raises(ValueError, match="must both be provided"):
+            QuixTSDataLakeSink(
+                s3_prefix="test-prefix",
+                table_name="test_table",
+                stream_timeout_ms=6000,
+                on_stream_timeout=None,
+            )
 
-        # A second flush inside the same silence period does NOT re-fire.
-        fake_ns[0] = 200_000_000
-        sink.flush()
-        assert calls == ["t"], "callback must not fire twice per silence"
+    def test_disabled_timeout_none_no_fire(self):
+        """Validates test-spec §2 variant: on_stream_timeout set but
+        stream_timeout_ms=None raises ValueError (mismatched pair).
+        """
+        with pytest.raises(ValueError, match="must both be provided"):
+            QuixTSDataLakeSink(
+                s3_prefix="test-prefix",
+                table_name="test_table",
+                stream_timeout_ms=None,
+                on_stream_timeout=MagicMock(),
+            )
 
-        # A new message arrives → timer re-arms (_fired=False, _last_seen_ms
-        # refreshed). The next silence period can fire independently.
-        fake_ns[0] = 250_000_000
+
+# =============================================================================
+# 10. Stream Timeout — 4 Keys Simultaneous (Test 3)
+# =============================================================================
+
+
+class TestStreamTimeoutSimultaneous:
+    """Validates test-spec section 4 (Test 3): 4 keys go silent
+    simultaneously, callback called 4 times (once per key).
+
+    Spec reference: spec v6 section 4 scenario 1.
+    """
+
+    def test_four_keys_simultaneous_fires_four_callbacks(self):
+        """Validates test-spec §4: produce s1-s4 at the same mock-time,
+        advance clock past threshold, call _check_timeouts(), assert
+        callback invoked once per key.
+        """
+        callback = MagicMock()
+        sink = QuixTSDataLakeSink(
+            s3_prefix="test-prefix",
+            table_name="test_table",
+            stream_timeout_ms=6000,
+            on_stream_timeout=callback,
+        )
+        # Prevent timer thread from starting
+        sink._ensure_timer_thread_alive = lambda: None
+
+        # All 4 keys arrive at t=10000 ms
+        sink._now_ms = lambda: 10_000
+        for i, key in enumerate(["s1", "s2", "s3", "s4"]):
+            sink.add(
+                value={"v": i}, key=key, timestamp=1000,
+                headers=[], topic="t", partition=0, offset=i,
+            )
+
+        # Verify all 4 keys tracked
+        assert len(sink._last_seen_by_key) == 4
+        assert set(sink._last_seen_by_key.keys()) == {"s1", "s2", "s3", "s4"}
+
+        # Advance clock to t=16001 ms (6001 ms of silence — past 6000 ms threshold)
+        sink._now_ms = lambda: 16_001
+
+        sink._check_timeouts()
+
+        # Callback must have been called exactly 4 times
+        assert callback.call_count == 4
+        fired_keys = {call.args[0] for call in callback.call_args_list}
+        assert fired_keys == {"s1", "s2", "s3", "s4"}
+
+        # All keys should be evicted after firing
+        assert len(sink._last_seen_by_key) == 0
+
+    def test_four_keys_no_fire_before_threshold(self):
+        """Validates test-spec §4 negative path: at exactly threshold - 1 ms
+        of silence, no callback fires.
+        """
+        callback = MagicMock()
+        sink = QuixTSDataLakeSink(
+            s3_prefix="test-prefix",
+            table_name="test_table",
+            stream_timeout_ms=6000,
+            on_stream_timeout=callback,
+        )
+        sink._ensure_timer_thread_alive = lambda: None
+
+        sink._now_ms = lambda: 10_000
+        for i, key in enumerate(["s1", "s2", "s3", "s4"]):
+            sink.add(
+                value={"v": i}, key=key, timestamp=1000,
+                headers=[], topic="t", partition=0, offset=i,
+            )
+
+        # Advance to t=15999 ms — only 5999 ms of silence, < 6000 threshold
+        sink._now_ms = lambda: 15_999
+
+        sink._check_timeouts()
+
+        callback.assert_not_called()
+        assert len(sink._last_seen_by_key) == 4
+
+
+# =============================================================================
+# 11. Stream Timeout — 4 Keys Serial Spacing (Test 4)
+# =============================================================================
+
+
+class TestStreamTimeoutSerial:
+    """Validates test-spec section 5 (Test 4): 4 keys go silent serially
+    with 3s spacing. Callback called 4 times with matching order and timing.
+
+    Spec reference: spec v6 section 4 scenario 1.
+    """
+
+    def test_four_keys_serial_fires_in_order(self):
+        """Validates test-spec §5: s1 stops at t0, s2 at t0+3s, s3 at t0+6s,
+        s4 at t0+9s. Callbacks fire at t0+6s, t0+9s, t0+12s, t0+15s
+        respectively, matching the serial stagger.
+        """
+        callback = MagicMock()
+        sink = QuixTSDataLakeSink(
+            s3_prefix="test-prefix",
+            table_name="test_table",
+            stream_timeout_ms=6000,
+            on_stream_timeout=callback,
+        )
+        sink._ensure_timer_thread_alive = lambda: None
+
+        t0 = 10_000  # base time in ms
+
+        # Stagger sends: s1 at t0, s2 at t0+3000, s3 at t0+6000, s4 at t0+9000
+        # Each key gets exactly one message then goes silent.
+        current_time_ms = t0
+        sink._now_ms = lambda: current_time_ms
+
         sink.add(
-            value={"v": 2},
-            key="sensor-b",
-            timestamp=0,
-            headers=[],
-            topic="t",
-            partition=0,
-            offset=1,
+            value={"v": 1}, key="s1", timestamp=1000,
+            headers=[], topic="t", partition=0, offset=0,
         )
-        assert sink._fired is False
-        assert sink._last_seen_ms == 250
 
-        # t=400 ms: another 150 ms of silence → second fire for the same
-        # stream designation.
-        fake_ns[0] = 400_000_000
-        sink.flush()
-        assert calls == ["t", "t"], "re-armed timer should fire again after new silence period"
-        assert sink._fired is True
+        current_time_ms = t0 + 3_000
+        sink._now_ms = lambda: current_time_ms
+        sink.add(
+            value={"v": 2}, key="s2", timestamp=1000,
+            headers=[], topic="t", partition=0, offset=1,
+        )
+
+        current_time_ms = t0 + 6_000
+        sink._now_ms = lambda: current_time_ms
+        sink.add(
+            value={"v": 3}, key="s3", timestamp=1000,
+            headers=[], topic="t", partition=0, offset=2,
+        )
+
+        current_time_ms = t0 + 9_000
+        sink._now_ms = lambda: current_time_ms
+        sink.add(
+            value={"v": 4}, key="s4", timestamp=1000,
+            headers=[], topic="t", partition=0, offset=3,
+        )
+
+        # Now drive the clock forward in 1s steps and call _check_timeouts each step.
+        # Track which keys fire and at what mock time.
+        fire_log = []
+        original_callback = callback
+
+        def tracking_callback(stream_name):
+            fire_log.append((stream_name, current_time_ms))
+
+        sink._on_stream_timeout = tracking_callback
+
+        # s1 should fire at >= t0+6000 (silent since t0, threshold 6000)
+        # Check at t0+6001: s1 should fire
+        current_time_ms = t0 + 6_001
+        sink._now_ms = lambda: current_time_ms
+        sink._check_timeouts()
+
+        assert len(fire_log) == 1
+        assert fire_log[0][0] == "s1"
+
+        # Check at t0+9001: s2 should fire (silent since t0+3000, 6001ms elapsed)
+        current_time_ms = t0 + 9_001
+        sink._now_ms = lambda: current_time_ms
+        sink._check_timeouts()
+
+        assert len(fire_log) == 2
+        assert fire_log[1][0] == "s2"
+
+        # Check at t0+12001: s3 should fire
+        current_time_ms = t0 + 12_001
+        sink._now_ms = lambda: current_time_ms
+        sink._check_timeouts()
+
+        assert len(fire_log) == 3
+        assert fire_log[2][0] == "s3"
+
+        # Check at t0+15001: s4 should fire
+        current_time_ms = t0 + 15_001
+        sink._now_ms = lambda: current_time_ms
+        sink._check_timeouts()
+
+        assert len(fire_log) == 4
+        assert fire_log[3][0] == "s4"
+
+        # Verify 3s spacing between fires
+        for i in range(1, 4):
+            spacing_ms = fire_log[i][1] - fire_log[i - 1][1]
+            assert spacing_ms == 3_000, (
+                f"Spacing between fire {i-1} and {i}: {spacing_ms}ms, expected 3000ms"
+            )
+
+    def test_serial_keys_no_premature_fire(self):
+        """Validates test-spec §5 negative: at t0+5999 only s1 has 5999ms
+        of silence, nobody should fire.
+        """
+        callback = MagicMock()
+        sink = QuixTSDataLakeSink(
+            s3_prefix="test-prefix",
+            table_name="test_table",
+            stream_timeout_ms=6000,
+            on_stream_timeout=callback,
+        )
+        sink._ensure_timer_thread_alive = lambda: None
+
+        t0 = 10_000
+        current_time_ms = t0
+        sink._now_ms = lambda: current_time_ms
+        sink.add(
+            value={"v": 1}, key="s1", timestamp=1000,
+            headers=[], topic="t", partition=0, offset=0,
+        )
+
+        current_time_ms = t0 + 3_000
+        sink._now_ms = lambda: current_time_ms
+        sink.add(
+            value={"v": 2}, key="s2", timestamp=1000,
+            headers=[], topic="t", partition=0, offset=1,
+        )
+
+        # Check at t0+5999: s1 has 5999ms silence, s2 has 2999ms — nobody fires
+        current_time_ms = t0 + 5_999
+        sink._now_ms = lambda: current_time_ms
+        sink._check_timeouts()
+
+        callback.assert_not_called()
+
+
+# =============================================================================
+# 12. Stream Timeout — Re-arm Semantics (Test 5)
+# =============================================================================
+
+
+class TestStreamTimeoutRearm:
+    """Validates test-spec section 6 (Test 5): 1 key fires, re-arms,
+    then all 4 keys fire. Callback called 5 times total (twice for
+    the re-armed key).
+
+    Spec reference: spec v6 section 4 scenario 2; architecture
+    fire-and-evict model.
+    """
+
+    def test_rearm_produces_five_callbacks(self):
+        """Validates test-spec §6: s1 times out (1st fire), re-arms,
+        all 4 stop, all 4 time out (s1 fires 2nd time). Total: 5.
+        """
+        fire_log = []
+
+        def tracking_callback(stream_name):
+            fire_log.append((stream_name, current_time_ms))
+
+        sink = QuixTSDataLakeSink(
+            s3_prefix="test-prefix",
+            table_name="test_table",
+            stream_timeout_ms=6000,
+            on_stream_timeout=tracking_callback,
+        )
+        sink._ensure_timer_thread_alive = lambda: None
+
+        t0 = 10_000
+
+        # Step 2: at t0, all 4 keys produce
+        current_time_ms = t0
+        sink._now_ms = lambda: current_time_ms
+        for i, key in enumerate(["s1", "s2", "s3", "s4"]):
+            sink.add(
+                value={"v": i}, key=key, timestamp=1000,
+                headers=[], topic="t", partition=0, offset=i,
+            )
+
+        # Step 3: keep s2, s3, s4 alive every 2s; s1 goes silent.
+        # Simulate keepalive at t0+2000
+        current_time_ms = t0 + 2_000
+        sink._now_ms = lambda: current_time_ms
+        for key in ["s2", "s3", "s4"]:
+            sink.add(
+                value={"v": 1}, key=key, timestamp=1000,
+                headers=[], topic="t", partition=0, offset=10,
+            )
+
+        # Keepalive at t0+4000
+        current_time_ms = t0 + 4_000
+        sink._now_ms = lambda: current_time_ms
+        for key in ["s2", "s3", "s4"]:
+            sink.add(
+                value={"v": 1}, key=key, timestamp=1000,
+                headers=[], topic="t", partition=0, offset=20,
+            )
+
+        # Step 4: check at t0+6001 — s1 should fire (silent since t0)
+        current_time_ms = t0 + 6_001
+        sink._now_ms = lambda: current_time_ms
+        sink._check_timeouts()
+
+        assert len(fire_log) == 1, f"Expected 1 fire, got {len(fire_log)}: {fire_log}"
+        assert fire_log[0][0] == "s1"
+
+        # Continue keepalive for s2, s3, s4 at t0+6000 and t0+8000
+        current_time_ms = t0 + 6_000
+        sink._now_ms = lambda: current_time_ms
+        for key in ["s2", "s3", "s4"]:
+            sink.add(
+                value={"v": 1}, key=key, timestamp=1000,
+                headers=[], topic="t", partition=0, offset=30,
+            )
+
+        current_time_ms = t0 + 8_000
+        sink._now_ms = lambda: current_time_ms
+        for key in ["s2", "s3", "s4"]:
+            sink.add(
+                value={"v": 1}, key=key, timestamp=1000,
+                headers=[], topic="t", partition=0, offset=40,
+            )
+
+        # Step 5: at t0+10000, re-arm s1 (new message on s1)
+        current_time_ms = t0 + 10_000
+        sink._now_ms = lambda: current_time_ms
+        sink.add(
+            value={"v": 99}, key="s1", timestamp=1000,
+            headers=[], topic="t", partition=0, offset=50,
+        )
+
+        # Continue keepalive at t0+10000
+        for key in ["s2", "s3", "s4"]:
+            sink.add(
+                value={"v": 1}, key=key, timestamp=1000,
+                headers=[], topic="t", partition=0, offset=51,
+            )
+
+        # Step 6: at t0+12000, stop all keys (last sends)
+        current_time_ms = t0 + 12_000
+        sink._now_ms = lambda: current_time_ms
+        for key in ["s2", "s3", "s4"]:
+            sink.add(
+                value={"v": 1}, key=key, timestamp=1000,
+                headers=[], topic="t", partition=0, offset=60,
+            )
+
+        # Verify s1 has NOT fired again yet (only 2000ms since re-arm)
+        sink._check_timeouts()
+        assert len(fire_log) == 1, (
+            f"s1 should not re-fire at t0+12000 (only 2s since re-arm)"
+        )
+
+        # Step 7: at t0+16001, s1 should fire again (6001ms since re-arm at t0+10000)
+        current_time_ms = t0 + 16_001
+        sink._now_ms = lambda: current_time_ms
+        sink._check_timeouts()
+
+        assert len(fire_log) == 2, (
+            f"Expected 2 fires (s1 re-arm), got {len(fire_log)}: {fire_log}"
+        )
+        assert fire_log[1][0] == "s1"
+
+        # At t0+18001, s2/s3/s4 should fire (6001ms since last send at t0+12000)
+        current_time_ms = t0 + 18_001
+        sink._now_ms = lambda: current_time_ms
+        sink._check_timeouts()
+
+        assert len(fire_log) == 5, (
+            f"Expected 5 total fires, got {len(fire_log)}: {fire_log}"
+        )
+
+        # Verify per-key counts
+        from collections import Counter
+        counts = Counter(name for name, _ in fire_log)
+        assert counts["s1"] == 2, f"s1 should fire 2 times, got {counts['s1']}"
+        assert counts["s2"] == 1, f"s2 should fire 1 time, got {counts['s2']}"
+        assert counts["s3"] == 1, f"s3 should fire 1 time, got {counts['s3']}"
+        assert counts["s4"] == 1, f"s4 should fire 1 time, got {counts['s4']}"
+
+        # All keys evicted
+        assert len(sink._last_seen_by_key) == 0
+
+    def test_rearm_ts_ms_monotonicity(self):
+        """Validates test-spec §8 cross-cutting: for a key that fires twice,
+        the two fire times must be strictly increasing with gap >= 5000ms.
+        """
+        fire_times = []
+
+        def tracking_callback(stream_name):
+            if stream_name == "s1":
+                fire_times.append(current_time_ms)
+
+        sink = QuixTSDataLakeSink(
+            s3_prefix="test-prefix",
+            table_name="test_table",
+            stream_timeout_ms=6000,
+            on_stream_timeout=tracking_callback,
+        )
+        sink._ensure_timer_thread_alive = lambda: None
+
+        t0 = 10_000
+
+        # s1 arrives at t0
+        current_time_ms = t0
+        sink._now_ms = lambda: current_time_ms
+        sink.add(
+            value={"v": 1}, key="s1", timestamp=1000,
+            headers=[], topic="t", partition=0, offset=0,
+        )
+
+        # s1 fires at t0+6001
+        current_time_ms = t0 + 6_001
+        sink._now_ms = lambda: current_time_ms
+        sink._check_timeouts()
+
+        # Re-arm s1 at t0+10000
+        current_time_ms = t0 + 10_000
+        sink._now_ms = lambda: current_time_ms
+        sink.add(
+            value={"v": 2}, key="s1", timestamp=1000,
+            headers=[], topic="t", partition=0, offset=1,
+        )
+
+        # s1 fires again at t0+16001
+        current_time_ms = t0 + 16_001
+        sink._now_ms = lambda: current_time_ms
+        sink._check_timeouts()
+
+        assert len(fire_times) == 2
+        assert fire_times[1] > fire_times[0]
+        gap = fire_times[1] - fire_times[0]
+        assert gap >= 5_000, f"Gap between s1 fires is {gap}ms, expected >= 5000ms"
+
+
+# =============================================================================
+# 13. Stream Timeout — Disabled + Re-arm Sequence (Test 6)
+# =============================================================================
+
+
+class TestStreamTimeoutDisabledRearmSequence:
+    """Validates test-spec section 7 (Test 6): repeat the re-arm producer
+    sequence from Test 5, but with the feature disabled. No callback fires.
+
+    Spec reference: spec v6 section 4 scenario 4; test-spec section 7.
+    """
+
+    def test_disabled_rearm_sequence_no_callbacks(self):
+        """Validates test-spec §7: full re-arm producer sequence with
+        stream_timeout_ms=None, on_stream_timeout=None produces zero
+        callback invocations.
+        """
+        callback = MagicMock()
+        sink = QuixTSDataLakeSink(
+            s3_prefix="test-prefix",
+            table_name="test_table",
+            stream_timeout_ms=None,
+            on_stream_timeout=None,
+        )
+        assert sink._stream_timeout_enabled is False
+
+        # Replicate the full test-5 producer sequence
+        offset = 0
+
+        # Step 2: all 4 keys produce
+        for key in ["s1", "s2", "s3", "s4"]:
+            sink.add(
+                value={"v": 1}, key=key, timestamp=1000,
+                headers=[], topic="t", partition=0, offset=offset,
+            )
+            offset += 1
+
+        # Step 3: keepalives on s2-s4 (s1 silent)
+        for _ in range(5):
+            for key in ["s2", "s3", "s4"]:
+                sink.add(
+                    value={"v": 1}, key=key, timestamp=1000,
+                    headers=[], topic="t", partition=0, offset=offset,
+                )
+                offset += 1
+
+        # Step 5: re-arm s1
+        sink.add(
+            value={"v": 99}, key="s1", timestamp=1000,
+            headers=[], topic="t", partition=0, offset=offset,
+        )
+        offset += 1
+
+        # Step 6: more keepalives then stop
+        for key in ["s2", "s3", "s4"]:
+            sink.add(
+                value={"v": 1}, key=key, timestamp=1000,
+                headers=[], topic="t", partition=0, offset=offset,
+            )
+            offset += 1
+
+        # Feature disabled: no tracker, no check, no fire
+        assert not hasattr(sink, "_last_seen_by_key")
+        callback.assert_not_called()
+
+
