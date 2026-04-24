@@ -30,6 +30,7 @@ from quixstreams.sinks.base import (
     ClientConnectSuccessCallback,
     SinkBatch,
 )
+
 from ._blob_storage_client import BlobStorageClient, get_bucket_name
 from ._quix_ts_datalake_catalog_client import QuixTSDataLakeCatalogClient
 from .timeout_event_generator import StreamTimeoutTracker

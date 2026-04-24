@@ -13,7 +13,6 @@ import pytest
 
 from quixstreams.sinks.core.timeout_event_generator import StreamTimeoutTracker
 
-
 # =============================================================================
 # Helpers
 # =============================================================================
@@ -59,17 +58,13 @@ class TestTrackerDisabled:
     """
 
     def test_both_none_disables_tracker(self):
-        tracker = StreamTimeoutTracker(
-            stream_timeout_ms=None, on_stream_timeout=None
-        )
+        tracker = StreamTimeoutTracker(stream_timeout_ms=None, on_stream_timeout=None)
         assert tracker.enabled is False
         # Disabled path: no per-stream dict is allocated.
         assert not hasattr(tracker, "_last_seen_by_stream")
 
     def test_disabled_touch_is_noop(self):
-        tracker = StreamTimeoutTracker(
-            stream_timeout_ms=None, on_stream_timeout=None
-        )
+        tracker = StreamTimeoutTracker(stream_timeout_ms=None, on_stream_timeout=None)
         # Does not raise, does not allocate, does not track.
         tracker.touch("s1")
         tracker.touch(b"bytes-key")
@@ -77,37 +72,27 @@ class TestTrackerDisabled:
         assert not hasattr(tracker, "_last_seen_by_stream")
 
     def test_disabled_check_now_is_noop(self):
-        tracker = StreamTimeoutTracker(
-            stream_timeout_ms=None, on_stream_timeout=None
-        )
+        tracker = StreamTimeoutTracker(stream_timeout_ms=None, on_stream_timeout=None)
         # Does not raise — no dict, no threshold, no callback.
         tracker.check_now()
 
     def test_disabled_start_stop_are_noops(self):
-        tracker = StreamTimeoutTracker(
-            stream_timeout_ms=None, on_stream_timeout=None
-        )
+        tracker = StreamTimeoutTracker(stream_timeout_ms=None, on_stream_timeout=None)
         tracker.start()  # no thread spawned
         tracker.stop()  # no exception
         assert not hasattr(tracker, "_timer_thread")
 
     def test_mismatched_pair_raises_threshold_only(self):
         with pytest.raises(ValueError, match="must both be provided"):
-            StreamTimeoutTracker(
-                stream_timeout_ms=6000, on_stream_timeout=None
-            )
+            StreamTimeoutTracker(stream_timeout_ms=6000, on_stream_timeout=None)
 
     def test_mismatched_pair_raises_callback_only(self):
         with pytest.raises(ValueError, match="must both be provided"):
-            StreamTimeoutTracker(
-                stream_timeout_ms=None, on_stream_timeout=MagicMock()
-            )
+            StreamTimeoutTracker(stream_timeout_ms=None, on_stream_timeout=MagicMock())
 
     def test_non_positive_threshold_raises(self):
         with pytest.raises(ValueError, match="positive int"):
-            StreamTimeoutTracker(
-                stream_timeout_ms=0, on_stream_timeout=lambda s: None
-            )
+            StreamTimeoutTracker(stream_timeout_ms=0, on_stream_timeout=lambda s: None)
         with pytest.raises(ValueError, match="positive int"):
             StreamTimeoutTracker(
                 stream_timeout_ms=-10, on_stream_timeout=lambda s: None
@@ -198,9 +183,7 @@ class TestTrackerSimultaneous:
 
     def test_four_keys_simultaneous_fires_four_callbacks(self):
         callback = MagicMock()
-        tracker = _tracker(
-            stream_timeout_ms=6000, on_stream_timeout=callback
-        )
+        tracker = _tracker(stream_timeout_ms=6000, on_stream_timeout=callback)
 
         _freeze_now(tracker, 10_000)
         for key in ["s1", "s2", "s3", "s4"]:
@@ -220,9 +203,7 @@ class TestTrackerSimultaneous:
 
     def test_four_keys_no_fire_before_threshold(self):
         callback = MagicMock()
-        tracker = _tracker(
-            stream_timeout_ms=6000, on_stream_timeout=callback
-        )
+        tracker = _tracker(stream_timeout_ms=6000, on_stream_timeout=callback)
 
         _freeze_now(tracker, 10_000)
         for key in ["s1", "s2", "s3", "s4"]:
@@ -244,9 +225,7 @@ class TestTrackerSerial:
     """4 keys go silent serially with 3s spacing; 4 callbacks in order."""
 
     def test_four_keys_serial_fires_in_order(self):
-        tracker = _tracker(
-            stream_timeout_ms=6000, on_stream_timeout=lambda s: None
-        )
+        tracker = _tracker(stream_timeout_ms=6000, on_stream_timeout=lambda s: None)
 
         t0 = 10_000
         current = [t0]
@@ -305,9 +284,7 @@ class TestTrackerSerial:
 
     def test_serial_keys_no_premature_fire(self):
         callback = MagicMock()
-        tracker = _tracker(
-            stream_timeout_ms=6000, on_stream_timeout=callback
-        )
+        tracker = _tracker(stream_timeout_ms=6000, on_stream_timeout=callback)
 
         t0 = 10_000
         _freeze_now(tracker, t0)
@@ -335,9 +312,7 @@ class TestTrackerRearm:
         def tracking_callback(stream_name):
             fire_log.append((stream_name, current[0]))
 
-        tracker = _tracker(
-            stream_timeout_ms=6000, on_stream_timeout=tracking_callback
-        )
+        tracker = _tracker(stream_timeout_ms=6000, on_stream_timeout=tracking_callback)
         tracker._now_ms = lambda: current[0]
 
         t0 = 10_000
@@ -412,9 +387,7 @@ class TestTrackerRearm:
             if stream_name == "s1":
                 fire_times.append(current[0])
 
-        tracker = _tracker(
-            stream_timeout_ms=6000, on_stream_timeout=tracking_callback
-        )
+        tracker = _tracker(stream_timeout_ms=6000, on_stream_timeout=tracking_callback)
         tracker._now_ms = lambda: current[0]
 
         t0 = 10_000
@@ -445,9 +418,7 @@ class TestTrackerDisabledRearmSequence:
 
     def test_disabled_rearm_sequence_no_callbacks(self):
         callback = MagicMock()
-        tracker = StreamTimeoutTracker(
-            stream_timeout_ms=None, on_stream_timeout=None
-        )
+        tracker = StreamTimeoutTracker(stream_timeout_ms=None, on_stream_timeout=None)
         assert tracker.enabled is False
 
         # Replicate the producer sequence from the enabled-rearm test
@@ -479,42 +450,32 @@ class TestTrackerKeyPassthrough:
 
     def test_null_key_silently_skipped(self):
         callback = MagicMock()
-        tracker = _tracker(
-            stream_timeout_ms=6000, on_stream_timeout=callback
-        )
+        tracker = _tracker(stream_timeout_ms=6000, on_stream_timeout=callback)
         _freeze_now(tracker, 10_000)
         tracker.touch(None)
         assert len(tracker._last_seen_by_stream) == 0
 
     def test_bytes_key_stored_as_bytes(self):
-        tracker = _tracker(
-            stream_timeout_ms=6000, on_stream_timeout=lambda s: None
-        )
+        tracker = _tracker(stream_timeout_ms=6000, on_stream_timeout=lambda s: None)
         _freeze_now(tracker, 10_000)
         tracker.touch(b"sensor-a")
         assert b"sensor-a" in tracker._last_seen_by_stream
 
     def test_str_key_stored_as_str(self):
-        tracker = _tracker(
-            stream_timeout_ms=6000, on_stream_timeout=lambda s: None
-        )
+        tracker = _tracker(stream_timeout_ms=6000, on_stream_timeout=lambda s: None)
         _freeze_now(tracker, 10_000)
         tracker.touch("sensor-c")
         assert "sensor-c" in tracker._last_seen_by_stream
 
     def test_int_key_stored_as_int(self):
-        tracker = _tracker(
-            stream_timeout_ms=6000, on_stream_timeout=lambda s: None
-        )
+        tracker = _tracker(stream_timeout_ms=6000, on_stream_timeout=lambda s: None)
         _freeze_now(tracker, 10_000)
         tracker.touch(42)
         assert 42 in tracker._last_seen_by_stream
 
     def test_bytes_and_str_with_same_content_are_distinct_keys(self):
         """Raw pass-through: ``b'x'`` and ``'x'`` do not collide."""
-        tracker = _tracker(
-            stream_timeout_ms=6000, on_stream_timeout=lambda s: None
-        )
+        tracker = _tracker(stream_timeout_ms=6000, on_stream_timeout=lambda s: None)
         _freeze_now(tracker, 10_000)
         tracker.touch(b"sensor")
         tracker.touch("sensor")
@@ -525,9 +486,7 @@ class TestTrackerKeyPassthrough:
     def test_callback_receives_raw_key(self):
         """The callback gets the exact object passed to ``touch``."""
         received = []
-        tracker = _tracker(
-            stream_timeout_ms=6000, on_stream_timeout=received.append
-        )
+        tracker = _tracker(stream_timeout_ms=6000, on_stream_timeout=received.append)
         _freeze_now(tracker, 10_000)
         tracker.touch(b"raw-bytes")
         _freeze_now(tracker, 20_000)  # past threshold
@@ -631,9 +590,7 @@ class TestTrackerNowMs:
     """Passing an explicit now_ms to touch/check_now overrides the clock."""
 
     def test_touch_now_ms_override(self):
-        tracker = _tracker(
-            stream_timeout_ms=6000, on_stream_timeout=lambda s: None
-        )
+        tracker = _tracker(stream_timeout_ms=6000, on_stream_timeout=lambda s: None)
         _freeze_now(tracker, 10_000)
         tracker.touch("s1", now_ms=20_000)
         # Explicit now_ms wins over tracker._now_ms.
@@ -770,8 +727,6 @@ class TestTrackerStateIsolation:
     """
 
     def test_tracker_has_no_on_paused(self):
-        tracker = _tracker(
-            stream_timeout_ms=6000, on_stream_timeout=lambda s: None
-        )
+        tracker = _tracker(stream_timeout_ms=6000, on_stream_timeout=lambda s: None)
         # Explicit: the tracker does not claim to know about pause events.
         assert not hasattr(tracker, "on_paused")

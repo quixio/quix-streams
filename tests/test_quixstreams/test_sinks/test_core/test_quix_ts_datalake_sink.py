@@ -1061,12 +1061,15 @@ class TestStreamTimeoutWiring:
         sink = sink_factory()
         sink._timeout = MagicMock()
 
-        with patch(
-            "quixstreams.sinks.core.quix_ts_datalake_sink.get_bucket_name",
-            return_value="test-bucket",
-        ), patch(
-            "quixstreams.sinks.core.quix_ts_datalake_sink.BlobStorageClient",
-            return_value=mock_blob_client,
+        with (
+            patch(
+                "quixstreams.sinks.core.quix_ts_datalake_sink.get_bucket_name",
+                return_value="test-bucket",
+            ),
+            patch(
+                "quixstreams.sinks.core.quix_ts_datalake_sink.BlobStorageClient",
+                return_value=mock_blob_client,
+            ),
         ):
             sink.setup()
 
@@ -1120,5 +1123,3 @@ class TestStreamTimeoutWiring:
         sink._timeout.check_now()
         sink._timeout.start()
         sink._timeout.stop()
-
-
