@@ -8,7 +8,6 @@ Uses quixportal for unified blob storage access (Azure, AWS S3, GCP, MinIO, loca
 """
 
 import logging
-import threading
 import time
 import uuid
 from datetime import datetime, timezone
@@ -31,9 +30,9 @@ from quixstreams.sinks.base import (
     ClientConnectSuccessCallback,
     SinkBatch,
 )
-
 from ._blob_storage_client import BlobStorageClient, get_bucket_name
 from ._quix_ts_datalake_catalog_client import QuixTSDataLakeCatalogClient
+from .timeout_event_generator import StreamTimeoutTracker
 
 logger = logging.getLogger(__name__)
 
@@ -74,69 +73,15 @@ class QuixTSDataLakeSink(BatchingSink):
     :param auto_create_bucket: If True, attempt to create bucket/path in storage if missing
     :param max_workers: Maximum number of parallel upload threads (default: 10)
     :param stream_timeout_ms: Optional **per-key** silence threshold in
-        milliseconds. Must be a positive int. Paired with
-        ``on_stream_timeout``; both must be provided to enable the feature.
-        One "stream" = one Kafka message key; the threshold applies
-        independently to each key the sink observes.
-    :param on_stream_timeout: Optional callback invoked with a stream
-        designation (``Callable[[str], None]``) whenever a particular
-        Kafka message key has been silent for at least
-        ``stream_timeout_ms``. The designation passed in is the message
-        key decoded as a UTF-8 string. Fires **exactly once per silence
-        period per key** and then evicts that key's tracking entry; if
-        the same key starts producing again, it is treated as a fresh
-        stream and can fire again on its next silence. Runs
-        synchronously on the sink thread during ``flush()``; exceptions
-        are logged and swallowed so a misbehaving callback does not kill
-        the sink.
-
-        The feature is **enabled only when both** ``stream_timeout_ms`` is a
-        positive int **and** ``on_stream_timeout`` is callable. Any other
-        combination (either ``None``, zero, negative, wrong type) disables
-        the feature with zero overhead: no per-key dict is allocated, no
-        check loop runs.
-
-        *Per-key semantics:* silence is tracked per Kafka message key
-        in a single in-memory dict ``{key: last_seen_ms}``. Every
-        ``add()`` refreshes that key's entry; ``flush()`` collects all
-        keys whose silence ≥ threshold, fires each exactly once, and
-        evicts them. A TTL safety sweep also evicts any entry older
-        than ``3 × stream_timeout_ms`` without firing, as a belt-and-
-        braces bound on dict growth.
-
-        *Precision floor:* timeouts fire from a background daemon
-        thread on a periodic cadence (``_check_interval_ms``, defaulting
-        to ``max(100, min(1000, stream_timeout_ms // 5))`` ms), and also
-        at the end of ``flush()`` as a belt-and-suspenders secondary
-        trigger. Expect fire latency up to roughly
-        ``stream_timeout_ms + _check_interval_ms`` — e.g. ~61 s with the
-        default 60 s threshold and 1000 ms check interval. This is a
-        change from earlier drafts: a purely flush-driven cadence
-        missed keys whose silence began at or after the last message,
-        because ``BatchingSink`` stops calling ``flush()`` once there
-        are no batches left. A periodic timer fixes that.
-
-        *Restart / rebalance behaviour:* tracking state is in-memory
-        only. On process restart or partition rebalance the dict for
-        the affected keys is lost; keys that remain dormant will not
-        fire for the current silence cycle. Keys that resume publishing
-        after restart/rebalance are fresh streams and will fire normally
-        on their next silence.
-
-        *Backpressure:* ``on_paused()`` does not touch the per-key
-        tracking dict. Timeout reflects "when did we last see data from
-        this key", independent of write success.
-
-        *Concurrency:* ``add()`` and ``flush()`` run on the consumer
-        thread; a background daemon thread also drives the periodic
-        check (see *Precision floor*). The per-key tracking dict is
-        guarded by a ``threading.Lock`` held only across tiny dict
-        operations — the user callback is invoked OUTSIDE the lock so
-        a blocking callback cannot stall ``add()``. Because Kafka maps
-        one key to one partition, and one partition is owned by one
-        consumer replica at a time, the same key cannot be stamped
-        from two replicas simultaneously — no cross-replica coordinator
-        is required.
+        milliseconds. Paired with ``on_stream_timeout``; both must be
+        provided to enable the feature. See
+        :class:`quixstreams.sinks.core.timeout_event_generator.StreamTimeoutTracker`
+        for the full behavioural contract (per-key tracking, fire-and-evict
+        semantics, re-arm on next record, 3x TTL safety sweep,
+        background check cadence, and zero-overhead disabled path).
+    :param on_stream_timeout: Optional callback
+        ``Callable[[str], None]`` invoked once per silence period per
+        Kafka message key. See ``stream_timeout_ms`` above.
     :param on_client_connect_success: An optional callback made after successful
         client authentication, primarily for additional logging.
     :param on_client_connect_failure: An optional callback made after failed
@@ -159,7 +104,7 @@ class QuixTSDataLakeSink(BatchingSink):
         auto_create_bucket: bool = True,
         max_workers: int = 10,
         stream_timeout_ms: Optional[int] = None,
-        on_stream_timeout: Optional[Callable[[str], None]] = None,
+        on_stream_timeout: Optional[Callable[[Any], None]] = None,
         on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
         on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
         _check_interval_ms: Optional[int] = None,
@@ -196,108 +141,20 @@ class QuixTSDataLakeSink(BatchingSink):
         self._pending_futures: List[Dict[str, Any]] = []
 
         # Stream-timeout tracking (opt-in, per-key silence detector).
-        # Feature is enabled iff both scalar params are usable; mismatched
-        # pairs raise ValueError. Disabled path is zero-overhead:
-        # ``_stream_timeout_enabled`` stays ``False`` and the per-key dict
-        # is never allocated.
-        self._stream_timeout_enabled: bool = False
-        self._validate_stream_timeout_params(stream_timeout_ms, on_stream_timeout)
-        if (
-            isinstance(stream_timeout_ms, int)
-            and not isinstance(stream_timeout_ms, bool)
-            and stream_timeout_ms > 0
-            and callable(on_stream_timeout)
-        ):
-            self._stream_timeout_enabled = True
-            self._stream_timeout_ms: int = stream_timeout_ms
-            self._on_stream_timeout: Callable[[str], None] = on_stream_timeout
-            # Per-key last-seen timestamps. Allocated only when enabled.
-            # Keys are the decoded Kafka message keys (see
-            # ``_decode_stream_name``); values are wall-clock ms from
-            # ``_now_ms()``. Bounded in practice by eviction-on-fire and
-            # the 3x TTL safety sweep inside ``_check_timeouts()``.
-            self._last_seen_by_key: dict[str, int] = {}
-
-            # Background timer-thread machinery (spec v6 §7.6, REVISED
-            # 2026-04-22). Local QA proved the flush-only cadence is
-            # insufficient: when the input topic goes fully silent,
-            # BatchingSink stops calling flush() (no batch to flush), so
-            # keys whose silence begins at or after the last message
-            # never get checked. A periodic daemon thread now drives
-            # _check_timeouts() on a wall-clock cadence; flush() still
-            # calls it as a belt-and-suspenders secondary trigger.
-            self._stop: threading.Event = threading.Event()
-            # Guards self._last_seen_by_key against concurrent mutation
-            # from the consumer thread (add/flush) and the timer thread
-            # (periodic check). Critical sections are tiny (dict op + a
-            # few comparisons); the callback is explicitly invoked
-            # OUTSIDE the lock so user code cannot stall the consumer.
-            self._tracker_lock: threading.Lock = threading.Lock()
-            # Cadence for the periodic check. Default: stream_timeout_ms
-            # // 5 clamped to [100, 1000] ms. Overridable via the hidden
-            # _check_interval_ms kwarg for tests only (no env var, no
-            # public API). A positive int override wins; anything else
-            # falls back to the computed default.
-            if (
-                isinstance(_check_interval_ms, int)
-                and not isinstance(_check_interval_ms, bool)
-                and _check_interval_ms > 0
-            ):
-                self._check_interval_ms: int = _check_interval_ms
-            else:
-                self._check_interval_ms = max(100, min(1000, stream_timeout_ms // 5))
-            # Thread placeholder; the thread is started in setup() after
-            # the blob client init so a blob failure still tears down
-            # cleanly without leaving an orphan timer thread running.
-            # The thread may also self-terminate after the tracker has
-            # been empty for ``_idle_exit_cycles`` consecutive cycles;
-            # the next ``add()`` respawns it (see ``_timeout_check_loop``).
-            self._timer_thread: Optional[threading.Thread] = None
-            # Number of consecutive empty-tracker cycles the timer thread
-            # tolerates before self-terminating. Default: 3 cycles × the
-            # configured check interval ≈ 3 s of idle at 1000 ms cadence.
-            # Cap at 10 as a sanity ceiling.
-            self._idle_exit_cycles: int = 3
-
-    @staticmethod
-    def _validate_stream_timeout_params(
-        stream_timeout_ms: Any, on_stream_timeout: Any
-    ) -> None:
-        """Validate the two scalar stream-timeout params (spec §6.1).
-
-        Policy:
-        - Both ``None`` → disabled silently, no error.
-        - Exactly one supplied in a non-``None`` form → raise with the pair
-          message so operators catch "set the threshold but forgot the
-          callback" loudly at construction time.
-        - ``stream_timeout_ms`` provided alongside a callable callback but
-          not a positive int → raise with the threshold message.
-        - ``on_stream_timeout`` provided alongside a positive int threshold
-          but not callable → raise with the callback message.
-        """
-        # Both defaults: disabled silently.
-        if stream_timeout_ms is None and on_stream_timeout is None:
-            return
-
-        # Mismatched pair (exactly one is None): fail loud.
-        if (stream_timeout_ms is None) != (on_stream_timeout is None):
-            raise ValueError(
-                "stream_timeout_ms and on_stream_timeout must both be "
-                "provided to enable stream-timeout tracking; got "
-                f"stream_timeout_ms={stream_timeout_ms!r}, "
-                f"on_stream_timeout={on_stream_timeout!r}"
-            )
-
-        # Both supplied: validate each.
-        # ``bool`` is a subclass of ``int`` in Python; reject explicitly.
-        if (
-            not isinstance(stream_timeout_ms, int)
-            or isinstance(stream_timeout_ms, bool)
-            or stream_timeout_ms <= 0
-        ):
-            raise ValueError("stream_timeout_ms must be a positive int (milliseconds)")
-        if not callable(on_stream_timeout):
-            raise ValueError("on_stream_timeout must be callable")
+        # All state, threading, and validation live inside the
+        # StreamTimeoutTracker — the sink composes it and exposes it
+        # via integration hooks in add/flush/setup/cleanup below. See
+        # :mod:`quixstreams.sinks.core.timeout_event_generator` for the
+        # behavioural contract. Disabled pair -> tracker is allocated
+        # but ``tracker.enabled`` is False and every method is a
+        # zero-overhead no-op.
+        self._timeout = StreamTimeoutTracker(
+            stream_timeout_ms=stream_timeout_ms,
+            on_stream_timeout=on_stream_timeout,
+            check_interval_ms=_check_interval_ms,
+            thread_name="QuixTSDataLakeSink-timeout-check",
+            logger=logger,
+        )
 
     @property
     def s3_bucket(self) -> str:
@@ -307,67 +164,18 @@ class QuixTSDataLakeSink(BatchingSink):
         return self._s3_bucket
 
     # ------------------------------------------------------------------
-    # Stream-timeout tracking (per-key silence detector — v6)
+    # Stream-timeout integration
     # ------------------------------------------------------------------
     #
-    # The three hooks below (``add``, ``flush``, ``on_paused``) layer an
-    # opt-in per-key silence detector on top of the parent ``BatchingSink``.
-    # State is a single dict ``{stream_name: last_seen_ms}`` where
-    # ``stream_name`` is the decoded Kafka message key. ``add()`` refreshes
-    # the entry; ``flush()`` runs ``_check_timeouts()`` which collects
-    # timed-out keys in one pass and then fires + evicts them. Eviction is
-    # the fire marker — there is no separate ``_fired`` flag. A re-activated
-    # key is treated as a fresh stream with a new baseline.
-    #
-    # Feature gate: if ``_stream_timeout_enabled`` is False (because the
-    # constructor received an unusable pair, a zero/None threshold, or a
-    # non-callable callback), each hook short-circuits after the ``super()``
-    # call with a single boolean check. No dict is allocated, no loop runs.
-    #
-    # Concurrency (updated v6 §7.6, REVISED 2026-04-22): ``add()`` and
-    # ``flush()`` run on the consumer/sink thread, but a dedicated
-    # background daemon thread also drives ``_check_timeouts()`` on a
-    # periodic cadence (spec v6 §7.6 — the flush-only cadence missed
-    # keys whose silence began at/after the last message). The per-key
-    # dict is therefore guarded by ``self._tracker_lock``; critical
-    # sections are tiny (dict op + comparisons) and the user callback
-    # is intentionally invoked OUTSIDE the lock so arbitrarily-long
-    # callbacks cannot stall the consumer thread. Kafka still
-    # guarantees one key -> one partition -> one replica at any moment,
-    # so a given stream name cannot be stamped from two replicas
-    # simultaneously — no cross-replica coordinator is required.
-
-    def _now_ms(self) -> int:
-        """Return the current wall-clock time in milliseconds.
-
-        All references to "now" inside silence detection, firing, and the
-        TTL sweep route through this method so tests can override it with
-        a monkeypatched instance attribute to drive deterministic
-        timelines without ``time.sleep`` or ``freezegun``.
-        """
-        return int(time.time() * 1000)
-
-    @staticmethod
-    def _decode_stream_name(key: Any) -> Optional[str]:
-        """Decode a Kafka message key into a stream-name string.
-
-        Policy (spec v6 §6.3):
-        - ``None`` → return ``None`` (null-keyed record; not tracked).
-        - ``bytes`` / ``bytearray`` → UTF-8 decode; on ``UnicodeDecodeError``
-          return ``None`` and a WARNING is logged by the caller.
-        - ``str`` → return as-is.
-        - anything else → ``str(key)``.
-        """
-        if key is None:
-            return None
-        if isinstance(key, (bytes, bytearray)):
-            try:
-                return bytes(key).decode("utf-8")
-            except UnicodeDecodeError:
-                return None
-        if isinstance(key, str):
-            return key
-        return str(key)
+    # All behaviour lives in ``self._timeout``
+    # (:class:`quixstreams.sinks.core.timeout_event_generator.StreamTimeoutTracker`).
+    # The three hooks below wire the sink lifecycle into the tracker:
+    # ``add`` -> ``touch``, ``flush`` -> ``check_now``,
+    # ``setup`` -> ``start``, ``cleanup`` -> ``stop``. ``on_paused`` is
+    # intentionally a no-op on tracker state (backpressure means the
+    # destination rejected a batch, not that the messages were never
+    # seen; per-key silence timers continue from their last-seen
+    # stamp regardless of write success).
 
     def add(
         self,
@@ -379,211 +187,21 @@ class QuixTSDataLakeSink(BatchingSink):
         partition: int,
         offset: int,
     ):
-        """Accumulate the record into the parent batch, then (if enabled)
-        refresh the per-key last-seen timestamp for this message's key.
-
-        A record whose key is ``None`` or whose bytes are not valid UTF-8
-        is still sunk normally, but is skipped for timeout tracking; a
-        WARNING is logged for undecodable bytes (every occurrence — no
-        dedup, per spec §8.7 O-2).
+        """Accumulate the record, then refresh the per-key last-seen
+        stamp via the tracker.
         """
         super().add(value, key, timestamp, headers, topic, partition, offset)
-        if not self._stream_timeout_enabled:
-            return
-        stream_name = self._decode_stream_name(key)
-        if stream_name is None:
-            if key is not None:
-                # Undecodable bytes (UTF-8 failure). Null keys are silently
-                # skipped; bad bytes are loud.
-                logger.warning(
-                    "Skipping stream-timeout tracking for record on topic "
-                    "%r partition %d offset %d: key %r is not valid UTF-8",
-                    topic,
-                    partition,
-                    offset,
-                    key,
-                )
-            return
-        # Lock-guarded write: the timer thread may be reading/mutating
-        # _last_seen_by_key concurrently. Critical section is a single
-        # dict assignment plus a cheap is-alive check on the timer
-        # thread so we respawn it if it self-terminated during a prior
-        # idle period. Both must happen under the same lock as the
-        # thread's own self-terminate-and-clear, to close the race.
-        now_ms = self._now_ms()
-        with self._tracker_lock:
-            self._last_seen_by_key[stream_name] = now_ms
-            self._ensure_timer_thread_alive()
+        self._timeout.touch(key, topic=topic, partition=partition, offset=offset)
 
     def flush(self):
-        """Flush the parent batch, then (if enabled) check whether any key
-        has been silent past the threshold and fire + evict.
-
-        The timeout check runs *after* the parquet write so a callback can
-        trust that everything up to this moment has been committed.
-        """
+        """Flush the parent batch, then run a timeout check."""
         super().flush()
-        if self._stream_timeout_enabled:
-            self._check_timeouts()
+        self._timeout.check_now()
 
     def on_paused(self):
-        """Inherit the parent ``on_paused()`` behaviour — drop the pending
-        batches but **do not touch** the per-key tracking dict.
-
-        Backpressure means the destination rejected a batch, not that the
-        messages were never seen. Per-key silence timers continue from the
-        same last-seen stamp regardless of write success.
-        """
+        """Inherit parent ``on_paused()`` — do **not** touch tracker state."""
         super().on_paused()
         # intentional no-op on tracker state
-
-    def _check_timeouts(self) -> None:
-        """Fire keys whose silence >= threshold; also TTL-sweep any
-        stragglers older than ``3 x stream_timeout_ms``.
-
-        Concurrency: callable from two threads — the consumer thread
-        (via ``flush()``) and the background timer thread (via
-        ``_timeout_check_loop``). The snapshot pass acquires
-        ``self._tracker_lock`` to collect keys to fire/drop; user
-        callbacks run OUTSIDE the lock so a blocking / misbehaving
-        callback cannot stall the consumer thread's ``add()`` path.
-
-        Eviction policy: a fired key is evicted from the tracker ONLY
-        AFTER its callback returns successfully. If the callback raises,
-        the key remains tracked and will fire again on the next check
-        cycle — giving the caller retry semantics on transient failure.
-        The ``3x`` TTL sweep is the backstop that eventually drops a
-        key whose callback keeps failing. TTL-sweep evictions happen
-        inside the snapshot lock (no callback involved).
-        """
-        now_ms = self._now_ms()
-        timeout = self._stream_timeout_ms
-        ttl_evict = 3 * timeout
-
-        # --- Critical section: snapshot + TTL-sweep evict under the lock. ---
-        to_fire: list[tuple[str, int]] = []
-        to_drop_silently: list[str] = []
-        with self._tracker_lock:
-            if not self._last_seen_by_key:
-                return
-            for stream_name, last_seen in self._last_seen_by_key.items():
-                silence = now_ms - last_seen
-                if silence >= ttl_evict:
-                    # Should have fired already at 1x; safety-sweep fallback.
-                    to_drop_silently.append(stream_name)
-                elif silence >= timeout:
-                    to_fire.append((stream_name, silence))
-            # TTL-sweep entries have no callback, so evict them in-lock
-            # right now. ``to_fire`` entries are NOT evicted here — they
-            # are evicted below, only after the callback succeeds.
-            for stream_name in to_drop_silently:
-                self._last_seen_by_key.pop(stream_name, None)
-        # --- End of critical section. Callbacks run unlocked below. ---
-
-        for stream_name, silence in to_fire:
-            logger.info(
-                "Stream %r timed out (silence %d ms >= threshold %d ms)",
-                stream_name,
-                silence,
-                timeout,
-            )
-            try:
-                self._on_stream_timeout(stream_name)
-            except Exception:
-                logger.exception(
-                    "on_stream_timeout callback raised for %r", stream_name
-                )
-                # Leave entry in tracker; retry on next check cycle.
-                continue
-            # Callback succeeded → evict. Lock-guarded for safe dict
-            # mutation against a concurrent add() on the consumer thread.
-            with self._tracker_lock:
-                self._last_seen_by_key.pop(stream_name, None)
-
-        for stream_name in to_drop_silently:
-            logger.warning(
-                "Stream %r dropped by TTL sweep (silence >= 3x threshold %d ms)",
-                stream_name,
-                timeout,
-            )
-
-    def _timeout_check_loop(self) -> None:
-        """Periodic timeout-check loop for the background daemon thread.
-
-        Runs ``_check_timeouts()`` every ``self._check_interval_ms``
-        milliseconds until either ``self._stop`` is set (cleanup) or
-        the tracker has been empty for ``self._idle_exit_cycles``
-        consecutive cycles (self-terminate on sustained idle). A raising
-        check must NOT kill the thread (else silent keys would go
-        untracked forever), so the body is wrapped in a broad
-        ``try/except`` that logs and continues.
-
-        Self-termination policy: if the tracker has been empty for
-        ``_idle_exit_cycles`` cycles in a row, the thread clears
-        ``self._timer_thread`` under the tracker lock and returns. The
-        next ``add()`` that records a new last-seen stamp re-spawns it
-        via ``_ensure_timer_thread_alive()``. The set-to-None + respawn
-        check both live inside the tracker lock so there is no window
-        where the tracker has entries and no thread is running.
-        """
-        empty_cycles = 0
-        while not self._stop.is_set():
-            try:
-                self._check_timeouts()
-            except Exception:
-                logger.exception("Periodic stream-timeout check raised")
-
-            # Decide whether to self-terminate. Done under the lock so a
-            # concurrent add() cannot race an entry in between our empty
-            # check and our exit — if add() wins the lock, empty_cycles
-            # resets; if we win, we clear the thread ref before releasing.
-            with self._tracker_lock:
-                if self._last_seen_by_key:
-                    empty_cycles = 0
-                else:
-                    empty_cycles += 1
-                    if empty_cycles >= self._idle_exit_cycles:
-                        logger.info(
-                            "Stream-timeout thread self-terminating "
-                            "(tracker empty for %d cycles); will be "
-                            "respawned by next add()",
-                            empty_cycles,
-                        )
-                        self._timer_thread = None
-                        return
-
-            # Event.wait returns early if the stop event fires — allows
-            # a prompt shutdown from cleanup()/tests without waiting out
-            # the full interval.
-            self._stop.wait(self._check_interval_ms / 1000)
-
-    def _ensure_timer_thread_alive(self) -> None:
-        """Start the timer thread if it's absent or has self-terminated.
-
-        MUST be called with ``self._tracker_lock`` held, so the
-        is-alive check and the new-thread creation are atomic with
-        respect to the loop's own set-to-None under the same lock.
-        """
-        t = self._timer_thread
-        if t is not None and t.is_alive():
-            return
-        # _stop may have been left set by a prior cleanup(); don't
-        # clear it here — cleanup() is terminal. A respawn after
-        # cleanup() is nonsensical, so honor _stop by short-circuiting.
-        if self._stop.is_set():
-            return
-        self._timer_thread = threading.Thread(
-            target=self._timeout_check_loop,
-            daemon=True,
-            name="QuixTSDataLakeSink-timeout-check",
-        )
-        self._timer_thread.start()
-        logger.info(
-            "Stream-timeout thread (re)started by add() "
-            "(interval=%d ms, threshold=%d ms)",
-            self._check_interval_ms,
-            self._stream_timeout_ms,
-        )
 
     def setup(self):
         """Initialize blob storage client and test connection."""
@@ -634,20 +252,8 @@ class QuixTSDataLakeSink(BatchingSink):
 
         # Start the background timeout-check thread AFTER the blob
         # client is healthy, so a blob-setup failure tears down cleanly
-        # without leaving an orphan timer thread running. daemon=True
-        # means the thread dies with the process; no join required.
-        if self._stream_timeout_enabled:
-            self._timer_thread = threading.Thread(
-                target=self._timeout_check_loop,
-                daemon=True,
-                name="QuixTSDataLakeSink-timeout-check",
-            )
-            self._timer_thread.start()
-            logger.info(
-                "Started stream-timeout check thread (interval=%d ms, threshold=%d ms)",
-                self._check_interval_ms,
-                self._stream_timeout_ms,
-            )
+        # without leaving an orphan timer thread running.
+        self._timeout.start()
 
     def _ensure_bucket(self):
         """Ensure the blob storage path is accessible."""
@@ -1085,11 +691,8 @@ class QuixTSDataLakeSink(BatchingSink):
 
     def cleanup(self):
         """Cleanup resources when sink is stopped."""
-        # Signal the background timer to exit its loop. The thread is
-        # daemon=True so this is not strictly required for process exit,
-        # but it lets tests and any future explicit-shutdown paths tear
-        # the loop down promptly instead of waiting out the interval.
-        if self._stream_timeout_enabled and self._stop is not None:
-            self._stop.set()
+        # Signal the background timer to exit its loop. No-op when the
+        # timeout feature is disabled.
+        self._timeout.stop()
         if self._blob_client:
             self._blob_client.shutdown()
