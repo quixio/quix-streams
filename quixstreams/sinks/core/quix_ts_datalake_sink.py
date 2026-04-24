@@ -33,7 +33,7 @@ from quixstreams.sinks.base import (
 
 from ._blob_storage_client import BlobStorageClient, get_bucket_name
 from ._quix_ts_datalake_catalog_client import QuixTSDataLakeCatalogClient
-from .timeout_event_generator import StreamTimeoutTracker
+from .stream_timeout_tracker import StreamTimeoutTracker
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +76,7 @@ class QuixTSDataLakeSink(BatchingSink):
     :param stream_timeout_ms: Optional **per-key** silence threshold in
         milliseconds. Paired with ``on_stream_timeout``; both must be
         provided to enable the feature. See
-        :class:`quixstreams.sinks.core.timeout_event_generator.StreamTimeoutTracker`
+        :class:`quixstreams.sinks.core.stream_timeout_tracker.StreamTimeoutTracker`
         for the full behavioural contract (per-key tracking, fire-and-evict
         semantics, re-arm on next record, 3x TTL safety sweep,
         background check cadence, and zero-overhead disabled path).
@@ -145,7 +145,7 @@ class QuixTSDataLakeSink(BatchingSink):
         # All state, threading, and validation live inside the
         # StreamTimeoutTracker — the sink composes it and exposes it
         # via integration hooks in add/flush/setup/cleanup below. See
-        # :mod:`quixstreams.sinks.core.timeout_event_generator` for the
+        # :mod:`quixstreams.sinks.core.stream_timeout_tracker` for the
         # behavioural contract. Disabled pair -> tracker is allocated
         # but ``tracker.enabled`` is False and every method is a
         # zero-overhead no-op.
@@ -169,7 +169,7 @@ class QuixTSDataLakeSink(BatchingSink):
     # ------------------------------------------------------------------
     #
     # All behaviour lives in ``self._timeout``
-    # (:class:`quixstreams.sinks.core.timeout_event_generator.StreamTimeoutTracker`).
+    # (:class:`quixstreams.sinks.core.stream_timeout_tracker.StreamTimeoutTracker`).
     # The three hooks below wire the sink lifecycle into the tracker:
     # ``add`` -> ``touch``, ``flush`` -> ``check_now``,
     # ``setup`` -> ``start``, ``cleanup`` -> ``stop``. ``on_paused`` is

@@ -59,12 +59,14 @@ The sink can detect when individual Kafka message keys go quiet and fire a callb
 
 One **stream** in this feature equals one Kafka message key. The threshold (`stream_timeout_ms`) is uniform across all keys observed by the sink.
 
+All silence-detection logic is provided by the standalone [`StreamTimeoutTracker`](stream-timeout-tracker.md) — a stdlib-only, sink-agnostic module that any sink can compose. The sink holds one instance as `sink._timeout` and wires it through `add`/`flush`/`setup`/`cleanup`.
+
 ### Constructor parameters
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `stream_timeout_ms` | `Optional[int]` | `None` | Per-key silence threshold in milliseconds. Must be a positive integer. The feature is disabled when this is `None`, `0`, or negative. |
-| `on_stream_timeout` | `Optional[Callable[[str], None]]` | `None` | Callback invoked once per silent key. Receives the Kafka message key as a UTF-8 string. Exceptions are logged and swallowed. |
+| `on_stream_timeout` | `Optional[Callable[[Any], None]]` | `None` | Callback invoked once per silent key. Receives the raw Kafka message key as-is (`bytes`, `str`, `int`, … — whatever was passed to the sink). Exceptions are logged and swallowed. |
 
 Both parameters must be set to a usable value (`stream_timeout_ms` a positive int, `on_stream_timeout` callable) for the feature to activate. Any other combination disables the feature with zero overhead: no per-key dict is allocated, no background thread is started.
 
@@ -96,11 +98,12 @@ The callback runs on the sink's flush thread, which is the same thread that driv
 
 ### Example: wiring a timeout-event producer
 
-This pattern is how the `QuixLakeSinkEventCaller` deployment connects the sink to a Kafka side-channel topic:
+This pattern is how the `QuixLakeSinkEventCaller` deployment connects the sink to a Kafka side-channel topic. The callback receives the **raw** key (bytes in practice when consuming from Kafka), so the record key passes through to the side-channel topic byte-for-byte:
 
 ```python
 import json
 import time
+from typing import Any
 from quixstreams import Application
 from quixstreams.sinks.core.quix_ts_datalake_sink import QuixTSDataLakeSink
 
@@ -114,14 +117,17 @@ timeout_topic = app.topic(
     value_serializer="bytes",
 )
 
-def on_stream_timeout(stream: str) -> None:
+def on_stream_timeout(stream: Any) -> None:
+    # `stream` is the raw Kafka key (bytes in practice). Decode once for the
+    # JSON payload; the Kafka record key is pass-through.
+    stream_str = stream.decode("utf-8", errors="replace") if isinstance(stream, bytes) else str(stream)
     # Fire-and-forget: no flush() here. The producer delivers asynchronously.
     side_producer.produce(
         topic=timeout_topic.name,           # workspace-prefixed name on Quix Cloud
-        key=stream.encode(),
+        key=stream,                         # raw pass-through
         value=json.dumps({
             "ts_ms": int(time.time() * 1000),
-            "stream": stream,
+            "stream": stream_str,
             "event": "stream_timeout",
         }).encode(),
     )
@@ -144,13 +150,15 @@ if __name__ == "__main__":
         app.run()
 ```
 
-When `sensor-a` goes quiet for 60 seconds, one record arrives on `stream-timeouts` with Kafka key `sensor-a` (raw UTF-8 bytes) and value:
+When `sensor-a` goes quiet for 60 seconds, one record arrives on `stream-timeouts` with Kafka key `sensor-a` (exact bytes of the original record key) and value:
 
 ```json
 {"ts_ms": 1745311234567, "stream": "sensor-a", "event": "stream_timeout"}
 ```
 
 Other keys continue flowing unaffected.
+
+For deeper coverage of the tracker itself (concurrency, TTL sweep, composing it into a third-party sink, etc.), see the standalone [StreamTimeoutTracker](stream-timeout-tracker.md) page.
 
 ## Retrying Failures
 

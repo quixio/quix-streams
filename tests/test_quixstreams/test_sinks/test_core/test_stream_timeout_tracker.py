@@ -1,5 +1,5 @@
 """
-Tests for StreamTimeoutTracker (quixstreams/sinks/core/timeout_event_generator.py).
+Tests for StreamTimeoutTracker (quixstreams/sinks/core/stream_timeout_tracker.py).
 
 Migrated from the sink test file; these exercise the tracker directly
 without any sink construction. All behavioural coverage for the v6
@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from quixstreams.sinks.core.timeout_event_generator import StreamTimeoutTracker
+from quixstreams.sinks.core.stream_timeout_tracker import StreamTimeoutTracker
 
 # =============================================================================
 # Helpers
@@ -507,7 +507,7 @@ class TestTrackerTTLSweep:
         tracker = _tracker(
             stream_timeout_ms=6000,
             on_stream_timeout=callback,
-            logger=logging.getLogger("quixstreams.sinks.core.timeout_event_generator"),
+            logger=logging.getLogger("quixstreams.sinks.core.stream_timeout_tracker"),
         )
 
         # Seed a key 4x older than threshold (24_000 ms old).
@@ -515,7 +515,7 @@ class TestTrackerTTLSweep:
         tracker._last_seen_by_stream["ancient"] = 100_000 - 24_000
 
         with caplog.at_level(
-            logging.WARNING, logger="quixstreams.sinks.core.timeout_event_generator"
+            logging.WARNING, logger="quixstreams.sinks.core.stream_timeout_tracker"
         ):
             tracker.check_now()
 

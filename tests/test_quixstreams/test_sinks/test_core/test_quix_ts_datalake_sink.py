@@ -1013,14 +1013,14 @@ class TestStorageKeyGeneration:
 
 # =============================================================================
 # 9. Stream-Timeout Wiring (MagicMock-based; behaviour lives in
-#    test_timeout_event_generator.py)
+#    test_stream_timeout_tracker.py)
 # =============================================================================
 
 
 class TestStreamTimeoutWiring:
     """Regression-pin that the sink calls the tracker's methods at the
     right lifecycle points. Behaviour of the tracker itself is covered
-    in ``test_timeout_event_generator.py``; these tests replace
+    in ``test_stream_timeout_tracker.py``; these tests replace
     ``sink._timeout`` with a ``MagicMock`` and assert call counts and
     argument shapes only. No real timing, no real threads.
     """
