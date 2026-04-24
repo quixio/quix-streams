@@ -1009,3 +1009,117 @@ class TestStorageKeyGeneration:
         storage_key = call_args[0][0]
 
         assert "region=us-west" in storage_key
+
+
+# =============================================================================
+# 9. Stream-Timeout Wiring (MagicMock-based; behaviour lives in
+#    test_stream_timeout_tracker.py)
+# =============================================================================
+
+
+class TestStreamTimeoutWiring:
+    """Regression-pin that the sink calls the tracker's methods at the
+    right lifecycle points. Behaviour of the tracker itself is covered
+    in ``test_stream_timeout_tracker.py``; these tests replace
+    ``sink._timeout`` with a ``MagicMock`` and assert call counts and
+    argument shapes only. No real timing, no real threads.
+    """
+
+    def test_add_calls_tracker_touch_with_log_context(
+        self, sink_factory, mock_blob_client
+    ):
+        """The sink forwards the key to tracker.touch(...) and passes
+        topic/partition/offset as kwargs (opaque context to the tracker).
+        """
+        sink = sink_factory()
+        sink._timeout = MagicMock()
+
+        sink.add(
+            value={"v": 1},
+            key="sensor-a",
+            timestamp=1000,
+            headers=[],
+            topic="my-topic",
+            partition=3,
+            offset=42,
+        )
+
+        sink._timeout.touch.assert_called_once_with(
+            "sensor-a", topic="my-topic", partition=3, offset=42
+        )
+
+    def test_flush_calls_tracker_check_now(self, sink_factory, mock_blob_client):
+        sink = sink_factory()
+        sink._timeout = MagicMock()
+
+        sink.flush()
+
+        sink._timeout.check_now.assert_called_once_with()
+
+    def test_setup_calls_tracker_start(self, sink_factory, mock_blob_client):
+        """setup() calls tracker.start() AFTER the blob client is healthy."""
+        sink = sink_factory()
+        sink._timeout = MagicMock()
+
+        with (
+            patch(
+                "quixstreams.sinks.core.quix_ts_datalake_sink.get_bucket_name",
+                return_value="test-bucket",
+            ),
+            patch(
+                "quixstreams.sinks.core.quix_ts_datalake_sink.BlobStorageClient",
+                return_value=mock_blob_client,
+            ),
+        ):
+            sink.setup()
+
+        sink._timeout.start.assert_called_once_with()
+
+    def test_cleanup_calls_tracker_stop(self, sink_factory, mock_blob_client):
+        sink = sink_factory()
+        sink._timeout = MagicMock()
+
+        sink.cleanup()
+
+        sink._timeout.stop.assert_called_once_with()
+
+    def test_on_paused_does_not_touch_tracker(self, sink_factory, mock_blob_client):
+        """Regression pin: on_paused must NOT invoke any tracker method
+        (backpressure is not a silence event).
+        """
+        sink = sink_factory()
+        sink._timeout = MagicMock()
+
+        sink.on_paused()
+
+        sink._timeout.touch.assert_not_called()
+        sink._timeout.check_now.assert_not_called()
+        sink._timeout.start.assert_not_called()
+        sink._timeout.stop.assert_not_called()
+
+    def test_constructor_builds_tracker_with_expected_args(self):
+        """The sink forwards stream_timeout_ms / on_stream_timeout /
+        _check_interval_ms to the tracker constructor. Public sink
+        signature unchanged.
+        """
+        callback = MagicMock()
+        sink = QuixTSDataLakeSink(
+            s3_prefix="p",
+            table_name="t",
+            stream_timeout_ms=6000,
+            on_stream_timeout=callback,
+            _check_interval_ms=250,
+        )
+        assert sink._timeout.enabled is True
+        assert sink._timeout._stream_timeout_ms == 6000
+        assert sink._timeout._on_stream_timeout is callback
+        assert sink._timeout._check_interval_ms == 250
+
+    def test_constructor_disabled_pair_leaves_tracker_disabled(self):
+        sink = QuixTSDataLakeSink(s3_prefix="p", table_name="t")
+        assert sink._timeout.enabled is False
+        # Disabled path: touch/check_now/start/stop are all no-ops.
+        sink._timeout.touch("s1")
+        sink._timeout.check_now()
+        sink._timeout.start()
+        sink._timeout.stop()

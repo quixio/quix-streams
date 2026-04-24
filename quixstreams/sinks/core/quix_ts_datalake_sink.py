@@ -11,7 +11,7 @@ import logging
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 try:
     import pandas as pd
@@ -33,6 +33,7 @@ from quixstreams.sinks.base import (
 
 from ._blob_storage_client import BlobStorageClient, get_bucket_name
 from ._quix_ts_datalake_catalog_client import QuixTSDataLakeCatalogClient
+from .stream_timeout_tracker import StreamTimeoutTracker
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +73,16 @@ class QuixTSDataLakeSink(BatchingSink):
     :param namespace: Catalog namespace (default: "default")
     :param auto_create_bucket: If True, attempt to create bucket/path in storage if missing
     :param max_workers: Maximum number of parallel upload threads (default: 10)
+    :param stream_timeout_ms: Optional **per-key** silence threshold in
+        milliseconds. Paired with ``on_stream_timeout``; both must be
+        provided to enable the feature. See
+        :class:`quixstreams.sinks.core.stream_timeout_tracker.StreamTimeoutTracker`
+        for the full behavioural contract (per-key tracking, fire-and-evict
+        semantics, re-arm on next record, 3x TTL safety sweep,
+        background check cadence, and zero-overhead disabled path).
+    :param on_stream_timeout: Optional callback
+        ``Callable[[str], None]`` invoked once per silence period per
+        Kafka message key. See ``stream_timeout_ms`` above.
     :param on_client_connect_success: An optional callback made after successful
         client authentication, primarily for additional logging.
     :param on_client_connect_failure: An optional callback made after failed
@@ -93,8 +104,11 @@ class QuixTSDataLakeSink(BatchingSink):
         namespace: str = "default",
         auto_create_bucket: bool = True,
         max_workers: int = 10,
+        stream_timeout_ms: Optional[int] = None,
+        on_stream_timeout: Optional[Callable[[Any], None]] = None,
         on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
         on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
+        _check_interval_ms: Optional[int] = None,
     ):
         super().__init__(
             on_client_connect_success=on_client_connect_success,
@@ -127,12 +141,68 @@ class QuixTSDataLakeSink(BatchingSink):
         # Batch upload tracking
         self._pending_futures: List[Dict[str, Any]] = []
 
+        # Stream-timeout tracking (opt-in, per-key silence detector).
+        # All state, threading, and validation live inside the
+        # StreamTimeoutTracker — the sink composes it and exposes it
+        # via integration hooks in add/flush/setup/cleanup below. See
+        # :mod:`quixstreams.sinks.core.stream_timeout_tracker` for the
+        # behavioural contract. Disabled pair -> tracker is allocated
+        # but ``tracker.enabled`` is False and every method is a
+        # zero-overhead no-op.
+        self._timeout = StreamTimeoutTracker(
+            stream_timeout_ms=stream_timeout_ms,
+            on_stream_timeout=on_stream_timeout,
+            check_interval_ms=_check_interval_ms,
+            thread_name="QuixTSDataLakeSink-timeout-check",
+            logger=logger,
+        )
+
     @property
     def s3_bucket(self) -> str:
         """Get the S3 bucket name (extracted from quixportal config)."""
         if self._s3_bucket is None:
             raise RuntimeError("s3_bucket not initialized. Call setup() first.")
         return self._s3_bucket
+
+    # ------------------------------------------------------------------
+    # Stream-timeout integration
+    # ------------------------------------------------------------------
+    #
+    # All behaviour lives in ``self._timeout``
+    # (:class:`quixstreams.sinks.core.stream_timeout_tracker.StreamTimeoutTracker`).
+    # The three hooks below wire the sink lifecycle into the tracker:
+    # ``add`` -> ``touch``, ``flush`` -> ``check_now``,
+    # ``setup`` -> ``start``, ``cleanup`` -> ``stop``. ``on_paused`` is
+    # intentionally a no-op on tracker state (backpressure means the
+    # destination rejected a batch, not that the messages were never
+    # seen; per-key silence timers continue from their last-seen
+    # stamp regardless of write success).
+
+    def add(
+        self,
+        value: Any,
+        key: Any,
+        timestamp: int,
+        headers: Any,
+        topic: str,
+        partition: int,
+        offset: int,
+    ):
+        """Accumulate the record, then refresh the per-key last-seen
+        stamp via the tracker.
+        """
+        super().add(value, key, timestamp, headers, topic, partition, offset)
+        self._timeout.touch(key, topic=topic, partition=partition, offset=offset)
+
+    def flush(self):
+        """Flush the parent batch, then run a timeout check."""
+        super().flush()
+        self._timeout.check_now()
+
+    def on_paused(self):
+        """Inherit parent ``on_paused()`` — do **not** touch tracker state."""
+        super().on_paused()
+        # intentional no-op on tracker state
 
     def setup(self):
         """Initialize blob storage client and test connection."""
@@ -180,6 +250,11 @@ class QuixTSDataLakeSink(BatchingSink):
         except Exception as e:
             logger.error("Failed to setup blob storage connection: %s", e)
             raise
+
+        # Start the background timeout-check thread AFTER the blob
+        # client is healthy, so a blob-setup failure tears down cleanly
+        # without leaving an orphan timer thread running.
+        self._timeout.start()
 
     def _ensure_bucket(self):
         """Ensure the blob storage path is accessible."""
@@ -617,5 +692,8 @@ class QuixTSDataLakeSink(BatchingSink):
 
     def cleanup(self):
         """Cleanup resources when sink is stopped."""
+        # Signal the background timer to exit its loop. No-op when the
+        # timeout feature is disabled.
+        self._timeout.stop()
         if self._blob_client:
             self._blob_client.shutdown()
