@@ -94,13 +94,9 @@ class TestRocksDBStorePartition:
             match=f'State store at "{path}" is corrupted but may be recovered '
             f"from the changelog topic",
         ):
-            store_partition_factory(
-                options=RocksDBOptions(on_corrupted_recreate=False)
-            )
+            store_partition_factory(options=RocksDBOptions(on_corrupted_recreate=False))
 
-    def test_db_corrupted_recreated_by_default(
-        self, store_partition_factory, tmp_path
-    ):
+    def test_db_corrupted_recreated_by_default(self, store_partition_factory, tmp_path):
         # Initialize and corrupt the database by messing with the MANIFEST
         Rdict(path=tmp_path.as_posix())
         next(tmp_path.glob("MANIFEST*")).write_bytes(b"")
