@@ -337,8 +337,10 @@ class RocksDBStorePartition(StorePartition):
                 raise RocksDBCorruptedError(
                     f'State store at "{self._path}" is corrupted '
                     f"but may be recovered from the changelog topic. "
-                    "Pass `rocksdb_options=RocksDBOptions(..., on_corrupted_recreate=True)` "
-                    "to the Application to destroy the corrupted state "
+                    "`on_corrupted_recreate` is set to False; "
+                    "remove the override (or pass "
+                    "`rocksdb_options=RocksDBOptions(..., on_corrupted_recreate=True)`) "
+                    "to destroy the corrupted state "
                     "and recover it from the changelog."
                 ) from exc
 
