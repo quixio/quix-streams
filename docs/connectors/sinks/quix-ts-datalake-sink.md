@@ -12,7 +12,13 @@ Supported backends (via `quixportal`):
 
 ## How To Install
 
-`QuixTSDataLakeSink` ships in the default `quixstreams` package — no extra install step.
+The dependencies for this sink are not included to the default `quixstreams` package.
+
+To install them, run the following command:
+
+```commandline
+pip install quixstreams[quixdatalake]
+```
 
 ## How To Use
 
