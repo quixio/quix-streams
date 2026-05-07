@@ -10,7 +10,7 @@
 class State(ABC, Generic[K, V])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L17)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\state\base\state.py#L17)
 
 Primary interface for working with key-value state data from `StreamingDataFrame`
 
@@ -25,7 +25,7 @@ Primary interface for working with key-value state data from `StreamingDataFrame
 def get(key: K, default: Optional[V] = None) -> Optional[V]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L29)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\state\base\state.py#L29)
 
 Get the value for key if key is present in the state, else default
 
@@ -52,7 +52,7 @@ value or None if the key is not found and `default` is not provided
 def get_bytes(key: K, default: Optional[bytes] = None) -> Optional[bytes]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L45)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\state\base\state.py#L45)
 
 Get the value for key if key is present in the state, else default
 
@@ -80,7 +80,7 @@ value as bytes or None if the key is not found and `default` is not provided
 def set(key: K, value: V) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L55)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\state\base\state.py#L55)
 
 Set value for the key.
 
@@ -102,7 +102,7 @@ Set value for the key.
 def set_bytes(key: K, value: bytes) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L64)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\state\base\state.py#L64)
 
 Set value for the key.
 
@@ -124,7 +124,7 @@ Set value for the key.
 def delete(key: K)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L73)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\state\base\state.py#L73)
 
 Delete value for the key.
 
@@ -147,7 +147,7 @@ This function always returns `None`, even if value is not found.
 def exists(key: K) -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L83)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\state\base\state.py#L83)
 
 Check if the key exists in state.
 
@@ -171,7 +171,7 @@ True if key exists, False otherwise
 class TransactionState(State)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L92)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\state\base\state.py#L92)
 
 <a id="quixstreams.state.base.state.TransactionState.__init__"></a>
 
@@ -180,10 +180,12 @@ class TransactionState(State)
 #### TransactionState.\_\_init\_\_
 
 ```python
-def __init__(prefix: bytes, transaction: "PartitionTransaction")
+def __init__(prefix: bytes,
+             transaction: "PartitionTransaction",
+             timestamp: Optional[int] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L98)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\state\base\state.py#L99)
 
 Simple key-value state to be provided into `StreamingDataFrame` functions
 
@@ -192,6 +194,10 @@ Simple key-value state to be provided into `StreamingDataFrame` functions
 ***Arguments:***
 
 - `transaction`: instance of `PartitionTransaction`
+- `prefix`: serialized key prefix shared across calls
+- `timestamp`: optional event-time of the current record (ms).
+TTL-enabled stores use this to stamp values on ``set()`` and to
+filter expired entries on ``get()``. Non-TTL stores ignore it.
 
 <a id="quixstreams.state.base.state.TransactionState.get"></a>
 
@@ -203,7 +209,7 @@ Simple key-value state to be provided into `StreamingDataFrame` functions
 def get(key: K, default: Optional[V] = None) -> Optional[V]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L113)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\state\base\state.py#L124)
 
 Get the value for key if key is present in the state, else default
 
@@ -230,7 +236,7 @@ value or None if the key is not found and `default` is not provided
 def get_bytes(key: K, default: Optional[bytes] = None) -> Optional[bytes]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L129)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\state\base\state.py#L145)
 
 Get the bytes value for key if key is present in the state, else default
 
@@ -257,7 +263,7 @@ value or None if the key is not found and `default` is not provided
 def set(key: K, value: V) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L141)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\state\base\state.py#L160)
 
 Set value for the key.
 
@@ -278,7 +284,7 @@ Set value for the key.
 def set_bytes(key: K, value: bytes) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L149)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\state\base\state.py#L170)
 
 Set value for the key.
 
@@ -299,7 +305,7 @@ Set value for the key.
 def delete(key: K)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L157)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\state\base\state.py#L180)
 
 Delete value for the key.
 
@@ -321,7 +327,7 @@ This function always returns `None`, even if value is not found.
 def exists(key: K) -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/base/state.py#L166)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\state\base\state.py#L189)
 
 Check if the key exists in state.
 
@@ -350,7 +356,7 @@ True if key exists, False otherwise
 class RocksDBOptions(RocksDBOptionsType)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/options.py#L26)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\state\rocksdb\options.py#L26)
 
 RocksDB database options.
 
@@ -369,6 +375,12 @@ If this option is True, but `use_changelog_topics=False`,
 the DB won't be destroyed.
 Note: risk of data loss! Make sure that the changelog topics are up-to-date before disabling it in production.
 Default - `True`.
+- `max_evictions_per_flush`: cap on TTL-driven evictions performed
+during a single ``flush()`` for stores with TTL enabled. Larger values
+increase per-flush latency but let the sweep keep up with higher
+steady-state expiration rates. Only meaningful for TTL-enabled
+stores; ignored otherwise.
+Default - ``10_000``.
 
 Please see `rocksdict.Options` for a complete description of other options.
 
@@ -382,7 +394,7 @@ Please see `rocksdict.Options` for a complete description of other options.
 def to_options() -> rocksdict.Options
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/state/rocksdb/options.py#L62)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\state\rocksdb\options.py#L69)
 
 Convert parameters to `rocksdict.Options`
 

@@ -200,3 +200,112 @@ def apply(value, state):
     
 sdf = sdf.apply(apply, stateful=True)
 ```
+
+
+## State TTL
+
+State TTL lets you attach an expiry duration to individual writes in a state store. You opt in per write by passing `ttl=timedelta(...)` as the third argument to `state.set()`. A write with no `ttl` argument never expires. Expiry is driven by the **event time** of each incoming record (the Kafka message timestamp), not by the wall clock. Eviction runs as a bounded sweep inside each `flush()` call — no new threads are created and no external scheduler is required.
+
+
+### When to use it
+
+- **Deduplication over a fixed window.** You want semantic idempotency: if you have already seen a message ID in the last seven days, drop the duplicate. You write the ID to state only on the first encounter, with a `ttl=timedelta(days=7)`. After seven days the entry expires, and the same ID is treated as new again.
+
+- **Last-seen / heartbeat tracking.** You want to know when a device was most recently active. You write the device's timestamp to state on every encounter, passing `ttl=` each time. The TTL acts as a sliding window: as long as events keep arriving, the stamp is refreshed and the entry never expires. Once the device goes silent for longer than the TTL, the entry is evicted and the device is effectively forgotten.
+
+
+### Quick example — deduplication
+
+```python
+from datetime import timedelta
+from quixstreams import Application, State
+
+app = Application(broker_address="localhost:9092")
+topic = app.topic("events")
+sdf = app.dataframe(topic)
+
+def is_new(value: dict, state: State) -> bool:
+    msg_id = value["id"]
+    if state.get(msg_id) is not None:
+        return False                              # already seen — drop it
+    state.set(msg_id, 1, ttl=timedelta(days=7))  # first time — record it
+    return True
+
+sdf = sdf.filter(is_new, stateful=True)
+```
+
+The `ttl=` argument goes on the `state.set()` call inside your callback, not on `.filter()` or `.apply()`.
+
+
+### Fixed-window vs sliding-window semantics
+
+The same store produces two different retention behaviors depending on whether your callback calls `state.set(..., ttl=...)` only on the first encounter or on every encounter.
+
+**Fixed window** — set on first encounter only. The expiry clock starts when the entry is created and does not reset on subsequent events.
+
+```python
+def dedup(value: dict, state: State) -> bool:
+    if state.get(value["id"]) is not None:
+        return False                                    # seen before — suppress
+    state.set(value["id"], 1, ttl=timedelta(days=7))   # first time — stamp it
+    return True
+```
+
+**Sliding window** — set on every encounter. Each new event re-stamps the entry, so it lives for `ttl` from the *last* time it was seen.
+
+```python
+def touch_session(value: dict, state: State) -> dict:
+    state.set(value["session_id"], value["ts"], ttl=timedelta(minutes=5))
+    return value
+```
+
+
+### Mixing expiring and permanent entries in one store
+
+Any callback can write some keys with a `ttl` and others without, all to the same store. Writes without `ttl` carry a "never expires" sentinel and live forever. Writes with `ttl` expire relative to the record's event time. Both coexist in the same RocksDB column family with no extra configuration.
+
+```python
+def handle(value: dict, state: State) -> dict:
+    # This key expires 7 days after each event that writes it.
+    state.set(f"seen:{value['id']}", 1, ttl=timedelta(days=7))
+
+    # This key lives forever — no ttl argument.
+    state.set(f"config:{value['k']}", value["v"])
+
+    return value
+
+sdf = sdf.apply(handle, stateful=True)
+```
+
+Mixing TTL behavior in the same callback is the normal pattern. Writes without a `ttl` argument live forever; writes with a `ttl` argument expire `ttl` of event-time after the record's timestamp. The same key can flip between expiring and permanent by overwriting it with or without `ttl=`.
+
+
+### Semantics and gotchas
+
+- **Expiry is event-time-based.** The expiry of an entry is `record.timestamp + ttl`. Replaying historical data does not instantly evict everything; entries expire relative to the timestamps in the data being processed, not relative to the system clock.
+
+- **Eviction is approximate.** The sweep runs inside `flush()` and is capped at 10,000 evictions per flush by default. You can tune this with `RocksDBOptions(max_evictions_per_flush=N)`. On a low-traffic partition, physical eviction can lag by up to one `commit_interval` after logical expiry. Logically-expired entries are already invisible to reads — they are just not yet reclaimed from disk. This lag is by design.
+
+- **Cold start.** Until at least one record has been processed, the partition has no event-time reference and no sweep runs. Reads return whatever is in the store.
+
+- **8-byte overhead per value.** Every stored value carries an 8-byte expiry stamp on disk, including entries written without `ttl=`. The stamp is transparent to your code and negligible in practice.
+
+- **Upgrading from v3.23.6 or earlier.** On-disk state stores from v3.23.6 and earlier use an incompatible layout. The application will raise `IncompatibleStateStoreError` on startup if it detects an old store. Delete the local state directory before starting; the store rebuilds from the changelog topic automatically. If the changelog topic also predates the new format, clear it too — all state is lost, but this is a one-time cost on upgrade.
+
+- **Changelog topic retention.** For long-lived deployments with TTL, set the changelog topic's `retention.ms` to at least `ttl + a buffer` and use `cleanup.policy=compact,delete`. Without this, the changelog may retain data longer than the TTL — harmless but wastes storage. See [Changelog Topics](#how-changelog-topics-work) above.
+
+
+### Current limitations
+
+- **No per-store default TTL.** There is no `ttl=` argument on `.apply()`, `.update()`, `.filter()`, or `register_store()`. If you want every entry in a callback to expire, pass `ttl=` on each `state.set()` call.
+- **No wall-clock TTL.** Expiry is always event-time. There is no wall-clock fallback.
+- **No TTL on windowed stores.** Windowed state stores manage their own retention via `grace_ms`; `ttl=` on `state.set()` has no effect inside windowed aggregations.
+
+
+### API reference
+
+- [`State.set()`](../api-reference/state.md#stateset)
+- [`State.set_bytes()`](../api-reference/state.md#stateset_bytes)
+- [`StreamingDataFrame.apply()`](../api-reference/dataframe.md#streamingdataframeapply)
+- [`StreamingDataFrame.filter()`](../api-reference/dataframe.md#streamingdataframefilter)
+- [`StreamingDataFrame.update()`](../api-reference/dataframe.md#streamingdataframeupdate)

@@ -10,7 +10,7 @@
 class BaseSource(ABC)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L28)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\base\source.py#L28)
 
 This is the base class for all sources.
 
@@ -83,7 +83,7 @@ if __name__ == "__main__":
 def configure(topic: Topic, producer: InternalProducer, **kwargs) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L116)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\base\source.py#L116)
 
 This method is triggered before the source is started.
 
@@ -99,7 +99,7 @@ It configures the source's Kafka producer, the topic it will produce to and opti
 def setup()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L125)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\base\source.py#L125)
 
 When applicable, set up the client here along with any validation to affirm a
 valid/successful authentication/connection.
@@ -115,7 +115,7 @@ valid/successful authentication/connection.
 def start() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L145)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\base\source.py#L145)
 
 This method is triggered in the subprocess when the source is started.
 
@@ -133,7 +133,7 @@ Use it to fetch data and produce it to Kafka.
 def stop() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L154)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\base\source.py#L154)
 
 This method is triggered when the application is shutting down.
 
@@ -150,7 +150,7 @@ The source must ensure that the `run` method is completed soon.
 def default_topic() -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L162)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\base\source.py#L162)
 
 This method is triggered when the topic is not provided to the source.
 
@@ -166,7 +166,7 @@ Note: if the default topic is used, the Application will prefix its name with "s
 class Source(BaseSource)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L172)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\base\source.py#L172)
 
 A base class for custom Sources that provides a basic implementation of `BaseSource`
 interface.
@@ -231,7 +231,7 @@ def __init__(
 ) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L222)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\base\source.py#L222)
 
 
 <br>
@@ -257,7 +257,7 @@ Callback must resolve (or propagate/re-raise) the Exception.
 def running() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L251)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\base\source.py#L251)
 
 Property indicating if the source is running.
 
@@ -273,7 +273,7 @@ The `stop` method will set it to `False`. Use it to stop the source gracefully.
 def cleanup(failed: bool) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L259)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\base\source.py#L259)
 
 This method is triggered once the `run` method completes.
 
@@ -291,7 +291,7 @@ It flushes the producer when `_run` completes successfully.
 def stop() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L270)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\base\source.py#L270)
 
 This method is triggered when the application is shutting down.
 
@@ -307,7 +307,7 @@ It sets the `running` property to `False`.
 def start() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L278)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\base\source.py#L278)
 
 This method is triggered in the subprocess when the source is started.
 
@@ -324,7 +324,7 @@ It marks the source as running, execute it's run method and ensure cleanup happe
 def run()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L295)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\base\source.py#L295)
 
 This method is triggered in the subprocess when the source is started.
 
@@ -344,7 +344,7 @@ def serialize(key: Optional[object] = None,
               timestamp_ms: Optional[int] = None) -> KafkaMessage
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L303)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\base\source.py#L303)
 
 Serialize data to bytes using the producer topic serializers and return a `quixstreams.models.messages.KafkaMessage`.
 
@@ -370,7 +370,7 @@ def produce(value: Optional[Union[str, bytes]] = None,
             buffer_error_max_tries: int = PRODUCER_ON_ERROR_RETRIES) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L319)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\base\source.py#L319)
 
 Produce a message to the configured source topic in Kafka.
 
@@ -384,7 +384,7 @@ Produce a message to the configured source topic in Kafka.
 def flush(timeout: Optional[float] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L344)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\base\source.py#L344)
 
 This method flush the producer.
 
@@ -411,7 +411,7 @@ None use producer default or -1 is infinite. Default: None
 def default_topic() -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L362)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\base\source.py#L362)
 
 Return a default topic matching the source name.
 
@@ -433,7 +433,7 @@ Note: if the default topic is used, the Application will prefix its name with "s
 class StatefulSource(Source)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L381)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\base\source.py#L381)
 
 A `Source` class for custom Sources that need a state.
 
@@ -498,7 +498,7 @@ def __init__(
 ) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L431)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\base\source.py#L431)
 
 
 <br>
@@ -527,7 +527,7 @@ def configure(topic: Topic,
               **kwargs) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L458)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\base\source.py#L458)
 
 This method is triggered before the source is started.
 
@@ -544,7 +544,7 @@ It configures the source's Kafka producer, the topic it will produce to and the 
 def store_partitions_count() -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L477)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\base\source.py#L477)
 
 Count of store partitions.
 
@@ -561,7 +561,7 @@ Used to configure the number of partition in the changelog topic.
 def assigned_store_partition() -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L486)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\base\source.py#L486)
 
 The store partition assigned to this instance
 
@@ -576,7 +576,7 @@ The store partition assigned to this instance
 def store_name() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L493)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\base\source.py#L493)
 
 The source store name
 
@@ -591,7 +591,7 @@ The source store name
 def state() -> State
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L500)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\base\source.py#L500)
 
 Access the `State` of the source.
 
@@ -609,7 +609,7 @@ Important: after each `.flush()` call, a previously returned instance is invalid
 def flush(timeout: Optional[float] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/base/source.py#L519)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\base\source.py#L519)
 
 This method commit the state and flush the producer.
 
@@ -638,7 +638,7 @@ None use producer default or -1 is infinite. Default: None
 class CSVSource(Source)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/core/csv.py#L13)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\core\csv.py#L13)
 
 <a id="quixstreams.sources.core.csv.CSVSource.__init__"></a>
 
@@ -657,7 +657,7 @@ def __init__(path: Union[str, Path],
              dialect: str = "excel") -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/core/csv.py#L14)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\core\csv.py#L14)
 
 A base CSV source that reads data from a CSV file and produces rows
 
@@ -697,7 +697,7 @@ Default - `"excel"`.
 class KafkaReplicatorSource(Source)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/core/kafka/kafka.py#L27)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\core\kafka\kafka.py#L27)
 
 Source implementation that replicates a topic from a Kafka broker to your application broker.
 
@@ -751,7 +751,7 @@ def __init__(
 ) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/core/kafka/kafka.py#L56)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\core\kafka\kafka.py#L56)
 
 
 <br>
@@ -796,7 +796,7 @@ Callback must resolve (or propagate/re-raise) the Exception.
 class QuixEnvironmentSource(KafkaReplicatorSource)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/core/kafka/quix.py#L22)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\core\kafka\quix.py#L22)
 
 Source implementation that replicates a topic from a Quix Cloud environment to your application broker.
 It can copy messages for development and testing without risking producing them back or affecting the consumer groups.
@@ -854,7 +854,7 @@ def __init__(
 ) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/core/kafka/quix.py#L53)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\core\kafka\quix.py#L53)
 
 
 <br>
@@ -879,7 +879,7 @@ For other parameters See `quixstreams.sources.kafka.KafkaReplicatorSource`
 class AzureFileSource(FileSource)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/azure.py#L36)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\community\file\azure.py#L36)
 
 A source for extracting records stored within files in an Azure Filestore container.
 
@@ -912,7 +912,7 @@ def __init__(connection_string: str,
                  ClientConnectFailureCallback] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/azure.py#L45)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\community\file\azure.py#L45)
 
 
 <br>
@@ -956,7 +956,7 @@ Callback must resolve (or propagate/re-raise) the Exception.
 def file_partition_counter() -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/azure.py#L135)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\community\file\azure.py#L135)
 
 This is a simplified version of the recommended way to retrieve folder
 names based on the azure SDK docs examples.
@@ -973,7 +973,7 @@ names based on the azure SDK docs examples.
 class FileSource(Source)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/base.py#L23)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\community\file\base.py#L23)
 
 An interface for extracting records using a file-based client.
 
@@ -1015,7 +1015,7 @@ def __init__(filepath: Union[str, Path],
                  ClientConnectFailureCallback] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/base.py#L43)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\community\file\base.py#L43)
 
 
 <br>
@@ -1058,7 +1058,7 @@ Callback must resolve (or propagate/re-raise) the Exception.
 def get_file_list(filepath: Path) -> Iterable[Path]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/base.py#L106)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\community\file\base.py#L106)
 
 Find all files/"blobs" starting from a root folder.
 
@@ -1087,7 +1087,7 @@ an iterable will all desired files in their desired processing order
 def read_file(filepath: Path) -> BinaryIO
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/base.py#L117)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\community\file\base.py#L117)
 
 Returns a filepath as an unaltered, open filestream.
 
@@ -1103,7 +1103,7 @@ Result should be ready for deserialization (and/or decompression).
 def process_record(record: object)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/base.py#L124)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\community\file\base.py#L124)
 
 Applies replay delay, serializes the record, and produces it to Kafka.
 
@@ -1117,7 +1117,7 @@ Applies replay delay, serializes the record, and produces it to Kafka.
 def file_partition_counter() -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/base.py#L166)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\community\file\base.py#L166)
 
 Can optionally define a way of counting folders to intelligently
 set the "default_topic" partition count to match partition folder count.
@@ -1148,7 +1148,7 @@ topic_name/
 def default_topic() -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/base.py#L192)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\community\file\base.py#L192)
 
 Optionally allows the file structure to define the partition count for the
 
@@ -1172,7 +1172,7 @@ the default topic with optionally altered partition count
 class LocalFileSource(FileSource)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/local.py#L20)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\community\file\local.py#L20)
 
 A source for extracting records stored within files in a local filesystem.
 
@@ -1203,7 +1203,7 @@ def __init__(filepath: Union[str, Path],
                  ClientConnectFailureCallback] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/local.py#L29)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\community\file\local.py#L29)
 
 
 <br>
@@ -1247,7 +1247,7 @@ Callback must resolve (or propagate/re-raise) the Exception.
 class S3FileSource(FileSource)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/s3.py#L38)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\community\file\s3.py#L38)
 
 A source for extracting records stored within files in an S3 bucket location.
 
@@ -1284,7 +1284,7 @@ def __init__(
             ClientConnectFailureCallback] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/s3.py#L47)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\community\file\s3.py#L47)
 
 
 <br>
@@ -1342,7 +1342,7 @@ Callback must resolve (or propagate/re-raise) the Exception.
 class JSONFormat(Format)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/formats/json.py#L12)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\community\file\formats\json.py#L12)
 
 <a id="quixstreams.sources.community.file.formats.json.JSONFormat.__init__"></a>
 
@@ -1355,7 +1355,7 @@ def __init__(compression: Optional[CompressionName],
              loads: Optional[Callable[[str], dict]] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/file/formats/json.py#L13)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\community\file\formats\json.py#L13)
 
 Read a JSON-formatted file (along with decompressing it).
 
@@ -1383,7 +1383,7 @@ with {_key: str, _value: dict, _timestamp: int}.
 class KinesisSource(StatefulSource)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/kinesis/kinesis.py#L22)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\community\kinesis\kinesis.py#L22)
 
 NOTE: Requires `pip install quixstreams[kinesis]` to work.
 
@@ -1445,7 +1445,7 @@ def __init__(
             ClientConnectFailureCallback] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/kinesis/kinesis.py#L61)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\community\kinesis\kinesis.py#L61)
 
 
 <br>
@@ -1488,7 +1488,7 @@ Callback must resolve (or propagate/re-raise) the Exception.
 class MQTTSource(Source)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/mqtt.py#L56)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\community\mqtt.py#L56)
 
 A source that reads messages from an MQTT broker.
 
@@ -1520,7 +1520,7 @@ def __init__(
             ClientConnectFailureCallback] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/mqtt.py#L61)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\community\mqtt.py#L61)
 
 
 <br>
@@ -1558,7 +1558,7 @@ Callback must resolve (or propagate/re-raise) the Exception.
 class PubSubSource(Source)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/pubsub/pubsub.py#L20)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\community\pubsub\pubsub.py#L20)
 
 This source enables reading from a Google Cloud Pub/Sub topic,
 dumping it to a kafka topic using desired SDF-based transformations.
@@ -1618,7 +1618,7 @@ def __init__(project_id: str,
                  ClientConnectFailureCallback] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/pubsub/pubsub.py#L59)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\community\pubsub\pubsub.py#L59)
 
 
 <br>
@@ -1657,7 +1657,7 @@ Callback must resolve (or propagate/re-raise) the Exception.
 class PandasDataFrameSource(Source)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/pandas.py#L20)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\community\pandas.py#L20)
 
 <a id="quixstreams.sources.community.pandas.PandasDataFrameSource.__init__"></a>
 
@@ -1675,7 +1675,7 @@ def __init__(df: pd.DataFrame,
              name: str = "pandas-dataframe-source") -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/pandas.py#L21)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\community\pandas.py#L21)
 
 A source that reads data from a pandas.DataFrame and produces rows to a Kafka topic in JSON format.
 
@@ -1710,7 +1710,7 @@ Default - `True`.
 def run()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/pandas.py#L107)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\community\pandas.py#L107)
 
 Produces data from the DataFrame row by row.
 
@@ -1726,7 +1726,7 @@ Produces data from the DataFrame row by row.
 class InfluxDB3Source(Source)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/influxdb3/influxdb3.py#L79)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\community\influxdb3\influxdb3.py#L79)
 
 InfluxDB3Source extracts data from a specified set of measurements in a
   database (or all available ones if none are specified).
@@ -1769,7 +1769,7 @@ def __init__(
 ) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sources/community/influxdb3/influxdb3.py#L94)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sources\community\influxdb3\influxdb3.py#L94)
 
 
 <br>

@@ -2,6 +2,11 @@ import pytest
 
 from quixstreams.state.manager import SUPPORTED_STORES
 from quixstreams.state.metadata import Marker
+from quixstreams.state.rocksdb.ttl_codec import (
+    SENTINEL_NEVER,
+    decode_ttl_value,
+    encode_ttl_value,
+)
 
 
 @pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
@@ -18,11 +23,28 @@ class TestStorePartition:
 
     @pytest.mark.parametrize("store_value", [10, None])
     def test_recover_from_changelog_message_success(self, store_value, store_partition):
+        # Replay a raw legacy (unstamped) value; the partition wraps it with
+        # the never-expires sentinel so the on-disk payload follows the v2
+        # value layout. ``partition.get`` returns the raw stamped blob since
+        # the partition layer is below the TTL-decoding transaction.
         store_partition.recover_from_changelog_message(
             key=b"key", value=b"value", cf_name="default", offset=1
         )
-        assert store_partition.get(b"key") == b"value"
+        stored = store_partition.get(b"key")
+        stamp, payload = decode_ttl_value(stored)
+        assert stamp == SENTINEL_NEVER
+        assert payload == b"value"
         assert store_partition.get_changelog_offset() == 1
+
+    def test_recover_from_changelog_message_already_stamped(self, store_partition):
+        # An already-stamped replay value (>= 8 bytes, valid stamp prefix) is
+        # passed through verbatim.
+        stamped = encode_ttl_value(SENTINEL_NEVER, b"value")
+        store_partition.recover_from_changelog_message(
+            key=b"key", value=stamped, cf_name="default", offset=2
+        )
+        assert store_partition.get(b"key") == stamped
+        assert store_partition.get_changelog_offset() == 2
 
     def test_recover_from_changelog_message_missing_cf(self, store_partition):
         store_partition.recover_from_changelog_message(

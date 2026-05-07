@@ -18,6 +18,7 @@ from quixstreams.state.metadata import (
     CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER,
     Marker,
 )
+from quixstreams.state.rocksdb.ttl_codec import SENTINEL_NEVER, encode_ttl_value
 from quixstreams.state.serialization import serialize
 from quixstreams.utils.json import dumps
 
@@ -466,7 +467,12 @@ class TestPartitionTransaction:
                 data, changelog_producer_mock.produce.call_args_list
             ):
                 assert call.kwargs["key"] == tx._serialize_key(key=key, prefix=prefix)
-                assert call.kwargs["value"] == tx._serialize_value(value=value)
+                # v2: every default-CF write carries an 8-byte expiry stamp.
+                # ``set`` without ``ttl=`` writes the never-expires sentinel.
+                expected_value = encode_ttl_value(
+                    SENTINEL_NEVER, tx._serialize_value(value=value)
+                )
+                assert call.kwargs["value"] == expected_value
                 assert call.kwargs["headers"] == {
                     CHANGELOG_CF_MESSAGE_HEADER: cf,
                     CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER: dumps(

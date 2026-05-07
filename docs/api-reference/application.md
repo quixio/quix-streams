@@ -10,7 +10,7 @@
 class Application()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L88)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\app.py#L88)
 
 The main Application class.
 
@@ -88,7 +88,7 @@ def __init__(broker_address: Optional[Union[str, ConnectionConfig]] = None,
              broker_availability_timeout: float = 120.0)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L126)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\app.py#L126)
 
 
 <br>
@@ -194,7 +194,7 @@ instead of the default one.
 def Quix(cls, *args, **kwargs)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L412)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\app.py#L412)
 
 RAISES EXCEPTION: DEPRECATED.
 
@@ -217,7 +217,7 @@ def topic(name: str,
           timestamp_extractor: Optional[TimestampExtractor] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L444)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\app.py#L444)
 
 Create a topic definition.
 
@@ -299,7 +299,7 @@ def dataframe(topic: Optional[Topic] = None,
               source: Optional[BaseSource] = None) -> StreamingDataFrame
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L524)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\app.py#L524)
 
 A simple helper method that generates a `StreamingDataFrame`, which is used
 
@@ -355,7 +355,7 @@ to be used as an input topic.
 def stop(fail: bool = False)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L580)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\app.py#L580)
 
 Stop the internal poll loop and the message processing.
 
@@ -382,7 +382,7 @@ to unhandled exception, and it shouldn't commit the current checkpoint.
 def get_producer(transactional: bool = False) -> Producer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L625)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\app.py#L625)
 
 Create and return a pre-configured Producer instance.
 
@@ -427,7 +427,7 @@ with app.get_producer() as producer:
 def get_consumer(auto_commit_enable: bool = True) -> Consumer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L693)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\app.py#L693)
 
 Create and return a pre-configured Consumer instance.
 
@@ -484,7 +484,7 @@ with app.get_consumer() as consumer:
 def clear_state()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L742)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\app.py#L742)
 
 Clear the state of the application.
 
@@ -498,7 +498,7 @@ Clear the state of the application.
 def add_source(source: BaseSource, topic: Optional[Topic] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L748)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\app.py#L748)
 
 Add a source to the application.
 
@@ -529,7 +529,7 @@ def run(dataframe: Optional[StreamingDataFrame] = None,
         metadata: bool = False) -> list[dict]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L782)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\app.py#L782)
 
 Start processing data from Kafka using provided `StreamingDataFrame`
 
@@ -605,7 +605,7 @@ Default - `False`.
 class ApplicationConfig(BaseSettings)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1156)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\app.py#L1156)
 
 Immutable object holding the application configuration
 
@@ -628,7 +628,7 @@ def settings_customise_sources(
 ) -> Tuple[PydanticBaseSettingsSource, ...]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1192)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\app.py#L1192)
 
 Included to ignore reading/setting values from the environment
 
@@ -642,7 +642,7 @@ Included to ignore reading/setting values from the environment
 def copy(**kwargs) -> "ApplicationConfig"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1205)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\app.py#L1205)
 
 Update the application config and return a copy
 
@@ -657,7 +657,7 @@ def resolve_transactional_id(transactional_id: Optional[str],
                              prefix: str) -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1227)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\app.py#L1227)
 
 Utility function to resolve the transactional.id based
 on existing config and provided prefix.

@@ -157,12 +157,11 @@ class TestRocksDBStorePartition:
         self, store_partition: RocksDBStorePartition
     ):
         cfs = store_partition.list_column_families()
-        assert cfs == [
-            # "default" CF is always present in RocksDB
-            "default",
-            # "__metadata__" CF is created by the RocksDBStorePartition
-            "__metadata__",
-        ]
+        # Order can vary depending on creation sequence, so compare as sets.
+        # "default" is always present in RocksDB. "__metadata__" is created by
+        # RocksDBStorePartition. "__ttl_index__" is created by the per-write
+        # TTL machinery (always-on in v2; see ttl_codec.py).
+        assert set(cfs) == {"default", "__metadata__", "__ttl_index__"}
 
     def test_ensure_metadata_cf(self, store_partition: RocksDBStorePartition):
         assert store_partition.get_or_create_column_family("__metadata__")

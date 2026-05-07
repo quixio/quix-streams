@@ -3,6 +3,7 @@ import functools
 import logging
 from abc import ABC
 from collections import defaultdict
+from datetime import timedelta
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -27,6 +28,7 @@ from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER,
     DEFAULT_PREFIX,
+    LOCAL_ONLY_CFS,
     SEPARATOR,
     Marker,
 )
@@ -281,12 +283,23 @@ class PartitionTransaction(ABC, Generic[K, V]):
         prefix = prefix + SEPARATOR if prefix else b""
         return prefix + key_bytes
 
-    def as_state(self, prefix: Any = DEFAULT_PREFIX) -> State[K, V]:
+    def as_state(
+        self,
+        prefix: Any = DEFAULT_PREFIX,
+        timestamp: Optional[int] = None,
+    ) -> State[K, V]:
         """
         Create an instance implementing the `State` protocol to be provided
         to `StreamingDataFrame` functions.
         All operations called on this State object will be prefixed with
         the supplied `prefix`.
+
+        :param prefix: a key prefix for the State proxy
+        :param timestamp: the current record's event-time in milliseconds.
+            Required for stores with TTL enabled; ignored otherwise. The
+            framework injects this on every record via the stateful
+            wrapper in ``StreamingDataFrame`` so user code does not need
+            to pass it explicitly.
 
         :return: an instance implementing the `State` protocol
         """
@@ -297,6 +310,7 @@ class PartitionTransaction(ABC, Generic[K, V]):
                 if isinstance(prefix, bytes)
                 else serialize(prefix, dumps=self._dumps)
             ),
+            timestamp=timestamp,
         )
 
     @overload
@@ -313,6 +327,7 @@ class PartitionTransaction(ABC, Generic[K, V]):
         prefix: bytes,
         default: Optional[V] = None,
         cf_name: str = "default",
+        timestamp: Optional[int] = None,
     ) -> Optional[V]:
         """
         Get a key from the store.
@@ -323,10 +338,14 @@ class PartitionTransaction(ABC, Generic[K, V]):
         :param prefix: a key prefix
         :param default: default value to return if the key is not found
         :param cf_name: column family name
+        :param timestamp: current record event-time, in milliseconds.
+            Used by TTL-aware transaction subclasses to advance the
+            partition high-water mark for read-time expiry filtering;
+            ignored by the base implementation.
         :return: value or None if the key is not found and `default` is not provided
         """
 
-        data = self._get_bytes(key, prefix, cf_name)
+        data = self._get_bytes(key, prefix, cf_name, timestamp=timestamp)
         if data is Marker.DELETED or data is Marker.UNDEFINED:
             return default
 
@@ -352,6 +371,7 @@ class PartitionTransaction(ABC, Generic[K, V]):
         prefix: bytes,
         default: Optional[bytes] = None,
         cf_name: str = "default",
+        timestamp: Optional[int] = None,
     ) -> Optional[bytes]:
         """
         Get a key from the store.
@@ -362,9 +382,12 @@ class PartitionTransaction(ABC, Generic[K, V]):
         :param prefix: a key prefix
         :param default: default value to return if the key is not found
         :param cf_name: column family name
+        :param timestamp: current record event-time, in milliseconds.
+            Used by TTL-aware transaction subclasses; ignored by the base
+            implementation.
         :return: value as bytes or None if the key is not found and `default` is not provided
         """
-        data = self._get_bytes(key, prefix, cf_name)
+        data = self._get_bytes(key, prefix, cf_name, timestamp=timestamp)
         if data is Marker.DELETED or data is Marker.UNDEFINED:
             return default
 
@@ -376,6 +399,7 @@ class PartitionTransaction(ABC, Generic[K, V]):
         key: K,
         prefix: bytes,
         cf_name: str = "default",
+        timestamp: Optional[int] = None,
     ) -> Union[bytes, Literal[Marker.DELETED, Marker.UNDEFINED]]:
         key_serialized = self._serialize_key(key, prefix=prefix)
 
@@ -388,13 +412,27 @@ class PartitionTransaction(ABC, Generic[K, V]):
 
         return cached
 
-    def set(self, key: K, value: V, prefix: bytes, cf_name: str = "default") -> None:
+    def set(
+        self,
+        key: K,
+        value: V,
+        prefix: bytes,
+        cf_name: str = "default",
+        timestamp: Optional[int] = None,
+        ttl: Optional[timedelta] = None,
+    ) -> None:
         """
         Set value for the key.
         :param key: key
         :param prefix: a key prefix
         :param value: value
         :param cf_name: column family name
+        :param timestamp: current record event-time, in milliseconds.
+            Used by TTL-aware transaction subclasses to stamp the value
+            with ``timestamp + ttl``; required when ``ttl`` is provided
+            on a TTL-aware store.
+        :param ttl: optional per-write event-time TTL. See
+            :class:`quixstreams.state.base.State.set`.
         """
 
         try:
@@ -403,10 +441,23 @@ class PartitionTransaction(ABC, Generic[K, V]):
             self._status = PartitionTransactionStatus.FAILED
             raise
 
-        self._set_bytes(key, value_serialized, prefix, cf_name=cf_name)
+        self._set_bytes(
+            key,
+            value_serialized,
+            prefix,
+            cf_name=cf_name,
+            timestamp=timestamp,
+            ttl=ttl,
+        )
 
     def set_bytes(
-        self, key: K, value: bytes, prefix: bytes, cf_name: str = "default"
+        self,
+        key: K,
+        value: bytes,
+        prefix: bytes,
+        cf_name: str = "default",
+        timestamp: Optional[int] = None,
+        ttl: Optional[timedelta] = None,
     ) -> None:
         """
         Set bytes value for the key.
@@ -414,17 +465,39 @@ class PartitionTransaction(ABC, Generic[K, V]):
         :param prefix: a key prefix
         :param value: value
         :param cf_name: column family name
+        :param timestamp: current record event-time, in milliseconds.
+            Used by TTL-aware transaction subclasses; ignored by the base
+            implementation.
+        :param ttl: optional per-write event-time TTL. See
+            :class:`quixstreams.state.base.State.set_bytes`.
         """
         if not isinstance(value, bytes):
             self._status = PartitionTransactionStatus.FAILED
             raise StateSerializationError("Value must be bytes")
 
-        self._set_bytes(key=key, value=value, prefix=prefix, cf_name=cf_name)
+        self._set_bytes(
+            key=key,
+            value=value,
+            prefix=prefix,
+            cf_name=cf_name,
+            timestamp=timestamp,
+            ttl=ttl,
+        )
 
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
     def _set_bytes(
-        self, key: K, value: bytes, prefix: bytes, cf_name: str = "default"
+        self,
+        key: K,
+        value: bytes,
+        prefix: bytes,
+        cf_name: str = "default",
+        timestamp: Optional[int] = None,
+        ttl: Optional[timedelta] = None,
     ) -> None:
+        # The base implementation ignores ``ttl`` and ``timestamp``; TTL-aware
+        # subclasses (e.g. RocksDBPartitionTransaction) intercept earlier in
+        # ``set`` / ``set_bytes`` to stamp the bytes payload before this
+        # method is reached.
         try:
             key_serialized = self._serialize_key(key, prefix=prefix)
             self._update_cache.set(
@@ -457,12 +530,21 @@ class PartitionTransaction(ABC, Generic[K, V]):
             raise
 
     @validate_transaction_status(PartitionTransactionStatus.STARTED)
-    def exists(self, key: K, prefix: bytes, cf_name: str = "default") -> bool:
+    def exists(
+        self,
+        key: K,
+        prefix: bytes,
+        cf_name: str = "default",
+        timestamp: Optional[int] = None,
+    ) -> bool:
         """
         Check if the key exists in state.
         :param key: key
         :param prefix: a key prefix
         :param cf_name: column family name
+        :param timestamp: current record event-time, in milliseconds.
+            Used by TTL-aware transaction subclasses; ignored by the base
+            implementation.
         :return: True if key exists, False otherwise
         """
         key_serialized = self._serialize_key(key, prefix=prefix)
@@ -512,6 +594,12 @@ class PartitionTransaction(ABC, Generic[K, V]):
         column_families = self._update_cache.get_column_families()
 
         for cf_name in column_families:
+            # Local-only column families (e.g. the TTL secondary expiry index)
+            # never participate in changelog production; their writes are
+            # rebuilt locally on recovery.
+            if cf_name in LOCAL_ONLY_CFS:
+                continue
+
             headers: Headers = {
                 CHANGELOG_CF_MESSAGE_HEADER: cf_name,
                 CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER: source_tp_offset_header,

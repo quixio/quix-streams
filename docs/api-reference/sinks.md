@@ -10,7 +10,7 @@
 class BaseSink(abc.ABC)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L24)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\base\sink.py#L24)
 
 This is a base class for all sinks.
 
@@ -31,7 +31,7 @@ def __init__(on_client_connect_success: Optional[
                  ClientConnectFailureCallback] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L33)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\base\sink.py#L33)
 
 
 <br>
@@ -55,7 +55,7 @@ Callback must resolve (or propagate/re-raise) the Exception.
 def flush()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L54)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\base\sink.py#L54)
 
 This method is triggered by the Checkpoint class when it commits.
 
@@ -77,7 +77,7 @@ def add(value: Any, key: Any, timestamp: int, headers: HeadersTuples,
         topic: str, partition: int, offset: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L66)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\base\sink.py#L66)
 
 This method is triggered on every new processed record being sent to this sink.
 
@@ -95,7 +95,7 @@ on flush().
 def setup()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L84)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\base\sink.py#L84)
 
 When applicable, set up the client here along with any validation to affirm a
 valid/successful authentication/connection.
@@ -110,7 +110,7 @@ valid/successful authentication/connection.
 def start()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L90)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\base\sink.py#L90)
 
 Called as part of `Application.run()` to initialize the sink's client.
 Allows using a callback pattern around the connection attempt.
@@ -125,7 +125,7 @@ Allows using a callback pattern around the connection attempt.
 def on_paused()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L101)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\base\sink.py#L101)
 
 This method is triggered when the sink is paused due to backpressure, when
 the `SinkBackpressureError` is raised.
@@ -140,7 +140,7 @@ Here you can react to the backpressure events.
 class BatchingSink(BaseSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L110)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\base\sink.py#L110)
 
 A base class for batching sinks, that need to accumulate the data first before
 sending it to the external destinations.
@@ -166,7 +166,7 @@ def __init__(on_client_connect_success: Optional[
                  ClientConnectFailureCallback] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L126)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\base\sink.py#L126)
 
 
 <br>
@@ -190,7 +190,7 @@ Callback must resolve (or propagate/re-raise) the Exception.
 def write(batch: SinkBatch)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L149)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\base\sink.py#L149)
 
 This method implements actual writing to the external destination.
 
@@ -210,7 +210,7 @@ def add(value: Any, key: Any, timestamp: int, headers: HeadersTuples,
         topic: str, partition: int, offset: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L159)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\base\sink.py#L159)
 
 Add a new record to in-memory batch.
 
@@ -224,7 +224,7 @@ Add a new record to in-memory batch.
 def flush()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L181)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\base\sink.py#L181)
 
 Flush accumulated batches to the destination and drop them afterward.
 
@@ -238,7 +238,7 @@ Flush accumulated batches to the destination and drop them afterward.
 def on_paused()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/sink.py#L199)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\base\sink.py#L199)
 
 When the destination is already backpressured, drop the accumulated batches.
 
@@ -254,7 +254,7 @@ When the destination is already backpressured, drop the accumulated batches.
 class SinkBatch()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/batch.py#L12)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\base\batch.py#L12)
 
 A batch to accumulate processed data by `BatchingSink` between the checkpoints.
 
@@ -277,7 +277,7 @@ Batches are created automatically by the implementations of `BatchingSink`.
 def iter_chunks(n: int) -> Iterable[Iterable[SinkItem]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/batch.py#L69)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\base\batch.py#L69)
 
 Iterate over batch data in chunks of length n.
 The last batch may be shorter.
@@ -294,7 +294,7 @@ The last batch may be shorter.
 class SinkBackpressureError(QuixException)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/base/exceptions.py#L6)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\base\exceptions.py#L6)
 
 An exception to be raised by Sinks during flush() call
 
@@ -322,7 +322,7 @@ a timeout specified in `retry_after`, and resume them when it's elapsed.
 class InfluxDB3Sink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/influxdb3.py#L53)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\core\influxdb3.py#L53)
 
 <a id="quixstreams.sinks.core.influxdb3.InfluxDB3Sink.__init__"></a>
 
@@ -355,7 +355,7 @@ def __init__(token: str,
              verify_ssl: bool = True)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/influxdb3.py#L61)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\core\influxdb3.py#L61)
 
 A connector to sink processed data to InfluxDB v3.
 
@@ -453,7 +453,7 @@ Default - `True`.
 class CSVSink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/csv.py#L9)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\core\csv.py#L9)
 
 <a id="quixstreams.sinks.core.csv.CSVSink.__init__"></a>
 
@@ -468,7 +468,7 @@ def __init__(path: str,
              value_serializer: Callable[[Any], str] = json.dumps)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/csv.py#L10)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\core\csv.py#L10)
 
 A base CSV sink that writes data from all assigned partitions to a single file.
 
@@ -502,7 +502,7 @@ Default - `json.dumps`.
 class FileSink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/base.py#L24)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\file\base.py#L24)
 
 A sink that writes data batches to files using configurable formats and
 destinations.
@@ -531,7 +531,7 @@ def __init__(
 ) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/base.py#L38)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\file\base.py#L38)
 
 Initialize the FileSink with the specified configuration.
 
@@ -561,7 +561,7 @@ Callback must resolve (or propagate/re-raise) the Exception.
 def setup()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/base.py#L76)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\file\base.py#L76)
 
 Authenticate and validate connection here
 
@@ -575,7 +575,7 @@ Authenticate and validate connection here
 def write(batch: SinkBatch) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/base.py#L90)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\file\base.py#L90)
 
 Write a batch of data using the configured format.
 
@@ -597,7 +597,7 @@ Write a batch of data using the configured format.
 class AzureContainerNotFoundError(Exception)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/azure.py#L29)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\file\azure.py#L29)
 
 Raised when the specified Azure File container does not exist.
 
@@ -609,7 +609,7 @@ Raised when the specified Azure File container does not exist.
 class AzureContainerAccessDeniedError(Exception)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/azure.py#L33)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\file\azure.py#L33)
 
 Raised when the specified Azure File container access is denied.
 
@@ -621,7 +621,7 @@ Raised when the specified Azure File container access is denied.
 class AzureFileSink(FileSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/azure.py#L37)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\file\azure.py#L37)
 
 A destination that writes data to Microsoft Azure File.
 
@@ -645,7 +645,7 @@ def __init__(
 ) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/azure.py#L45)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\file\azure.py#L45)
 
 Initialize the Azure File destination.
 
@@ -683,7 +683,7 @@ Callback must resolve (or propagate/re-raise) the Exception.
 class AppendNotSupported(Exception)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/local.py#L15)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\file\local.py#L15)
 
 Raised when append=True but specified format does not support it
 
@@ -695,7 +695,7 @@ Raised when append=True but specified format does not support it
 class LocalFileSink(FileSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/local.py#L19)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\file\local.py#L19)
 
 A destination that writes data to the local filesystem.
 
@@ -714,7 +714,7 @@ def __init__(append: bool = False,
              format: Union[FormatName, Format] = "json") -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/local.py#L26)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\file\local.py#L26)
 
 Initialize the local destination.
 
@@ -747,7 +747,7 @@ current directory.
 class S3BucketNotFoundError(Exception)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/s3.py#L29)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\file\s3.py#L29)
 
 Raised when the specified S3 bucket does not exist.
 
@@ -759,7 +759,7 @@ Raised when the specified S3 bucket does not exist.
 class S3BucketAccessDeniedError(Exception)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/s3.py#L33)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\file\s3.py#L33)
 
 Raised when the specified S3 bucket access is denied.
 
@@ -771,7 +771,7 @@ Raised when the specified S3 bucket access is denied.
 class S3FileSink(FileSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/s3.py#L37)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\file\s3.py#L37)
 
 A sink that writes data batches to files using configurable formats and
 destinations.
@@ -808,7 +808,7 @@ def __init__(bucket: str,
              **kwargs) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/s3.py#L51)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\file\s3.py#L51)
 
 Initialize the S3 destination.
 
@@ -845,7 +845,7 @@ NOTE: can alternatively set the AWS_ENDPOINT_URL_S3 environment variable
 class Format(ABC)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/base.py#L8)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\file\formats\base.py#L8)
 
 Base class for formatting batches in file sinks.
 
@@ -866,7 +866,7 @@ formatted and saved.
 def file_extension() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/base.py#L20)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\file\formats\base.py#L20)
 
 Returns the file extension used for output files.
 
@@ -888,7 +888,7 @@ The file extension as a string.
 def supports_append() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/base.py#L30)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\file\formats\base.py#L30)
 
 Indicates if the format supports appending data to an existing file.
 
@@ -909,7 +909,7 @@ True if appending is supported, otherwise False.
 def serialize(batch: SinkBatch) -> bytes
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/base.py#L39)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\file\formats\base.py#L39)
 
 Serializes a batch of messages into bytes.
 
@@ -937,7 +937,7 @@ The serialized batch as bytes.
 class JSONFormat(Format)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/json.py#L14)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\file\formats\json.py#L14)
 
 Serializes batches of messages into JSON Lines format with optional gzip
 compression.
@@ -960,7 +960,7 @@ def __init__(file_extension: str = ".jsonl",
              dumps: Optional[Callable[[Any], str]] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/json.py#L28)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\file\formats\json.py#L28)
 
 Initializes the JSONFormat.
 
@@ -986,7 +986,7 @@ strings. If provided, the `compact` option is ignored.
 def file_extension() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/json.py#L57)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\file\formats\json.py#L57)
 
 Returns the file extension used for output files.
 
@@ -1006,7 +1006,7 @@ The file extension as a string.
 def serialize(batch: SinkBatch) -> bytes
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/json.py#L65)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\file\formats\json.py#L65)
 
 Serializes a `SinkBatch` into bytes in JSON Lines format.
 
@@ -1039,7 +1039,7 @@ compressed with gzip.
 class ParquetFormat(Format)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/parquet.py#L13)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\file\formats\parquet.py#L13)
 
 Serializes batches of messages into Parquet format.
 
@@ -1060,7 +1060,7 @@ def __init__(file_extension: str = ".parquet",
              compression: Compression = "snappy") -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/parquet.py#L26)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\file\formats\parquet.py#L26)
 
 Initializes the ParquetFormat.
 
@@ -1085,7 +1085,7 @@ or "zstd". Defaults to "snappy".
 def file_extension() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/parquet.py#L63)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\file\formats\parquet.py#L63)
 
 Returns the file extension used for output files.
 
@@ -1105,7 +1105,7 @@ The file extension as a string.
 def serialize(batch: SinkBatch) -> bytes
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/file/formats/parquet.py#L71)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\file\formats\parquet.py#L71)
 
 Serializes a `SinkBatch` into bytes in Parquet format.
 
@@ -1140,7 +1140,7 @@ The serialized batch as bytes in Parquet format.
 class BigQuerySink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/bigquery.py#L60)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\bigquery.py#L60)
 
 <a id="quixstreams.sinks.community.bigquery.BigQuerySink.__init__"></a>
 
@@ -1165,7 +1165,7 @@ def __init__(project_id: str,
              **kwargs)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/bigquery.py#L61)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\bigquery.py#L61)
 
 A connector to sink processed data to Google Cloud BigQuery.
 
@@ -1227,7 +1227,7 @@ Callback must resolve (or propagate/re-raise) the Exception.
 class ElasticsearchSink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/elasticsearch.py#L38)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\elasticsearch.py#L38)
 
 Pushes data to an ElasticSearch index.
 
@@ -1260,7 +1260,7 @@ def __init__(url: str,
              **kwargs)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/elasticsearch.py#L48)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\elasticsearch.py#L48)
 
 
 <br>
@@ -1295,7 +1295,7 @@ Callback must resolve (or propagate/re-raise) the Exception.
 class AWSIcebergConfig(BaseIcebergConfig)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/iceberg.py#L49)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\iceberg.py#L49)
 
 <a id="quixstreams.sinks.community.iceberg.AWSIcebergConfig.__init__"></a>
 
@@ -1311,7 +1311,7 @@ def __init__(aws_s3_uri: str,
              aws_session_token: Optional[str] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/iceberg.py#L50)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\iceberg.py#L50)
 
 Configure IcebergSink to work with AWS Glue.
 
@@ -1340,7 +1340,7 @@ using AWS Glue.
 class IcebergSink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/iceberg.py#L83)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\iceberg.py#L83)
 
 IcebergSink writes batches of data to an Apache Iceberg table.
 
@@ -1417,7 +1417,7 @@ if __name__ == "__main__":
 def write(batch: SinkBatch)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/iceberg.py#L199)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\iceberg.py#L199)
 
 Writes a batch of data to the Iceberg table.
 
@@ -1441,7 +1441,7 @@ Implements retry logic to handle concurrent write conflicts.
 class KinesisStreamNotFoundError(Exception)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/kinesis.py#L28)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\kinesis.py#L28)
 
 Raised when the specified Kinesis stream does not exist.
 
@@ -1453,7 +1453,7 @@ Raised when the specified Kinesis stream does not exist.
 class KinesisSink(BaseSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/kinesis.py#L32)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\kinesis.py#L32)
 
 <a id="quixstreams.sinks.community.kinesis.KinesisSink.__init__"></a>
 
@@ -1478,7 +1478,7 @@ def __init__(
         **kwargs) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/kinesis.py#L33)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\kinesis.py#L33)
 
 Initialize the KinesisSink.
 
@@ -1513,7 +1513,7 @@ def add(value: Any, key: Any, timestamp: int, headers: HeadersTuples,
         topic: str, partition: int, offset: int) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/kinesis.py#L103)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\kinesis.py#L103)
 
 Buffer a record for the Kinesis stream.
 
@@ -1531,7 +1531,7 @@ will be sent when the flush method is called.
 def flush() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/kinesis.py#L133)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\kinesis.py#L133)
 
 Flush all records bufferred so far.
 
@@ -1552,7 +1552,7 @@ stream.
 class MongoDBSink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/mongodb.py#L66)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\mongodb.py#L66)
 
 <a id="quixstreams.sinks.community.mongodb.MongoDBSink.__init__"></a>
 
@@ -1580,7 +1580,7 @@ def __init__(host: str,
              **kwargs) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/mongodb.py#L67)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\mongodb.py#L67)
 
 A connector to sink processed data to MongoDB in batches.
 
@@ -1626,7 +1626,7 @@ exclude it here!
 def write(batch: SinkBatch) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/mongodb.py#L162)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\mongodb.py#L162)
 
 Note: Transactions could be an option here, but then each record requires a
 network call, and the transaction has size limits...so `bulk_write` is used
@@ -1644,7 +1644,7 @@ instead, with the downside that duplicate writes may occur if errors arise.
 class MQTTSink(BaseSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/mqtt.py#L35)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\mqtt.py#L35)
 
 A sink that publishes messages to an MQTT broker.
 
@@ -1675,7 +1675,7 @@ def __init__(client_id: str,
                  ClientConnectFailureCallback] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/mqtt.py#L40)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\mqtt.py#L40)
 
 Initialize the MQTTSink.
 
@@ -1720,7 +1720,7 @@ Callback must resolve (or propagate/re-raise) the Exception.
 class Neo4jSink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/neo4j.py#L32)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\neo4j.py#L32)
 
 <a id="quixstreams.sinks.community.neo4j.Neo4jSink.__init__"></a>
 
@@ -1738,7 +1738,7 @@ def __init__(host: str,
              **kwargs) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/neo4j.py#L33)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\neo4j.py#L33)
 
 A connector to sink processed data to Neo4j.
 
@@ -1813,7 +1813,7 @@ if __name__ == "__main__":
 class PostgreSQLSink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/postgresql.py#L68)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\postgresql.py#L68)
 
 <a id="quixstreams.sinks.community.postgresql.PostgreSQLSink.__init__"></a>
 
@@ -1841,7 +1841,7 @@ def __init__(host: str,
              **kwargs)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/postgresql.py#L69)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\postgresql.py#L69)
 
 A connector to sink topic data to PostgreSQL.
 
@@ -1893,7 +1893,7 @@ Callback must resolve (or propagate/re-raise) the Exception.
 class PubSubTopicNotFoundError(Exception)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/pubsub.py#L30)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\pubsub.py#L30)
 
 Raised when the specified topic does not exist.
 
@@ -1905,7 +1905,7 @@ Raised when the specified topic does not exist.
 class PubSubSink(BaseSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/pubsub.py#L34)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\pubsub.py#L34)
 
 A sink that publishes messages to Google Cloud Pub/Sub.
 
@@ -1929,7 +1929,7 @@ def __init__(project_id: str,
              **kwargs) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/pubsub.py#L37)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\pubsub.py#L37)
 
 Initialize the PubSubSink.
 
@@ -1967,7 +1967,7 @@ def add(value: Any, key: Any, timestamp: int, headers: HeadersTuples,
         topic: str, partition: int, offset: int) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/pubsub.py#L104)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\pubsub.py#L104)
 
 Publish a message to Pub/Sub.
 
@@ -1981,7 +1981,7 @@ Publish a message to Pub/Sub.
 def flush() -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/pubsub.py#L137)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\pubsub.py#L137)
 
 Wait for all publish operations to complete successfully.
 
@@ -1997,7 +1997,7 @@ Wait for all publish operations to complete successfully.
 class RedisSink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/redis.py#L26)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\redis.py#L26)
 
 <a id="quixstreams.sinks.community.redis.RedisSink.__init__"></a>
 
@@ -2021,7 +2021,7 @@ def __init__(host: str,
              **kwargs) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/redis.py#L27)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\redis.py#L27)
 
 A connector to sink processed data to Redis.
 
@@ -2061,7 +2061,7 @@ Callback must resolve (or propagate/re-raise) the Exception.
 class InfluxDB1Sink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/influxdb1.py#L50)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\influxdb1.py#L50)
 
 <a id="quixstreams.sinks.community.influxdb1.InfluxDB1Sink.__init__"></a>
 
@@ -2091,7 +2091,7 @@ def __init__(host: str,
                  ClientConnectFailureCallback] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/influxdb1.py#L58)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\influxdb1.py#L58)
 
 A connector to sink processed data to InfluxDB v1.
 
@@ -2176,7 +2176,7 @@ Callback must resolve (or propagate/re-raise) the Exception.
 class TDengineSink(BatchingSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/sink.py#L50)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\tdengine\sink.py#L50)
 
 <a id="quixstreams.sinks.community.tdengine.sink.TDengineSink.__init__"></a>
 
@@ -2211,7 +2211,7 @@ def __init__(host: str,
              retry_backoff_factor: float = 1.0)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/community/tdengine/sink.py#L51)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\sinks\community\tdengine\sink.py#L51)
 
 A connector to sink processed data to TDengine.
 
