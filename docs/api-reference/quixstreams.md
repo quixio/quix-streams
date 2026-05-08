@@ -8307,6 +8307,7 @@ def __init__(host: str,
                                                                  str]]] = None,
              password: Optional[str] = None,
              socket_timeout: float = 30.0,
+             ttl: Optional[int] = None,
              on_client_connect_success: Optional[
                  ClientConnectSuccessCallback] = None,
              on_client_connect_failure: Optional[
@@ -8332,6 +8333,7 @@ If not provided, the Kafka message key will be used as is.
 - `password`: Redis password, optional.
 - `socket_timeout`: Redis socket timeout.
 Default - 30s.
+- `ttl`: Redis key TTL in seconds, optional.
 - `on_client_connect_success`: An optional callback made after successful
 client authentication, primarily for additional logging.
 - `on_client_connect_failure`: An optional callback made after failed
