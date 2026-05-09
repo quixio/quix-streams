@@ -23,27 +23,26 @@ class TestStorePartition:
 
     @pytest.mark.parametrize("store_value", [10, None])
     def test_recover_from_changelog_message_success(self, store_value, store_partition):
-        # Replay a raw legacy (unstamped) value; the partition wraps it with
-        # the never-expires sentinel so the on-disk payload follows the v2
-        # value layout. ``partition.get`` returns the raw stamped blob since
-        # the partition layer is below the TTL-decoding transaction.
+        # v3: a fresh partition replaying an unstamped legacy value stays in
+        # legacy mode (the recovery flag-discovery heuristic only flips on a
+        # plausibly-stamped first value). The on-disk payload is the raw
+        # value, byte-identical to v3.23.6 — no sentinel wrapping.
         store_partition.recover_from_changelog_message(
             key=b"key", value=b"value", cf_name="default", offset=1
         )
-        stored = store_partition.get(b"key")
-        stamp, payload = decode_ttl_value(stored)
-        assert stamp == SENTINEL_NEVER
-        assert payload == b"value"
+        assert store_partition.get(b"key") == b"value"
+        assert store_partition.uses_ttl_stamps is False
         assert store_partition.get_changelog_offset() == 1
 
     def test_recover_from_changelog_message_already_stamped(self, store_partition):
-        # An already-stamped replay value (>= 8 bytes, valid stamp prefix) is
-        # passed through verbatim.
+        # An already-stamped replay value (>= 8 bytes, sentinel stamp) flips
+        # the recovery partition into TTL mode and is stored verbatim.
         stamped = encode_ttl_value(SENTINEL_NEVER, b"value")
         store_partition.recover_from_changelog_message(
             key=b"key", value=stamped, cf_name="default", offset=2
         )
         assert store_partition.get(b"key") == stamped
+        assert store_partition.uses_ttl_stamps is True
         assert store_partition.get_changelog_offset() == 2
 
     def test_recover_from_changelog_message_missing_cf(self, store_partition):

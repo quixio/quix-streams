@@ -5,8 +5,14 @@ from typing import Any, Dict, Literal, Optional, Union, cast
 
 from quixstreams.state import PartitionTransaction
 from quixstreams.state.base import PartitionTransactionCache, StorePartition
-from quixstreams.state.base.transaction import PartitionTransactionStatus
-from quixstreams.state.exceptions import StateSerializationError
+from quixstreams.state.base.transaction import (
+    PartitionTransactionStatus,
+    validate_transaction_status,
+)
+from quixstreams.state.exceptions import (
+    IncompatibleStateStoreError,
+    StateSerializationError,
+)
 from quixstreams.state.metadata import (
     LOCAL_ONLY_CFS,
     METADATA_CF_NAME,
@@ -14,7 +20,12 @@ from quixstreams.state.metadata import (
     Marker,
 )
 from quixstreams.state.recovery import ChangelogProducer
-from quixstreams.state.rocksdb.metadata import TTL_HIGH_WATER_KEY
+from quixstreams.state.rocksdb.metadata import (
+    STATE_FORMAT_VERSION,
+    STATE_FORMAT_VERSION_KEY,
+    TTL_ENABLED_KEY,
+    TTL_HIGH_WATER_KEY,
+)
 from quixstreams.state.rocksdb.transaction import _ttl_to_ms
 from quixstreams.state.rocksdb.ttl_codec import (
     SENTINEL_NEVER,
@@ -66,6 +77,10 @@ class MemoryStorePartition(StorePartition):
         identical semantics.
     """
 
+    # Class-level switch (subclasses can hard-disable). The **runtime**
+    # flag is initialized to False in ``__init__`` to mirror the v3 v3.23.6-
+    # compatible default; the partition flips itself into TTL mode on first
+    # detection of a ``state.set(..., ttl=...)`` write at flush time.
     uses_ttl_stamps: bool = True
 
     def __init__(
@@ -86,9 +101,14 @@ class MemoryStorePartition(StorePartition):
         self._closed = False
         self._max_evictions_per_flush = max_evictions_per_flush
         self._high_water_ms: Optional[int] = None
-        if self.uses_ttl_stamps:
-            self._state.setdefault(TTL_INDEX_CF_NAME, {})
-            self._load_high_water()
+
+        class_uses_ttl_stamps = type(self).uses_ttl_stamps
+        if class_uses_ttl_stamps:
+            # Memory store has no persistent on-disk metadata (each
+            # partition starts fresh), but recovery can flip it later.
+            self.uses_ttl_stamps = False
+        else:
+            self.uses_ttl_stamps = False
 
     @property
     def closed(self) -> bool:
@@ -149,11 +169,51 @@ class MemoryStorePartition(StorePartition):
                 self._state[METADATA_CF_NAME][TTL_HIGH_WATER_KEY] = int_to_bytes(
                     self._high_water_ms
                 )
+            self._state.setdefault(TTL_INDEX_CF_NAME, {})
             self._run_sweep()
+
+    # ------------------------------------------------------------------
+    # TTL flip / probe helpers (mirror RocksDBStorePartition).
+    # ------------------------------------------------------------------
+
+    def main_cf_has_user_data(self) -> bool:
+        return bool(self._state.get("default"))
+
+    def estimated_main_cf_key_count(self) -> int:
+        return len(self._state.get("default", {}))
+
+    def reject_ttl_on_populated_store(self) -> "IncompatibleStateStoreError":
+        approx_keys = self.estimated_main_cf_key_count()
+        msg = (
+            f"IncompatibleStateStoreError: in-memory state store '{id(self)}' "
+            f"has {approx_keys} un-stamped existing entries; cannot enable "
+            "TTL on a populated store. Restart the application — the "
+            "in-memory store will rebuild from the changelog with TTL "
+            "enabled."
+        )
+        logger.error(
+            msg,
+            extra={
+                "approx_key_count": approx_keys,
+                "operator_action": "restart_application",
+            },
+        )
+        return IncompatibleStateStoreError(msg)
 
     def recover_from_changelog_message(
         self, key: bytes, value: Optional[bytes], cf_name: str, offset: int
     ) -> None:
+        # Flag-discovery heuristic mirrors RocksDBStorePartition.
+        if (
+            type(self).uses_ttl_stamps
+            and not self.uses_ttl_stamps
+            and cf_name == "default"
+            and value
+            and self._looks_like_stamped_value(value)
+        ):
+            self.uses_ttl_stamps = True
+            self._state.setdefault(TTL_INDEX_CF_NAME, {})
+
         if not self.uses_ttl_stamps:
             if value:
                 self._state.setdefault(cf_name, {})[key] = value
@@ -256,6 +316,18 @@ class MemoryStorePartition(StorePartition):
             return encode_ttl_value(SENTINEL_NEVER, value), SENTINEL_NEVER
         return value, stamp
 
+    def _looks_like_stamped_value(self, value: bytes) -> bool:
+        """See ``RocksDBStorePartition._looks_like_stamped_value``."""
+        if len(value) < 8:
+            return False
+        try:
+            stamp, _ = decode_ttl_value(value)
+        except ValueError:
+            return False
+        if stamp == SENTINEL_NEVER:
+            return True
+        return 0 < stamp < 10**15
+
     def _run_sweep(self) -> None:
         if self._high_water_ms is None:
             return
@@ -321,6 +393,8 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self._partition = cast(MemoryStorePartition, self._partition)
+        self._batch_has_ttl_writes: bool = False
+        self._pending_stamps: dict[tuple[bytes, bytes], int] = {}
 
     def _stamps_enabled(self, cf_name: str) -> bool:
         return cf_name == "default" and self._partition.uses_ttl_stamps
@@ -353,7 +427,7 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
         timestamp: Optional[int] = None,
         ttl: Optional[timedelta] = None,
     ) -> None:
-        if not self._stamps_enabled(cf_name):
+        if cf_name != "default" or not type(self._partition).uses_ttl_stamps:
             super().set(
                 key=key,
                 value=value,
@@ -364,10 +438,9 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
             )
             return
 
-        if timestamp is not None:
-            self._partition.advance_high_water(timestamp)
-
-        stamp = self._compute_stamp(ttl=ttl, timestamp=timestamp)
+        if self._partition.uses_ttl_stamps:
+            self._set_default_cf_stamped(key, value, prefix, timestamp, ttl)
+            return
 
         try:
             value_serialized = self._serialize_value(value)
@@ -375,19 +448,17 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
             self._status = PartitionTransactionStatus.FAILED
             raise
 
-        stamped = encode_ttl_value(stamp, value_serialized)
         super().set_bytes(
-            key=key, value=stamped, prefix=prefix, cf_name="default"
+            key=key, value=value_serialized, prefix=prefix, cf_name="default"
         )
 
-        if stamp != SENTINEL_NEVER:
+        if ttl is not None:
+            stamp = self._compute_stamp(ttl=ttl, timestamp=timestamp)
+            self._batch_has_ttl_writes = True
             key_serialized = self._serialize_key(key, prefix=prefix)
-            self._update_cache.set(
-                key=encode_index_key(stamp, key_serialized),
-                value=b"",
-                prefix=b"",
-                cf_name=TTL_INDEX_CF_NAME,
-            )
+            self._pending_stamps[(prefix, key_serialized)] = stamp
+            if timestamp is not None:
+                self._partition.advance_high_water(timestamp)
 
     def set_bytes(
         self,
@@ -398,7 +469,7 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
         timestamp: Optional[int] = None,
         ttl: Optional[timedelta] = None,
     ) -> None:
-        if not self._stamps_enabled(cf_name):
+        if cf_name != "default" or not type(self._partition).uses_ttl_stamps:
             super().set_bytes(
                 key=key,
                 value=value,
@@ -413,15 +484,44 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
             self._status = PartitionTransactionStatus.FAILED
             raise StateSerializationError("Value must be bytes")
 
+        if self._partition.uses_ttl_stamps:
+            self._set_bytes_default_cf_stamped(
+                key, value, prefix, timestamp, ttl
+            )
+            return
+
+        super().set_bytes(
+            key=key, value=value, prefix=prefix, cf_name="default"
+        )
+
+        if ttl is not None:
+            stamp = self._compute_stamp(ttl=ttl, timestamp=timestamp)
+            self._batch_has_ttl_writes = True
+            key_serialized = self._serialize_key(key, prefix=prefix)
+            self._pending_stamps[(prefix, key_serialized)] = stamp
+            if timestamp is not None:
+                self._partition.advance_high_water(timestamp)
+
+    def _set_default_cf_stamped(
+        self,
+        key: Any,
+        value: Any,
+        prefix: bytes,
+        timestamp: Optional[int],
+        ttl: Optional[timedelta],
+    ) -> None:
         if timestamp is not None:
             self._partition.advance_high_water(timestamp)
-
         stamp = self._compute_stamp(ttl=ttl, timestamp=timestamp)
-        stamped = encode_ttl_value(stamp, value)
+        try:
+            value_serialized = self._serialize_value(value)
+        except Exception:
+            self._status = PartitionTransactionStatus.FAILED
+            raise
+        stamped = encode_ttl_value(stamp, value_serialized)
         super().set_bytes(
             key=key, value=stamped, prefix=prefix, cf_name="default"
         )
-
         if stamp != SENTINEL_NEVER:
             key_serialized = self._serialize_key(key, prefix=prefix)
             self._update_cache.set(
@@ -430,6 +530,95 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
                 prefix=b"",
                 cf_name=TTL_INDEX_CF_NAME,
             )
+
+    def _set_bytes_default_cf_stamped(
+        self,
+        key: Any,
+        value: bytes,
+        prefix: bytes,
+        timestamp: Optional[int],
+        ttl: Optional[timedelta],
+    ) -> None:
+        if timestamp is not None:
+            self._partition.advance_high_water(timestamp)
+        stamp = self._compute_stamp(ttl=ttl, timestamp=timestamp)
+        stamped = encode_ttl_value(stamp, value)
+        super().set_bytes(
+            key=key, value=stamped, prefix=prefix, cf_name="default"
+        )
+        if stamp != SENTINEL_NEVER:
+            key_serialized = self._serialize_key(key, prefix=prefix)
+            self._update_cache.set(
+                key=encode_index_key(stamp, key_serialized),
+                value=b"",
+                prefix=b"",
+                cf_name=TTL_INDEX_CF_NAME,
+            )
+
+    @validate_transaction_status(PartitionTransactionStatus.STARTED)
+    def prepare(self, processed_offsets: Optional[dict[str, int]] = None) -> None:
+        """
+        Run flush-time TTL detection / flip-or-reject before delegating to
+        the parent's changelog production. See
+        ``RocksDBPartitionTransaction.prepare`` for the design notes.
+        """
+        self._maybe_flip_or_reject()
+        super().prepare(processed_offsets=processed_offsets)
+
+    def _maybe_flip_or_reject(self) -> None:
+        if not self._batch_has_ttl_writes:
+            return
+        if self._partition.uses_ttl_stamps:
+            return
+        if self._partition.main_cf_has_user_data():
+            self._status = PartitionTransactionStatus.FAILED
+            raise self._partition.reject_ttl_on_populated_store()
+
+        # Empty-store fast path: re-encode default-CF cache entries.
+        cache = self._update_cache
+        updates = cache.get_updates(cf_name="default")
+        prefixes = list(updates.keys())
+        for prefix in prefixes:
+            entries = list(updates[prefix].items())
+            for serialized_key, raw_value in entries:
+                stamp = self._pending_stamps.get(
+                    (prefix, serialized_key), SENTINEL_NEVER
+                )
+                stamped = encode_ttl_value(stamp, raw_value)
+                cache.set(
+                    key=serialized_key,
+                    value=stamped,
+                    prefix=prefix,
+                    cf_name="default",
+                )
+                if stamp != SENTINEL_NEVER:
+                    cache.set(
+                        key=encode_index_key(stamp, serialized_key),
+                        value=b"",
+                        prefix=b"",
+                        cf_name=TTL_INDEX_CF_NAME,
+                    )
+
+        # Persist the flip flag + format version into the metadata CF cache;
+        # MemoryStorePartition.write applies it together with user writes.
+        cache.set(
+            key=TTL_ENABLED_KEY,
+            value=b"\x01",
+            prefix=b"",
+            cf_name=METADATA_CF_NAME,
+        )
+        cache.set(
+            key=STATE_FORMAT_VERSION_KEY,
+            value=int_to_bytes(STATE_FORMAT_VERSION),
+            prefix=b"",
+            cf_name=METADATA_CF_NAME,
+        )
+        self._partition.uses_ttl_stamps = True
+        self._partition._state.setdefault(TTL_INDEX_CF_NAME, {})
+        logger.info(
+            "Flipping memory state partition into TTL mode (empty-store "
+            "fast path)."
+        )
 
     def _get_bytes(
         self,

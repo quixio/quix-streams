@@ -158,10 +158,12 @@ class TestRocksDBStorePartition:
     ):
         cfs = store_partition.list_column_families()
         # Order can vary depending on creation sequence, so compare as sets.
-        # "default" is always present in RocksDB. "__metadata__" is created by
-        # RocksDBStorePartition. "__ttl_index__" is created by the per-write
-        # TTL machinery (always-on in v2; see ttl_codec.py).
-        assert set(cfs) == {"default", "__metadata__", "__ttl_index__"}
+        # "default" is always present in RocksDB. "__metadata__" is created
+        # by RocksDBStorePartition. The ``__ttl_index__`` CF is **lazy** in
+        # v3: it only exists after a partition flips into TTL mode on first
+        # detection of a ``state.set(..., ttl=...)`` write. A fresh, never-
+        # used partition stays byte-identical to v3.23.6.
+        assert set(cfs) == {"default", "__metadata__"}
 
     def test_ensure_metadata_cf(self, store_partition: RocksDBStorePartition):
         assert store_partition.get_or_create_column_family("__metadata__")

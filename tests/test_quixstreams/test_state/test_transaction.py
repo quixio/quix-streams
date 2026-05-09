@@ -467,11 +467,13 @@ class TestPartitionTransaction:
                 data, changelog_producer_mock.produce.call_args_list
             ):
                 assert call.kwargs["key"] == tx._serialize_key(key=key, prefix=prefix)
-                # v2: every default-CF write carries an 8-byte expiry stamp.
-                # ``set`` without ``ttl=`` writes the never-expires sentinel.
-                expected_value = encode_ttl_value(
-                    SENTINEL_NEVER, tx._serialize_value(value=value)
-                )
+                # v3: a fresh partition that never sees a ``state.set(...,
+                # ttl=...)`` write stays byte-identical to v3.23.6 — values
+                # on the changelog are the raw serializer bytes, no stamp
+                # prefix. The TTL machinery only kicks in once the
+                # partition flips into TTL mode (see
+                # ``RocksDBPartitionTransaction._maybe_flip_or_reject``).
+                expected_value = tx._serialize_value(value=value)
                 assert call.kwargs["value"] == expected_value
                 assert call.kwargs["headers"] == {
                     CHANGELOG_CF_MESSAGE_HEADER: cf,

@@ -77,12 +77,24 @@ value as bytes or None if the key is not found and `default` is not provided
 
 ```python
 @abstractmethod
-def set(key: K, value: V) -> None
+def set(key: K, value: V, ttl: Optional[timedelta] = None) -> None
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\state\base\state.py#L55)
 
 Set value for the key.
+
+Pass `ttl=timedelta(...)` to expire the entry after that duration of event time. Omit `ttl` (or pass `None`) for an entry that never expires.
+
+```python
+# Expires 7 days after the event timestamp of the record that writes it.
+state.set("msg_id", 1, ttl=timedelta(days=7))
+
+# Never expires (default behavior).
+state.set("config_key", "value")
+```
+
+See [State TTL](../advanced/stateful-processing.md#state-ttl) for full usage, patterns, and troubleshooting.
 
 
 <br>
@@ -90,6 +102,7 @@ Set value for the key.
 
 - `key`: key
 - `value`: value
+- `ttl`: optional expiry duration as a `timedelta`. Must be greater than zero if provided. Expiry is event-time-based, not wall-clock. Default `None` — never expires.
 
 <a id="quixstreams.state.base.state.State.set_bytes"></a>
 
@@ -99,19 +112,22 @@ Set value for the key.
 
 ```python
 @abstractmethod
-def set_bytes(key: K, value: bytes) -> None
+def set_bytes(key: K, value: bytes, ttl: Optional[timedelta] = None) -> None
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\state\base\state.py#L64)
 
-Set value for the key.
+Set value for the key. Raw-bytes variant of [`State.set()`](#stateset) — use this when you handle serialization yourself.
+
+Pass `ttl=timedelta(...)` to expire the entry after that duration of event time. See [`State.set()`](#stateset) for TTL semantics.
 
 
 <br>
 ***Arguments:***
 
 - `key`: key
-- `value`: value
+- `value`: value as raw bytes
+- `ttl`: optional expiry duration as a `timedelta`. Must be greater than zero if provided. Default `None` — never expires.
 
 <a id="quixstreams.state.base.state.State.delete"></a>
 
@@ -260,12 +276,12 @@ value or None if the key is not found and `default` is not provided
 #### TransactionState.set
 
 ```python
-def set(key: K, value: V) -> None
+def set(key: K, value: V, ttl: Optional[timedelta] = None) -> None
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\state\base\state.py#L160)
 
-Set value for the key.
+Set value for the key. Pass `ttl=timedelta(...)` to expire the entry after that duration of event time. See [`State.set()`](#stateset) for full TTL semantics and examples.
 
 
 <br>
@@ -273,6 +289,7 @@ Set value for the key.
 
 - `key`: key
 - `value`: value
+- `ttl`: optional expiry duration as a `timedelta`. Must be greater than zero if provided. Default `None` — never expires.
 
 <a id="quixstreams.state.base.state.TransactionState.set_bytes"></a>
 
@@ -281,19 +298,20 @@ Set value for the key.
 #### TransactionState.set\_bytes
 
 ```python
-def set_bytes(key: K, value: bytes) -> None
+def set_bytes(key: K, value: bytes, ttl: Optional[timedelta] = None) -> None
 ```
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\state\base\state.py#L170)
 
-Set value for the key.
+Set value for the key. Raw-bytes variant — use this when you handle serialization yourself. Pass `ttl=timedelta(...)` to expire the entry. See [`State.set()`](#stateset) for full TTL semantics.
 
 
 <br>
 ***Arguments:***
 
 - `key`: key
-- `value`: value
+- `value`: value as raw bytes
+- `ttl`: optional expiry duration as a `timedelta`. Must be greater than zero if provided. Default `None` — never expires.
 
 <a id="quixstreams.state.base.state.TransactionState.delete"></a>
 
