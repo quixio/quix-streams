@@ -45,6 +45,12 @@ TIMESTAMP_COL_MAPPER = {
     "hour": lambda col: col.dt.hour.astype(str).str.zfill(2),
 }
 
+# Hive/Iceberg/Spark convention for partition values that are NULL. Readers
+# that respect the convention (DuckDB hive_partitioning, Spark, Trino…)
+# materialise the column as NULL when they encounter this sentinel in a
+# path segment.
+HIVE_NULL_PARTITION = "__HIVE_DEFAULT_PARTITION__"
+
 
 class QuixTSDataLakeSink(BatchingSink):
     """
@@ -199,10 +205,15 @@ class QuixTSDataLakeSink(BatchingSink):
         while attempts:
             start = time.perf_counter()
             try:
-                self._write_batch(batch)
+                rows_written = self._write_batch(batch)
                 elapsed_ms = (time.perf_counter() - start) * 1000
+                # Log the actually-written count, not batch.size. They are
+                # equal in normal operation, but reporting the real number
+                # makes any future silent-drop regression visible in the log.
                 logger.info(
-                    "Wrote %d rows to blob storage in %.1f ms", batch.size, elapsed_ms
+                    "Wrote %d rows to blob storage in %.1f ms",
+                    rows_written,
+                    elapsed_ms,
                 )
                 return
             except Exception as exc:
@@ -212,10 +223,16 @@ class QuixTSDataLakeSink(BatchingSink):
                 logger.warning("Write failed (%s) - retrying...", exc)
                 time.sleep(3)
 
-    def _write_batch(self, batch: SinkBatch):
-        """Convert batch to Parquet and write to blob storage with Hive partitioning."""
+    def _write_batch(self, batch: SinkBatch) -> int:
+        """Convert batch to Parquet and write to blob storage with Hive partitioning.
+
+        Returns the number of rows actually grouped and written to storage.
+        Equals batch.size in normal operation; reported by write() so any
+        future silent-drop regression is visible in the log instead of
+        being papered over with the input count.
+        """
         if not batch:
-            return
+            return 0
 
         # Convert batch to list of dictionaries
         rows = []
@@ -238,8 +255,19 @@ class QuixTSDataLakeSink(BatchingSink):
 
         # Use only the explicitly specified partition columns
         if partition_columns := self.hive_columns.copy():
+            # Rows where a partition column is NaN/None would be silently
+            # discarded by pandas.groupby's default dropna=True — the for-
+            # loop below would simply not iterate over them and they would
+            # never reach storage, even though write() would still report
+            # success using batch.size. Route them into a single Hive-NULL
+            # bucket instead so the data lands somewhere queryable.
+            for col in partition_columns:
+                if col in df.columns:
+                    df[col] = df[col].fillna(HIVE_NULL_PARTITION)
+
             # Group by partition columns and write each partition separately
             # This creates the Hive-style directory structure: col1=val1/col2=val2/file.parquet
+            rows_written = 0
             for group_values, group_df in df.groupby(partition_columns):
                 # Ensure group_values is always a tuple for consistent handling
                 if not isinstance(group_values, tuple):
@@ -262,15 +290,18 @@ class QuixTSDataLakeSink(BatchingSink):
                 self._write_parquet_to_storage(
                     data_df, storage_key, partition_columns, group_values
                 )
+                rows_written += len(group_df)
         else:
             # No partitioning - write as single file directly under table directory
             storage_key = (
                 f"{self.s3_prefix}/{self.table_name}/data_{uuid.uuid4().hex}.parquet"
             )
             self._write_parquet_to_storage(df, storage_key, [], ())
+            rows_written = len(df)
 
         # Wait for all uploads to complete and register files in catalog
         self._finalize_writes()
+        return rows_written
 
     def _write_parquet_to_storage(
         self,

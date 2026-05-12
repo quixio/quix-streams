@@ -538,6 +538,110 @@ class TestWriteOperations:
         # Should have 2 uploads - one for each partition
         assert mock_blob_client.put_object_async.call_count == 2
 
+    def test_write_does_not_drop_rows_with_none_partition_value(
+        self, sink_factory, mock_blob_client
+    ):
+        """
+        Regression: rows whose partition column is None / missing must NOT
+        be silently dropped.
+
+        pandas' DataFrame.groupby defaults to dropna=True, so any row whose
+        partition key contains NaN is silently excluded from the iteration.
+        The sink's for-loop never produced a group for those rows, no PUT
+        was issued — yet write() still logged "Wrote N rows" (using
+        batch.size, not the actually-written count), hiding the data loss.
+        """
+        sink = sink_factory(hive_columns=["machine"])
+
+        records = [
+            {
+                "value": {"machine": "M1", "ts_ms": 1704067200000},
+                "key": "k1",
+                "timestamp": 1704067200000,
+                "offset": 0,
+            },
+            {
+                "value": {"machine": None, "ts_ms": 1704067260000},
+                "key": "k2",
+                "timestamp": 1704067260000,
+                "offset": 1,
+            },
+            {
+                # Missing 'machine' entirely → NaN in the DataFrame, same path.
+                "value": {"ts_ms": 1704067320000},
+                "key": "k3",
+                "timestamp": 1704067320000,
+                "offset": 2,
+            },
+        ]
+        batch = SinkBatch(topic="test", partition=0)
+        for r in records:
+            batch.append(
+                value=r["value"],
+                key=r["key"],
+                timestamp=r["timestamp"],
+                headers=[],
+                offset=r["offset"],
+            )
+
+        sink.write(batch)
+
+        # Two distinct partition groups → two PUTs: one for M1, one for the
+        # null bucket containing both the explicit-None and missing-key rows.
+        assert mock_blob_client.put_object_async.call_count == 2
+
+        storage_keys = [
+            call.args[0]
+            for call in mock_blob_client.put_object_async.call_args_list
+        ]
+        assert any("machine=M1" in k for k in storage_keys)
+        # Null partition values land under the Hive convention sentinel so
+        # downstream readers (Iceberg/Spark/DuckDB hive_partitioning) treat
+        # the column as NULL rather than the literal string "None".
+        assert any(
+            "machine=__HIVE_DEFAULT_PARTITION__" in k for k in storage_keys
+        )
+
+    def test_write_all_null_partition_values_still_writes(
+        self, sink_factory, mock_blob_client
+    ):
+        """
+        Regression: a batch in which every row has a NaN partition value
+        must still write a file. Previously this case produced zero PUTs
+        while the sink reported success.
+        """
+        sink = sink_factory(hive_columns=["machine"])
+
+        records = [
+            {
+                "value": {"ts_ms": 1704067200000},  # no 'machine'
+                "key": "k1",
+                "timestamp": 1704067200000,
+                "offset": 0,
+            },
+            {
+                "value": {"machine": None, "ts_ms": 1704067260000},
+                "key": "k2",
+                "timestamp": 1704067260000,
+                "offset": 1,
+            },
+        ]
+        batch = SinkBatch(topic="test", partition=0)
+        for r in records:
+            batch.append(
+                value=r["value"],
+                key=r["key"],
+                timestamp=r["timestamp"],
+                headers=[],
+                offset=r["offset"],
+            )
+
+        sink.write(batch)
+
+        assert mock_blob_client.put_object_async.call_count == 1
+        storage_key = mock_blob_client.put_object_async.call_args.args[0]
+        assert "machine=__HIVE_DEFAULT_PARTITION__" in storage_key
+
     def test_write_adds_timestamp_from_item_if_missing(
         self, sink_factory, sample_batch, mock_blob_client
     ):
