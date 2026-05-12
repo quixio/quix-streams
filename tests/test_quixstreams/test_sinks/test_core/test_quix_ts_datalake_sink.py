@@ -246,6 +246,111 @@ class TestQuixTSDataLakeSinkInit:
         with pytest.raises(RuntimeError, match="s3_bucket not initialized"):
             _ = sink.s3_bucket
 
+    def test_silence_azure_http_logs_defaults_to_true(self):
+        """The chatty-log mute should be on by default — Azure SDK + adlfs
+        log one INFO record per HTTP round-trip, which is pure noise for a
+        sink that probes a deep partition tree."""
+        sink = QuixTSDataLakeSink(s3_prefix="p", table_name="t")
+        assert sink._silence_azure_http_logs is True
+
+    def test_silence_azure_http_logs_can_be_disabled(self):
+        sink = QuixTSDataLakeSink(
+            s3_prefix="p", table_name="t", silence_azure_http_logs=False
+        )
+        assert sink._silence_azure_http_logs is False
+
+
+# =============================================================================
+# 1b. Chatty Logger Silencing
+# =============================================================================
+
+
+class TestSilenceChattyLoggers:
+    """Tests for the silence_chatty_loggers() helper and its integration
+    with sink.setup()."""
+
+    # Names that the helper is responsible for muting. Kept in sync with
+    # _CHATTY_HTTP_LOGGERS in quix_ts_datalake_sink.py.
+    _SILENCED = (
+        "azure",
+        "azure.core",
+        "azure.core.pipeline.policies.http_logging_policy",
+        "azure.storage",
+        "adlfs",
+        "botocore",
+        "boto3",
+        "s3transfer",
+    )
+
+    @pytest.fixture(autouse=True)
+    def _reset_logger_levels(self):
+        """Reset levels on the silenced loggers before and after each test
+        so we don't leak state into the rest of the suite."""
+        import logging as _logging
+
+        previous = {
+            name: _logging.getLogger(name).level for name in self._SILENCED
+        }
+        for name in self._SILENCED:
+            _logging.getLogger(name).setLevel(_logging.NOTSET)
+        try:
+            yield
+        finally:
+            for name, level in previous.items():
+                _logging.getLogger(name).setLevel(level)
+
+    def test_helper_raises_levels_to_warning(self):
+        import logging as _logging
+
+        from quixstreams.sinks.core.quix_ts_datalake_sink import (
+            silence_chatty_loggers,
+        )
+
+        # Start permissive — everything would otherwise emit INFO.
+        for name in self._SILENCED:
+            _logging.getLogger(name).setLevel(_logging.INFO)
+
+        silence_chatty_loggers()
+
+        for name in self._SILENCED:
+            assert (
+                _logging.getLogger(name).level == _logging.WARNING
+            ), f"{name} not raised to WARNING"
+
+    def test_setup_silences_when_flag_is_true(self, sink_factory, mock_blob_client):
+        import logging as _logging
+
+        sink = sink_factory(silence_azure_http_logs=True)
+        for name in self._SILENCED:
+            _logging.getLogger(name).setLevel(_logging.INFO)
+
+        with patch(
+            "quixstreams.sinks.core.quix_ts_datalake_sink.get_bucket_name",
+            return_value="test-bucket",
+        ):
+            sink.setup()
+
+        for name in self._SILENCED:
+            assert _logging.getLogger(name).level == _logging.WARNING
+
+    def test_setup_leaves_logger_levels_alone_when_flag_is_false(
+        self, sink_factory, mock_blob_client
+    ):
+        import logging as _logging
+
+        sink = sink_factory(silence_azure_http_logs=False)
+        for name in self._SILENCED:
+            _logging.getLogger(name).setLevel(_logging.INFO)
+
+        with patch(
+            "quixstreams.sinks.core.quix_ts_datalake_sink.get_bucket_name",
+            return_value="test-bucket",
+        ):
+            sink.setup()
+
+        for name in self._SILENCED:
+            assert _logging.getLogger(name).level == _logging.INFO
+
 
 # =============================================================================
 # 2. Timestamp Column Mapping Tests

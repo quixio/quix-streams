@@ -51,6 +51,36 @@ TIMESTAMP_COL_MAPPER = {
 # path segment.
 HIVE_NULL_PARTITION = "__HIVE_DEFAULT_PARTITION__"
 
+# Loggers that emit one INFO record per HTTP round-trip — useful for low-
+# level SDK debugging, but pure noise for a sink that performs hundreds of
+# blob operations per minute (the Hive partition tree probe alone). The
+# sink mutes them by default; pass `silence_azure_http_logs=False` to
+# preserve them.
+_CHATTY_HTTP_LOGGERS = (
+    "azure",
+    "azure.core",
+    "azure.core.pipeline.policies.http_logging_policy",
+    "azure.storage",
+    "adlfs",
+    "botocore",
+    "boto3",
+    "s3transfer",
+)
+
+
+def silence_chatty_loggers() -> None:
+    """Mute per-request HTTP logging from the cloud-storage SDKs used by
+    this sink (Azure SDK + adlfs, botocore/boto3 + s3transfer).
+
+    Safe to call from application code at any point. Levels are raised to
+    WARNING, so anything actually noteworthy (auth failures, retries,
+    throttling, server errors) still propagates. Call after configuring
+    your own logging (e.g. after instantiating quixstreams.Application)
+    so the framework's logging setup does not reset these levels.
+    """
+    for name in _CHATTY_HTTP_LOGGERS:
+        logging.getLogger(name).setLevel(logging.WARNING)
+
 
 class QuixTSDataLakeSink(BatchingSink):
     """
@@ -78,6 +108,13 @@ class QuixTSDataLakeSink(BatchingSink):
     :param namespace: Catalog namespace (default: "default")
     :param auto_create_bucket: If True, attempt to create bucket/path in storage if missing
     :param max_workers: Maximum number of parallel upload threads (default: 10)
+    :param silence_azure_http_logs: If True (default), raise the log levels of
+        the Azure SDK / adlfs / botocore HTTP-logging loggers to WARNING during
+        setup(). These libraries log one INFO record per HTTP round-trip with
+        the full URL and headers, which buries the sink's own logs under
+        hundreds of lines per minute of partition probing. Set to False to
+        keep the verbose request/response logs (useful for low-level SDK
+        debugging).
     :param on_client_connect_success: An optional callback made after successful
         client authentication, primarily for additional logging.
     :param on_client_connect_failure: An optional callback made after failed
@@ -99,6 +136,7 @@ class QuixTSDataLakeSink(BatchingSink):
         namespace: str = "default",
         auto_create_bucket: bool = True,
         max_workers: int = 10,
+        silence_azure_http_logs: bool = True,
         on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
         on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
     ):
@@ -129,6 +167,7 @@ class QuixTSDataLakeSink(BatchingSink):
         )
         self._auto_create_bucket = auto_create_bucket
         self._max_workers = max_workers
+        self._silence_azure_http_logs = silence_azure_http_logs
 
         # Batch upload tracking
         self._pending_futures: List[Dict[str, Any]] = []
@@ -143,6 +182,13 @@ class QuixTSDataLakeSink(BatchingSink):
     def setup(self):
         """Initialize blob storage client and test connection."""
         logger.info("Starting Quix Lake Blob Storage Sink...")
+
+        # Done in setup() rather than __init__ so it runs after the host
+        # application (typically quixstreams.Application) has configured
+        # logging; otherwise the framework's setup would reset these levels
+        # back to whatever the global log level is.
+        if self._silence_azure_http_logs:
+            silence_chatty_loggers()
 
         # Extract bucket name from quixportal configuration
         self._s3_bucket = get_bucket_name()
