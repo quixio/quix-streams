@@ -660,11 +660,19 @@ class QuixTSDataLakeSink(BatchingSink):
             else:
                 file_path = f"s3://{self.s3_bucket}/{storage_key}"
 
-            # Build partition values dict
-            partition_dict = {}
+            # Build partition values dict.
+            # _write_batch fillna()'s NaN partition values with HIVE_NULL_PARTITION
+            # so they survive groupby and land in a real Hive-NULL directory on
+            # disk. The catalog, however, should record those values as actual
+            # SQL NULL — not the literal sentinel string — so that downstream
+            # `partition_<col> IS NULL` filters and partition-tree NULL rendering
+            # work natively. Translate back here.
+            partition_dict: Dict[str, Optional[str]] = {}
             if partition_columns and partition_values:
                 for col, val in zip(partition_columns, partition_values):
-                    partition_dict[col] = str(val)
+                    partition_dict[col] = (
+                        None if val == HIVE_NULL_PARTITION else str(val)
+                    )
 
             # Create file entry
             file_entries.append(

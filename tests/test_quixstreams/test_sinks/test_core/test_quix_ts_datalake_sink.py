@@ -991,6 +991,68 @@ class TestCatalogIntegration:
         with pytest.raises(Exception, match="Manifest error"):
             sink.write(batch)
 
+    def test_manifest_registers_null_partition_as_sql_null(
+        self, sink_factory, mock_blob_client, mock_catalog_client
+    ):
+        """
+        A row whose partition column is None / missing lands in the Hive-NULL
+        bucket on disk (path segment = `col=__HIVE_DEFAULT_PARTITION__`), but
+        the catalog payload must record the partition value as SQL NULL — not
+        as the literal sentinel string. This is what lets downstream readers
+        emit `partition_<col> IS NULL` filters and render the bucket as NULL
+        in their partition trees, instead of leaking the storage-layer
+        sentinel into user-facing SQL.
+        """
+        sink = sink_factory(
+            hive_columns=["machine"],
+            catalog_url="http://catalog:8080",
+            auto_discover=True,
+        )
+        sink._catalog = mock_catalog_client
+        sink.table_registered = True
+
+        records = [
+            {
+                "value": {"machine": "M1", "ts_ms": 1704067200000},
+                "key": "k1",
+                "timestamp": 1704067200000,
+                "offset": 0,
+            },
+            {
+                "value": {"machine": None, "ts_ms": 1704067260000},
+                "key": "k2",
+                "timestamp": 1704067260000,
+                "offset": 1,
+            },
+        ]
+        batch = SinkBatch(topic="test", partition=0)
+        for r in records:
+            batch.append(
+                value=r["value"],
+                key=r["key"],
+                timestamp=r["timestamp"],
+                headers=[],
+                offset=r["offset"],
+            )
+
+        sink.write(batch)
+
+        manifest_calls = [
+            call
+            for call in mock_catalog_client.post.call_args_list
+            if "manifest" in str(call)
+        ]
+        assert len(manifest_calls) == 1
+        files = manifest_calls[0].kwargs["json"]["files"]
+        # One file per partition group — M1 and the null bucket.
+        by_partition = {f["partition_values"]["machine"]: f for f in files}
+        assert by_partition["M1"]["partition_values"]["machine"] == "M1"
+        assert by_partition[None]["partition_values"]["machine"] is None
+        # Storage key on disk still uses the Hive convention sentinel so
+        # the on-disk layout is portable to Spark / Iceberg readers.
+        null_bucket_path = by_partition[None]["file_path"]
+        assert "machine=__HIVE_DEFAULT_PARTITION__" in null_bucket_path
+
 
 # =============================================================================
 # 7. Error Handling Tests
