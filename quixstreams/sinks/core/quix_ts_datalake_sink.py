@@ -45,11 +45,15 @@ TIMESTAMP_COL_MAPPER = {
     "hour": lambda col: col.dt.hour.astype(str).str.zfill(2),
 }
 
-# Hive/Iceberg/Spark convention for partition values that are NULL. Readers
-# that respect the convention (DuckDB hive_partitioning, Spark, Trino…)
-# materialise the column as NULL when they encounter this sentinel in a
-# path segment.
-HIVE_NULL_PARTITION = "__HIVE_DEFAULT_PARTITION__"
+# On-disk path segment used when a partition column value is NULL.
+# Earlier this was Hive/Iceberg/Spark's official ``__HIVE_DEFAULT_PARTITION__``
+# sentinel, but ``None`` is clearer in the UI and matches what users see
+# when they ``print(value)`` on a NULL row — so we use that instead. The
+# catalog conversion at the bottom of ``_write_batch`` still maps this
+# string back to actual SQL NULL when registering manifest entries, so
+# downstream ``partition_<col> IS NULL`` filters and partition-tree
+# NULL rendering keep working.
+HIVE_NULL_PARTITION = "None"
 
 # Loggers that emit one INFO record per HTTP round-trip — useful for low-
 # level SDK debugging, but pure noise for a sink that performs hundreds of
@@ -662,7 +666,8 @@ class QuixTSDataLakeSink(BatchingSink):
 
             # Build partition values dict.
             # _write_batch fillna()'s NaN partition values with HIVE_NULL_PARTITION
-            # so they survive groupby and land in a real Hive-NULL directory on
+            # (the on-disk sentinel — see the constant near the top) so they
+            # survive groupby and land in a single ``col=None`` directory on
             # disk. The catalog, however, should record those values as actual
             # SQL NULL — not the literal sentinel string — so that downstream
             # `partition_<col> IS NULL` filters and partition-tree NULL rendering

@@ -697,10 +697,10 @@ class TestWriteOperations:
             call.args[0] for call in mock_blob_client.put_object_async.call_args_list
         ]
         assert any("machine=M1" in k for k in storage_keys)
-        # Null partition values land under the Hive convention sentinel so
-        # downstream readers (Iceberg/Spark/DuckDB hive_partitioning) treat
-        # the column as NULL rather than the literal string "None".
-        assert any("machine=__HIVE_DEFAULT_PARTITION__" in k for k in storage_keys)
+        # Null partition values land in a single ``machine=None`` bucket. The
+        # catalog still gets SQL NULL for these rows (see ``_write_batch``)
+        # — the on-disk segment is the human-readable string ``None``.
+        assert any("machine=None" in k for k in storage_keys)
 
     def test_write_all_null_partition_values_still_writes(
         self, sink_factory, mock_blob_client
@@ -740,7 +740,7 @@ class TestWriteOperations:
 
         assert mock_blob_client.put_object_async.call_count == 1
         storage_key = mock_blob_client.put_object_async.call_args.args[0]
-        assert "machine=__HIVE_DEFAULT_PARTITION__" in storage_key
+        assert "machine=None" in storage_key
 
     def test_write_adds_timestamp_from_item_if_missing(
         self, sink_factory, sample_batch, mock_blob_client
@@ -990,11 +990,11 @@ class TestCatalogIntegration:
         self, sink_factory, mock_blob_client, mock_catalog_client
     ):
         """
-        A row whose partition column is None / missing lands in the Hive-NULL
-        bucket on disk (path segment = `col=__HIVE_DEFAULT_PARTITION__`), but
-        the catalog payload must record the partition value as SQL NULL — not
-        as the literal sentinel string. This is what lets downstream readers
-        emit `partition_<col> IS NULL` filters and render the bucket as NULL
+        A row whose partition column is None / missing lands in a
+        ``col=None`` bucket on disk, but the catalog payload must record
+        the partition value as SQL NULL — not as the literal string
+        "None". This is what lets downstream readers emit
+        ``partition_<col> IS NULL`` filters and render the bucket as NULL
         in their partition trees, instead of leaking the storage-layer
         sentinel into user-facing SQL.
         """
@@ -1043,10 +1043,11 @@ class TestCatalogIntegration:
         by_partition = {f["partition_values"]["machine"]: f for f in files}
         assert by_partition["M1"]["partition_values"]["machine"] == "M1"
         assert by_partition[None]["partition_values"]["machine"] is None
-        # Storage key on disk still uses the Hive convention sentinel so
-        # the on-disk layout is portable to Spark / Iceberg readers.
+        # Storage key on disk uses the literal "None" string — easier to
+        # eyeball than the Hive sentinel and matches what ``str(None)`` would
+        # produce naturally for a Python user inspecting the path.
         null_bucket_path = by_partition[None]["file_path"]
-        assert "machine=__HIVE_DEFAULT_PARTITION__" in null_bucket_path
+        assert "machine=None" in null_bucket_path
 
 
 # =============================================================================
