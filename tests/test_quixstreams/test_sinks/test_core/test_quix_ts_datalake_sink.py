@@ -288,9 +288,7 @@ class TestSilenceChattyLoggers:
         so we don't leak state into the rest of the suite."""
         import logging as _logging
 
-        previous = {
-            name: _logging.getLogger(name).level for name in self._SILENCED
-        }
+        previous = {name: _logging.getLogger(name).level for name in self._SILENCED}
         for name in self._SILENCED:
             _logging.getLogger(name).setLevel(_logging.NOTSET)
         try:
@@ -313,9 +311,9 @@ class TestSilenceChattyLoggers:
         silence_chatty_loggers()
 
         for name in self._SILENCED:
-            assert (
-                _logging.getLogger(name).level == _logging.WARNING
-            ), f"{name} not raised to WARNING"
+            assert _logging.getLogger(name).level == _logging.WARNING, (
+                f"{name} not raised to WARNING"
+            )
 
     def test_setup_silences_when_flag_is_true(self, sink_factory, mock_blob_client):
         import logging as _logging
@@ -696,16 +694,13 @@ class TestWriteOperations:
         assert mock_blob_client.put_object_async.call_count == 2
 
         storage_keys = [
-            call.args[0]
-            for call in mock_blob_client.put_object_async.call_args_list
+            call.args[0] for call in mock_blob_client.put_object_async.call_args_list
         ]
         assert any("machine=M1" in k for k in storage_keys)
         # Null partition values land under the Hive convention sentinel so
         # downstream readers (Iceberg/Spark/DuckDB hive_partitioning) treat
         # the column as NULL rather than the literal string "None".
-        assert any(
-            "machine=__HIVE_DEFAULT_PARTITION__" in k for k in storage_keys
-        )
+        assert any("machine=__HIVE_DEFAULT_PARTITION__" in k for k in storage_keys)
 
     def test_write_all_null_partition_values_still_writes(
         self, sink_factory, mock_blob_client
