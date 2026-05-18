@@ -45,6 +45,45 @@ TIMESTAMP_COL_MAPPER = {
     "hour": lambda col: col.dt.hour.astype(str).str.zfill(2),
 }
 
+# On-disk path segment used when a partition column value is NULL.
+# Unified with the reading side (quix-ts-datalake catalog + API + UI):
+# every writer in the stack emits this exact string, every reader maps
+# it back to SQL NULL. Double-underscore prefix/suffix keeps the
+# sentinel from colliding with real user values like the bare string
+# ``"None"`` or Spark's ``__HIVE_DEFAULT_PARTITION__``, both of which
+# the readers also accept for backward compatibility on existing data.
+HIVE_NULL_PARTITION = "__None__"
+
+# Loggers that emit one INFO record per HTTP round-trip — useful for low-
+# level SDK debugging, but pure noise for a sink that performs hundreds of
+# blob operations per minute (the Hive partition tree probe alone). The
+# sink mutes them by default; pass `silence_azure_http_logs=False` to
+# preserve them.
+_CHATTY_HTTP_LOGGERS = (
+    "azure",
+    "azure.core",
+    "azure.core.pipeline.policies.http_logging_policy",
+    "azure.storage",
+    "adlfs",
+    "botocore",
+    "boto3",
+    "s3transfer",
+)
+
+
+def silence_chatty_loggers() -> None:
+    """Mute per-request HTTP logging from the cloud-storage SDKs used by
+    this sink (Azure SDK + adlfs, botocore/boto3 + s3transfer).
+
+    Safe to call from application code at any point. Levels are raised to
+    WARNING, so anything actually noteworthy (auth failures, retries,
+    throttling, server errors) still propagates. Call after configuring
+    your own logging (e.g. after instantiating quixstreams.Application)
+    so the framework's logging setup does not reset these levels.
+    """
+    for name in _CHATTY_HTTP_LOGGERS:
+        logging.getLogger(name).setLevel(logging.WARNING)
+
 
 class QuixTSDataLakeSink(BatchingSink):
     """
@@ -72,6 +111,13 @@ class QuixTSDataLakeSink(BatchingSink):
     :param namespace: Catalog namespace (default: "default")
     :param auto_create_bucket: If True, attempt to create bucket/path in storage if missing
     :param max_workers: Maximum number of parallel upload threads (default: 10)
+    :param silence_azure_http_logs: If True (default), raise the log levels of
+        the Azure SDK / adlfs / botocore HTTP-logging loggers to WARNING during
+        setup(). These libraries log one INFO record per HTTP round-trip with
+        the full URL and headers, which buries the sink's own logs under
+        hundreds of lines per minute of partition probing. Set to False to
+        keep the verbose request/response logs (useful for low-level SDK
+        debugging).
     :param on_client_connect_success: An optional callback made after successful
         client authentication, primarily for additional logging.
     :param on_client_connect_failure: An optional callback made after failed
@@ -93,6 +139,7 @@ class QuixTSDataLakeSink(BatchingSink):
         namespace: str = "default",
         auto_create_bucket: bool = True,
         max_workers: int = 10,
+        silence_azure_http_logs: bool = True,
         on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
         on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
     ):
@@ -123,6 +170,7 @@ class QuixTSDataLakeSink(BatchingSink):
         )
         self._auto_create_bucket = auto_create_bucket
         self._max_workers = max_workers
+        self._silence_azure_http_logs = silence_azure_http_logs
 
         # Batch upload tracking
         self._pending_futures: List[Dict[str, Any]] = []
@@ -137,6 +185,13 @@ class QuixTSDataLakeSink(BatchingSink):
     def setup(self):
         """Initialize blob storage client and test connection."""
         logger.info("Starting Quix Lake Blob Storage Sink...")
+
+        # Done in setup() rather than __init__ so it runs after the host
+        # application (typically quixstreams.Application) has configured
+        # logging; otherwise the framework's setup would reset these levels
+        # back to whatever the global log level is.
+        if self._silence_azure_http_logs:
+            silence_chatty_loggers()
 
         # Extract bucket name from quixportal configuration
         self._s3_bucket = get_bucket_name()
@@ -199,10 +254,15 @@ class QuixTSDataLakeSink(BatchingSink):
         while attempts:
             start = time.perf_counter()
             try:
-                self._write_batch(batch)
+                rows_written = self._write_batch(batch)
                 elapsed_ms = (time.perf_counter() - start) * 1000
+                # Log the actually-written count, not batch.size. They are
+                # equal in normal operation, but reporting the real number
+                # makes any future silent-drop regression visible in the log.
                 logger.info(
-                    "Wrote %d rows to blob storage in %.1f ms", batch.size, elapsed_ms
+                    "Wrote %d rows to blob storage in %.1f ms",
+                    rows_written,
+                    elapsed_ms,
                 )
                 return
             except Exception as exc:
@@ -212,10 +272,16 @@ class QuixTSDataLakeSink(BatchingSink):
                 logger.warning("Write failed (%s) - retrying...", exc)
                 time.sleep(3)
 
-    def _write_batch(self, batch: SinkBatch):
-        """Convert batch to Parquet and write to blob storage with Hive partitioning."""
+    def _write_batch(self, batch: SinkBatch) -> int:
+        """Convert batch to Parquet and write to blob storage with Hive partitioning.
+
+        Returns the number of rows actually grouped and written to storage.
+        Equals batch.size in normal operation; reported by write() so any
+        future silent-drop regression is visible in the log instead of
+        being papered over with the input count.
+        """
         if not batch:
-            return
+            return 0
 
         # Convert batch to list of dictionaries
         rows = []
@@ -238,8 +304,19 @@ class QuixTSDataLakeSink(BatchingSink):
 
         # Use only the explicitly specified partition columns
         if partition_columns := self.hive_columns.copy():
+            # Rows where a partition column is NaN/None would be silently
+            # discarded by pandas.groupby's default dropna=True — the for-
+            # loop below would simply not iterate over them and they would
+            # never reach storage, even though write() would still report
+            # success using batch.size. Route them into a single Hive-NULL
+            # bucket instead so the data lands somewhere queryable.
+            for col in partition_columns:
+                if col in df.columns:
+                    df[col] = df[col].fillna(HIVE_NULL_PARTITION)
+
             # Group by partition columns and write each partition separately
             # This creates the Hive-style directory structure: col1=val1/col2=val2/file.parquet
+            rows_written = 0
             for group_values, group_df in df.groupby(partition_columns):
                 # Ensure group_values is always a tuple for consistent handling
                 if not isinstance(group_values, tuple):
@@ -262,15 +339,18 @@ class QuixTSDataLakeSink(BatchingSink):
                 self._write_parquet_to_storage(
                     data_df, storage_key, partition_columns, group_values
                 )
+                rows_written += len(group_df)
         else:
             # No partitioning - write as single file directly under table directory
             storage_key = (
                 f"{self.s3_prefix}/{self.table_name}/data_{uuid.uuid4().hex}.parquet"
             )
             self._write_parquet_to_storage(df, storage_key, [], ())
+            rows_written = len(df)
 
         # Wait for all uploads to complete and register files in catalog
         self._finalize_writes()
+        return rows_written
 
     def _write_parquet_to_storage(
         self,
@@ -583,11 +663,20 @@ class QuixTSDataLakeSink(BatchingSink):
             else:
                 file_path = f"s3://{self.s3_bucket}/{storage_key}"
 
-            # Build partition values dict
-            partition_dict = {}
+            # Build partition values dict.
+            # _write_batch fillna()'s NaN partition values with HIVE_NULL_PARTITION
+            # (the on-disk sentinel — see the constant near the top) so they
+            # survive groupby and land in a single ``col=__None__`` directory on
+            # disk. The catalog, however, should record those values as actual
+            # SQL NULL — not the literal sentinel string — so that downstream
+            # `partition_<col> IS NULL` filters and partition-tree NULL rendering
+            # work natively. Translate back here.
+            partition_dict: Dict[str, Optional[str]] = {}
             if partition_columns and partition_values:
                 for col, val in zip(partition_columns, partition_values):
-                    partition_dict[col] = str(val)
+                    partition_dict[col] = (
+                        None if val == HIVE_NULL_PARTITION else str(val)
+                    )
 
             # Create file entry
             file_entries.append(
