@@ -47,3 +47,5 @@ site/
 
 # memories (local development notes)
 memories/
+
+.claude/

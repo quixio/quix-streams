@@ -246,6 +246,109 @@ class TestQuixTSDataLakeSinkInit:
         with pytest.raises(RuntimeError, match="s3_bucket not initialized"):
             _ = sink.s3_bucket
 
+    def test_silence_azure_http_logs_defaults_to_true(self):
+        """The chatty-log mute should be on by default — Azure SDK + adlfs
+        log one INFO record per HTTP round-trip, which is pure noise for a
+        sink that probes a deep partition tree."""
+        sink = QuixTSDataLakeSink(s3_prefix="p", table_name="t")
+        assert sink._silence_azure_http_logs is True
+
+    def test_silence_azure_http_logs_can_be_disabled(self):
+        sink = QuixTSDataLakeSink(
+            s3_prefix="p", table_name="t", silence_azure_http_logs=False
+        )
+        assert sink._silence_azure_http_logs is False
+
+
+# =============================================================================
+# 1b. Chatty Logger Silencing
+# =============================================================================
+
+
+class TestSilenceChattyLoggers:
+    """Tests for the silence_chatty_loggers() helper and its integration
+    with sink.setup()."""
+
+    # Names that the helper is responsible for muting. Kept in sync with
+    # _CHATTY_HTTP_LOGGERS in quix_ts_datalake_sink.py.
+    _SILENCED = (
+        "azure",
+        "azure.core",
+        "azure.core.pipeline.policies.http_logging_policy",
+        "azure.storage",
+        "adlfs",
+        "botocore",
+        "boto3",
+        "s3transfer",
+    )
+
+    @pytest.fixture(autouse=True)
+    def _reset_logger_levels(self):
+        """Reset levels on the silenced loggers before and after each test
+        so we don't leak state into the rest of the suite."""
+        import logging as _logging
+
+        previous = {name: _logging.getLogger(name).level for name in self._SILENCED}
+        for name in self._SILENCED:
+            _logging.getLogger(name).setLevel(_logging.NOTSET)
+        try:
+            yield
+        finally:
+            for name, level in previous.items():
+                _logging.getLogger(name).setLevel(level)
+
+    def test_helper_raises_levels_to_warning(self):
+        import logging as _logging
+
+        from quixstreams.sinks.core.quix_ts_datalake_sink import (
+            silence_chatty_loggers,
+        )
+
+        # Start permissive — everything would otherwise emit INFO.
+        for name in self._SILENCED:
+            _logging.getLogger(name).setLevel(_logging.INFO)
+
+        silence_chatty_loggers()
+
+        for name in self._SILENCED:
+            assert (
+                _logging.getLogger(name).level == _logging.WARNING
+            ), f"{name} not raised to WARNING"
+
+    def test_setup_silences_when_flag_is_true(self, sink_factory, mock_blob_client):
+        import logging as _logging
+
+        sink = sink_factory(silence_azure_http_logs=True)
+        for name in self._SILENCED:
+            _logging.getLogger(name).setLevel(_logging.INFO)
+
+        with patch(
+            "quixstreams.sinks.core.quix_ts_datalake_sink.get_bucket_name",
+            return_value="test-bucket",
+        ):
+            sink.setup()
+
+        for name in self._SILENCED:
+            assert _logging.getLogger(name).level == _logging.WARNING
+
+    def test_setup_leaves_logger_levels_alone_when_flag_is_false(
+        self, sink_factory, mock_blob_client
+    ):
+        import logging as _logging
+
+        sink = sink_factory(silence_azure_http_logs=False)
+        for name in self._SILENCED:
+            _logging.getLogger(name).setLevel(_logging.INFO)
+
+        with patch(
+            "quixstreams.sinks.core.quix_ts_datalake_sink.get_bucket_name",
+            return_value="test-bucket",
+        ):
+            sink.setup()
+
+        for name in self._SILENCED:
+            assert _logging.getLogger(name).level == _logging.INFO
+
 
 # =============================================================================
 # 2. Timestamp Column Mapping Tests
@@ -538,6 +641,108 @@ class TestWriteOperations:
         # Should have 2 uploads - one for each partition
         assert mock_blob_client.put_object_async.call_count == 2
 
+    def test_write_does_not_drop_rows_with_none_partition_value(
+        self, sink_factory, mock_blob_client
+    ):
+        """
+        Regression: rows whose partition column is None / missing must NOT
+        be silently dropped.
+
+        pandas' DataFrame.groupby defaults to dropna=True, so any row whose
+        partition key contains NaN is silently excluded from the iteration.
+        The sink's for-loop never produced a group for those rows, no PUT
+        was issued — yet write() still logged "Wrote N rows" (using
+        batch.size, not the actually-written count), hiding the data loss.
+        """
+        sink = sink_factory(hive_columns=["machine"])
+
+        records = [
+            {
+                "value": {"machine": "M1", "ts_ms": 1704067200000},
+                "key": "k1",
+                "timestamp": 1704067200000,
+                "offset": 0,
+            },
+            {
+                "value": {"machine": None, "ts_ms": 1704067260000},
+                "key": "k2",
+                "timestamp": 1704067260000,
+                "offset": 1,
+            },
+            {
+                # Missing 'machine' entirely → NaN in the DataFrame, same path.
+                "value": {"ts_ms": 1704067320000},
+                "key": "k3",
+                "timestamp": 1704067320000,
+                "offset": 2,
+            },
+        ]
+        batch = SinkBatch(topic="test", partition=0)
+        for r in records:
+            batch.append(
+                value=r["value"],
+                key=r["key"],
+                timestamp=r["timestamp"],
+                headers=[],
+                offset=r["offset"],
+            )
+
+        sink.write(batch)
+
+        # Two distinct partition groups → two PUTs: one for M1, one for the
+        # null bucket containing both the explicit-None and missing-key rows.
+        assert mock_blob_client.put_object_async.call_count == 2
+
+        storage_keys = [
+            call.args[0] for call in mock_blob_client.put_object_async.call_args_list
+        ]
+        assert any("machine=M1" in k for k in storage_keys)
+        # Null partition values land in a single ``machine=__None__`` bucket.
+        # The catalog still gets SQL NULL for these rows (see ``_write_batch``)
+        # — the on-disk segment is the unified ``__None__`` sentinel used
+        # across the sink, catalog, API, and UI.
+        assert any("machine=__None__" in k for k in storage_keys)
+
+    def test_write_all_null_partition_values_still_writes(
+        self, sink_factory, mock_blob_client
+    ):
+        """
+        Regression: a batch in which every row has a NaN partition value
+        must still write a file. Previously this case produced zero PUTs
+        while the sink reported success.
+        """
+        sink = sink_factory(hive_columns=["machine"])
+
+        records = [
+            {
+                "value": {"ts_ms": 1704067200000},  # no 'machine'
+                "key": "k1",
+                "timestamp": 1704067200000,
+                "offset": 0,
+            },
+            {
+                "value": {"machine": None, "ts_ms": 1704067260000},
+                "key": "k2",
+                "timestamp": 1704067260000,
+                "offset": 1,
+            },
+        ]
+        batch = SinkBatch(topic="test", partition=0)
+        for r in records:
+            batch.append(
+                value=r["value"],
+                key=r["key"],
+                timestamp=r["timestamp"],
+                headers=[],
+                offset=r["offset"],
+            )
+
+        sink.write(batch)
+
+        assert mock_blob_client.put_object_async.call_count == 1
+        storage_key = mock_blob_client.put_object_async.call_args.args[0]
+        assert "machine=None" in storage_key
+
     def test_write_adds_timestamp_from_item_if_missing(
         self, sink_factory, sample_batch, mock_blob_client
     ):
@@ -781,6 +986,69 @@ class TestCatalogIntegration:
 
         with pytest.raises(Exception, match="Manifest error"):
             sink.write(batch)
+
+    def test_manifest_registers_null_partition_as_sql_null(
+        self, sink_factory, mock_blob_client, mock_catalog_client
+    ):
+        """
+        A row whose partition column is None / missing lands in a
+        ``col=__None__`` bucket on disk, but the catalog payload must
+        record the partition value as SQL NULL — not as the literal
+        sentinel string. This is what lets downstream readers emit
+        ``partition_<col> IS NULL`` filters and render the bucket as NULL
+        in their partition trees, instead of leaking the storage-layer
+        sentinel into user-facing SQL.
+        """
+        sink = sink_factory(
+            hive_columns=["machine"],
+            catalog_url="http://catalog:8080",
+            auto_discover=True,
+        )
+        sink._catalog = mock_catalog_client
+        sink.table_registered = True
+
+        records = [
+            {
+                "value": {"machine": "M1", "ts_ms": 1704067200000},
+                "key": "k1",
+                "timestamp": 1704067200000,
+                "offset": 0,
+            },
+            {
+                "value": {"machine": None, "ts_ms": 1704067260000},
+                "key": "k2",
+                "timestamp": 1704067260000,
+                "offset": 1,
+            },
+        ]
+        batch = SinkBatch(topic="test", partition=0)
+        for r in records:
+            batch.append(
+                value=r["value"],
+                key=r["key"],
+                timestamp=r["timestamp"],
+                headers=[],
+                offset=r["offset"],
+            )
+
+        sink.write(batch)
+
+        manifest_calls = [
+            call
+            for call in mock_catalog_client.post.call_args_list
+            if "manifest" in str(call)
+        ]
+        assert len(manifest_calls) == 1
+        files = manifest_calls[0].kwargs["json"]["files"]
+        # One file per partition group — M1 and the null bucket.
+        by_partition = {f["partition_values"]["machine"]: f for f in files}
+        assert by_partition["M1"]["partition_values"]["machine"] == "M1"
+        assert by_partition[None]["partition_values"]["machine"] is None
+        # Storage key on disk uses the unified ``__None__`` sentinel — the
+        # same string the catalog, API, and UI all expect for NULL partition
+        # values.
+        null_bucket_path = by_partition[None]["file_path"]
+        assert "machine=__None__" in null_bucket_path
 
 
 # =============================================================================

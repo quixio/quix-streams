@@ -367,8 +367,8 @@ if it's locked by another process. To disable retrying, pass 0
 if the `use_changelog_topics=True` is also set on the Application.
 If this option is True, but `use_changelog_topics=False`,
 the DB won't be destroyed.
-Note: risk of data loss! Make sure that the changelog topics are up-to-date before enabling it in production.
-Default - `False`.
+Note: risk of data loss! Make sure that the changelog topics are up-to-date before disabling it in production.
+Default - `True`.
 
 Please see `rocksdict.Options` for a complete description of other options.
 
