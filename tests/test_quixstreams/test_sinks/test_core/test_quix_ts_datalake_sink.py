@@ -741,7 +741,7 @@ class TestWriteOperations:
 
         assert mock_blob_client.put_object_async.call_count == 1
         storage_key = mock_blob_client.put_object_async.call_args.args[0]
-        assert "machine=None" in storage_key
+        assert "machine=__None__" in storage_key
 
     def test_write_adds_timestamp_from_item_if_missing(
         self, sink_factory, sample_batch, mock_blob_client
@@ -987,17 +987,18 @@ class TestCatalogIntegration:
         with pytest.raises(Exception, match="Manifest error"):
             sink.write(batch)
 
-    def test_manifest_registers_null_partition_as_sql_null(
+    def test_manifest_registers_null_partition_as_literal_sentinel(
         self, sink_factory, mock_blob_client, mock_catalog_client
     ):
         """
         A row whose partition column is None / missing lands in a
-        ``col=__None__`` bucket on disk, but the catalog payload must
-        record the partition value as SQL NULL — not as the literal
-        sentinel string. This is what lets downstream readers emit
-        ``partition_<col> IS NULL`` filters and render the bucket as NULL
-        in their partition trees, instead of leaking the storage-layer
-        sentinel into user-facing SQL.
+        ``col=__None__`` bucket on disk, and the catalog payload must
+        record the same literal ``__None__`` string — not SQL NULL —
+        so the manifest, the on-disk path, and what readers see at query
+        time (DuckDB's ``hive_partitioning=true`` exposes the literal
+        path segment as the column value) all agree. The lake treats
+        partition values as opaque strings end-to-end; equality filters
+        on ``__None__`` then resolve without any sentinel translation.
         """
         sink = sink_factory(
             hive_columns=["machine"],
@@ -1043,11 +1044,10 @@ class TestCatalogIntegration:
         # One file per partition group — M1 and the null bucket.
         by_partition = {f["partition_values"]["machine"]: f for f in files}
         assert by_partition["M1"]["partition_values"]["machine"] == "M1"
-        assert by_partition[None]["partition_values"]["machine"] is None
-        # Storage key on disk uses the unified ``__None__`` sentinel — the
-        # same string the catalog, API, and UI all expect for NULL partition
-        # values.
-        null_bucket_path = by_partition[None]["file_path"]
+        # Literal passthrough: catalog row carries ``__None__`` exactly,
+        # matching the on-disk path segment.
+        assert by_partition["__None__"]["partition_values"]["machine"] == "__None__"
+        null_bucket_path = by_partition["__None__"]["file_path"]
         assert "machine=__None__" in null_bucket_path
 
 

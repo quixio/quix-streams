@@ -667,16 +667,16 @@ class QuixTSDataLakeSink(BatchingSink):
             # _write_batch fillna()'s NaN partition values with HIVE_NULL_PARTITION
             # (the on-disk sentinel — see the constant near the top) so they
             # survive groupby and land in a single ``col=__None__`` directory on
-            # disk. The catalog, however, should record those values as actual
-            # SQL NULL — not the literal sentinel string — so that downstream
-            # `partition_<col> IS NULL` filters and partition-tree NULL rendering
-            # work natively. Translate back here.
-            partition_dict: Dict[str, Optional[str]] = {}
+            # disk. The catalog receives the same literal string — including
+            # the ``__None__`` sentinel for NULL buckets — so the manifest
+            # row, the on-disk path, and what DuckDB's
+            # ``hive_partitioning=true`` exposes at query time all agree.
+            # Equality filters then resolve end-to-end without any sentinel
+            # translation in the lake.
+            partition_dict: Dict[str, str] = {}
             if partition_columns and partition_values:
                 for col, val in zip(partition_columns, partition_values):
-                    partition_dict[col] = (
-                        None if val == HIVE_NULL_PARTITION else str(val)
-                    )
+                    partition_dict[col] = str(val)
 
             # Create file entry
             file_entries.append(
