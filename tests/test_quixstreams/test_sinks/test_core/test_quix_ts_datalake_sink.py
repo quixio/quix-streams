@@ -446,6 +446,42 @@ class TestTimestampColumnMapping:
         assert "month" not in result_df.columns
         assert "hour" not in result_df.columns
 
+    def test_add_timestamp_columns_does_not_mutate_timestamp_column_dtype(
+        self, sink_factory
+    ):
+        """
+        Regression: extracting year/month/day/hour for time-based hive
+        partitioning must not change the dtype of the source timestamp
+        column. ``ts_ms`` is a system column the sink injects from the
+        Kafka ``item.timestamp`` (always int64 ms); its dtype is part of
+        the contract with readers — files written under different
+        ``HIVE_COLUMNS`` configurations must store ``ts_ms`` with the same
+        type, otherwise downstream readers see the same column as BIGINT
+        in some files and TIMESTAMP in others.
+        """
+        sink = sink_factory(hive_columns=["year", "month", "day", "hour"])
+
+        df = pd.DataFrame(
+            {"ts_ms": [1704067200000, 1704067260000], "value": [1, 2]}
+        )
+        original_dtype = df["ts_ms"].dtype
+
+        result_df = sink._add_timestamp_columns(df)
+
+        # Derived columns still correct.
+        assert result_df["year"].iloc[0] == "2024"
+        assert result_df["month"].iloc[0] == "01"
+        assert result_df["day"].iloc[0] == "01"
+        assert result_df["hour"].iloc[0] == "00"
+
+        # Source ts_ms column is untouched — same dtype, same values.
+        assert result_df["ts_ms"].dtype == original_dtype, (
+            f"ts_ms dtype changed from {original_dtype} to "
+            f"{result_df['ts_ms'].dtype}; partitioning logic must not "
+            f"mutate the data column"
+        )
+        assert list(result_df["ts_ms"]) == [1704067200000, 1704067260000]
+
 
 # =============================================================================
 # 3. Empty Dict Handling Tests
