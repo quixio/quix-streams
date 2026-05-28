@@ -2,12 +2,14 @@ import hashlib
 import logging
 import threading
 import time
+from datetime import timedelta
 from typing import TYPE_CHECKING, Any, Literal, Mapping, Optional, Union
 
 import httpx
 import orjson
 from confluent_kafka import TopicPartition
 
+from quixstreams.dataframe.utils import ensure_milliseconds
 from quixstreams.kafka import ConnectionConfig, Consumer
 from quixstreams.kafka.exceptions import KafkaConsumerException
 from quixstreams.models import HeadersMapping, Topic
@@ -35,6 +37,11 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_REQUEST_TIMEOUT = 5
 DEFAULT_CONSUMER_GROUP = "enrich"
+
+# Wall-clock poll granularity for the late-config grace wait loop, in seconds.
+# Controls how often the wait loop re-reads `self._configurations` while blocked.
+# Trades wakeup latency against busy-spin. Not a public constructor knob in v1.
+DEFAULT_GRACE_POLL_INTERVAL: float = 0.05
 
 
 class Lookup(BaseLookup[BaseField]):
@@ -74,7 +81,35 @@ class Lookup(BaseLookup[BaseField]):
         quix_sdk_token: Optional[str] = None,
         cache_size: int = 1000,
         fallback: Literal["error", "default"] = "error",
+        grace_ms: Union[int, timedelta] = 0,
     ):
+        """
+        :param grace_ms: Optional late-config grace period. When a lookup would
+            miss because the matching configuration version has not yet been
+            consumed into the in-memory config dict, the join blocks the
+            partition in a bounded wall-clock sleep/re-check loop for up to this
+            duration, resolving as soon as a valid version appears. On expiry it
+            falls back to current behavior (missing/default value, or raise per
+            `fallback`).
+
+            This is measured in **wall-clock real time** from the moment the
+            record enters `join()` — NOT event-time, and NOT the as-of/interval
+            join `grace_ms` (which is passive event-time state retention). It is
+            an active blocking wait.
+
+            Default `0` disables the feature: the hot path is byte-for-byte
+            unchanged, with no sleeps or extra bookkeeping.
+
+            WARNING — partition stall: a positive value blocks the *entire*
+            partition (synchronous, single-threaded per partition) for up to
+            `grace_ms` per record with an unresolved config. A genuinely-absent
+            config makes every matching record pay the full window, capping
+            sustained throughput near `1000 / grace_ms` records/sec in the
+            pathological all-miss case. Prefer small values (sub-second to
+            low-seconds) and only enable it if you can tolerate the stall.
+
+            Accepts an `int` (milliseconds) or a `timedelta`. Must be `>= 0`.
+        """
         if QUIX_REPLICA_NAME:
             consumer_group = f"{consumer_group}-{QUIX_REPLICA_NAME.split('-')[-1]}"
 
@@ -99,6 +134,15 @@ class Lookup(BaseLookup[BaseField]):
         self._topic = topic
         self._request_timeout = request_timeout
         self._fallback = fallback
+
+        # Late-config grace period (wall-clock). See the `grace_ms` docstring and
+        # `_find_version_with_grace`. NOTE: this is NOT the as-of/interval join
+        # `grace_ms` (which is passive event-time state retention). This one is an
+        # active wall-clock wait. 0 disables it entirely (hot path unchanged).
+        self._grace_ms = ensure_milliseconds(grace_ms)
+        if self._grace_ms < 0:
+            raise ValueError("grace_ms must be >= 0")
+        self._grace_poll_interval = DEFAULT_GRACE_POLL_INTERVAL
 
         self._started = threading.Event()
 
@@ -367,6 +411,52 @@ class Lookup(BaseLookup[BaseField]):
         )
         return version
 
+    def _find_version_with_grace(
+        self,
+        type: str,
+        on: str,
+        timestamp: int,
+        deadline: float,
+    ) -> Optional[ConfigurationVersion]:
+        """
+        `_find_version` wrapped in the bounded late-config grace wait loop.
+
+        Only invoked when `self._grace_ms > 0`. Re-reads the in-memory config
+        dict via `_find_version` every `self._grace_poll_interval` seconds until
+        either a valid version appears or the shared per-record `deadline`
+        (a `time.time()` wall-clock value) passes.
+
+        IMPORTANT: this wait is **wall-clock real time**, not event-time. We are
+        waiting for the daemon consumer thread to deserialize a config message
+        into `self._configurations` — a real-time event with no event-time
+        analog. This is deliberately NOT the as-of/interval join `grace_ms`
+        (passive event-time state retention); do not "unify" the two.
+
+        `_find_version` already tries both the specific and the wildcard config
+        id, so this loop resolves the instant *either* becomes valid. It also
+        tolerates the dict being mutated by the writer thread mid-wait: a
+        transient `None` after a partial state simply keeps the loop going until
+        the deadline.
+
+        :param type: The configuration type.
+        :param on: The target key for the configuration.
+        :param timestamp: The message timestamp, used to select the version.
+        :param deadline: Wall-clock (`time.time()`) instant after which to give
+            up and return whatever `_find_version` last produced.
+
+        :returns: The valid configuration version, or None if still unresolved
+            at the deadline.
+        """
+        version = self._find_version(type, on, timestamp)
+        while version is None:
+            remaining = deadline - time.time()
+            if remaining <= 0:
+                break
+            # Clamp the final sleep so we never overshoot the shared deadline.
+            time.sleep(min(self._grace_poll_interval, remaining))
+            version = self._find_version(type, on, timestamp)
+        return version
+
     def _version_data(
         self, version: Optional[ConfigurationVersion], fields: dict[str, BaseField]
     ) -> dict[str, Any]:
@@ -438,13 +528,33 @@ class Lookup(BaseLookup[BaseField]):
                 fields_by_type.setdefault(field.type, {})[key] = field
             self._fields_by_type[fields_ids] = fields_by_type
 
-        for type_, fields in fields_by_type.items():
-            version = self._find_version(type_, on, timestamp)
+        # Hot path: grace disabled (default). No deadline math, no sleeps — the
+        # behavior here is byte-for-byte identical to before the feature existed.
+        if self._grace_ms == 0:
+            for type_, fields in fields_by_type.items():
+                version = self._find_version(type_, on, timestamp)
 
-            if version is not None and version.retry_at < start:
-                self._version_data_cached.remove(version, fields)
+                if version is not None and version.retry_at < start:
+                    self._version_data_cached.remove(version, fields)
 
-            value.update(self._version_data_cached(version, fields))
+                value.update(self._version_data_cached(version, fields))
+        else:
+            # Late-config grace enabled: one shared wall-clock deadline for the
+            # whole record (NOT per type — see spec §5.3), measured from record
+            # entry (`start = time.time()` above). This bounds total per-record
+            # stall to ~grace_ms regardless of the number of field types: once
+            # the deadline passes, remaining types resolve immediately to their
+            # missing values.
+            deadline = start + self._grace_ms / 1000
+            for type_, fields in fields_by_type.items():
+                version = self._find_version_with_grace(
+                    type_, on, timestamp, deadline
+                )
+
+                if version is not None and version.retry_at < start:
+                    self._version_data_cached.remove(version, fields)
+
+                value.update(self._version_data_cached(version, fields))
 
         logger.debug("Join took %.2f ms", (time.time() - start) * 1000)
 

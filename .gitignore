@@ -49,3 +49,9 @@ site/
 memories/
 
 .claude/
+
+# scratch
+.tmp/
+
+# local planning artifacts (spec + architecture)
+dev-planning/

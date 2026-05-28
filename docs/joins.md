@@ -244,6 +244,56 @@ if __name__ == '__main__':
     app.run()
 ```
 
+### Late-arriving configuration (`grace_ms`)
+
+> _New in [3.23.7](https://github.com/quixio/quix-streams/releases/tag/v3.23.7)_
+
+By default, `QuixConfigurationService` is non-blocking: if the background consumer thread has not yet received the matching configuration version when a record arrives, the join resolves immediately to the missing/default value (per the `fallback` setting). This is safe and has no throughput impact.
+
+`grace_ms` gives you a bounded wait for that config to arrive. When you pass a positive value, the join holds the partition in a poll loop — checking every 50 ms — until a valid version appears or the deadline elapses.
+
+```python
+from datetime import timedelta
+
+from quixstreams import Application
+from quixstreams.dataframe.joins.lookups import QuixConfigurationService
+
+app = Application()
+
+lookup = QuixConfigurationService(
+    topic=app.topic("device-configurations"),
+    app_config=app.config,
+    grace_ms=timedelta(seconds=2),  # wait up to 2 s for a late config version
+)
+```
+
+You can also pass an integer number of milliseconds:
+
+```python
+lookup = QuixConfigurationService(
+    topic=app.topic("device-configurations"),
+    app_config=app.config,
+    grace_ms=500,  # wait up to 500 ms
+)
+```
+
+**When to use it.** Enable `grace_ms` only when you have a genuine race at startup or during a rolling update — for example, data records arrive on a partition before the config consumer thread has consumed the matching config version from its own topic. A value of a few hundred milliseconds to a few seconds is usually enough to cover the lag.
+
+Do not enable it for configs that are permanently absent or for high-throughput pipelines where you cannot afford the stall.
+
+!!! warning "Partition stall"
+    `grace_ms` is measured in **wall-clock real time**, not event time. It is not the same as the `grace_ms` on `join_asof` or `join_interval`, which passively retain state keyed by event timestamps.
+
+    When `grace_ms > 0`, a record with an unresolved config key **blocks the entire partition** for up to `grace_ms`. A single permanently-missing config key caps sustained throughput for that partition to roughly `1000 / grace_ms` records/second (e.g., 2 records/sec at `grace_ms=500`). Use the smallest value that covers your expected startup lag.
+
+    The deadline is shared across all field types in a single record, so total stall per record is bounded to `~grace_ms` regardless of how many field types are configured.
+
+**Parameter reference:**
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `grace_ms` | `int` (milliseconds) or `timedelta` | `0` | Maximum wall-clock wait for a late config version. `0` disables the feature; the hot path is unchanged. Must be `>= 0`. |
+
 ### Advanced Configuration Matching
 
 Use custom key matching logic for complex scenarios:

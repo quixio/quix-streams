@@ -1,19 +1,24 @@
 import sys
+import threading
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 from unittest.mock import Mock, patch
 
 import orjson
 import pytest
 
-from quixstreams.dataframe.joins.lookups.quix_configuration_service.lookup import Lookup
+from quixstreams.dataframe.joins.lookups.quix_configuration_service.lookup import (
+    DEFAULT_GRACE_POLL_INTERVAL,
+    Lookup,
+)
 from quixstreams.dataframe.joins.lookups.quix_configuration_service.models import (
     Configuration,
     ConfigurationVersion,
     Event,
 )
+from quixstreams.dataframe.utils import ensure_milliseconds
 
 
 @pytest.fixture
@@ -1306,3 +1311,469 @@ class TestLookupInit:
             app_config=app.config,
         )
         assert len(lookup._configurations) == num_configs
+
+
+@pytest.fixture
+def lookup_with_grace():
+    """Create a mock Lookup instance with a configurable grace_ms for testing.
+
+    Returns a factory that accepts grace_ms (default 200) and fallback (default "default").
+    """
+
+    def _factory(grace_ms=200, fallback="default"):
+        mock_topic = Mock()
+        mock_topic.name = "test-topic"
+        with (
+            patch(
+                "quixstreams.dataframe.joins.lookups.quix_configuration_service.lookup.Consumer"
+            ),
+            patch(
+                "quixstreams.dataframe.joins.lookups.quix_configuration_service.lookup.httpx.Client"
+            ),
+            patch.object(Lookup, "_start_consumer_thread"),
+        ):
+            inst = Lookup(
+                topic=mock_topic,
+                broker_address="dummy:9092",
+                consumer_poll_timeout=1.0,
+                grace_ms=grace_ms,
+                fallback=fallback,
+            )
+            inst._configurations = {}
+            return inst
+
+    return _factory
+
+
+class TestEnsureMillisecondsAndGraceInit:
+    """Validates spec S6.1: constructor parameter + coercion."""
+
+    def test_grace_ms_zero_default(self, lookup):
+        """Validates spec S2: grace_ms default 0 means no blocking."""
+        assert lookup._grace_ms == 0
+
+    def test_grace_ms_int_coercion(self, lookup_with_grace):
+        """Validates spec S6.1: int grace_ms stored as-is via ensure_milliseconds."""
+        inst = lookup_with_grace(grace_ms=500)
+        assert inst._grace_ms == 500
+
+    def test_grace_ms_timedelta_coercion(self, lookup_with_grace):
+        """Validates spec S6.1: timedelta coerced to milliseconds."""
+        inst = lookup_with_grace(grace_ms=timedelta(milliseconds=300))
+        assert inst._grace_ms == 300
+
+    def test_grace_ms_timedelta_seconds(self, lookup_with_grace):
+        """Validates spec S6.1: timedelta(seconds=2) -> 2000 ms."""
+        inst = lookup_with_grace(grace_ms=timedelta(seconds=2))
+        assert inst._grace_ms == 2000
+
+    def test_grace_ms_negative_raises(self):
+        """Validates spec S6.1: negative grace_ms raises ValueError."""
+        mock_topic = Mock()
+        mock_topic.name = "test-topic"
+        with (
+            patch(
+                "quixstreams.dataframe.joins.lookups.quix_configuration_service.lookup.Consumer"
+            ),
+            patch(
+                "quixstreams.dataframe.joins.lookups.quix_configuration_service.lookup.httpx.Client"
+            ),
+            patch.object(Lookup, "_start_consumer_thread"),
+        ):
+            with pytest.raises(ValueError, match="grace_ms must be >= 0"):
+                Lookup(
+                    topic=mock_topic,
+                    broker_address="dummy:9092",
+                    consumer_poll_timeout=1.0,
+                    grace_ms=-1,
+                )
+
+    def test_grace_ms_negative_timedelta_raises(self):
+        """Validates spec S6.1: negative timedelta raises ValueError."""
+        mock_topic = Mock()
+        mock_topic.name = "test-topic"
+        with (
+            patch(
+                "quixstreams.dataframe.joins.lookups.quix_configuration_service.lookup.Consumer"
+            ),
+            patch(
+                "quixstreams.dataframe.joins.lookups.quix_configuration_service.lookup.httpx.Client"
+            ),
+            patch.object(Lookup, "_start_consumer_thread"),
+        ):
+            with pytest.raises(ValueError, match="grace_ms must be >= 0"):
+                Lookup(
+                    topic=mock_topic,
+                    broker_address="dummy:9092",
+                    consumer_poll_timeout=1.0,
+                    grace_ms=timedelta(milliseconds=-100),
+                )
+
+    def test_ensure_milliseconds_type_error(self):
+        """Validates spec S6.1: non-int/timedelta raises TypeError."""
+        with pytest.raises(TypeError, match="Timedelta must be either"):
+            ensure_milliseconds("not a number")
+
+    def test_grace_poll_interval_constant(self):
+        """Validates spec S5.4: DEFAULT_GRACE_POLL_INTERVAL is 0.05 seconds."""
+        assert DEFAULT_GRACE_POLL_INTERVAL == 0.05
+
+
+class TestGraceMsZeroHotPath:
+    """Validates spec S2/S5.2: grace_ms=0 means no blocking, current behavior unchanged."""
+
+    def test_grace_zero_missing_config_returns_default_immediately(self, lookup):
+        """Validates spec S2: grace_ms=0, missing config -> default immediately, no sleep.
+
+        With fallback='default' on the lookup fixture (which uses fallback='error'),
+        we use the lookup_with_grace factory instead for a cleaner assertion.
+        """
+        # The default `lookup` fixture has fallback='error' and grace_ms=0.
+        # A missing config with no default field -> raises immediately.
+        fields = {
+            "user_name": lookup.json_field(
+                type="user-config", jsonpath="$.name", default="MISSING"
+            ),
+        }
+        value = {}
+        start = time.time()
+        lookup.join(
+            fields=fields,
+            on="user123",
+            value=value,
+            key="k",
+            timestamp=1500,
+            headers={},
+        )
+        elapsed = time.time() - start
+        assert value["user_name"] == "MISSING"
+        # Must be near-instant (no sleep). Allow generous 50ms for test overhead.
+        assert elapsed < 0.05, f"grace_ms=0 path took {elapsed:.3f}s, expected near-instant"
+
+    def test_grace_zero_does_not_call_find_version_with_grace(self, lookup):
+        """Validates spec S5.2: hot path calls _find_version, NOT _find_version_with_grace."""
+        fields = {
+            "user_name": lookup.json_field(
+                type="user-config", jsonpath="$.name", default="MISSING"
+            ),
+        }
+        value = {}
+        with patch.object(lookup, "_find_version_with_grace") as mock_grace:
+            lookup.join(
+                fields=fields,
+                on="user123",
+                value=value,
+                key="k",
+                timestamp=1500,
+                headers={},
+            )
+            mock_grace.assert_not_called()
+
+
+class TestGraceConfigArrivesMidWait:
+    """Validates spec S5.2: config arrives mid-wait -> resolves correctly within the window."""
+
+    def test_config_injected_mid_wait_resolves(self, lookup_with_grace):
+        """Validates spec S4 user story 1 + S5.2: config appears during grace window,
+        record enriched correctly without waiting the full grace_ms.
+        """
+        grace_val = 300  # 300 ms grace
+        inst = lookup_with_grace(grace_ms=grace_val, fallback="default")
+
+        # Create a version and configuration that will be injected mid-wait.
+        version = create_configuration_version(valid_from=1000.0)
+        config = Configuration(versions={1: version})
+        config_id = inst._config_id("user-config", "user123")
+
+        # Schedule injection after ~80ms (well within the 300ms window).
+        def inject_config():
+            time.sleep(0.08)
+            inst._configurations[config_id] = config
+
+        inject_thread = threading.Thread(target=inject_config, daemon=True)
+
+        test_content = {"name": "John Doe"}
+        with patch.object(
+            inst, "_fetch_version_content", return_value=orjson.dumps(test_content)
+        ):
+            fields = {
+                "user_name": inst.json_field(type="user-config", jsonpath="$.name"),
+            }
+            value = {}
+
+            inject_thread.start()
+            start = time.time()
+            inst.join(
+                fields=fields,
+                on="user123",
+                value=value,
+                key="k",
+                timestamp=1500,
+                headers={},
+            )
+            elapsed = time.time() - start
+            inject_thread.join(timeout=1)
+
+        assert value["user_name"] == "John Doe"
+        # Should resolve well before the full grace window.
+        # Allow generous tolerance: must be < grace_ms but > injection delay.
+        assert elapsed < grace_val / 1000, (
+            f"Expected resolution before grace window ({grace_val}ms), took {elapsed:.3f}s"
+        )
+
+    def test_config_injected_mid_wait_wildcard_resolves(self, lookup_with_grace):
+        """Validates spec S8 'Wildcard fallback interaction': grace covers wildcard too.
+
+        Config injected as a wildcard (*) key mid-wait resolves the lookup.
+        """
+        inst = lookup_with_grace(grace_ms=300, fallback="default")
+
+        version = create_configuration_version(valid_from=1000.0)
+        config = Configuration(versions={1: version})
+        wildcard_id = inst._config_id("user-config", "*")
+
+        def inject_config():
+            time.sleep(0.08)
+            inst._configurations[wildcard_id] = config
+
+        inject_thread = threading.Thread(target=inject_config, daemon=True)
+
+        test_content = {"name": "Wildcard User"}
+        with patch.object(
+            inst, "_fetch_version_content", return_value=orjson.dumps(test_content)
+        ):
+            fields = {
+                "user_name": inst.json_field(type="user-config", jsonpath="$.name"),
+            }
+            value = {}
+
+            inject_thread.start()
+            inst.join(
+                fields=fields,
+                on="specific-key-not-present",
+                value=value,
+                key="k",
+                timestamp=1500,
+                headers={},
+            )
+            inject_thread.join(timeout=1)
+
+        assert value["user_name"] == "Wildcard User"
+
+
+class TestGraceConfigNeverArrives:
+    """Validates spec S5.2: config never arrives -> falls back after ~grace_ms."""
+
+    def test_grace_expires_returns_default(self, lookup_with_grace):
+        """Validates spec S5.2 deadline expiry: no config -> falls back to default value
+        after approximately grace_ms, with bounded overshoot.
+        """
+        grace_val = 150  # 150 ms
+        inst = lookup_with_grace(grace_ms=grace_val, fallback="default")
+
+        fields = {
+            "user_name": inst.json_field(
+                type="user-config", jsonpath="$.name", default="FALLBACK"
+            ),
+        }
+        value = {}
+
+        start = time.time()
+        inst.join(
+            fields=fields,
+            on="user123",
+            value=value,
+            key="k",
+            timestamp=1500,
+            headers={},
+        )
+        elapsed_ms = (time.time() - start) * 1000
+
+        assert value["user_name"] == "FALLBACK"
+        # Should wait at least close to grace_ms (allow 1 poll interval short).
+        assert elapsed_ms >= grace_val - (DEFAULT_GRACE_POLL_INTERVAL * 1000) - 10, (
+            f"Returned too early: {elapsed_ms:.1f}ms < {grace_val}ms"
+        )
+        # Should not overshoot by more than 2 poll intervals + scheduling jitter.
+        max_overshoot_ms = grace_val + (DEFAULT_GRACE_POLL_INTERVAL * 1000 * 2) + 50
+        assert elapsed_ms <= max_overshoot_ms, (
+            f"Overshoot too large: {elapsed_ms:.1f}ms > {max_overshoot_ms:.1f}ms"
+        )
+
+    def test_grace_expires_fallback_error_raises(self, lookup_with_grace):
+        """Validates spec S5.2 + S2 (fallback='error'): on grace expiry with no config,
+        field.missing() raises (RAISE_ON_MISSING sentinel) just like grace_ms=0.
+        """
+        inst = lookup_with_grace(grace_ms=100, fallback="error")
+
+        fields = {
+            "user_name": inst.json_field(
+                type="user-config", jsonpath="$.name"
+                # no default -> RAISE_ON_MISSING
+            ),
+        }
+        value = {}
+
+        with pytest.raises(KeyError):
+            inst.join(
+                fields=fields,
+                on="nonexistent",
+                value=value,
+                key="k",
+                timestamp=1500,
+                headers={},
+            )
+
+
+class TestGraceSharedDeadlineAcrossTypes:
+    """Validates spec S5.3: shared deadline across multiple field types.
+
+    Total stall should be approximately grace_ms, NOT grace_ms x N types.
+    """
+
+    def test_shared_deadline_multiple_types_bounded_stall(self, lookup_with_grace):
+        """Validates spec S5.3: 3 missing types with grace_ms=200 -> total stall ~ 200ms,
+        NOT 600ms.
+        """
+        grace_val = 200  # 200 ms
+        inst = lookup_with_grace(grace_ms=grace_val, fallback="default")
+
+        # Three distinct config types, none present -> all will miss.
+        fields = {
+            "field_a": inst.json_field(
+                type="type-a", jsonpath="$.a", default="default-a"
+            ),
+            "field_b": inst.json_field(
+                type="type-b", jsonpath="$.b", default="default-b"
+            ),
+            "field_c": inst.json_field(
+                type="type-c", jsonpath="$.c", default="default-c"
+            ),
+        }
+        value = {}
+
+        start = time.time()
+        inst.join(
+            fields=fields,
+            on="key1",
+            value=value,
+            key="k",
+            timestamp=1500,
+            headers={},
+        )
+        elapsed_ms = (time.time() - start) * 1000
+
+        # All fields should get defaults.
+        assert value["field_a"] == "default-a"
+        assert value["field_b"] == "default-b"
+        assert value["field_c"] == "default-c"
+
+        # Total stall must be bounded near grace_ms, NOT 3x grace_ms.
+        # Upper bound: grace_ms + generous jitter (3 poll intervals + 80ms scheduling).
+        upper_bound_ms = grace_val + (DEFAULT_GRACE_POLL_INTERVAL * 1000 * 3) + 80
+        assert elapsed_ms <= upper_bound_ms, (
+            f"Total stall {elapsed_ms:.1f}ms exceeds bound {upper_bound_ms:.1f}ms — "
+            f"deadline likely not shared across types (spec S5.3 violation)"
+        )
+        # Sanity: should not be less than roughly grace_ms minus one poll.
+        lower_bound_ms = grace_val - (DEFAULT_GRACE_POLL_INTERVAL * 1000) - 20
+        assert elapsed_ms >= lower_bound_ms, (
+            f"Returned too early: {elapsed_ms:.1f}ms < {lower_bound_ms:.1f}ms"
+        )
+
+    def test_shared_deadline_first_type_present_others_wait(self, lookup_with_grace):
+        """Validates spec S5.3 edge note: a type whose config is already present resolves
+        on the first check with no sleep; remaining types share the same deadline.
+        """
+        grace_val = 200
+        inst = lookup_with_grace(grace_ms=grace_val, fallback="default")
+
+        # Pre-populate type-a config so it resolves immediately.
+        version = create_configuration_version(valid_from=1000.0)
+        config = Configuration(versions={1: version})
+        config_id_a = inst._config_id("type-a", "key1")
+        inst._configurations[config_id_a] = config
+
+        test_content = {"a": "resolved-a"}
+        with patch.object(
+            inst, "_fetch_version_content", return_value=orjson.dumps(test_content)
+        ):
+            fields = {
+                "field_a": inst.json_field(type="type-a", jsonpath="$.a"),
+                "field_b": inst.json_field(
+                    type="type-b", jsonpath="$.b", default="default-b"
+                ),
+            }
+            value = {}
+
+            start = time.time()
+            inst.join(
+                fields=fields,
+                on="key1",
+                value=value,
+                key="k",
+                timestamp=1500,
+                headers={},
+            )
+            elapsed_ms = (time.time() - start) * 1000
+
+        assert value["field_a"] == "resolved-a"
+        assert value["field_b"] == "default-b"
+        # Total stall should be approximately grace_ms (type-b uses the remaining deadline).
+        upper_bound_ms = grace_val + (DEFAULT_GRACE_POLL_INTERVAL * 1000 * 3) + 80
+        assert elapsed_ms <= upper_bound_ms
+
+
+class TestFindVersionWithGrace:
+    """Unit-level tests for the _find_version_with_grace helper directly.
+
+    Validates spec S5.2-S5.4 mechanics.
+    """
+
+    def test_immediate_hit_no_sleep(self, lookup_with_grace):
+        """Validates spec S5.3 edge note: config already present -> immediate return."""
+        inst = lookup_with_grace(grace_ms=500)
+        version = create_configuration_version(valid_from=1000.0)
+        config = Configuration(versions={1: version})
+        config_id = inst._config_id("user-config", "user123")
+        inst._configurations[config_id] = config
+
+        deadline = time.time() + 0.5
+        start = time.time()
+        result = inst._find_version_with_grace("user-config", "user123", 1500, deadline)
+        elapsed = time.time() - start
+
+        assert result == version
+        # Should be near-instant, no sleep.
+        assert elapsed < 0.02, f"Immediate hit took {elapsed:.3f}s, expected near-instant"
+
+    def test_deadline_already_passed_returns_none(self, lookup_with_grace):
+        """Validates spec S5.2: if deadline already passed, return None immediately."""
+        inst = lookup_with_grace(grace_ms=500)
+        # No config present, deadline in the past.
+        deadline = time.time() - 1.0
+        start = time.time()
+        result = inst._find_version_with_grace("user-config", "user123", 1500, deadline)
+        elapsed = time.time() - start
+
+        assert result is None
+        assert elapsed < 0.02, f"Past deadline took {elapsed:.3f}s, expected near-instant"
+
+    def test_clamps_final_sleep_to_remaining(self, lookup_with_grace):
+        """Validates spec S5.4: the loop clamps the final sleep so it never overshoots.
+
+        Use a very short grace so the entire window is < 1 poll interval.
+        """
+        grace_val = 20  # 20 ms — less than the 50 ms poll interval
+        inst = lookup_with_grace(grace_ms=grace_val)
+
+        deadline = time.time() + grace_val / 1000
+        start = time.time()
+        result = inst._find_version_with_grace("user-config", "user123", 1500, deadline)
+        elapsed_ms = (time.time() - start) * 1000
+
+        assert result is None
+        # Should clamp to ~20ms, not sleep a full 50ms poll interval.
+        assert elapsed_ms < 80, (
+            f"Clamped sleep took {elapsed_ms:.1f}ms, expected <= ~{grace_val + 30}ms"
+        )
