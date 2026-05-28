@@ -497,14 +497,20 @@ class QuixTSDataLakeSink(BatchingSink):
         Add timestamp-based columns (year/month/day/hour) for time-based partitioning.
 
         This method extracts time components from the timestamp column and adds them
-        as separate columns that can be used for Hive partitioning.
+        as separate columns that can be used for Hive partitioning. The source
+        ``timestamp_column`` is **not** mutated — derivation happens on a local
+        datetime64 series. Preserving its dtype is part of the sink's contract
+        with readers (in particular, ``ts_ms`` is the system-injected Kafka
+        timestamp and must always land in parquet as int64 ms, regardless of
+        whether time-based hive partitioning is configured).
         """
-        # Convert to datetime if needed (handles numeric timestamps)
-        if not pd.api.types.is_datetime64_any_dtype(df[self.timestamp_column]):
+        # Build a datetime64 view of the timestamp column to extract from.
+        # Never write this back into ``df`` — that would change the dtype of
+        # the source column in the parquet output.
+        timestamp_col = df[self.timestamp_column]
+        if not pd.api.types.is_datetime64_any_dtype(timestamp_col):
             sample_value = float(
-                df[self.timestamp_column].iloc[0]
-                if not df[self.timestamp_column].empty
-                else 0
+                timestamp_col.iloc[0] if not timestamp_col.empty else 0
             )
 
             # Auto-detect timestamp unit by inspecting the magnitude of the value
@@ -514,28 +520,14 @@ class QuixTSDataLakeSink(BatchingSink):
             # - Microseconds: ~1.7e15
             # - Nanoseconds: ~1.7e18
             if sample_value > 1e17:
-                # Nanoseconds (Java/Kafka timestamps)
-                df[self.timestamp_column] = pd.to_datetime(
-                    df[self.timestamp_column], unit="ns"
-                )
+                unit = "ns"  # Nanoseconds (Java/Kafka timestamps)
             elif sample_value > 1e14:
-                # Microseconds
-                df[self.timestamp_column] = pd.to_datetime(
-                    df[self.timestamp_column], unit="us"
-                )
+                unit = "us"  # Microseconds
             elif sample_value > 1e11:
-                # Milliseconds (common in JavaScript/Kafka)
-                df[self.timestamp_column] = pd.to_datetime(
-                    df[self.timestamp_column], unit="ms"
-                )
+                unit = "ms"  # Milliseconds (common in JavaScript/Kafka)
             else:
-                # Seconds (Unix timestamp)
-                df[self.timestamp_column] = pd.to_datetime(
-                    df[self.timestamp_column], unit="s"
-                )
-
-        # Extract time-based columns (year, month, day, hour) from the timestamp
-        timestamp_col = df[self.timestamp_column]
+                unit = "s"  # Seconds (Unix timestamp)
+            timestamp_col = pd.to_datetime(timestamp_col, unit=unit)
 
         # Only add columns that are specified in _ts_hive_columns
         # TIMESTAMP_COL_MAPPER handles proper formatting (e.g., zero-padding for months/days)
@@ -667,16 +659,16 @@ class QuixTSDataLakeSink(BatchingSink):
             # _write_batch fillna()'s NaN partition values with HIVE_NULL_PARTITION
             # (the on-disk sentinel — see the constant near the top) so they
             # survive groupby and land in a single ``col=__None__`` directory on
-            # disk. The catalog, however, should record those values as actual
-            # SQL NULL — not the literal sentinel string — so that downstream
-            # `partition_<col> IS NULL` filters and partition-tree NULL rendering
-            # work natively. Translate back here.
-            partition_dict: Dict[str, Optional[str]] = {}
+            # disk. The catalog receives the same literal string — including
+            # the ``__None__`` sentinel for NULL buckets — so the manifest
+            # row, the on-disk path, and what DuckDB's
+            # ``hive_partitioning=true`` exposes at query time all agree.
+            # Equality filters then resolve end-to-end without any sentinel
+            # translation in the lake.
+            partition_dict: Dict[str, str] = {}
             if partition_columns and partition_values:
                 for col, val in zip(partition_columns, partition_values):
-                    partition_dict[col] = (
-                        None if val == HIVE_NULL_PARTITION else str(val)
-                    )
+                    partition_dict[col] = str(val)
 
             # Create file entry
             file_entries.append(
