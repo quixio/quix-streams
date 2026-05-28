@@ -461,9 +461,7 @@ class TestTimestampColumnMapping:
         """
         sink = sink_factory(hive_columns=["year", "month", "day", "hour"])
 
-        df = pd.DataFrame(
-            {"ts_ms": [1704067200000, 1704067260000], "value": [1, 2]}
-        )
+        df = pd.DataFrame({"ts_ms": [1704067200000, 1704067260000], "value": [1, 2]})
         original_dtype = df["ts_ms"].dtype
 
         result_df = sink._add_timestamp_columns(df)
