@@ -446,6 +446,40 @@ class TestTimestampColumnMapping:
         assert "month" not in result_df.columns
         assert "hour" not in result_df.columns
 
+    def test_add_timestamp_columns_does_not_mutate_timestamp_column_dtype(
+        self, sink_factory
+    ):
+        """
+        Regression: extracting year/month/day/hour for time-based hive
+        partitioning must not change the dtype of the source timestamp
+        column. ``ts_ms`` is a system column the sink injects from the
+        Kafka ``item.timestamp`` (always int64 ms); its dtype is part of
+        the contract with readers — files written under different
+        ``HIVE_COLUMNS`` configurations must store ``ts_ms`` with the same
+        type, otherwise downstream readers see the same column as BIGINT
+        in some files and TIMESTAMP in others.
+        """
+        sink = sink_factory(hive_columns=["year", "month", "day", "hour"])
+
+        df = pd.DataFrame({"ts_ms": [1704067200000, 1704067260000], "value": [1, 2]})
+        original_dtype = df["ts_ms"].dtype
+
+        result_df = sink._add_timestamp_columns(df)
+
+        # Derived columns still correct.
+        assert result_df["year"].iloc[0] == "2024"
+        assert result_df["month"].iloc[0] == "01"
+        assert result_df["day"].iloc[0] == "01"
+        assert result_df["hour"].iloc[0] == "00"
+
+        # Source ts_ms column is untouched — same dtype, same values.
+        assert result_df["ts_ms"].dtype == original_dtype, (
+            f"ts_ms dtype changed from {original_dtype} to "
+            f"{result_df['ts_ms'].dtype}; partitioning logic must not "
+            f"mutate the data column"
+        )
+        assert list(result_df["ts_ms"]) == [1704067200000, 1704067260000]
+
 
 # =============================================================================
 # 3. Empty Dict Handling Tests
@@ -741,7 +775,7 @@ class TestWriteOperations:
 
         assert mock_blob_client.put_object_async.call_count == 1
         storage_key = mock_blob_client.put_object_async.call_args.args[0]
-        assert "machine=None" in storage_key
+        assert "machine=__None__" in storage_key
 
     def test_write_adds_timestamp_from_item_if_missing(
         self, sink_factory, sample_batch, mock_blob_client
@@ -987,17 +1021,18 @@ class TestCatalogIntegration:
         with pytest.raises(Exception, match="Manifest error"):
             sink.write(batch)
 
-    def test_manifest_registers_null_partition_as_sql_null(
+    def test_manifest_registers_null_partition_as_literal_sentinel(
         self, sink_factory, mock_blob_client, mock_catalog_client
     ):
         """
         A row whose partition column is None / missing lands in a
-        ``col=__None__`` bucket on disk, but the catalog payload must
-        record the partition value as SQL NULL — not as the literal
-        sentinel string. This is what lets downstream readers emit
-        ``partition_<col> IS NULL`` filters and render the bucket as NULL
-        in their partition trees, instead of leaking the storage-layer
-        sentinel into user-facing SQL.
+        ``col=__None__`` bucket on disk, and the catalog payload must
+        record the same literal ``__None__`` string — not SQL NULL —
+        so the manifest, the on-disk path, and what readers see at query
+        time (DuckDB's ``hive_partitioning=true`` exposes the literal
+        path segment as the column value) all agree. The lake treats
+        partition values as opaque strings end-to-end; equality filters
+        on ``__None__`` then resolve without any sentinel translation.
         """
         sink = sink_factory(
             hive_columns=["machine"],
@@ -1043,11 +1078,10 @@ class TestCatalogIntegration:
         # One file per partition group — M1 and the null bucket.
         by_partition = {f["partition_values"]["machine"]: f for f in files}
         assert by_partition["M1"]["partition_values"]["machine"] == "M1"
-        assert by_partition[None]["partition_values"]["machine"] is None
-        # Storage key on disk uses the unified ``__None__`` sentinel — the
-        # same string the catalog, API, and UI all expect for NULL partition
-        # values.
-        null_bucket_path = by_partition[None]["file_path"]
+        # Literal passthrough: catalog row carries ``__None__`` exactly,
+        # matching the on-disk path segment.
+        assert by_partition["__None__"]["partition_values"]["machine"] == "__None__"
+        null_bucket_path = by_partition["__None__"]["file_path"]
         assert "machine=__None__" in null_bucket_path
 
 
