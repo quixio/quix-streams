@@ -4,7 +4,6 @@ from quixstreams.state.manager import SUPPORTED_STORES
 from quixstreams.state.metadata import Marker
 from quixstreams.state.rocksdb.ttl_codec import (
     SENTINEL_NEVER,
-    decode_ttl_value,
     encode_ttl_value,
 )
 

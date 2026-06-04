@@ -278,9 +278,9 @@ class TestTrackerSerial:
         # 3s spacing between fires
         for i in range(1, 4):
             spacing_ms = fire_log[i][1] - fire_log[i - 1][1]
-            assert (
-                spacing_ms == 3_000
-            ), f"Spacing between fire {i - 1} and {i}: {spacing_ms}ms"
+            assert spacing_ms == 3_000, (
+                f"Spacing between fire {i - 1} and {i}: {spacing_ms}ms"
+            )
 
     def test_serial_keys_no_premature_fire(self):
         callback = MagicMock()

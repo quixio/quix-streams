@@ -399,15 +399,11 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
     def _stamps_enabled(self, cf_name: str) -> bool:
         return cf_name == "default" and self._partition.uses_ttl_stamps
 
-    def _compute_stamp(
-        self, ttl: Optional[timedelta], timestamp: Optional[int]
-    ) -> int:
+    def _compute_stamp(self, ttl: Optional[timedelta], timestamp: Optional[int]) -> int:
         if ttl is None:
             return SENTINEL_NEVER
         if ttl <= timedelta(0):
-            raise ValueError(
-                f"ttl must be a positive timedelta or None, got {ttl!r}"
-            )
+            raise ValueError(f"ttl must be a positive timedelta or None, got {ttl!r}")
         if timestamp is None:
             raise ValueError(
                 "ttl=... on state.set() requires the current record's "
@@ -485,14 +481,10 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
             raise StateSerializationError("Value must be bytes")
 
         if self._partition.uses_ttl_stamps:
-            self._set_bytes_default_cf_stamped(
-                key, value, prefix, timestamp, ttl
-            )
+            self._set_bytes_default_cf_stamped(key, value, prefix, timestamp, ttl)
             return
 
-        super().set_bytes(
-            key=key, value=value, prefix=prefix, cf_name="default"
-        )
+        super().set_bytes(key=key, value=value, prefix=prefix, cf_name="default")
 
         if ttl is not None:
             stamp = self._compute_stamp(ttl=ttl, timestamp=timestamp)
@@ -519,9 +511,7 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
             self._status = PartitionTransactionStatus.FAILED
             raise
         stamped = encode_ttl_value(stamp, value_serialized)
-        super().set_bytes(
-            key=key, value=stamped, prefix=prefix, cf_name="default"
-        )
+        super().set_bytes(key=key, value=stamped, prefix=prefix, cf_name="default")
         if stamp != SENTINEL_NEVER:
             key_serialized = self._serialize_key(key, prefix=prefix)
             self._update_cache.set(
@@ -543,9 +533,7 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
             self._partition.advance_high_water(timestamp)
         stamp = self._compute_stamp(ttl=ttl, timestamp=timestamp)
         stamped = encode_ttl_value(stamp, value)
-        super().set_bytes(
-            key=key, value=stamped, prefix=prefix, cf_name="default"
-        )
+        super().set_bytes(key=key, value=stamped, prefix=prefix, cf_name="default")
         if stamp != SENTINEL_NEVER:
             key_serialized = self._serialize_key(key, prefix=prefix)
             self._update_cache.set(
@@ -614,10 +602,9 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
             cf_name=METADATA_CF_NAME,
         )
         self._partition.uses_ttl_stamps = True
-        self._partition._state.setdefault(TTL_INDEX_CF_NAME, {})
+        self._partition._state.setdefault(TTL_INDEX_CF_NAME, {})  # noqa: SLF001
         logger.info(
-            "Flipping memory state partition into TTL mode (empty-store "
-            "fast path)."
+            "Flipping memory state partition into TTL mode (empty-store fast path)."
         )
 
     def _get_bytes(

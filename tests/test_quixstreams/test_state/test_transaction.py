@@ -18,7 +18,6 @@ from quixstreams.state.metadata import (
     CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER,
     Marker,
 )
-from quixstreams.state.rocksdb.ttl_codec import SENTINEL_NEVER, encode_ttl_value
 from quixstreams.state.serialization import serialize
 from quixstreams.utils.json import dumps
 

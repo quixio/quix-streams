@@ -618,9 +618,7 @@ class RocksDBStorePartition(StorePartition):
         # without paying for the iterator step. Build the cutoff prefix as
         # 8 BE bytes equal to ``now_ms + 1`` so any entry whose first
         # 8 bytes equal exactly ``now_ms`` is still iterated.
-        upper_bound = (
-            int_to_bytes(now_ms + 1) if now_ms < (2**64 - 1) else None
-        )
+        upper_bound = int_to_bytes(now_ms + 1) if now_ms < (2**64 - 1) else None
         read_opt = ReadOptions()
         if upper_bound is not None:
             read_opt.set_iterate_upper_bound(upper_bound)

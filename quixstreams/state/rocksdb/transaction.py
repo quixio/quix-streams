@@ -113,15 +113,11 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         """
         return cf_name == "default" and self._partition.uses_ttl_stamps
 
-    def _compute_stamp(
-        self, ttl: Optional[timedelta], timestamp: Optional[int]
-    ) -> int:
+    def _compute_stamp(self, ttl: Optional[timedelta], timestamp: Optional[int]) -> int:
         if ttl is None:
             return SENTINEL_NEVER
         if ttl <= timedelta(0):
-            raise ValueError(
-                f"ttl must be a positive timedelta or None, got {ttl!r}"
-            )
+            raise ValueError(f"ttl must be a positive timedelta or None, got {ttl!r}")
         if timestamp is None:
             raise ValueError(
                 "ttl=... on state.set() requires the current record's "
@@ -228,9 +224,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             )
             return
 
-        super().set_bytes(
-            key=key, value=value, prefix=prefix, cf_name="default"
-        )
+        super().set_bytes(key=key, value=value, prefix=prefix, cf_name="default")
 
         if ttl is not None:
             stamp = self._compute_stamp(ttl=ttl, timestamp=timestamp)
@@ -258,9 +252,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             self._status = PartitionTransactionStatus.FAILED
             raise
         stamped = encode_ttl_value(stamp, value_serialized)
-        super().set_bytes(
-            key=key, value=stamped, prefix=prefix, cf_name="default"
-        )
+        super().set_bytes(key=key, value=stamped, prefix=prefix, cf_name="default")
         if stamp != SENTINEL_NEVER:
             key_serialized = self._serialize_key(key, prefix=prefix)
             self._update_cache.set(
@@ -283,9 +275,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             self._partition.advance_high_water(timestamp)
         stamp = self._compute_stamp(ttl=ttl, timestamp=timestamp)
         stamped = encode_ttl_value(stamp, value)
-        super().set_bytes(
-            key=key, value=stamped, prefix=prefix, cf_name="default"
-        )
+        super().set_bytes(key=key, value=stamped, prefix=prefix, cf_name="default")
         if stamp != SENTINEL_NEVER:
             key_serialized = self._serialize_key(key, prefix=prefix)
             self._update_cache.set(

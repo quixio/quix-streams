@@ -454,9 +454,9 @@ class TestRecoveryManager:
             recovery_manager.do_recovery()
 
         # Verify recovery completed successfully
-        assert (
-            not recovery_manager.partitions
-        ), "Recovery should complete and unassign all partitions"
+        assert not recovery_manager.partitions, (
+            "Recovery should complete and unassign all partitions"
+        )
         assert consumer.poll.call_count == 3, (
             "Should poll three times: "
             "1) None (OFFSET_INVALID detected and skipped), "

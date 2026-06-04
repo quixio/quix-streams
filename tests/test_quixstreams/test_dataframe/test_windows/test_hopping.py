@@ -435,9 +435,9 @@ class TestHoppingWindow:
                 if 3 in window_result["collect"]:
                     found_triggering_value = True
                     break
-            assert (
-                found_triggering_value
-            ), "Triggering value (3) should be in collection storage"
+            assert found_triggering_value, (
+                "Triggering value (3) should be in collection storage"
+            )
 
     @pytest.mark.parametrize(
         "duration, grace, step, provided_name, func_name, expected_name",

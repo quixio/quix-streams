@@ -385,7 +385,7 @@ class QuixKafkaConfigsBuilder:
         # an exception is raised (status code) if topic is not created successfully
         logger.info(
             f'Creating topic "{topic.name}" '
-            f'with a config: "{topic.create_config.as_dict() if topic.create_config is not None else {} }"'
+            f'with a config: "{topic.create_config.as_dict() if topic.create_config is not None else {}}"'
         )
         resp = self._api.post_topic(
             topic_name=topic.name,

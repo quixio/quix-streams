@@ -68,9 +68,7 @@ class State(ABC, Generic[K, V]):
         ...
 
     @abstractmethod
-    def set_bytes(
-        self, key: K, value: bytes, ttl: Optional[timedelta] = None
-    ) -> None:
+    def set_bytes(self, key: K, value: bytes, ttl: Optional[timedelta] = None) -> None:
         """
         Set bytes value for the key, optionally with a per-write expiry.
 
@@ -186,9 +184,7 @@ class TransactionState(State):
             ttl=ttl,
         )
 
-    def set_bytes(
-        self, key: K, value: bytes, ttl: Optional[timedelta] = None
-    ) -> None:
+    def set_bytes(self, key: K, value: bytes, ttl: Optional[timedelta] = None) -> None:
         """
         Set bytes value for the key, optionally with a per-write expiry.
 

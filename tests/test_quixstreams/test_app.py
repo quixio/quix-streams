@@ -1381,9 +1381,9 @@ class TestApplicationWithState:
             auto_offset_reset="earliest",
             state_dir=state_dir,
             # Suppress errors during message processing
-            on_processing_error=lambda exc, *args: True
-            if isinstance(exc, ValueError)
-            else False,
+            on_processing_error=lambda exc, *args: (
+                True if isinstance(exc, ValueError) else False
+            ),
         )
 
         topic_in = app.topic(str(uuid.uuid4()), value_deserializer=JSONDeserializer())

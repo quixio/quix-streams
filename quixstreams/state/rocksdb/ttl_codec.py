@@ -110,8 +110,6 @@ def decode_index_key(blob: bytes) -> tuple[int, bytes]:
     :raises ValueError: if the blob is too short to contain the expiry stamp.
     """
     if len(blob) < TTL_STAMP_BYTES:
-        raise ValueError(
-            f"TTL index key is shorter than {TTL_STAMP_BYTES} bytes"
-        )
+        raise ValueError(f"TTL index key is shorter than {TTL_STAMP_BYTES} bytes")
     (expires_at_ms,) = _stamp_unpack_from(blob, 0)
     return expires_at_ms, blob[TTL_STAMP_BYTES:]

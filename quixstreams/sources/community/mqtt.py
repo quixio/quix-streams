@@ -13,7 +13,7 @@ try:
     import paho.mqtt.client as paho
 except ImportError as exc:
     raise ImportError(
-        'Package "paho-mqtt" is missing: ' "run pip install quixstreams[mqtt] to fix it"
+        'Package "paho-mqtt" is missing: run pip install quixstreams[mqtt] to fix it'
     ) from exc
 
 
