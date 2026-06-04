@@ -315,11 +315,23 @@ class PartitionTransaction(ABC, Generic[K, V]):
 
     @overload
     def get(
-        self, key: K, prefix: bytes, *, cf_name: str = "default"
+        self,
+        key: K,
+        prefix: bytes,
+        *,
+        cf_name: str = "default",
+        timestamp: Optional[int] = None,
     ) -> Optional[V]: ...
 
     @overload
-    def get(self, key: K, prefix: bytes, default: V, cf_name: str = "default") -> V: ...
+    def get(
+        self,
+        key: K,
+        prefix: bytes,
+        default: V,
+        cf_name: str = "default",
+        timestamp: Optional[int] = None,
+    ) -> V: ...
 
     def get(
         self,
@@ -358,11 +370,17 @@ class PartitionTransaction(ABC, Generic[K, V]):
         prefix: bytes,
         default: Literal[None] = None,
         cf_name: str = "default",
+        timestamp: Optional[int] = None,
     ) -> Optional[bytes]: ...
 
     @overload
     def get_bytes(
-        self, key: K, prefix: bytes, default: bytes, cf_name: str = "default"
+        self,
+        key: K,
+        prefix: bytes,
+        default: bytes,
+        cf_name: str = "default",
+        timestamp: Optional[int] = None,
     ) -> bytes: ...
 
     def get_bytes(

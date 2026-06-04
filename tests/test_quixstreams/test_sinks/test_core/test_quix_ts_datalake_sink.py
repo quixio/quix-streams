@@ -311,9 +311,9 @@ class TestSilenceChattyLoggers:
         silence_chatty_loggers()
 
         for name in self._SILENCED:
-            assert _logging.getLogger(name).level == _logging.WARNING, (
-                f"{name} not raised to WARNING"
-            )
+            assert (
+                _logging.getLogger(name).level == _logging.WARNING
+            ), f"{name} not raised to WARNING"
 
     def test_setup_silences_when_flag_is_true(self, sink_factory, mock_blob_client):
         import logging as _logging
