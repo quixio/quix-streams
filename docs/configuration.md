@@ -178,8 +178,12 @@ To override it, pass an instance of `quixstreams.state.rocksdb.options.RocksDBOp
 See the [Stateful Processing](advanced/stateful-processing.md#fault-tolerance-recovery) page to learn more about changelog topics.   
 **Default** - `True`.
 
-- **`auto_recover_from_source_offset_out_of_range`** - whether stateful applications should automatically delete local state for an affected partition and recover from the source topic low watermark when the committed source offset is older than the broker's retained offsets. This recovery necessarily loses state/source history before the retained source offset. Set it to `False` to raise `StateRecoveryOffsetOutOfRange` instead.  
+- **`auto_recover_from_source_offset_out_of_range`** - whether stateful applications should automatically delete local state for an affected partition when the committed source offset is older than the broker's retained offsets. The source offset used after recovery is controlled by `state_recovery_offset_reset`. Set this to `False` to raise `StateRecoveryOffsetOutOfRange` instead.  
 **Default** - `True`.
+
+- **`state_recovery_offset_reset`** - source offset reset policy to use after automatic state recovery deletes local state because the committed source offset is no longer retained by Kafka. Use `"earliest"` to resume from the broker low watermark, `"latest"` to resume from the broker high watermark, or `"match"` to follow `auto_offset_reset`. If `"match"` resolves to `auto_offset_reset="error"`, Quix Streams raises `StateRecoveryOffsetOutOfRange`.  
+**Options** - `"earliest"`, `"latest"`, `"match"`.  
+**Default** - `"earliest"`.
 
 ## Logging
 - `loglevel` - a log level to use for the "quixstreams" logger.  

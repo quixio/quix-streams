@@ -95,7 +95,9 @@ For stateful applications, Quix Streams uses the consumer group's committed sour
 
 If a committed source offset is lower than the broker's current low watermark for that source topic partition, the source records needed to validate the recovery boundary are no longer retained.
 
-By default, Quix Streams treats this as a destructive recovery case: it deletes the local state for the affected partition, uses the source topic low watermark as the changelog recovery boundary, and logs a critical warning. This avoids getting stuck, but it necessarily loses state/source history before the retained source offset.
+By default, Quix Streams treats this as a destructive recovery case: it deletes the local state for the affected partition, uses the source topic low watermark as the changelog recovery boundary, seeks the source consumer to that low watermark, and logs a critical warning. This avoids getting stuck, but it necessarily loses state/source history before the retained source offset.
+
+Use `state_recovery_offset_reset` to choose where automatic recovery resumes source consumption after deleting local state. The default `"earliest"` resumes from the broker low watermark and rebuilds from the oldest retained source records. `"latest"` resumes from the broker high watermark and starts with empty local state from that point, skipping retained source records too. `"match"` follows `auto_offset_reset`; if `auto_offset_reset="error"`, Quix Streams raises `StateRecoveryOffsetOutOfRange`.
 
 To fail instead of deleting local state automatically, set `auto_recover_from_source_offset_out_of_range=False` on `Application`. In that mode, Quix Streams raises `StateRecoveryOffsetOutOfRange` during partition assignment. To recover manually, reset the consumer group offset to a retained offset and clear or rebuild the local state directory, or start the application with a new consumer group and state directory.
 
