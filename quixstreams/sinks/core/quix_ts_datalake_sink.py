@@ -11,7 +11,7 @@ import logging
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 try:
     import pandas as pd
@@ -33,6 +33,7 @@ from quixstreams.sinks.base import (
 
 from ._blob_storage_client import BlobStorageClient, get_bucket_name
 from ._quix_ts_datalake_catalog_client import QuixTSDataLakeCatalogClient
+from .stream_timeout_tracker import StreamTimeoutTracker
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,45 @@ TIMESTAMP_COL_MAPPER = {
     "day": lambda col: col.dt.day.astype(str).str.zfill(2),
     "hour": lambda col: col.dt.hour.astype(str).str.zfill(2),
 }
+
+# On-disk path segment used when a partition column value is NULL.
+# Unified with the reading side (quix-ts-datalake catalog + API + UI):
+# every writer in the stack emits this exact string, every reader maps
+# it back to SQL NULL. Double-underscore prefix/suffix keeps the
+# sentinel from colliding with real user values like the bare string
+# ``"None"`` or Spark's ``__HIVE_DEFAULT_PARTITION__``, both of which
+# the readers also accept for backward compatibility on existing data.
+HIVE_NULL_PARTITION = "__None__"
+
+# Loggers that emit one INFO record per HTTP round-trip — useful for low-
+# level SDK debugging, but pure noise for a sink that performs hundreds of
+# blob operations per minute (the Hive partition tree probe alone). The
+# sink mutes them by default; pass `silence_azure_http_logs=False` to
+# preserve them.
+_CHATTY_HTTP_LOGGERS = (
+    "azure",
+    "azure.core",
+    "azure.core.pipeline.policies.http_logging_policy",
+    "azure.storage",
+    "adlfs",
+    "botocore",
+    "boto3",
+    "s3transfer",
+)
+
+
+def silence_chatty_loggers() -> None:
+    """Mute per-request HTTP logging from the cloud-storage SDKs used by
+    this sink (Azure SDK + adlfs, botocore/boto3 + s3transfer).
+
+    Safe to call from application code at any point. Levels are raised to
+    WARNING, so anything actually noteworthy (auth failures, retries,
+    throttling, server errors) still propagates. Call after configuring
+    your own logging (e.g. after instantiating quixstreams.Application)
+    so the framework's logging setup does not reset these levels.
+    """
+    for name in _CHATTY_HTTP_LOGGERS:
+        logging.getLogger(name).setLevel(logging.WARNING)
 
 
 class QuixTSDataLakeSink(BatchingSink):
@@ -72,6 +112,23 @@ class QuixTSDataLakeSink(BatchingSink):
     :param namespace: Catalog namespace (default: "default")
     :param auto_create_bucket: If True, attempt to create bucket/path in storage if missing
     :param max_workers: Maximum number of parallel upload threads (default: 10)
+    :param stream_timeout_ms: Optional **per-key** silence threshold in
+        milliseconds. Paired with ``on_stream_timeout``; both must be
+        provided to enable the feature. See
+        :class:`quixstreams.sinks.core.stream_timeout_tracker.StreamTimeoutTracker`
+        for the full behavioural contract (per-key tracking, fire-and-evict
+        semantics, re-arm on next record, 3x TTL safety sweep,
+        background check cadence, and zero-overhead disabled path).
+    :param on_stream_timeout: Optional callback
+        ``Callable[[str], None]`` invoked once per silence period per
+        Kafka message key. See ``stream_timeout_ms`` above.
+    :param silence_azure_http_logs: If True (default), raise the log levels of
+        the Azure SDK / adlfs / botocore HTTP-logging loggers to WARNING during
+        setup(). These libraries log one INFO record per HTTP round-trip with
+        the full URL and headers, which buries the sink's own logs under
+        hundreds of lines per minute of partition probing. Set to False to
+        keep the verbose request/response logs (useful for low-level SDK
+        debugging).
     :param on_client_connect_success: An optional callback made after successful
         client authentication, primarily for additional logging.
     :param on_client_connect_failure: An optional callback made after failed
@@ -93,8 +150,12 @@ class QuixTSDataLakeSink(BatchingSink):
         namespace: str = "default",
         auto_create_bucket: bool = True,
         max_workers: int = 10,
+        stream_timeout_ms: Optional[int] = None,
+        on_stream_timeout: Optional[Callable[[Any], None]] = None,
+        silence_azure_http_logs: bool = True,
         on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
         on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
+        _check_interval_ms: Optional[int] = None,
     ):
         super().__init__(
             on_client_connect_success=on_client_connect_success,
@@ -123,9 +184,26 @@ class QuixTSDataLakeSink(BatchingSink):
         )
         self._auto_create_bucket = auto_create_bucket
         self._max_workers = max_workers
+        self._silence_azure_http_logs = silence_azure_http_logs
 
         # Batch upload tracking
         self._pending_futures: List[Dict[str, Any]] = []
+
+        # Stream-timeout tracking (opt-in, per-key silence detector).
+        # All state, threading, and validation live inside the
+        # StreamTimeoutTracker — the sink composes it and exposes it
+        # via integration hooks in add/flush/setup/cleanup below. See
+        # :mod:`quixstreams.sinks.core.stream_timeout_tracker` for the
+        # behavioural contract. Disabled pair -> tracker is allocated
+        # but ``tracker.enabled`` is False and every method is a
+        # zero-overhead no-op.
+        self._timeout = StreamTimeoutTracker(
+            stream_timeout_ms=stream_timeout_ms,
+            on_stream_timeout=on_stream_timeout,
+            check_interval_ms=_check_interval_ms,
+            thread_name="QuixTSDataLakeSink-timeout-check",
+            logger=logger,
+        )
 
     @property
     def s3_bucket(self) -> str:
@@ -134,9 +212,56 @@ class QuixTSDataLakeSink(BatchingSink):
             raise RuntimeError("s3_bucket not initialized. Call setup() first.")
         return self._s3_bucket
 
+    # ------------------------------------------------------------------
+    # Stream-timeout integration
+    # ------------------------------------------------------------------
+    #
+    # All behaviour lives in ``self._timeout``
+    # (:class:`quixstreams.sinks.core.stream_timeout_tracker.StreamTimeoutTracker`).
+    # The three hooks below wire the sink lifecycle into the tracker:
+    # ``add`` -> ``touch``, ``flush`` -> ``check_now``,
+    # ``setup`` -> ``start``, ``cleanup`` -> ``stop``. ``on_paused`` is
+    # intentionally a no-op on tracker state (backpressure means the
+    # destination rejected a batch, not that the messages were never
+    # seen; per-key silence timers continue from their last-seen
+    # stamp regardless of write success).
+
+    def add(
+        self,
+        value: Any,
+        key: Any,
+        timestamp: int,
+        headers: Any,
+        topic: str,
+        partition: int,
+        offset: int,
+    ):
+        """Accumulate the record, then refresh the per-key last-seen
+        stamp via the tracker.
+        """
+        super().add(value, key, timestamp, headers, topic, partition, offset)
+        self._timeout.touch(key, topic=topic, partition=partition, offset=offset)
+
+    def flush(self):
+        """Flush the parent batch, then run a timeout check."""
+        super().flush()
+        self._timeout.check_now()
+
+    def on_paused(self):
+        """Inherit parent ``on_paused()`` — do **not** touch tracker state."""
+        super().on_paused()
+        # intentional no-op on tracker state
+
     def setup(self):
         """Initialize blob storage client and test connection."""
         logger.info("Starting Quix Lake Blob Storage Sink...")
+
+        # Done in setup() rather than __init__ so it runs after the host
+        # application (typically quixstreams.Application) has configured
+        # logging; otherwise the framework's setup would reset these levels
+        # back to whatever the global log level is.
+        if self._silence_azure_http_logs:
+            silence_chatty_loggers()
 
         # Extract bucket name from quixportal configuration
         self._s3_bucket = get_bucket_name()
@@ -181,6 +306,11 @@ class QuixTSDataLakeSink(BatchingSink):
             logger.error("Failed to setup blob storage connection: %s", e)
             raise
 
+        # Start the background timeout-check thread AFTER the blob
+        # client is healthy, so a blob-setup failure tears down cleanly
+        # without leaving an orphan timer thread running.
+        self._timeout.start()
+
     def _ensure_bucket(self):
         """Ensure the blob storage path is accessible."""
         if not self._blob_client.ensure_path_exists(
@@ -199,10 +329,15 @@ class QuixTSDataLakeSink(BatchingSink):
         while attempts:
             start = time.perf_counter()
             try:
-                self._write_batch(batch)
+                rows_written = self._write_batch(batch)
                 elapsed_ms = (time.perf_counter() - start) * 1000
+                # Log the actually-written count, not batch.size. They are
+                # equal in normal operation, but reporting the real number
+                # makes any future silent-drop regression visible in the log.
                 logger.info(
-                    "Wrote %d rows to blob storage in %.1f ms", batch.size, elapsed_ms
+                    "Wrote %d rows to blob storage in %.1f ms",
+                    rows_written,
+                    elapsed_ms,
                 )
                 return
             except Exception as exc:
@@ -212,10 +347,16 @@ class QuixTSDataLakeSink(BatchingSink):
                 logger.warning("Write failed (%s) - retrying...", exc)
                 time.sleep(3)
 
-    def _write_batch(self, batch: SinkBatch):
-        """Convert batch to Parquet and write to blob storage with Hive partitioning."""
+    def _write_batch(self, batch: SinkBatch) -> int:
+        """Convert batch to Parquet and write to blob storage with Hive partitioning.
+
+        Returns the number of rows actually grouped and written to storage.
+        Equals batch.size in normal operation; reported by write() so any
+        future silent-drop regression is visible in the log instead of
+        being papered over with the input count.
+        """
         if not batch:
-            return
+            return 0
 
         # Convert batch to list of dictionaries
         rows = []
@@ -238,8 +379,19 @@ class QuixTSDataLakeSink(BatchingSink):
 
         # Use only the explicitly specified partition columns
         if partition_columns := self.hive_columns.copy():
+            # Rows where a partition column is NaN/None would be silently
+            # discarded by pandas.groupby's default dropna=True — the for-
+            # loop below would simply not iterate over them and they would
+            # never reach storage, even though write() would still report
+            # success using batch.size. Route them into a single Hive-NULL
+            # bucket instead so the data lands somewhere queryable.
+            for col in partition_columns:
+                if col in df.columns:
+                    df[col] = df[col].fillna(HIVE_NULL_PARTITION)
+
             # Group by partition columns and write each partition separately
             # This creates the Hive-style directory structure: col1=val1/col2=val2/file.parquet
+            rows_written = 0
             for group_values, group_df in df.groupby(partition_columns):
                 # Ensure group_values is always a tuple for consistent handling
                 if not isinstance(group_values, tuple):
@@ -262,15 +414,18 @@ class QuixTSDataLakeSink(BatchingSink):
                 self._write_parquet_to_storage(
                     data_df, storage_key, partition_columns, group_values
                 )
+                rows_written += len(group_df)
         else:
             # No partitioning - write as single file directly under table directory
             storage_key = (
                 f"{self.s3_prefix}/{self.table_name}/data_{uuid.uuid4().hex}.parquet"
             )
             self._write_parquet_to_storage(df, storage_key, [], ())
+            rows_written = len(df)
 
         # Wait for all uploads to complete and register files in catalog
         self._finalize_writes()
+        return rows_written
 
     def _write_parquet_to_storage(
         self,
@@ -417,14 +572,20 @@ class QuixTSDataLakeSink(BatchingSink):
         Add timestamp-based columns (year/month/day/hour) for time-based partitioning.
 
         This method extracts time components from the timestamp column and adds them
-        as separate columns that can be used for Hive partitioning.
+        as separate columns that can be used for Hive partitioning. The source
+        ``timestamp_column`` is **not** mutated — derivation happens on a local
+        datetime64 series. Preserving its dtype is part of the sink's contract
+        with readers (in particular, ``ts_ms`` is the system-injected Kafka
+        timestamp and must always land in parquet as int64 ms, regardless of
+        whether time-based hive partitioning is configured).
         """
-        # Convert to datetime if needed (handles numeric timestamps)
-        if not pd.api.types.is_datetime64_any_dtype(df[self.timestamp_column]):
+        # Build a datetime64 view of the timestamp column to extract from.
+        # Never write this back into ``df`` — that would change the dtype of
+        # the source column in the parquet output.
+        timestamp_col = df[self.timestamp_column]
+        if not pd.api.types.is_datetime64_any_dtype(timestamp_col):
             sample_value = float(
-                df[self.timestamp_column].iloc[0]
-                if not df[self.timestamp_column].empty
-                else 0
+                timestamp_col.iloc[0] if not timestamp_col.empty else 0
             )
 
             # Auto-detect timestamp unit by inspecting the magnitude of the value
@@ -434,28 +595,14 @@ class QuixTSDataLakeSink(BatchingSink):
             # - Microseconds: ~1.7e15
             # - Nanoseconds: ~1.7e18
             if sample_value > 1e17:
-                # Nanoseconds (Java/Kafka timestamps)
-                df[self.timestamp_column] = pd.to_datetime(
-                    df[self.timestamp_column], unit="ns"
-                )
+                unit = "ns"  # Nanoseconds (Java/Kafka timestamps)
             elif sample_value > 1e14:
-                # Microseconds
-                df[self.timestamp_column] = pd.to_datetime(
-                    df[self.timestamp_column], unit="us"
-                )
+                unit = "us"  # Microseconds
             elif sample_value > 1e11:
-                # Milliseconds (common in JavaScript/Kafka)
-                df[self.timestamp_column] = pd.to_datetime(
-                    df[self.timestamp_column], unit="ms"
-                )
+                unit = "ms"  # Milliseconds (common in JavaScript/Kafka)
             else:
-                # Seconds (Unix timestamp)
-                df[self.timestamp_column] = pd.to_datetime(
-                    df[self.timestamp_column], unit="s"
-                )
-
-        # Extract time-based columns (year, month, day, hour) from the timestamp
-        timestamp_col = df[self.timestamp_column]
+                unit = "s"  # Seconds (Unix timestamp)
+            timestamp_col = pd.to_datetime(timestamp_col, unit=unit)
 
         # Only add columns that are specified in _ts_hive_columns
         # TIMESTAMP_COL_MAPPER handles proper formatting (e.g., zero-padding for months/days)
@@ -583,8 +730,17 @@ class QuixTSDataLakeSink(BatchingSink):
             else:
                 file_path = f"s3://{self.s3_bucket}/{storage_key}"
 
-            # Build partition values dict
-            partition_dict = {}
+            # Build partition values dict.
+            # _write_batch fillna()'s NaN partition values with HIVE_NULL_PARTITION
+            # (the on-disk sentinel — see the constant near the top) so they
+            # survive groupby and land in a single ``col=__None__`` directory on
+            # disk. The catalog receives the same literal string — including
+            # the ``__None__`` sentinel for NULL buckets — so the manifest
+            # row, the on-disk path, and what DuckDB's
+            # ``hive_partitioning=true`` exposes at query time all agree.
+            # Equality filters then resolve end-to-end without any sentinel
+            # translation in the lake.
+            partition_dict: Dict[str, str] = {}
             if partition_columns and partition_values:
                 for col, val in zip(partition_columns, partition_values):
                     partition_dict[col] = str(val)
@@ -617,5 +773,8 @@ class QuixTSDataLakeSink(BatchingSink):
 
     def cleanup(self):
         """Cleanup resources when sink is stopped."""
+        # Signal the background timer to exit its loop. No-op when the
+        # timeout feature is disabled.
+        self._timeout.stop()
         if self._blob_client:
             self._blob_client.shutdown()

@@ -8173,13 +8173,32 @@ stored within the PEM as well.
 
 <a id="quixstreams.models.serializers.schema_registry.SchemaRegistrySerializationConfig"></a>
 
-### SchemaRegistrySerializationConfig
+<a id="quixstreams.sinks.core.quix_ts_datalake_sink.silence_chatty_loggers"></a>
+
+#### silence\_chatty\_loggers
+
+```python
+def silence_chatty_loggers() -> None
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L74)
+
+Mute per-request HTTP logging from the cloud-storage SDKs used by
+this sink (Azure SDK + adlfs, botocore/boto3 + s3transfer).
+
+Safe to call from application code at any point. Levels are raised to
+WARNING, so anything actually noteworthy (auth failures, retries,
+throttling, server errors) still propagates. Call after configuring
+your own logging (e.g. after instantiating quixstreams.Application)
+so the framework's logging setup does not reset these levels.
+
+<a id="quixstreams.sinks.core.quix_ts_datalake_sink.QuixTSDataLakeSink"></a>
 
 ```python
 class SchemaRegistrySerializationConfig(BaseSettings)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\models\serializers\schema_registry.py#L48)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L88)
 
 Configuration that instructs Serializer how to handle communication with a
 
@@ -8211,7 +8230,32 @@ then this property must be set to True until all old consumers have been upgrade
 
 <a id="quixstreams.models.serializers.simple_types"></a>
 
-## quixstreams.models.serializers.simple\_types
+- `s3_prefix`: Path prefix for data files (e.g., "data-lake/time-series")
+- `table_name`: Table name for registration
+- `workspace_id`: Workspace ID for workspace-scoped storage paths
+(auto-injected by platform)
+- `hive_columns`: List of columns to use for Hive partitioning. Include
+'year', 'month', 'day', 'hour' to extract these from timestamp_column
+- `timestamp_column`: Column containing timestamp to extract time partitions from
+- `catalog_url`: Optional REST Catalog URL for table registration
+- `catalog_auth_token`: If using REST Catalog, the respective auth token for it
+- `auto_discover`: Whether to auto-register table on first write
+- `namespace`: Catalog namespace (default: "default")
+- `auto_create_bucket`: If True, attempt to create bucket/path in storage if missing
+- `max_workers`: Maximum number of parallel upload threads (default: 10)
+- `silence_azure_http_logs`: If True (default), raise the log levels of
+the Azure SDK / adlfs / botocore HTTP-logging loggers to WARNING during
+setup(). These libraries log one INFO record per HTTP round-trip with
+the full URL and headers, which buries the sink's own logs under
+hundreds of lines per minute of partition probing. Set to False to
+keep the verbose request/response logs (useful for low-level SDK
+debugging).
+- `on_client_connect_success`: An optional callback made after successful
+client authentication, primarily for additional logging.
+- `on_client_connect_failure`: An optional callback made after failed
+client authentication (which should raise an Exception).
+Callback should accept the raised Exception as an argument.
+Callback must resolve (or propagate/re-raise) the Exception.
 
 <a id="quixstreams.models.serializers.simple_types.BytesDeserializer"></a>
 
@@ -8221,7 +8265,7 @@ then this property must be set to True until all old consumers have been upgrade
 class BytesDeserializer(Deserializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\models\serializers\simple_types.py#L56)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L179)
 
 A deserializer to bypass bytes without any changes
 
@@ -8233,7 +8277,7 @@ A deserializer to bypass bytes without any changes
 class BytesSerializer(Serializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\models\serializers\simple_types.py#L65)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L185)
 
 A serializer to bypass bytes without any changes
 
@@ -8245,7 +8289,7 @@ A serializer to bypass bytes without any changes
 class StringDeserializer(Deserializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\models\serializers\simple_types.py#L74)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L247)
 
 <a id="quixstreams.models.serializers.simple_types.StringDeserializer.__init__"></a>
 
@@ -8255,7 +8299,7 @@ class StringDeserializer(Deserializer)
 def __init__(codec: str = "utf_8")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\models\serializers\simple_types.py#L75)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L699)
 
 Deserializes bytes to strings using the specified encoding.
 
