@@ -1136,6 +1136,13 @@ class Application:
                         )
 
                     committed_offsets[tp.partition][tp.topic] = lowwater
+                    self._consumer.seek(
+                        TopicPartition(
+                            topic=tp.topic,
+                            partition=tp.partition,
+                            offset=lowwater,
+                        )
+                    )
                 else:
                     committed_offsets[tp.partition][tp.topic] = tp.offset
 
