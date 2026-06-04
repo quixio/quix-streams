@@ -79,6 +79,7 @@ def __init__(broker_address: Optional[Union[str, ConnectionConfig]] = None,
              loglevel: Optional[Union[int, LogLevel]] = "INFO",
              auto_create_topics: bool = True,
              use_changelog_topics: bool = True,
+             auto_recover_from_source_offset_out_of_range: bool = True,
              quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
              topic_manager: Optional[TopicManager] = None,
              request_timeout: float = 30,
@@ -151,6 +152,12 @@ Default - `"INFO"`.
 Default - `True`
 - `use_changelog_topics`: Use changelog topics to back stateful operations
 Default - `True`
+- `auto_recover_from_source_offset_out_of_range`: If `True`, stateful
+applications will delete local state for an assigned partition and recover
+from the source topic low watermark when the committed source offset is
+older than the broker's retained offsets. This recovery loses state/source
+history before the low watermark. If `False`, the application raises
+`StateRecoveryOffsetOutOfRange` instead. Default - `True`.
 - `topic_manager`: A `TopicManager` instance
 - `request_timeout`: timeout (seconds) for REST-based requests
 - `topic_create_timeout`: timeout (seconds) for topic create finalization
@@ -661,4 +668,3 @@ def resolve_transactional_id(transactional_id: Optional[str],
 
 Utility function to resolve the transactional.id based
 on existing config and provided prefix.
-

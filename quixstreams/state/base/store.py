@@ -102,6 +102,15 @@ class Store(ABC):
             self._stream_id,
         )
 
+    def destroy_partition(self, partition: int) -> bool:
+        """
+        Delete any persisted data for a store partition.
+
+        :param partition: partition number
+        :return: True when persisted data was deleted, otherwise False.
+        """
+        return False
+
     def start_partition_transaction(self, partition: int) -> PartitionTransaction:
         """
         Start a new partition transaction.

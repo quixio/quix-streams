@@ -8,7 +8,30 @@ import pytest
 from confluent_kafka import TopicPartition
 from confluent_kafka.error import KafkaError
 
+from quixstreams.exceptions import PartitionAssignmentError
+from quixstreams.kafka.consumer import _wrap_assignment_errors
+from quixstreams.state.exceptions import StateRecoveryOffsetOutOfRange
 from tests.utils import DEFAULT_TIMEOUT, Timeout
+
+
+def test_assignment_wrapper_preserves_quix_exceptions():
+    @_wrap_assignment_errors
+    def callback():
+        raise StateRecoveryOffsetOutOfRange("state recovery failed")
+
+    with pytest.raises(StateRecoveryOffsetOutOfRange, match="state recovery failed"):
+        callback()
+
+
+def test_assignment_wrapper_wraps_unexpected_exceptions():
+    @_wrap_assignment_errors
+    def callback():
+        raise ValueError("unexpected")
+
+    with pytest.raises(PartitionAssignmentError) as raised:
+        callback()
+
+    assert isinstance(raised.value.__cause__, ValueError)
 
 
 def test_consumer_start_close(

@@ -50,6 +50,7 @@ from .runtracker import RunTracker
 from .sinks import SinkManager
 from .sources import BaseSource, SourceException, SourceManager
 from .state import StateStoreManager
+from .state.exceptions import StateRecoveryOffsetOutOfRange
 from .state.recovery import RecoveryManager
 from .state.rocksdb import RocksDBOptionsType
 from .utils.settings import BaseSettings
@@ -146,6 +147,7 @@ class Application:
         loglevel: Optional[Union[int, LogLevel]] = "INFO",
         auto_create_topics: bool = True,
         use_changelog_topics: bool = True,
+        auto_recover_from_source_offset_out_of_range: bool = True,
         quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
         topic_manager: Optional[TopicManager] = None,
         request_timeout: float = 30,
@@ -212,6 +214,12 @@ class Application:
             Default - `True`
         :param use_changelog_topics: Use changelog topics to back stateful operations
             Default - `True`
+        :param auto_recover_from_source_offset_out_of_range: If `True`, stateful
+            applications will delete local state for an assigned partition and recover
+            from the source topic low watermark when the committed source offset is
+            older than the broker's retained offsets. This recovery loses state/source
+            history before the low watermark. If `False`, the application raises
+            `StateRecoveryOffsetOutOfRange` instead. Default - `True`.
         :param topic_manager: A `TopicManager` instance
         :param request_timeout: timeout (seconds) for REST-based requests
         :param topic_create_timeout: timeout (seconds) for topic create finalization
@@ -345,6 +353,7 @@ class Application:
             state_dir=state_dir,
             rocksdb_options=rocksdb_options,
             use_changelog_topics=use_changelog_topics,
+            auto_recover_from_source_offset_out_of_range=auto_recover_from_source_offset_out_of_range,
             max_partition_buffer_size=max_partition_buffer_size,
         )
 
@@ -1077,7 +1086,58 @@ class Application:
                         f"Failed to get committed offsets for "
                         f'"{tp.topic}[{tp.partition}]" from the broker: {tp.error}'
                     )
-                committed_offsets[tp.partition][tp.topic] = tp.offset
+                lowwater, highwater = self._consumer.get_watermark_offsets(
+                    TopicPartition(topic=tp.topic, partition=tp.partition),
+                    timeout=30,
+                )
+                if 0 <= tp.offset < lowwater:
+                    if not self._config.auto_recover_from_source_offset_out_of_range:
+                        message = (
+                            f"Consumer group offset {tp.offset} for topic "
+                            f"{tp.topic}[{tp.partition}] is below the broker low "
+                            f"watermark {lowwater}. State cannot be recovered safely "
+                            f"from retained source data. Broker high watermark is "
+                            f"{highwater}; auto_offset_reset is "
+                            f'"{self._config.auto_offset_reset}". Reset the consumer '
+                            "group offset and clear/rebuild local state, or start "
+                            "with a new consumer group/state directory."
+                        )
+                        logger.error(message)
+                        raise StateRecoveryOffsetOutOfRange(message)
+
+                    for stream_id in self._dataframe_registry.get_stream_ids(
+                        topic_name=tp.topic
+                    ):
+                        destroyed_stores = self._state_manager.destroy_partition_state(
+                            stream_id=stream_id,
+                            partition=tp.partition,
+                        )
+                        logger.critical(
+                            "DESTRUCTIVE STATE RECOVERY: consumer group offset %s "
+                            "for topic %s[%s] is below the broker low watermark %s "
+                            "(high watermark %s). Local state for stream %s[%s] "
+                            "has been deleted for stores %s because "
+                            "`auto_recover_from_source_offset_out_of_range` is True. "
+                            "This recovery necessarily loses state/source history "
+                            "before the retained source offset. To avoid automatic "
+                            "state deletion, set "
+                            "`auto_recover_from_source_offset_out_of_range=False` "
+                            "and manually reset the consumer group offset plus "
+                            "clear/rebuild local state, or start with a new consumer "
+                            "group/state directory.",
+                            tp.offset,
+                            tp.topic,
+                            tp.partition,
+                            lowwater,
+                            highwater,
+                            stream_id,
+                            tp.partition,
+                            destroyed_stores or "<no persisted stores>",
+                        )
+
+                    committed_offsets[tp.partition][tp.topic] = lowwater
+                else:
+                    committed_offsets[tp.partition][tp.topic] = tp.offset
 
             # Match the assigned TP with a stream ID via DataFrameRegistry
             for tp in non_changelog_tps:
@@ -1186,6 +1246,7 @@ class ApplicationConfig(BaseSettings):
     state_dir: Path = Path("state")
     rocksdb_options: Optional[RocksDBOptionsType] = None
     use_changelog_topics: bool = True
+    auto_recover_from_source_offset_out_of_range: bool = True
     max_partition_buffer_size: int = 10000
 
     @classmethod

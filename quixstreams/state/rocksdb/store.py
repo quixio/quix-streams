@@ -64,3 +64,10 @@ class RocksDBStore(Store):
         return RocksDBStorePartition(
             path=path, options=self._options, changelog_producer=changelog_producer
         )
+
+    def destroy_partition(self, partition: int) -> bool:
+        path = str((self._partitions_dir / str(partition)).absolute())
+        if not Path(path).exists():
+            return False
+        RocksDBStorePartition.destroy(path)
+        return True

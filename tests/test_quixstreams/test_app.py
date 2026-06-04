@@ -5,7 +5,7 @@ import uuid
 from concurrent.futures import Future
 from json import dumps, loads
 from pathlib import Path
-from unittest.mock import create_autospec, patch
+from unittest.mock import MagicMock, create_autospec, patch
 
 import pytest
 from confluent_kafka import KafkaException, TopicPartition
@@ -32,6 +32,7 @@ from quixstreams.platforms.quix.env import QuixEnvironment
 from quixstreams.sinks import SinkBackpressureError, SinkBatch
 from quixstreams.sources import SourceException, multiprocessing
 from quixstreams.state import RecoveryManager, State
+from quixstreams.state.exceptions import StateRecoveryOffsetOutOfRange
 from quixstreams.state.manager import SUPPORTED_STORES
 from quixstreams.state.rocksdb import RocksDBStore
 from tests.utils import DummySink, DummySource, DummyStatefulSource
@@ -1202,6 +1203,82 @@ def test_quix_app_state_dir_fallback_to_state_dir(
 
 @pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
 class TestApplicationWithState:
+    def _app_with_out_of_range_committed_offset(
+        self, auto_recover_from_source_offset_out_of_range=True
+    ):
+        app = Application(
+            broker_address="localhost:9092",
+            consumer_group=str(uuid.uuid4()),
+            auto_offset_reset="earliest",
+            auto_recover_from_source_offset_out_of_range=auto_recover_from_source_offset_out_of_range,
+            loglevel=None,
+        )
+        topic_name = str(uuid.uuid4())
+        changelog_topic_name = f"changelog__{topic_name}--default"
+
+        app._source_manager = MagicMock()
+        app._topic_manager = MagicMock()
+        app._topic_manager.non_changelog_topics = {topic_name: object()}
+        app._dataframe_registry = MagicMock()
+        app._dataframe_registry.get_stream_ids.return_value = [topic_name]
+        app._state_manager = MagicMock()
+        app._state_manager.stores = {topic_name: {"default": object()}}
+
+        source_tp = TopicPartition(topic=topic_name, partition=0)
+        changelog_tp = TopicPartition(topic=changelog_topic_name, partition=0)
+
+        app._consumer.assign = MagicMock()
+        app._consumer.pause = MagicMock()
+        app._consumer.committed = MagicMock()
+        app._consumer.committed.return_value = [
+            TopicPartition(topic=topic_name, partition=0, offset=10)
+        ]
+        app._consumer.get_watermark_offsets = MagicMock()
+        app._consumer.get_watermark_offsets.return_value = (20, 30)
+
+        return app, topic_name, source_tp, changelog_tp
+
+    def test_on_assign_stateful_committed_offset_below_low_watermark_auto_recovers(
+        self, store_type
+    ):
+        app, topic_name, source_tp, changelog_tp = (
+            self._app_with_out_of_range_committed_offset()
+        )
+        app._state_manager.destroy_partition_state.return_value = ["default"]
+
+        app._on_assign(None, [source_tp, changelog_tp])
+
+        app._state_manager.destroy_partition_state.assert_called_once_with(
+            stream_id=topic_name,
+            partition=0,
+        )
+        app._state_manager.on_partition_assign.assert_called_once_with(
+            stream_id=topic_name,
+            partition=0,
+            committed_offsets={topic_name: 20},
+        )
+
+    def test_on_assign_stateful_committed_offset_below_low_watermark_fails_when_auto_recovery_disabled(
+        self, store_type
+    ):
+        app, topic_name, source_tp, changelog_tp = (
+            self._app_with_out_of_range_committed_offset(
+                auto_recover_from_source_offset_out_of_range=False
+            )
+        )
+
+        with pytest.raises(
+            StateRecoveryOffsetOutOfRange,
+            match=(
+                rf"Consumer group offset 10 for topic {topic_name}\[0\] "
+                "is below the broker low watermark 20"
+            ),
+        ):
+            app._on_assign(None, [source_tp, changelog_tp])
+
+        app._state_manager.destroy_partition_state.assert_not_called()
+        app._state_manager.on_partition_assign.assert_not_called()
+
     def _validate_state(
         self,
         stores,

@@ -178,6 +178,9 @@ To override it, pass an instance of `quixstreams.state.rocksdb.options.RocksDBOp
 See the [Stateful Processing](advanced/stateful-processing.md#fault-tolerance-recovery) page to learn more about changelog topics.   
 **Default** - `True`.
 
+- **`auto_recover_from_source_offset_out_of_range`** - whether stateful applications should automatically delete local state for an affected partition and recover from the source topic low watermark when the committed source offset is older than the broker's retained offsets. This recovery necessarily loses state/source history before the retained source offset. Set it to `False` to raise `StateRecoveryOffsetOutOfRange` instead.  
+**Default** - `True`.
+
 ## Logging
 - `loglevel` - a log level to use for the "quixstreams" logger.  
 **Options:** `"DEBUG"`, `"INFO"`, `"ERROR"`, `"WARNING"`, `"CRITICAL"`,`"NOTSET"`, `None`.  
