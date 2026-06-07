@@ -48,6 +48,7 @@ redis_sink = RedisSink(
     key_serializer=None,
     password=None,
     socket_timeout=30.0,
+    ttl=None,
 )
 
 sdf = app.dataframe(topic)

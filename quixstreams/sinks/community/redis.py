@@ -33,6 +33,7 @@ class RedisSink(BatchingSink):
         key_serializer: Optional[Callable[[Any, Any], Union[bytes, str]]] = None,
         password: Optional[str] = None,
         socket_timeout: float = 30.0,
+        ttl: Optional[int] = None,
         on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
         on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
         **kwargs,
@@ -51,6 +52,7 @@ class RedisSink(BatchingSink):
         :param password: Redis password, optional.
         :param socket_timeout: Redis socket timeout.
             Default - 30s.
+        :param ttl: Redis key TTL in seconds.
         :param on_client_connect_success: An optional callback made after successful
             client authentication, primarily for additional logging.
         :param on_client_connect_failure: An optional callback made after failed
@@ -63,9 +65,9 @@ class RedisSink(BatchingSink):
             on_client_connect_success=on_client_connect_success,
             on_client_connect_failure=on_client_connect_failure,
         )
-
         self._key_serializer = key_serializer
         self._value_serializer = value_serializer
+        self._ttl = ttl
         self._client: Optional[redis.Redis] = None
         self._client_settings = {
             "host": host,
@@ -94,7 +96,7 @@ class RedisSink(BatchingSink):
                 if self._key_serializer is not None:
                     key = self._key_serializer(key, item.value)
                 value = self._value_serializer(item.value)
-                pipe.set(key, value)
+                pipe.set(key, value, ex=self._ttl)
             keys_updated = len(pipe)
             pipe.execute(raise_on_error=True)
         time_elapsed = round(time.monotonic() - start, 4)
