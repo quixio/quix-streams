@@ -138,6 +138,9 @@ class InternalConsumer(BaseConsumer):
             if on_assign is not None:
                 on_assign(consumer, partitions)
 
+            # Seed the buffer from effective positions so partitions already at
+            # their start offset can be recognized as idle before any messages
+            # are observed in this process.
             committed = consumer.committed(buffer_partitions, timeout=30)
             positions = {
                 (tp.topic, tp.partition): tp.offset

@@ -57,10 +57,7 @@ class PartitionBuffer:
         """
         Set the current consumer position for this topic partition.
 
-        The position is the next offset to be returned by the Kafka consumer. When a
-        process starts from a committed offset, the buffer has not observed the
-        previously consumed messages, so its max offset must be initialized from
-        the position to determine idleness correctly.
+        The position is the next offset to be returned by the Kafka consumer.
 
         :param offset: the current consumer position.
         """
