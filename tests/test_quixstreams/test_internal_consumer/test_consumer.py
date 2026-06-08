@@ -449,3 +449,75 @@ class TestInternalConsumer:
         assert row is not None
         assert row.topic == topic1.name
         assert row.value == {"field": "active"}
+
+    def test_poll_row_buffered_respects_on_assign_seek_before_position_seed(
+        self,
+        consumer_factory,
+        internal_consumer_factory,
+        topic_json_serdes_factory,
+        producer,
+    ):
+        """
+        Test that buffer position seeding respects customized offsets set in
+        the assignment callback.
+        """
+        topic1 = topic_json_serdes_factory()
+        topic2 = topic_json_serdes_factory()
+        consumer_group = str(uuid4())
+
+        with producer:
+            for i in range(3):
+                producer.produce(
+                    topic=topic1.name,
+                    key=b"key",
+                    value=f'{{"field": "replay-{i}"}}'.encode(),
+                    timestamp=10 + i,
+                )
+            producer.produce(
+                topic=topic2.name,
+                key=b"key",
+                value=b'{"field": "idle"}',
+                timestamp=1,
+            )
+
+        with consumer_factory(
+            consumer_group=consumer_group,
+            auto_offset_reset="earliest",
+            auto_commit_enable=False,
+        ) as consumer:
+            consumer.subscribe(topics=[topic1.name, topic2.name])
+            while not consumer.assignment():
+                consumer.poll(0.1)
+            consumer.commit(
+                offsets=[
+                    TopicPartition(topic=topic1.name, partition=0, offset=3),
+                    TopicPartition(topic=topic2.name, partition=0, offset=1),
+                ],
+                asynchronous=False,
+            )
+
+        def on_assign(consumer, partitions):
+            for partition in partitions:
+                if partition.topic == topic1.name:
+                    partition.offset = 0
+                elif partition.topic == topic2.name:
+                    partition.offset = 1
+            consumer.assign(partitions)
+
+        with internal_consumer_factory(
+            consumer_group=consumer_group,
+            auto_offset_reset="earliest",
+            auto_commit_enable=False,
+        ) as consumer:
+            consumer.subscribe([topic1, topic2], on_assign=on_assign)
+
+            row = None
+            while Timeout():
+                row = consumer.poll_row(0.1, buffered=True)
+                if row is not None:
+                    break
+
+        assert row is not None
+        assert row.topic == topic1.name
+        assert row.offset == 0
+        assert row.value == {"field": "replay-0"}

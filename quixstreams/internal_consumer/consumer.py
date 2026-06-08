@@ -135,18 +135,34 @@ class InternalConsumer(BaseConsumer):
                 tp for tp in partitions if not self._topics[tp.topic].is_changelog
             ]
             self._buffer.assign_partitions(buffer_partitions)
+            if on_assign is not None:
+                on_assign(consumer, partitions)
+
             committed = consumer.committed(buffer_partitions, timeout=30)
+            positions = {
+                (tp.topic, tp.partition): tp.offset
+                for tp in consumer.position(buffer_partitions)
+                if tp.offset >= 0
+            }
+            positions.update(
+                {
+                    (tp.topic, tp.partition): tp.offset
+                    for tp in buffer_partitions
+                    if tp.offset >= 0 and (tp.topic, tp.partition) not in positions
+                }
+            )
+            positions.update(
+                {
+                    (tp.topic, tp.partition): tp.offset
+                    for tp in committed
+                    if tp.offset >= 0 and (tp.topic, tp.partition) not in positions
+                }
+            )
             self._buffer.feed(
                 messages=[],
                 high_watermarks={},
-                positions={
-                    (tp.topic, tp.partition): tp.offset
-                    for tp in committed
-                    if tp.offset >= 0
-                },
+                positions=positions,
             )
-            if on_assign is not None:
-                on_assign(consumer, partitions)
 
         def _on_revoke(consumer: Consumer, partitions: list[TopicPartition]):
             buffer_partitions = [
