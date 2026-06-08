@@ -224,10 +224,13 @@ class Application:
             `StateRecoveryOffsetOutOfRange` instead. Default - `True`.
         :param state_recovery_offset_reset: Source offset reset policy to use after
             automatic state recovery deletes local state because the committed source
-            offset is no longer retained by Kafka. Use `"earliest"` to resume from the
-            broker low watermark, `"latest"` to resume from the broker high watermark,
-            or `"match"` to follow `auto_offset_reset` (`"error"` raises
-            `StateRecoveryOffsetOutOfRange`). Default - `"earliest"`.
+            offset is no longer retained by Kafka. Use `"earliest"` to use the broker
+            low watermark as the changelog recovery boundary and resume source
+            consumption from there. Use `"latest"` to resume source consumption from
+            the broker high watermark and skip changelog records that carry processed
+            source-offset metadata; older changelog records without this metadata may
+            still be applied. Use `"match"` to follow `auto_offset_reset` (`"error"`
+            raises `StateRecoveryOffsetOutOfRange`). Default - `"earliest"`.
         :param topic_manager: A `TopicManager` instance
         :param request_timeout: timeout (seconds) for REST-based requests
         :param topic_create_timeout: timeout (seconds) for topic create finalization
