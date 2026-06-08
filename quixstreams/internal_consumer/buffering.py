@@ -53,6 +53,20 @@ class PartitionBuffer:
         """
         self._high_watermark = offset
 
+    def set_position(self, offset: int):
+        """
+        Set the current consumer position for this topic partition.
+
+        The position is the next offset to be returned by the Kafka consumer. When a
+        process starts from a committed offset, the buffer has not observed the
+        previously consumed messages, so its max offset must be initialized from
+        the position to determine idleness correctly.
+
+        :param offset: the current consumer position.
+        """
+        if offset > 0:
+            self._max_offset = max(self._max_offset, offset - 1)
+
     def idleness(self) -> Idleness:
         """
         Check if the partition is idle or has more data to be consumed from the broker.
@@ -202,6 +216,17 @@ class PartitionBufferGroup:
         for topic, watermark in offsets.items():
             buffer = self._partition_buffers[topic]
             buffer.set_high_watermark(watermark)
+
+    def set_positions(self, offsets: dict[str, int]):
+        """
+        Set consumer positions for assigned partitions.
+
+        :param offsets: a mapping of {<topic>: <offset>} with the current consumer
+            positions for this group.
+        """
+        for topic, offset in offsets.items():
+            buffer = self._partition_buffers[topic]
+            buffer.set_position(offset)
 
     def append(self, message: SuccessfulConfluentKafkaMessageProto):
         """
@@ -357,17 +382,20 @@ class InternalConsumerBuffer:
         self,
         messages: Iterable[SuccessfulConfluentKafkaMessageProto],
         high_watermarks: dict[tuple[str, int], int],
+        positions: Optional[dict[tuple[str, int], int]] = None,
     ):
         """
         Feed new batch of messages to the buffer.
 
         :param messages: an iterable with successful `confluent_kafka.Message` objects (`.error()` is expected to be None).
         :param high_watermarks: a dictionary with high watermarks for all assigned topic partitions.
+        :param positions: a dictionary with current consumer positions for all assigned topic partitions.
         """
         for message in messages:
             partition_group = self._partition_groups[message.partition()]
             partition_group.append(message=message)
 
+        positions = positions or {}
         for partition_group in self._partition_groups.values():
             group_watermarks = {
                 topic: watermark
@@ -375,6 +403,12 @@ class InternalConsumerBuffer:
                 if partition == partition_group.partition
             }
             partition_group.set_high_watermarks(offsets=group_watermarks)
+            group_positions = {
+                topic: position
+                for (topic, partition), position in positions.items()
+                if partition == partition_group.partition
+            }
+            partition_group.set_positions(offsets=group_positions)
 
     def pop(self) -> Optional[SuccessfulConfluentKafkaMessageProto]:
         """

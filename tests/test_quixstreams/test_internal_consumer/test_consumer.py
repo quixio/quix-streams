@@ -4,7 +4,7 @@ from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
-from confluent_kafka import KafkaError, TopicPartition
+from confluent_kafka import OFFSET_INVALID, KafkaError, TopicPartition
 
 from quixstreams.exceptions import PartitionAssignmentError
 from quixstreams.internal_consumer import InternalConsumer
@@ -374,3 +374,78 @@ class TestInternalConsumer:
         assert rows[1].timestamp == messages[2].timestamp
         assert rows[2].timestamp == messages[3].timestamp
         assert rows[3].timestamp == messages[1].timestamp
+
+    def test_poll_row_buffered_releases_message_when_other_topic_committed_at_end(
+        self,
+        consumer_factory,
+        internal_consumer_factory,
+        topic_json_serdes_factory,
+        producer,
+    ):
+        """
+        Test buffered consumption after restart when one topic has lag and another
+        co-partitioned topic is already committed at its high watermark.
+        """
+        topic1 = topic_json_serdes_factory()
+        topic2 = topic_json_serdes_factory()
+        consumer_group = str(uuid4())
+
+        with producer:
+            for i in range(3):
+                producer.produce(
+                    topic=topic2.name,
+                    key=b"key",
+                    value=f'{{"field": "idle-{i}"}}'.encode(),
+                    timestamp=i,
+                )
+            producer.produce(
+                topic=topic1.name,
+                key=b"key",
+                value=b'{"field": "active"}',
+                timestamp=10,
+            )
+
+        with consumer_factory(
+            consumer_group=consumer_group,
+            auto_offset_reset="earliest",
+            auto_commit_enable=False,
+        ) as consumer:
+            consumer.subscribe(topics=[topic1.name, topic2.name])
+            while not consumer.assignment():
+                consumer.poll(0.1)
+            consumer.commit(
+                offsets=[
+                    TopicPartition(topic=topic1.name, partition=0, offset=0),
+                    TopicPartition(topic=topic2.name, partition=0, offset=3),
+                ],
+                asynchronous=False,
+            )
+
+        with internal_consumer_factory(
+            consumer_group=consumer_group,
+            auto_offset_reset="earliest",
+            auto_commit_enable=False,
+        ) as consumer:
+            consumer.subscribe([topic1, topic2])
+
+            real_position = consumer.position
+
+            def position_with_unknown_idle_topic(partitions):
+                positions = real_position(partitions)
+                for position in positions:
+                    if position.topic == topic2.name:
+                        position.offset = OFFSET_INVALID
+                return positions
+
+            row = None
+            with patch.object(
+                consumer, "position", side_effect=position_with_unknown_idle_topic
+            ):
+                while Timeout():
+                    row = consumer.poll_row(0.1, buffered=True)
+                    if row is not None:
+                        break
+
+        assert row is not None
+        assert row.topic == topic1.name
+        assert row.value == {"field": "active"}

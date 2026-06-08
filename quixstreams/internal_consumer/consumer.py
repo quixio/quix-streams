@@ -135,6 +135,16 @@ class InternalConsumer(BaseConsumer):
                 tp for tp in partitions if not self._topics[tp.topic].is_changelog
             ]
             self._buffer.assign_partitions(buffer_partitions)
+            committed = consumer.committed(buffer_partitions, timeout=30)
+            self._buffer.feed(
+                messages=[],
+                high_watermarks={},
+                positions={
+                    (tp.topic, tp.partition): tp.offset
+                    for tp in committed
+                    if tp.offset >= 0
+                },
+            )
             if on_assign is not None:
                 on_assign(consumer, partitions)
 
@@ -340,17 +350,24 @@ class InternalConsumer(BaseConsumer):
 
         # Get the recent cached high watermarks
         high_watermarks: dict[tuple[str, int], int] = {}
+        positions: dict[tuple[str, int], int] = {}
         for tp in self.assignment():
             topic_obj = self._topics[tp.topic]
             if not topic_obj.is_changelog:
                 _, high = self.get_watermark_offsets(partition=tp, cached=True)
                 high_watermarks[(tp.topic, tp.partition)] = high
+                position, *_ = self.position([tp])
+                positions[(tp.topic, tp.partition)] = position.offset
 
         # Create a generator to validate messages
         valid_messages = _validate_message_batch(messages, on_error=self._on_error)
 
         # Feed the batch and the watermarks to the buffer
-        self._buffer.feed(messages=valid_messages, high_watermarks=high_watermarks)
+        self._buffer.feed(
+            messages=valid_messages,
+            high_watermarks=high_watermarks,
+            positions=positions,
+        )
 
         # Resume partitions with empty buffers
         for topic, partition in self._buffer.resume_empty():
