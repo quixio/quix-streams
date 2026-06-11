@@ -15602,6 +15602,8 @@ def __init__(broker_address: Optional[Union[str, ConnectionConfig]] = None,
              loglevel: Optional[Union[int, LogLevel]] = "INFO",
              auto_create_topics: bool = True,
              use_changelog_topics: bool = True,
+             auto_recover_from_source_offset_out_of_range: bool = True,
+             state_recovery_offset_reset: StateRecoveryOffsetReset = "earliest",
              quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
              topic_manager: Optional[TopicManager] = None,
              request_timeout: float = 30,
@@ -15672,6 +15674,21 @@ Default - `"INFO"`.
 Default - `True`
 - `use_changelog_topics`: Use changelog topics to back stateful operations
 Default - `True`
+- `auto_recover_from_source_offset_out_of_range`: If `True`, stateful
+applications will delete local state for an assigned partition when the
+committed source offset is older than the broker's retained offsets. The
+source offset used after recovery is controlled by
+`state_recovery_offset_reset`. If `False`, the application raises
+`StateRecoveryOffsetOutOfRange` instead. Default - `True`.
+- `state_recovery_offset_reset`: Source offset reset policy to use after
+automatic state recovery deletes local state because the committed source
+offset is no longer retained by Kafka. Use `"earliest"` to use the broker
+low watermark as the changelog recovery boundary and resume source
+consumption from there. Use `"latest"` to resume source consumption from the
+broker high watermark and skip changelog records that carry processed
+source-offset metadata; older changelog records without this metadata may
+still be applied. Use `"match"` to follow `auto_offset_reset` (`"error"`
+raises `StateRecoveryOffsetOutOfRange`). Default - `"earliest"`.
 - `topic_manager`: A `TopicManager` instance
 - `request_timeout`: timeout (seconds) for REST-based requests
 - `topic_create_timeout`: timeout (seconds) for topic create finalization
@@ -19255,4 +19272,3 @@ def close()
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/internal_consumer/buffering.py#L418)
 
 Drop all partition buffers.
-

@@ -340,6 +340,21 @@ class StateStoreManager:
             for store in stores:
                 store.revoke_partition(partition=partition)
 
+    def destroy_partition_state(self, stream_id: str, partition: int) -> list[str]:
+        """
+        Destroy persisted state for all stores of a stream partition.
+
+        :param stream_id: stream id
+        :param partition: partition number
+        :return: names of stores whose persisted state was destroyed.
+        """
+        destroyed = []
+        for store in self._stores.get(stream_id, {}).values():
+            store.revoke_partition(partition=partition)
+            if store.destroy_partition(partition=partition):
+                destroyed.append(store.name)
+        return destroyed
+
     def init(self) -> None:
         """
         Initialize `StateStoreManager` and create a store directory

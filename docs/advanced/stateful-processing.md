@@ -89,6 +89,18 @@ It will ensure the changelog topics exist for these stores.
 - When the application restarts or a new consumer joins the group, it will check whether the state stores are up-to-date with their changelog topics.    
 If they are not, the application will first update the local stores, and only then will it continue processing the messages. 
 
+### Source Offset Retention During Recovery
+
+For stateful applications, Quix Streams uses the consumer group's committed source topic offsets as the recovery boundary for changelog replay.
+
+If a committed source offset is lower than the broker's current low watermark for that source topic partition, the source records needed to validate the recovery boundary are no longer retained.
+
+By default, Quix Streams treats this as a destructive recovery case: it deletes the local state for the affected partition, replays changelog records up to the source topic low watermark, seeks the source consumer to that low watermark, and logs a critical warning. This avoids getting stuck, but it necessarily loses state/source history before the retained source offset.
+
+Use `state_recovery_offset_reset` to choose where automatic recovery resumes source consumption after deleting local state. The default `"earliest"` uses the broker low watermark as the changelog recovery boundary, then resumes source consumption from that same low watermark. This rebuilds the most complete state possible from Kafka's retained source data. `"latest"` resumes source consumption from the broker high watermark and skips changelog records that carry processed source-offset metadata, so retained source records are not reprocessed. Older changelog records without processed-offset metadata may still be applied during recovery. `"match"` follows `auto_offset_reset`; if `auto_offset_reset="error"`, Quix Streams raises `StateRecoveryOffsetOutOfRange`.
+
+To fail instead of deleting local state automatically, set `auto_recover_from_source_offset_out_of_range=False` on `Application`. In that mode, Quix Streams raises `StateRecoveryOffsetOutOfRange` during partition assignment. To recover manually, reset the consumer group offset to a retained offset and clear or rebuild the local state directory, or start the application with a new consumer group and state directory.
+
 
 ### Creating Changelog Topics manually
 
