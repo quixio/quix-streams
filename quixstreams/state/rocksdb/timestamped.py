@@ -263,7 +263,12 @@ class TimestampedStorePartition(RocksDBStorePartition):
 
     This class is responsible for managing the state of one partition and creating
     `TimestampedPartitionTransaction` instances to handle atomic operations for that partition.
+
+    Timestamped stores have their own retention model (``grace_ms``) and
+    opt out of the always-on per-write TTL stamp.
     """
+
+    uses_ttl_stamps = False
 
     def __init__(
         self,

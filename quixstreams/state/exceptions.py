@@ -25,6 +25,20 @@ class InvalidStoreChangelogOffset(QuixException): ...
 class StateError(QuixException): ...
 
 
+class IncompatibleStateStoreError(StateError):
+    """
+    Raised when an existing populated state store cannot be transitioned into
+    TTL mode (i.e. the user's pipeline started writing ``state.set(..., ttl=...)``
+    on a partition that already contains un-stamped legacy entries).
+
+    Operator action: stop the application, delete the affected state directory,
+    restart — recovery will rebuild the partition from the changelog topic
+    with TTL enabled from the first replayed record.
+    """
+
+    ...
+
+
 class StateSerializationError(StateError): ...
 
 

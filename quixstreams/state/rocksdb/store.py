@@ -5,9 +5,7 @@ from typing import Optional
 from quixstreams.state.base import Store
 from quixstreams.state.recovery import ChangelogProducer, ChangelogProducerFactory
 
-from .partition import (
-    RocksDBStorePartition,
-)
+from .partition import RocksDBStorePartition
 from .types import RocksDBOptionsType
 
 logger = logging.getLogger(__name__)

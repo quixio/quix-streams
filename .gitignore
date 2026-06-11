@@ -49,3 +49,9 @@ site/
 memories/
 
 .claude/
+
+# local QA / scratch test harnesses
+.tmp/
+
+# planning artifacts (specs, architecture docs, etc.)
+dev-planning/

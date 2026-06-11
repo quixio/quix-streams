@@ -38,6 +38,12 @@ class RocksDBOptions(RocksDBOptionsType):
         the DB won't be destroyed.
         Note: risk of data loss! Make sure that the changelog topics are up-to-date before disabling it in production.
         Default - `True`.
+    :param max_evictions_per_flush: cap on TTL-driven evictions performed
+        during a single ``flush()`` for stores with TTL enabled. Larger values
+        increase per-flush latency but let the sweep keep up with higher
+        steady-state expiration rates. Only meaningful for TTL-enabled
+        stores; ignored otherwise.
+        Default - ``10_000``.
 
     Please see `rocksdict.Options` for a complete description of other options.
     """
@@ -58,6 +64,7 @@ class RocksDBOptions(RocksDBOptionsType):
     open_retry_backoff: float = 3.0
     use_fsync: bool = True
     on_corrupted_recreate: bool = True
+    max_evictions_per_flush: int = 10_000
 
     def to_options(self) -> rocksdict.Options:
         """

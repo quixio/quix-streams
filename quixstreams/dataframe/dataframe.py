@@ -2006,9 +2006,14 @@ class StreamingDataFrame:
         self._stream = self._stream.add_update(func, metadata=metadata)  # type: ignore[call-overload]
         return self
 
-    def register_store(self, store_type: Optional[StoreTypes] = None) -> None:
+    def register_store(
+        self,
+        store_type: Optional[StoreTypes] = None,
+    ) -> None:
         """
         Register the default store for the current stream_id in StateStoreManager.
+
+        :param store_type: optional store implementation override.
         """
         TopicManager.ensure_topics_copartitioned(*self._topics)
 
@@ -2183,11 +2188,14 @@ def _as_stateful(
     @functools.wraps(func)
     def wrapper(value: Any, key: Any, timestamp: int, headers: Any) -> Any:
         # Pass a State object with an interface limited to the key updates only
-        # and prefix all the state keys by the message key
+        # and prefix all the state keys by the message key. The record's
+        # event-time timestamp is plumbed in so TTL-enabled stores can
+        # stamp values and filter expired reads without changing the
+        # public state.set/state.get signatures.
         state = sdf.processing_context.checkpoint.get_store_transaction(
             stream_id=sdf.stream_id,
             partition=message_context().partition,
-        ).as_state(prefix=key)
+        ).as_state(prefix=key, timestamp=timestamp)
         return func(value, key, timestamp, headers, state)
 
     return wrapper
