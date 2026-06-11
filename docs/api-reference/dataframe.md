@@ -10,7 +10,7 @@
 class StreamingDataFrame()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\dataframe.py#L94)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L94)
 
 `StreamingDataFrame` is the main object you will use for ETL work.
 
@@ -73,7 +73,7 @@ sdf = sdf.to_topic(topic_obj)
 def stream_id() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\dataframe.py#L179)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L179)
 
 An identifier of the data stream this StreamingDataFrame
 manipulates in the application.
@@ -104,11 +104,10 @@ def apply(func: Union[
           *,
           stateful: bool = False,
           expand: bool = False,
-          metadata: bool = False,
-          ttl: Optional[timedelta] = None) -> "StreamingDataFrame"
+          metadata: bool = False) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\dataframe.py#L238)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L238)
 
 Apply a function to transform the value and return a new value.
 
@@ -147,12 +146,6 @@ Default - `False`.
 - `metadata`: if True, the callback will receive key, timestamp and headers
 along with the value.
 Default - `False`.
-- `ttl`: optional per-store TTL for the default state store.
-When set, every value written via ``state.set()`` from this
-callback expires ``ttl`` of event-time after the record's
-timestamp; expired entries are filtered on read and reclaimed
-on every flush. Only meaningful when ``stateful=True``;
-ignored otherwise.
 
 <a id="quixstreams.dataframe.dataframe.StreamingDataFrame.update"></a>
 
@@ -169,11 +162,10 @@ def update(func: Union[
 ],
            *,
            stateful: bool = False,
-           metadata: bool = False,
-           ttl: Optional[timedelta] = None) -> "StreamingDataFrame"
+           metadata: bool = False) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\dataframe.py#L349)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L342)
 
 Apply a function to mutate value in-place or to perform a side effect
 
@@ -216,9 +208,6 @@ of type `State` to perform stateful operations.
 - `metadata`: if True, the callback will receive key, timestamp and headers
 along with the value.
 Default - `False`.
-- `ttl`: optional per-store TTL for the default state store.
-See :meth:`apply` for semantics. Only meaningful when
-``stateful=True``.
 
 
 <br>
@@ -241,11 +230,10 @@ def filter(func: Union[
 ],
            *,
            stateful: bool = False,
-           metadata: bool = False,
-           ttl: Optional[timedelta] = None) -> "StreamingDataFrame"
+           metadata: bool = False) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\dataframe.py#L456)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L445)
 
 Filter value using provided function.
 
@@ -281,9 +269,6 @@ of type `State` to perform stateful operations.
 - `metadata`: if True, the callback will receive key, timestamp and headers
 along with the value.
 Default - `False`.
-- `ttl`: optional per-store TTL for the default state store.
-See :meth:`apply` for semantics. Only meaningful when
-``stateful=True``.
 
 <a id="quixstreams.dataframe.dataframe.StreamingDataFrame.group_by"></a>
 
@@ -300,7 +285,7 @@ def group_by(key: Union[str, Callable[[Any], Any]],
              key_serializer: SerializerType = "json") -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\dataframe.py#L545)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L530)
 
 "Groups" messages by re-keying them via the provided group_by operation
 
@@ -365,7 +350,7 @@ a clone with this operation added (assign to keep its effect).
 def contains(keys: Union[str, list[str]]) -> StreamingSeries
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\dataframe.py#L659)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L644)
 
 Check if keys are present in the Row value.
 
@@ -407,7 +392,7 @@ def to_topic(
         key: Optional[Callable[[Any], Any]] = None) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\dataframe.py#L703)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L688)
 
 Produce current value to a topic. You can optionally specify a new key.
 
@@ -478,7 +463,7 @@ def set_timestamp(
         func: Callable[[Any, Any, int, Any], int]) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\dataframe.py#L772)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L757)
 
 Set a new timestamp based on the current message value and its metadata.
 
@@ -531,7 +516,7 @@ def set_headers(
 ) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\dataframe.py#L815)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L800)
 
 Set new message headers based on the current message value and metadata.
 
@@ -580,7 +565,7 @@ a new StreamingDataFrame instance
 def print(pretty: bool = True, metadata: bool = False) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\dataframe.py#L866)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L851)
 
 Print out the current message value (and optionally, the message metadata) to
 
@@ -643,7 +628,7 @@ def print_table(
                                      int]] = None) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\dataframe.py#L912)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L897)
 
 Print a table with the most recent records.
 
@@ -736,7 +721,7 @@ sdf.print_table(size=5, title="Live Records", slowdown=1)
 def compose(sink: Optional[VoidExecutor] = None) -> dict[str, VoidExecutor]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\dataframe.py#L1028)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1013)
 
 Compose all functions of this StreamingDataFrame into one big closure.
 
@@ -790,7 +775,7 @@ def test(value: Any,
          topic: Optional[Topic] = None) -> List[Any]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\dataframe.py#L1062)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1047)
 
 A shorthand to test `StreamingDataFrame` with provided value
 
@@ -832,7 +817,7 @@ def tumbling_window(
 ) -> TumblingTimeWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\dataframe.py#L1101)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1086)
 
 Create a time-based tumbling window transformation on this StreamingDataFrame.
 
@@ -936,7 +921,7 @@ def tumbling_count_window(
         name: Optional[str] = None) -> TumblingCountWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\dataframe.py#L1208)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1193)
 
 Create a count-based tumbling window transformation on this StreamingDataFrame.
 
@@ -1011,7 +996,7 @@ def hopping_window(
 ) -> HoppingTimeWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\dataframe.py#L1258)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1243)
 
 Create a time-based hopping window transformation on this StreamingDataFrame.
 
@@ -1126,7 +1111,7 @@ def hopping_count_window(
         name: Optional[str] = None) -> HoppingCountWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\dataframe.py#L1379)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1364)
 
 Create a count-based hopping window transformation on this StreamingDataFrame.
 
@@ -1204,7 +1189,7 @@ def sliding_window(
 ) -> SlidingTimeWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\dataframe.py#L1436)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1421)
 
 Create a time-based sliding window transformation on this StreamingDataFrame.
 
@@ -1302,7 +1287,7 @@ def sliding_count_window(
         name: Optional[str] = None) -> SlidingCountWindowDefinition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\dataframe.py#L1531)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1516)
 
 Create a count-based sliding window transformation on this StreamingDataFrame.
 
@@ -1372,7 +1357,7 @@ sdf = (
 def fill(*columns: str, **mapping: Any) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\dataframe.py#L1584)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1569)
 
 Fill missing values in the message value with a constant value.
 
@@ -1429,7 +1414,7 @@ def drop(columns: Union[str, List[str]],
          errors: Literal["ignore", "raise"] = "raise") -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\dataframe.py#L1636)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1621)
 
 Drop column(s) from the message value (value must support `del`, like a dict).
 
@@ -1473,7 +1458,7 @@ a new StreamingDataFrame instance
 def sink(sink: BaseSink)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\dataframe.py#L1680)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1665)
 
 Sink the processed data to the specified destination.
 
@@ -1501,7 +1486,7 @@ operations, but branches can still be generated from its originating SDF.
 def concat(other: "StreamingDataFrame") -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\dataframe.py#L1718)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1703)
 
 Concatenate two StreamingDataFrames together and return a new one.
 
@@ -1542,7 +1527,7 @@ def join_asof(right: "StreamingDataFrame",
               name: Optional[str] = None) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\dataframe.py#L1754)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1739)
 
 Join the left dataframe with the records of the right dataframe with
 
@@ -1625,7 +1610,7 @@ def join_interval(
         forward_ms: Union[int, timedelta] = 0) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\dataframe.py#L1830)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1815)
 
 Join the left dataframe with records from the right dataframe that fall within
 
@@ -1728,7 +1713,7 @@ def join_lookup(
 ) -> "StreamingDataFrame"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\dataframe.py#L1935)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L1920)
 
 Note: This is an experimental feature, and its API is likely to change in the future.
 
@@ -1786,24 +1771,12 @@ sdf = sdf.join_lookup(lookup, fields)
 #### StreamingDataFrame.register\_store
 
 ```python
-def register_store(store_type: Optional[StoreTypes] = None,
-                   ttl: Optional[timedelta] = None) -> None
+def register_store(store_type: Optional[StoreTypes] = None) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\dataframe.py#L2024)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/dataframe.py#L2009)
 
 Register the default store for the current stream_id in StateStoreManager.
-
-
-<br>
-***Arguments:***
-
-- `store_type`: optional store implementation override.
-- `ttl`: optional per-store TTL applied to every entry written
-to the default state store. See
-:meth:`StateStoreManager.register_store` for semantics. Calling
-``register_store`` repeatedly with conflicting TTL values
-raises :class:`StoreAlreadyRegisteredError`.
 
 <a id="quixstreams.dataframe.series"></a>
 
@@ -1817,7 +1790,7 @@ raises :class:`StoreAlreadyRegisteredError`.
 class StreamingSeries()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\series.py#L59)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L59)
 
 `StreamingSeries` are typically generated by `StreamingDataframes` when getting
 elements from, or performing certain operations on, a `StreamingDataframe`,
@@ -1884,7 +1857,7 @@ def from_apply_callback(cls, func: ApplyWithMetadataCallback,
                         sdf_id: int) -> "StreamingSeries"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\series.py#L125)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L125)
 
 Create a StreamingSeries from a function.
 
@@ -1913,7 +1886,7 @@ instance of `StreamingSeries`
 def apply(func: ApplyCallback) -> "StreamingSeries"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\series.py#L152)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L152)
 
 Add a callable to the execution list for this series.
 
@@ -1965,7 +1938,7 @@ a new `StreamingSeries` with the new callable added
 def compose_returning() -> ReturningExecutor
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\series.py#L186)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L186)
 
 Compose a list of functions from this StreamingSeries and its parents into one
 
@@ -1998,7 +1971,7 @@ def test(value: Any,
          ctx: Optional[MessageContext] = None) -> Any
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\series.py#L201)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L201)
 
 A shorthand to test `StreamingSeries` with provided value
 
@@ -2030,7 +2003,7 @@ result of `StreamingSeries`
 def isin(other: Container) -> "StreamingSeries"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\series.py#L266)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L266)
 
 Check if series value is in "other".
 
@@ -2075,7 +2048,7 @@ new StreamingSeries
 def contains(other: Union["StreamingSeries", object]) -> "StreamingSeries"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\series.py#L297)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L297)
 
 Check if series value contains "other"
 
@@ -2120,7 +2093,7 @@ new StreamingSeries
 def is_(other: Union["StreamingSeries", object]) -> "StreamingSeries"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\series.py#L322)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L322)
 
 Check if series value refers to the same object as `other`
 
@@ -2162,7 +2135,7 @@ new StreamingSeries
 def isnot(other: Union["StreamingSeries", object]) -> "StreamingSeries"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\series.py#L345)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L345)
 
 Check if series value does not refer to the same object as `other`
 
@@ -2205,7 +2178,7 @@ new StreamingSeries
 def isnull() -> "StreamingSeries"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\series.py#L369)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L369)
 
 Check if series value is None.
 
@@ -2242,7 +2215,7 @@ new StreamingSeries
 def notnull() -> "StreamingSeries"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\series.py#L392)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L392)
 
 Check if series value is not None.
 
@@ -2279,7 +2252,7 @@ new StreamingSeries
 def abs() -> "StreamingSeries"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\series.py#L415)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/series.py#L415)
 
 Get absolute value of the series value.
 
@@ -2315,7 +2288,7 @@ new StreamingSeries
 class BaseLookup(abc.ABC, Generic[F])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\joins\lookups\base.py#L10)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/base.py#L10)
 
 Abstract base class for implementing custom lookup join strategies for data enrichment in streaming dataframes.
 
@@ -2344,7 +2317,7 @@ def join(fields: Mapping[str, F], on: str, value: dict[str, Any], key: Any,
          timestamp: int, headers: HeadersMapping) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\joins\lookups\base.py#L28)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/base.py#L28)
 
 Perform a lookup join operation to enrich the provided value with data from the specified fields.
 
@@ -2374,7 +2347,7 @@ None. The input value dictionary is updated in-place with the enriched configura
 class BaseField(abc.ABC)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\joins\lookups\base.py#L53)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/base.py#L53)
 
 Abstract base dataclass for defining a field used in lookup joins.
 
@@ -2395,7 +2368,7 @@ into the target record during a lookup join.
 class BaseSQLiteLookupField(BaseField, abc.ABC)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\joins\lookups\sqlite.py#L22)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/sqlite.py#L22)
 
 <a id="quixstreams.dataframe.joins.lookups.sqlite.BaseSQLiteLookupField.build_query"></a>
 
@@ -2411,7 +2384,7 @@ def build_query(
                 Any]) -> Tuple[str, Union[dict[str, Any], Tuple[str, ...]]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\joins\lookups\sqlite.py#L29)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/sqlite.py#L29)
 
 Build the SQL query string for this field.
 
@@ -2439,7 +2412,7 @@ A tuple of the SQL query string and the parameters.
 def result(cursor: sqlite3.Cursor) -> Union[dict[str, Any], list[Any]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\joins\lookups\sqlite.py#L43)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/sqlite.py#L43)
 
 Extract the result from the cursor based on the field definition.
 
@@ -2464,7 +2437,7 @@ The extracted data, either a single row or a list of rows.
 class SQLiteLookupField(BaseSQLiteLookupField)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\joins\lookups\sqlite.py#L55)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/sqlite.py#L55)
 
 Field definition for use with SQLiteLookup in lookup joins.
 
@@ -2524,7 +2497,7 @@ Rows will be deserialized into a dictionary with column names as keys.
 def build_query(on: str, value: dict[str, Any]) -> Tuple[str, Tuple[str, ...]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\joins\lookups\sqlite.py#L136)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/sqlite.py#L136)
 
 Build the SQL query string for this field.
 
@@ -2552,7 +2525,7 @@ def result(
         cursor: sqlite3.Cursor) -> Union[dict[str, Any], list[dict[str, Any]]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\joins\lookups\sqlite.py#L158)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/sqlite.py#L158)
 
 Extract the result from the cursor based on the field definition.
 
@@ -2577,7 +2550,7 @@ The extracted data, either a single row or a list of rows.
 class SQLiteLookupQueryField(BaseSQLiteLookupField)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\joins\lookups\sqlite.py#L176)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/sqlite.py#L176)
 
 Field definition for use with SQLiteLookup in lookup joins.
 
@@ -2636,7 +2609,7 @@ Query results are returned as tuples of values, without additional deserializati
 def result(cursor: sqlite3.Cursor) -> Union[dict[str, Any], list[Any]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\joins\lookups\sqlite.py#L231)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/sqlite.py#L231)
 
 Extract the result from the cursor based on the field definition.
 
@@ -2661,7 +2634,7 @@ class SQLiteLookup(BaseLookup[Union[SQLiteLookupField,
                                     SQLiteLookupQueryField]])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\joins\lookups\sqlite.py#L244)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/sqlite.py#L244)
 
 Lookup join implementation for enriching streaming data with data from a SQLite database.
 
@@ -2697,7 +2670,7 @@ def join(fields: Mapping[str, Union[SQLiteLookupField,
                      Any], key: Any, timestamp: int, headers: Any) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\joins\lookups\sqlite.py#L342)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/sqlite.py#L342)
 
 Enrich the message value in-place by querying SQLite for each field and caching results per TTL.
 
@@ -2728,7 +2701,7 @@ None. The input value dictionary is updated in-place with the enriched data.
 def cache_info() -> CacheInfo
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\joins\lookups\sqlite.py#L382)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/sqlite.py#L382)
 
 Get cache statistics for the SQLiteLookup LRU cache.
 
@@ -2751,7 +2724,7 @@ A dictionary containing cache statistics: hits, misses, size, maxsize.
 class BasePostgresLookupField(BaseField, abc.ABC)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\joins\lookups\postgresql.py#L31)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L31)
 
 <a id="quixstreams.dataframe.joins.lookups.postgresql.BasePostgresLookupField.build_query"></a>
 
@@ -2766,7 +2739,7 @@ def build_query(
 ) -> Tuple[sql.Composable, Union[dict[str, Any], Tuple[str, ...]]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\joins\lookups\postgresql.py#L38)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L38)
 
 Build the SQL query string for this field.
 
@@ -2794,7 +2767,7 @@ A tuple of the SQL query string and the parameters.
 def result(cursor: pg_cursor) -> Union[dict[str, Any], list[dict[str, Any]]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\joins\lookups\postgresql.py#L52)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L52)
 
 Extract the result from the cursor based on the field definition.
 
@@ -2819,7 +2792,7 @@ The extracted data, either a single row or a list of rows.
 class PostgresLookupField(BasePostgresLookupField)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\joins\lookups\postgresql.py#L64)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L64)
 
 <a id="quixstreams.dataframe.joins.lookups.postgresql.PostgresLookupField.build_query"></a>
 
@@ -2832,7 +2805,7 @@ def build_query(on: str,
                 value: dict[str, Any]) -> Tuple[sql.Composed, Tuple[str, ...]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\joins\lookups\postgresql.py#L103)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L103)
 
 Build the SQL query string for this field.
 
@@ -2859,7 +2832,7 @@ A tuple of the SQL query string and the parameters.
 def result(cursor: pg_cursor) -> Union[dict[str, Any], list[dict[str, Any]]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\joins\lookups\postgresql.py#L133)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L133)
 
 Extract the result from the cursor based on the field definition.
 
@@ -2884,7 +2857,7 @@ The extracted data, either a single row or a list of rows.
 class PostgresLookupQueryField(BasePostgresLookupField)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\joins\lookups\postgresql.py#L148)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L148)
 
 <a id="quixstreams.dataframe.joins.lookups.postgresql.PostgresLookupQueryField.result"></a>
 
@@ -2896,7 +2869,7 @@ class PostgresLookupQueryField(BasePostgresLookupField)
 def result(cursor: pg_cursor) -> Union[list[Any], Any]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\joins\lookups\postgresql.py#L161)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L161)
 
 Extract the result from the cursor based on the field definition.
 
@@ -2921,7 +2894,7 @@ class PostgresLookup(BaseLookup[Union[PostgresLookupField,
                                       PostgresLookupQueryField]])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\joins\lookups\postgresql.py#L174)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L174)
 
 Lookup join implementation for enriching streaming data with data from a Postgres database.
 
@@ -2959,7 +2932,7 @@ def __init__(host: str,
              **kwargs)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\joins\lookups\postgresql.py#L194)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L194)
 
 
 <br>
@@ -2994,7 +2967,7 @@ def field(table: str,
           first_match_only: bool = True) -> PostgresLookupField
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\joins\lookups\postgresql.py#L318)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L318)
 
 Field definition for use with PostgresLookup in lookup joins.
 
@@ -3063,7 +3036,7 @@ def query_field(query: str,
                 first_match_only: bool = True) -> PostgresLookupQueryField
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\joins\lookups\postgresql.py#L392)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L392)
 
 Field definition for use with PostgresLookup in lookup joins.
 
@@ -3125,7 +3098,7 @@ def join(fields: Mapping[str, Union[PostgresLookupField,
                      Any], key: Any, timestamp: int, headers: Any) -> None
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\joins\lookups\postgresql.py#L446)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L446)
 
 Enrich the message value in-place by querying SQLite for each field and caching results per TTL.
 
@@ -3156,7 +3129,7 @@ None. The input value dictionary is updated in-place with the enriched data.
 def cache_info() -> CacheInfo
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/feature/sc-72538/adding-ttl-to-state/quixstreams\dataframe\joins\lookups\postgresql.py#L486)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/dataframe/joins/lookups/postgresql.py#L486)
 
 Get cache statistics for the SQLiteLookup LRU cache.
 
