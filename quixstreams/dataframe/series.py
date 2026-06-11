@@ -496,16 +496,17 @@ class StreamingSeries:
         if isinstance(other, self.__class__):
             other_composed = other.compose_returning()
             return self._from_apply_callback(
-                func=lambda value, key, timestamp, headers: (
-                    self_composed(value, key, timestamp, headers)[0]
-                    and other_composed(value, key, timestamp, headers)[0]
-                )
+                func=lambda value, key, timestamp, headers: self_composed(
+                    value, key, timestamp, headers
+                )[0]
+                and other_composed(value, key, timestamp, headers)[0]
             )
         else:
             return self._from_apply_callback(
-                func=lambda value, key, timestamp, headers: (
-                    self_composed(value, key, timestamp, headers)[0] and other
-                )
+                func=lambda value, key, timestamp, headers: self_composed(
+                    value, key, timestamp, headers
+                )[0]
+                and other
             )
 
     def __or__(self, other: Union["StreamingSeries", object]) -> "StreamingSeries":
@@ -527,16 +528,17 @@ class StreamingSeries:
         if isinstance(other, self.__class__):
             other_composed = other.compose_returning()
             return self._from_apply_callback(
-                func=lambda value, key, timestamp, headers: (
-                    self_composed(value, key, timestamp, headers)[0]
-                    or other_composed(value, key, timestamp, headers)[0]
-                )
+                func=lambda value, key, timestamp, headers: self_composed(
+                    value, key, timestamp, headers
+                )[0]
+                or other_composed(value, key, timestamp, headers)[0]
             )
         else:
             return self._from_apply_callback(
-                func=lambda value, key, timestamp, headers: (
-                    self_composed(value, key, timestamp, headers)[0] or other
-                )
+                func=lambda value, key, timestamp, headers: self_composed(
+                    value, key, timestamp, headers
+                )[0]
+                or other
             )
 
     def __invert__(self) -> "StreamingSeries":
