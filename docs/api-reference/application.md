@@ -10,7 +10,7 @@
 class Application()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L88)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L90)
 
 The main Application class.
 
@@ -58,39 +58,40 @@ app.run()
 #### Application.\_\_init\_\_
 
 ```python
-def __init__(broker_address: Optional[Union[str, ConnectionConfig]] = None,
-             *,
-             quix_sdk_token: Optional[str] = None,
-             quix_portal_api: Optional[str] = None,
-             consumer_group: Optional[str] = None,
-             auto_offset_reset: AutoOffsetReset = "latest",
-             commit_interval: float = 5.0,
-             commit_every: int = 0,
-             consumer_extra_config: Optional[dict] = None,
-             producer_extra_config: Optional[dict] = None,
-             state_dir: Union[None, str, Path] = None,
-             rocksdb_options: Optional[RocksDBOptionsType] = None,
-             on_consumer_error: Optional[ConsumerErrorCallback] = None,
-             on_processing_error: Optional[ProcessingErrorCallback] = None,
-             on_producer_error: Optional[ProducerErrorCallback] = None,
-             on_message_processed: Optional[MessageProcessedCallback] = None,
-             consumer_poll_timeout: float = 1.0,
-             producer_poll_timeout: float = 0.0,
-             loglevel: Optional[Union[int, LogLevel]] = "INFO",
-             auto_create_topics: bool = True,
-             use_changelog_topics: bool = True,
-             auto_recover_from_source_offset_out_of_range: bool = True,
-             state_recovery_offset_reset: StateRecoveryOffsetReset = "earliest",
-             quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
-             topic_manager: Optional[TopicManager] = None,
-             request_timeout: float = 30,
-             topic_create_timeout: float = 60,
-             processing_guarantee: ProcessingGuarantee = "at-least-once",
-             max_partition_buffer_size: int = 10000,
-             broker_availability_timeout: float = 120.0)
+def __init__(
+        broker_address: Optional[Union[str, ConnectionConfig]] = None,
+        *,
+        quix_sdk_token: Optional[str] = None,
+        quix_portal_api: Optional[str] = None,
+        consumer_group: Optional[str] = None,
+        auto_offset_reset: AutoOffsetReset = "latest",
+        commit_interval: float = 5.0,
+        commit_every: int = 0,
+        consumer_extra_config: Optional[dict] = None,
+        producer_extra_config: Optional[dict] = None,
+        state_dir: Union[None, str, Path] = None,
+        rocksdb_options: Optional[RocksDBOptionsType] = None,
+        on_consumer_error: Optional[ConsumerErrorCallback] = None,
+        on_processing_error: Optional[ProcessingErrorCallback] = None,
+        on_producer_error: Optional[ProducerErrorCallback] = None,
+        on_message_processed: Optional[MessageProcessedCallback] = None,
+        consumer_poll_timeout: float = 1.0,
+        producer_poll_timeout: float = 0.0,
+        loglevel: Optional[Union[int, LogLevel]] = "INFO",
+        auto_create_topics: bool = True,
+        use_changelog_topics: bool = True,
+        auto_recover_from_source_offset_out_of_range: bool = True,
+        state_recovery_offset_reset: StateRecoveryOffsetReset = "earliest",
+        quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
+        topic_manager: Optional[TopicManager] = None,
+        request_timeout: float = 30,
+        topic_create_timeout: float = 60,
+        processing_guarantee: ProcessingGuarantee = "at-least-once",
+        max_partition_buffer_size: int = 10000,
+        broker_availability_timeout: float = 120.0)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L126)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L128)
 
 
 <br>
@@ -163,8 +164,8 @@ source offset used after recovery is controlled by
 automatic state recovery deletes local state because the committed source
 offset is no longer retained by Kafka. Use `"earliest"` to use the broker
 low watermark as the changelog recovery boundary and resume source
-consumption from there. Use `"latest"` to resume source consumption from the
-broker high watermark and skip changelog records that carry processed
+consumption from there. Use `"latest"` to resume source consumption from
+the broker high watermark and skip changelog records that carry processed
 source-offset metadata; older changelog records without this metadata may
 still be applied. Use `"match"` to follow `auto_offset_reset` (`"error"`
 raises `StateRecoveryOffsetOutOfRange`). Default - `"earliest"`.
@@ -211,7 +212,7 @@ instead of the default one.
 def Quix(cls, *args, **kwargs)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L412)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L433)
 
 RAISES EXCEPTION: DEPRECATED.
 
@@ -234,7 +235,7 @@ def topic(name: str,
           timestamp_extractor: Optional[TimestampExtractor] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L444)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L465)
 
 Create a topic definition.
 
@@ -316,7 +317,7 @@ def dataframe(topic: Optional[Topic] = None,
               source: Optional[BaseSource] = None) -> StreamingDataFrame
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L524)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L545)
 
 A simple helper method that generates a `StreamingDataFrame`, which is used
 
@@ -372,7 +373,7 @@ to be used as an input topic.
 def stop(fail: bool = False)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L580)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L601)
 
 Stop the internal poll loop and the message processing.
 
@@ -399,7 +400,7 @@ to unhandled exception, and it shouldn't commit the current checkpoint.
 def get_producer(transactional: bool = False) -> Producer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L625)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L646)
 
 Create and return a pre-configured Producer instance.
 
@@ -444,7 +445,7 @@ with app.get_producer() as producer:
 def get_consumer(auto_commit_enable: bool = True) -> Consumer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L693)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L714)
 
 Create and return a pre-configured Consumer instance.
 
@@ -501,7 +502,7 @@ with app.get_consumer() as consumer:
 def clear_state()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L742)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L763)
 
 Clear the state of the application.
 
@@ -515,7 +516,7 @@ Clear the state of the application.
 def add_source(source: BaseSource, topic: Optional[Topic] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L748)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L769)
 
 Add a source to the application.
 
@@ -546,7 +547,7 @@ def run(dataframe: Optional[StreamingDataFrame] = None,
         metadata: bool = False) -> list[dict]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L782)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L803)
 
 Start processing data from Kafka using provided `StreamingDataFrame`
 
@@ -622,7 +623,7 @@ Default - `False`.
 class ApplicationConfig(BaseSettings)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1156)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1278)
 
 Immutable object holding the application configuration
 
@@ -645,7 +646,7 @@ def settings_customise_sources(
 ) -> Tuple[PydanticBaseSettingsSource, ...]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1192)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1316)
 
 Included to ignore reading/setting values from the environment
 
@@ -659,7 +660,7 @@ Included to ignore reading/setting values from the environment
 def copy(**kwargs) -> "ApplicationConfig"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1205)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1329)
 
 Update the application config and return a copy
 
@@ -674,7 +675,8 @@ def resolve_transactional_id(transactional_id: Optional[str],
                              prefix: str) -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1227)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/app.py#L1351)
 
 Utility function to resolve the transactional.id based
 on existing config and provided prefix.
+
