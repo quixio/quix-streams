@@ -533,6 +533,7 @@ class QuixTSDataLakeSink(BatchingSink)
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L89)
 
 Writes Kafka batches directly to blob storage as Hive-partitioned Parquet files,
+
 then optionally registers the table using the REST Catalog.
 
 It batches the processed records in memory per topic partition, converts
@@ -542,6 +543,7 @@ blob storage at the checkpoint.
 >***NOTE***: QuixTSDataLakeSink can accept only dictionaries.
 > If the record values are not dicts, you need to convert them to dicts before
 > sinking.
+
 
 <br>
 ***Arguments:***
@@ -560,14 +562,15 @@ blob storage at the checkpoint.
 - `auto_create_bucket`: If True, attempt to create bucket/path in storage if missing
 - `max_workers`: Maximum number of parallel upload threads (default: 10)
 - `stream_timeout_ms`: Optional **per-key** silence threshold in
-milliseconds. Paired with `on_stream_timeout`; both must be
-provided to enable the feature. See `StreamTimeoutTracker`
+milliseconds. Paired with ``on_stream_timeout``; both must be
+provided to enable the feature. See
+:class:`quixstreams.sinks.core.stream_timeout_tracker.StreamTimeoutTracker`
 for the full behavioural contract (per-key tracking, fire-and-evict
 semantics, re-arm on next record, 3x TTL safety sweep,
 background check cadence, and zero-overhead disabled path).
 - `on_stream_timeout`: Optional callback
-`Callable[[str], None]` invoked once per silence period per
-Kafka message key. See `stream_timeout_ms` above.
+``Callable[[str], None]`` invoked once per silence period per
+Kafka message key. See ``stream_timeout_ms`` above.
 - `silence_azure_http_logs`: If True (default), raise the log levels of
 the Azure SDK / adlfs / botocore HTTP-logging loggers to WARNING during
 setup(). These libraries log one INFO record per HTTP round-trip with
@@ -593,7 +596,7 @@ Callback must resolve (or propagate/re-raise) the Exception.
 def s3_bucket() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L208)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L209)
 
 Get the S3 bucket name (extracted from quixportal config).
 
@@ -639,7 +642,7 @@ def on_paused()
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/quix_ts_datalake_sink.py#L250)
 
-Inherit parent `on_paused()` — do **not** touch tracker state.
+Inherit parent ``on_paused()`` — do **not** touch tracker state.
 
 <a id="quixstreams.sinks.core.quix_ts_datalake_sink.QuixTSDataLakeSink.setup"></a>
 
@@ -689,13 +692,20 @@ Cleanup resources when sink is stopped.
 
 Stream-timeout tracker for sinks.
 
-Provides `StreamTimeoutTracker` — a sink-agnostic, per-key silence
+Provides ``StreamTimeoutTracker`` — a sink-agnostic, per-key silence
 detector that fires a user callback when a tracked "stream" (typically a
 Kafka message key) has been silent past a configurable threshold.
 
 The tracker owns all state and threading for the feature; host sinks
-compose it via four one-liners (`touch` on add, `check_now` on
-flush, `start` on setup, `stop` on cleanup).
+compose it via four one-liners (``touch`` on add, ``check_now`` on
+flush, ``start`` on setup, ``stop`` on cleanup). See spec v6 of the
+Quix Lake sink timeout feature for the behavioural contract that this
+module implements verbatim.
+
+This module intentionally has **zero imports** from any specific sink,
+from ``quixstreams.sinks.core``, or from any Quix-platform-specific
+type. Only the standard library is used so any sink (core, community,
+or third-party) can drop it in.
 
 <a id="quixstreams.sinks.core.stream_timeout_tracker.StreamTimeoutTracker"></a>
 
@@ -707,22 +717,39 @@ class StreamTimeoutTracker()
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/stream_timeout_tracker.py#L26)
 
-Per-key silence detector, extracted from `QuixTSDataLakeSink`.
+Per-key silence detector, extracted from ``QuixTSDataLakeSink``.
 
-One "stream" = one key. Callers invoke `touch` every time a
+One "stream" = one key. Callers invoke :meth:`touch` every time a
 record arrives for a key; the tracker records the last-seen wall
 clock time and fires the configured callback exactly once per
 silence period per key. On fire the key is evicted — a later
-`touch` for the same key resurrects it as a fresh stream
+:meth:`touch` for the same key resurrects it as a fresh stream
 eligible to fire again.
 
 Keys are stored and surfaced **as-is** (raw pass-through). Any
-hashable value is accepted: `str`, `bytes`, `int`, etc. The
+hashable value is accepted: ``str``, ``bytes``, ``int``, etc. The
 callback receives the exact object that was passed to
-`touch`. `None` keys are silently skipped.
+:meth:`touch`. ``None`` keys are silently skipped.
 
-The tracker exposes a property `enabled`. When `False`,
+The tracker exposes a property :attr:`enabled`. When ``False``,
 every public method is a no-op and no per-key dict is allocated.
+
+Two code paths drive checks:
+
+- :meth:`check_now`, called synchronously by the host sink at the
+  end of each flush.
+- A background daemon thread started by :meth:`start` that runs
+  :meth:`check_now` on a periodic cadence. The thread
+  **self-terminates** after ``idle_exit_cycles`` consecutive empty
+  cycles and is **respawned** by the next :meth:`touch` that
+  records a new stamp. This keeps the sink idle-zero-overhead
+  when no keys are tracked.
+
+Concurrency: :meth:`touch` and :meth:`check_now` can run on
+different threads. A single ``threading.Lock`` guards the per-key
+dict and timer-thread reference. Critical sections are tiny; user
+callbacks are invoked **outside** the lock so a blocking callback
+cannot stall :meth:`touch`.
 
 <a id="quixstreams.sinks.core.stream_timeout_tracker.StreamTimeoutTracker.__init__"></a>
 
@@ -744,20 +771,21 @@ def __init__(stream_timeout_ms: Optional[int],
 
 Construct the tracker.
 
+
 <br>
 ***Arguments:***
 
-- `stream_timeout_ms`: Positive `int` (milliseconds) to
-enable; `None` to disable. `bool` is rejected
-explicitly. Non-positive values raise `ValueError` when
+- `stream_timeout_ms`: Positive ``int`` (milliseconds) to
+enable; ``None`` to disable. ``bool`` is rejected
+explicitly. Non-positive values raise ``ValueError`` when
 paired with a callable callback.
-- `on_stream_timeout`: Callable `(stream_key: Any) -> None`
-to enable; `None` to disable. Mismatched pair (exactly
-one `None`) raises `ValueError`. The callback receives
-the raw key object that was passed to `touch`.
+- `on_stream_timeout`: Callable ``(stream_key: Any) -> None``
+to enable; ``None`` to disable. Mismatched pair (exactly
+one ``None``) raises ``ValueError``. The callback receives
+the raw key object that was passed to :meth:`touch`.
 - `check_interval_ms`: Kw-only. Override the periodic
-cadence. Positive `int` wins; anything else falls back
-to `max(100, min(1000, stream_timeout_ms // 5))`.
+cadence. Positive ``int`` wins; anything else falls back
+to ``max(100, min(1000, stream_timeout_ms // 5))``.
 - `idle_exit_cycles`: Kw-only. Consecutive empty-tracker
 cycles before the timer thread self-terminates.
 - `thread_name`: Kw-only. Name for the daemon thread.
@@ -775,9 +803,9 @@ lines on. Defaults to this module's logger.
 def enabled() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/stream_timeout_tracker.py#L173)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/stream_timeout_tracker.py#L174)
 
-`True` iff the feature is active (both params valid).
+``True`` iff the feature is active (both params valid).
 
 <a id="quixstreams.sinks.core.stream_timeout_tracker.StreamTimeoutTracker.touch"></a>
 
@@ -794,11 +822,28 @@ def touch(stream_key: Any,
 
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/stream_timeout_tracker.py#L178)
 
-Refresh the last-seen timestamp for `stream_key`.
+Refresh the last-seen timestamp for ``stream_key``.
 
 The key is stored as-is (raw pass-through); any hashable value
-works (`str`, `bytes`, `int`, etc.). `None` keys are
+works (``str``, ``bytes``, ``int``, etc.). ``None`` keys are
 silently skipped.
+
+Callers may pass ``topic``/``partition``/``offset`` (or any
+other context) as keyword arguments; these are accepted for
+call-site compatibility with earlier versions of the tracker
+and are currently unused. The tracker remains sink-agnostic —
+it treats the context as opaque kwargs.
+
+
+<br>
+***Arguments:***
+
+- `stream_key`: The raw key from the record. Must be
+hashable if not ``None``.
+- `now_ms`: Kw-only. Explicit timestamp in milliseconds;
+defaults to :meth:`_now_ms`.
+- `log_context`: Kw-only. Reserved for future per-record
+log enrichment; currently ignored.
 
 <a id="quixstreams.sinks.core.stream_timeout_tracker.StreamTimeoutTracker.check_now"></a>
 
@@ -815,7 +860,7 @@ def check_now(*, now_ms: Optional[int] = None) -> None
 Run one pass of the silence check.
 
 Fires and evicts keys whose silence >= threshold; silently
-drops keys whose silence >= `3 * stream_timeout_ms` (TTL
+drops keys whose silence >= ``3 * stream_timeout_ms`` (TTL
 safety sweep). Callbacks run outside the tracker lock; a
 callback that raises leaves its key in the tracker for retry
 on the next cycle.
@@ -834,8 +879,8 @@ def start() -> None
 
 Start the background daemon check thread.
 
-Idempotent. No-op when `enabled` is `False`. Hosts
-call this from `setup()` **after** their own resources are
+Idempotent. No-op when :attr:`enabled` is ``False``. Hosts
+call this from ``setup()`` **after** their own resources are
 healthy, so a setup failure tears down cleanly without
 leaving an orphan timer thread running.
 
@@ -852,7 +897,7 @@ def stop() -> None
 [[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/main/quixstreams/sinks/core/stream_timeout_tracker.py#L298)
 
 Signal the background thread to exit. Idempotent. No-op when
-`enabled` is `False`.
+:attr:`enabled` is ``False``.
 
 <a id="quixstreams.sinks.community.file.base"></a>
 
