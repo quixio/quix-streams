@@ -701,7 +701,7 @@ The same window may receive another update in the future, and a new value with t
 `current()` mode can be used to react on changes quickly because the application doesn't need to wait until the window is closed. 
 But you will likely get duplicated values for each window interval.
 
-### Emitting after the window is closed 
+### Emitting after the window is closed
 
 Here is how to emit results only once for each window interval after it's closed:
 

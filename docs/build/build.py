@@ -124,6 +124,8 @@ doc_map = {
             "quixstreams.sinks.base.exceptions",
             "quixstreams.sinks.core.influxdb3",
             "quixstreams.sinks.core.csv",
+            "quixstreams.sinks.core.quix_ts_datalake_sink",
+            "quixstreams.sinks.core.stream_timeout_tracker",
             "quixstreams.sinks.community.file.base",
             "quixstreams.sinks.community.file.azure",
             "quixstreams.sinks.community.file.local",
