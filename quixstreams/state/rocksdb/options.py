@@ -1,4 +1,5 @@
 import dataclasses
+from datetime import timedelta
 from typing import Mapping, Optional
 
 import rocksdict
@@ -44,6 +45,21 @@ class RocksDBOptions(RocksDBOptionsType):
         steady-state expiration rates. Only meaningful for TTL-enabled
         stores; ignored otherwise.
         Default - ``10_000``.
+    :param legacy_records_ttl: opt-in for enabling TTL on a **populated**
+        legacy store that already holds un-stamped records. When ``None``
+        (the default), the first ``state.set(..., ttl=...)`` write on a
+        populated legacy store raises ``IncompatibleStateStoreError`` —
+        byte-for-byte the v3.24 behavior. When set to a strictly positive
+        ``timedelta``, the partition instead **backfills** its pre-existing
+        un-stamped records with a uniform expiry of
+        ``high_water + legacy_records_ttl`` (event-time high-water at the
+        enable moment) and flips into TTL mode in place — no state deletion.
+        New records keep getting their true event-time expiry. The backfill
+        runs exactly once; a redeploy / restart never re-runs it. Ignored for
+        windowed / timestamped stores (they opt out of the TTL stamp
+        machinery at the class level). Must be strictly positive if set;
+        ``<= 0`` raises ``ValueError`` at construction.
+        Default - ``None``.
 
     Please see `rocksdict.Options` for a complete description of other options.
     """
@@ -65,6 +81,17 @@ class RocksDBOptions(RocksDBOptionsType):
     use_fsync: bool = True
     on_corrupted_recreate: bool = True
     max_evictions_per_flush: int = 10_000
+    legacy_records_ttl: Optional[timedelta] = None
+
+    def __post_init__(self) -> None:
+        if (
+            self.legacy_records_ttl is not None
+            and self.legacy_records_ttl <= timedelta(0)
+        ):
+            raise ValueError(
+                "legacy_records_ttl must be a strictly positive timedelta or "
+                f"None, got {self.legacy_records_ttl!r}"
+            )
 
     def to_options(self) -> rocksdict.Options:
         """

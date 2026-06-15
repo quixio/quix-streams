@@ -1,5 +1,6 @@
 import functools
 import logging
+import time
 from datetime import timedelta
 from typing import Any, Dict, Literal, Optional, Union, cast
 
@@ -101,6 +102,14 @@ class MemoryStorePartition(StorePartition):
         self._closed = False
         self._max_evictions_per_flush = max_evictions_per_flush
         self._high_water_ms: Optional[int] = None
+        # Wallclock reference captured once per changelog-recovery session
+        # (lazily, on the first stamped default-CF replay). Mirrors
+        # ``RocksDBStorePartition._recovery_now_ms``: used to judge whether a
+        # replayed TTL entry is already expired and to seed the post-recovery
+        # high-water (see :meth:`recover_from_changelog_message`,
+        # ``spec-recovery-wallclock.md`` §3.2/§3.3). ``None`` means no stamped
+        # message has been replayed yet in this partition's lifetime.
+        self._recovery_now_ms: Optional[int] = None
 
         class_uses_ttl_stamps = type(self).uses_ttl_stamps
         if class_uses_ttl_stamps:
@@ -127,6 +136,15 @@ class MemoryStorePartition(StorePartition):
             return
         if self._high_water_ms is None or timestamp > self._high_water_ms:
             self._high_water_ms = timestamp
+
+    def _now_ms(self) -> int:
+        """
+        Current wallclock time in epoch milliseconds. Isolated behind a method
+        purely as a test seam so changelog-recovery determinism cases can
+        inject a fixed ``now`` without sleeping. Mirrors
+        ``RocksDBStorePartition._now_ms``.
+        """
+        return int(time.time() * 1000)
 
     def close(self) -> None:
         self._closed = True
@@ -232,13 +250,22 @@ class MemoryStorePartition(StorePartition):
             self._state.setdefault(cf_name, {}).pop(key, None)
         elif is_main_cf:
             stamped, stamp = self._normalize_replay_value(value)
-            recovery_now = self._high_water_ms
-            if (
-                stamp != SENTINEL_NEVER
-                and recovery_now is not None
-                and stamp <= recovery_now
-            ):
-                # already-expired entry; drop it
+            # Judge expiry against the current wallclock captured once per
+            # recovery session, NOT against a stamp-ratcheted pseudo-clock (the
+            # old ``recovery_now = self._high_water_ms`` ratchet, advanced by
+            # each entry's stamp, collapsed uniform-expiry backfilled stores;
+            # see spec-recovery-wallclock.md §2/§3). Capture lazily on the first
+            # stamped default-CF replay and seed the post-recovery high-water to
+            # the same reference so the recovery→live boundary is continuous
+            # (§3.3). Sentinel-stamped entries are never compared and always
+            # survive (§7). Mirrors ``RocksDBStorePartition``.
+            if stamp != SENTINEL_NEVER and self._recovery_now_ms is None:
+                self._recovery_now_ms = self._now_ms()
+                self._high_water_ms = self._recovery_now_ms
+            if stamp != SENTINEL_NEVER and stamp <= self._recovery_now_ms:
+                # Already-expired against wallclock-at-recovery; skip both the
+                # main and the index write. The __ttl_index__ stays consistent
+                # with survivors — a dropped entry writes neither (§7).
                 pass
             else:
                 self._state.setdefault(cf_name, {})[key] = stamped
@@ -246,7 +273,6 @@ class MemoryStorePartition(StorePartition):
                     self._state.setdefault(TTL_INDEX_CF_NAME, {})[
                         encode_index_key(stamp, key)
                     ] = b""
-                    self.advance_high_water(stamp)
         else:
             self._state.setdefault(cf_name, {})[key] = value
 

@@ -13,6 +13,7 @@ from quixstreams.state.metadata import Marker
 from quixstreams.state.recovery import ChangelogProducer
 from quixstreams.state.serialization import DumpsFunc, LoadsFunc, append_integer
 
+from .exceptions import IncompatibleStateStoreError
 from .metadata import (
     GLOBAL_COUNTER_CF_NAME,
     GLOBAL_COUNTER_KEY,
@@ -115,6 +116,29 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
 
     def _compute_stamp(self, ttl: Optional[timedelta], timestamp: Optional[int]) -> int:
         if ttl is None:
+            # Rule 3 (spec §0 / §6.7): once a partition is flipped into TTL
+            # mode AND ``legacy_records_ttl`` is configured, a write with no
+            # explicit ``ttl=`` is floored to ``event_time + legacy_records_ttl``
+            # instead of ``SENTINEL_NEVER`` — so nothing ever-expires while the
+            # feature is active in that partition.
+            #
+            # Gated on the **runtime** flip flag (Rule 1 activation gate): a
+            # partition that never took a ``ttl=`` write is unflipped
+            # (``uses_ttl_stamps`` is False) and falls straight through to the
+            # sentinel, byte-identical to v3.23.6. Windowed / timestamped
+            # partitions nail ``uses_ttl_stamps = False`` at the class level and
+            # never reach this method on the stamped path, so they never floor.
+            legacy_records_ttl = self._partition.legacy_records_ttl
+            if self._partition.uses_ttl_stamps and legacy_records_ttl is not None:
+                if timestamp is None:
+                    # Cannot floor without an event-time to anchor the expiry.
+                    # The State wrapper injects ``timestamp`` on every record
+                    # (see ``state/base/state.py`` ``set``), so this is
+                    # belt-and-suspenders; mirror ``_compute_stamp``'s existing
+                    # "flooring requires event-time" stance rather than invent a
+                    # wall-clock expiry, and fall back to never-expires.
+                    return SENTINEL_NEVER
+                return timestamp + _ttl_to_ms(legacy_records_ttl)
             return SENTINEL_NEVER
         if ttl <= timedelta(0):
             raise ValueError(f"ttl must be a positive timedelta or None, got {ttl!r}")
@@ -418,58 +442,124 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         """
         Flush-time TTL detection.
 
-        Three terminal cases:
+        Four terminal cases:
 
         1. Partition is already flipped → no work; the cache was stamped
            inline by :meth:`set` / :meth:`set_bytes`.
         2. Partition is not flipped and the batch has no TTL writes → no
            work; the cache stays un-stamped (legacy layout, byte-identical
            to v3.23.6 on disk and on the changelog).
-        3. Partition is not flipped and the batch has at least one TTL
-           write → either flip (empty default CF) or reject loudly
-           (populated default CF). On flip, every default-CF entry in the
-           cache is re-encoded with its stamp (sentinel for entries
-           without ``ttl=``, real stamp for entries with ``ttl=``), index
-           entries are queued for non-sentinel writes, and metadata flag
-           writes are added to the cache so the partition's ``write()``
+        3. Partition is not flipped, the batch has a TTL write, and the
+           default CF is **empty** → flip (empty-store fast path). Every
+           default-CF entry in the cache is re-encoded with its stamp,
+           index entries are queued for non-sentinel writes, and metadata
+           flag writes are added to the cache so the partition's ``write()``
            commits everything atomically.
+        4. Partition is not flipped, the batch has a TTL write, and the
+           default CF is **populated**:
+           - if ``legacy_records_ttl`` is set → **backfill** every
+             pre-existing record with a uniform ``high_water +
+             legacy_records_ttl`` expiry, then flip;
+           - otherwise → reject loudly (with the operator-callable message
+             pointing at ``legacy_records_ttl``).
         """
         if not self._batch_has_ttl_writes:
             return
         if self._partition.uses_ttl_stamps:
             return
-        if self._partition.main_cf_has_user_data():
+
+        populated = self._partition.main_cf_has_user_data()
+        legacy_records_ttl = self._partition.legacy_records_ttl
+
+        if populated and legacy_records_ttl is None:
             self._status = PartitionTransactionStatus.FAILED
             raise self._partition.reject_ttl_on_populated_store()
 
-        # Empty-store fast path: re-encode the cache with stamps + flip the
-        # partition flag in the same logical batch. The actual on-disk
-        # ``WriteBatch`` is built later in ``RocksDBStorePartition.write``;
-        # we mutate the transaction cache here so both the changelog
-        # producer (in ``super().prepare()``) and the partition writer see
-        # the stamped values.
-        self._restamp_default_cf_cache_for_flip()
+        restamped = 0
+        backfilled_keys: set[bytes] = set()
+        if populated:
+            # Backfill branch: re-stamp every pre-existing on-disk record with
+            # a uniform expiry derived from the event-time enable moment, then
+            # fall through to the shared flip machinery for the in-batch keys
+            # and the flip metadata.
+            expires_at_ms = self._compute_legacy_expiry(legacy_records_ttl)
+            backfilled_keys = self._partition.backfill_legacy_records(
+                expires_at_ms=expires_at_ms,
+                cache=self._update_cache,
+            )
+            restamped = len(backfilled_keys)
+
+        # Re-encode the in-batch cache with stamps + flip the partition flag in
+        # the same logical batch. The actual on-disk ``WriteBatch`` is built
+        # later in ``RocksDBStorePartition.write``; we mutate the transaction
+        # cache here so both the changelog producer (in ``super().prepare()``)
+        # and the partition writer see the stamped values.
+        self._restamp_default_cf_cache_for_flip(skip_keys=backfilled_keys)
         self._write_flip_metadata_to_cache()
         # Flip the **runtime** flag now so the partition's write path takes
         # the TTL-aware branch (high-water persist, sweep, index-CF use).
         self._partition.uses_ttl_stamps = True
         self._partition.get_or_create_column_family(TTL_INDEX_CF_NAME)
-        logger.info(
-            "Flipping state store partition into TTL mode (empty-store fast "
-            "path) path=%s",
-            getattr(self._partition, "path", "<memory>"),
-        )
+        if populated:
+            logger.info(
+                "Backfilled %d legacy records and flipped state store "
+                "partition into TTL mode (legacy_records_ttl) path=%s",
+                restamped,
+                getattr(self._partition, "path", "<memory>"),
+            )
+        else:
+            logger.info(
+                "Flipping state store partition into TTL mode (empty-store "
+                "fast path) path=%s",
+                getattr(self._partition, "path", "<memory>"),
+            )
 
-    def _restamp_default_cf_cache_for_flip(self) -> None:
+    def _compute_legacy_expiry(self, legacy_records_ttl: timedelta) -> int:
+        """
+        Compute the uniform expiry for backfilled legacy records:
+        ``enable_time + legacy_records_ttl`` in event-time milliseconds
+        (spec §8.1).
+
+        ``enable_time`` is the partition's event-time high-water. The TTL
+        write that triggers the flip advanced the high-water with its own
+        record timestamp (``transaction.py`` ``set`` / ``set_bytes``), so the
+        high-water also *is* that triggering record's timestamp in the normal
+        single-write-at-flip case. If the high-water is ``None`` here, the
+        triggering TTL write carried no record timestamp — which the ``ttl=``
+        validation in :meth:`_compute_stamp` should already have rejected — so
+        we hard-error rather than invent a wall-clock expiry (spec §8.1).
+        """
+        ttl_ms = _ttl_to_ms(legacy_records_ttl)
+        enable_time_ms = self._partition.high_water_ms
+        if enable_time_ms is None:
+            raise IncompatibleStateStoreError(
+                "Cannot backfill legacy records: no event-time high-water is "
+                "available at flip (a ttl= write carried no record timestamp). "
+                "This should have been rejected at the state.set(..., ttl=...) "
+                "call site. Refusing to invent a wall-clock expiry."
+            )
+        return enable_time_ms + ttl_ms
+
+    def _restamp_default_cf_cache_for_flip(
+        self, skip_keys: "Optional[set[bytes]]" = None
+    ) -> None:
         """
         Re-encode every default-CF cache entry with its TTL stamp, queue
         index entries for non-sentinel writes, and persist the partition's
         high-water if the batch advanced it.
 
-        Called from :meth:`_maybe_flip_or_reject` on the empty-store flip
-        path. The cache walk is O(batch); typical first-flush batches are
-        tens to hundreds of entries.
+        Called from :meth:`_maybe_flip_or_reject` on both the empty-store flip
+        path and the backfill path. The cache walk is O(batch); typical
+        first-flush batches are tens to hundreds of entries.
+
+        :param skip_keys: serialized default-CF keys already stamped by
+            :meth:`RocksDBStorePartition.backfill_legacy_records` (pre-existing
+            on-disk records). They are staged in the cache with their uniform
+            legacy expiry already applied, so they must NOT be re-stamped here
+            (that would double-wrap the value). Only the genuine in-batch user
+            writes are (re-)stamped.
         """
+        skip_keys = skip_keys or set()
         cache = self._update_cache
         updates = cache.get_updates(cf_name="default")
         # Snapshot prefixes/keys before mutating; we update in place.
@@ -477,6 +567,8 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         for prefix in prefixes:
             entries = list(updates[prefix].items())
             for serialized_key, raw_value in entries:
+                if serialized_key in skip_keys:
+                    continue
                 stamp = self._pending_stamps.get(
                     (prefix, serialized_key), SENTINEL_NEVER
                 )

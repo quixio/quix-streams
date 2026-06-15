@@ -1,5 +1,6 @@
 import logging
 import time
+from datetime import timedelta
 from typing import (
     Dict,
     Iterator,
@@ -94,10 +95,26 @@ class RocksDBStorePartition(StorePartition):
         self._open_max_retries = self._options.open_max_retries
         self._open_retry_backoff = self._options.open_retry_backoff
         self._max_evictions_per_flush = self._options.max_evictions_per_flush
+        # Opt-in for backfilling a populated legacy store on TTL enable.
+        # ``None`` preserves the current reject-on-populated-store behavior;
+        # a strictly positive ``timedelta`` enables the in-place backfill
+        # (see :meth:`backfill_legacy_records`). Read by the transaction layer
+        # through this partition in ``_maybe_flip_or_reject``.
+        self._legacy_records_ttl: Optional[timedelta] = (
+            self._options.legacy_records_ttl
+        )
         self._db = self._init_rocksdb()
         self._cf_cache: Dict[str, Rdict] = {}
         self._cf_handle_cache: Dict[str, ColumnFamily] = {}
         self._high_water_ms: Optional[int] = None
+        # Wallclock reference captured once per changelog-recovery session
+        # (lazily, on the first stamped default-CF replay). Used to judge
+        # whether a replayed TTL entry is already expired and to seed the
+        # post-recovery high-water (see :meth:`recover_from_changelog_message`,
+        # spec ``spec-recovery-wallclock.md`` §3.2/§3.3). ``None`` means no
+        # stamped message has been replayed yet in this partition's lifetime;
+        # a fresh partition instance per assignment is a fresh recovery session.
+        self._recovery_now_ms: Optional[int] = None
 
         # Resolve the **runtime** TTL flag. Subclasses that nail
         # ``uses_ttl_stamps = False`` at the class level (windowed,
@@ -135,6 +152,15 @@ class RocksDBStorePartition(StorePartition):
         """Cap on per-flush sweep evictions."""
         return self._max_evictions_per_flush
 
+    @property
+    def legacy_records_ttl(self) -> Optional[timedelta]:
+        """
+        Opt-in TTL applied to pre-existing un-stamped records when TTL is
+        enabled on a populated legacy store. ``None`` = reject on populated
+        store (default); a positive ``timedelta`` = backfill in place.
+        """
+        return self._legacy_records_ttl
+
     def advance_high_water(self, timestamp: Optional[int]) -> None:
         """
         Advance the partition's high-water mark monotonically. Called by the
@@ -145,6 +171,14 @@ class RocksDBStorePartition(StorePartition):
             return
         if self._high_water_ms is None or timestamp > self._high_water_ms:
             self._high_water_ms = timestamp
+
+    def _now_ms(self) -> int:
+        """
+        Current wallclock time in epoch milliseconds. Isolated behind a method
+        purely as a test seam so changelog-recovery determinism cases can
+        inject a fixed ``now`` without sleeping (spec §8, case 6).
+        """
+        return int(time.time() * 1000)
 
     def recover_from_changelog_message(
         self, key: bytes, value: Optional[bytes], cf_name: str, offset: int
@@ -210,15 +244,22 @@ class RocksDBStorePartition(StorePartition):
             batch.delete(key, cf_handle)
         elif is_main_cf:
             stamped, stamp = self._normalize_replay_value(value)
-            recovery_now = self._high_water_ms
-            if (
-                stamp != SENTINEL_NEVER
-                and recovery_now is not None
-                and stamp <= recovery_now
-            ):
-                # Already-expired entry; skip both the main and the index
-                # write. Roll the changelog offset forward so recovery
-                # progresses.
+            # Judge expiry against the current wallclock captured once per
+            # recovery session, NOT against a stamp-ratcheted pseudo-clock
+            # (the old ``recovery_now = self._high_water_ms`` ratchet collapsed
+            # uniform-expiry backfilled stores; see spec-recovery-wallclock.md
+            # §2/§3). Capture lazily on the first stamped default-CF replay and
+            # seed the post-recovery high-water to the same reference so the
+            # recovery→live boundary is continuous (§3.3). Sentinel-stamped
+            # entries are never compared and always survive (§7).
+            if stamp != SENTINEL_NEVER and self._recovery_now_ms is None:
+                self._recovery_now_ms = self._now_ms()
+                self._high_water_ms = self._recovery_now_ms
+            if stamp != SENTINEL_NEVER and stamp <= self._recovery_now_ms:
+                # Already-expired against wallclock-at-recovery; skip both the
+                # main and the index write. Roll the changelog offset forward
+                # so recovery progresses. The __ttl_index__ stays consistent
+                # with survivors — a dropped entry writes neither (§7).
                 pass
             else:
                 batch.put(key, stamped, cf_handle)
@@ -230,14 +271,6 @@ class RocksDBStorePartition(StorePartition):
 
         self._update_changelog_offset(batch=batch, offset=offset)
         self._write(batch)
-
-        # Track the highest stamp seen as a recovery high-water — this is the
-        # only event-time signal available on a fresh partition. Sentinel
-        # stamps don't advance it.
-        if value is not None and is_main_cf:
-            _, stamp = self._normalize_replay_value(value)
-            if stamp != SENTINEL_NEVER:
-                self.advance_high_water(stamp)
 
     def write(
         self,
@@ -375,30 +408,114 @@ class RocksDBStorePartition(StorePartition):
         self.get_or_create_column_family(TTL_INDEX_CF_NAME)
         self.uses_ttl_stamps = True
 
+    def backfill_legacy_records(
+        self,
+        expires_at_ms: int,
+        cache: PartitionTransactionCache,
+    ) -> set[bytes]:
+        """
+        Re-stamp every pre-existing un-stamped record in the default CF with a
+        uniform ``expires_at_ms`` expiry and stage the writes into the
+        transaction ``cache`` so they flow through the existing changelog
+        producer and the partition's atomic ``write()`` (spec §8.5, option a).
+
+        Called by the transaction layer from ``prepare()`` when a TTL write is
+        detected on a partition whose default CF is **populated** *and*
+        ``legacy_records_ttl`` is set (the backfill branch of
+        ``_maybe_flip_or_reject``). The companion empty-store flip path
+        (:meth:`flip_into_ttl_mode`) handles the empty-CF case.
+
+        For each on-disk default-CF key that is **not already staged in the
+        cache** by the current transaction (those in-batch keys are re-stamped
+        with their own true pending stamp by
+        ``_restamp_default_cf_cache_for_flip``), this:
+
+        - wraps the value with ``encode_ttl_value(expires_at_ms, value)``;
+        - stages a matching ``encode_index_key(expires_at_ms, key)`` entry into
+          the local-only ``__ttl_index__`` CF.
+
+        Because the entries land in the transaction cache, ``super().prepare()``
+        produces the re-stamped default-CF values to the changelog (the index
+        CF is local-only and is rebuilt on recovery), and the partition's
+        ``write()`` commits everything — including the flip metadata written by
+        the caller — in a single atomic ``WriteBatch``. Either the store is
+        fully backfilled-and-flipped or untouched; a crash before the commit
+        leaves the store legacy and the backfill re-runs cleanly (spec §8.4).
+
+        The whole default CF is staged in one pass — the backfill is a one-time
+        migration and is **not** bounded by ``max_evictions_per_flush``.
+
+        :param expires_at_ms: uniform absolute event-time expiry to stamp on
+            every pre-existing record (``high_water + legacy_records_ttl``).
+        :param cache: the current transaction's update cache.
+        :return: the set of serialized default-CF keys that were re-stamped
+            (the caller passes it to ``_restamp_default_cf_cache_for_flip`` so
+            those keys are not double-stamped as in-batch writes).
+        """
+        default_cf = self.get_or_create_column_family("default")
+
+        # Keys the current transaction already staged in the default CF. Those
+        # are user-driven writes for *this* batch; the caller re-stamps them
+        # with their own pending stamp, so we must not overwrite them with the
+        # uniform legacy expiry.
+        staged_default: set[bytes] = set()
+        for prefix_updates in cache.get_updates(cf_name="default").values():
+            staged_default.update(prefix_updates.keys())
+
+        backfilled_keys: set[bytes] = set()
+        for key, value in default_cf.items():
+            key = cast(bytes, key)
+            if key in staged_default:
+                continue
+            stamped = encode_ttl_value(expires_at_ms, cast(bytes, value))
+            # Stage under an empty prefix bucket: ``write()`` and the changelog
+            # producer both key off the full ``key``, so the bucket is only an
+            # organizational grouping.
+            cache.set(key=key, value=stamped, prefix=b"", cf_name="default")
+            cache.set(
+                key=encode_index_key(expires_at_ms, key),
+                value=b"",
+                prefix=b"",
+                cf_name=TTL_INDEX_CF_NAME,
+            )
+            backfilled_keys.add(key)
+
+        # Pre-create the index CF so the write path never races a CF creation.
+        self.get_or_create_column_family(TTL_INDEX_CF_NAME)
+        return backfilled_keys
+
     def reject_ttl_on_populated_store(self) -> "IncompatibleStateStoreError":
         """
         Build (and log) the structured ERROR raised when a TTL write lands on
-        a partition that has existing un-stamped data. The caller is expected
-        to ``raise`` the returned exception; emitting the log line here keeps
-        the message format in one place.
+        a partition that has existing un-stamped data **and** the operator did
+        not opt in to backfill. The caller is expected to ``raise`` the
+        returned exception; emitting the log line here keeps the message format
+        in one place.
 
-        Spec §6.4.1 — silent TTL drop is the worst possible failure mode for
-        the dedup workload this feature exists for, so we halt loudly.
+        Silent TTL drop is the worst possible failure mode for the dedup
+        workload this feature exists for, so we halt loudly. The message points
+        at the operator-callable fix (set ``legacy_records_ttl``), not at
+        deleting the state directory — Quix Cloud has no customer-callable
+        state reset.
         """
         approx_keys = self.estimated_main_cf_key_count()
         msg = (
             f"IncompatibleStateStoreError: state store at {self._path!r} "
             f"has {approx_keys} un-stamped existing entries; cannot enable "
-            "TTL on a populated store. To enable TTL: stop the application, "
-            f"delete the state directory at {self._path!r}, restart — "
-            "recovery will rebuild from the changelog with TTL enabled."
+            "TTL on a populated store without backfilling them. To enable "
+            "TTL in place, set a uniform expiry for the existing records via "
+            "RocksDBOptions(legacy_records_ttl=timedelta(...)) and redeploy: "
+            "the partition will re-stamp every existing record with an expiry "
+            "of high-water + legacy_records_ttl (event-time at enable) and "
+            "flip into TTL mode without deleting any state. New records keep "
+            "their true event-time expiry."
         )
         logger.error(
             msg,
             extra={
                 "state_store_path": self._path,
                 "approx_key_count": approx_keys,
-                "operator_action": "delete_state_directory_and_recover",
+                "operator_action": "set_legacy_records_ttl",
             },
         )
         return IncompatibleStateStoreError(msg)
