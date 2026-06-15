@@ -121,7 +121,7 @@ They will be included as
 {
     "field_x": "value_a",
     "field_y": "value_b",
-    "__key": b"my_key",
+    "__key": "my_key",
     "__headers": {},
     "__timestamp": 1234567890,
 }
