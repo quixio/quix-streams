@@ -94,4 +94,4 @@ The `Producer` is implemented on top of the [`confluent_kafka`](https://github.c
 - `producer_extra_config` - a dictionary with additional configuration parameters for Producer in the format of `librdkafka`.
 
 The full list of configuration parameters can be found in [the librdkafka documentation](https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md)  
-Passing `bootstrap.servers` and `partitioner` within `producer_extra_config` will have no effect because they are already supplied to the `Application` object.
+Passing `partitioner` within `producer_extra_config` overrides the default `murmur2` partitioner. Passing `bootstrap.servers` within `producer_extra_config` has no effect because broker configuration is supplied by the `Application` object.
