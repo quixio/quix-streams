@@ -71,10 +71,10 @@ All silence-detection logic is provided by the standalone [`StreamTimeoutTracker
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `stream_timeout_ms` | `Optional[int]` | `None` | Per-key silence threshold in milliseconds. Must be a positive integer. The feature is disabled when this is `None`, `0`, or negative. |
+| `stream_timeout_ms` | `Optional[int]` | `None` | Per-key silence threshold in milliseconds. Must be a positive integer when `on_stream_timeout` is set. |
 | `on_stream_timeout` | `Optional[Callable[[Any], None]]` | `None` | Callback invoked once per silent key. Receives the raw Kafka message key as-is (`bytes`, `str`, `int`, … — whatever was passed to the sink). Exceptions are logged and swallowed. |
 
-Both parameters must be set to a usable value (`stream_timeout_ms` a positive int, `on_stream_timeout` callable) for the feature to activate. Any other combination disables the feature with zero overhead: no per-key dict is allocated, no background thread is started.
+Both parameters must be set to a usable value (`stream_timeout_ms` a positive int, `on_stream_timeout` callable) for the feature to activate. Passing both as `None` disables the feature with zero overhead: no per-key dict is allocated, no background thread is started. Any other invalid combination raises `ValueError`.
 
 ### Fire-and-evict semantics
 
