@@ -49,11 +49,10 @@ from quixstreams import Application
 app = Application(
     broker_address='localhost:9092', 
     auto_offset_reset='earliest', 
-    auto_commit_enable=True,
 )
 
 # Create a consumer and start a polling loop
-with app.get_consumer() as consumer:
+with app.get_consumer(auto_commit_enable=True) as consumer:
     consumer.subscribe(topics=['my-topic'])
 
     while True:
