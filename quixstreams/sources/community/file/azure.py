@@ -18,7 +18,7 @@ try:
 except ImportError as exc:
     raise ImportError(
         f"Package {exc.name} is missing: "
-        'run "pip install quixstreams[azure-file]" to use AzureFileOrigin'
+        'run "pip install quixstreams[azure-file]" to use AzureFileSource'
     ) from exc
 
 __all__ = (
