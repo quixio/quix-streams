@@ -80,6 +80,9 @@ app = Application(
 # Define a topic with chat messages in JSON format
 messages_topic = app.topic(name="messages", value_deserializer="json")
 
+# Define a topic to write the split words back to Kafka
+words_topic = app.topic(name="words", value_serializer="json")
+
 # Create a StreamingDataFrame - the stream processing pipeline
 # with a Pandas-like interface on streaming data
 sdf = app.dataframe(topic=messages_topic)
@@ -100,6 +103,9 @@ sdf["length"] = sdf["text"].apply(lambda word: len(word))
 
 # Print the output result
 sdf = sdf.update(lambda row: print(f"Output: {row}"))
+
+# Write the results back to Kafka
+sdf = sdf.to_topic(words_topic)
 
 # Run the streaming application
 if __name__ == "__main__":
