@@ -253,5 +253,4 @@ beginning (reproducing all previously processed messages).
 The default topic will have a partition count that reflects the partition count found 
 within the provided topic's folder structure.
 
-The default topic name the Application dumps to is based on the last folder name of 
-the `FileSource` `directory` as: `source__<last folder name>`.
+The default source topic name is based on the last path name as `file_<last path name>`. When passed to `Application.dataframe(source=...)` without a custom topic, the Kafka topic name is prefixed as `source__file_<last path name>`.
