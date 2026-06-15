@@ -850,7 +850,7 @@ described in [the "Updating Kafka Headers" section](./processing.md#updating-kaf
 
 Here are some general concepts about how windowed aggregations are implemented in Quix Streams:
 
-- Only time-based windows are supported. 
+- Quix Streams supports both time-based windows and count-based windows.
 - Every window is grouped by the current Kafka message key.
 - Messages with `None` key will be ignored.
 - The minimal window unit is a **millisecond**. More fine-grained values (e.g. microseconds) will be rounded towards the closest millisecond number.
