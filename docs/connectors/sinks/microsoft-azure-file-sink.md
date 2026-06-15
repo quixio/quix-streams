@@ -36,7 +36,7 @@ Create an instance of `AzureFileSink` and pass it to the `StreamingDataFrame.sin
 ```python
 from quixstreams import Application
 from quixstreams.sinks.community.file.azure import AzureFileSink
-from quixstreams.sinks.community.file.destinations import AzureFileDestination
+from quixstreams.sinks.community.file.formats import JSONFormat
 
 
 # Configure the sink to write JSON files to Azure
