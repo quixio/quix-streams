@@ -37,7 +37,8 @@ the `commit_every` parameter.
 - **`auto_offset_reset`** - Consumer `auto.offset.reset` setting.  
 It determines where the consumer should start reading messages from.  
 See more `auto.offset.reset` in this [article](https://www.quix.io/blog/kafka-auto-offset-reset-use-cases-and-pitfalls#the-auto-offset-reset-configuration).  
-**Options**: `"latest"`, `"earliest"`.  
+**Options**: `"latest"`, `"earliest"`, `"error"`.  
+Using `"error"` makes the consumer raise an error if no committed offset is found for a partition.  
 **Default** - `"latest"`.
 
 - **`processing_guarantee`** - Use "at-least-once" or "exactly-once" processing guarantees.  
