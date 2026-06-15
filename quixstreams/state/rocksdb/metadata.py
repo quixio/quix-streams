@@ -29,3 +29,13 @@ STATE_FORMAT_VERSION = 2
 # framework on the first ``state.set(..., ttl=...)`` write that landed on a
 # fresh (empty) default CF; once flipped, it stays flipped.
 TTL_ENABLED_KEY = b"__ttl_enabled__"
+
+# Persisted backfill cursor for the legacy-records backfill (Fix A,
+# spec-backfill-completeness.md §3.3). Holds the integer count ``N`` of keys
+# already stamped from the deterministically-sorted census key list. Advanced
+# in the same ``WriteBatch`` as each chunk's puts so a crash mid-backfill
+# resumes at exactly key index ``N`` (no byte-sniffing). Additive metadata key:
+# legacy and already-flipped stores simply never have it (no format-version
+# bump). Lives in the metadata CF, which is in ``LOCAL_ONLY_CFS`` and is never
+# produced to the changelog.
+TTL_BACKFILL_PROGRESS_KEY = b"__ttl_backfill_progress__"

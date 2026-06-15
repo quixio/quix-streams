@@ -28,6 +28,7 @@ from quixstreams.state.rocksdb import RocksDBOptions
 from quixstreams.state.rocksdb.metadata import (
     STATE_FORMAT_VERSION,
     STATE_FORMAT_VERSION_KEY,
+    TTL_BACKFILL_PROGRESS_KEY,
     TTL_ENABLED_KEY,
     TTL_INDEX_CF_NAME,
 )
@@ -35,8 +36,6 @@ from quixstreams.state.rocksdb.ttl_codec import (
     SENTINEL_NEVER,
     decode_index_key,
     decode_ttl_value,
-    encode_index_key,
-    encode_ttl_value,
 )
 from quixstreams.state.serialization import int_from_bytes
 
@@ -213,7 +212,14 @@ class TestChunkedBackfill:
         assert expires_at == ts + DAY_MS
         partition.close()
 
-    # Case 2 — crash before flag: re-run converges, no double-wrap.
+    # Case 2 — crash before flag: cursor-resumed re-run converges, no double-wrap.
+    #
+    # Fix A (spec-backfill-completeness.md §3.3): the re-run re-censuses the
+    # identical sorted key list and resumes at the persisted cursor. Keys
+    # stamped by the interrupted run are NOT re-read (cursor-skipped), so they
+    # keep that run's expiry; the remaining keys are stamped by the completing
+    # run. Both runs use ``encode_ttl_value`` wrap-whole, so every key is
+    # stamped EXACTLY ONCE (no double-wrap) regardless of which run touched it.
     def test_crash_before_flag_reruns_and_converges(self, store_partition_factory):
         m = 350
         partition = store_partition_factory(name="db")
@@ -248,8 +254,8 @@ class TestChunkedBackfill:
             with partition.begin() as tx:
                 tx.set(key="knew", value="vnew", prefix=b"pfx", timestamp=ts, ttl=ttl)
 
-        # The flag was never written; some chunks committed. Restore the raw
-        # writer and confirm the partition is still legacy on a fresh open.
+        # The flag was never written; 2 chunks (200 keys) committed and the
+        # cursor advanced with them. Restore the raw writer and reopen.
         partition._write = real_write
         partition.close()
 
@@ -263,11 +269,13 @@ class TestChunkedBackfill:
         assert partition.uses_ttl_stamps is False
         meta = partition.get_or_create_column_family(METADATA_CF_NAME)
         assert meta.get(TTL_ENABLED_KEY) is None
+        # The cursor persisted the 200 keys stamped by the interrupted run.
+        assert int_from_bytes(meta.get(TTL_BACKFILL_PROGRESS_KEY)) == 200
         del meta
 
-        # Re-run: a fresh ttl= write triggers the backfill again. It re-reads
-        # the already-stamped chunks and converges to the COMPLETING run's
-        # uniform expiry, with no double-wrap.
+        # Re-run: a fresh ttl= write triggers the backfill again. It re-censuses
+        # the identical sorted list, skips the first 200 keys via the cursor,
+        # and stamps the remaining 150 with the COMPLETING run's expiry.
         ts2 = ts + 5_000  # high-water advanced, so expiry differs from run 1
         with partition.begin() as tx:
             tx.set(key="knew", value="vnew", prefix=b"pfx", timestamp=ts2, ttl=ttl)
@@ -275,29 +283,36 @@ class TestChunkedBackfill:
         assert partition.uses_ttl_stamps is True
         decoded = _decode_default_cf(partition)
         legacy = {k: v for k, v in decoded.items() if b"knew" not in k}
+        # Every legacy key is present and stamped EXACTLY ONCE (no double-wrap).
         assert len(legacy) == m
-        expected = ts2 + 7 * DAY_MS
+        run1_expiry = ts + 7 * DAY_MS
+        run2_expiry = ts2 + 7 * DAY_MS
         for expires_at, payload in legacy.values():
-            assert expires_at == expected
-            # Single decode yields the original serialized JSON payload (no
-            # nested stamp). A double-wrap would leave an 8-byte stamp prefix
-            # in front of the JSON instead of a clean ``"v..."`` string.
+            # Each key carries one of the two run expiries — never a nested
+            # stamp. A double-wrap would leave an 8-byte prefix in front of the
+            # JSON instead of a clean ``"v..."`` string.
+            assert expires_at in (run1_expiry, run2_expiry)
             assert payload.startswith(b'"v')
-        # Index is consistent: one entry per legacy key at the uniform expiry.
+        # 200 keys kept run 1's expiry; 150 got run 2's (cursor split).
+        assert sum(1 for e, _ in legacy.values() if e == run1_expiry) == 200
+        assert sum(1 for e, _ in legacy.values() if e == run2_expiry) == 150
+        # Index is consistent: exactly one entry per legacy key at its expiry
+        # (no stale pointers — cursor-skipped keys were never re-stamped, so no
+        # double index entry exists). The in-batch ``knew`` key adds one more.
         index = _decode_index_cf(partition)
-        for key in legacy:
-            assert index[key] == expected
+        assert len(index) == m + 1
+        for key, (expires_at, _) in legacy.items():
+            assert index[key] == expires_at
         partition.close()
 
-    # Case 3 — mixed already-stamped (prior run) + legacy, no double-wrap.
-    def test_mixed_stamped_and_legacy_restamp(self, store_partition_factory):
-        # Build a store by hand on a SINGLE open partition (no reopen, so no
-        # Windows lock-release timing): some default-CF values already stamped
-        # with a prior expiry E_prior, some stamped at E_now (skip target), some
-        # plain legacy. Then run the backfill with current expiry E_now.
-        ts = 1_000_000_000_000
-        e_now = ts + 7 * DAY_MS
-        e_prior = ts + 3 * DAY_MS
+    # Case 3 — first-run wrap-whole over a fresh legacy store (no inference).
+    #
+    # Fix A retires the byte-sniffing already-stamped recognizer from the
+    # backfill path (spec §3.5): on a first run (cursor=0) every value is
+    # genuine legacy and is wrapped whole exactly once. This drives
+    # ``backfill_legacy_records`` directly to assert that contract.
+    def test_first_run_wraps_every_value_whole(self, store_partition_factory):
+        e_now = 1_000_000_000_000 + 7 * DAY_MS
 
         partition = store_partition_factory(
             name="db",
@@ -307,20 +322,9 @@ class TestChunkedBackfill:
             ),
         )
         default_cf = partition.get_or_create_column_family("default")
-        # Plain legacy values (no stamp).
         default_cf[b"pfx|legacy1"] = b'"L1"'
         default_cf[b"pfx|legacy2"] = b'"L2"'
-        # Prior-run stamped value (different expiry) -> must re-stamp to e_now.
-        default_cf[b"pfx|prior1"] = encode_ttl_value(e_prior, b'"P1"')
-        # Already at target expiry -> must be skipped (no-op).
-        default_cf[b"pfx|attarget"] = encode_ttl_value(e_now, b'"AT"')
-        # Pre-create the prior-run index entries: the stale e_prior pointer for
-        # prior1 (must be cleaned), and the already-correct e_now pointer for
-        # attarget (a skip must leave its existing index entry intact — the
-        # backfill does not re-emit index entries for skipped records).
-        index_cf = partition.get_or_create_column_family(TTL_INDEX_CF_NAME)
-        index_cf[encode_index_key(e_prior, b"pfx|prior1")] = b""
-        index_cf[encode_index_key(e_now, b"pfx|attarget")] = b""
+        default_cf[b"pfx|legacy3"] = b'"L3"'
 
         # Drive the backfill directly with a known expires_at_ms = e_now.
         restamped = partition.backfill_legacy_records(
@@ -330,24 +334,19 @@ class TestChunkedBackfill:
             staged_default_keys=set(),
             chunk_size=2,
         )
+        assert restamped == 3
 
         decoded = _decode_default_cf(partition)
-        # legacy1, legacy2, prior1 re-stamped; attarget skipped -> 3 restamped.
-        assert restamped == 3
         assert decoded[b"pfx|legacy1"] == (e_now, b'"L1"')
         assert decoded[b"pfx|legacy2"] == (e_now, b'"L2"')
-        # prior1 re-stamped from the STRIPPED payload -> single decode == "P1".
-        assert decoded[b"pfx|prior1"] == (e_now, b'"P1"')
-        # attarget left exactly as it was (single decode, original payload).
-        assert decoded[b"pfx|attarget"] == (e_now, b'"AT"')
+        assert decoded[b"pfx|legacy3"] == (e_now, b'"L3"')
 
-        # Index: stale e_prior entry deleted, every key now at e_now.
+        # One index entry per key at the uniform expiry.
         index = _decode_index_cf(partition)
         assert index == {
             b"pfx|legacy1": e_now,
             b"pfx|legacy2": e_now,
-            b"pfx|prior1": e_now,
-            b"pfx|attarget": e_now,
+            b"pfx|legacy3": e_now,
         }
         partition.close()
 

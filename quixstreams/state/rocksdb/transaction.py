@@ -21,6 +21,7 @@ from .metadata import (
 )
 from .ttl_codec import (
     SENTINEL_NEVER,
+    TTL_STAMP_BYTES,
     decode_ttl_value,
     encode_index_key,
     encode_ttl_value,
@@ -34,6 +35,50 @@ __all__ = ("RocksDBPartitionTransaction",)
 logger = logging.getLogger(__name__)
 
 MAX_UINT64 = 2**64 - 1  # 18446744073709551615
+
+# Upper bound (exclusive) for a "plausible" epoch-ms expiry stamp: ~year 33658,
+# far beyond any realistic event-time clock. Shared bound with
+# ``RocksDBStorePartition._looks_like_stamped_value`` so the read-side strict
+# validator and the recovery flag-discovery heuristic agree on what a stamp can
+# look like (Fix B, spec-backfill-completeness.md §4.2).
+_MAX_PLAUSIBLE_STAMP_MS = 10**15
+
+
+def _safe_decode_stamp(value: bytes) -> Optional[tuple[int, bytes]]:
+    """
+    Strict, fail-safe stamp validator for the flipped-partition read path
+    (Fix B, spec-backfill-completeness.md §4.2).
+
+    Returns ``(stamp, payload)`` ONLY when ``value`` robustly looks like a real
+    TTL stamp, else ``None`` so the caller can degrade (return the value RAW as
+    never-expires) instead of unconditionally stripping 8 bytes off a value that
+    may be a genuine un-stamped legacy payload.
+
+    "Robustly looks like a stamp" means:
+
+    - ``len(value) >= TTL_STAMP_BYTES`` (an 8-byte stamp prefix can exist), and
+    - the leading 8 big-endian bytes decode to either ``SENTINEL_NEVER`` or a
+      plausible epoch-ms expiry ``0 < stamp < 10**15``.
+
+    A genuine stamp is always accepted: real stamps are ``>= 8`` bytes and carry
+    either the sentinel or an expiry well below the plausibility cap, so no
+    genuinely-stamped value is ever mis-read as legacy (§4.3). The residual is
+    the safe-direction one: a legacy value whose first 8 bytes coincidentally
+    decode to a plausible expiry is still mis-treated as stamped — but Fix A's
+    completeness guarantee means a Fix-A-backfilled store has no un-stamped
+    values left to mis-classify, so this only bites pre-Fix-A stores.
+    """
+    if len(value) < TTL_STAMP_BYTES:
+        return None
+    try:
+        stamp, payload = decode_ttl_value(value)
+    except ValueError:
+        return None
+    if stamp == SENTINEL_NEVER:
+        return stamp, payload
+    if 0 < stamp < _MAX_PLAUSIBLE_STAMP_MS:
+        return stamp, payload
+    return None
 
 
 def _ttl_to_ms(ttl: timedelta) -> int:
@@ -96,6 +141,11 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         # time. Untouched on flipped-from-start transactions (no extra work
         # for the steady-state TTL store).
         self._pending_stamps: dict[tuple[bytes, bytes], int] = {}
+        # Fix B (spec-backfill-completeness.md §4.2): set once the fail-safe
+        # read path has logged a degrade-to-raw WARNING for this partition, so
+        # the warning is emitted at most once per transaction (rate-limited)
+        # rather than on every hot-path read of a non-stamped value.
+        self._unstamped_read_warned: bool = False
 
     # ------------------------------------------------------------------
     # TTL-aware write / read overrides.
@@ -330,13 +380,39 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         if raw is Marker.UNDEFINED or raw is Marker.DELETED:
             return raw
 
-        try:
-            stamp, payload = decode_ttl_value(cast(bytes, raw))
-        except ValueError:
-            # Malformed entry; treat as missing rather than crashing the
-            # caller. The format-version guard at open time is the primary
-            # line of defense; this branch is purely belt-and-suspenders.
+        raw_bytes = cast(bytes, raw)
+
+        # A value shorter than the stamp prefix cannot be a real stamp AND
+        # cannot carry a stripped payload — preserve the existing
+        # ``ValueError → UNDEFINED`` handling (treat as missing) rather than
+        # returning a sub-stamp blob raw. This branch is unchanged from before
+        # Fix B (decode_ttl_value raised only for len < 8).
+        if len(raw_bytes) < TTL_STAMP_BYTES:
             return Marker.UNDEFINED
+
+        # Fail-safe decode (Fix B, spec-backfill-completeness.md §4.2): only
+        # strip the 8-byte stamp when a strict validator confirms the prefix is
+        # a real stamp. A genuine un-stamped legacy value in a flipped partition
+        # (the live-incident corruption: a long JSON value whose first 8 bytes
+        # are NOT a plausible stamp) must NOT be mis-stripped — degrade by
+        # returning it RAW (treat as never-expires), log once, never corrupt.
+        decoded = _safe_decode_stamp(raw_bytes)
+        if decoded is None:
+            if not self._unstamped_read_warned:
+                self._unstamped_read_warned = True
+                logger.warning(
+                    "Fail-safe TTL read: a flipped partition holds a value that "
+                    "does not decode to a valid stamp (key prefix=%r) at "
+                    "path=%s; returning it raw and treating it as never-expires "
+                    "rather than stripping 8 bytes. This should be impossible on "
+                    "a fully backfilled store and signals a pre-Fix-A store or "
+                    "an externally-mutated value.",
+                    prefix[:16],
+                    getattr(self._partition, "path", "<memory>"),
+                )
+            return raw_bytes
+
+        stamp, payload = decoded
 
         # Sentinel-stamped entries always pass; "no TTL" is the common case.
         if stamp == SENTINEL_NEVER:

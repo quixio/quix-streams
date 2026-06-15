@@ -1,7 +1,6 @@
 import logging
 import time
 from datetime import timedelta
-from itertools import islice
 from typing import (
     Dict,
     Iterator,
@@ -35,6 +34,7 @@ from .metadata import (
     CHANGELOG_OFFSET_KEY,
     STATE_FORMAT_VERSION,
     STATE_FORMAT_VERSION_KEY,
+    TTL_BACKFILL_PROGRESS_KEY,
     TTL_ENABLED_KEY,
     TTL_HIGH_WATER_KEY,
     TTL_INDEX_CF_NAME,
@@ -53,6 +53,13 @@ __all__ = ("RocksDBStorePartition",)
 
 
 logger = logging.getLogger(__name__)
+
+# Census-size threshold above which the in-memory key list is logged as a
+# future spill-to-disk concern (OP-BC-2, spec-backfill-completeness.md §5).
+# At ~80 B per held key, this is ~800 MB — large enough to threaten a small
+# container. The backfill still proceeds in memory; the warning only flags
+# that a multi-million-key store should grow a disk-spill census in future.
+_CENSUS_SPILL_WARN_THRESHOLD = 3_000_000
 
 
 class RocksDBStorePartition(StorePartition):
@@ -437,10 +444,12 @@ class RocksDBStorePartition(StorePartition):
         chunk_size: int,
     ) -> int:
         """
-        Re-stamp every pre-existing record in the default CF with a uniform
-        ``expires_at_ms`` expiry in **bounded chunks**, persisting and producing
-        each chunk before reading the next so peak transient memory is one chunk
-        regardless of total store size (spec ``spec-chunked-backfill.md`` §3).
+        Provably-complete backfill (Fix A, spec ``spec-backfill-completeness.md``
+        §3): census the full default-CF key list FIRST, then chunk over that
+        frozen list, point-getting each value fresh and re-stamping it with a
+        uniform ``expires_at_ms`` expiry. Persisting and producing each chunk
+        before reading the next bounds peak transient memory to one chunk (plus
+        the key-list census) regardless of total store size.
 
         Called by the transaction layer from ``prepare()`` when a TTL write is
         detected on a partition whose default CF is **populated** *and*
@@ -448,47 +457,56 @@ class RocksDBStorePartition(StorePartition):
         ``_maybe_flip_or_reject``). The companion empty-store flip path
         (:meth:`flip_into_ttl_mode`) handles the empty-CF case.
 
-        Per chunk (up to ``chunk_size`` (key, value) pairs read from a single
-        forward iterator over the default CF):
+        **Why census-then-chunk (no iterate-while-write).** The earlier design
+        held a single live forward iterator over the default CF *while* writing
+        re-stamped values back into that same CF. At real scale (200k+ keys,
+        SST flushes/compactions triggered mid-iteration) that read-while-write
+        pattern can skip or duplicate keys — and a single skipped key flips a
+        populated store into TTL mode with an un-stamped value, which the read
+        path then mis-strips → corruption (the live incident). Instead we freeze
+        the set of keys to stamp up front via a single ``keys()`` scan and drive
+        the write loop from that frozen Python list, point-getting each value
+        with ``default_cf.get(key)``. The read driver is independent of the CF's
+        live structure, so every census key is visited **exactly once**.
 
-        1. Build a ``WriteBatch`` of default-CF puts (the re-stamped values) and
-           ``__ttl_index__`` puts (``encode_index_key(expires_at_ms, key)``).
-        2. Produce the re-stamped default-CF records to the changelog (the index
-           CF is local-only and is rebuilt on recovery), then ``flush()`` the
-           producer so its in-flight queue stays bounded to one chunk.
-        3. Commit the batch with the raw writer ``self._write(batch)`` — NOT
-           ``self.write(...)`` — so no sweep runs (the partition is still legacy
-           during the backfill) and the per-chunk default+index puts commit
-           atomically together.
+        **Deterministic census order + persisted cursor (re-run safety, §3.3).**
+        ``default_cf.keys()`` yields keys in RocksDB byte-sorted order; we
+        ``sorted(...)`` the materialized list to make the order explicit and
+        reproducible across runs. Progress is tracked by an integer cursor ``N``
+        persisted under ``__ttl_backfill_progress__`` in the metadata CF, advanced
+        in the **same WriteBatch** as each chunk's puts. A crash mid-backfill
+        leaves the partition legacy (the flag is written LAST by the caller), so
+        a re-run re-censuses — producing the identical sorted list — and resumes
+        at key index ``N``: keys ``[0:N)`` are known done (skipped via the cursor,
+        **not** byte-sniffed) and keys ``[N:]`` are re-stamped. There is no
+        inference and no double-wrap: a resumed key is read fresh and wrapped
+        whole exactly once.
+
+        **No format inference.** On the first run the partition is legacy by
+        precondition (flag absent), so every value is genuine legacy and is
+        wrapped whole with ``encode_ttl_value(expires_at_ms, value)``.
+        ``_looks_like_stamped_value`` is **not** used anywhere in this path; it
+        survives only for the recovery flag-discovery path.
+
+        Per chunk (up to ``chunk_size`` keys from the frozen census list):
+
+        1. Point-get each key's value fresh; wrap whole into a ``WriteBatch`` of
+           default-CF puts + ``__ttl_index__`` puts
+           (``encode_index_key(expires_at_ms, key)``). Skip ``staged_default_keys``
+           (re-stamped by the caller) and keys deleted since the census
+           (``get`` → ``None``).
+        2. Produce the chunk's re-stamped default-CF records to the changelog
+           (the index CF is local-only and is rebuilt on recovery), then
+           ``flush()`` the producer so its in-flight queue stays bounded.
+        3. Stage the advanced cursor into the same batch and commit with the raw
+           writer ``self._write(batch)`` — NOT ``self.write(...)`` — so no sweep
+           runs (the partition is still legacy) and the per-chunk default+index
+           puts + cursor commit atomically together.
         4. Drop the chunk's structures before reading the next.
 
-        This deliberately departs from the "transaction writes once at flush"
-        model — the chunk loop issues ``_db.write()`` per chunk *before* the
-        transaction's own ``flush()``. It is sound because the writes target
-        pre-existing keys the transaction is not otherwise touching (those are
-        in ``staged_default_keys`` and skipped) and are forward-only convergent.
-
-        Idempotency / re-run safety (spec §4): a crash before the caller writes
-        ``__ttl_enabled__`` leaves the partition legacy, so a re-run re-reads the
-        already-stamped chunks. For each record this:
-
-        - skips it if it already decodes to exactly ``expires_at_ms`` (no-op);
-        - re-stamps from the **stripped payload** (``decode_ttl_value`` →
-          payload), never from the stamped blob, if it decodes to a *different*
-          stamp (prior partial run with a different expiry) — no double-wrap,
-          converging to a uniform expiry; the stale index key is deleted;
-        - wraps the whole value (first run / genuine legacy value) otherwise.
-
-        "Already stamped" reuses :meth:`_looks_like_stamped_value` exactly, so
-        the heuristic matches the recovery path (spec §4.2). The only residual
-        hazard is a genuine legacy value whose leading 8 bytes coincidentally
-        decode to exactly ``expires_at_ms`` (skipped → left un-stamped). That is
-        a specific 64-bit collision; accepted and documented (spec §4.1, OP-CB-1)
-        — the same heuristic class already used by ``_looks_like_stamped_value``.
-
-        The caller writes ``__ttl_enabled__`` / the format version **last**,
-        after this method returns, so the flip is durable only once every chunk
-        has landed (spec §3.3 flag-last ordering).
+        After the cursor reaches ``len(key_list)`` the caller writes
+        ``__ttl_enabled__`` / the format version **last**, so the flip is durable
+        only once every census key has landed (§3.4 flag-last ordering).
 
         :param expires_at_ms: uniform absolute event-time expiry to stamp on
             every pre-existing record (``high_water + legacy_records_ttl``).
@@ -502,8 +520,8 @@ class RocksDBStorePartition(StorePartition):
             current transaction's update cache (genuine in-batch user writes).
             They are skipped here and re-stamped with their own true pending
             stamp by ``_restamp_default_cf_cache_for_flip``.
-        :return: count of pre-existing records re-stamped (skipped no-ops are
-            not counted).
+        :return: count of pre-existing records re-stamped on this run (cursor-
+            skipped, staged, and deleted-since-census keys are not counted).
         """
         # Pre-create the index CF so the per-chunk batch never races a CF
         # creation.
@@ -511,6 +529,7 @@ class RocksDBStorePartition(StorePartition):
         default_cf = self.get_or_create_column_family("default")
         default_handle = self.get_column_family_handle("default")
         index_handle = self.get_column_family_handle(TTL_INDEX_CF_NAME)
+        metadata_handle = self.get_column_family_handle(METADATA_CF_NAME)
 
         headers = None
         if changelog_producer is not None:
@@ -521,45 +540,55 @@ class RocksDBStorePartition(StorePartition):
                 ),
             }
 
-        # Single forward iterator over the default CF for the whole backfill.
-        # RocksDB iterators read consistent snapshot data; the per-chunk writes
-        # put re-stamped values at the same (already-passed) keys, so they are
-        # not revisited within a single run. A crash + re-run uses a fresh
-        # iterator and relies on the already-stamped detection above.
-        iterator: Iterator[tuple[bytes, bytes]] = cast(
-            Iterator[tuple[bytes, bytes]], default_cf.items()
+        # Step 0 — CENSUS: materialize the complete, deterministically-ordered
+        # key list ONCE, with no concurrent writes to the default CF (backfill
+        # is sequential inside prepare(); processing is paused). Keys only —
+        # values are point-got fresh per chunk. ``sorted`` makes the resume
+        # order explicit and identical across runs so the integer cursor is
+        # exact (§3.3). ``staged_default_keys`` are excluded here so they are
+        # never censused, never counted in the cursor, and re-stamped only by
+        # the caller's ``_restamp_default_cf_cache_for_flip``.
+        key_list: list[bytes] = sorted(
+            cast(bytes, key)
+            for key in default_cf.keys()
+            if cast(bytes, key) not in staged_default_keys
         )
+        total = len(key_list)
+        if total > _CENSUS_SPILL_WARN_THRESHOLD:
+            logger.warning(
+                "TTL legacy backfill censused %d keys at path=%s; the key list "
+                "is held in memory (~80 B/key). For multi-million-key stores a "
+                "spill-to-disk census will be needed (OP-BC-2); proceeding "
+                "in memory for now.",
+                total,
+                self._path,
+            )
+
+        # Resume from the persisted cursor (0 on a first run / absent key).
+        cursor = self._load_backfill_progress()
+        if cursor > total:
+            # Defensive: census shrank since the cursor was written (keys
+            # deleted between runs). Clamp so the loop is a no-op tail.
+            cursor = total
 
         restamped = 0
-        while True:
-            # READ one chunk into a bounded local list.
-            chunk = list(islice(iterator, chunk_size))
-            if not chunk:
-                break
+        while cursor < total:
+            chunk_keys = key_list[cursor : cursor + chunk_size]
 
-            # RE-STAMP + build this chunk's WriteBatch (default + index puts),
-            # and collect the produce payloads so the producer queue is bounded
-            # to one chunk.
+            # RE-STAMP this chunk: point-get each value fresh and wrap whole.
             batch = WriteBatch(raw_mode=True)
             produce: list[tuple[bytes, bytes]] = []
-            for raw_key, raw_value in chunk:
-                key = cast(bytes, raw_key)
-                value = cast(bytes, raw_value)
-                if key in staged_default_keys:
-                    # Genuine in-batch user write; re-stamped by the caller.
+            for key in chunk_keys:
+                raw_value = default_cf.get(key, default=None)
+                if raw_value is None:
+                    # Deleted since the census — nothing to stamp, no index
+                    # entry to create. Skip cleanly (§5 / §8 edge cases).
                     continue
-
-                stamped = self._restamp_one_for_backfill(
-                    key=key,
-                    value=value,
-                    expires_at_ms=expires_at_ms,
-                    batch=batch,
-                    default_handle=default_handle,
-                    index_handle=index_handle,
+                stamped = encode_ttl_value(expires_at_ms, cast(bytes, raw_value))
+                batch.put(key, stamped, default_handle)
+                batch.put(
+                    encode_index_key(expires_at_ms, key), b"", index_handle
                 )
-                if stamped is None:
-                    # Already at the target expiry — skip (no-op put avoided).
-                    continue
                 produce.append((key, stamped))
                 restamped += 1
 
@@ -572,55 +601,45 @@ class RocksDBStorePartition(StorePartition):
                     )
                 changelog_producer.flush()
 
-            # COMMIT this chunk atomically (default + index puts together).
+            # ADVANCE the cursor IN THE SAME batch as the chunk's puts so the
+            # progress marker and the stamped data commit atomically. A crash
+            # after this commit but before the flag leaves the partition legacy
+            # with the cursor at this value; the re-run resumes here exactly.
+            cursor += len(chunk_keys)
+            batch.put(
+                TTL_BACKFILL_PROGRESS_KEY,
+                int_to_bytes(cursor),
+                metadata_handle,
+            )
+
+            # COMMIT this chunk atomically (default + index puts + cursor).
             self._write(batch)
 
             # RELEASE: drop the chunk's structures before the next iteration.
-            del chunk, batch, produce
+            del batch, produce
 
         return restamped
 
-    def _restamp_one_for_backfill(
-        self,
-        key: bytes,
-        value: bytes,
-        expires_at_ms: int,
-        batch: WriteBatch,
-        default_handle: ColumnFamily,
-        index_handle: ColumnFamily,
-    ) -> Optional[bytes]:
+    def _load_backfill_progress(self) -> int:
         """
-        Stage the (default + index) puts re-stamping one default-CF record to
-        ``expires_at_ms`` into ``batch`` (spec §4). Returns the new stamped
-        default-CF blob, or ``None`` if the record is already at the target
-        expiry and was skipped (no put staged).
-
-        Three cases:
-
-        - value looks stamped (reuse :meth:`_looks_like_stamped_value`) and its
-          decoded stamp already equals ``expires_at_ms`` → skip (return None);
-        - value looks stamped with a *different* stamp (prior partial run) →
-          re-stamp from the **stripped payload** (no double-wrap) and delete the
-          stale ``encode_index_key(stamp_old, key)`` (spec §4.3);
-        - otherwise (first run / genuine legacy value) → wrap the whole value.
+        Read the persisted backfill cursor ``__ttl_backfill_progress__`` from
+        the metadata CF. Absent / undecodable = ``0`` (first run / no progress
+        yet). The cursor is the number of census keys already stamped (Fix A,
+        spec §3.3).
         """
-        if self._looks_like_stamped_value(value):
-            stamp_old, payload = decode_ttl_value(value)
-            if stamp_old == expires_at_ms:
-                # Already converged to this run's uniform expiry.
-                return None
-            # Prior-run stamp with a different expiry: re-stamp from the
-            # stripped payload (never the stamped blob) and fix the index.
-            stamped = encode_ttl_value(expires_at_ms, payload)
-            if stamp_old != SENTINEL_NEVER:
-                batch.delete(encode_index_key(stamp_old, key), index_handle)
-        else:
-            # First run / genuine legacy value: wrap the whole value.
-            stamped = encode_ttl_value(expires_at_ms, value)
-
-        batch.put(key, stamped, default_handle)
-        batch.put(encode_index_key(expires_at_ms, key), b"", index_handle)
-        return stamped
+        metadata_cf = self.get_or_create_column_family(METADATA_CF_NAME)
+        raw = metadata_cf.get(TTL_BACKFILL_PROGRESS_KEY, default=None)
+        if raw is None:
+            return 0
+        try:
+            return int_from_bytes(cast(bytes, raw))
+        except Exception:
+            logger.warning(
+                "Failed to decode TTL backfill progress cursor at %s; "
+                "restarting the backfill from the beginning.",
+                self._path,
+            )
+            return 0
 
     def reject_ttl_on_populated_store(self) -> "IncompatibleStateStoreError":
         """
