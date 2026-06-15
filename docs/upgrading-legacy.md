@@ -100,7 +100,7 @@ during processing.
 Quix Streams >= 2.0 has deprecated the "split" messaging format (it will remain 
 supported in legacy C# library).
 
-***`quixstreams>=2.0` will (gracefully) skip any split messages it encounters.***
+***`quixstreams>=2.0` will fail deserialization for split messages unless your application handles or suppresses the resulting serialization error.***
 
 
 ### Batched/"Buffered" Message Handling
