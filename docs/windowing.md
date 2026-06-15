@@ -723,7 +723,7 @@ sdf = sdf.tumbling_window(timedelta(seconds=10)).agg(value=Sum()).final()
 # -> Timestamp=10001, value=1 -> emit {"start": 0, "end": 10000, "value": 2}, because the time has progressed beyond the window end. 
 ```
 
-`.final()` mode makes the window wait until the maximum observed timestamp for the topic partition passes the window end before emitting.
+By default, `.final()` mode makes the window wait until the maximum observed timestamp for the same message key passes the window end before emitting. Use `final(closing_strategy="partition")` to close windows based on the maximum observed timestamp for the whole topic partition.
 
 Emitting final results provides unique and complete values per window interval, but it adds some latency.
 Also, specifying a grace period using `grace_ms` will increase the latency, because the window now needs to wait for potential out-of-order events.
