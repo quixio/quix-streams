@@ -141,7 +141,7 @@ python consumer.py
 [2024-02-21 19:57:38,669] [INFO] : Topics required for this application: "messages", "words"
 [2024-02-21 19:57:38,699] [INFO] : Validating Kafka topics exist and are configured correctly...
 [2024-02-21 19:57:38,718] [INFO] : Kafka topics validation complete
-[2024-02-21 19:57:38,718] [INFO] : Initializing state directory at "/app/state/text-splitter-v1"
+[2024-02-21 19:57:38,718] [INFO] : Initializing state directory at "<current-directory>/state/text-splitter-v1"
 [2024-02-21 19:57:38,718] [INFO] : The application started and is now processing incoming messages
 Input:  {'chat_id': 'id1', 'text': 'Lorem ipsum dolor sit amet'}
 Output: {'text': 'Lorem', 'length': 5}
