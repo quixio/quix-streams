@@ -1,6 +1,7 @@
 import logging
 import time
 from datetime import timedelta
+from itertools import islice
 from typing import (
     Dict,
     Iterator,
@@ -17,10 +18,17 @@ from quixstreams.state.base import (
     PartitionTransactionCache,
     StorePartition,
 )
-from quixstreams.state.metadata import LOCAL_ONLY_CFS, METADATA_CF_NAME, Marker
+from quixstreams.state.metadata import (
+    CHANGELOG_CF_MESSAGE_HEADER,
+    CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER,
+    LOCAL_ONLY_CFS,
+    METADATA_CF_NAME,
+    Marker,
+)
 from quixstreams.state.recovery import ChangelogProducer
 from quixstreams.state.rocksdb.transaction import RocksDBPartitionTransaction
 from quixstreams.state.serialization import int_from_bytes, int_to_bytes
+from quixstreams.utils.json import dumps as json_dumps
 
 from .exceptions import IncompatibleStateStoreError, RocksDBCorruptedError
 from .metadata import (
@@ -103,6 +111,13 @@ class RocksDBStorePartition(StorePartition):
         self._legacy_records_ttl: Optional[timedelta] = (
             self._options.legacy_records_ttl
         )
+        # Number of pre-existing records re-stamped per write-batch during the
+        # one-time legacy backfill. Bounds peak transient memory to one chunk
+        # (see :meth:`backfill_legacy_records`). Only consulted on the single
+        # backfilling flush.
+        self._legacy_backfill_chunk_size: int = (
+            self._options.legacy_backfill_chunk_size
+        )
         self._db = self._init_rocksdb()
         self._cf_cache: Dict[str, Rdict] = {}
         self._cf_handle_cache: Dict[str, ColumnFamily] = {}
@@ -160,6 +175,11 @@ class RocksDBStorePartition(StorePartition):
         store (default); a positive ``timedelta`` = backfill in place.
         """
         return self._legacy_records_ttl
+
+    @property
+    def legacy_backfill_chunk_size(self) -> int:
+        """Number of records re-stamped per write-batch during the backfill."""
+        return self._legacy_backfill_chunk_size
 
     def advance_high_water(self, timestamp: Optional[int]) -> None:
         """
@@ -411,13 +431,16 @@ class RocksDBStorePartition(StorePartition):
     def backfill_legacy_records(
         self,
         expires_at_ms: int,
-        cache: PartitionTransactionCache,
-    ) -> set[bytes]:
+        changelog_producer: Optional[ChangelogProducer],
+        processed_offsets: Optional[dict[str, int]],
+        staged_default_keys: set[bytes],
+        chunk_size: int,
+    ) -> int:
         """
-        Re-stamp every pre-existing un-stamped record in the default CF with a
-        uniform ``expires_at_ms`` expiry and stage the writes into the
-        transaction ``cache`` so they flow through the existing changelog
-        producer and the partition's atomic ``write()`` (spec §8.5, option a).
+        Re-stamp every pre-existing record in the default CF with a uniform
+        ``expires_at_ms`` expiry in **bounded chunks**, persisting and producing
+        each chunk before reading the next so peak transient memory is one chunk
+        regardless of total store size (spec ``spec-chunked-backfill.md`` §3).
 
         Called by the transaction layer from ``prepare()`` when a TTL write is
         detected on a partition whose default CF is **populated** *and*
@@ -425,64 +448,179 @@ class RocksDBStorePartition(StorePartition):
         ``_maybe_flip_or_reject``). The companion empty-store flip path
         (:meth:`flip_into_ttl_mode`) handles the empty-CF case.
 
-        For each on-disk default-CF key that is **not already staged in the
-        cache** by the current transaction (those in-batch keys are re-stamped
-        with their own true pending stamp by
-        ``_restamp_default_cf_cache_for_flip``), this:
+        Per chunk (up to ``chunk_size`` (key, value) pairs read from a single
+        forward iterator over the default CF):
 
-        - wraps the value with ``encode_ttl_value(expires_at_ms, value)``;
-        - stages a matching ``encode_index_key(expires_at_ms, key)`` entry into
-          the local-only ``__ttl_index__`` CF.
+        1. Build a ``WriteBatch`` of default-CF puts (the re-stamped values) and
+           ``__ttl_index__`` puts (``encode_index_key(expires_at_ms, key)``).
+        2. Produce the re-stamped default-CF records to the changelog (the index
+           CF is local-only and is rebuilt on recovery), then ``flush()`` the
+           producer so its in-flight queue stays bounded to one chunk.
+        3. Commit the batch with the raw writer ``self._write(batch)`` — NOT
+           ``self.write(...)`` — so no sweep runs (the partition is still legacy
+           during the backfill) and the per-chunk default+index puts commit
+           atomically together.
+        4. Drop the chunk's structures before reading the next.
 
-        Because the entries land in the transaction cache, ``super().prepare()``
-        produces the re-stamped default-CF values to the changelog (the index
-        CF is local-only and is rebuilt on recovery), and the partition's
-        ``write()`` commits everything — including the flip metadata written by
-        the caller — in a single atomic ``WriteBatch``. Either the store is
-        fully backfilled-and-flipped or untouched; a crash before the commit
-        leaves the store legacy and the backfill re-runs cleanly (spec §8.4).
+        This deliberately departs from the "transaction writes once at flush"
+        model — the chunk loop issues ``_db.write()`` per chunk *before* the
+        transaction's own ``flush()``. It is sound because the writes target
+        pre-existing keys the transaction is not otherwise touching (those are
+        in ``staged_default_keys`` and skipped) and are forward-only convergent.
 
-        The whole default CF is staged in one pass — the backfill is a one-time
-        migration and is **not** bounded by ``max_evictions_per_flush``.
+        Idempotency / re-run safety (spec §4): a crash before the caller writes
+        ``__ttl_enabled__`` leaves the partition legacy, so a re-run re-reads the
+        already-stamped chunks. For each record this:
+
+        - skips it if it already decodes to exactly ``expires_at_ms`` (no-op);
+        - re-stamps from the **stripped payload** (``decode_ttl_value`` →
+          payload), never from the stamped blob, if it decodes to a *different*
+          stamp (prior partial run with a different expiry) — no double-wrap,
+          converging to a uniform expiry; the stale index key is deleted;
+        - wraps the whole value (first run / genuine legacy value) otherwise.
+
+        "Already stamped" reuses :meth:`_looks_like_stamped_value` exactly, so
+        the heuristic matches the recovery path (spec §4.2). The only residual
+        hazard is a genuine legacy value whose leading 8 bytes coincidentally
+        decode to exactly ``expires_at_ms`` (skipped → left un-stamped). That is
+        a specific 64-bit collision; accepted and documented (spec §4.1, OP-CB-1)
+        — the same heuristic class already used by ``_looks_like_stamped_value``.
+
+        The caller writes ``__ttl_enabled__`` / the format version **last**,
+        after this method returns, so the flip is durable only once every chunk
+        has landed (spec §3.3 flag-last ordering).
 
         :param expires_at_ms: uniform absolute event-time expiry to stamp on
             every pre-existing record (``high_water + legacy_records_ttl``).
-        :param cache: the current transaction's update cache.
-        :return: the set of serialized default-CF keys that were re-stamped
-            (the caller passes it to ``_restamp_default_cf_cache_for_flip`` so
-            those keys are not double-stamped as in-batch writes).
+        :param changelog_producer: the partition's changelog producer, or
+            ``None`` when changelog topics are disabled (chunks still persist
+            locally; production is skipped).
+        :param processed_offsets: ``<topic: offset>`` of the latest processed
+            message, encoded into the changelog headers exactly as the base
+            ``_prepare`` path does.
+        :param staged_default_keys: serialized default-CF keys present in the
+            current transaction's update cache (genuine in-batch user writes).
+            They are skipped here and re-stamped with their own true pending
+            stamp by ``_restamp_default_cf_cache_for_flip``.
+        :return: count of pre-existing records re-stamped (skipped no-ops are
+            not counted).
         """
-        default_cf = self.get_or_create_column_family("default")
-
-        # Keys the current transaction already staged in the default CF. Those
-        # are user-driven writes for *this* batch; the caller re-stamps them
-        # with their own pending stamp, so we must not overwrite them with the
-        # uniform legacy expiry.
-        staged_default: set[bytes] = set()
-        for prefix_updates in cache.get_updates(cf_name="default").values():
-            staged_default.update(prefix_updates.keys())
-
-        backfilled_keys: set[bytes] = set()
-        for key, value in default_cf.items():
-            key = cast(bytes, key)
-            if key in staged_default:
-                continue
-            stamped = encode_ttl_value(expires_at_ms, cast(bytes, value))
-            # Stage under an empty prefix bucket: ``write()`` and the changelog
-            # producer both key off the full ``key``, so the bucket is only an
-            # organizational grouping.
-            cache.set(key=key, value=stamped, prefix=b"", cf_name="default")
-            cache.set(
-                key=encode_index_key(expires_at_ms, key),
-                value=b"",
-                prefix=b"",
-                cf_name=TTL_INDEX_CF_NAME,
-            )
-            backfilled_keys.add(key)
-
-        # Pre-create the index CF so the write path never races a CF creation.
+        # Pre-create the index CF so the per-chunk batch never races a CF
+        # creation.
         self.get_or_create_column_family(TTL_INDEX_CF_NAME)
-        return backfilled_keys
+        default_cf = self.get_or_create_column_family("default")
+        default_handle = self.get_column_family_handle("default")
+        index_handle = self.get_column_family_handle(TTL_INDEX_CF_NAME)
+
+        headers = None
+        if changelog_producer is not None:
+            headers = {
+                CHANGELOG_CF_MESSAGE_HEADER: "default",
+                CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER: json_dumps(
+                    processed_offsets
+                ),
+            }
+
+        # Single forward iterator over the default CF for the whole backfill.
+        # RocksDB iterators read consistent snapshot data; the per-chunk writes
+        # put re-stamped values at the same (already-passed) keys, so they are
+        # not revisited within a single run. A crash + re-run uses a fresh
+        # iterator and relies on the already-stamped detection above.
+        iterator: Iterator[tuple[bytes, bytes]] = cast(
+            Iterator[tuple[bytes, bytes]], default_cf.items()
+        )
+
+        restamped = 0
+        while True:
+            # READ one chunk into a bounded local list.
+            chunk = list(islice(iterator, chunk_size))
+            if not chunk:
+                break
+
+            # RE-STAMP + build this chunk's WriteBatch (default + index puts),
+            # and collect the produce payloads so the producer queue is bounded
+            # to one chunk.
+            batch = WriteBatch(raw_mode=True)
+            produce: list[tuple[bytes, bytes]] = []
+            for raw_key, raw_value in chunk:
+                key = cast(bytes, raw_key)
+                value = cast(bytes, raw_value)
+                if key in staged_default_keys:
+                    # Genuine in-batch user write; re-stamped by the caller.
+                    continue
+
+                stamped = self._restamp_one_for_backfill(
+                    key=key,
+                    value=value,
+                    expires_at_ms=expires_at_ms,
+                    batch=batch,
+                    default_handle=default_handle,
+                    index_handle=index_handle,
+                )
+                if stamped is None:
+                    # Already at the target expiry — skip (no-op put avoided).
+                    continue
+                produce.append((key, stamped))
+                restamped += 1
+
+            # PRODUCE this chunk's re-stamped default-CF records, then flush so
+            # the producer's in-flight queue does not grow across chunks.
+            if changelog_producer is not None and produce:
+                for key, stamped in produce:
+                    changelog_producer.produce(
+                        key=key, value=stamped, headers=headers
+                    )
+                changelog_producer.flush()
+
+            # COMMIT this chunk atomically (default + index puts together).
+            self._write(batch)
+
+            # RELEASE: drop the chunk's structures before the next iteration.
+            del chunk, batch, produce
+
+        return restamped
+
+    def _restamp_one_for_backfill(
+        self,
+        key: bytes,
+        value: bytes,
+        expires_at_ms: int,
+        batch: WriteBatch,
+        default_handle: ColumnFamily,
+        index_handle: ColumnFamily,
+    ) -> Optional[bytes]:
+        """
+        Stage the (default + index) puts re-stamping one default-CF record to
+        ``expires_at_ms`` into ``batch`` (spec §4). Returns the new stamped
+        default-CF blob, or ``None`` if the record is already at the target
+        expiry and was skipped (no put staged).
+
+        Three cases:
+
+        - value looks stamped (reuse :meth:`_looks_like_stamped_value`) and its
+          decoded stamp already equals ``expires_at_ms`` → skip (return None);
+        - value looks stamped with a *different* stamp (prior partial run) →
+          re-stamp from the **stripped payload** (no double-wrap) and delete the
+          stale ``encode_index_key(stamp_old, key)`` (spec §4.3);
+        - otherwise (first run / genuine legacy value) → wrap the whole value.
+        """
+        if self._looks_like_stamped_value(value):
+            stamp_old, payload = decode_ttl_value(value)
+            if stamp_old == expires_at_ms:
+                # Already converged to this run's uniform expiry.
+                return None
+            # Prior-run stamp with a different expiry: re-stamp from the
+            # stripped payload (never the stamped blob) and fix the index.
+            stamped = encode_ttl_value(expires_at_ms, payload)
+            if stamp_old != SENTINEL_NEVER:
+                batch.delete(encode_index_key(stamp_old, key), index_handle)
+        else:
+            # First run / genuine legacy value: wrap the whole value.
+            stamped = encode_ttl_value(expires_at_ms, value)
+
+        batch.put(key, stamped, default_handle)
+        batch.put(encode_index_key(expires_at_ms, key), b"", index_handle)
+        return stamped
 
     def reject_ttl_on_populated_store(self) -> "IncompatibleStateStoreError":
         """

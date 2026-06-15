@@ -33,22 +33,61 @@ byte-for-byte identical to the prior reject-on-populated-store behavior.
   `high_water + legacy_records_ttl`, so legacy records expire consistently with
   new records. We never invent a wall-clock expiry — if no event-time is
   available at flip we hard-error.
-- **Bulk-at-flip, single atomic batch (spec §8.2-8.4).** All re-stamped values,
-  index entries, and the `__ttl_enabled__` flag are staged into the one
-  transaction cache and committed by the partition's existing single-`WriteBatch`
-  `write()`. RocksDB `WriteBatch` is atomic, so the store is either fully
-  backfilled-and-flipped or untouched. Because `__ttl_enabled__` is written last
-  (in the same batch), a crash before commit leaves the store legacy and the
-  backfill re-runs cleanly — no double-stamping, exactly-once backfill.
-- **Changelog via option (a) (spec §8.5).** Re-stamped pre-existing keys are
-  staged into the **transaction update cache**, so the existing changelog
-  producer emits them naturally and cold-restore recovery rebuilds from the same
-  bytes with zero recovery-side code change. The `__ttl_index__` CF is
-  local-only and is rebuilt during recovery, not produced to the changelog.
-  Spike confirmed (a) is viable: a 500k-key store re-stamps in ~0.4 s with a
-  ~27 MB WriteBatch; memory scales linearly and is dominated by the cache, which
-  is acceptable for the dedup workload. Chunking was deliberately rejected
-  because it would break the single-atomic-batch idempotency guarantee.
+- **Chunked re-stamp, flag-last (spec `spec-chunked-backfill.md` §3, §6).** The
+  earlier single-shot design staged the *entire* store into the transaction
+  cache and committed it in one `WriteBatch`. That held several whole-store-sized
+  copies co-resident (cache + serialized batch + changelog producer queue) and
+  was **OOM-killed on a real 500 MB Quix Cloud deployment at ~165k records**. The
+  backfill now iterates the populated default CF with a **single forward
+  iterator** in bounded chunks of `legacy_backfill_chunk_size` (default 10_000).
+  Per chunk: re-stamp into a chunk-sized `WriteBatch` (default-CF puts +
+  `__ttl_index__` puts), produce the chunk's re-stamped default-CF records to the
+  changelog, `flush()` the producer (bounding its in-flight queue to one chunk),
+  commit the batch with the **raw** writer `self._write(batch)`, then release the
+  chunk's structures. Peak transient memory is therefore **one chunk**, flat
+  regardless of total store size (~30-80 MB at the default). The work happens out
+  of the transaction cache entirely; only the small genuine in-batch user writes
+  still flow through the cache.
+- **Flag-last atomicity invariant (spec §3.3, §6).** A single `WriteBatch` could
+  no longer wrap the whole migration, so atomicity is anchored differently:
+  `backfill_legacy_records` persists+produces every chunk first, then the caller
+  writes `__ttl_enabled__` + the format version **last**, in the final
+  transaction batch via `partition.write()`. Until that flag lands the on-disk
+  partition is still legacy. A crash mid-backfill (or before the flag) ⇒ the
+  partition opens legacy ⇒ the backfill re-runs from a fresh iterator and
+  converges. Each chunk is itself atomic (its default+index puts commit
+  together). The backfill stays **sequential** inside `prepare()` (no threads),
+  so processing is paused for the whole migration and there is no interleaving —
+  the atomic-flip correctness (convert all → flag → resume) is preserved.
+- **Re-run / already-stamped safety (spec §4, OP-CB-1 — the correctness core).**
+  Because chunks commit incrementally, a re-run after a partial backfill re-reads
+  already-stamped records. For each record the loop reuses
+  `_looks_like_stamped_value`: if it decodes to *exactly* the current run's
+  `expires_at_ms` it is **skipped** (no-op put avoided); if it decodes to a
+  *different* stamp (a prior partial run with a different high-water-derived
+  expiry) it is **re-stamped from the stripped payload** (`decode_ttl_value` →
+  payload, never the stamped blob) and the stale `__ttl_index__` pointer is
+  deleted — so there is no double-wrap and the store converges to one uniform
+  expiry; otherwise (first run / genuine legacy value) the whole value is
+  wrapped. The only residual hazard is a genuine legacy value whose leading 8
+  bytes coincidentally decode to exactly `expires_at_ms` (skipped → left
+  un-stamped) — a specific 64-bit collision, the same heuristic class already
+  accepted in `_looks_like_stamped_value` / `_normalize_replay_value`. Accepted
+  and documented; no per-record format marker added.
+- **Changelog via option (a), per chunk (spec §5, §8.5).** Re-stamped
+  pre-existing default-CF keys are produced to the changelog directly per chunk
+  (not via the transaction cache), so cold-restore recovery rebuilds from the
+  same bytes with zero recovery-side code change. The `__ttl_index__` CF is
+  local-only and is rebuilt during recovery, not produced. Recovery replays in
+  Kafka offset order regardless of how producing was batched, so per-chunk
+  production is recovery-identical to single-shot. **Changelog offset
+  correctness:** the per-chunk `_write(batch)` does NOT advance the persisted
+  `__changelog_offset__`; that is still written once in the final
+  `partition.write()`. `InternalProducer._on_delivery` records the max produced
+  offset per topic-partition across *all* `produce()` calls (chunk + in-batch),
+  and `Checkpoint.commit` reads `producer.offsets` after its flush, so the final
+  persisted offset already includes the chunk-produced messages — verified
+  against `internal_producer.py:206-232`.
 
 ## Data flow
 
@@ -65,31 +104,50 @@ tx.prepare()                                            (transaction.py)
        2. already flipped          -> return (inline-stamped path)
        3. populated + opt-in unset -> reject_ttl_on_populated_store() (raise)
        4. empty                    -> flip (empty-store fast path)
-       5. populated + opt-in set   -> BACKFILL:
+       5. populated + opt-in set   -> CHUNKED BACKFILL:
+            staged_default_keys = serialized default-CF keys in this batch
             expires = _compute_legacy_expiry(legacy_records_ttl)
                     = high_water + _ttl_to_ms(legacy_records_ttl)
-            backfilled_keys = partition.backfill_legacy_records(expires, cache)
-                 └─ iterate default CF on disk (user data only; spike Q3)
-                    for each key NOT already staged this batch:
-                       cache.set(key, encode_ttl_value(expires, value))   [default CF]
-                       cache.set(encode_index_key(expires, key), b"")     [__ttl_index__]
-            _restamp_default_cf_cache_for_flip(skip_keys=backfilled_keys)
-                 └─ stamp the genuine in-batch writes with their own stamps
-            _write_flip_metadata_to_cache()   (__ttl_enabled__, format version)
-            partition.uses_ttl_stamps = True
-  └─ super().prepare()  -> produces every non-local-only cache entry to changelog
-                           (re-stamped legacy keys + new keys reach the changelog)
+            restamped = partition.backfill_legacy_records(
+                            expires, changelog_producer, processed_offsets,
+                            staged_default_keys, chunk_size)
+                 └─ single forward iterator over the default CF; loop:
+                    chunk = islice(iterator, chunk_size)   (bounded read)
+                    for key, value in chunk (skip staged_default_keys):
+                       # already-stamped detection (re-run safety):
+                       #   stamp == expires        -> skip (no-op)
+                       #   stamp != expires (prior) -> re-stamp from PAYLOAD,
+                       #                               delete stale index key
+                       #   not stamped (legacy)     -> wrap whole value
+                       batch.put(key, encode_ttl_value(expires, payload))  [default]
+                       batch.put(encode_index_key(expires, key), b"")      [__ttl_index__]
+                    changelog_producer.produce(chunk's re-stamped default recs)
+                    changelog_producer.flush()        # bound producer queue
+                    self._write(batch)                # raw writer, per-chunk commit
+                    release chunk + batch              # peak memory = 1 chunk
+            _restamp_default_cf_cache_for_flip()       # stamp in-batch writes only
+            _write_flip_metadata_to_cache()            # __ttl_enabled__, format ver
+            partition.uses_ttl_stamps = True           # (reached only if no crash)
+  └─ super().prepare()  -> produces the (small) in-batch cache entries to changelog
 
 tx.flush()                                              (base transaction.py)
   └─ partition.write(cache, offset)                     (partition.py)
-       └─ one WriteBatch: all cache entries + high-water + sweep + offset
-       └─ self._write(batch)   <-- single atomic on-disk commit (flag included)
+       └─ one WriteBatch: in-batch cache entries + flip metadata + high-water
+                          + sweep-eligible + __changelog_offset__
+       └─ self._write(batch)   <-- final atomic commit; this is where the FLAG
+                                    lands (flag-last). Crash before here ⇒ legacy.
 ```
 
-Recovery (cold restore) is unchanged: the existing flag-discovery
-(`partition.py:167-183`) flips a recovering partition into TTL mode on the first
-stamped default-CF replay, and `_normalize_replay_value` round-trips stamped
-values, so the backfilled stamps replay verbatim.
+Pre-existing records are persisted+produced by the chunk loop *before* this
+final batch; the final batch carries only the genuine in-batch user writes and
+the flip metadata. The `__changelog_offset__` is advanced only in this final
+write, using the checkpoint's `produced_offsets` (which already reflects the
+chunk-produced messages).
+
+Recovery (cold restore) is unchanged: the existing flag-discovery flips a
+recovering partition into TTL mode on the first stamped default-CF replay, and
+the wallclock-at-recovery filter (Rule 4) decides survivors. Chunk boundaries
+are invisible to recovery — messages replay in Kafka offset order.
 
 ## File inventory
 
@@ -99,7 +157,13 @@ Created:
 - `tests/test_quixstreams/test_state/test_rocksdb/test_legacy_backfill.py` —
   unit tests for spec §11 cases 1-9 (validation, backfill stamps, reject
   message, empty store, idempotency, event-time clock, windowed opt-out,
-  recovery wiring, crash-before-flag re-run).
+  recovery wiring, crash-before-flag re-run) + the wallclock-recovery cases.
+- `tests/test_quixstreams/test_state/test_rocksdb/test_chunked_backfill.py` —
+  unit tests for the chunked backfill (`spec-chunked-backfill.md` §10): chunk
+  size validation, store >> chunk completes with one `_write` per chunk + final
+  flip batch, store < chunk, empty store, crash-before-flag re-run convergence
+  with no double-wrap, mixed already-stamped/legacy re-stamp + stale-index
+  cleanup, per-chunk changelog rebuild-identical.
 - `dev-planning/state-ttl-legacy-backfill/implementation-notes.md` — spike
   findings (Q1-Q3) and chosen approach.
 - `dev-planning/state-ttl-legacy-backfill/open-points.md` — OP-1 (recovery
@@ -108,12 +172,18 @@ Created:
 Modified:
 
 - `quixstreams/state/rocksdb/options.py` — `legacy_records_ttl` field +
-  docstring; `__post_init__` validation (strictly positive or `ValueError`).
-- `quixstreams/state/rocksdb/types.py` — `legacy_records_ttl` on the
-  `RocksDBOptionsType` protocol.
-- `quixstreams/state/rocksdb/partition.py` — thread the option into `__init__`
-  (`self._legacy_records_ttl`), add the `legacy_records_ttl` property, add
-  `backfill_legacy_records(expires_at_ms, cache)`, and rewrite
+  docstring; `legacy_backfill_chunk_size: int = 10_000` field + docstring;
+  `__post_init__` validation (both: strictly positive or `ValueError`).
+- `quixstreams/state/rocksdb/types.py` — `legacy_records_ttl` and
+  `legacy_backfill_chunk_size` on the `RocksDBOptionsType` protocol.
+- `quixstreams/state/rocksdb/partition.py` — thread both options into `__init__`
+  (`self._legacy_records_ttl`, `self._legacy_backfill_chunk_size`), add the
+  `legacy_records_ttl` and `legacy_backfill_chunk_size` properties, **rewrite
+  `backfill_legacy_records` as the chunked loop** (new signature
+  `(expires_at_ms, changelog_producer, processed_offsets, staged_default_keys,
+  chunk_size) -> int`; no longer takes/uses the transaction cache) with the
+  `_restamp_one_for_backfill` per-record helper (already-stamped detection,
+  payload re-stamp, stale-index delete), and rewrite
   `reject_ttl_on_populated_store` (operator-callable message;
   `operator_action="set_legacy_records_ttl"`). **OP-1 recovery-clock fix
   (spec-recovery-wallclock.md):** `recover_from_changelog_message` now judges
@@ -122,10 +192,14 @@ Modified:
   the `_now_ms()` test seam) instead of a stamp-ratcheted high-water; the old
   `advance_high_water(stamp)` recovery ratchet is removed and the post-recovery
   `high_water_ms` is seeded to that captured wallclock.
-- `quixstreams/state/rocksdb/transaction.py` — 4th (backfill) branch in
-  `_maybe_flip_or_reject`; new `_compute_legacy_expiry`; `skip_keys` parameter
-  on `_restamp_default_cf_cache_for_flip` to prevent double-stamping backfilled
-  keys; top-level import of `IncompatibleStateStoreError`.
+- `quixstreams/state/rocksdb/transaction.py` — backfill branch in
+  `_maybe_flip_or_reject` re-plumbed for the chunked method: `prepare()` now
+  forwards `processed_offsets` into `_maybe_flip_or_reject`, which computes
+  `staged_default_keys` (the in-batch default-CF keys) and passes the changelog
+  producer + offsets + chunk size into `backfill_legacy_records`; the
+  pre-existing keys no longer pass through `_restamp_default_cf_cache_for_flip`
+  (it now stamps only the in-batch writes, called with no `skip_keys`); new
+  `_compute_legacy_expiry`; Rule-3 `_compute_stamp` floor (prior work).
 
 ## Integration with neighboring features
 
@@ -163,7 +237,18 @@ Modified:
   uses the old stamp-ratchet logic; the fix was scoped to the RocksDB partition
   only (per spec), so the in-memory store retains the OP-1 collapse — flag for a
   follow-up if the memory backend is used with TTL + changelog recovery.
-- **Large stores.** Backfill loads the whole default CF into the transaction
-  cache (option a) before flushing. Fine for the dedup workload (short keys,
-  tiny values). For pathological huge-value stores this is the memory knob to
-  revisit (see implementation-notes §8.3 Q1) — out of scope for Phase 1.
+- **Large stores — OOM fixed (chunked backfill).** The single-shot backfill held
+  several whole-store-sized copies and was OOM-killed at ~165k records on a
+  500 MB Quix Cloud deployment. The backfill is now chunked
+  (`legacy_backfill_chunk_size`, default 10_000); peak transient memory is one
+  chunk (~30-80 MB at the default), flat in total store size. Lower the knob on
+  tight-memory deployments. See `spec-chunked-backfill.md`.
+- **Per-chunk `producer.flush()` cost.** One network round-trip per chunk (~17
+  for the 165k store at the default) — negligible. If profiling ever shows flush
+  latency dominating for very large stores, flush every K chunks instead (trades
+  a bounded multiple of producer memory for fewer round-trips); not currently
+  needed.
+- **Re-run double-wrap hazard (OP-CB-1).** See "Re-run / already-stamped safety"
+  above: a genuine legacy value whose leading 8 bytes coincidentally equal the
+  exact current `expires_at_ms` would be skipped and left un-stamped. Negligible
+  64-bit collision; accepted, no per-record marker added.

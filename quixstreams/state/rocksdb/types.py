@@ -27,5 +27,6 @@ class RocksDBOptionsType(Protocol):
     on_corrupted_recreate: bool
     max_evictions_per_flush: int
     legacy_records_ttl: Optional[timedelta]
+    legacy_backfill_chunk_size: int
 
     def to_options(self) -> rocksdict.Options: ...

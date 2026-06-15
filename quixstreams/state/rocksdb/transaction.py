@@ -435,10 +435,12 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         :param processed_offsets: the dict with <topic: offset> of the latest processed message
         """
         self._persist_counter()
-        self._maybe_flip_or_reject()
+        self._maybe_flip_or_reject(processed_offsets=processed_offsets)
         super().prepare(processed_offsets=processed_offsets)
 
-    def _maybe_flip_or_reject(self) -> None:
+    def _maybe_flip_or_reject(
+        self, processed_offsets: Optional[dict[str, int]] = None
+    ) -> None:
         """
         Flush-time TTL detection.
 
@@ -459,9 +461,14 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
            default CF is **populated**:
            - if ``legacy_records_ttl`` is set → **backfill** every
              pre-existing record with a uniform ``high_water +
-             legacy_records_ttl`` expiry, then flip;
+             legacy_records_ttl`` expiry in bounded chunks (each chunk
+             persisted + produced before the next is read; peak memory ≈ one
+             chunk), then write the in-batch stamps and the flip metadata LAST;
            - otherwise → reject loudly (with the operator-callable message
              pointing at ``legacy_records_ttl``).
+
+        :param processed_offsets: ``<topic: offset>`` of the latest processed
+            message, forwarded to the chunked backfill for changelog headers.
         """
         if not self._batch_has_ttl_writes:
             return
@@ -476,25 +483,41 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             raise self._partition.reject_ttl_on_populated_store()
 
         restamped = 0
-        backfilled_keys: set[bytes] = set()
+        staged_default_keys: set[bytes] = set()
         if populated:
-            # Backfill branch: re-stamp every pre-existing on-disk record with
-            # a uniform expiry derived from the event-time enable moment, then
-            # fall through to the shared flip machinery for the in-batch keys
-            # and the flip metadata.
+            # Backfill branch: re-stamp every pre-existing on-disk record with a
+            # uniform expiry in bounded chunks (memory ≈ one chunk), producing
+            # and committing each chunk before reading the next. The genuine
+            # in-batch user writes are skipped here (passed as
+            # ``staged_default_keys``) and re-stamped with their own true pending
+            # stamp by ``_restamp_default_cf_cache_for_flip`` below. The flip
+            # metadata is written LAST (flag-last ordering, spec §3.3): a crash
+            # before ``_write_flip_metadata_to_cache`` lands leaves the partition
+            # legacy and the backfill re-runs cleanly.
+            for prefix_updates in self._update_cache.get_updates(
+                cf_name="default"
+            ).values():
+                staged_default_keys.update(prefix_updates.keys())
+
             expires_at_ms = self._compute_legacy_expiry(legacy_records_ttl)
-            backfilled_keys = self._partition.backfill_legacy_records(
+            restamped = self._partition.backfill_legacy_records(
                 expires_at_ms=expires_at_ms,
-                cache=self._update_cache,
+                changelog_producer=self._changelog_producer,
+                processed_offsets=processed_offsets,
+                staged_default_keys=staged_default_keys,
+                chunk_size=self._partition.legacy_backfill_chunk_size,
             )
-            restamped = len(backfilled_keys)
 
         # Re-encode the in-batch cache with stamps + flip the partition flag in
         # the same logical batch. The actual on-disk ``WriteBatch`` is built
         # later in ``RocksDBStorePartition.write``; we mutate the transaction
         # cache here so both the changelog producer (in ``super().prepare()``)
-        # and the partition writer see the stamped values.
-        self._restamp_default_cf_cache_for_flip(skip_keys=backfilled_keys)
+        # and the partition writer see the stamped values. The pre-existing
+        # records have already been persisted+produced by the chunk loop above,
+        # so only the (small) in-batch keys flow through the cache here, and
+        # every one of them must be stamped with its own pending stamp — there
+        # are no pre-existing backfilled keys left in the cache to skip.
+        self._restamp_default_cf_cache_for_flip()
         self._write_flip_metadata_to_cache()
         # Flip the **runtime** flag now so the partition's write path takes
         # the TTL-aware branch (high-water persist, sweep, index-CF use).
@@ -552,12 +575,15 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         path and the backfill path. The cache walk is O(batch); typical
         first-flush batches are tens to hundreds of entries.
 
-        :param skip_keys: serialized default-CF keys already stamped by
-            :meth:`RocksDBStorePartition.backfill_legacy_records` (pre-existing
-            on-disk records). They are staged in the cache with their uniform
-            legacy expiry already applied, so they must NOT be re-stamped here
-            (that would double-wrap the value). Only the genuine in-batch user
-            writes are (re-)stamped.
+        With the chunked backfill the pre-existing on-disk records are persisted
+        and produced directly by
+        :meth:`RocksDBStorePartition.backfill_legacy_records` and never enter
+        this cache, so the cache holds only the genuine in-batch user writes —
+        all of which must be stamped. ``skip_keys`` is therefore unused by the
+        current caller and retained only as a defensive hook.
+
+        :param skip_keys: optional serialized default-CF keys to leave
+            untouched (not re-stamped). The current caller passes none.
         """
         skip_keys = skip_keys or set()
         cache = self._update_cache

@@ -60,6 +60,17 @@ class RocksDBOptions(RocksDBOptionsType):
         machinery at the class level). Must be strictly positive if set;
         ``<= 0`` raises ``ValueError`` at construction.
         Default - ``None``.
+    :param legacy_backfill_chunk_size: number of pre-existing records re-stamped
+        per write-batch during the one-time legacy backfill (see
+        ``legacy_records_ttl``). The backfill iterates the populated default CF
+        in chunks of this size; each chunk is re-stamped, produced to the
+        changelog, flushed, and committed before the next chunk is read, so peak
+        transient memory is bounded to one chunk regardless of total store size.
+        Lower it on memory-constrained deployments. Only meaningful on the single
+        backfilling flush; ignored otherwise and on windowed / timestamped
+        stores. Must be strictly positive; ``<= 0`` raises ``ValueError`` at
+        construction.
+        Default - ``10_000``.
 
     Please see `rocksdict.Options` for a complete description of other options.
     """
@@ -82,6 +93,7 @@ class RocksDBOptions(RocksDBOptionsType):
     on_corrupted_recreate: bool = True
     max_evictions_per_flush: int = 10_000
     legacy_records_ttl: Optional[timedelta] = None
+    legacy_backfill_chunk_size: int = 10_000
 
     def __post_init__(self) -> None:
         if (
@@ -91,6 +103,11 @@ class RocksDBOptions(RocksDBOptionsType):
             raise ValueError(
                 "legacy_records_ttl must be a strictly positive timedelta or "
                 f"None, got {self.legacy_records_ttl!r}"
+            )
+        if self.legacy_backfill_chunk_size <= 0:
+            raise ValueError(
+                "legacy_backfill_chunk_size must be a strictly positive int, "
+                f"got {self.legacy_backfill_chunk_size!r}"
             )
 
     def to_options(self) -> rocksdict.Options:
