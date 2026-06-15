@@ -90,7 +90,6 @@ Here are some important configurations to be aware of (see [MQTT Source API](../
     **Default**: Raw message payload
 - `timestamp_setter`: Function to extract timestamp from MQTT message.
     **Default**: Uses "_timestamp" from payload or message timestamp
-- `properties`: MQTT properties (MQTT v5 only).
 - `on_client_connect_success`: Optional callback for successful client authentication.
 - `on_client_connect_failure`: Optional callback for failed client authentication.
 
