@@ -90,7 +90,7 @@ The `Producer` is implemented on top of the [`confluent_kafka`](https://github.c
 
 - `broker_address` - the Kafka broker address.
 - `partitioner` - the partitioner to be used. Default - `murmur2`. Available values: `"random"`, `"consistent_random"`, `"murmur2"`, `"murmur2_random"`, `"fnv1a"`, `"fnv1a_random"`.
-- `producer_poll_timeout` - the timeout to be used when polling Kafka for the producer callbacks. Default - `0.0`. `Producer` polls for callbacks automatically on each `.produce()` call.
+- `producer_poll_timeout` - the timeout used by the `Application` processing loop when polling Kafka for producer callbacks. Default - `0.0`. Low-level `Producer.produce()` calls poll callbacks with `poll(0)` after a successful produce; the method's `poll_timeout` parameter is only used when polling before retrying after a full local producer buffer.
 - `producer_extra_config` - a dictionary with additional configuration parameters for Producer in the format of `librdkafka`.
 
 The full list of configuration parameters can be found in [the librdkafka documentation](https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md)  
