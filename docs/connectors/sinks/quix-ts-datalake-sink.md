@@ -100,7 +100,7 @@ Tracking state is in-memory only. On process restart or Kafka partition rebalanc
 
 ### Callback must not block
 
-The callback runs on the sink's flush thread, which is the same thread that drives the Kafka consumer heartbeat. A blocking call inside the callback (for example, a synchronous producer `flush()`) will stop the consumer from polling, causing a heartbeat timeout and triggering a rebalance cascade. The callback must do bounded work and return promptly. If you need to produce a Kafka message from the callback, use a fire-and-forget `produce()` call — do not follow it with a synchronous `flush()`.
+The callback can run either during sink `flush()` on the thread that drives the Kafka consumer heartbeat, or on the timeout tracker's background daemon thread. A blocking call inside the callback (for example, a synchronous producer `flush()`) can stop the consumer from polling when invoked during `flush()`, causing a heartbeat timeout and triggering a rebalance cascade. The callback must do bounded work and return promptly. If you need to produce a Kafka message from the callback, use a fire-and-forget `produce()` call — do not follow it with a synchronous `flush()`.
 
 ### Example: wiring a timeout-event producer
 
