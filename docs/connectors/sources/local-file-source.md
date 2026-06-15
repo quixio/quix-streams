@@ -95,7 +95,7 @@ Here are some important configurations to be aware of (see [File Source API](../
 
 ### Optional:
 
-- `format`: what format the message files are in (ex: `"json"`, `"parquet"`).    
+- `file_format`: what format the message files are in (ex: `"json"`, `"parquet"`).    
     **Advanced**: can optionally provide a `Format` instance (`compression` will then be ignored).    
     **Default**: `"json"`
 - `compression`: what compression is used on the given files, if any (ex: `"gzip"`)    
@@ -235,7 +235,7 @@ This will result in the following Kafka message format for `Application`:
 ### Custom Schemas (Advanced)
 
 If the original files are not formatted as expected, custom loaders can be configured 
-on some `Format` classes (ex: `JsonFormat`) which can be handed to `FileSource(format=<Format>)`.
+on some `Format` classes (ex: `JsonFormat`) which can be handed to `FileSource(file_format=<Format>)`.
 
 Formats can be imported from `quixstreams.sources.community.file.formats`.
 
