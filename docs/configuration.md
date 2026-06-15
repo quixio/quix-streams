@@ -168,7 +168,8 @@ For more information about tuning the `commit_interval`, see the ["Configuring t
 ## State
 - **`state_dir`** - path to the application state directory.  
 This directory contains data for each state store separated by consumer group.  
-Default - `"state"`.
+When not set, Quix Streams uses the first available value from this order: `Quix__Deployment__State__Path`, deprecated `Quix__State__Dir`, `/app/state` for Quix deployments, then `state` for local runs.  
+Default - auto-detected as described above.
 
 - **`rocksdb_options`** - options to be used for RocksDB instances.   
 The default configuration is described in the class `quixstreams.state.rocksdb.options.RocksDBOptions`.  
