@@ -83,8 +83,8 @@ Each object is named using the batch's starting offset (padded to 19 digits) and
 
 ## Supported Formats
 
-- **JSON**: Supports appending to existing files
-- **Parquet**: Does not support appending (new file created for each batch)
+- **JSON**: Writes a new blob for each batch
+- **Parquet**: Writes a new blob for each batch
 
 ## Delivery Guarantees
 
