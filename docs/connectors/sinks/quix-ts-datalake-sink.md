@@ -80,11 +80,11 @@ Both parameters must be set to a usable value (`stream_timeout_ms` a positive in
 
 When a key has been silent for at least `stream_timeout_ms`:
 
-1. The key's tracking entry is evicted from the in-memory dict.
+1. An INFO line is logged: `Stream 'sensor-a' timed out (silence N ms >= threshold M ms)`.
 2. `on_stream_timeout(key)` is called synchronously.
-3. An INFO line is logged: `Stream 'sensor-a' timed out (silence N ms >= threshold M ms)`.
+3. If the callback returns successfully, the key's tracking entry is evicted from the in-memory dict.
 
-The eviction happens before the callback, so a callback that raises still counts as fired — the same key will not fire again for the current silence period. If the key starts producing again after eviction, it is treated as a fresh stream with a new baseline and will fire again on its next silence.
+If the callback raises, the exception is logged and the key remains tracked so the callback can be retried on the next check cycle. If the key starts producing again after successful eviction, it is treated as a fresh stream with a new baseline and will fire again on its next silence.
 
 A TTL safety sweep also evicts any tracking entry older than `3 × stream_timeout_ms` without firing (WARNING logged). This bounds the dict size in degenerate cases without any additional configuration.
 
