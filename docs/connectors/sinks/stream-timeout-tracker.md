@@ -69,7 +69,7 @@ tracker.enabled       # True iff both params are valid
 tracker.touch(key)    # record a key (call from the host sink's `add()`)
 tracker.check_now()   # synchronous check (call from the host sink's `flush()`)
 tracker.start()       # start the background daemon thread (call from `setup()`)
-tracker.stop()        # signal the thread to exit (call from `cleanup()`)
+tracker.stop()        # signal the thread to exit from your host's shutdown path
 ```
 
 Both `stream_timeout_ms` and `on_stream_timeout` must be provided together. Mismatched pairs raise `ValueError`. Passing `None` for both silently disables the tracker — every public method becomes a no-op and the per-key dict is never allocated.
@@ -104,10 +104,11 @@ class MyCustomSink(BatchingSink):
         super().setup()
         self._timeout.start()
 
-    def cleanup(self):
+    def stop_timeout_tracker(self):
         self._timeout.stop()
-        super().cleanup()
 ```
+
+`BaseSink` and `BatchingSink` do not define an application-invoked cleanup hook. If your host owns the sink lifecycle, call `tracker.stop()` from that host's shutdown path; otherwise the daemon thread will also self-terminate after sustained idle.
 
 The tracker treats `topic`/`partition`/`offset` as opaque kwargs; pass any per-record context you want — the tracker currently ignores them (reserved for future log enrichment).
 
