@@ -74,7 +74,5 @@ class MyDatabaseSink(BatchingSink):
         except TimeoutError:
             # In case of timeout, tell the app to wait for 30s 
             # and retry the writing later
-            raise SinkBackpressureError(
-               retry_after=30.0,
-            )
+            raise SinkBackpressureError(retry_after=30.0)
 ```
