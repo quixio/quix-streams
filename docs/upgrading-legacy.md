@@ -127,9 +127,9 @@ The Quix Streams <2.0 client supported and actively managed multiple message typ
 on one topic under the hood, which significantly complicates the client messaging model.
 
 As such, `quixstreams>=2.0` intends to _encourage_ producing only one message type
-per topic by enforcing one serializer per-topic, per-application. Additionally, 
-`quixstreams>=2.0` ignores all but `TimeseriesData` and `EventData` message types 
-when using a `QuixDeserializer`. 
+per topic by enforcing one serializer per-topic, per-application. When using a `QuixDeserializer`,
+`quixstreams>=2.0` parses `TimeseriesData`, `ParameterData`, `EventData`, and `EventData[]`
+messages, and ignores metadata/control message types such as stream properties and definitions.
 
 It is still possible to handle multiple types in one application, 
 but it must be done manually with a custom serialization and handling logic.
