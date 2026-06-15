@@ -18,6 +18,14 @@ into TTL mode — all in place, with no state deletion. New records continue to
 get their true per-write event-time expiry. With the default `None`, behavior is
 byte-for-byte identical to the prior reject-on-populated-store behavior.
 
+TTL is **strictly per-write**: only `state.set(..., ttl=...)` sets an expiry. A
+write with no explicit `ttl=` is always never-expires (`SENTINEL_NEVER`),
+regardless of flip state or `legacy_records_ttl`. `legacy_records_ttl` is ONLY a
+one-time migration knob for the pre-existing legacy records (the backfill above);
+it imposes no store-wide default and never floors a steady-state write. (An
+earlier design — "Rule 3" — floored no-`ttl=` writes to `legacy_records_ttl`;
+that was removed by design to keep the per-write-only contract intact.)
+
 ## Why this architecture
 
 - **Additive, single source of truth.** The feature is one new config field,
@@ -104,9 +112,9 @@ byte-for-byte identical to the prior reject-on-populated-store behavior.
   No per-value format marker added (spec §4.4; the marker is the designated
   escalation, OP-BC-1, if a future feature must mix legacy + stamped values).
   **Shared-path note:** the change is confined to the flipped branch of
-  `_get_bytes`; recovery (Rule 4 wallclock) and the sweep (Rule 3) call
+  `_get_bytes`; recovery (Rule 4 wallclock) and the expiry sweep call
   `decode_ttl_value` directly and are **not** routed through `_safe_decode_stamp`
-  — recovery/Rule-3 behavior is unchanged.
+  — recovery/sweep behavior is unchanged.
 - **Changelog via option (a), per chunk (spec §5, §8.5).** Re-stamped
   pre-existing default-CF keys are produced to the changelog directly per chunk
   (not via the transaction cache), so cold-restore recovery rebuilds from the
@@ -252,7 +260,9 @@ Modified:
   producer + offsets + chunk size into `backfill_legacy_records`; the
   pre-existing keys no longer pass through `_restamp_default_cf_cache_for_flip`
   (it now stamps only the in-batch writes, called with no `skip_keys`); new
-  `_compute_legacy_expiry`; Rule-3 `_compute_stamp` floor (prior work).
+  `_compute_legacy_expiry`. `_compute_stamp` returns `SENTINEL_NEVER`
+  unconditionally for `ttl is None` (TTL strictly per-write; the former Rule-3
+  no-`ttl=` floor was removed — `legacy_records_ttl` is migration-only).
   **Fix B:** new module-level `_safe_decode_stamp` strict validator +
   `_MAX_PLAUSIBLE_STAMP_MS` constant; `_get_bytes`'s flipped branch now degrades
   to raw (never-expires) on a non-stamp instead of unconditionally stripping,

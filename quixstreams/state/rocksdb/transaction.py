@@ -166,29 +166,13 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
 
     def _compute_stamp(self, ttl: Optional[timedelta], timestamp: Optional[int]) -> int:
         if ttl is None:
-            # Rule 3 (spec §0 / §6.7): once a partition is flipped into TTL
-            # mode AND ``legacy_records_ttl`` is configured, a write with no
-            # explicit ``ttl=`` is floored to ``event_time + legacy_records_ttl``
-            # instead of ``SENTINEL_NEVER`` — so nothing ever-expires while the
-            # feature is active in that partition.
-            #
-            # Gated on the **runtime** flip flag (Rule 1 activation gate): a
-            # partition that never took a ``ttl=`` write is unflipped
-            # (``uses_ttl_stamps`` is False) and falls straight through to the
-            # sentinel, byte-identical to v3.23.6. Windowed / timestamped
-            # partitions nail ``uses_ttl_stamps = False`` at the class level and
-            # never reach this method on the stamped path, so they never floor.
-            legacy_records_ttl = self._partition.legacy_records_ttl
-            if self._partition.uses_ttl_stamps and legacy_records_ttl is not None:
-                if timestamp is None:
-                    # Cannot floor without an event-time to anchor the expiry.
-                    # The State wrapper injects ``timestamp`` on every record
-                    # (see ``state/base/state.py`` ``set``), so this is
-                    # belt-and-suspenders; mirror ``_compute_stamp``'s existing
-                    # "flooring requires event-time" stance rather than invent a
-                    # wall-clock expiry, and fall back to never-expires.
-                    return SENTINEL_NEVER
-                return timestamp + _ttl_to_ms(legacy_records_ttl)
+            # A ``state.set(...)`` with no explicit ``ttl=`` always writes the
+            # never-expires sentinel — TTL is strictly per-write. This is the
+            # pre-Rule-3 / v3.23.6 semantics: ``legacy_records_ttl`` does NOT
+            # impose a store-wide default on steady-state writes. (Rule 3, the
+            # no-``ttl=`` floor, was removed by design — ``legacy_records_ttl``
+            # remains ONLY a one-time migration knob for pre-existing legacy
+            # records, applied via the backfill path, never on new writes.)
             return SENTINEL_NEVER
         if ttl <= timedelta(0):
             raise ValueError(f"ttl must be a positive timedelta or None, got {ttl!r}")
