@@ -114,6 +114,20 @@ class StorePartition(ABC):
             default-CF record. Absent/False = legacy / un-stamped.
         """
 
+    def complete_recovery(self) -> None:
+        """
+        Recovery-finalize hook, called once by the recovery manager after this
+        partition has replayed every changelog message up to the high-watermark
+        and before it is handed to live processing.
+
+        The default is a no-op. The RocksDB backend overrides this to complete an
+        interrupted legacy-TTL migration whose changelog replayed as MIXED
+        (some ``__ttl_stamped__``-header records + some header-absent legacy
+        records) — see ``RocksDBStorePartition.complete_recovery`` and
+        ``spec-incomplete-migration-recovery.md`` (spec §8.8).
+        """
+        return None
+
     @abstractmethod
     def begin(self) -> PartitionTransaction:
         """

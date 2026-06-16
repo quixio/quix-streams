@@ -5,9 +5,13 @@ GLOBAL_COUNTER_CF_NAME = "__global-counter__"
 GLOBAL_COUNTER_KEY = b"__global_counter__"
 
 # TTL feature constants (see dev-planning/state-ttl/architecture.md).
-# TTL_INDEX_CF_NAME is shared with quixstreams.state.metadata so the base
-# transaction can route writes for it locally, off the changelog.
-from quixstreams.state.metadata import TTL_INDEX_CF_NAME  # noqa: E402, F401
+# TTL_INDEX_CF_NAME / TTL_BACKFILL_PENDING_CF_NAME are shared with
+# quixstreams.state.metadata so the base transaction can route writes for them
+# locally, off the changelog.
+from quixstreams.state.metadata import (  # noqa: E402, F401
+    TTL_BACKFILL_PENDING_CF_NAME,
+    TTL_INDEX_CF_NAME,
+)
 
 # Highest record event-time observed by any transaction on this partition,
 # persisted to the metadata CF on every flush so the sweep / read-time filter

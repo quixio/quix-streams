@@ -227,6 +227,18 @@ class RecoveryPartition:
                 offset=changelog_message.offset(),
             )
 
+    def complete_recovery(self):
+        """
+        Finalize recovery for the underlying `StorePartition`.
+
+        Called once by the recovery manager after this partition has reached its
+        changelog high-watermark and before it is unassigned / handed to live
+        processing. Delegates to ``StorePartition.complete_recovery`` (a no-op on
+        every backend except RocksDB, which uses it to complete an interrupted
+        legacy-TTL migration — spec §8.8 / spec-incomplete-migration-recovery.md).
+        """
+        self._store_partition.complete_recovery()
+
     def set_recovery_consume_position(self, offset: int):
         """
         Update the recovery partition with the consumer's position (whenever
@@ -600,6 +612,12 @@ class RecoveryManager:
 
             rp.set_recovery_consume_position(position)
             if rp.finished_recovery_check:
+                # Recovery-finalize seam (spec §8.8): the partition has reached
+                # its changelog high-watermark. Complete any interrupted legacy-
+                # TTL migration before the partition is unassigned and handed to
+                # live processing. A no-op on every shape except a MIXED changelog
+                # restored with ``legacy_records_ttl`` set.
+                rp.complete_recovery()
                 rp_revokes.append(rp)
                 if rp.had_recovery_changes:
                     logger.info(f"Recovery successful for {rp}")

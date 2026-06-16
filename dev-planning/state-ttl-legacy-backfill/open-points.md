@@ -228,3 +228,120 @@ Buddy/Ludvík picked **A (per-record header)** and spec'd the exact signal + the
 back-compat story for already-flipped changelogs in **spec.md §8.7**. ArchDev
 implements on this branch; the two `xfail(strict=True)` repro tests flip to
 passing as the acceptance gate.
+
+---
+
+## OP-4: Cold-restore of a MIXED (incomplete-migration) changelog strands the
+## leftover legacy records as never-expiring — the backfill GATE, not classification
+
+**Raised by:** Design analysis (deferred, then re-opened by Ludvík, 2026-06-16).
+**Root cause layer:** `architecture` (the backfill is gated on "partition NOT
+flipped"; recovery flips on the first stamped record, so a redeploy never
+re-enters the backfill for the leftover legacy records).
+**Status:** **IMPLEMENTED (2026-06-16, ArchDev) — approach A, replay-driven
+completion.** Spec:
+**`dev-planning/state-ttl-legacy-backfill/spec-incomplete-migration-recovery.md`**
+(this is `spec.md` §8.8 filed as a companion). RocksDB only on this branch;
+memory backend bundled with OP-2. New CF `__ttl_backfill_pending__` (local-only)
++ `complete_recovery()` recovery-finalize seam (`recovery.py`
+`_update_recovery_status` → `RecoveryPartition.complete_recovery` →
+`StorePartition.complete_recovery`); config-absent rejects loudly; clock =
+wallclock-at-rebuild; pending-CF delete = cursor. Acceptance gate (cold-restore
+partial-migration repro) passing in
+`tests/.../test_rocksdb/test_incomplete_migration_recovery.py`. **Left
+uncommitted for Ludvík's review.** Warm-stranded limitation (§9.1) + forced-
+full-rebuild operator action (R2) still need Ludvík sign-off / DocuGuy coverage.
+
+### Problem
+
+`__ttl_enabled__` is `LOCAL_ONLY` (never on the changelog → lost on volume loss).
+The backfill is gated on the partition being NOT flipped
+(`transaction.py:535-536`). Recovery flips the partition the moment it replays
+ANY stamped (`__ttl_stamped__`-header) record. Failure sequence: a TTL build run
+WITHOUT State Management (forces cold-restore) flips and starts producing
+stamped+header records to the changelog, but is INTERRUPTED before the backfill
+completes → the changelog is now MIXED (some stamped records + the original
+un-stamped legacy records, preserved per-key by log compaction). On a later
+redeploy WITH state on a fresh/wiped volume → full cold restore → recovery flips
+on the stamped records and replays the leftover legacy records verbatim
+(never-expire); the first `ttl=` write sees an already-flipped partition →
+`_maybe_flip_or_reject` returns early → backfill never runs → those legacy keys
+are stranded as never-expiring, **permanently**. The §8.7 header fix does NOT
+close this — the problem is the backfill **gate**, not classification. On disk
+the stamped-vs-legacy bit is unrecoverable (the header is changelog-transport-
+only; `__ttl_enabled__` is partition-level), so the fix MUST act DURING recovery,
+where the per-record header still exists.
+
+### Resolution summary (decision record)
+
+- **Chosen:** approach **A, replay-driven completion.** During the full
+  cold-restore replay: track per-partition `saw_stamped` (first header-true
+  default-CF record) and collect the keys that arrived **header-absent** into a
+  durable local-only CF `__ttl_backfill_pending__` (put on legacy, delete on
+  stamped supersession; memory ≈ one chunk, not an unbounded RAM set). At
+  end-of-recovery, if `saw_stamped` and pending is non-empty → the migration is
+  incomplete → backfill exactly the pending keys (stamp + index + produce
+  header-bearing records), NOT gated on "partition not flipped". Only the MIXED
+  case triggers this; all-legacy (§8.6) and all-stamped (§8.7) paths are
+  unchanged.
+- **Wrinkle #1 — config-absent behavior: REJECT LOUDLY.** A MIXED changelog
+  restored with `legacy_records_ttl` ABSENT → recovery finishes the replay (no
+  data loss), then the completion trigger raises the operator-callable
+  `IncompatibleStateStoreError` naming `legacy_records_ttl`, stating the migration
+  is incomplete + the leftover count, pointing at restoring config + redeploying
+  (NOT deleting state). *Justification:* the alternative (land verbatim + WARN)
+  reproduces exactly the silent never-expire bug OP-4 exists to kill; a loud,
+  actionable startup failure on a recoverable misconfiguration is strictly safer
+  than silently never-expiring dedup state. **Rule 2 is amended:**
+  `legacy_records_ttl` may be removed only after the migration is COMPLETE (an
+  all-stamped changelog / empty pending CF), not merely started.
+- **Wrinkle #2 — completion clock: WALLCLOCK-AT-REBUILD.**
+  `expires_at_ms = wallclock_now (the once-per-recovery `_recovery_now_ms`) +
+  _ttl_to_ms(legacy_records_ttl)`. *Justification:* the leftover legacy records
+  have no event-time and there is no triggering live `ttl=` write to borrow a
+  `high_water` from; recovery already judges every survivor by `wallclock_now`
+  (Rule 4) and seeds post-recovery high-water to it, so completion stamps a full
+  fresh window from the rebuild moment — consistent with Rule 4, never the stale
+  event-time path.
+- **Wrinkle #3 — idempotency / interrupt-safety: pending-CF delete IS the
+  cursor.** Completion mirrors the chunked backfill (flag-last + skip-already-done):
+  each key is stamped + indexed + produced + deleted-from-pending in one
+  WriteBatch; a crash leaves the still-pending keys, the next restore rebuilds
+  pending from the (now-more-stamped) changelog and resumes over exactly the
+  remainder → strictly shrinking, convergent in one uninterrupted pass. Never
+  double-stamps: only header-absent census keys are wrapped (whole-value-once); a
+  previously-stamped key is header-true on the wire → never added to pending.
+
+### Scope / limitations
+
+- **Cold restore (full replay) only.** A WARM restore (local state present, only a
+  delta replayed) cannot re-encounter on-disk stranded legacy records (they are
+  not in the replayed delta), so the pending CF is never populated for them and
+  completion never sees them. **Documented limitation:** a warm-stranded store
+  keeps its leftovers un-stamped indefinitely; the only recovery is a **forced
+  full rebuild** (wipe local volume → next start is a full cold restore). This
+  depends on a Quix Cloud wipe/rebuild affordance (cross-ref MEMORY
+  `quix-cloud-no-state-reset`) — **flag to Ludvík.**
+- **Memory backend:** applies in principle but bundled with OP-2 (its recovery
+  path is already pending that decision; memory is non-persistent so the
+  fresh-volume scenario differs). RocksDB first; do not touch memory recovery here
+  without sign-off.
+
+### New risk surfaced
+
+- **R1 (plumbing):** there is no existing per-partition "recovery done" hook;
+  ArchDev must add a `complete_recovery()` seam in the recovery driver
+  (`quixstreams/state/recovery.py`) — the only non-additive change. Low risk (the
+  changelog high-watermark is already known) but flag it.
+- **R2 (operator action):** warm-stranded recovery needs "force full rebuild,"
+  which may have no operator-callable path in the current Portal — **flag to
+  Ludvík** before ArchDev builds.
+
+### Ask — DONE
+
+Buddy/Ludvík direction taken: approach A (replay-driven completion), config-absent
+= reject loudly, clock = wallclock-at-rebuild, idempotency = pending-CF cursor.
+Spec'd in `spec-incomplete-migration-recovery.md`. ArchDev implements on this
+branch; the cold-restore partial-migration repro (spec §11 case 1) flipping
+leftover legacy keys to stamped+indexed (no never-expire survivors) is the
+acceptance gate.

@@ -26,7 +26,10 @@ from quixstreams.state.metadata import (
     Marker,
 )
 from quixstreams.state.recovery import ChangelogProducer
-from quixstreams.state.rocksdb.transaction import RocksDBPartitionTransaction
+from quixstreams.state.rocksdb.transaction import (
+    RocksDBPartitionTransaction,
+    _ttl_to_ms,
+)
 from quixstreams.state.serialization import int_from_bytes, int_to_bytes
 from quixstreams.utils.json import dumps as json_dumps
 
@@ -35,6 +38,7 @@ from .metadata import (
     CHANGELOG_OFFSET_KEY,
     STATE_FORMAT_VERSION,
     STATE_FORMAT_VERSION_KEY,
+    TTL_BACKFILL_PENDING_CF_NAME,
     TTL_BACKFILL_PROGRESS_KEY,
     TTL_ENABLED_KEY,
     TTL_HIGH_WATER_KEY,
@@ -138,6 +142,14 @@ class RocksDBStorePartition(StorePartition):
         # stamped message has been replayed yet in this partition's lifetime;
         # a fresh partition instance per assignment is a fresh recovery session.
         self._recovery_now_ms: Optional[int] = None
+        # Incomplete-migration detection (spec §8.8). Set True on the first
+        # header-true default-CF replay (the same condition that flips the
+        # partition into TTL mode). Combined with a non-empty
+        # ``__ttl_backfill_pending__`` CF at end of recovery, it marks a MIXED
+        # (incomplete-migration) changelog whose leftover legacy records must be
+        # completed by :meth:`complete_recovery`. False (the all-legacy first-
+        # enablement case) never triggers completion.
+        self._recovery_saw_stamped: bool = False
 
         # Resolve the **runtime** TTL flag. Subclasses that nail
         # ``uses_ttl_stamps = False`` at the class level (windowed,
@@ -251,6 +263,31 @@ class RocksDBStorePartition(StorePartition):
             # process restart picks up TTL mode at open time.
             self._stamp_flip_metadata()
 
+        # Incomplete-migration detection / census (spec §8.8). The
+        # stamped-vs-legacy decision is per-record on the ``ttl_stamped`` header,
+        # NOT on the latched ``uses_ttl_stamps`` flag: a MIXED changelog replays
+        # header-absent legacy records AFTER the partition has flipped, and those
+        # must still land verbatim (never re-wrapped) and be censused into
+        # ``__ttl_backfill_pending__`` for the completion backfill. The pending
+        # bookkeeping rides the SAME WriteBatch as the default-CF write so it is
+        # atomic with the replay (§4.1).
+        if type(self).uses_ttl_stamps and cf_name == "default":
+            pending_handle = self.get_column_family_handle(
+                TTL_BACKFILL_PENDING_CF_NAME
+            )
+            if ttl_stamped:
+                # A header-true default-CF record. Mark that the partition
+                # replayed at least one stamped record (the MIXED-detection
+                # half) and drop any earlier legacy census entry for this key —
+                # a later stamped write supersedes it (compaction ordering, §4).
+                self._recovery_saw_stamped = True
+                batch.delete(key, pending_handle)
+            elif value is not None:
+                # A header-absent (legacy) default-CF record. Census the key as a
+                # leftover-legacy candidate; it lands verbatim below. A tombstone
+                # (value is None) is not a leftover record and is not censused.
+                batch.put(key, b"", pending_handle)
+
         if not self.uses_ttl_stamps:
             # Legacy / non-TTL partitions: replay the raw payload verbatim.
             # Identical to v3.23.6 behavior — no stamp wrapping, no index
@@ -277,6 +314,15 @@ class RocksDBStorePartition(StorePartition):
 
         if value is None:
             batch.delete(key, cf_handle)
+        elif is_main_cf and not ttl_stamped:
+            # Header-absent default-CF record replayed on a (now-)flipped
+            # partition — a leftover legacy record of an interrupted migration
+            # (MIXED changelog, §8.8). It MUST land verbatim (no stamp wrap, no
+            # index entry, no Rule 4 filter): its key was just censused into the
+            # pending CF and the completion backfill (:meth:`complete_recovery`)
+            # will stamp it at end of recovery. Routing here on the per-record
+            # header — not on the latched flag — is the §6.2 fix.
+            batch.put(key, value, cf_handle)
         elif is_main_cf:
             stamped, stamp = self._normalize_replay_value(value)
             # Judge expiry against the current wallclock captured once per
@@ -306,6 +352,234 @@ class RocksDBStorePartition(StorePartition):
 
         self._update_changelog_offset(batch=batch, offset=offset)
         self._write(batch)
+
+    def complete_recovery(self) -> None:
+        """
+        Recovery-finalize hook (spec §8.8). Called once by the recovery manager
+        after this partition has replayed its changelog up to the high-watermark
+        and before it is handed to live processing.
+
+        Completes an **interrupted legacy-TTL migration**. During replay a MIXED
+        changelog (some ``__ttl_stamped__``-header records + some header-absent
+        legacy records) flips the partition into TTL mode on the first stamped
+        record (so ``_recovery_saw_stamped`` is True) and lands the leftover
+        legacy records verbatim while censusing their keys into
+        ``__ttl_backfill_pending__``. Those leftovers are otherwise stranded as
+        never-expiring forever (the live ``ttl=`` write sees an already-flipped
+        partition and the backfill gate short-circuits — OP-4).
+
+        Trigger (only the MIXED shape — §7):
+
+        - if NOT ``_recovery_saw_stamped`` → all-legacy first-enablement (§8.6);
+          the live first-``ttl=``-write backfill owns it. No-op.
+        - if the pending CF is empty → all-stamped / fully-migrated (§8.7);
+          nothing to complete. No-op.
+        - else (stamped seen AND pending non-empty) → incomplete migration:
+            - if ``legacy_records_ttl is None`` → **reject loudly** with the
+              operator-callable :class:`IncompatibleStateStoreError` (§8): the
+              field is required to finish the migration; restore it and redeploy
+              (do NOT delete state).
+            - else → chunk-backfill exactly the pending keys, stamping each with
+              ``self._recovery_now_ms + _ttl_to_ms(legacy_records_ttl)`` (wallclock-
+              at-rebuild, §5), writing the ``__ttl_index__`` entry, producing a
+              header-bearing stamped record to the changelog, and deleting the key
+              from the pending CF as the chunk commits (the delete IS the durable
+              progress cursor — §6).
+
+        Un-gated by the live flip flag (the partition is already flipped). Idempotent
+        and convergent across interrupts: an interrupted run leaves the still-pending
+        keys in the CF; the next cold restore rebuilds pending from the (now-more-
+        stamped) changelog and resumes over exactly the remainder.
+        """
+        if not (type(self).uses_ttl_stamps and self.uses_ttl_stamps):
+            # Never flipped (pure-legacy partition) or a subclass opted out:
+            # there is no migration to complete.
+            return
+        if not self._recovery_saw_stamped:
+            # All-legacy first-enablement (§8.6): even if the pending CF holds
+            # every key, completion does NOT run — the live first-``ttl=``-write
+            # backfill owns this case.
+            return
+
+        pending_count = self._count_backfill_pending()
+        if pending_count == 0:
+            # All-stamped / fully-migrated changelog (§8.7): nothing leftover.
+            return
+
+        legacy_records_ttl = self._legacy_records_ttl
+        if legacy_records_ttl is None:
+            # Config-absent (wrinkle #1, §8): the replay finished cleanly (no data
+            # lost / corrupted), but completion needs a duration it does not have.
+            # Reject loudly with an operator-callable message — silently landing
+            # the leftovers as never-expire is exactly the OP-4 bug being fixed.
+            raise self._reject_incomplete_migration_no_ttl(pending_count)
+
+        # Wallclock-at-rebuild expiry (wrinkle #2, §5). ``_recovery_now_ms`` was
+        # captured on the first stamped default-CF replay (which is exactly when
+        # ``_recovery_saw_stamped`` was set), so it is normally populated here;
+        # capture defensively if a stamped record was seen but no non-sentinel
+        # stamp ever set it.
+        if self._recovery_now_ms is None:
+            self._recovery_now_ms = self._now_ms()
+            self._high_water_ms = self._recovery_now_ms
+        expires_at_ms = self._recovery_now_ms + _ttl_to_ms(legacy_records_ttl)
+
+        logger.info(
+            "Recovery: completing interrupted legacy-TTL migration at path=%s; "
+            "%d leftover legacy record(s) will be stamped with expiry=%d "
+            "(wallclock-at-rebuild + legacy_records_ttl).",
+            self._path,
+            pending_count,
+            expires_at_ms,
+        )
+        completed = self._complete_pending_backfill(
+            expires_at_ms=expires_at_ms,
+            chunk_size=self._legacy_backfill_chunk_size,
+        )
+        logger.info(
+            "Recovery: completed legacy-TTL migration at path=%s; stamped %d "
+            "leftover record(s); __ttl_backfill_pending__ is now empty.",
+            self._path,
+            completed,
+        )
+
+    def _count_backfill_pending(self) -> int:
+        """Count keys currently in the ``__ttl_backfill_pending__`` census CF."""
+        pending_cf = self.get_or_create_column_family(TTL_BACKFILL_PENDING_CF_NAME)
+        count = 0
+        for _ in pending_cf.keys():
+            count += 1
+        return count
+
+    def _complete_pending_backfill(
+        self,
+        expires_at_ms: int,
+        chunk_size: int,
+    ) -> int:
+        """
+        Chunk-backfill the leftover legacy keys censused in
+        ``__ttl_backfill_pending__`` (spec §8.8 §6). Mirrors
+        :meth:`backfill_legacy_records` but drives its census from the pending CF
+        instead of the full default CF, and uses the pending-CF delete as its
+        durable progress cursor (no integer cursor needed — a key leaves pending
+        only once it has been stamped + indexed + produced atomically).
+
+        Per chunk (up to ``chunk_size`` pending keys, byte-sorted):
+
+        1. Point-get the key's current default-CF value; wrap it whole with
+           ``encode_ttl_value(expires_at_ms, value)``, write the ``__ttl_index__``
+           entry, and delete the key from the pending CF — all in one WriteBatch.
+        2. Produce the chunk's stamped + header-bearing default-CF records to the
+           changelog, then flush so the producer queue stays bounded.
+        3. Commit the WriteBatch with the raw writer (no sweep — the high-water is
+           seeded to wallclock-at-rebuild and the leftovers expire in the future).
+
+        :return: count of leftover records stamped on this run.
+        """
+        self.get_or_create_column_family(TTL_INDEX_CF_NAME)
+        pending_cf = self.get_or_create_column_family(TTL_BACKFILL_PENDING_CF_NAME)
+        default_cf = self.get_or_create_column_family("default")
+        default_handle = self.get_column_family_handle("default")
+        index_handle = self.get_column_family_handle(TTL_INDEX_CF_NAME)
+        pending_handle = self.get_column_family_handle(TTL_BACKFILL_PENDING_CF_NAME)
+
+        headers = None
+        if self._changelog_producer is not None:
+            headers = {
+                CHANGELOG_CF_MESSAGE_HEADER: "default",
+                # Completion runs at recovery with no triggering live message, so
+                # there are no processed offsets to encode (cf. the live backfill).
+                CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER: json_dumps(None),
+                # Completion records are stamped, so they carry the §8.7 bit; a
+                # subsequent restore then sees an all-stamped changelog and never
+                # re-enters completion (§6).
+                CHANGELOG_TTL_STAMPED_HEADER: b"\x01",
+            }
+
+        stamped_count = 0
+        while True:
+            # CENSUS one chunk from the pending CF in byte-sorted order. The
+            # pending-CF delete (below) is the cursor, so each pass re-reads the
+            # current head of the CF — a key reappears only if its chunk did not
+            # commit (crash), in which case re-stamping it is harmless (whole-
+            # value-once on the raw legacy value, never on an already-stamped one).
+            chunk_keys: list[bytes] = []
+            for raw_key in pending_cf.keys():
+                chunk_keys.append(cast(bytes, raw_key))
+                if len(chunk_keys) >= chunk_size:
+                    break
+            if not chunk_keys:
+                break
+
+            batch = WriteBatch(raw_mode=True)
+            produce: list[tuple[bytes, bytes]] = []
+            for key in chunk_keys:
+                raw_value = default_cf.get(key, default=None)
+                if raw_value is None:
+                    # Censused key whose default-CF entry vanished (tombstoned
+                    # since census). Nothing to stamp; just drop the stale
+                    # pending entry so the cursor advances.
+                    batch.delete(key, pending_handle)
+                    continue
+                stamped = encode_ttl_value(expires_at_ms, cast(bytes, raw_value))
+                batch.put(key, stamped, default_handle)
+                batch.put(encode_index_key(expires_at_ms, key), b"", index_handle)
+                batch.delete(key, pending_handle)
+                produce.append((key, stamped))
+                stamped_count += 1
+
+            if self._changelog_producer is not None and produce:
+                for key, stamped in produce:
+                    self._changelog_producer.produce(
+                        key=key, value=stamped, headers=headers
+                    )
+                self._changelog_producer.flush()
+
+            # COMMIT atomically: default puts + index puts + pending deletes. The
+            # pending deletes are the durable cursor — a crash before this commit
+            # leaves the chunk's keys in pending and the next pass redoes them.
+            self._write(batch)
+            del batch, produce
+
+        return stamped_count
+
+    def _reject_incomplete_migration_no_ttl(
+        self, pending_count: int
+    ) -> "IncompatibleStateStoreError":
+        """
+        Build (and log) the operator-callable ERROR raised when a MIXED
+        (incomplete-migration) changelog is cold-restored but
+        ``legacy_records_ttl`` is absent from config (spec §8). The caller
+        ``raise``s the returned exception.
+
+        Distinct from :meth:`reject_ttl_on_populated_store` (enable-on-populated):
+        here the migration is already in progress and merely needs the duration to
+        finish. The message names ``legacy_records_ttl``, states the leftover
+        count, and points at restoring the field + redeploying — NOT at deleting
+        state (Quix Cloud has no customer-callable state reset).
+        """
+        msg = (
+            f"IncompatibleStateStoreError: state store at {self._path!r} has an "
+            f"incomplete legacy-TTL migration: {pending_count} leftover legacy "
+            "record(s) replayed from a MIXED changelog were never stamped "
+            "(a previous backfill was interrupted). Completing the migration "
+            "requires a uniform expiry for these records, but "
+            "legacy_records_ttl is not set. Restore "
+            "RocksDBOptions(legacy_records_ttl=timedelta(...)) in config and "
+            "redeploy: the partition will stamp the leftover records "
+            "(expiry = wallclock-at-rebuild + legacy_records_ttl) and finish the "
+            "migration. Do NOT delete the state directory — the leftover records "
+            "are intact and only need the expiry to be stamped."
+        )
+        logger.error(
+            msg,
+            extra={
+                "state_store_path": self._path,
+                "pending_leftover_count": pending_count,
+                "operator_action": "restore_legacy_records_ttl",
+            },
+        )
+        return IncompatibleStateStoreError(msg)
 
     def write(
         self,

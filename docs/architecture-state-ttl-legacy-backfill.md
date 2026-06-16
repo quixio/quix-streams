@@ -270,7 +270,41 @@ Modified:
   → `UNDEFINED` handling preserved.
 - `quixstreams/state/rocksdb/metadata.py` — new `TTL_BACKFILL_PROGRESS_KEY`
   metadata key (the Fix A cursor; local-only, never produced; no format-version
-  bump).
+  bump). **§8.8:** re-exports `TTL_BACKFILL_PENDING_CF_NAME` alongside
+  `TTL_INDEX_CF_NAME`.
+
+§8.8 — incomplete-migration recovery completion (OP-4):
+
+- `quixstreams/state/metadata.py` — new CF constant
+  `TTL_BACKFILL_PENDING_CF_NAME = "__ttl_backfill_pending__"` added to
+  `LOCAL_ONLY_CFS` (never produced to the changelog; rebuilt from the changelog
+  on every cold restore).
+- `quixstreams/state/base/partition.py` — new `complete_recovery()` hook on
+  `StorePartition` (default no-op; overridden by RocksDB).
+- `quixstreams/state/recovery.py` — `RecoveryPartition.complete_recovery()`
+  delegates to `StorePartition.complete_recovery()`; `RecoveryManager.
+  _update_recovery_status` calls `rp.complete_recovery()` once when the partition
+  reaches its changelog high-watermark (`finished_recovery_check`), before it is
+  revoked / handed to live processing. This is the one new piece of recovery
+  plumbing (spec §13 R1).
+- `quixstreams/state/rocksdb/partition.py` — **§8.8:** `_recovery_saw_stamped`
+  init alongside `_recovery_now_ms`; per-record pending bookkeeping in
+  `recover_from_changelog_message` (header-true default-CF → set
+  `_recovery_saw_stamped`, `batch.delete` from pending; header-absent default-CF →
+  `batch.put(key, b"", pending)`, in the same WriteBatch as the verbatim replay);
+  the main-CF verbatim-vs-stamped routing is now keyed on the per-record
+  `ttl_stamped` header (not the latched flag) so a header-absent record landing on
+  an already-flipped partition is replayed verbatim (the §6.2 fix). New
+  `complete_recovery()` + helpers `_count_backfill_pending`,
+  `_complete_pending_backfill` (chunked, pending-CF delete = cursor), and
+  `_reject_incomplete_migration_no_ttl` (operator-callable config-absent reject;
+  `operator_action="restore_legacy_records_ttl"`). Imports `_ttl_to_ms` from
+  `transaction.py`.
+- `tests/test_quixstreams/test_state/test_rocksdb/test_incomplete_migration_recovery.py`
+  — §8.8 suite: MIXED-changelog completion at wallclock expiry (N2 stamped+indexed,
+  N1 byte-unchanged, pending empty, header-bearing produces), config-absent loud
+  reject, interrupt-then-converge (no double-stamp), all-legacy / all-stamped
+  no-op guards, supersession drains pending.
 
 ## Integration with neighboring features
 
@@ -360,6 +394,65 @@ Modified:
     intentionally still uses the value-content heuristic (signature updated to
     accept and ignore `ttl_stamped`); its recovery-read fix is bundled with the
     pending OP-2 decision and deliberately out of scope here.
+- **OP-4 (cold restore of a MIXED / incomplete-migration changelog strands
+  leftover legacy records) — RESOLVED (§8.8 replay-driven completion).** §8.7
+  fixed *classification* but not the backfill **gate**: an interrupted backfill
+  leaves the changelog MIXED (some `__ttl_stamped__`-header records + the original
+  header-absent legacy records, kept per-key by log compaction). On a fresh-volume
+  cold restore, recovery flips on the first stamped record, replays the leftover
+  legacy records verbatim, and the first live `ttl=` write then sees an
+  already-flipped partition → `_maybe_flip_or_reject` returns early → the backfill
+  never runs → those legacy keys are stranded as never-expiring **permanently**.
+  On-disk the stamped-vs-legacy bit is unrecoverable (the header is changelog-
+  transport-only), so the fix must act **during recovery** while the per-record
+  header still exists.
+  - **Detection / census (during replay).** A new local-only CF
+    `__ttl_backfill_pending__` is the durable census of leftover legacy keys: a
+    header-absent default-CF replay `put`s its key, a header-true replay of the
+    same key `delete`s it (supersession), both in the same WriteBatch as the
+    default-CF write. A per-partition `_recovery_saw_stamped` flag is set on the
+    first header-true default-CF record. The pending CF (not an in-RAM set) bounds
+    peak memory to one chunk and gives interrupt-safety for free.
+  - **Completion (end of recovery).** `complete_recovery()` runs iff
+    `_recovery_saw_stamped` AND pending is non-empty (the MIXED shape only). It
+    chunk-backfills exactly the pending keys: point-get the current default value,
+    wrap whole with `encode_ttl_value(expires_at_ms, value)`, write the
+    `__ttl_index__` entry, produce a header-bearing stamped record, and delete the
+    key from pending — all atomic per chunk. The pending-CF delete **is** the
+    progress cursor (no separate flag): a crash leaves the still-pending keys, the
+    next restore rebuilds pending from the now-more-stamped changelog and resumes
+    over the remainder (strictly shrinking, convergent in one uninterrupted pass).
+    Never double-stamps (only header-absent census keys are wrapped, whole-value-
+    once).
+  - **Completion clock — wallclock-at-rebuild (wrinkle #2).**
+    `expires_at_ms = self._recovery_now_ms + _ttl_to_ms(legacy_records_ttl)`. The
+    leftovers have no event-time and there is no triggering live `ttl=` write to
+    borrow a `high_water` from; recovery already judges every survivor by
+    `wallclock_now` (Rule 4) and seeds the post-recovery high-water to it, so the
+    leftovers get a full fresh `legacy_records_ttl` window from the rebuild moment.
+  - **Config-absent — reject loudly (wrinkle #1).** If completion is needed but
+    `legacy_records_ttl is None`, the replay finishes cleanly (no data lost /
+    corrupted) and `complete_recovery()` raises the operator-callable
+    `IncompatibleStateStoreError` naming `legacy_records_ttl`, stating the leftover
+    count, and pointing at restoring the field + redeploying — **not** at deleting
+    state (Quix Cloud has no customer-callable state reset). Landing the leftovers
+    as never-expire + WARN was rejected: it reproduces exactly the silent
+    never-expire bug OP-4 exists to kill. **Rule 2 amended:** `legacy_records_ttl`
+    may be removed only after the migration is COMPLETE (an all-stamped changelog /
+    empty pending CF), not merely started.
+  - **Unchanged paths.** All-legacy (first-enablement, §8.6): `_recovery_saw_stamped`
+    is False → completion is a no-op even though pending holds every key (the live
+    first-`ttl=`-write backfill owns it). All-stamped (§8.7): pending is empty →
+    no-op. Only the MIXED case completes.
+  - **Scope / limitation.** Cold restore (full replay) only. A **warm**-stranded
+    store (interrupted backfill, then warm restarts that never trigger a full
+    replay) keeps its leftovers un-stamped: the on-disk stranded records are not in
+    the replayed delta, so the pending CF is never populated for them. The only
+    recovery is a **forced full rebuild** (wipe the local volume → next start is a
+    full cold restore) — which depends on a Quix Cloud wipe/rebuild affordance that
+    may not exist (MEMORY `quix-cloud-no-state-reset`). **Flag to Ludvík.** Memory
+    backend is out of scope here (bundled with OP-2); its
+    `complete_recovery()` is the base no-op.
 - **Large stores — OOM fixed (chunked backfill).** The single-shot backfill held
   several whole-store-sized copies and was OOM-killed at ~165k records on a
   500 MB Quix Cloud deployment. The backfill is now chunked
