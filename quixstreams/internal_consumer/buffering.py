@@ -2,6 +2,7 @@ import enum
 import logging
 from collections import deque
 from operator import attrgetter
+from time import monotonic
 from typing import Iterable, Optional
 
 from confluent_kafka import TopicPartition
@@ -80,6 +81,14 @@ class PartitionBuffer:
 
         return (
             Idleness.IDLE if self._max_offset + 1 >= high_watermark else Idleness.ACTIVE
+        )
+
+    def diagnostic_state(self) -> str:
+        return (
+            f"{self.topic}[{self.partition}] "
+            f"messages={len(self._messages)} paused={self._paused} "
+            f"max_offset={self._max_offset} high_watermark={self._high_watermark} "
+            f"idleness={self.idleness().name} next_timestamp={self.next_timestamp}"
         )
 
     def append(self, message: SuccessfulConfluentKafkaMessageProto):
@@ -166,7 +175,13 @@ class PartitionBuffer:
 
 
 class PartitionBufferGroup:
-    def __init__(self, partition: int, max_size: int):
+    def __init__(
+        self,
+        partition: int,
+        max_size: int,
+        diagnose_stuck_processing: bool = False,
+        diagnostic_stuck_timeout: float = 600.0,
+    ):
         """
         A group of individual `PartitionBuffer`s by partition.
 
@@ -177,6 +192,11 @@ class PartitionBufferGroup:
         self._max_size = max_size
         self._partition_buffers: dict[str, PartitionBuffer] = {}
         self._partition_buffers_values = self._partition_buffers.values()
+        self._diagnose_stuck_processing = diagnose_stuck_processing
+        self._diagnostic_stuck_timeout = diagnostic_stuck_timeout
+        self._blocked_since: Optional[float] = None
+        self._last_blocked_log_at = 0.0
+        self._last_blocked_key: Optional[tuple[str, int, str]] = None
 
     @property
     def partition(self) -> int:
@@ -259,13 +279,62 @@ class PartitionBufferGroup:
             # Wait until new messages are fetched or the highwater is set.
             for buffer in buffers:
                 if buffer.empty() and buffer.idleness() != Idleness.IDLE:
+                    self._log_blocked_pop(buffer)
                     return None
 
             buffer = min(buffers, key=_next_timestamp_getter)
+            self._clear_blocked_pop()
             return buffer.popleft()
         else:
             # The buffer has no partitions yet
             return None
+
+    def _log_blocked_pop(self, blocked_buffer: PartitionBuffer) -> None:
+        if not self._diagnose_stuck_processing:
+            return
+
+        now = monotonic()
+        blocked_key = (
+            blocked_buffer.topic,
+            blocked_buffer.partition,
+            blocked_buffer.idleness().name,
+        )
+        if blocked_key != self._last_blocked_key:
+            self._blocked_since = now
+            self._last_blocked_key = blocked_key
+
+        blocked_for = 0.0 if self._blocked_since is None else now - self._blocked_since
+        if blocked_for >= self._diagnostic_stuck_timeout:
+            raise RuntimeError(
+                "Buffered consumer diagnostic timeout: partition group "
+                f"{self._partition} has been blocked for {blocked_for:.0f}s "
+                f"waiting on {blocked_buffer.topic}[{blocked_buffer.partition}] "
+                f"(idleness={blocked_buffer.idleness().name})"
+            )
+
+        if now - self._last_blocked_log_at < 10:
+            return
+        self._last_blocked_log_at = now
+        logger.warning(
+            "Buffered consumer diagnostic: partition group %s blocked for %.1fs "
+            "waiting on empty non-idle buffer %s; group_state=%s",
+            self._partition,
+            blocked_for,
+            blocked_buffer.diagnostic_state(),
+            [buffer.diagnostic_state() for buffer in self._partition_buffers_values],
+        )
+
+    def _clear_blocked_pop(self) -> None:
+        if self._blocked_since is None:
+            return
+        if self._diagnose_stuck_processing:
+            logger.warning(
+                "Buffered consumer diagnostic: partition group %s unblocked after %.1fs",
+                self._partition,
+                monotonic() - self._blocked_since,
+            )
+        self._blocked_since = None
+        self._last_blocked_key = None
 
     def pause_full(self) -> list[tuple[str, int]]:
         """
@@ -314,7 +383,12 @@ class PartitionBufferGroup:
 
 
 class InternalConsumerBuffer:
-    def __init__(self, max_partition_buffer_size: int = 10000):
+    def __init__(
+        self,
+        max_partition_buffer_size: int = 10000,
+        diagnose_stuck_processing: bool = False,
+        diagnostic_stuck_timeout: float = 600.0,
+    ):
         """
         A buffer to align messages across different topics by timestamps and consume them
         in-order across partitions.
@@ -345,6 +419,8 @@ class InternalConsumerBuffer:
         """
         self._partition_groups: dict[int, PartitionBufferGroup] = {}
         self._max_partition_buffer_size = max_partition_buffer_size
+        self._diagnose_stuck_processing = diagnose_stuck_processing
+        self._diagnostic_stuck_timeout = diagnostic_stuck_timeout
 
     def assign_partitions(self, topic_partitions: list[TopicPartition]):
         """
@@ -359,7 +435,10 @@ class InternalConsumerBuffer:
             partition_group = self._partition_groups.setdefault(
                 tp.partition,
                 PartitionBufferGroup(
-                    partition=tp.partition, max_size=self._max_partition_buffer_size
+                    partition=tp.partition,
+                    max_size=self._max_partition_buffer_size,
+                    diagnose_stuck_processing=self._diagnose_stuck_processing,
+                    diagnostic_stuck_timeout=self._diagnostic_stuck_timeout,
                 ),
             )
             partition_group.assign_partition(topic=tp.topic)

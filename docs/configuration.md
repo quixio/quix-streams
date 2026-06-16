@@ -185,6 +185,12 @@ See the [Stateful Processing](advanced/stateful-processing.md#fault-tolerance-re
 **Options** - `"earliest"`, `"latest"`, `"match"`.  
 **Default** - `"earliest"`.
 
+- **`diagnose_stuck_processing`** - enable additional diagnostic logs and fail-fast guards for partition-level stuck states during state recovery and buffered/time-aligned consumption. Intended for incident diagnosis only because it logs detailed assignment, offset, watermark, and recovery progress state.
+**Default** - `False`.
+
+- **`diagnostic_stuck_timeout`** - timeout in seconds used by diagnostic fail-fast guards when `diagnose_stuck_processing` is enabled.
+**Default** - `600.0`.
+
 ## Logging
 - `loglevel` - a log level to use for the "quixstreams" logger.  
 **Options:** `"DEBUG"`, `"INFO"`, `"ERROR"`, `"WARNING"`, `"CRITICAL"`,`"NOTSET"`, `None`.  

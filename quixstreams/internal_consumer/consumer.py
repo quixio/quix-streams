@@ -52,6 +52,8 @@ class InternalConsumer(BaseConsumer):
         extra_config: Optional[dict] = None,
         on_error: Optional[ConsumerErrorCallback] = None,
         max_partition_buffer_size: int = 10000,
+        diagnose_stuck_processing: bool = False,
+        diagnostic_stuck_timeout: float = 600.0,
     ):
         """
         A consumer class that is capable of deserializing Kafka messages to Rows
@@ -98,8 +100,12 @@ class InternalConsumer(BaseConsumer):
         self._topics: dict[str, Topic] = {}
         self._backpressurred_tps: set[TopicPartition] = set()
         self._max_partition_buffer_size = max_partition_buffer_size
+        self._diagnose_stuck_processing = diagnose_stuck_processing
+        self._last_buffer_diagnostic_at = 0.0
         self._buffer = InternalConsumerBuffer(
-            max_partition_buffer_size=self._max_partition_buffer_size
+            max_partition_buffer_size=self._max_partition_buffer_size,
+            diagnose_stuck_processing=diagnose_stuck_processing,
+            diagnostic_stuck_timeout=diagnostic_stuck_timeout,
         )
         self.reset_backpressure()
 
@@ -378,6 +384,13 @@ class InternalConsumer(BaseConsumer):
                 position, *_ = self.position([tp])
                 positions[(tp.topic, tp.partition)] = position.offset
 
+        if self._diagnose_stuck_processing:
+            self._log_buffer_feed_diagnostic(
+                messages=messages,
+                high_watermarks=high_watermarks,
+                positions=positions,
+            )
+
         # Create a generator to validate messages
         valid_messages = _validate_message_batch(messages, on_error=self._on_error)
 
@@ -399,3 +412,29 @@ class InternalConsumer(BaseConsumer):
         # from other partitions on the next call
         for topic, partition in self._buffer.pause_full():
             self.pause([TopicPartition(topic=topic, partition=partition)])
+
+    def _log_buffer_feed_diagnostic(
+        self,
+        messages: list[RawConfluentKafkaMessageProto],
+        high_watermarks: dict[tuple[str, int], int],
+        positions: dict[tuple[str, int], int],
+    ) -> None:
+        now = monotonic()
+        if now - self._last_buffer_diagnostic_at < 10:
+            return
+        self._last_buffer_diagnostic_at = now
+        logger.warning(
+            "Buffered consumer diagnostic: fetched=%s assignment=%s "
+            "positions=%s high_watermarks=%s backpressured=%s",
+            len(messages),
+            [f"{tp.topic}[{tp.partition}]" for tp in self.assignment()],
+            {
+                f"{topic}[{partition}]": offset
+                for (topic, partition), offset in positions.items()
+            },
+            {
+                f"{topic}[{partition}]": offset
+                for (topic, partition), offset in high_watermarks.items()
+            },
+            [f"{tp.topic}[{tp.partition}]" for tp in self._backpressurred_tps],
+        )

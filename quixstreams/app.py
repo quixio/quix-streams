@@ -150,6 +150,8 @@ class Application:
         use_changelog_topics: bool = True,
         auto_recover_from_source_offset_out_of_range: bool = True,
         state_recovery_offset_reset: StateRecoveryOffsetReset = "earliest",
+        diagnose_stuck_processing: bool = False,
+        diagnostic_stuck_timeout: float = 600.0,
         quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
         topic_manager: Optional[TopicManager] = None,
         request_timeout: float = 30,
@@ -231,6 +233,13 @@ class Application:
             source-offset metadata; older changelog records without this metadata may
             still be applied. Use `"match"` to follow `auto_offset_reset` (`"error"`
             raises `StateRecoveryOffsetOutOfRange`). Default - `"earliest"`.
+        :param diagnose_stuck_processing: Enable additional diagnostic logs and
+            fail-fast timeouts for partition-level stuck states in state recovery and
+            buffered/time-aligned consumption. This is intended for production incident
+            diagnosis and is disabled by default to avoid log noise.
+        :param diagnostic_stuck_timeout: Time in seconds before diagnostic stuck-state
+            guards fail the application when `diagnose_stuck_processing=True`.
+            Default - `600.0`.
         :param topic_manager: A `TopicManager` instance
         :param request_timeout: timeout (seconds) for REST-based requests
         :param topic_create_timeout: timeout (seconds) for topic create finalization
@@ -366,6 +375,8 @@ class Application:
             use_changelog_topics=use_changelog_topics,
             auto_recover_from_source_offset_out_of_range=auto_recover_from_source_offset_out_of_range,
             state_recovery_offset_reset=state_recovery_offset_reset,
+            diagnose_stuck_processing=diagnose_stuck_processing,
+            diagnostic_stuck_timeout=diagnostic_stuck_timeout,
             max_partition_buffer_size=max_partition_buffer_size,
         )
 
@@ -375,6 +386,10 @@ class Application:
             raise ValueError(
                 f"broker_availability_timeout must be >= 0, "
                 f"got {broker_availability_timeout}"
+            )
+        if diagnostic_stuck_timeout <= 0:
+            raise ValueError(
+                f"diagnostic_stuck_timeout must be > 0, got {diagnostic_stuck_timeout}"
             )
         self._broker_availability_timeout = broker_availability_timeout
 
@@ -396,6 +411,8 @@ class Application:
                 consumer=self._consumer,
                 topic_manager=self._topic_manager,
                 broker_availability_timeout=self._broker_availability_timeout,
+                diagnose_stuck_processing=self._config.diagnose_stuck_processing,
+                diagnostic_stuck_timeout=self._config.diagnostic_stuck_timeout,
             )
 
         self._state_manager = StateStoreManager(
@@ -707,6 +724,8 @@ class Application:
             auto_offset_reset=self._config.auto_offset_reset,
             auto_commit_enable=False,  # Disable auto commit and manage commits manually
             max_partition_buffer_size=self._config.max_partition_buffer_size,
+            diagnose_stuck_processing=self._config.diagnose_stuck_processing,
+            diagnostic_stuck_timeout=self._config.diagnostic_stuck_timeout,
             extra_config=extra_config,
             on_error=on_error,
         )
@@ -1310,6 +1329,8 @@ class ApplicationConfig(BaseSettings):
     use_changelog_topics: bool = True
     auto_recover_from_source_offset_out_of_range: bool = True
     state_recovery_offset_reset: StateRecoveryOffsetReset = "earliest"
+    diagnose_stuck_processing: bool = False
+    diagnostic_stuck_timeout: float = 600.0
     max_partition_buffer_size: int = 10000
 
     @classmethod

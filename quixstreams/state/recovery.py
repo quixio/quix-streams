@@ -64,6 +64,10 @@ class RecoveryPartition:
         self._initial_offset: Optional[int] = None
         self._invalid_offset_count = 0  # Track consecutive invalid offset attempts
         self._last_valid_position_time: Optional[float] = None
+        self._last_diagnostic_position: Optional[int] = None
+        self._last_diagnostic_position_time: Optional[float] = None
+        self._last_diagnostic_report_time: Optional[float] = None
+        self._last_diagnostic_percent_bucket = -1
 
     def __repr__(self):
         return (
@@ -77,6 +81,14 @@ class RecoveryPartition:
     @property
     def changelog_highwater(self) -> int:
         return self._changelog_highwater
+
+    @property
+    def changelog_lowwater(self) -> int:
+        return self._changelog_lowwater
+
+    @property
+    def committed_offsets(self) -> dict[str, int]:
+        return self._committed_offsets
 
     @property
     def partition_num(self) -> int:
@@ -230,6 +242,65 @@ class RecoveryPartition:
         """
         self._recovery_consume_position = offset
 
+    def diagnostic_progress(self, position: int) -> Tuple[int, int]:
+        """
+        Return recovery progress as (percent, bucket).
+
+        The bucket changes at 10% boundaries. A partition with no changelog range is
+        considered complete.
+        """
+        start = self._initial_offset
+        if start is None or start < self._changelog_lowwater:
+            start = self._changelog_lowwater
+        start = max(start, 0)
+        total = max(self._changelog_highwater - start, 0)
+        if total == 0:
+            return 100, 10
+
+        processed = min(max(position - start, 0), total)
+        percent = int((processed / total) * 100)
+        return percent, min(percent // 10, 10)
+
+    def should_log_diagnostic_progress(
+        self,
+        position: int,
+        now: float,
+        interval: float,
+    ) -> tuple[bool, str]:
+        """
+        Decide whether to log diagnostic recovery progress.
+
+        Logs when recovery crosses another 10% boundary or when the interval elapses.
+        """
+        percent, bucket = self.diagnostic_progress(position)
+        if bucket > self._last_diagnostic_percent_bucket:
+            self._last_diagnostic_percent_bucket = bucket
+            self._last_diagnostic_report_time = now
+            return True, f"{percent}%"
+
+        if (
+            self._last_diagnostic_report_time is None
+            or now - self._last_diagnostic_report_time >= interval
+        ):
+            reason = f"{interval:.0f}s"
+            self._last_diagnostic_report_time = now
+            return True, reason
+
+        return False, ""
+
+    def diagnostic_stalled_for(self, position: int, now: float) -> float:
+        """
+        Return how long recovery has stayed at the same position.
+        """
+        if self._last_diagnostic_position != position:
+            self._last_diagnostic_position = position
+            self._last_diagnostic_position_time = now
+            return 0.0
+        if self._last_diagnostic_position_time is None:
+            self._last_diagnostic_position_time = now
+            return 0.0
+        return now - self._last_diagnostic_position_time
+
     def _should_apply_changelog(self, processed_offsets: dict[str, int]) -> bool:
         """
         Determine whether the changelog update should be skipped.
@@ -355,11 +426,15 @@ class RecoveryManager:
         consumer: BaseConsumer,
         topic_manager: TopicManager,
         broker_availability_timeout: float = 0,
+        diagnose_stuck_processing: bool = False,
+        diagnostic_stuck_timeout: float = 600.0,
     ):
         self._running = False
         self._consumer = consumer
         self._topic_manager = topic_manager
         self._broker_availability_timeout = broker_availability_timeout
+        self._diagnose_stuck_processing = diagnose_stuck_processing
+        self._diagnostic_stuck_timeout = diagnostic_stuck_timeout
         self._recovery_partitions: Dict[int, Dict[str, RecoveryPartition]] = {}
         self._last_progress_logged_time = time.monotonic()
         # Cache position results to avoid double calls in same iteration
@@ -431,6 +506,17 @@ class RecoveryManager:
             tp = ConfluentPartition(
                 topic=rp.changelog_name, partition=rp.partition_num, offset=rp.offset
             )
+            if self._diagnose_stuck_processing:
+                logger.warning(
+                    "Recovery diagnostic: seeking changelog %s[%s] to offset %s "
+                    "(lowwater=%s highwater=%s committed_offsets=%s)",
+                    rp.changelog_name,
+                    rp.partition_num,
+                    tp.offset,
+                    rp.changelog_lowwater,
+                    rp.changelog_highwater,
+                    rp.committed_offsets,
+                )
             self._consumer.seek(tp)
             self._consumer.resume([tp])
 
@@ -445,6 +531,12 @@ class RecoveryManager:
                 for tp in self._consumer.assignment()
                 if tp.topic in self._topic_manager.non_changelog_topics
             ]
+            if self._diagnose_stuck_processing:
+                logger.warning(
+                    "Recovery diagnostic: recovery completed; resuming source "
+                    "partitions %s",
+                    [f"{tp.topic}[{tp.partition}]" for tp in non_changelog_tps],
+                )
             self._consumer.resume(non_changelog_tps)
         else:
             logger.debug("Recovery process interrupted; stopping.")
@@ -518,6 +610,19 @@ class RecoveryManager:
             if rp.needs_recovery_check:
                 logger.debug(f"Adding a recovery check for {rp}")
                 self._recovery_partitions.setdefault(partition, {})[changelog_name] = rp
+                if self._diagnose_stuck_processing:
+                    logger.warning(
+                        "Recovery diagnostic: added %s for source %s[%s]; "
+                        "store_changelog_offset=%s changelog_lowwater=%s "
+                        "changelog_highwater=%s committed_offsets=%s",
+                        rp,
+                        topic,
+                        partition,
+                        rp.offset,
+                        rp.changelog_lowwater,
+                        rp.changelog_highwater,
+                        committed_offsets,
+                    )
             elif rp.has_invalid_offset:
                 raise InvalidStoreChangelogOffset(
                     "The offset in the state store is greater than or equal to its "
@@ -532,12 +637,28 @@ class RecoveryManager:
             if self._running:
                 # Some partitions are already recovering,
                 # pausing only the source topic partition
+                if self._diagnose_stuck_processing:
+                    logger.warning(
+                        "Recovery diagnostic: pausing source partition %s[%s] "
+                        "while recovery is running",
+                        topic,
+                        partition,
+                    )
                 self._consumer.pause(
                     [ConfluentPartition(topic=topic, partition=partition)]
                 )
             else:
                 # Recovery hasn't started yet, so pause ALL partitions
                 # and wait for Application to start recovery
+                if self._diagnose_stuck_processing:
+                    logger.warning(
+                        "Recovery diagnostic: pausing full assignment before "
+                        "recovery starts: %s",
+                        [
+                            f"{tp.topic}[{tp.partition}]"
+                            for tp in self._consumer.assignment()
+                        ],
+                    )
                 self._consumer.pause(self._consumer.assignment())
 
     def _revoke_recovery_partitions(self, recovery_partitions: List[RecoveryPartition]):
@@ -557,6 +678,14 @@ class RecoveryManager:
             ]
         )
         for rp in recovery_partitions:
+            if self._diagnose_stuck_processing:
+                logger.warning(
+                    "Recovery diagnostic: completed %s at position %s/%s; "
+                    "pausing changelog partition",
+                    rp,
+                    rp.recovery_consume_position,
+                    rp.changelog_highwater,
+                )
             del self._recovery_partitions[rp.partition_num][rp.changelog_name]
             # Clean up position cache for revoked partition
             cache_key = f"{rp.changelog_name}:{rp.partition_num}"
@@ -591,6 +720,8 @@ class RecoveryManager:
                 continue
 
             rp.set_recovery_consume_position(position)
+            if self._diagnose_stuck_processing:
+                self._log_recovery_partition_diagnostic(rp, position)
             if rp.finished_recovery_check:
                 rp_revokes.append(rp)
                 if rp.had_recovery_changes:
@@ -614,6 +745,8 @@ class RecoveryManager:
                 msg = raise_for_msg_error(msg)
                 rp = self._recovery_partitions[msg.partition()][msg.topic()]
                 rp.recover_from_changelog_message(changelog_message=msg)
+                if self._diagnose_stuck_processing:
+                    self._log_recovery_partition_diagnostic(rp, msg.offset() + 1)
                 self._consumer._broker_available()  # noqa: SLF001
             if self._broker_availability_timeout:
                 self._consumer.raise_if_broker_unavailable(
@@ -672,7 +805,56 @@ class RecoveryManager:
                     logger.info(
                         f"Recovery progress for {rp}: {last_consumed_offset} / {rp.changelog_highwater}"
                     )
+                    if self._diagnose_stuck_processing:
+                        self._log_recovery_partition_diagnostic(
+                            rp,
+                            position_tp.offset,
+                            force_reason="10s",
+                        )
             self._last_progress_logged_time = time.monotonic()
+
+    def _log_recovery_partition_diagnostic(
+        self,
+        rp: RecoveryPartition,
+        position: int,
+        force_reason: Optional[str] = None,
+    ) -> None:
+        now = time.monotonic()
+        should_log = False
+        reason = force_reason or ""
+        if force_reason:
+            should_log = True
+        else:
+            should_log, reason = rp.should_log_diagnostic_progress(
+                position=position,
+                now=now,
+                interval=10.0,
+            )
+
+        stalled_for = rp.diagnostic_stalled_for(position=position, now=now)
+        if stalled_for >= self._diagnostic_stuck_timeout:
+            raise RuntimeError(
+                f"Recovery diagnostic timeout for {rp}: position {position} "
+                f"has not advanced for {stalled_for:.0f}s "
+                f"(timeout={self._diagnostic_stuck_timeout:.0f}s, "
+                f"highwater={rp.changelog_highwater})"
+            )
+
+        if not should_log:
+            return
+
+        percent, _ = rp.diagnostic_progress(position)
+        logger.warning(
+            "Recovery diagnostic: %s progress=%s%% position=%s highwater=%s "
+            "stalled_for=%.1fs report_reason=%s committed_offsets=%s",
+            rp,
+            percent,
+            position,
+            rp.changelog_highwater,
+            stalled_for,
+            reason,
+            rp.committed_offsets,
+        )
 
     def _get_changelog_offset(self, rp: RecoveryPartition) -> Optional[int]:
         """
