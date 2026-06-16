@@ -150,7 +150,7 @@ class Application:
         use_changelog_topics: bool = True,
         auto_recover_from_source_offset_out_of_range: bool = True,
         state_recovery_offset_reset: StateRecoveryOffsetReset = "earliest",
-        diagnose_stuck_processing: bool = False,
+        diagnose_stuck_processing: bool = True,
         diagnostic_stuck_timeout: float = 600.0,
         quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
         topic_manager: Optional[TopicManager] = None,
@@ -235,8 +235,7 @@ class Application:
             raises `StateRecoveryOffsetOutOfRange`). Default - `"earliest"`.
         :param diagnose_stuck_processing: Enable additional diagnostic logs and
             fail-fast timeouts for partition-level stuck states in state recovery and
-            buffered/time-aligned consumption. This is intended for production incident
-            diagnosis and is disabled by default to avoid log noise.
+            buffered/time-aligned consumption.
         :param diagnostic_stuck_timeout: Time in seconds before diagnostic stuck-state
             guards fail the application when `diagnose_stuck_processing=True`.
             Default - `600.0`.
@@ -1329,7 +1328,7 @@ class ApplicationConfig(BaseSettings):
     use_changelog_topics: bool = True
     auto_recover_from_source_offset_out_of_range: bool = True
     state_recovery_offset_reset: StateRecoveryOffsetReset = "earliest"
-    diagnose_stuck_processing: bool = False
+    diagnose_stuck_processing: bool = True
     diagnostic_stuck_timeout: float = 600.0
     max_partition_buffer_size: int = 10000
 

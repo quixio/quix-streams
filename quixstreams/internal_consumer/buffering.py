@@ -179,7 +179,7 @@ class PartitionBufferGroup:
         self,
         partition: int,
         max_size: int,
-        diagnose_stuck_processing: bool = False,
+        diagnose_stuck_processing: bool = True,
         diagnostic_stuck_timeout: float = 600.0,
     ):
         """
@@ -386,7 +386,7 @@ class InternalConsumerBuffer:
     def __init__(
         self,
         max_partition_buffer_size: int = 10000,
-        diagnose_stuck_processing: bool = False,
+        diagnose_stuck_processing: bool = True,
         diagnostic_stuck_timeout: float = 600.0,
     ):
         """

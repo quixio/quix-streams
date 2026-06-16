@@ -426,7 +426,7 @@ class RecoveryManager:
         consumer: BaseConsumer,
         topic_manager: TopicManager,
         broker_availability_timeout: float = 0,
-        diagnose_stuck_processing: bool = False,
+        diagnose_stuck_processing: bool = True,
         diagnostic_stuck_timeout: float = 600.0,
     ):
         self._running = False

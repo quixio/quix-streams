@@ -309,7 +309,7 @@ def app_factory(kafka_container, random_consumer_group, tmp_path, store_type):
         auto_create_topics: bool = True,
         use_changelog_topics: bool = True,
         state_recovery_offset_reset: StateRecoveryOffsetReset = "earliest",
-        diagnose_stuck_processing: bool = False,
+        diagnose_stuck_processing: bool = True,
         diagnostic_stuck_timeout: float = 600.0,
         topic_manager: Optional[TopicManager] = None,
         processing_guarantee: ProcessingGuarantee = "at-least-once",

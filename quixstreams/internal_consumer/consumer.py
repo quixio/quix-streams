@@ -52,7 +52,7 @@ class InternalConsumer(BaseConsumer):
         extra_config: Optional[dict] = None,
         on_error: Optional[ConsumerErrorCallback] = None,
         max_partition_buffer_size: int = 10000,
-        diagnose_stuck_processing: bool = False,
+        diagnose_stuck_processing: bool = True,
         diagnostic_stuck_timeout: float = 600.0,
     ):
         """
