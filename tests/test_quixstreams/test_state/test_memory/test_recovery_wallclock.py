@@ -18,7 +18,9 @@ entries rebuilt within their TTL window.
 See ``dev-planning/state-ttl-legacy-backfill/spec-recovery-wallclock.md``.
 """
 
+import struct
 from datetime import timedelta
+from unittest.mock import patch
 
 from quixstreams.state.memory import MemoryStorePartition
 from quixstreams.state.metadata import CHANGELOG_CF_MESSAGE_HEADER
@@ -27,6 +29,7 @@ from quixstreams.state.rocksdb.ttl_codec import (
     SENTINEL_NEVER,
     decode_index_key,
     decode_ttl_value,
+    encode_ttl_value,
 )
 
 DAY_MS = 86_400_000
@@ -56,12 +59,13 @@ def _capture_default_changelog(changelog_producer_mock):
     return msgs
 
 
-def _replay_default(recovered, msgs, now_ms):
+def _replay_default(recovered, msgs, now_ms, ttl_stamped=True):
     recovered._now_ms = lambda: now_ms  # noqa: E731
     offset = 0
     for key, value in msgs:
         recovered.recover_from_changelog_message(
-            key=key, value=value, cf_name="default", offset=offset
+            key=key, value=value, cf_name="default", offset=offset,
+            ttl_stamped=ttl_stamped,
         )
         offset += 1
 
@@ -221,7 +225,8 @@ class TestMemoryRecoveryWallclock:
         offset = 0
         for key, value in msgs:
             recovered.recover_from_changelog_message(
-                key=key, value=value, cf_name="default", offset=offset
+                key=key, value=value, cf_name="default", offset=offset,
+                ttl_stamped=True,
             )
             offset += 1
 
@@ -254,3 +259,86 @@ class TestMemoryRecoveryWallclock:
 
         assert default_a == default_b == source_default
         assert index_a == index_b
+
+
+class TestMemoryRecoveryRoutesOnHeaderOnly:
+    """§8.7 / spec-memory-backend-recovery §6.1 — recovery routes purely on the
+    ``__ttl_stamped__`` header, never on value content; the
+    ``_looks_like_stamped_value`` heuristic is not consulted."""
+
+    def test_header_absent_stamp_shaped_value_stays_legacy(
+        self, changelog_producer_mock
+    ):
+        # The OP-2/OP-3 false-positive shape: legacy dedup values that are 8-byte
+        # BE epoch-ms timestamps, with NO __ttl_stamped__ header. Recovery must
+        # stay legacy, replay every value verbatim (no 8B strip, none dropped),
+        # and must NOT consult the value-content heuristic.
+        recovered = MemoryStorePartition(changelog_producer=changelog_producer_mock)
+        recovered._now_ms = lambda: 1_780_000_000_000  # noqa: E731
+        with patch.object(recovered, "_looks_like_stamped_value") as looks_spy:
+            offset = 0
+            for i in range(10):
+                value = struct.pack(">q", 1_700_000_000_000 + i)
+                recovered.recover_from_changelog_message(
+                    key=f"pfx|k{i}".encode(),
+                    value=value,
+                    cf_name="default",
+                    offset=offset,
+                    ttl_stamped=False,
+                )
+                offset += 1
+            looks_spy.assert_not_called()
+
+        assert recovered.uses_ttl_stamps is False
+        stored = recovered._state.get("default", {})
+        assert len(stored) == 10
+        # Verbatim: the stored bytes equal the raw 8-byte value (no strip).
+        assert stored[b"pfx|k0"] == struct.pack(">q", 1_700_000_000_000)
+        # Legacy stores never build a TTL index.
+        assert not recovered._state.get(TTL_INDEX_CF_NAME)
+        recovered.close()
+
+    def test_header_true_flips_and_filters(self, changelog_producer_mock):
+        # header-true stamped value -> partition flips, stamped branch + Rule 4.
+        recovered = MemoryStorePartition(changelog_producer=changelog_producer_mock)
+        base = 1_000_000_000_000
+        recovered._now_ms = lambda: base  # noqa: E731
+        with patch.object(recovered, "_looks_like_stamped_value") as looks_spy:
+            value = encode_ttl_value(base + 365 * DAY_MS, b"v")
+            recovered.recover_from_changelog_message(
+                key=b"pfx|k0",
+                value=value,
+                cf_name="default",
+                offset=0,
+                ttl_stamped=True,
+            )
+            looks_spy.assert_not_called()
+
+        assert recovered.uses_ttl_stamps is True
+        index = _decode_index(recovered)
+        assert index[b"pfx|k0"] == base + 365 * DAY_MS
+        recovered.close()
+
+    def test_first_header_true_latches_for_session(self, changelog_producer_mock):
+        # Once flipped on the first header-true record, the partition stays in TTL
+        # mode for the rest of the session even if later records arrive with the
+        # header absent (the produce-side guarantees stamped records carry it; the
+        # latch just mirrors RocksDB's session semantics).
+        recovered = MemoryStorePartition(changelog_producer=changelog_producer_mock)
+        base = 1_000_000_000_000
+        recovered._now_ms = lambda: base  # noqa: E731
+        v0 = encode_ttl_value(base + 365 * DAY_MS, b"v0")
+        recovered.recover_from_changelog_message(
+            key=b"pfx|k0", value=v0, cf_name="default", offset=0, ttl_stamped=True
+        )
+        assert recovered.uses_ttl_stamps is True
+
+        # Subsequent stamped record with header absent: still treated as stamped
+        # (the latch holds), so it goes through the stamped branch + index write.
+        v1 = encode_ttl_value(base + 365 * DAY_MS, b"v1")
+        recovered.recover_from_changelog_message(
+            key=b"pfx|k1", value=v1, cf_name="default", offset=1, ttl_stamped=False
+        )
+        index = _decode_index(recovered)
+        assert b"pfx|k0" in index and b"pfx|k1" in index
+        recovered.close()

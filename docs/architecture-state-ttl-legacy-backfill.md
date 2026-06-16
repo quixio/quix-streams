@@ -308,6 +308,58 @@ Modified:
   uses the old stamp-ratchet logic; the fix was scoped to the RocksDB partition
   only (per spec), so the in-memory store retains the OP-1 collapse — flag for a
   follow-up if the memory backend is used with TTL + changelog recovery.
+- **OP-3 (recovery stamped-vs-legacy discovery) — RESOLVED (§8.7 per-record
+  changelog header).** Recovery flip-discovery used to peek at value content
+  (`_looks_like_stamped_value`): any default-CF replay value whose leading 8
+  bytes decoded as `SENTINEL_NEVER` or `0 < stamp < 10^15` flipped the recovering
+  partition into TTL mode. A legacy dedup value that is an 8-byte BE epoch-ms
+  timestamp is numerically indistinguishable from an expiry stamp, so this
+  false-positived: on a first-enablement cold restore (changelog holds only
+  un-stamped legacy records) the heuristic flipped, the Rule 4 wallclock filter
+  dropped every past-dated legacy value, the default CF emptied, and the first
+  `ttl=` write took the empty-store fast path instead of backfilling (the §8.6
+  bug). **Fix:** an out-of-band per-record changelog message header
+  `CHANGELOG_TTL_STAMPED_HEADER = "__ttl_stamped__"` (`metadata.py`). It is set
+  on **every** `default`-CF record produced while the partition is in TTL mode —
+  broader than "this write carried `ttl=`": post-flip no-`ttl=` SENTINEL writes
+  carry the 8-byte prefix on the wire and are marked too.
+  - **Produce side (two seams).** (1) Base `PartitionTransaction._prepare`
+    (`base/transaction.py`) adds the header to the per-CF `headers` dict iff
+    `cf_name == "default"` and `getattr(self._partition, "uses_ttl_stamps",
+    False)` — a read-only probe on the partition the base already owns, a no-op
+    for any backend lacking the attribute (legacy/never-TTL stores stay
+    byte-identical). This covers the in-batch live writes (the flip transaction
+    sets `uses_ttl_stamps = True` in `_maybe_flip_or_reject` *before*
+    `super().prepare()` produces). (2) The chunked backfill produces its
+    re-stamped records directly from `RocksDBStorePartition.backfill_legacy_records`
+    (`partition.py`), *before* the flag is flipped, so it sets the header
+    unconditionally in its own `headers` dict (those records are always stamped).
+  - **Recovery side.** `recovery.py` parses `ttl_stamped = bool(headers.get(
+    CHANGELOG_TTL_STAMPED_HEADER))` and threads it as a new `ttl_stamped: bool`
+    kwarg into `StorePartition.recover_from_changelog_message` (base abstract +
+    both backends). `RocksDBStorePartition.recover_from_changelog_message` routes
+    purely on the header: header-true on a default-CF record flips + latches the
+    recovering partition into TTL mode and takes the stamped branch (strip 8B +
+    Rule 4 wallclock filter + index rebuild); header-absent replays the value
+    **verbatim** (legacy). A purely-legacy changelog (all header-absent) never
+    latches — exactly the §8.6 Option-1 requirement, so the recovered records
+    land and the first `ttl=` write backfills them.
+  - **`_looks_like_stamped_value` is OFF the recovery path** but retained (not
+    deleted): `test_backfill_completeness.py` spies on it to assert the backfill
+    never byte-sniffs, and `transaction.py` shares its `_MAX_PLAUSIBLE_STAMP_MS`
+    bound for read-side strict validation. It has no remaining live production
+    caller in RocksDB.
+  - **Back-compat (option a).** No fallback heuristic for absent headers: absent
+    = legacy, full stop (`ttl_stamped` defaults to `False`). First enablement
+    must happen on the header build; a hypothetical pre-header *stamped* changelog
+    is not supported (delete-state + re-restore on the header build). This is safe
+    on this branch because the test env re-seeds fresh and the live Maxio store
+    never successfully flipped (its changelog is still all-un-stamped legacy).
+  - **Memory backend.** Produce-side header is emitted for memory partitions via
+    the base `_prepare` for free, but its `recover_from_changelog_message`
+    intentionally still uses the value-content heuristic (signature updated to
+    accept and ignore `ttl_stamped`); its recovery-read fix is bundled with the
+    pending OP-2 decision and deliberately out of scope here.
 - **Large stores — OOM fixed (chunked backfill).** The single-shot backfill held
   several whole-store-sized copies and was OOM-killed at ~165k records on a
   500 MB Quix Cloud deployment. The backfill is now chunked

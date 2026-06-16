@@ -20,6 +20,7 @@ from quixstreams.state.base import (
 from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER,
+    CHANGELOG_TTL_STAMPED_HEADER,
     LOCAL_ONLY_CFS,
     METADATA_CF_NAME,
     Marker,
@@ -208,32 +209,39 @@ class RocksDBStorePartition(StorePartition):
         return int(time.time() * 1000)
 
     def recover_from_changelog_message(
-        self, key: bytes, value: Optional[bytes], cf_name: str, offset: int
+        self,
+        key: bytes,
+        value: Optional[bytes],
+        cf_name: str,
+        offset: int,
+        ttl_stamped: bool = False,
     ):
         cf_handle = self.get_column_family_handle(cf_name)
         batch = WriteBatch(raw_mode=True)
 
-        # Recovery flag-discovery (spec §6.6).
+        # Recovery flip-discovery (spec §8.7).
         #
         # The ``__ttl_enabled__`` key lives in the metadata CF, which is in
         # ``LOCAL_ONLY_CFS`` and therefore never produced to the changelog
         # topic — so a cold-restore recovery cannot read the flag from a
-        # changelog message. We instead infer the partition's TTL mode from
-        # the **first user-data message replayed**: if its value is
-        # stamped (8-byte BE prefix decodable as the sentinel or a
-        # plausible epoch-ms expiry), the source partition was flipped, so
-        # we flip this recovery partition too and stay in TTL mode for the
-        # rest of replay. This is the "peek at the first replayed value"
-        # design called out as the fallback in spec §8.
+        # changelog message. Instead, every stamped ``default``-CF record
+        # produced while the source partition was in TTL mode carries the
+        # out-of-band ``__ttl_stamped__`` header (set in the base ``_prepare``),
+        # surfaced here as ``ttl_stamped``. On the first header-true default-CF
+        # record we flip this recovery partition into TTL mode and latch for the
+        # rest of the session. This REPLACES the old value-content heuristic
+        # (``_looks_like_stamped_value``), which false-positived on legacy 8-byte
+        # epoch-ms values and dropped them (OP-3 / §8.6.3). Header absent → the
+        # record is legacy / un-stamped and replays verbatim below, so a purely
+        # legacy changelog never latches (the §8.6 Option-1 requirement).
         if (
             type(self).uses_ttl_stamps
             and not self.uses_ttl_stamps
             and cf_name == "default"
-            and value
-            and self._looks_like_stamped_value(value)
+            and ttl_stamped
         ):
             logger.info(
-                "Recovery: detected stamped default-CF replay; flipping "
+                "Recovery: __ttl_stamped__ header on default-CF replay; flipping "
                 "partition path=%s into TTL mode for the rest of recovery.",
                 self._path,
             )
@@ -538,6 +546,11 @@ class RocksDBStorePartition(StorePartition):
                 CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER: json_dumps(
                     processed_offsets
                 ),
+                # Backfill records are always stamped (re-stamped legacy values),
+                # so they unconditionally carry the §8.7 stamped bit. The base
+                # ``_prepare`` cannot set it for these because they are produced
+                # directly here, before ``uses_ttl_stamps`` is flipped to True.
+                CHANGELOG_TTL_STAMPED_HEADER: b"\x01",
             }
 
         # Step 0 — CENSUS: materialize the complete, deterministically-ordered
@@ -1028,8 +1041,14 @@ class RocksDBStorePartition(StorePartition):
 
     def _looks_like_stamped_value(self, value: bytes) -> bool:
         """
-        Heuristic used by the recovery flag-discovery path to decide whether
-        a replayed default-CF value originated from a flipped store.
+        Value-content recognizer for a stamped default-CF value.
+
+        NO LONGER ON THE RECOVERY PATH (spec §8.7). Recovery flip-discovery now
+        routes purely on the out-of-band ``__ttl_stamped__`` changelog header
+        (see ``recover_from_changelog_message``), because this content heuristic
+        false-positives on legacy 8-byte epoch-ms values (OP-3). Retained because
+        ``test_backfill_completeness`` spies on it to assert the backfill never
+        byte-sniffs; it has no remaining live production caller.
 
         Conservative recognizer: the value must be at least 8 bytes long,
         and the leading 8 BE bytes must be either:

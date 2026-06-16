@@ -23,6 +23,7 @@ from .exceptions import (
 from .metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER,
+    CHANGELOG_TTL_STAMPED_HEADER,
 )
 
 logger = logging.getLogger(__name__)
@@ -191,6 +192,12 @@ class RecoveryPartition:
         processed_offsets = json_loads(
             headers.get(CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER, b"null")
         )
+
+        # Stamped-vs-legacy bit (spec §8.7). Out-of-band, never inferred from
+        # value content. Absent header → legacy / un-stamped (default False, also
+        # covers pre-header changelog messages — see §8.7.4 back-compat option a).
+        ttl_stamped = bool(headers.get(CHANGELOG_TTL_STAMPED_HEADER))
+
         if processed_offsets is None or self._should_apply_changelog(
             processed_offsets=processed_offsets
         ):
@@ -211,6 +218,7 @@ class RecoveryPartition:
                 key=key,
                 value=value,
                 offset=changelog_message.offset(),
+                ttl_stamped=ttl_stamped,
             )
         else:
             # Even if the changelog update is skipped, roll the changelog offset

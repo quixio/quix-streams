@@ -219,16 +219,38 @@ class MemoryStorePartition(StorePartition):
         return IncompatibleStateStoreError(msg)
 
     def recover_from_changelog_message(
-        self, key: bytes, value: Optional[bytes], cf_name: str, offset: int
+        self,
+        key: bytes,
+        value: Optional[bytes],
+        cf_name: str,
+        offset: int,
+        ttl_stamped: bool = False,
     ) -> None:
-        # Flag-discovery heuristic mirrors RocksDBStorePartition.
+        # Recovery flip-discovery (spec §8.7, mirrors
+        # ``RocksDBStorePartition.recover_from_changelog_message``).
+        #
+        # Every stamped ``default``-CF record produced while the source partition
+        # was in TTL mode carries the out-of-band ``__ttl_stamped__`` changelog
+        # header (set in the base ``_prepare``), surfaced here as ``ttl_stamped``.
+        # On the first header-true default-CF record we flip this recovery
+        # partition into TTL mode and latch for the rest of the session. This
+        # REPLACES the old value-content heuristic (``_looks_like_stamped_value``),
+        # which false-positived on legacy 8-byte epoch-ms values and dropped them
+        # (OP-2 / OP-3). Header absent → the record is legacy / un-stamped and
+        # replays verbatim below, so a purely legacy changelog never latches
+        # (back-compat option (a), §9). The flip is session-local: memory
+        # partitions are non-persistent and re-recover from the changelog on every
+        # open, so there is no ``_stamp_flip_metadata`` mirror (§8).
         if (
             type(self).uses_ttl_stamps
             and not self.uses_ttl_stamps
             and cf_name == "default"
-            and value
-            and self._looks_like_stamped_value(value)
+            and ttl_stamped
         ):
+            logger.info(
+                "Recovery: __ttl_stamped__ header on default-CF replay; flipping "
+                "in-memory partition into TTL mode for the rest of recovery."
+            )
             self.uses_ttl_stamps = True
             self._state.setdefault(TTL_INDEX_CF_NAME, {})
 
@@ -343,7 +365,16 @@ class MemoryStorePartition(StorePartition):
         return value, stamp
 
     def _looks_like_stamped_value(self, value: bytes) -> bool:
-        """See ``RocksDBStorePartition._looks_like_stamped_value``."""
+        """See ``RocksDBStorePartition._looks_like_stamped_value``.
+
+        NOTE: as of the §8.7 header-routing change this is **no longer on the
+        recovery path** — ``recover_from_changelog_message`` routes purely on the
+        ``__ttl_stamped__`` header. Retained (not deleted) to stay symmetric with
+        the RocksDB backend, which keeps its copy because a test patches it; this
+        method has no live caller in the memory backend and must not be
+        reintroduced into recovery (it false-positives on legacy 8-byte epoch-ms
+        values).
+        """
         if len(value) < 8:
             return False
         try:

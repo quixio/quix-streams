@@ -71,27 +71,35 @@ def _decode_index_cf(partition):
 
 
 def _capture_default_cf_changelog(changelog_producer_mock):
-    """Return the list of ``(key, value)`` default-CF changelog messages."""
-    from quixstreams.state.metadata import CHANGELOG_CF_MESSAGE_HEADER
+    """Return the list of ``(key, value, ttl_stamped)`` default-CF changelog
+    messages, carrying the ``__ttl_stamped__`` header bit (spec §8.7)."""
+    from quixstreams.state.metadata import (
+        CHANGELOG_CF_MESSAGE_HEADER,
+        CHANGELOG_TTL_STAMPED_HEADER,
+    )
 
     msgs = []
     for call in changelog_producer_mock.produce.call_args_list:
         headers = call.kwargs["headers"]
         if headers[CHANGELOG_CF_MESSAGE_HEADER] == "default":
-            msgs.append((call.kwargs["key"], call.kwargs["value"]))
+            ttl_stamped = bool(headers.get(CHANGELOG_TTL_STAMPED_HEADER))
+            msgs.append((call.kwargs["key"], call.kwargs["value"], ttl_stamped))
     return msgs
 
 
 def _replay_default(recovered, msgs, now_ms):
     """
     Replay default-CF ``msgs`` into ``recovered`` with an injected wallclock
-    ``now_ms`` (test clock seam). Returns nothing; inspect ``recovered`` after.
+    ``now_ms`` (test clock seam). Threads the captured ``__ttl_stamped__`` header
+    so recovery routes on the header (spec §8.7), as the live recovery manager
+    does. Returns nothing; inspect ``recovered`` after.
     """
     recovered._now_ms = lambda: now_ms  # noqa: E731
     offset = 0
-    for key, value in msgs:
+    for key, value, ttl_stamped in msgs:
         recovered.recover_from_changelog_message(
-            key=key, value=value, cf_name="default", offset=offset
+            key=key, value=value, cf_name="default", offset=offset,
+            ttl_stamped=ttl_stamped,
         )
         offset += 1
 
@@ -347,23 +355,27 @@ class TestLegacyBackfill:
         source_default = _decode_default_cf(partition)
 
         # Collect the default-CF changelog messages produced at flip.
-        from quixstreams.state.metadata import CHANGELOG_CF_MESSAGE_HEADER
+        from quixstreams.state.metadata import (
+            CHANGELOG_CF_MESSAGE_HEADER,
+            CHANGELOG_TTL_STAMPED_HEADER,
+        )
 
         changelog_msgs = []
         for call in changelog_producer_mock.produce.call_args_list:
             headers = call.kwargs["headers"]
             cf_name = headers[CHANGELOG_CF_MESSAGE_HEADER]
+            ttl_stamped = bool(headers.get(CHANGELOG_TTL_STAMPED_HEADER))
             changelog_msgs.append(
-                (call.kwargs["key"], call.kwargs["value"], cf_name)
+                (call.kwargs["key"], call.kwargs["value"], cf_name, ttl_stamped)
             )
         partition.close()
 
         # The index CF is local-only and must NOT appear on the changelog.
-        assert all(cf != TTL_INDEX_CF_NAME for _, _, cf in changelog_msgs)
+        assert all(cf != TTL_INDEX_CF_NAME for _, _, cf, _ in changelog_msgs)
         # The pre-existing keys must be present on the changelog (option a):
         # this is the core recovery-wiring guarantee the backfill controls.
         default_changelog_keys = {
-            key for key, _, cf in changelog_msgs if cf == "default"
+            key for key, _, cf, _ in changelog_msgs if cf == "default"
         }
         assert default_changelog_keys >= set(source_default.keys())
 
@@ -372,12 +384,13 @@ class TestLegacyBackfill:
         recovered = store_partition_factory(name="dst")
         recovered._now_ms = lambda: ts - DAY_MS  # noqa: E731
         default_msgs = [
-            (k, v, cf) for (k, v, cf) in changelog_msgs if cf == "default"
+            (k, v, ts_h) for (k, v, cf, ts_h) in changelog_msgs if cf == "default"
         ]
         replay_offset = 0
-        for key, value, cf_name in default_msgs:
+        for key, value, ttl_stamped in default_msgs:
             recovered.recover_from_changelog_message(
-                key=key, value=value, cf_name=cf_name, offset=replay_offset
+                key=key, value=value, cf_name="default", offset=replay_offset,
+                ttl_stamped=ttl_stamped,
             )
             replay_offset += 1
 
@@ -673,9 +686,10 @@ class TestRecoveryWallclock:
         ticks = iter([legacy_expiry - 1] + [legacy_expiry + DAY_MS] * 100)
         recovered._now_ms = lambda: next(ticks)  # noqa: E731
         offset = 0
-        for key, value in msgs:
+        for key, value, ttl_stamped in msgs:
             recovered.recover_from_changelog_message(
-                key=key, value=value, cf_name="default", offset=offset
+                key=key, value=value, cf_name="default", offset=offset,
+                ttl_stamped=ttl_stamped,
             )
             offset += 1
 

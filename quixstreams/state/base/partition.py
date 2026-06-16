@@ -95,7 +95,12 @@ class StorePartition(ABC):
 
     @abstractmethod
     def recover_from_changelog_message(
-        self, key: bytes, value: Optional[bytes], cf_name: str, offset: int
+        self,
+        key: bytes,
+        value: Optional[bytes],
+        cf_name: str,
+        offset: int,
+        ttl_stamped: bool = False,
     ):
         """
         Updates state from a given changelog message.
@@ -104,6 +109,9 @@ class StorePartition(ABC):
         :param value: changelog message value
         :param cf_name: column family name
         :param offset: changelog message offset
+        :param ttl_stamped: True when the changelog record carries the
+            ``__ttl_stamped__`` header (spec §8.7) — i.e. the value is a stamped
+            default-CF record. Absent/False = legacy / un-stamped.
         """
 
     @abstractmethod

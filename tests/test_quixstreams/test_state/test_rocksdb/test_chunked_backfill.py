@@ -69,12 +69,16 @@ def _decode_index_cf(partition):
 
 
 def _capture_default_cf_changelog(changelog_producer_mock):
-    """Return the list of ``(key, value)`` default-CF changelog messages."""
+    """Return ``(key, value, ttl_stamped)`` default-CF changelog messages,
+    carrying the ``__ttl_stamped__`` header bit (spec §8.7)."""
+    from quixstreams.state.metadata import CHANGELOG_TTL_STAMPED_HEADER
+
     msgs = []
     for call in changelog_producer_mock.produce.call_args_list:
         headers = call.kwargs["headers"]
         if headers[CHANGELOG_CF_MESSAGE_HEADER] == "default":
-            msgs.append((call.kwargs["key"], call.kwargs["value"]))
+            ttl_stamped = bool(headers.get(CHANGELOG_TTL_STAMPED_HEADER))
+            msgs.append((call.kwargs["key"], call.kwargs["value"], ttl_stamped))
     return msgs
 
 
@@ -380,7 +384,7 @@ class TestChunkedBackfill:
 
         msgs = _capture_default_cf_changelog(changelog_producer_mock)
         # Every pre-existing key reached the changelog (option a durability).
-        produced_keys = {k for k, _ in msgs}
+        produced_keys = {k for k, _, _ in msgs}
         assert produced_keys >= set(source_default.keys())
         partition.close()
 
@@ -389,9 +393,10 @@ class TestChunkedBackfill:
         recovered = store_partition_factory(name="dst")
         recovered._now_ms = lambda: ts - DAY_MS  # noqa: E731
         offset = 0
-        for key, value in msgs:
+        for key, value, ttl_stamped in msgs:
             recovered.recover_from_changelog_message(
-                key=key, value=value, cf_name="default", offset=offset
+                key=key, value=value, cf_name="default", offset=offset,
+                ttl_stamped=ttl_stamped,
             )
             offset += 1
 
