@@ -869,6 +869,18 @@ class RocksDBStorePartition(StorePartition):
                 self._path,
             )
 
+        # STARTED bracket (lifecycle log). One INFO line once the census count
+        # is known, before the chunk loop, so an operator sees the migration
+        # bracket open even when the app's periodic status logger is off in
+        # production. The matching FINISHED line is emitted after the last
+        # chunk commits; the per-chunk progress line sits between them and the
+        # caller's "Backfilled N … flipped" log confirms the flip.
+        logger.info(
+            "TTL legacy backfill STARTED: %d records to re-stamp path=%s",
+            total,
+            self._path,
+        )
+
         # Resume from the persisted cursor (0 on a first run / absent key).
         cursor = self._load_backfill_progress()
         if cursor > total:
@@ -935,6 +947,16 @@ class RocksDBStorePartition(StorePartition):
 
             # RELEASE: drop the chunk's structures before the next iteration.
             del batch, produce
+
+        # FINISHED bracket (lifecycle log). Closes the STARTED line above after
+        # the last chunk has committed and before returning to the caller. The
+        # caller's "Backfilled N … flipped (legacy_records_ttl)" log is the
+        # separate flip confirmation; this line brackets the backfill loop.
+        logger.info(
+            "TTL legacy backfill FINISHED: %d records re-stamped path=%s",
+            restamped,
+            self._path,
+        )
 
         return restamped
 
