@@ -132,7 +132,7 @@ regardless of ordering settings).
     
 ## Topic
 
-The default topic name the Application dumps to is `gcp-pubsub_{subscription_name}_{topic_name}`.
+The source default topic name is `pubsub_{subscription_name}_{topic_name}`. When passed to `Application.dataframe(source=...)` without a custom topic, the Kafka topic name is prefixed as `source__pubsub_{subscription_name}_{topic_name}`.
 
 
 ## Testing Locally

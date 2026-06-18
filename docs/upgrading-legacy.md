@@ -91,21 +91,21 @@ stream.timeseries.buffer.time_span_in_milliseconds = 100
 
 These metadata were passed to Kafka topics as messages.
 
-Quix Streams >=2.0 has deprecated the metadata messages, and they are silently omitted 
+Quix Streams 2.0 and later have deprecated the metadata messages, and they are silently omitted 
 during processing.
 
 
 ### "Split" Messages Unsupported
 
-Quix Streams >= 2.0 has deprecated the "split" messaging format (it will remain 
+Quix Streams 2.0 and later have deprecated the "split" messaging format (it will remain 
 supported in legacy C# library).
 
-***`quixstreams>=2.0` will (gracefully) skip any split messages it encounters.***
+***Quix Streams 2.0 and later fail deserialization for split messages unless your application handles or suppresses the resulting serialization error.***
 
 
 ### Batched/"Buffered" Message Handling
 
-`quixstreams>=2.0` has deprecated producer-based batching/buffering of messages, 
+Quix Streams 2.0 and later have deprecated producer-based batching/buffering of messages, 
 which essentially consolidates multiple messages into one.
 
 However, it will still be able to consume these messages without issue.
@@ -126,10 +126,10 @@ For example, a message like the one below would equate to three independently pr
 The Quix Streams <2.0 client supported and actively managed multiple message types like `ParameterData` and `EventData`
 on one topic under the hood, which significantly complicates the client messaging model.
 
-As such, `quixstreams>=2.0` intends to _encourage_ producing only one message type
-per topic by enforcing one serializer per-topic, per-application. Additionally, 
-`quixstreams>=2.0` ignores all but `TimeseriesData` and `EventData` message types 
-when using a `QuixDeserializer`. 
+As such, Quix Streams 2.0 and later _encourage_ producing only one message type
+per topic by enforcing one serializer per-topic, per-application. When using a `QuixDeserializer`,
+Quix Streams 2.0 and later parse `TimeseriesData`, `ParameterData`, `EventData`, and `EventData[]`
+messages, and ignores metadata/control message types such as stream properties and definitions.
 
 It is still possible to handle multiple types in one application, 
 but it must be done manually with a custom serialization and handling logic.

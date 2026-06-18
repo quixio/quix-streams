@@ -10,7 +10,7 @@ from quixstreams.sources import CSVSource
 
 def main():
     app = Application()
-    source = CSVSource(path="input.csv")
+    source = CSVSource(path="input.csv", name="csv")
     
     sdf = app.dataframe(source=source)
     sdf.print(metadata=True)
@@ -61,7 +61,7 @@ from quixstreams.models.topics import TopicConfig
 def main():
     app = Application()
     # Create a CSVSource
-    source = CSVSource(path="input.csv")
+    source = CSVSource(path="input.csv", name="csv")
     
     # Define a topic for the CSVSource with a custom config
     topic = app.topic("my_csv_source", config=TopicConfig(num_partitions=4, replication_factor=1))

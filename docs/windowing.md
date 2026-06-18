@@ -723,7 +723,7 @@ sdf = sdf.tumbling_window(timedelta(seconds=10)).agg(value=Sum()).final()
 # -> Timestamp=10001, value=1 -> emit {"start": 0, "end": 10000, "value": 2}, because the time has progressed beyond the window end. 
 ```
 
-`.final()` mode makes the window wait until the maximum observed timestamp for the topic partition passes the window end before emitting.
+By default, `.final()` mode makes the window wait until the maximum observed timestamp for the same message key passes the window end before emitting. Use `final(closing_strategy="partition")` to close windows based on the maximum observed timestamp for the whole topic partition.
 
 Emitting final results provides unique and complete values per window interval, but it adds some latency.
 Also, specifying a grace period using `grace_ms` will increase the latency, because the window now needs to wait for potential out-of-order events.
@@ -850,7 +850,7 @@ described in [the "Updating Kafka Headers" section](./processing.md#updating-kaf
 
 Here are some general concepts about how windowed aggregations are implemented in Quix Streams:
 
-- Only time-based windows are supported. 
+- Quix Streams supports both time-based windows and count-based windows.
 - Every window is grouped by the current Kafka message key.
 - Messages with `None` key will be ignored.
 - The minimal window unit is a **millisecond**. More fine-grained values (e.g. microseconds) will be rounded towards the closest millisecond number.
