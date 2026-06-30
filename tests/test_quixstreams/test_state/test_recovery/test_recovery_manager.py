@@ -14,6 +14,7 @@ from quixstreams.state.exceptions import (
 )
 from quixstreams.state.manager import SUPPORTED_STORES
 from quixstreams.state.metadata import CHANGELOG_CF_MESSAGE_HEADER
+from quixstreams.state.recovery import RecoveryManager
 from tests.utils import ConfluentKafkaMessageStub
 
 
@@ -471,6 +472,126 @@ class TestRecoveryManager:
 
         # Verify the changelog message was processed
         store_partition.recover_from_changelog_message.assert_called_once()
+
+    def test_recovery_paused_partition_is_resumed_when_reassigned(
+        self,
+    ):
+        """
+        Regression test for a data partition staying paused after recovery.
+
+        Recovery pauses the whole assignment before consuming changelogs. If a
+        paused data partition is temporarily missing from the assignment when
+        recovery completes, it must still be resumed when it is assigned again.
+        """
+
+        class TrackingConsumer:
+            def __init__(self, assignments):
+                self._assignments = assignments
+                self._assignment_call_count = 0
+                self.paused = set()
+                self.pause_calls = []
+                self.resume_calls = []
+
+            def assignment(self):
+                index = min(self._assignment_call_count, len(self._assignments) - 1)
+                self._assignment_call_count += 1
+                return self._assignments[index]
+
+            def pause(self, partitions):
+                self.pause_calls.append(partitions)
+                for tp in partitions:
+                    self.paused.add((tp.topic, tp.partition))
+
+            def resume(self, partitions):
+                self.resume_calls.append(partitions)
+                for tp in partitions:
+                    self.paused.discard((tp.topic, tp.partition))
+
+            def get_watermark_offsets(self, *_args, **_kwargs):
+                return 0, 10
+
+            def seek(self, *_args, **_kwargs):
+                return None
+
+            def poll(self, *_args, **_kwargs):
+                return None
+
+            def position(self, partitions):
+                return [
+                    ConfluentPartition(
+                        topic=tp.topic,
+                        partition=tp.partition,
+                        offset=10,
+                    )
+                    for tp in partitions
+                ]
+
+            def _broker_available(self):
+                return None
+
+        topic_name = str(uuid.uuid4())
+        store_name = "default"
+
+        def broker_topic(topic):
+            topic.broker_config = topic.create_config
+            return topic
+
+        topic_manager = TopicManager(
+            topic_admin=MagicMock(),
+            consumer_group=str(uuid.uuid4()),
+        )
+        with patch.object(
+            topic_manager, "_get_or_create_broker_topic", side_effect=broker_topic
+        ):
+            data_topic = topic_manager.topic(topic_name)
+            changelog_topic = topic_manager.changelog_topic(
+                stream_id=topic_name,
+                store_name=store_name,
+                config=TopicConfig(num_partitions=2, replication_factor=1),
+            )
+
+        data_tp_0 = TopicPartition(data_topic.name, 0)
+        data_tp_1 = TopicPartition(data_topic.name, 1)
+        changelog_tp_0 = TopicPartition(changelog_topic.name, 0)
+        changelog_tp_1 = TopicPartition(changelog_topic.name, 1)
+
+        consumer = TrackingConsumer(
+            assignments=[
+                [data_tp_0, data_tp_1, changelog_tp_0, changelog_tp_1],
+                [data_tp_0, data_tp_1, changelog_tp_0, changelog_tp_1],
+                [data_tp_0, changelog_tp_0],
+                [data_tp_1, changelog_tp_1],
+            ]
+        )
+        recovery_manager = RecoveryManager(
+            consumer=consumer, topic_manager=topic_manager
+        )
+
+        recovering_store_partition = MagicMock(spec_set=StorePartition)
+        recovering_store_partition.get_changelog_offset.return_value = 5
+        caught_up_store_partition = MagicMock(spec_set=StorePartition)
+        caught_up_store_partition.get_changelog_offset.return_value = 9
+
+        recovery_manager.assign_partition(
+            topic=topic_name,
+            partition=0,
+            committed_offsets={topic_name: -1001},
+            store_partitions={store_name: recovering_store_partition},
+        )
+        assert (data_topic.name, 1) in consumer.paused
+
+        recovery_manager.do_recovery()
+
+        # Simulate the data partition being assigned again after recovery
+        # completed while it was missing from the assignment snapshot.
+        recovery_manager.assign_partition(
+            topic=topic_name,
+            partition=1,
+            committed_offsets={topic_name: -1001},
+            store_partitions={store_name: caught_up_store_partition},
+        )
+
+        assert (data_topic.name, 1) not in consumer.paused
 
 
 @pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
