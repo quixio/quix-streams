@@ -364,6 +364,7 @@ class RecoveryManager:
         self._last_progress_logged_time = time.monotonic()
         # Cache position results to avoid double calls in same iteration
         self._position_cache: Dict[str, Tuple[float, ConfluentPartition]] = {}
+        self._recovery_paused_data_tps: set[tuple[str, int]] = set()
 
     @property
     def partitions(self) -> Dict[int, Dict[str, RecoveryPartition]]:
@@ -446,8 +447,48 @@ class RecoveryManager:
                 if tp.topic in self._topic_manager.non_changelog_topics
             ]
             self._consumer.resume(non_changelog_tps)
+            self._forget_recovery_paused_data_partitions(non_changelog_tps)
         else:
             logger.debug("Recovery process interrupted; stopping.")
+
+    def _pause_for_recovery(self, partitions: List[ConfluentPartition]) -> None:
+        self._track_recovery_paused_data_partitions(partitions)
+        self._consumer.pause(partitions)
+
+    def _track_recovery_paused_data_partitions(
+        self, partitions: List[ConfluentPartition]
+    ) -> None:
+        non_changelog_topics = self._topic_manager.non_changelog_topics
+        self._recovery_paused_data_tps.update(
+            (tp.topic, tp.partition)
+            for tp in partitions
+            if tp.topic in non_changelog_topics
+        )
+
+    def _forget_recovery_paused_data_partitions(
+        self, partitions: List[ConfluentPartition]
+    ) -> None:
+        for tp in partitions:
+            self._recovery_paused_data_tps.discard((tp.topic, tp.partition))
+
+    def _resume_recovery_paused_data_partitions(
+        self, partitions: List[ConfluentPartition]
+    ) -> None:
+        if not self._recovery_paused_data_tps:
+            return
+
+        non_changelog_topics = self._topic_manager.non_changelog_topics
+        to_resume = [
+            tp
+            for tp in partitions
+            if tp.topic in non_changelog_topics
+            and (tp.topic, tp.partition) in self._recovery_paused_data_tps
+        ]
+        if not to_resume:
+            return
+
+        self._consumer.resume(to_resume)
+        self._forget_recovery_paused_data_partitions(to_resume)
 
     def _generate_recovery_partitions(
         self,
@@ -501,9 +542,8 @@ class RecoveryManager:
             committed_offsets=committed_offsets,
         )
 
-        assigned_tps = set(
-            (tp.topic, tp.partition) for tp in self._consumer.assignment()
-        )
+        current_assignment = self._consumer.assignment()
+        assigned_tps = set((tp.topic, tp.partition) for tp in current_assignment)
 
         for rp in recovery_partitions:
             changelog_name, partition = rp.changelog_name, rp.partition_num
@@ -532,13 +572,15 @@ class RecoveryManager:
             if self._running:
                 # Some partitions are already recovering,
                 # pausing only the source topic partition
-                self._consumer.pause(
+                self._pause_for_recovery(
                     [ConfluentPartition(topic=topic, partition=partition)]
                 )
             else:
                 # Recovery hasn't started yet, so pause ALL partitions
                 # and wait for Application to start recovery
-                self._consumer.pause(self._consumer.assignment())
+                self._pause_for_recovery(self._consumer.assignment())
+        else:
+            self._resume_recovery_paused_data_partitions(current_assignment)
 
     def _revoke_recovery_partitions(self, recovery_partitions: List[RecoveryPartition]):
         """
