@@ -270,6 +270,11 @@ class RocksDBStorePartition(StorePartition):
         # For unflipped partitions this commits the cache as-is — exactly the
         # v3.23.6 behavior. For flipped partitions the transaction layer has
         # already stamped values and emitted index-CF writes into the cache.
+        # Keys re-written into the default CF in this same flush. The TTL sweep
+        # reads committed disk state (not this uncommitted batch), so it must not
+        # delete a key the batch just refreshed — otherwise the stale-read delete
+        # clobbers the fresh write.
+        staged_default_keys: set[bytes] = set()
         for cf_name in column_families:
             cf_handle = self.get_column_family_handle(cf_name)
 
@@ -277,6 +282,8 @@ class RocksDBStorePartition(StorePartition):
             for prefix_update_cache in updates.values():
                 for key, value in prefix_update_cache.items():
                     batch.put(key, value, cf_handle)
+                    if cf_name == "default":
+                        staged_default_keys.add(key)
 
             deletes = cache.get_deletes(cf_name=cf_name)
             for key in deletes:
@@ -290,7 +297,7 @@ class RocksDBStorePartition(StorePartition):
             )
 
         if self.uses_ttl_stamps:
-            self._run_sweep(batch=batch)
+            self._run_sweep(batch=batch, staged_default_keys=staged_default_keys)
 
         # Save the latest changelog topic offset to know where to recover from
         # It may be None if changelog topics are disabled
@@ -593,13 +600,20 @@ class RocksDBStorePartition(StorePartition):
     # TTL machinery (only used when ``uses_ttl_stamps`` is True).
     # ------------------------------------------------------------------
 
-    def _run_sweep(self, batch: WriteBatch) -> None:
+    def _run_sweep(
+        self, batch: WriteBatch, staged_default_keys: "set[bytes] | None" = None
+    ) -> None:
         """
         Bounded-budget sweep over the secondary expiry index.
 
         Called from :meth:`write` so any deletes go into the same batch as
         the user-driven writes for atomicity.
+
+        ``staged_default_keys`` are the default-CF keys re-written in this same
+        flush. The sweep reads committed disk state, which is stale for those
+        keys, so it must never delete them here.
         """
+        staged_default_keys = staged_default_keys or frozenset()
         if self._high_water_ms is None:
             # Cold start: no event-time established yet — skip the sweep.
             return
@@ -667,12 +681,15 @@ class RocksDBStorePartition(StorePartition):
                 batch.delete(index_key, index_handle)
                 continue
 
-            if main_expires_at == idx_expires_at:
+            if main_expires_at == idx_expires_at and user_key not in staged_default_keys:
                 batch.delete(user_key, main_handle)
                 batch.delete(index_key, index_handle)
                 evicted += 1
             else:
-                # Ghost: key was overwritten with a fresh expiry stamp.
+                # Ghost: key was overwritten with a fresh expiry stamp — either
+                # already committed, or re-written in this same batch (in which
+                # case the committed read above is stale). Drop only the stale
+                # index pointer; deleting the key would clobber the fresh write.
                 batch.delete(index_key, index_handle)
 
         if evicted:
