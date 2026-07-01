@@ -496,10 +496,13 @@ class RocksDBStorePartition(StorePartition):
                 CHANGELOG_TTL_STAMPED_HEADER: b"\x01",
             }
 
-        # Total leftover count for the progress denominator (logging only). The
-        # pending CF shrinks as the loop deletes stamped keys, so capture it once
-        # up front; ``stamped_count`` is the cumulative numerator.
-        total_pending = self._count_backfill_pending()
+        # Total leftover count for the DEBUG progress denominator (logging only).
+        # The pending CF shrinks as the loop deletes stamped keys, so capture it
+        # once up front — but only when DEBUG is on, so the census scan never
+        # runs at INFO. ``stamped_count`` is the cumulative numerator.
+        total_pending = (
+            self._count_backfill_pending() if logger.isEnabledFor(logging.DEBUG) else 0
+        )
 
         stamped_count = 0
         while True:
@@ -545,17 +548,18 @@ class RocksDBStorePartition(StorePartition):
             # leaves the chunk's keys in pending and the next pass redoes them.
             self._write(batch)
 
-            # PROGRESS: one INFO line per chunk on the OP-4 recovery-completion
+            # PROGRESS: one DEBUG line per chunk on the OP-4 recovery-completion
             # path, distinct from the live backfill message so the source is
             # clear in logs. Denominator is the initial leftover census; the
-            # caller still emits the final "completed … migration" log.
-            logger.info(
-                "Recovery: legacy-TTL migration completion progress: "
-                "%d / %d leftover record(s) stamped path=%s",
-                stamped_count,
-                total_pending,
-                self._path,
-            )
+            # caller still emits the final "completed … migration" log at INFO.
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(
+                    "Recovery: legacy-TTL migration completion progress: "
+                    "%d / %d leftover record(s) stamped path=%s",
+                    stamped_count,
+                    total_pending,
+                    self._path,
+                )
 
             del batch, produce
 
@@ -656,12 +660,14 @@ class RocksDBStorePartition(StorePartition):
         # It may be None if changelog topics are disabled
         if changelog_offset is not None:
             self._update_changelog_offset(batch=batch, offset=changelog_offset)
-        logger.debug(
-            f"Flushing state changes to the disk "
-            f'path="{self.path}" '
-            f"changelog_offset={changelog_offset} "
-            f"bytes_total={batch.size_in_bytes()}"
-        )
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                'Flushing state changes to the disk path="%s" '
+                "changelog_offset=%s bytes_total=%d",
+                self.path,
+                changelog_offset,
+                batch.size_in_bytes(),
+            )
 
         self._write(batch)
 
@@ -932,14 +938,13 @@ class RocksDBStorePartition(StorePartition):
             # COMMIT this chunk atomically (default + index puts + cursor).
             self._write(batch)
 
-            # PROGRESS: one INFO line per chunk (~chunk_size records, default
+            # PROGRESS: one DEBUG line per chunk (~chunk_size records, default
             # 10k) so a large/long backfill is observable instead of looking
             # like a hang. Mirrors recovery's ``Recovery progress … X / Total``
             # cadence. ``cursor`` is the cumulative census index reached; the
             # final completion log is still emitted by the caller.
-            logger.info(
-                "TTL legacy backfill progress: %d / %d records re-stamped "
-                "path=%s",
+            logger.debug(
+                "TTL legacy backfill progress: %d / %d records re-stamped path=%s",
                 cursor,
                 total,
                 self._path,

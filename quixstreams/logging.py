@@ -20,6 +20,45 @@ _DEFAULT_HANDLER = logging.StreamHandler(stream=sys.stderr)
 
 logger = logging.getLogger(LOGGER_NAME)
 
+_STATE_LOG_LEVEL_ENV = "QUIXSTREAMS_STATE_LOG_LEVEL"
+_STATE_LOGGER_NAME = f"{LOGGER_NAME}.state"
+# NOTSET is deliberately excluded: it maps to level 0, which would lower the
+# shared handler to 0 and flood it with records from every subsystem.
+_ACCEPTED_STATE_LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
+
+
+def _apply_state_log_level_override() -> None:
+    """Scoped verbosity for the ``quixstreams.state`` namespace, driven by the
+    ``QUIXSTREAMS_STATE_LOG_LEVEL`` env var.
+
+    Lets an operator raise ``quixstreams.state.*`` to DEBUG without flipping the
+    whole app to DEBUG. Only ever *lowers* the shared handler, so non-state
+    loggers stay filtered at their (app) logger level and never become verbose.
+
+    Unset/empty is a no-op: the state namespace inherits the app loglevel.
+    An unrecognized value warns once and is ignored (the app still starts).
+    """
+    raw = os.environ.get(_STATE_LOG_LEVEL_ENV)
+    if not raw:
+        return  # unset/empty -> no-op, inherit app level
+
+    level_name = raw.strip().upper()
+    if level_name not in _ACCEPTED_STATE_LOG_LEVELS:
+        logger.warning(
+            "Ignoring invalid %s=%r; expected one of %s.",
+            _STATE_LOG_LEVEL_ENV,
+            raw,
+            ", ".join(_ACCEPTED_STATE_LOG_LEVELS),
+        )
+        return
+
+    level = logging.getLevelName(level_name)  # accepted name -> int
+    logging.getLogger(_STATE_LOGGER_NAME).setLevel(level)
+    # Only ever LOWER the shared handler so non-state loggers stay filtered at
+    # their (app) logger level; never raise it.
+    if level < _DEFAULT_HANDLER.level:
+        _DEFAULT_HANDLER.setLevel(level)
+
 
 def configure_logging(
     loglevel: Optional[Union[int, LogLevel]],
@@ -59,6 +98,7 @@ def configure_logging(
             # Reconfigure the formatter in case we are in a subprocess and the logger
             # was configured by mistake by the Application.
             _DEFAULT_HANDLER.setFormatter(logging.Formatter(formatter))
+            _apply_state_log_level_override()
             return True
 
     # Configuring logger
@@ -67,4 +107,5 @@ def configure_logging(
     _DEFAULT_HANDLER.setFormatter(logging.Formatter(formatter))
     _DEFAULT_HANDLER.setLevel(loglevel)
     logger.addHandler(_DEFAULT_HANDLER)
+    _apply_state_log_level_override()
     return True

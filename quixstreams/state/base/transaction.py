@@ -605,9 +605,10 @@ class PartitionTransaction(ABC, Generic[K, V]):
             return
 
         logger.debug(
-            f"Flushing state changes to the changelog topic "
-            f'topic_name="{self._changelog_producer.changelog_name}" '
-            f"partition={self._changelog_producer.partition}"
+            'Flushing state changes to the changelog topic topic_name="%s" '
+            "partition=%s",
+            self._changelog_producer.changelog_name,
+            self._changelog_producer.partition,
         )
         source_tp_offset_header = json_dumps(processed_offsets)
         column_families = self._update_cache.get_column_families()

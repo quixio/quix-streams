@@ -314,9 +314,114 @@ This is the normal pattern for pipelines that track both transient events and st
 You do not need to declare that a store uses TTL. The framework detects it automatically on the first `state.set(..., ttl=...)` call that reaches a flush.
 
 - **New store (empty).** On the first flush that contains a TTL write, the store switches into TTL mode. The switch is free and transparent.
-- **Store with existing data.** If a store already contains data written without TTL and you deploy a code change that adds `state.set(..., ttl=...)`, the pipeline will raise `IncompatibleStateStoreError` on the next flush. See [Troubleshooting](#troubleshooting) below.
+- **Store with existing data.** If a store already contains data written without TTL and you deploy a code change that adds `state.set(..., ttl=...)`, there are two outcomes at the next flush:
+  - **`RocksDBOptions(legacy_records_ttl=...)` is set** — the framework backfills every pre-existing record with a uniform expiry and then flips the store into TTL mode in place. No data is deleted. See [Upgrading an existing store](#upgrading-an-existing-legacy-store--legacy_records_ttl) below.
+  - **`legacy_records_ttl` is not set** — the framework raises `IncompatibleStateStoreError`. See [Troubleshooting](#troubleshooting) for the fix.
 
 Once a store has switched into TTL mode, it stays in TTL mode for the life of that store. Plain `state.set(k, v)` calls on a TTL-enabled store still work and write a "never expires" sentinel — they do not turn off TTL for that key.
+
+
+### Upgrading an existing (legacy) store — `legacy_records_ttl`
+
+> **Preview feature.** Available from Quix Streams 3.24.1a2.
+
+If your pipeline was already running before TTL existed, its state store holds records that were written without any expiry stamp. Deploying a new version that calls `state.set(..., ttl=...)` will trigger `IncompatibleStateStoreError` on the first flush — unless you opt in to the in-place migration.
+
+`RocksDBOptions(legacy_records_ttl=timedelta(...))` opts in. When set, the framework backfills every pre-existing un-stamped record with a uniform expiry on the first TTL-enabled flush, then flips the store into TTL mode — all in place, with no state deletion.
+
+```python
+from datetime import timedelta
+from quixstreams import Application
+from quixstreams.state.rocksdb.options import RocksDBOptions
+
+app = Application(
+    consumer_group="my-dedup",
+    rocksdb_options=RocksDBOptions(
+        legacy_records_ttl=timedelta(days=7),   # opt-in; default None
+    ),
+)
+```
+
+#### What the option does and does not do
+
+- **Opt-in, default `None`.** Leaving the option unset preserves the original behavior: a populated legacy store still raises `IncompatibleStateStoreError` on the first `ttl=` write.
+- **Activation gate.** Setting the option alone does nothing. The backfill only runs when your code actually calls `state.set(..., ttl=...)`. If your code has no TTL writes, the option is inert and the store stays legacy.
+- **One-time and durable.** The backfill runs exactly once. The re-stamped values are written to the changelog, so the migration survives a restart. Once the store has flipped into TTL mode it will not backfill again, and you can remove `legacy_records_ttl` from your config on the next deploy.
+- **Bounded memory.** The backfill runs in chunks of `RocksDBOptions(legacy_backfill_chunk_size=10_000)` (default 10,000 records). A multi-million-record store migrates without running out of memory. Processing pauses for the duration of the one-time backfill.
+- **Migration only.** `legacy_records_ttl` only affects pre-existing un-stamped records. New writes still get their expiry from the `ttl=` argument on each `state.set()` call. A write with no `ttl=` argument is still never-expires, regardless of this option.
+
+#### Decision table at the first TTL write
+
+| State of the store | `legacy_records_ttl` | Outcome |
+|--------------------|----------------------|---------|
+| Already migrated (`__ttl_enabled__` present) | any | No-op — backfill never re-runs |
+| Empty store | any | Clean flip into TTL mode, nothing to backfill |
+| Populated with legacy records | set | Backfill all records, then flip into TTL mode |
+| Populated with legacy records | not set (`None`) | Raises `IncompatibleStateStoreError` |
+
+#### Worked example — upgrading a dedup app
+
+**Before (the old version, no TTL).** The dedup filter stores a key forever. Over time the store grows unbounded.
+
+```python
+from quixstreams import Application
+
+app = Application(consumer_group="my-dedup", auto_offset_reset="earliest")
+sdf = app.dataframe(app.topic("input"))
+
+def dedup(value, key, timestamp, headers, state):
+    if state.get("seen"):
+        return False          # already seen — drop
+    state.set("seen", True)   # no ttl= → remembered forever
+    return True
+
+sdf = sdf.filter(dedup, stateful=True, metadata=True)
+sdf.to_topic(app.topic("output"))
+app.run()
+```
+
+**After (same deployment, same state, add `legacy_records_ttl` and `ttl=`).** The pre-existing forever-keys are backfilled to expire in seven days. New keys also expire seven days after they are first seen.
+
+```python
+from datetime import timedelta
+from quixstreams import Application
+from quixstreams.state.rocksdb.options import RocksDBOptions
+
+app = Application(
+    consumer_group="my-dedup",        # same consumer group → same state
+    auto_offset_reset="earliest",
+    rocksdb_options=RocksDBOptions(
+        legacy_records_ttl=timedelta(days=7),
+    ),
+)
+sdf = app.dataframe(app.topic("input"))
+
+def dedup(value, key, timestamp, headers, state):
+    if state.get("seen"):
+        return False
+    state.set("seen", True, ttl=timedelta(days=7))   # now expires
+    return True
+
+sdf = sdf.filter(dedup, stateful=True, metadata=True)
+sdf.to_topic(app.topic("output"))
+app.run()
+```
+
+On startup, the log shows the one-time migration:
+
+```
+[INFO] [quixstreams.state] Backfilled 1234567 legacy records and flipped state store partition into TTL mode (legacy_records_ttl)
+```
+
+After the migration has run once, you can remove `legacy_records_ttl` from `RocksDBOptions` on the next deploy. The store remains in TTL mode permanently.
+
+#### Reference clock — when do migrated records expire?
+
+Legacy records carry no original timestamp, so their true age is unrecoverable. The backfill stamps them to expire `legacy_records_ttl` after the **event-time high-water mark at the moment of migration** — not after each record's original age. All migrated records therefore drain together once the stream's event time advances by `legacy_records_ttl` past the upgrade point.
+
+Because expiry is event-time based, the expiry clock advances only while new messages arrive. An idle stream freezes the clock; migrated records do not expire until traffic resumes.
+
+On a **cold restore** (state volume lost, rebuilt from the changelog), expiry for migrated records is judged against the **wall clock at rebuild time** rather than against the event-time stamp written during backfill. This prevents all migrated records from appearing expired simultaneously on replay.
 
 
 ### Troubleshooting
@@ -328,20 +433,35 @@ Once a store has switched into TTL mode, it stays in TTL mode for the life of th
 The error log names the state directory path, the approximate number of existing entries, and the action to take:
 
 ```
-ERROR  IncompatibleStateStoreError: state store at <path> has <N>
-       un-stamped existing entries; cannot enable TTL on a populated
-       store. To enable TTL: stop the application, delete the state
-       directory at <path>, restart — recovery will rebuild from the
-       changelog with TTL enabled.
+IncompatibleStateStoreError: state store at '<path>' has <N> un-stamped existing entries; cannot enable TTL on a populated store without backfilling them. To enable TTL in place, set a uniform expiry for the existing records via RocksDBOptions(legacy_records_ttl=timedelta(...)) and redeploy: the partition will re-stamp every existing record with an expiry of high-water + legacy_records_ttl (event-time at enable) and flip into TTL mode without deleting any state. New records keep their true event-time expiry.
 ```
 
-**How to fix it.**
+**How to fix it — preferred: migrate in place.**
+
+Set `legacy_records_ttl` on your `Application` and redeploy. No data is deleted and no changelog reset is needed. This is the only option in environments where you cannot access the state directory directly (such as Quix Cloud).
+
+```python
+from datetime import timedelta
+from quixstreams import Application
+from quixstreams.state.rocksdb.options import RocksDBOptions
+
+app = Application(
+    broker_address="localhost:9092",
+    rocksdb_options=RocksDBOptions(legacy_records_ttl=timedelta(days=7)),
+)
+```
+
+On the next flush the framework backfills every pre-existing record with the chosen expiry and flips the store into TTL mode. A one-time `[INFO]` line confirms completion. See [Upgrading an existing store](#upgrading-an-existing-legacy-store--legacy_records_ttl) for the full explanation and a worked example.
+
+**Alternative: delete and rebuild (last resort, local deployments only).**
+
+If you cannot use `legacy_records_ttl` and can access the state directory:
 
 1. Stop the application.
-2. Delete the local state directory (default: `./state`, or whatever `state_dir` is set to in your `Application`). You can also use `app.clear_state()` before calling `app.run()`.
+2. Delete the local state directory (default: `./state`, or whatever `state_dir` is set to in your `Application`). You can also call `app.clear_state()` before `app.run()`.
 3. Restart the application. The state store rebuilds automatically from the changelog topic.
 
-If the changelog topic also contains data written before TTL was enabled (for example, the pipeline ran for weeks before you added TTL), recovery will rebuild a non-TTL store and the next TTL write will fail again. In that case you also need to delete (or reset the offsets of) the changelog topic before restarting.
+If the changelog topic also contains records written before TTL was enabled, recovery will rebuild a non-TTL store and the next TTL write will fail again. In that case you also need to delete (or reset the offsets of) the changelog topic before restarting.
 
 > **Note.** The pipeline does not partially commit the failed flush. Your existing state is intact after the error — only the new TTL writes were rejected.
 
@@ -354,6 +474,21 @@ If the changelog topic also contains data written before TTL was enabled (for ex
 - **No TTL on windowed stores.** Windowed aggregations manage their own retention via `grace_ms`. Passing `ttl=` to `state.set()` inside a windowed aggregation has no effect.
 - **No per-store or per-callback default TTL.** There is no `ttl=` argument on `.apply()`, `.update()`, `.filter()`, or `register_store()`. Pass `ttl=` on each `state.set()` call where you want expiry.
 - **Overwriting a key without `ttl=` on a TTL-enabled store makes it permanent.** Calling `state.set(k, v)` (no `ttl`) after a prior `state.set(k, v, ttl=...)` removes the expiry from that key. This is intentional: it gives you three primitives — expire, make permanent, delete.
+
+
+### Debugging state and backfill
+
+Set the `QUIXSTREAMS_STATE_LOG_LEVEL` environment variable to turn on verbose diagnostics for the `quixstreams.state` namespace without affecting the rest of the application.
+
+```
+QUIXSTREAMS_STATE_LOG_LEVEL=DEBUG
+```
+
+Accepted values: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. The variable is read at application start; redeploy to apply a change. When the variable is unset, the state namespace inherits the application log level — the default behavior is unchanged.
+
+At `DEBUG`, the state logger emits per-flush and per-chunk backfill progress lines. This is useful for monitoring a large `legacy_records_ttl` migration (which can take several minutes on a store with millions of records) or for diagnosing unexpected recovery behavior.
+
+The variable scopes its effect to `quixstreams.state` and its children. Non-state subsystems (the Kafka client, the application event loop, etc.) stay at the application log level.
 
 
 ### Tuning sweep budget
