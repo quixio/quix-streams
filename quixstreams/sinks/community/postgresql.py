@@ -114,7 +114,7 @@ class PostgreSQLSink(BatchingSink):
             primary key collisions will consequently raise an exception.
         :param include_metadata: If True (default), includes ``__key`` and ``timestamp``
             columns for every row written to PostgreSQL. Set to False to omit them.
-            Defaults to True for backward compatibility.            
+            Defaults to True for backward compatibility.
         :param on_client_connect_success: An optional callback made after successful
             client authentication, primarily for additional logging.
         :param on_client_connect_failure: An optional callback made after failed
@@ -190,7 +190,9 @@ class PostgreSQLSink(BatchingSink):
                     row[key] = value
 
             if self._include_metadata:
-                row[TIMESTAMP_COLUMN_NAME] = datetime.fromtimestamp(item.timestamp / 1000)
+                row[TIMESTAMP_COLUMN_NAME] = datetime.fromtimestamp(
+                    item.timestamp / 1000
+                )
             table["rows"].append(row)
 
         table_counts = {}
