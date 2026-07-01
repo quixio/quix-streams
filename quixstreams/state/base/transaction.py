@@ -18,7 +18,7 @@ from typing import (
     overload,
 )
 
-from quixstreams.models import Headers
+from quixstreams.models import HeadersMapping
 from quixstreams.state.exceptions import (
     InvalidChangelogOffset,
     StateSerializationError,
@@ -620,7 +620,7 @@ class PartitionTransaction(ABC, Generic[K, V]):
             if cf_name in LOCAL_ONLY_CFS:
                 continue
 
-            headers: Headers = {
+            headers: HeadersMapping = {
                 CHANGELOG_CF_MESSAGE_HEADER: cf_name,
                 CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER: source_tp_offset_header,
             }

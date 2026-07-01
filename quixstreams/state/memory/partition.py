@@ -281,10 +281,14 @@ class MemoryStorePartition(StorePartition):
             # the same reference so the recovery→live boundary is continuous
             # (§3.3). Sentinel-stamped entries are never compared and always
             # survive (§7). Mirrors ``RocksDBStorePartition``.
-            if stamp != SENTINEL_NEVER and self._recovery_now_ms is None:
-                self._recovery_now_ms = self._now_ms()
-                self._high_water_ms = self._recovery_now_ms
-            if stamp != SENTINEL_NEVER and stamp <= self._recovery_now_ms:
+            expired = False
+            if stamp != SENTINEL_NEVER:
+                if self._recovery_now_ms is None:
+                    self._recovery_now_ms = self._now_ms()
+                    self._high_water_ms = self._recovery_now_ms
+                recovery_now_ms = self._recovery_now_ms
+                expired = stamp <= recovery_now_ms
+            if expired:
                 # Already-expired against wallclock-at-recovery; skip both the
                 # main and the index write. The __ttl_index__ stays consistent
                 # with survivors — a dropped entry writes neither (§7).

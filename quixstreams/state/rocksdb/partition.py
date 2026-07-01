@@ -13,6 +13,7 @@ from typing import (
 
 from rocksdict import AccessType, ColumnFamily, Rdict, ReadOptions, WriteBatch
 
+from quixstreams.models import HeadersMapping
 from quixstreams.state.base import (
     PartitionTransactionCache,
     StorePartition,
@@ -120,16 +121,12 @@ class RocksDBStorePartition(StorePartition):
         # a strictly positive ``timedelta`` enables the in-place backfill
         # (see :meth:`backfill_legacy_records`). Read by the transaction layer
         # through this partition in ``_maybe_flip_or_reject``.
-        self._legacy_records_ttl: Optional[timedelta] = (
-            self._options.legacy_records_ttl
-        )
+        self._legacy_records_ttl: Optional[timedelta] = self._options.legacy_records_ttl
         # Number of pre-existing records re-stamped per write-batch during the
         # one-time legacy backfill. Bounds peak transient memory to one chunk
         # (see :meth:`backfill_legacy_records`). Only consulted on the single
         # backfilling flush.
-        self._legacy_backfill_chunk_size: int = (
-            self._options.legacy_backfill_chunk_size
-        )
+        self._legacy_backfill_chunk_size: int = self._options.legacy_backfill_chunk_size
         self._db = self._init_rocksdb()
         self._cf_cache: Dict[str, Rdict] = {}
         self._cf_handle_cache: Dict[str, ColumnFamily] = {}
@@ -272,9 +269,7 @@ class RocksDBStorePartition(StorePartition):
         # bookkeeping rides the SAME WriteBatch as the default-CF write so it is
         # atomic with the replay (§4.1).
         if type(self).uses_ttl_stamps and cf_name == "default":
-            pending_handle = self.get_column_family_handle(
-                TTL_BACKFILL_PENDING_CF_NAME
-            )
+            pending_handle = self.get_column_family_handle(TTL_BACKFILL_PENDING_CF_NAME)
             if ttl_stamped:
                 # A header-true default-CF record. Mark that the partition
                 # replayed at least one stamped record (the MIXED-detection
@@ -333,10 +328,14 @@ class RocksDBStorePartition(StorePartition):
             # seed the post-recovery high-water to the same reference so the
             # recovery→live boundary is continuous (§3.3). Sentinel-stamped
             # entries are never compared and always survive (§7).
-            if stamp != SENTINEL_NEVER and self._recovery_now_ms is None:
-                self._recovery_now_ms = self._now_ms()
-                self._high_water_ms = self._recovery_now_ms
-            if stamp != SENTINEL_NEVER and stamp <= self._recovery_now_ms:
+            expired = False
+            if stamp != SENTINEL_NEVER:
+                if self._recovery_now_ms is None:
+                    self._recovery_now_ms = self._now_ms()
+                    self._high_water_ms = self._recovery_now_ms
+                recovery_now_ms = self._recovery_now_ms
+                expired = stamp <= recovery_now_ms
+            if expired:
                 # Already-expired against wallclock-at-recovery; skip both the
                 # main and the index write. Roll the changelog offset forward
                 # so recovery progresses. The __ttl_index__ stays consistent
@@ -483,7 +482,7 @@ class RocksDBStorePartition(StorePartition):
         index_handle = self.get_column_family_handle(TTL_INDEX_CF_NAME)
         pending_handle = self.get_column_family_handle(TTL_BACKFILL_PENDING_CF_NAME)
 
-        headers = None
+        headers: Optional[HeadersMapping] = None
         if self._changelog_producer is not None:
             headers = {
                 CHANGELOG_CF_MESSAGE_HEADER: "default",
@@ -837,7 +836,7 @@ class RocksDBStorePartition(StorePartition):
         index_handle = self.get_column_family_handle(TTL_INDEX_CF_NAME)
         metadata_handle = self.get_column_family_handle(METADATA_CF_NAME)
 
-        headers = None
+        headers: Optional[HeadersMapping] = None
         if changelog_producer is not None:
             headers = {
                 CHANGELOG_CF_MESSAGE_HEADER: "default",
@@ -909,9 +908,7 @@ class RocksDBStorePartition(StorePartition):
                     continue
                 stamped = encode_ttl_value(expires_at_ms, cast(bytes, raw_value))
                 batch.put(key, stamped, default_handle)
-                batch.put(
-                    encode_index_key(expires_at_ms, key), b"", index_handle
-                )
+                batch.put(encode_index_key(expires_at_ms, key), b"", index_handle)
                 produce.append((key, stamped))
                 restamped += 1
 
@@ -919,9 +916,7 @@ class RocksDBStorePartition(StorePartition):
             # the producer's in-flight queue does not grow across chunks.
             if changelog_producer is not None and produce:
                 for key, stamped in produce:
-                    changelog_producer.produce(
-                        key=key, value=stamped, headers=headers
-                    )
+                    changelog_producer.produce(key=key, value=stamped, headers=headers)
                 changelog_producer.flush()
 
             # ADVANCE the cursor IN THE SAME batch as the chunk's puts so the

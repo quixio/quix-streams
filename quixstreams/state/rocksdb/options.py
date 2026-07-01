@@ -96,9 +96,8 @@ class RocksDBOptions(RocksDBOptionsType):
     legacy_backfill_chunk_size: int = 10_000
 
     def __post_init__(self) -> None:
-        if (
-            self.legacy_records_ttl is not None
-            and self.legacy_records_ttl <= timedelta(0)
+        if self.legacy_records_ttl is not None and self.legacy_records_ttl <= timedelta(
+            0
         ):
             raise ValueError(
                 "legacy_records_ttl must be a strictly positive timedelta or "

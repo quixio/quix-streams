@@ -255,9 +255,7 @@ class TestUnchangedPaths:
         self, store_partition_factory, changelog_producer_mock
     ):
         now_ms = 1_780_000_000_000
-        msgs = [
-            (f"pfx|l{i}".encode(), f"legacy-{i}".encode(), False) for i in range(5)
-        ]
+        msgs = [(f"pfx|l{i}".encode(), f"legacy-{i}".encode(), False) for i in range(5)]
         recovered = store_partition_factory(
             name="dst",
             options=RocksDBOptions(legacy_records_ttl=timedelta(days=7)),

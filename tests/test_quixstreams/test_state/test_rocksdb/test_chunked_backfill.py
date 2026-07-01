@@ -100,7 +100,10 @@ class TestChunkSizeValidation:
             RocksDBOptions(legacy_backfill_chunk_size=-5)
 
     def test_positive_accepted(self):
-        assert RocksDBOptions(legacy_backfill_chunk_size=100).legacy_backfill_chunk_size == 100
+        assert (
+            RocksDBOptions(legacy_backfill_chunk_size=100).legacy_backfill_chunk_size
+            == 100
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -187,7 +190,13 @@ class TestChunkedBackfill:
         )
         ts = 1_000_000_000_000
         with partition.begin() as tx:
-            tx.set(key="knew", value="vnew", prefix=b"pfx", timestamp=ts, ttl=timedelta(days=1))
+            tx.set(
+                key="knew",
+                value="vnew",
+                prefix=b"pfx",
+                timestamp=ts,
+                ttl=timedelta(days=1),
+            )
 
         decoded = _decode_default_cf(partition)
         legacy = {k: v for k, v in decoded.items() if b"knew" not in k}
@@ -207,7 +216,9 @@ class TestChunkedBackfill:
         )
         ts = 5_000
         with partition.begin() as tx:
-            tx.set(key="k1", value="v1", prefix=b"pfx", timestamp=ts, ttl=timedelta(days=1))
+            tx.set(
+                key="k1", value="v1", prefix=b"pfx", timestamp=ts, ttl=timedelta(days=1)
+            )
 
         assert partition.uses_ttl_stamps is True
         decoded = _decode_default_cf(partition)
@@ -395,7 +406,10 @@ class TestChunkedBackfill:
         offset = 0
         for key, value, ttl_stamped in msgs:
             recovered.recover_from_changelog_message(
-                key=key, value=value, cf_name="default", offset=offset,
+                key=key,
+                value=value,
+                cf_name="default",
+                offset=offset,
                 ttl_stamped=ttl_stamped,
             )
             offset += 1

@@ -48,5 +48,8 @@ site/
 # memories (local development notes)
 memories/
 
+# dev planning (local specs / planning notes)
+dev-planning/
+
 # scratch
 .tmp/

@@ -1,7 +1,7 @@
 import logging
 from datetime import timedelta
 from itertools import chain
-from typing import TYPE_CHECKING, Any, Literal, Optional, Union, cast
+from typing import TYPE_CHECKING, Any, Literal, Optional, Set, Union, cast
 
 from quixstreams.state.base.transaction import (
     PartitionTransaction,
@@ -544,7 +544,10 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
 
         restamped = 0
         staged_default_keys: set[bytes] = set()
-        if populated:
+        # The ``legacy_records_ttl is not None`` term is redundant at runtime (a
+        # populated store with no legacy_records_ttl already raised above), but it
+        # narrows the type to ``timedelta`` for the _compute_legacy_expiry call.
+        if populated and legacy_records_ttl is not None:
             # Backfill branch: re-stamp every pre-existing on-disk record with a
             # uniform expiry in bounded chunks (memory ≈ one chunk), producing
             # and committing each chunk before reading the next. The genuine
@@ -624,7 +627,7 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         return enable_time_ms + ttl_ms
 
     def _restamp_default_cf_cache_for_flip(
-        self, skip_keys: "Optional[set[bytes]]" = None
+        self, skip_keys: Optional[Set[bytes]] = None
     ) -> None:
         """
         Re-encode every default-CF cache entry with its TTL stamp, queue

@@ -64,7 +64,10 @@ def _replay_default(recovered, msgs, now_ms, ttl_stamped=True):
     offset = 0
     for key, value in msgs:
         recovered.recover_from_changelog_message(
-            key=key, value=value, cf_name="default", offset=offset,
+            key=key,
+            value=value,
+            cf_name="default",
+            offset=offset,
             ttl_stamped=ttl_stamped,
         )
         offset += 1
@@ -168,8 +171,11 @@ class TestMemoryRecoveryWallclock:
         base = 1_000_000_000_000
         with partition.begin() as tx:
             tx.set(
-                key="kexp", value="vexp", prefix=b"pfx",
-                timestamp=base, ttl=timedelta(days=1),
+                key="kexp",
+                value="vexp",
+                prefix=b"pfx",
+                timestamp=base,
+                ttl=timedelta(days=1),
             )
             tx.set(key="kperm", value="vperm", prefix=b"pfx", timestamp=base)
         source_default = _decode_default(partition)
@@ -225,7 +231,10 @@ class TestMemoryRecoveryWallclock:
         offset = 0
         for key, value in msgs:
             recovered.recover_from_changelog_message(
-                key=key, value=value, cf_name="default", offset=offset,
+                key=key,
+                value=value,
+                cf_name="default",
+                offset=offset,
                 ttl_stamped=True,
             )
             offset += 1

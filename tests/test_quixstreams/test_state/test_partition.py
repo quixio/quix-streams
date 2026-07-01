@@ -41,7 +41,10 @@ class TestStorePartition:
         # heuristic — both reach TTL mode here.
         stamped = encode_ttl_value(SENTINEL_NEVER, b"value")
         store_partition.recover_from_changelog_message(
-            key=b"key", value=stamped, cf_name="default", offset=2,
+            key=b"key",
+            value=stamped,
+            cf_name="default",
+            offset=2,
             ttl_stamped=True,
         )
         assert store_partition.get(b"key") == stamped

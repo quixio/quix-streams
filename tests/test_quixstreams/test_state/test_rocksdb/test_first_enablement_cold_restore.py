@@ -81,7 +81,10 @@ def _replay_default(partition, msgs, now_ms=None):
     offset = 0
     for key, value, ttl_stamped in msgs:
         partition.recover_from_changelog_message(
-            key=key, value=value, cf_name="default", offset=offset,
+            key=key,
+            value=value,
+            cf_name="default",
+            offset=offset,
             ttl_stamped=ttl_stamped,
         )
         offset += 1
@@ -146,7 +149,9 @@ class TestColdRestoreFalseFlipRepro:
         for i in range(50):
             value = struct.pack(">q", 1_700_000_000_000 + i)  # past epoch-ms
             recovered.recover_from_changelog_message(
-                key=f"pfx|k{i}".encode(), value=value, cf_name="default",
+                key=f"pfx|k{i}".encode(),
+                value=value,
+                cf_name="default",
                 offset=offset,
             )
             offset += 1
@@ -172,7 +177,9 @@ class TestColdRestoreFalseFlipRepro:
         for i in range(n):
             value = struct.pack(">q", 1_700_000_000_000 + i)
             recovered.recover_from_changelog_message(
-                key=f"pfx|k{i}".encode(), value=value, cf_name="default",
+                key=f"pfx|k{i}".encode(),
+                value=value,
+                cf_name="default",
                 offset=offset,
             )
             offset += 1
@@ -180,8 +187,11 @@ class TestColdRestoreFalseFlipRepro:
         ts = 1_790_000_000_000
         with recovered.begin() as tx:
             tx.set(
-                key="klive", value="vlive", prefix=b"pfx",
-                timestamp=ts, ttl=timedelta(days=1),
+                key="klive",
+                value="vlive",
+                prefix=b"pfx",
+                timestamp=ts,
+                ttl=timedelta(days=1),
             )
         # Required: the recovered legacy records are backfilled (n + 1 entries).
         decoded = _decode_default_cf(recovered)
@@ -236,8 +246,11 @@ class TestFirstEnablementColdRestoreHappyPath:
         ts = 1_000_000_000_000
         with recovered.begin() as tx:
             tx.set(
-                key="klive", value="vlive", prefix=b"pfx",
-                timestamp=ts, ttl=timedelta(days=1),
+                key="klive",
+                value="vlive",
+                prefix=b"pfx",
+                timestamp=ts,
+                ttl=timedelta(days=1),
             )
 
         assert recovered.uses_ttl_stamps is True
@@ -280,8 +293,11 @@ class TestStampedRestoreNotMisclassified:
         for i in range(3):
             # Distinct, far-future expiries so a rebuild "now=base" keeps all.
             tx.set(
-                key=f"k{i}", value=f"v{i}", prefix=b"pfx",
-                timestamp=base, ttl=timedelta(days=365 * (i + 1)),
+                key=f"k{i}",
+                value=f"v{i}",
+                prefix=b"pfx",
+                timestamp=base,
+                ttl=timedelta(days=365 * (i + 1)),
             )
         tx.prepare(processed_offsets={"topic": 1})
         tx.flush(changelog_offset=0)
@@ -345,9 +361,7 @@ class TestTtlStampedHeaderProduce:
             tx.set(key="k0", value="v0", prefix=b"pfx", timestamp=None)
         assert src.uses_ttl_stamps is False
         headers = _produced_default_cf_headers(changelog_producer_mock)
-        assert headers and all(
-            CHANGELOG_TTL_STAMPED_HEADER not in h for h in headers
-        )
+        assert headers and all(CHANGELOG_TTL_STAMPED_HEADER not in h for h in headers)
         src.close()
 
     def test_header_set_on_post_flip_ttl_and_sentinel_writes(
@@ -361,8 +375,9 @@ class TestTtlStampedHeaderProduce:
         )
         base = 1_000_000_000_000
         tx = src.begin()
-        tx.set(key="kttl", value="v", prefix=b"pfx", timestamp=base,
-               ttl=timedelta(days=1))
+        tx.set(
+            key="kttl", value="v", prefix=b"pfx", timestamp=base, ttl=timedelta(days=1)
+        )
         tx.prepare(processed_offsets={"topic": 1})
         tx.flush(changelog_offset=0)
         assert src.uses_ttl_stamps is True
@@ -395,11 +410,11 @@ class TestTtlStampedHeaderProduce:
         )
         base = 1_000_000_000_000
         tx = src.begin()
-        tx.set(key="kttl", value="v", prefix=b"pfx", timestamp=base,
-               ttl=timedelta(days=1))
+        tx.set(
+            key="kttl", value="v", prefix=b"pfx", timestamp=base, ttl=timedelta(days=1)
+        )
         # Write to a non-default CF in the same flip transaction.
-        tx.set(key="kother", value="vo", prefix=b"pfx", cf_name="other",
-               timestamp=base)
+        tx.set(key="kother", value="vo", prefix=b"pfx", cf_name="other", timestamp=base)
         tx.prepare(processed_offsets={"topic": 1})
         tx.flush(changelog_offset=0)
         assert src.uses_ttl_stamps is True
@@ -423,15 +438,16 @@ class TestRecoveryRoutesOnHeaderOnly:
         # consult the value-content heuristic.
         recovered = store_partition_factory(name="dst")
         recovered._now_ms = lambda: 1_780_000_000_000  # noqa: E731
-        with patch.object(
-            recovered, "_looks_like_stamped_value"
-        ) as looks_spy:
+        with patch.object(recovered, "_looks_like_stamped_value") as looks_spy:
             offset = 0
             for i in range(10):
                 value = struct.pack(">q", 1_700_000_000_000 + i)
                 recovered.recover_from_changelog_message(
-                    key=f"pfx|k{i}".encode(), value=value, cf_name="default",
-                    offset=offset, ttl_stamped=False,
+                    key=f"pfx|k{i}".encode(),
+                    value=value,
+                    cf_name="default",
+                    offset=offset,
+                    ttl_stamped=False,
                 )
                 offset += 1
             looks_spy.assert_not_called()
@@ -449,12 +465,13 @@ class TestRecoveryRoutesOnHeaderOnly:
         recovered = store_partition_factory(name="dst")
         base = 1_000_000_000_000
         recovered._now_ms = lambda: base  # noqa: E731
-        with patch.object(
-            recovered, "_looks_like_stamped_value"
-        ) as looks_spy:
+        with patch.object(recovered, "_looks_like_stamped_value") as looks_spy:
             value = encode_ttl_value(base + 365 * DAY_MS, b"v")
             recovered.recover_from_changelog_message(
-                key=b"pfx|k0", value=value, cf_name="default", offset=0,
+                key=b"pfx|k0",
+                value=value,
+                cf_name="default",
+                offset=0,
                 ttl_stamped=True,
             )
             looks_spy.assert_not_called()

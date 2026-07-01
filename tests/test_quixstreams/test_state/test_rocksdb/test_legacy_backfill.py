@@ -98,7 +98,10 @@ def _replay_default(recovered, msgs, now_ms):
     offset = 0
     for key, value, ttl_stamped in msgs:
         recovered.recover_from_changelog_message(
-            key=key, value=value, cf_name="default", offset=offset,
+            key=key,
+            value=value,
+            cf_name="default",
+            offset=offset,
             ttl_stamped=ttl_stamped,
         )
         offset += 1
@@ -223,7 +226,7 @@ class TestLegacyBackfill:
         decoded = _decode_default_cf(partition)
         # Only the in-batch key is stamped — nothing was backfilled.
         assert len(decoded) == 1
-        (expires_at, _), = decoded.values()
+        ((expires_at, _),) = decoded.values()
         assert expires_at == ts + DAY_MS
         partition.close()
 
@@ -389,7 +392,10 @@ class TestLegacyBackfill:
         replay_offset = 0
         for key, value, ttl_stamped in default_msgs:
             recovered.recover_from_changelog_message(
-                key=key, value=value, cf_name="default", offset=replay_offset,
+                key=key,
+                value=value,
+                cf_name="default",
+                offset=replay_offset,
                 ttl_stamped=ttl_stamped,
             )
             replay_offset += 1
@@ -476,9 +482,7 @@ class TestRecoveryWallclock:
             options=RocksDBOptions(legacy_records_ttl=legacy_ttl),
             changelog_producer=changelog_producer_mock,
         )
-        _seed_legacy_records(
-            partition, [(f"k{i}", f"v{i}") for i in range(n)]
-        )
+        _seed_legacy_records(partition, [(f"k{i}", f"v{i}") for i in range(n)])
         changelog_producer_mock.produce.reset_mock()
         tx = partition.begin()
         tx.set(key="knew", value="vnew", prefix=b"pfx", timestamp=ts, ttl=legacy_ttl)
@@ -575,9 +579,7 @@ class TestRecoveryWallclock:
 
         recovered_default = _decode_default_cf(recovered)
         expected = {
-            k: payload
-            for k, payload in source_default.items()
-            if payload[0] > cutoff
+            k: payload for k, payload in source_default.items() if payload[0] > cutoff
         }
         assert recovered_default == expected
         assert len(recovered_default) == 1
@@ -595,8 +597,11 @@ class TestRecoveryWallclock:
         with partition.begin() as tx:
             # one expiring entry to flip into TTL mode + one sentinel entry
             tx.set(
-                key="kexp", value="vexp", prefix=b"pfx",
-                timestamp=base, ttl=timedelta(days=1),
+                key="kexp",
+                value="vexp",
+                prefix=b"pfx",
+                timestamp=base,
+                ttl=timedelta(days=1),
             )
             tx.set(key="kperm", value="vperm", prefix=b"pfx", timestamp=base)
         source_default = _decode_default_cf(partition)
@@ -688,7 +693,10 @@ class TestRecoveryWallclock:
         offset = 0
         for key, value, ttl_stamped in msgs:
             recovered.recover_from_changelog_message(
-                key=key, value=value, cf_name="default", offset=offset,
+                key=key,
+                value=value,
+                cf_name="default",
+                offset=offset,
                 ttl_stamped=ttl_stamped,
             )
             offset += 1

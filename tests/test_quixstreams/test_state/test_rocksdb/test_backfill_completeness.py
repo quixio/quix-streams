@@ -223,9 +223,12 @@ class TestBackfillCompleteness:
 
         # Run 2 completes the backfill.
         ts2 = ts + 5_000
-        with patch.object(
-            partition, "get_or_create_column_family", side_effect=proxy_goccf
-        ), patch.object(partition, "_looks_like_stamped_value") as looks_spy:
+        with (
+            patch.object(
+                partition, "get_or_create_column_family", side_effect=proxy_goccf
+            ),
+            patch.object(partition, "_looks_like_stamped_value") as looks_spy,
+        ):
             with partition.begin() as tx:
                 tx.set(key="knew", value="vnew", prefix=b"pfx", timestamp=ts2, ttl=ttl)
             # §9.4 — the backfill never byte-sniffs.
@@ -324,9 +327,7 @@ class TestBackfillCompleteness:
     # §9.7 — key deleted between census and stamp is skipped cleanly.
     def test_key_deleted_between_census_and_stamp(self, store_partition_factory):
         partition = store_partition_factory(name="db")
-        _seed_legacy_records(
-            partition, [("k1", "v1"), ("k2", "v2"), ("k3", "v3")]
-        )
+        _seed_legacy_records(partition, [("k1", "v1"), ("k2", "v2"), ("k3", "v3")])
         partition.close()
 
         ttl = timedelta(days=7)
@@ -426,15 +427,11 @@ class TestFailSafeRead:
         # Returned byte-identical to the original (no 8-byte strip) and no raise.
         assert result == payload
         # A WARNING was logged (observable degrade).
-        assert any(
-            "Fail-safe TTL read" in rec.message for rec in caplog.records
-        )
+        assert any("Fail-safe TTL read" in rec.message for rec in caplog.records)
         partition.close()
 
     # Genuinely-stamped values still expiry-filter correctly (no regression).
-    def test_genuinely_stamped_values_filter_normally(
-        self, store_partition_factory
-    ):
+    def test_genuinely_stamped_values_filter_normally(self, store_partition_factory):
         partition = store_partition_factory(name="db")
         _flip_partition_into_ttl(partition)
 
