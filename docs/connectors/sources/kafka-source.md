@@ -2,7 +2,7 @@
 
 A source that reads data from a Kafka topic and produce it to another Kafka topic. The two topics can be located on different Kafka clusters.
 
-This source supports exactly-once guarantees.
+This source supports exactly-once guarantees when the `Application` is configured with `processing_guarantee="exactly-once"`; otherwise it uses the application's default at-least-once guarantee.
 
 ## How To Use
 

@@ -71,20 +71,20 @@ All silence-detection logic is provided by the standalone [`StreamTimeoutTracker
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `stream_timeout_ms` | `Optional[int]` | `None` | Per-key silence threshold in milliseconds. Must be a positive integer. The feature is disabled when this is `None`, `0`, or negative. |
+| `stream_timeout_ms` | `Optional[int]` | `None` | Per-key silence threshold in milliseconds. Must be a positive integer when `on_stream_timeout` is set. |
 | `on_stream_timeout` | `Optional[Callable[[Any], None]]` | `None` | Callback invoked once per silent key. Receives the raw Kafka message key as-is (`bytes`, `str`, `int`, … — whatever was passed to the sink). Exceptions are logged and swallowed. |
 
-Both parameters must be set to a usable value (`stream_timeout_ms` a positive int, `on_stream_timeout` callable) for the feature to activate. Any other combination disables the feature with zero overhead: no per-key dict is allocated, no background thread is started.
+Both parameters must be set to a usable value (`stream_timeout_ms` a positive int, `on_stream_timeout` callable) for the feature to activate. Passing both as `None` disables the feature with zero overhead: no per-key dict is allocated, no background thread is started. Any other invalid combination raises `ValueError`.
 
 ### Fire-and-evict semantics
 
 When a key has been silent for at least `stream_timeout_ms`:
 
-1. The key's tracking entry is evicted from the in-memory dict.
+1. An INFO line is logged: `Stream 'sensor-a' timed out (silence N ms >= threshold M ms)`.
 2. `on_stream_timeout(key)` is called synchronously.
-3. An INFO line is logged: `Stream 'sensor-a' timed out (silence N ms >= threshold M ms)`.
+3. If the callback returns successfully, the key's tracking entry is evicted from the in-memory dict.
 
-The eviction happens before the callback, so a callback that raises still counts as fired — the same key will not fire again for the current silence period. If the key starts producing again after eviction, it is treated as a fresh stream with a new baseline and will fire again on its next silence.
+If the callback raises, the exception is logged and the key remains tracked so the callback can be retried on the next check cycle. If the key starts producing again after successful eviction, it is treated as a fresh stream with a new baseline and will fire again on its next silence.
 
 A TTL safety sweep also evicts any tracking entry older than `3 × stream_timeout_ms` without firing (WARNING logged). This bounds the dict size in degenerate cases without any additional configuration.
 
@@ -100,7 +100,7 @@ Tracking state is in-memory only. On process restart or Kafka partition rebalanc
 
 ### Callback must not block
 
-The callback runs on the sink's flush thread, which is the same thread that drives the Kafka consumer heartbeat. A blocking call inside the callback (for example, a synchronous producer `flush()`) will stop the consumer from polling, causing a heartbeat timeout and triggering a rebalance cascade. The callback must do bounded work and return promptly. If you need to produce a Kafka message from the callback, use a fire-and-forget `produce()` call — do not follow it with a synchronous `flush()`.
+The callback can run either during sink `flush()` on the thread that drives the Kafka consumer heartbeat, or on the timeout tracker's background daemon thread. A blocking call inside the callback (for example, a synchronous producer `flush()`) can stop the consumer from polling when invoked during `flush()`, causing a heartbeat timeout and triggering a rebalance cascade. The callback must do bounded work and return promptly. If you need to produce a Kafka message from the callback, use a fire-and-forget `produce()` call — do not follow it with a synchronous `flush()`.
 
 ### Example: wiring a timeout-event producer
 

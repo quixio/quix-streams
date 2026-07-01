@@ -98,7 +98,7 @@ Here are some important configurations to be aware of (see [File Source API](../
 
 ### Optional:
 
-- `format`: what format the message files are in (ex: `"json"`, `"parquet"`).    
+- `file_format`: what format the message files are in (ex: `"json"`, `"parquet"`).    
     **Advanced**: can optionally provide a `Format` instance (`compression` will then be ignored).    
     **Default**: `"json"`
 - `compression`: what compression is used on the given files, if any (ex: `"gzip"`)    
@@ -237,7 +237,7 @@ This will result in the following Kafka message format for `Application`:
 ### Custom Schemas (Advanced)
 
 If the original files are not formatted as expected, custom loaders can be configured 
-on some `Format` classes (ex: `JsonFormat`) which can be handed to `FileSource(format=<Format>)`.
+on some `Format` classes (ex: `JsonFormat`) which can be handed to `FileSource(file_format=<Format>)`.
 
 Formats can be imported from `quixstreams.sources.community.file.formats`.
 
@@ -272,7 +272,7 @@ emulated Azure host via Docker:
     mcr.microsoft.com/azure-storage/azurite:latest
     ```
 
-2. Set `connection_string` for `AzureOrigin` to: 
+2. Set `connection_string` for `AzureFileSource` to: 
 
 ```python
 "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;"

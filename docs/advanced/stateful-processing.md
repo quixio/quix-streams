@@ -85,7 +85,7 @@ They are also compacted to prevent them from growing indefinitely.
 ### How Changelog Topics Work
 - When the application starts, it automatically checks which state stores need to be created.  
 It will ensure the changelog topics exist for these stores.
-- When the key is updated in the state store during processing, the update will be sent both to the changelog topic and the local state store.
+- When the key is updated in the state store during processing, the update is staged in the current state transaction. During checkpoint commit, staged updates are produced to the changelog topic and then flushed to the local state store.
 - When the application restarts or a new consumer joins the group, it will check whether the state stores are up-to-date with their changelog topics.    
 If they are not, the application will first update the local stores, and only then will it continue processing the messages. 
 

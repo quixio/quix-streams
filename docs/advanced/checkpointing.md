@@ -21,10 +21,11 @@ See the [Configuration](../configuration.md#processing-guarantees) page to learn
 - The `Checkpoint` object is responsible for keeping track of processed Kafka offsets and pending state transactions.
 - After the message is successfully processed, its offset is marked as processed in the current checkpoint.
 - When checkpoint commits, it will:
-    1. *Produce changelog messages for every pending state update to the changelog topics (if they are enabled).*
-    2. *Flush the Kafka Producer and verify the delivery of every outgoing message both to output and changelog topics.*
-    3. *Synchronously commit the topic offsets to Kafka.*
-    4. *Flush the pending state transactions to the durable state stores.*
+    1. *Flush registered sinks. If a sink raises `SinkBackpressureError`, processing pauses assigned partitions and the checkpoint exits early without committing offsets.*
+    2. *Produce changelog messages for every pending state update to the changelog topics (if they are enabled).*
+    3. *Flush the Kafka Producer and verify the delivery of every outgoing message both to output and changelog topics.*
+    4. *Synchronously commit the topic offsets to Kafka.*
+    5. *Flush the pending state transactions to the durable state stores.*
         
 - After the checkpoint is fully committed, a new one is created and the processing continues.
 - Besides the regular intervals, the checkpoint is also committed when Kafka partitions are rebalanced.
@@ -106,4 +107,3 @@ In the At-Least-Once setting, it is still possible that unwanted changelog chang
 - Since the changelogs are already produced, during recovery from scratch they will be applied to the state even though the messages are now filtered.
 
 Though this case is rare, the best way to avoid it is to stop the application clean and ensure the latest checkpoint successfully commits before updating the processing code.
-

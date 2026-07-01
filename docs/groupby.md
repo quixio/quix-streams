@@ -247,14 +247,14 @@ what `store_id` it came from) ***over the past hour***.
 In this case, we need to get a windowed sum based on a single column identifier: `item`.
 
 This can be done by simply passing the `item` column name to `.group_by()`, followed by 
-a [`tumbling_window()`](windowing.md#time-based-tumbling-windows) [`.sum()`](aggregations.md#built-in-aggregators-and-collectors) over the past `3600` seconds:
+a [`tumbling_window()`](windowing.md#time-based-tumbling-windows) [`.sum()`](aggregations.md#built-in-aggregators-and-collectors) over the past hour:
 
 ```python
 from quixstreams.dataframe.windows import Sum
 
 sdf = app.dataframe(input_topic)
 sdf = sdf.group_by("item")
-sdf = sdf.tumbling_window(duration_ms=3600).agg(total_quantity=Sum()).final()
+sdf = sdf.tumbling_window(duration_ms=3_600_000).agg(total_quantity=Sum()).final()
 ```
 which generates data like:
 

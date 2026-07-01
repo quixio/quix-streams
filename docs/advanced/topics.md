@@ -19,7 +19,7 @@ Default - `True`.
 2. Define a topic using `Application.topic()` method.    
 This will let the app track this topic on the Kafka broker
 
-When you have this code in place, the topics will be created on `Application.run()`.
+When you call `Application.topic()`, regular topics are inspected on the broker and created immediately if they do not exist.
 
 >***NOTE:*** Quix Streams automatically creates topics only if they don't exist in Kafka.   
 > It never updates the topic configuration after the topics are already created.
@@ -41,8 +41,8 @@ output_topic = app.topic('output')
 # Create a bypass transformation sending messages from the input topic to the output one
 sdf = app.dataframe(input_topic).to_topic(output_topic)
 
-# Run the Application. 
-# The topics will be validated and created during this function call.
+# Run the Application.
+# The topics were validated and created when Application.topic() was called.
 app.run()
 ```
 
@@ -80,8 +80,8 @@ output_topic = app.topic(
 # Create a bypass transformation sending messages from the input topic to the output one
 sdf = app.dataframe(input_topic).to_topic(output_topic)
 
-# Run the Application. 
-# The topics will be validated and created during this function call.
+# Run the Application.
+# The topics were validated and created when Application.topic() was called.
 # Note: if the topics already exist, the configs will remain intact.
 app.run()
 ```
