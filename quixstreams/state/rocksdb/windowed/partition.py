@@ -14,7 +14,13 @@ class WindowedRocksDBStorePartition(RocksDBStorePartition):
 
     Besides the data, it keeps track of the latest observed timestamp and
     stores the expiration index to delete expired windows.
+
+    Windowed stores have their own retention model (``grace_ms``) and opt
+    out of the always-on per-write TTL stamp; values in their column
+    families are stored verbatim, no expiry prefix.
     """
+
+    uses_ttl_stamps = False
 
     def iter_keys(self, cf_name: str = "default") -> Iterator[bytes]:
         """

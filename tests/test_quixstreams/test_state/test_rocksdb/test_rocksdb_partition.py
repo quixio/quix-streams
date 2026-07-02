@@ -94,7 +94,15 @@ class TestRocksDBStorePartition:
             match=f'State store at "{path}" is corrupted but may be recovered '
             f"from the changelog topic",
         ):
-            store_partition_factory()
+            store_partition_factory(options=RocksDBOptions(on_corrupted_recreate=False))
+
+    def test_db_corrupted_recreated_by_default(self, store_partition_factory, tmp_path):
+        # Initialize and corrupt the database by messing with the MANIFEST
+        Rdict(path=tmp_path.as_posix())
+        next(tmp_path.glob("MANIFEST*")).write_bytes(b"")
+
+        # Default `on_corrupted_recreate=True` should recreate the DB
+        store_partition_factory()
 
     def test_db_corrupted_manifest_file(self, store_partition_factory, tmp_path):
         Rdict(path=tmp_path.as_posix())  # initialize db
@@ -149,12 +157,13 @@ class TestRocksDBStorePartition:
         self, store_partition: RocksDBStorePartition
     ):
         cfs = store_partition.list_column_families()
-        assert cfs == [
-            # "default" CF is always present in RocksDB
-            "default",
-            # "__metadata__" CF is created by the RocksDBStorePartition
-            "__metadata__",
-        ]
+        # Order can vary depending on creation sequence, so compare as sets.
+        # "default" is always present in RocksDB. "__metadata__" is created
+        # by RocksDBStorePartition. The ``__ttl_index__`` CF is **lazy** in
+        # v3: it only exists after a partition flips into TTL mode on first
+        # detection of a ``state.set(..., ttl=...)`` write. A fresh, never-
+        # used partition stays byte-identical to v3.23.6.
+        assert set(cfs) == {"default", "__metadata__"}
 
     def test_ensure_metadata_cf(self, store_partition: RocksDBStorePartition):
         assert store_partition.get_or_create_column_family("__metadata__")

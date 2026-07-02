@@ -5,9 +5,7 @@ from typing import Optional
 from quixstreams.state.base import Store
 from quixstreams.state.recovery import ChangelogProducer, ChangelogProducerFactory
 
-from .partition import (
-    RocksDBStorePartition,
-)
+from .partition import RocksDBStorePartition
 from .types import RocksDBOptionsType
 
 logger = logging.getLogger(__name__)
@@ -64,3 +62,10 @@ class RocksDBStore(Store):
         return RocksDBStorePartition(
             path=path, options=self._options, changelog_producer=changelog_producer
         )
+
+    def destroy_partition(self, partition: int) -> bool:
+        path = str((self._partitions_dir / str(partition)).absolute())
+        if not Path(path).exists():
+            return False
+        RocksDBStorePartition.destroy(path)
+        return True

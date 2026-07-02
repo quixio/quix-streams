@@ -1778,6 +1778,12 @@ def register_store(store_type: Optional[StoreTypes] = None) -> None
 
 Register the default store for the current stream_id in StateStoreManager.
 
+
+<br>
+***Arguments:***
+
+- `store_type`: optional store implementation override.
+
 <a id="quixstreams.dataframe.series"></a>
 
 ## quixstreams.dataframe.series

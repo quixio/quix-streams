@@ -37,7 +37,8 @@ the `commit_every` parameter.
 - **`auto_offset_reset`** - Consumer `auto.offset.reset` setting.  
 It determines where the consumer should start reading messages from.  
 See more `auto.offset.reset` in this [article](https://www.quix.io/blog/kafka-auto-offset-reset-use-cases-and-pitfalls#the-auto-offset-reset-configuration).  
-**Options**: `"latest"`, `"earliest"`.  
+**Options**: `"latest"`, `"earliest"`, `"error"`.  
+Using `"error"` makes the consumer raise an error if no committed offset is found for a partition.  
 **Default** - `"latest"`.
 
 - **`processing_guarantee`** - Use "at-least-once" or "exactly-once" processing guarantees.  
@@ -167,7 +168,8 @@ For more information about tuning the `commit_interval`, see the ["Configuring t
 ## State
 - **`state_dir`** - path to the application state directory.  
 This directory contains data for each state store separated by consumer group.  
-Default - `"state"`.
+When not set, Quix Streams uses the first available value from this order: `Quix__Deployment__State__Path`, deprecated `Quix__State__Dir`, `/app/state` for Quix deployments, then `state` for local runs.  
+Default - auto-detected as described above.
 
 - **`rocksdb_options`** - options to be used for RocksDB instances.   
 The default configuration is described in the class `quixstreams.state.rocksdb.options.RocksDBOptions`.  
@@ -177,6 +179,13 @@ To override it, pass an instance of `quixstreams.state.rocksdb.options.RocksDBOp
 - **`use_changelog_topics`** - whether the application should use changelog topics to back stateful operations.  
 See the [Stateful Processing](advanced/stateful-processing.md#fault-tolerance-recovery) page to learn more about changelog topics.   
 **Default** - `True`.
+
+- **`auto_recover_from_source_offset_out_of_range`** - whether stateful applications should automatically delete local state for an affected partition when the committed source offset is older than the broker's retained offsets. The source offset used after recovery is controlled by `state_recovery_offset_reset`. Set this to `False` to raise `StateRecoveryOffsetOutOfRange` instead.  
+**Default** - `True`.
+
+- **`state_recovery_offset_reset`** - source offset reset policy to use after automatic state recovery deletes local state because the committed source offset is no longer retained by Kafka. Use `"earliest"` to use the broker low watermark as the changelog recovery boundary and resume source consumption from there. Use `"latest"` to resume source consumption from the broker high watermark and skip changelog records that carry processed source-offset metadata; older changelog records without this metadata may still be applied. Use `"match"` to follow `auto_offset_reset`. If `"match"` resolves to `auto_offset_reset="error"`, Quix Streams raises `StateRecoveryOffsetOutOfRange`.  
+**Options** - `"earliest"`, `"latest"`, `"match"`.  
+**Default** - `"earliest"`.
 
 ## Logging
 - `loglevel` - a log level to use for the "quixstreams" logger.  

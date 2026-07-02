@@ -18,6 +18,7 @@ def main():
       topic="source-topic",
       quix_sdk_token="quix-sdk-token",
       quix_workspace_id="quix-workspace-id",
+      quix_portal_api="https://portal-api.cloud.quix.io",
     )
     
     sdf = app.dataframe(source=source)

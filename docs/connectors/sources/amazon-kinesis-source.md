@@ -107,7 +107,7 @@ processed (produced) more than once.
     
 ## Topic
 
-The default topic name the Application dumps to is `source-kinesis_<stream name>`.
+The source default topic name is `kinesis_<stream name>`. When passed to `Application.dataframe(source=...)` without a custom topic, the Kafka topic name is prefixed as `source__kinesis_<stream name>`.
 
 
 ## Testing Locally
@@ -130,4 +130,3 @@ Rather than connect to AWS, you can alternatively test your application using a 
 
 3. Set all other `aws_` parameters for `KinesisSource` to _any_ string. 
 They will not be used, but they must still be populated!
-

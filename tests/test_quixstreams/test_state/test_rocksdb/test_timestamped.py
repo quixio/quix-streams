@@ -175,6 +175,24 @@ class TestTimestampedPartitionTransaction:
             assert tx.get_latest(timestamp=30, prefix=b"key1") == "112"
             assert tx.get_latest(timestamp=30, prefix=b"key2") == "212"
 
+    def test_expire_does_not_affect_keys_sharing_byte_prefix(
+        self, transaction: TimestampedPartitionTransaction
+    ):
+        # `b"key2"` shares its leading bytes with `b"key"`. Since the SEPARATOR
+        # (b"|", 0x7c) sorts after digits/letters, `b"key2|..."` orders before
+        # `b"key|..."`, so expiring `b"key"` must not reach into `b"key2"`.
+        with transaction(grace_ms=5) as tx:
+            tx.set_for_timestamp(timestamp=3, value="key2val", prefix=b"key2")
+
+        # Writing `b"key"` at a high timestamp advances its expiration watermark
+        # and triggers a sweep. `b"key2"` was never eligible under its own grace.
+        with transaction(grace_ms=5) as tx:
+            tx.set_for_timestamp(timestamp=100, value="keyval", prefix=b"key")
+
+        with transaction(grace_ms=5) as tx:
+            assert tx.get_latest(timestamp=3, prefix=b"key2") == "key2val"
+            assert tx.get_latest(timestamp=100, prefix=b"key") == "keyval"
+
     def test_set_for_timestamp_overwrites_value_with_same_timestamp(
         self,
         transaction: TimestampedPartitionTransaction,

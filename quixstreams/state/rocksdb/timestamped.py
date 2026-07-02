@@ -203,7 +203,14 @@ class TimestampedPartitionTransaction(RocksDBPartitionTransaction):
                 if cached_key < key:
                     keys_to_delete.append((cached_key, prefix))
 
-            stored = self._partition.iter_items(lower_bound=prefix, upper_bound=key)
+            # Scope the lower bound to this prefix's namespace by appending the
+            # SEPARATOR. Without it, the bare prefix lets the range spill into
+            # other prefixes that share these bytes (e.g. b"key" vs b"key2"),
+            # deleting entries that belong to unrelated keys.
+            lower_bound = self._serialize_key(b"", prefix)
+            stored = self._partition.iter_items(
+                lower_bound=lower_bound, upper_bound=key
+            )
             for stored_key, _ in stored:
                 keys_to_delete.append((stored_key, prefix))
 
@@ -263,7 +270,12 @@ class TimestampedStorePartition(RocksDBStorePartition):
 
     This class is responsible for managing the state of one partition and creating
     `TimestampedPartitionTransaction` instances to handle atomic operations for that partition.
+
+    Timestamped stores have their own retention model (``grace_ms``) and
+    opt out of the always-on per-write TTL stamp.
     """
+
+    uses_ttl_stamps = False
 
     def __init__(
         self,

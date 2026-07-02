@@ -188,6 +188,21 @@ class TestStateStoreManager:
             shutil.rmtree(base_dir_path, ignore_errors=True)
             st.clear_stores()
 
+    def test_destroy_partition_state(self, state_manager):
+        store = MagicMock()
+        store.name = "default"
+        store.destroy_partition.return_value = True
+        state_manager._stores["topic"] = {"default": store}
+
+        destroyed = state_manager.destroy_partition_state(
+            stream_id="topic",
+            partition=0,
+        )
+
+        assert destroyed == ["default"]
+        store.revoke_partition.assert_called_once_with(partition=0)
+        store.destroy_partition.assert_called_once_with(partition=0)
+
 
 @pytest.mark.parametrize("store_type", SUPPORTED_STORES, indirect=True)
 class TestStateStoreManagerWithRecovery:

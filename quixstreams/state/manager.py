@@ -183,30 +183,32 @@ class StateStoreManager:
         :param changelog_config: changelog topic config.
             Note: the compaction will be enabled for the changelog topic.
         """
-        if self._stores.get(stream_id, {}).get(store_name) is None:
-            changelog_producer_factory = self._setup_changelogs(
-                stream_id, store_name, topic_config=changelog_config
+        if self._stores.get(stream_id, {}).get(store_name) is not None:
+            return
+
+        changelog_producer_factory = self._setup_changelogs(
+            stream_id, store_name, topic_config=changelog_config
+        )
+
+        store_type = store_type or self.default_store_type
+        if store_type == RocksDBStore:
+            store: Store = RocksDBStore(
+                name=store_name,
+                stream_id=stream_id,
+                base_dir=str(self._state_dir),
+                changelog_producer_factory=changelog_producer_factory,
+                options=self._rocksdb_options,
             )
+        elif store_type == MemoryStore:
+            store = MemoryStore(
+                name=store_name,
+                stream_id=stream_id,
+                changelog_producer_factory=changelog_producer_factory,
+            )
+        else:
+            raise ValueError(f"invalid store type: {store_type}")
 
-            store_type = store_type or self.default_store_type
-            if store_type == RocksDBStore:
-                store: Store = RocksDBStore(
-                    name=store_name,
-                    stream_id=stream_id,
-                    base_dir=str(self._state_dir),
-                    changelog_producer_factory=changelog_producer_factory,
-                    options=self._rocksdb_options,
-                )
-            elif store_type == MemoryStore:
-                store = MemoryStore(
-                    name=store_name,
-                    stream_id=stream_id,
-                    changelog_producer_factory=changelog_producer_factory,
-                )
-            else:
-                raise ValueError(f"invalid store type: {store_type}")
-
-            self._stores.setdefault(stream_id, {})[store_name] = store
+        self._stores.setdefault(stream_id, {})[store_name] = store
 
     def register_timestamped_store(
         self,
@@ -337,6 +339,21 @@ class StateStoreManager:
                 self._recovery_manager.revoke_partition(partition_num=partition)
             for store in stores:
                 store.revoke_partition(partition=partition)
+
+    def destroy_partition_state(self, stream_id: str, partition: int) -> list[str]:
+        """
+        Destroy persisted state for all stores of a stream partition.
+
+        :param stream_id: stream id
+        :param partition: partition number
+        :return: names of stores whose persisted state was destroyed.
+        """
+        destroyed = []
+        for store in self._stores.get(stream_id, {}).values():
+            store.revoke_partition(partition=partition)
+            if store.destroy_partition(partition=partition):
+                destroyed.append(store.name)
+        return destroyed
 
     def init(self) -> None:
         """

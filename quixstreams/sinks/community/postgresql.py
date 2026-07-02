@@ -81,6 +81,7 @@ class PostgreSQLSink(BatchingSink):
         primary_key_columns: PrimaryKeyColumns = (),
         upsert_on_primary_key: bool = False,
         on_conflict_do_nothing: bool = False,
+        include_metadata: bool = True,
         on_client_connect_success: Optional[ClientConnectSuccessCallback] = None,
         on_client_connect_failure: Optional[ClientConnectFailureCallback] = None,
         **kwargs,
@@ -114,7 +115,10 @@ class PostgreSQLSink(BatchingSink):
             primary key collisions will consequently raise an exception.
         :param on_conflict_do_nothing: If True, duplicate rows are silently ignored
             using `ON CONFLICT DO NOTHING`. Cannot be used together with
-            `upsert_on_primary_key=True`.            
+            `upsert_on_primary_key=True`.
+        :param include_metadata: If True (default), includes ``__key`` and ``timestamp``
+            columns for every row written to PostgreSQL. Set to False to omit them.
+            Defaults to True for backward compatibility.
         :param on_client_connect_success: An optional callback made after successful
             client authentication, primarily for additional logging.
         :param on_client_connect_failure: An optional callback made after failed
@@ -144,12 +148,13 @@ class PostgreSQLSink(BatchingSink):
             )
         self._primary_key_setter = _primary_key_setter(primary_key_columns)
         self._do_upsert = upsert_on_primary_key
-        self._on_conflict_do_nothing = on_conflict_do_nothing
         if upsert_on_primary_key and on_conflict_do_nothing:
             raise ValueError(
                 "Cannot use both `upsert_on_primary_key=True` and "
                 "`on_conflict_do_nothing=True` at the same time."
-            )        
+            )
+        self._on_conflict_do_nothing = on_conflict_do_nothing
+        self._include_metadata = include_metadata
 
         self._client_settings = {
             "host": host,
@@ -178,7 +183,7 @@ class PostgreSQLSink(BatchingSink):
                 primary_key_columns = [primary_key_columns]
 
             row = {}
-            if item.key is not None:
+            if item.key is not None and self._include_metadata:
                 key_type = type(item.key)
                 table["cols_types"].setdefault(KEY_COLUMN_NAME, key_type)
                 row[KEY_COLUMN_NAME] = item.key
@@ -194,7 +199,10 @@ class PostgreSQLSink(BatchingSink):
                     table["cols_types"].setdefault(key, type(value))
                     row[key] = value
 
-            row[TIMESTAMP_COLUMN_NAME] = datetime.fromtimestamp(item.timestamp / 1000)
+            if self._include_metadata:
+                row[TIMESTAMP_COLUMN_NAME] = datetime.fromtimestamp(
+                    item.timestamp / 1000
+                )
             table["rows"].append(row)
 
         table_counts = {}
@@ -263,18 +271,29 @@ class PostgreSQLSink(BatchingSink):
     def _create_table(self, table_name: str):
         if table_name in self._tables:
             return
-        query = sql.SQL(
-            """
-            CREATE TABLE IF NOT EXISTS {table} (
-                {timestamp_col} TIMESTAMP NOT NULL,
-                {key_col} TEXT
+        if self._include_metadata:
+            query = sql.SQL(
+                """
+                CREATE TABLE IF NOT EXISTS {table} (
+                    {timestamp_col} TIMESTAMP NOT NULL,
+                    {key_col} TEXT
+                )
+                """
+            ).format(
+                table=sql.Identifier(self._schema_name, table_name),
+                timestamp_col=sql.Identifier(TIMESTAMP_COLUMN_NAME),
+                key_col=sql.Identifier(KEY_COLUMN_NAME),
             )
-            """
-        ).format(
-            table=sql.Identifier(self._schema_name, table_name),
-            timestamp_col=sql.Identifier(TIMESTAMP_COLUMN_NAME),
-            key_col=sql.Identifier(KEY_COLUMN_NAME),
-        )
+        else:
+            query = sql.SQL(
+                """
+                CREATE TABLE IF NOT EXISTS {table} (
+                    _row_id SERIAL
+                )
+                """
+            ).format(
+                table=sql.Identifier(self._schema_name, table_name),
+            )
 
         with self._client.cursor() as cursor:
             cursor.execute(query)
@@ -396,7 +415,7 @@ class PostgreSQLSink(BatchingSink):
             )
             query = sql.SQL(" ").join([query, upsert_stub])
         elif self._on_conflict_do_nothing:
-            query = sql.SQL(" ").join([query, sql.SQL("ON CONFLICT DO NOTHING")])            
+            query = sql.SQL(" ").join([query, sql.SQL("ON CONFLICT DO NOTHING")])
 
         # Handle missing keys gracefully
         values = [[row.get(col, None) for col in columns] for row in rows]

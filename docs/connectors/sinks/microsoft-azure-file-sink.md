@@ -36,7 +36,7 @@ Create an instance of `AzureFileSink` and pass it to the `StreamingDataFrame.sin
 ```python
 from quixstreams import Application
 from quixstreams.sinks.community.file.azure import AzureFileSink
-from quixstreams.sinks.community.file.destinations import AzureFileDestination
+from quixstreams.sinks.community.file.formats import JSONFormat
 
 
 # Configure the sink to write JSON files to Azure
@@ -83,8 +83,8 @@ Each object is named using the batch's starting offset (padded to 19 digits) and
 
 ## Supported Formats
 
-- **JSON**: Supports appending to existing files
-- **Parquet**: Does not support appending (new file created for each batch)
+- **JSON**: Writes a new blob for each batch
+- **Parquet**: Writes a new blob for each batch
 
 ## Delivery Guarantees
 

@@ -24,5 +24,6 @@ class RocksDBOptionsType(Protocol):
     open_retry_backoff: float
     use_fsync: bool
     on_corrupted_recreate: bool
+    max_evictions_per_flush: int
 
     def to_options(self) -> rocksdict.Options: ...
