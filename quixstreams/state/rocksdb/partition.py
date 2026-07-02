@@ -273,8 +273,14 @@ class RocksDBStorePartition(StorePartition):
         # Keys re-written into the default CF in this same flush. The TTL sweep
         # reads committed disk state (not this uncommitted batch), so it must not
         # delete a key the batch just refreshed — otherwise the stale-read delete
-        # clobbers the fresh write.
+        # clobbers the fresh write. Track TTL-index keys too: a refreshed value
+        # can legitimately stage the same expiry index key the sweep is visiting.
         staged_default_keys: set[bytes] = set()
+        staged_ttl_index_keys: set[bytes] = set()
+        # Only track staged keys when a sweep will actually consume them. For
+        # legacy / unflipped partitions (the 99% no-TTL workload) the sweep never
+        # runs, so this keeps the inner write loop byte-identical to v3.23.6.
+        track_staged = self.uses_ttl_stamps
         for cf_name in column_families:
             cf_handle = self.get_column_family_handle(cf_name)
 
@@ -282,8 +288,11 @@ class RocksDBStorePartition(StorePartition):
             for prefix_update_cache in updates.values():
                 for key, value in prefix_update_cache.items():
                     batch.put(key, value, cf_handle)
-                    if cf_name == "default":
-                        staged_default_keys.add(key)
+                    if track_staged:
+                        if cf_name == "default":
+                            staged_default_keys.add(key)
+                        elif cf_name == TTL_INDEX_CF_NAME:
+                            staged_ttl_index_keys.add(key)
 
             deletes = cache.get_deletes(cf_name=cf_name)
             for key in deletes:
@@ -297,7 +306,11 @@ class RocksDBStorePartition(StorePartition):
             )
 
         if self.uses_ttl_stamps:
-            self._run_sweep(batch=batch, staged_default_keys=staged_default_keys)
+            self._run_sweep(
+                batch=batch,
+                staged_default_keys=staged_default_keys,
+                staged_ttl_index_keys=staged_ttl_index_keys,
+            )
 
         # Save the latest changelog topic offset to know where to recover from
         # It may be None if changelog topics are disabled
@@ -601,7 +614,10 @@ class RocksDBStorePartition(StorePartition):
     # ------------------------------------------------------------------
 
     def _run_sweep(
-        self, batch: WriteBatch, staged_default_keys: "set[bytes] | None" = None
+        self,
+        batch: WriteBatch,
+        staged_default_keys: "set[bytes] | None" = None,
+        staged_ttl_index_keys: "set[bytes] | None" = None,
     ) -> None:
         """
         Bounded-budget sweep over the secondary expiry index.
@@ -612,8 +628,13 @@ class RocksDBStorePartition(StorePartition):
         ``staged_default_keys`` are the default-CF keys re-written in this same
         flush. The sweep reads committed disk state, which is stale for those
         keys, so it must never delete them here.
+
+        ``staged_ttl_index_keys`` are the TTL-index entries written in this
+        batch. If a fresh write reuses the same expiry stamp as the stale index
+        entry being swept, deleting that index key would orphan the fresh value.
         """
         staged_default_keys = staged_default_keys or frozenset()
+        staged_ttl_index_keys = staged_ttl_index_keys or frozenset()
         if self._high_water_ms is None:
             # Cold start: no event-time established yet — skip the sweep.
             return
@@ -627,6 +648,10 @@ class RocksDBStorePartition(StorePartition):
         main_cf = self.get_or_create_column_family("default")
         index_handle = self.get_column_family_handle(TTL_INDEX_CF_NAME)
         main_handle = self.get_column_family_handle("default")
+
+        def delete_index_if_not_staged(index_key: bytes) -> None:
+            if index_key not in staged_ttl_index_keys:
+                batch.delete(index_key, index_handle)
 
         # Bound the iterator at the cutoff stamp to skip future expiries
         # without paying for the iterator step. Build the cutoff prefix as
@@ -649,7 +674,7 @@ class RocksDBStorePartition(StorePartition):
             try:
                 idx_expires_at, user_key = decode_index_key(index_key)
             except ValueError:
-                batch.delete(index_key, index_handle)
+                delete_index_if_not_staged(index_key)
                 continue
 
             if idx_expires_at > now_ms:
@@ -660,7 +685,7 @@ class RocksDBStorePartition(StorePartition):
             if main_value is None:
                 # Ghost: user deleted the main entry but the index still
                 # points at it. GC the orphaned index entry.
-                batch.delete(index_key, index_handle)
+                delete_index_if_not_staged(index_key)
                 continue
 
             try:
@@ -672,25 +697,28 @@ class RocksDBStorePartition(StorePartition):
                     self._path,
                     user_key,
                 )
-                batch.delete(index_key, index_handle)
+                delete_index_if_not_staged(index_key)
                 continue
 
             if main_expires_at == SENTINEL_NEVER:
                 # Ghost: key was overwritten by a plain ``state.set`` and
                 # is now permanent. Drop the stale index pointer only.
-                batch.delete(index_key, index_handle)
+                delete_index_if_not_staged(index_key)
                 continue
 
-            if main_expires_at == idx_expires_at and user_key not in staged_default_keys:
+            if (
+                main_expires_at == idx_expires_at
+                and user_key not in staged_default_keys
+            ):
                 batch.delete(user_key, main_handle)
-                batch.delete(index_key, index_handle)
+                delete_index_if_not_staged(index_key)
                 evicted += 1
             else:
                 # Ghost: key was overwritten with a fresh expiry stamp — either
                 # already committed, or re-written in this same batch (in which
                 # case the committed read above is stale). Drop only the stale
                 # index pointer; deleting the key would clobber the fresh write.
-                batch.delete(index_key, index_handle)
+                delete_index_if_not_staged(index_key)
 
         if evicted:
             logger.debug(
