@@ -49,6 +49,21 @@ if __name__ == '__main__':
     app.run()
 ```
 
+To drop duplicate or replayed messages at the database rather than raising an error, set `on_conflict_do_nothing=True` together with `primary_key_columns`:
+
+```python
+postgres_sink = PostgreSQLSink(
+    host="localhost",
+    port=5432,
+    dbname="mydatabase",
+    user="myuser",
+    password="mypassword",
+    table_name="numbers",
+    primary_key_columns="event_id",   # column (or columns) with a unique/primary-key constraint
+    on_conflict_do_nothing=True,      # duplicate rows are silently ignored
+)
+```
+
 ## How It Works
 
 PostgreSQLSink is a batching sink.
@@ -113,6 +128,9 @@ PostgreSQLSink accepts the following configuration parameters:
       include_metadata=False,
   )
   ```
+- `on_conflict_do_nothing`: If `True`, duplicate rows are silently ignored using PostgreSQL's `ON CONFLICT DO NOTHING` clause on the INSERT statement. Use this when replayed or duplicate messages should be dropped at the database rather than inserted or upserted. Cannot be combined with `upsert_on_primary_key=True` — constructing the sink with both set to `True` raises a `ValueError`. Default: `False`.
+
+**Choosing a conflict strategy:** use `upsert_on_primary_key=True` when you want the latest message to overwrite an existing row (last-write-wins). Use `on_conflict_do_nothing=True` when you want duplicate or replayed messages silently dropped. A primary key or unique constraint on the table is required for either option to take effect. The two options are mutually exclusive.
 
 
 ## Testing Locally
