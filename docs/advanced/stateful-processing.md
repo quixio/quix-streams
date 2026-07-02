@@ -220,6 +220,8 @@ State TTL lets you attach an expiry duration to individual writes in a state sto
 
 **If your pipeline never calls `state.set(..., ttl=...)`, nothing changes.** The on-disk layout, changelog bytes, and recovery path are identical to Quix Streams v3.23.6. TTL machinery activates only on the stores that actually use it.
 
+For practical patterns and complete working examples (dedup filter, short-lived cache, toggle/expiry filter, status-in-key with `group_by`, env-var TTL), see the [State TTL — Cookbook](state-ttl.md).
+
 
 ### The API
 
@@ -322,8 +324,6 @@ Once a store has switched into TTL mode, it stays in TTL mode for the life of th
 
 
 ### Upgrading an existing (legacy) store — `legacy_records_ttl`
-
-> **Preview feature.** Available from Quix Streams 3.24.1a2.
 
 If your pipeline was already running before TTL existed, its state store holds records that were written without any expiry stamp. Deploying a new version that calls `state.set(..., ttl=...)` triggers an automatic in-place migration on the first flush: the framework re-stamps every pre-existing un-stamped record with a uniform expiry and flips the store into TTL mode with no state deletion.
 
