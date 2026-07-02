@@ -11,7 +11,7 @@ from quixstreams.state.base.transaction import (
     PartitionTransactionStatus,
     validate_transaction_status,
 )
-from quixstreams.state.exceptions import StateSerializationError
+from quixstreams.state.exceptions import ChangelogFlushError, StateSerializationError
 from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER,
@@ -20,6 +20,8 @@ from quixstreams.state.metadata import (
     METADATA_CF_NAME,
     TTL_BACKFILL_PENDING_CF_NAME,
     TTL_INDEX_CF_NAME,
+    TTL_MIGRATION_DONE_KEY,
+    TTL_SYSTEM_CF_NAME,
     Marker,
 )
 from quixstreams.state.recovery import ChangelogProducer
@@ -29,9 +31,10 @@ from quixstreams.state.rocksdb.metadata import (
     TTL_ENABLED_KEY,
     TTL_HIGH_WATER_KEY,
 )
-from quixstreams.state.rocksdb.transaction import _ttl_to_ms
+from quixstreams.state.rocksdb.transaction import _safe_decode_stamp, _ttl_to_ms
 from quixstreams.state.rocksdb.ttl_codec import (
     SENTINEL_NEVER,
+    TTL_STAMP_BYTES,
     decode_index_key,
     decode_ttl_value,
     encode_index_key,
@@ -46,6 +49,12 @@ logger = logging.getLogger(__name__)
 __all__ = ("MemoryStorePartition",)
 
 _DEFAULT_MAX_EVICTIONS_PER_FLUSH = 10_000
+
+# Bounded flush timeout (seconds) for the done-marker changelog site, matching
+# ``RocksDBStorePartition._BACKFILL_CHANGELOG_FLUSH_TIMEOUT_S`` (below the 30 s
+# producer poll interval): confirm the marker on the changelog before recording
+# it locally, or raise instead of hanging indefinitely.
+_MIGRATION_MARKER_FLUSH_TIMEOUT_S: float = 25.0
 
 
 def _validate_partition_state():
@@ -133,6 +142,18 @@ class MemoryStorePartition(StorePartition):
         # incomplete migration when ``legacy_records_ttl`` is absent; ``None`` (no
         # surviving future stamp) falls back to SENTINEL_NEVER + a WARN.
         self._recovery_max_survivor_expiry_ms: Optional[int] = None
+        # Durable done-flag latch (spec §13.1), mirroring
+        # ``RocksDBStorePartition``. Set True when the replicated
+        # ``__ttl_system__`` marker is replayed; makes :meth:`complete_recovery`
+        # flip + discard pending + never re-run completion.
+        self._recovery_saw_migration_done: bool = False
+        # Warn-once guard for the populated-legacy live ``ttl=`` write path
+        # (spec §7.3 row I-target); flipped True after the first WARNING.
+        self._populated_legacy_warned: bool = False
+        # Warn-once guard for the fail-safe degraded TTL read (spec item d),
+        # scoped to the partition so it fires once per partition lifetime rather
+        # than once per checkpoint transaction.
+        self._unstamped_read_warned: bool = False
 
         class_uses_ttl_stamps = type(self).uses_ttl_stamps
         if class_uses_ttl_stamps:
@@ -230,9 +251,6 @@ class MemoryStorePartition(StorePartition):
     def main_cf_has_user_data(self) -> bool:
         return bool(self._state.get("default"))
 
-    def estimated_main_cf_key_count(self) -> int:
-        return len(self._state.get("default", {}))
-
     def recover_from_changelog_message(
         self,
         key: bytes,
@@ -241,6 +259,19 @@ class MemoryStorePartition(StorePartition):
         offset: int,
         ttl_stamped: bool = False,
     ) -> None:
+        # Done-flag consumption (spec §13.1), mirroring
+        # ``RocksDBStorePartition``. The replicated ``__ttl_system__`` marker
+        # means the source store completed its migration; latch it so
+        # :meth:`complete_recovery` flips, discards any pending census, and never
+        # re-runs completion. The record still lands in the local ``__ttl_system__``
+        # dict below. Marker absent leaves the latch False (existing logic).
+        if (
+            type(self).uses_ttl_stamps
+            and cf_name == TTL_SYSTEM_CF_NAME
+            and key == TTL_MIGRATION_DONE_KEY
+        ):
+            self._recovery_saw_migration_done = True
+
         # Recovery flip-discovery (spec §8.7, mirrors
         # ``RocksDBStorePartition.recover_from_changelog_message``).
         #
@@ -317,15 +348,15 @@ class MemoryStorePartition(StorePartition):
             # old ``recovery_now = self._high_water_ms`` ratchet, advanced by
             # each entry's stamp, collapsed uniform-expiry backfilled stores;
             # see spec-recovery-wallclock.md §2/§3). Capture lazily on the first
-            # stamped default-CF replay and seed the post-recovery high-water to
-            # the same reference so the recovery→live boundary is continuous
-            # (§3.3). Sentinel-stamped entries are never compared and always
-            # survive (§7). Mirrors ``RocksDBStorePartition``.
+            # stamped default-CF replay. Finding 3 (§7.4): the wallclock is the
+            # Rule 4 replay drop clock ONLY; it is NO LONGER seeded into the live
+            # ``_high_water_ms`` clock (removed for parity with RocksDB, so an
+            # event-time-lagging workload never over-expires its own writes).
+            # Sentinel-stamped entries are never compared and always survive (§7).
             expired = False
             if stamp != SENTINEL_NEVER:
                 if self._recovery_now_ms is None:
                     self._recovery_now_ms = self._now_ms()
-                    self._high_water_ms = self._recovery_now_ms
                 recovery_now_ms = self._recovery_now_ms
                 expired = stamp <= recovery_now_ms
             if expired:
@@ -377,10 +408,32 @@ class MemoryStorePartition(StorePartition):
         """
         if not type(self).uses_ttl_stamps:
             return
+        if self._recovery_saw_migration_done:
+            # Durable done-flag present (spec §13.1, parity with RocksDB): the
+            # migration is complete and is never redone. Ensure flipped, discard
+            # any pending census, run no completion.
+            if not self.uses_ttl_stamps:
+                self.uses_ttl_stamps = True
+                self._state.setdefault(TTL_INDEX_CF_NAME, {})
+            self._state.pop(TTL_BACKFILL_PENDING_CF_NAME, None)
+            return
+        if self._all_pending_values_are_stamped():
+            # §7.1 Finding-1 SELF-HEAL parity with RocksDB: when every censused
+            # value strictly validates as a stamp, adopt the whole store (flip +
+            # keep values verbatim + rebuild the index + discard the census).
+            # Fires before the §15.2 disposition so a MIXED-C store is adopted
+            # rather than double-wrapped; any failure falls through (residual R2').
+            self._adopt_v3240_stamps()
+            return
         if not self._recovery_saw_stamped:
             # Pure-legacy replay: the class-level census may hold orphan legacy
             # keys with no completion pass to drain them — discard them wholesale
             # (Bug 3 hygiene parity with RocksDB's _discard_backfill_pending).
+            # Finding-1 loud detection (spec §7.1) runs FIRST: this population is
+            # indistinguishable from a stock-v3.24.0 cold restore, so WARN if the
+            # censused values mostly look like stamps (detection only — no data
+            # is stripped, flipped, or re-routed).
+            self._warn_if_looks_like_v3240_upgrade()
             self._state.pop(TTL_BACKFILL_PENDING_CF_NAME, None)
             return
         if not self.uses_ttl_stamps:
@@ -392,10 +445,11 @@ class MemoryStorePartition(StorePartition):
 
         legacy_records_ttl = self._legacy_records_ttl
         if legacy_records_ttl is not None:
-            # Explicit config wins (parity): wallclock-at-rebuild + ttl.
+            # Explicit config wins (parity): wallclock-at-rebuild + ttl. Finding 3
+            # (§7.4): the wallclock derives this completion expiry only; it is NOT
+            # seeded into the live ``_high_water_ms`` clock (removed for parity).
             if self._recovery_now_ms is None:
                 self._recovery_now_ms = self._now_ms()
-                self._high_water_ms = self._recovery_now_ms
             expires_at_ms = self._recovery_now_ms + _ttl_to_ms(legacy_records_ttl)
             logger.info(
                 "Recovery: completing interrupted legacy-TTL migration in "
@@ -461,6 +515,136 @@ class MemoryStorePartition(StorePartition):
         # Drain the (now-empty) census.
         self._state.pop(TTL_BACKFILL_PENDING_CF_NAME, None)
 
+        # Flag-last (spec §13.1): the migration is complete, so record the
+        # durable done-flag marker AFTER the last stamped record.
+        self._produce_migration_done_marker()
+
+    def _produce_migration_done_marker(self) -> None:
+        """
+        Record + produce the durable "migration done" marker (spec §13.1),
+        mirroring ``RocksDBStorePartition._produce_migration_done_marker`` with
+        the same **changelog-first ordering**: produce the marker and confirm its
+        delivery with a bounded flush BEFORE recording it in the in-RAM
+        ``__ttl_system__`` dict, so the local state never marks "done" ahead of
+        the changelog. A failed / timed-out flush raises
+        :class:`ChangelogFlushError` (the marker is not recorded, so the next
+        completion retries); the changelog-carried marker is what a cold rebuild
+        learns "done, never redo" from (the in-RAM dict does not survive a
+        restart).
+        """
+        marker_value = int_to_bytes(STATE_FORMAT_VERSION)
+        if self._changelog_producer is not None:
+            self._changelog_producer.produce(
+                key=TTL_MIGRATION_DONE_KEY,
+                value=marker_value,
+                headers={
+                    CHANGELOG_CF_MESSAGE_HEADER: TTL_SYSTEM_CF_NAME,
+                    CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER: json_dumps(None),
+                },
+            )
+            unproduced = self._changelog_producer.flush(
+                timeout=_MIGRATION_MARKER_FLUSH_TIMEOUT_S
+            )
+            # Fail loudly only on a concrete positive backlog; a non-int return
+            # (e.g. an unconfigured test double) is treated as indeterminate.
+            if isinstance(unproduced, int) and unproduced > 0:
+                raise ChangelogFlushError(
+                    f"{unproduced} __ttl_migration_done__ marker record(s) still "
+                    f"undelivered after {_MIGRATION_MARKER_FLUSH_TIMEOUT_S}s; "
+                    "not recording the marker locally so the next completion "
+                    "retries it (the local store must not mark done ahead of the "
+                    "changelog)."
+                )
+        self._state.setdefault(TTL_SYSTEM_CF_NAME, {})[TTL_MIGRATION_DONE_KEY] = (
+            marker_value
+        )
+
+    def _warn_if_looks_like_v3240_upgrade(self, sample_size: int = 256) -> None:
+        """
+        Memory mirror of
+        ``RocksDBStorePartition._warn_if_looks_like_v3240_upgrade`` (spec §7.1).
+        Sample the censused values; if most decode as plausible 8-byte stamps,
+        WARN that this LOOKS like a stock-v3.24.0 cold restore. DETECTION ONLY:
+        the sampled bytes gate the log line, never data (spec §2/§6).
+        """
+        pending = self._state.get(TTL_BACKFILL_PENDING_CF_NAME, {})
+        default = self._state.get("default", {})
+        sampled = 0
+        plausible = 0
+        for key in pending:
+            value = default.get(key)
+            if value is not None:
+                sampled += 1
+                if _safe_decode_stamp(cast(bytes, value)) is not None:
+                    plausible += 1
+            if sampled >= sample_size:
+                break
+        if sampled and plausible / sampled >= 0.5:
+            logger.warning(
+                "Recovery replayed a header-absent (legacy) in-memory changelog "
+                "whose values mostly decode as 8-byte TTL stamps (%d/%d sampled); "
+                "this LOOKS like a stock v3.24.0 cold restore whose values may "
+                "read back with a spurious 8-byte prefix. HEURISTIC detection "
+                "only: NO automatic repair is applied and no value is modified.",
+                plausible,
+                sampled,
+            )
+
+    def _all_pending_values_are_stamped(self) -> bool:
+        """
+        Total-quorum strict stamp validation over the in-RAM pending census
+        (spec §7.1 self-heal), mirroring
+        ``RocksDBStorePartition._all_pending_values_are_stamped``. Require EVERY
+        censused value to pass ``_safe_decode_stamp``; short-circuit on the first
+        failure. Returns ``False`` on an empty census.
+        """
+        pending = self._state.get(TTL_BACKFILL_PENDING_CF_NAME, {})
+        default = self._state.get("default", {})
+        saw_any = False
+        for key in pending:
+            saw_any = True
+            value = default.get(key)
+            if value is None or _safe_decode_stamp(cast(bytes, value)) is None:
+                return False
+        return saw_any
+
+    def _adopt_v3240_stamps(self) -> None:
+        """
+        Adopt the pending census as v3.24.0-stamped records (spec §7.1), mirroring
+        ``RocksDBStorePartition._adopt_v3240_stamps``. Flip into TTL mode, keep
+        each default value verbatim (no re-wrap — §13.2 preserves the v3.24.0
+        stamp), rebuild the ``__ttl_index__`` entry from each non-sentinel stamp,
+        discard the census, and emit one INFO line. No changelog re-production.
+        """
+        if not self.uses_ttl_stamps:
+            self.uses_ttl_stamps = True
+            self._state.setdefault(TTL_INDEX_CF_NAME, {})
+
+        default = self._state.setdefault("default", {})
+        index = self._state.setdefault(TTL_INDEX_CF_NAME, {})
+        pending = self._state.get(TTL_BACKFILL_PENDING_CF_NAME, {})
+
+        adopted = 0
+        for key in list(pending.keys()):
+            value = default.get(key)
+            if value is None:
+                continue
+            decoded = _safe_decode_stamp(cast(bytes, value))
+            if decoded is None:
+                continue
+            stamp, _ = decoded
+            if stamp != SENTINEL_NEVER:
+                index[encode_index_key(stamp, key)] = b""
+            adopted += 1
+        self._state.pop(TTL_BACKFILL_PENDING_CF_NAME, None)
+
+        logger.info(
+            "Recovery: adopted %d v3.24.0-stamped record(s) in memory (flipped "
+            "into TTL mode; values kept verbatim, __ttl_index__ rebuilt from the "
+            "adopted stamps).",
+            adopted,
+        )
+
     def get_changelog_offset(self) -> Optional[int]:
         """
         Get offset that the changelog is up-to-date with.
@@ -517,12 +701,15 @@ class MemoryStorePartition(StorePartition):
             logger.warning("Failed to decode persisted TTL high-water; ignoring.")
 
     def _normalize_replay_value(self, value: bytes) -> tuple[bytes, int]:
-        if len(value) < 8:
+        # Route through the same strict validator as the live read path (spec
+        # item c); see RocksDBStorePartition._normalize_replay_value. A value that
+        # does not validate as a stamp (too short, zero, or out-of-range) is
+        # treated as never-expires and sentinel-wrapped so it round-trips on read
+        # and is never dropped by the Rule 4 recovery-drop filter.
+        decoded = _safe_decode_stamp(value)
+        if decoded is None:
             return encode_ttl_value(SENTINEL_NEVER, value), SENTINEL_NEVER
-        try:
-            stamp, _ = decode_ttl_value(value)
-        except ValueError:
-            return encode_ttl_value(SENTINEL_NEVER, value), SENTINEL_NEVER
+        stamp, _ = decoded
         return value, stamp
 
     def _looks_like_stamped_value(self, value: bytes) -> bool:
@@ -579,11 +766,15 @@ class MemoryStorePartition(StorePartition):
                 index.pop(index_key, None)
                 continue
 
-            try:
-                main_expires_at, _ = decode_ttl_value(main_value)
-            except ValueError:
+            # Decode through the same strict validator as the live read path
+            # (spec item c): a value that does not validate as a stamp (too short,
+            # zero, or out-of-range) reads as never-expires, so the sweep must not
+            # evict it — drop the orphan index pointer only.
+            decoded_main = _safe_decode_stamp(cast(bytes, main_value))
+            if decoded_main is None:
                 index.pop(index_key, None)
                 continue
+            main_expires_at, _ = decoded_main
 
             if main_expires_at == SENTINEL_NEVER:
                 index.pop(index_key, None)
@@ -768,7 +959,14 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
         the parent's changelog production. See
         ``RocksDBPartitionTransaction.prepare`` for the design notes.
         """
-        self._maybe_flip_or_reject()
+        # Mirror the base-class contract (spec item b): the flip hook runs before
+        # ``super().prepare()``, so an exception here must set status=FAILED rather
+        # than leave the transaction STARTED / reusable.
+        try:
+            self._maybe_flip_or_reject()
+        except Exception:
+            self._status = PartitionTransactionStatus.FAILED
+            raise
         super().prepare(processed_offsets=processed_offsets)
 
     def _maybe_flip_or_reject(self) -> None:
@@ -788,6 +986,22 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
             # verbatim (flipping without a backfill would mis-strip them). The
             # ttl= write lands as legacy this session; a changelog-driven flip on
             # a later open migrates the store.
+            #
+            # Row I-target (spec §7.3): this used to be a fully SILENT no-op. Emit
+            # ONE warn-once WARNING so an operator sees that a ttl= write landed on
+            # a populated legacy in-memory store and was stored un-stamped (the
+            # migration is owned by the next changelog rebuild, not this write).
+            if not self._partition._populated_legacy_warned:  # noqa: SLF001
+                self._partition._populated_legacy_warned = True  # noqa: SLF001
+                logger.warning(
+                    "A state.set(..., ttl=...) write landed on a POPULATED LEGACY "
+                    "in-memory store; the ttl= write is stored as a legacy "
+                    "(un-stamped) record this session and no live in-RAM backfill "
+                    "runs. The pre-existing legacy records migrate on the next "
+                    "changelog rebuild via complete_recovery(). To assign a "
+                    "uniform expiry to those legacy records, construct the store "
+                    "with legacy_records_ttl=timedelta(...)."
+                )
             return
 
         # Empty-store fast path: re-encode default-CF cache entries.
@@ -829,6 +1043,16 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
             prefix=b"",
             cf_name=METADATA_CF_NAME,
         )
+        # Durable done-flag (spec §13.1), staged last so it is produced flag-last.
+        # The replicated ``__ttl_system__`` CF is not local-only, so the base
+        # ``_prepare`` produces it to the changelog and ``write()`` lands it in
+        # the in-RAM dict — a cold rebuild then learns "done, never redo".
+        cache.set(
+            key=TTL_MIGRATION_DONE_KEY,
+            value=int_to_bytes(STATE_FORMAT_VERSION),
+            prefix=b"",
+            cf_name=TTL_SYSTEM_CF_NAME,
+        )
         self._partition.uses_ttl_stamps = True
         self._partition._state.setdefault(TTL_INDEX_CF_NAME, {})  # noqa: SLF001
         logger.info(
@@ -856,11 +1080,34 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
         if raw is Marker.UNDEFINED or raw is Marker.DELETED:
             return raw
 
-        try:
-            stamp, payload = decode_ttl_value(cast(bytes, raw))
-        except ValueError:
+        raw_bytes = cast(bytes, raw)
+        if len(raw_bytes) < TTL_STAMP_BYTES:
             return Marker.UNDEFINED
 
+        # Fail-safe decode through the strict validator, mirroring
+        # ``RocksDBPartitionTransaction._get_bytes`` (spec item c): only strip the
+        # 8-byte stamp when it robustly looks like one. A value that does not
+        # validate (raw legacy value, zero/out-of-range prefix) degrades to raw
+        # (never-expires) rather than being mis-stripped or mis-expired, so reads,
+        # the sweep, and recovery all agree.
+        decoded = _safe_decode_stamp(raw_bytes)
+        if decoded is None:
+            # Warn once per PARTITION (spec item d), not per checkpoint tx.
+            if not self._partition._unstamped_read_warned:  # noqa: SLF001
+                self._partition._unstamped_read_warned = True  # noqa: SLF001
+                logger.warning(
+                    "Fail-safe TTL read: a flipped partition holds a value that "
+                    "does not decode to a valid stamp (key prefix=%r) at "
+                    "path=%s; returning it raw and treating it as never-expires "
+                    "rather than stripping 8 bytes. This should be impossible on "
+                    "a fully backfilled store and signals a pre-Fix-A store or "
+                    "an externally-mutated value.",
+                    prefix[:16],
+                    getattr(self._partition, "path", "<memory>"),
+                )
+            return raw_bytes
+
+        stamp, payload = decoded
         if stamp == SENTINEL_NEVER:
             return payload
 

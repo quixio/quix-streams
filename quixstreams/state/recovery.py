@@ -1,6 +1,7 @@
+import inspect
 import logging
 import time
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 from confluent_kafka import OFFSET_BEGINNING
 from confluent_kafka import TopicPartition as ConfluentPartition
@@ -27,6 +28,28 @@ from .metadata import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _accepts_ttl_stamped(method: Callable) -> bool:
+    """
+    Return whether ``method`` accepts a ``ttl_stamped`` keyword argument.
+
+    ``StorePartition.recover_from_changelog_message`` declares ``ttl_stamped``
+    (default ``False``), but a third-party subclass may override it with a rigid
+    signature that predates the parameter. Introspecting once lets the recovery
+    loop omit the kwarg for such subclasses (spec item f) instead of failing with
+    a ``TypeError`` — the dropped bit is a no-op for a non-TTL store. An
+    un-introspectable callable (e.g. a C implementation) is assumed to honor the
+    base contract and accept it.
+    """
+    try:
+        params = inspect.signature(method).parameters
+    except (TypeError, ValueError):
+        return True
+    if "ttl_stamped" in params:
+        return True
+    return any(p.kind is p.VAR_KEYWORD for p in params.values())
+
 
 __all__ = (
     "ChangelogProducer",
@@ -65,6 +88,12 @@ class RecoveryPartition:
         self._initial_offset: Optional[int] = None
         self._invalid_offset_count = 0  # Track consecutive invalid offset attempts
         self._last_valid_position_time: Optional[float] = None
+        # Whether the store partition's recovery hook accepts ``ttl_stamped``
+        # (spec item f). Computed once so per-message dispatch stays cheap and a
+        # third-party subclass with a rigid override signature does not raise.
+        self._partition_accepts_ttl_stamped = _accepts_ttl_stamped(
+            store_partition.recover_from_changelog_message
+        )
 
     def __repr__(self):
         return (
@@ -213,13 +242,25 @@ class RecoveryPartition:
                     f'Invalid changelog value type {type(value)}, expected "bytes"'
                 )
 
-            self._store_partition.recover_from_changelog_message(
-                cf_name=cf_name,
-                key=key,
-                value=value,
-                offset=changelog_message.offset(),
-                ttl_stamped=ttl_stamped,
-            )
+            if self._partition_accepts_ttl_stamped:
+                self._store_partition.recover_from_changelog_message(
+                    cf_name=cf_name,
+                    key=key,
+                    value=value,
+                    offset=changelog_message.offset(),
+                    ttl_stamped=ttl_stamped,
+                )
+            else:
+                # Third-party StorePartition subclass whose override predates the
+                # ``ttl_stamped`` parameter (spec item f): omit the kwarg so the
+                # rigid signature still works. Such stores are non-TTL, so the
+                # dropped stamped bit is a no-op (it would default to False).
+                self._store_partition.recover_from_changelog_message(
+                    cf_name=cf_name,
+                    key=key,
+                    value=value,
+                    offset=changelog_message.offset(),
+                )
         else:
             # Even if the changelog update is skipped, roll the changelog offset
             # to move forward within the changelog topic

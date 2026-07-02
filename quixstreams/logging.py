@@ -22,9 +22,15 @@ logger = logging.getLogger(LOGGER_NAME)
 
 _STATE_LOG_LEVEL_ENV = "QUIXSTREAMS_STATE_LOG_LEVEL"
 _STATE_LOGGER_NAME = f"{LOGGER_NAME}.state"
-# NOTSET is deliberately excluded: it maps to level 0, which would lower the
-# shared handler to 0 and flood it with records from every subsystem.
+# NOTSET is deliberately excluded: it maps to level 0, which would make the
+# dedicated state handler pass everything the state logger emits with no floor.
 _ACCEPTED_STATE_LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
+
+# Dedicated handler for the ``quixstreams.state`` namespace, created lazily the
+# first time the override is applied (see ``_apply_state_log_level_override``).
+# Module-scoped so a re-run (e.g. subprocess reconfigure) reuses the same handler
+# instead of stacking duplicates.
+_STATE_HANDLER: Optional[logging.Handler] = None
 
 
 def _apply_state_log_level_override() -> None:
@@ -32,15 +38,21 @@ def _apply_state_log_level_override() -> None:
     ``QUIXSTREAMS_STATE_LOG_LEVEL`` env var.
 
     Lets an operator raise ``quixstreams.state.*`` to DEBUG without flipping the
-    whole app to DEBUG. Only ever *lowers* the shared handler, so non-state
-    loggers stay filtered at their (app) logger level and never become verbose.
+    whole app to DEBUG. Strictly scoped to the ``quixstreams.state`` logger: it
+    attaches a *dedicated* handler to that logger at the requested level and stops
+    propagation to the parent so the shared root handler is never mutated and
+    non-state loggers are entirely unaffected (the earlier build lowered the
+    shared ``_DEFAULT_HANDLER`` level — a global side effect this avoids).
 
-    Unset/empty is a no-op: the state namespace inherits the app loglevel.
-    An unrecognized value warns once and is ignored (the app still starts).
+    Unset/empty is a no-op: the state namespace inherits the app loglevel and
+    propagates to the shared handler as usual. An unrecognized value warns once
+    and is ignored (the app still starts).
     """
+    global _STATE_HANDLER
+
     raw = os.environ.get(_STATE_LOG_LEVEL_ENV)
     if not raw:
-        return  # unset/empty -> no-op, inherit app level
+        return  # unset/empty -> no-op, inherit app level + shared handler
 
     level_name = raw.strip().upper()
     if level_name not in _ACCEPTED_STATE_LOG_LEVELS:
@@ -53,11 +65,21 @@ def _apply_state_log_level_override() -> None:
         return
 
     level = logging.getLevelName(level_name)  # accepted name -> int
-    logging.getLogger(_STATE_LOGGER_NAME).setLevel(level)
-    # Only ever LOWER the shared handler so non-state loggers stay filtered at
-    # their (app) logger level; never raise it.
-    if level < _DEFAULT_HANDLER.level:
-        _DEFAULT_HANDLER.setLevel(level)
+    state_logger = logging.getLogger(_STATE_LOGGER_NAME)
+    state_logger.setLevel(level)
+
+    # Give the state namespace its OWN handler at the requested level so its
+    # (possibly more verbose) records reach stderr WITHOUT touching the shared
+    # root handler. Route state records solely through this handler
+    # (propagate=False) so the parent handler neither re-filters nor
+    # double-emits them. Created once; subsequent calls only refresh the level.
+    if _STATE_HANDLER is None:
+        _STATE_HANDLER = logging.StreamHandler(stream=sys.stderr)
+        if _DEFAULT_HANDLER.formatter is not None:
+            _STATE_HANDLER.setFormatter(_DEFAULT_HANDLER.formatter)
+        state_logger.addHandler(_STATE_HANDLER)
+        state_logger.propagate = False
+    _STATE_HANDLER.setLevel(level)
 
 
 def configure_logging(

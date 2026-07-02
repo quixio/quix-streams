@@ -149,11 +149,6 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         # lands; only maintained on the unflipped write path, so a steady-state
         # TTL store never touches it.
         self._max_batch_ttl_ms: Optional[int] = None
-        # Fix B (spec-backfill-completeness.md §4.2): set once the fail-safe
-        # read path has logged a degrade-to-raw WARNING for this partition, so
-        # the warning is emitted at most once per transaction (rate-limited)
-        # rather than on every hot-path read of a non-stamped value.
-        self._unstamped_read_warned: bool = False
 
     # ------------------------------------------------------------------
     # TTL-aware write / read overrides.
@@ -410,8 +405,12 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         # returning it RAW (treat as never-expires), log once, never corrupt.
         decoded = _safe_decode_stamp(raw_bytes)
         if decoded is None:
-            if not self._unstamped_read_warned:
-                self._unstamped_read_warned = True
+            # Warn once PER PARTITION (spec item d): the guard lives on the
+            # partition, not this checkpoint transaction, so a persistently
+            # degraded value logs a single WARNING for the partition's lifetime
+            # instead of re-warning on every checkpoint.
+            if not self._partition._unstamped_read_warned:  # noqa: SLF001
+                self._partition._unstamped_read_warned = True  # noqa: SLF001
                 logger.warning(
                     "Fail-safe TTL read: a flipped partition holds a value that "
                     "does not decode to a valid stamp (key prefix=%r) at "
@@ -522,8 +521,19 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
 
         :param processed_offsets: the dict with <topic: offset> of the latest processed message
         """
-        self._persist_counter()
-        self._maybe_flip_or_reject(processed_offsets=processed_offsets)
+        # The TTL hooks run BEFORE ``super().prepare()`` (they stamp the cache the
+        # parent then produces from). The base ``prepare()`` sets status=FAILED on
+        # any exception from ``_prepare``, but a hook raising here would otherwise
+        # leave the transaction STARTED — violating the base-class contract that a
+        # raised ``prepare()`` transitions to FAILED. Mirror that contract for the
+        # hooks explicitly (spec item b): a failed flip / counter persist must fail
+        # the transaction, not leave it reusable.
+        try:
+            self._persist_counter()
+            self._maybe_flip_or_reject(processed_offsets=processed_offsets)
+        except Exception:
+            self._status = PartitionTransactionStatus.FAILED
+            raise
         super().prepare(processed_offsets=processed_offsets)
 
     def _maybe_flip_or_reject(
@@ -623,6 +633,11 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
         # are no pre-existing backfilled keys left in the cache to skip.
         self._restamp_default_cf_cache_for_flip()
         self._write_flip_metadata_to_cache()
+        # Durable done-flag (spec §13.1): staged LAST so it is produced flag-last
+        # within this flip flush. On both the empty-store and the populated-
+        # backfill path the migration is complete once this flush commits, so the
+        # marker records "done, never redo" for any future cold rebuild.
+        self._write_migration_done_marker_to_cache()
         # Flip the **runtime** flag now so the partition's write path takes
         # the TTL-aware branch (high-water persist, sweep, index-CF use).
         self._partition.uses_ttl_stamps = True
@@ -785,6 +800,34 @@ class RocksDBPartitionTransaction(PartitionTransaction[bytes, Any]):
             value=int_to_bytes(STATE_FORMAT_VERSION),
             prefix=b"",
             cf_name=METADATA_CF_NAME,
+        )
+
+    def _write_migration_done_marker_to_cache(self) -> None:
+        """
+        Queue the durable "migration done" marker (spec §13.1) into the
+        replicated ``__ttl_system__`` CF cache. Because that CF is NOT in
+        ``LOCAL_ONLY_CFS``, the base ``_prepare`` produces it to the changelog
+        (so a cold rebuild onto a fresh volume learns "done, never redo"), and
+        the partition's ``write()`` also commits it to disk in the SAME flush as
+        the flip metadata and the first stamped user writes. It is staged after
+        the flip metadata so it is the last record produced in this flush.
+
+        Local imports mirror :meth:`_write_flip_metadata_to_cache` to avoid a
+        circular import with ``partition.py``.
+        """
+        from quixstreams.state.metadata import (
+            TTL_MIGRATION_DONE_KEY,
+            TTL_SYSTEM_CF_NAME,
+        )
+        from quixstreams.state.serialization import int_to_bytes
+
+        from .metadata import STATE_FORMAT_VERSION
+
+        self._update_cache.set(
+            key=TTL_MIGRATION_DONE_KEY,
+            value=int_to_bytes(STATE_FORMAT_VERSION),
+            prefix=b"",
+            cf_name=TTL_SYSTEM_CF_NAME,
         )
 
     def _increment_counter(self) -> int:

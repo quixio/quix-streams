@@ -12,6 +12,8 @@ from quixstreams.state.metadata import (  # noqa: E402, F401
     TTL_BACKFILL_PENDING_CF_NAME,
     TTL_BACKFILL_STAMPED_CF_NAME,
     TTL_INDEX_CF_NAME,
+    TTL_MIGRATION_DONE_KEY,
+    TTL_SYSTEM_CF_NAME,
 )
 
 # Highest record event-time observed by any transaction on this partition,
