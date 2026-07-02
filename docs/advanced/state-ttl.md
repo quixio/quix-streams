@@ -111,6 +111,28 @@ DEFAULT_TTL = timedelta(seconds=int(os.environ.get("STATE_TTL_SECONDS", "300")))
 ```
 
 
+## Refreshing a key (keep-alive)
+
+Re-writing a key resets its TTL clock — each `state.set(key, value, ttl=...)`
+starts a fresh countdown from that write, replacing whatever expiry the entry
+had before:
+
+```python
+state.set("session", data, ttl=timedelta(minutes=5))
+# ... 4 minutes later, another message arrives for the same key:
+state.set("session", data, ttl=timedelta(minutes=5))  # clock restarts at 5:00
+```
+
+This is safe regardless of timing: a refresh always wins, even when it lands in
+the exact moment the previous, already-expired entry is being cleaned up. The
+refreshed value is never lost and keeps expiring normally on its new schedule.
+You never need to `get` first, delete, or otherwise guard a refresh.
+
+A refresh can also change the duration (`ttl=timedelta(hours=1)` on a key
+originally written with minutes), or make the key permanent by writing it
+without `ttl` — a plain `state.set(key, value)` never expires.
+
+
 ## Emit only on toggle or after TTL expiry
 
 A window sensor emits readings like `window_open_ON` and `window_open_OFF`. You
