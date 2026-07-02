@@ -7,16 +7,19 @@
 
 ## What it does
 
-Adds an opt-in `RocksDBOptions(legacy_records_ttl: Optional[timedelta] = None)`.
-When set, enabling per-write TTL on a **populated legacy store** (one that
-already holds un-stamped records) no longer raises
-`IncompatibleStateStoreError`. Instead, on the first `state.set(..., ttl=...)`
-write, the partition re-stamps every pre-existing record with a uniform expiry
-of `high_water + legacy_records_ttl` (event-time at the enable moment),
-populates the secondary `__ttl_index__`, writes the flip metadata, and flips
-into TTL mode — all in place, with no state deletion. New records continue to
-get their true per-write event-time expiry. With the default `None`, behavior is
-byte-for-byte identical to the prior reject-on-populated-store behavior.
+Adds `RocksDBOptions(legacy_records_ttl: Optional[timedelta] = None)`.
+On the first `state.set(..., ttl=...)` write on a **populated legacy store** (one
+that already holds un-stamped records), the partition re-stamps every pre-existing
+record with a uniform expiry, populates the secondary `__ttl_index__`, writes the
+flip metadata, and flips into TTL mode — all in place, with no state deletion. New
+records continue to get their true per-write event-time expiry.
+
+When `legacy_records_ttl` is set, the expiry is `high_water + legacy_records_ttl`
+(event-time at the enable moment). When `None` (the default), the expiry is derived
+from the triggering batch's `max(ttl=)` value — `high_water + max(ttl=)` — with a
+one-time WARN naming the derived value and the override option. **The prior
+`IncompatibleStateStoreError` reject-on-populated-store path was removed (§15.1,
+2026-07-02).**
 
 TTL is **strictly per-write**: only `state.set(..., ttl=...)` sets an expiry. A
 write with no explicit `ttl=` is always never-expires (`SENTINEL_NEVER`),
@@ -67,24 +70,29 @@ that was removed by design to keep the per-write-only contract intact.)
   anywhere** — `_looks_like_stamped_value` is no longer called by the backfill
   (it survives only for recovery flag-discovery), and the
   `_restamp_one_for_backfill` per-record skip/re-stamp helper is removed.
-- **Flag-last atomicity + persisted cursor (spec §3.3, §3.4 — Fix A).** A single
-  `WriteBatch` can no longer wrap the whole migration, so atomicity is anchored
-  by: (1) the `__ttl_enabled__` + format-version flag written **last** by the
-  caller (`_maybe_flip_or_reject`) after the cursor reaches `len(key_list)`; and
-  (2) a persisted integer cursor `__ttl_backfill_progress__` in the metadata CF,
-  advanced in the **same WriteBatch** as each chunk's puts. A crash mid-backfill
-  (or before the flag) ⇒ the partition opens **legacy** (flag absent) and reads
-  pre-existing values raw (no stripping) in the meantime ⇒ the next `ttl=` write
-  re-enters backfill, **re-censuses** (producing the **identical sorted list**,
-  so the integer cursor resumes exactly), and stamps from the cursor onward.
-  Keys below the cursor are **known done** (skipped via the cursor, not
-  byte-sniffed) and are **never re-read** (no double-wrap by construction). Note
-  the convergence semantics: keys stamped by an interrupted run keep that run's
+- **Flag-last atomicity + stamped-key ledger resume (spec §3.3, §3.4 — Fix A,
+  supersedes integer-cursor).** A single `WriteBatch` can no longer wrap the
+  whole migration, so atomicity is anchored by: (1) the `__ttl_enabled__` +
+  format-version flag written **last** by the caller (`_maybe_flip_or_reject`)
+  after every census key has been stamped (flag-last ordering; crash before the
+  flag ⇒ partition opens legacy on the next start, reads raw, no stripping); and
+  (2) a per-key `__ttl_backfill_stamped__` ledger CF whose members are PUT in the
+  **same WriteBatch** as each chunk's stamped values (atomic per-chunk). The
+  **original integer-cursor resume over a re-sorted list was superseded** because
+  a legacy write landing between a crash and the resume shifts the sorted census
+  under a stale integer index, causing double-wraps or skips. The ledger solves
+  this: the census on any (re-)run is exactly `{keys on disk} − {staged} −
+  {ledger members}` — insensitive to population changes across the crash gap. A
+  key written plain between the crash and the retry is a not-yet-stamped census
+  key and gets stamped; an already-stamped key is a ledger member and is
+  **never re-read** (no double-wrap). `__ttl_backfill_progress__` still exists
+  but is an **observability counter only** (staged into the same batch for
+  monitoring); resume correctness derives entirely from the ledger exclusion.
+  Convergence semantics: keys stamped by the interrupted run keep that run's
   `expires_at_ms`; keys stamped by the completing run get the completing run's
-  expiry. If the high-water advanced between runs the two differ — the store is
-  fully stamped (the invariant holds) but not strictly uniform across the crash
-  boundary. The backfill stays **sequential** inside `prepare()` (no threads), so
-  processing is paused for the whole migration; no interleaving.
+  expiry — fully stamped but not strictly uniform across the crash boundary
+  (benign for dedup). The backfill is **sequential** inside `prepare()` (no
+  threads); processing is paused for the whole migration.
 - **Census memory (spec §5, OP-BC-2).** The frozen key list is bounded but
   linear in key count: ~16 MB at 200k, ~80 MB at 1M, ~800 MB at 10M. Above
   `_CENSUS_SPILL_WARN_THRESHOLD` (3M keys) a one-line WARNING flags the future
@@ -154,24 +162,28 @@ tx.prepare()                                            (transaction.py)
             restamped = partition.backfill_legacy_records(
                             expires, changelog_producer, processed_offsets,
                             staged_default_keys, chunk_size)
-                 # Fix A: census FIRST, then chunk over the frozen list.
-                 key_list = sorted(k for k in default_cf.keys()
-                                   if k not in staged_default_keys)  # frozen census
-                 cursor = _load_backfill_progress()    # resume point (0 first run)
-                 while cursor < len(key_list):
-                    chunk_keys = key_list[cursor : cursor + chunk_size]
+                 # Fix A: census = {disk keys} − {staged} − {ledger members}
+                 # (ledger-based resume; integer cursor is observability only).
+                 stamped_ledger = get_or_create_column_family(__ttl_backfill_stamped__)
+                 census = sorted(
+                    k for k in default_cf.keys()
+                    if k not in staged_default_keys
+                    and k not in stamped_ledger          # already done → skip
+                 )
+                 while census:
+                    chunk_keys = census[:chunk_size]
                     for key in chunk_keys:
                        value = default_cf.get(key)      # FRESH point-get (no iter)
                        if value is None: continue        # deleted since census
                        stamped = encode_ttl_value(expires, value)  # WRAP WHOLE
                        batch.put(key, stamped)                       [default]
                        batch.put(encode_index_key(expires, key), b"") [__ttl_index__]
+                       batch.put(key, b"", stamped_ledger)           [ledger; atomic]
                     changelog_producer.produce(chunk's re-stamped default recs)
                     changelog_producer.flush()        # bound producer queue
-                    cursor += len(chunk_keys)
-                    batch.put(__ttl_backfill_progress__, cursor)  # SAME batch
+                    batch.put(__ttl_backfill_progress__, counter)  # observability only
                     self._write(batch)                # raw writer, atomic per-chunk
-                    release batch                      # peak = census + 1 chunk
+                    release batch; advance census     # peak = census + 1 chunk
             _restamp_default_cf_cache_for_flip()       # stamp in-batch writes only
             _write_flip_metadata_to_cache()            # __ttl_enabled__, format ver
             partition.uses_ttl_stamps = True           # (reached only if no crash)
@@ -255,8 +267,11 @@ Modified:
   expiry against a wallclock captured once per recovery session
   (`self._recovery_now_ms`, lazily on the first stamped default-CF replay via
   the `_now_ms()` test seam) instead of a stamp-ratcheted high-water; the old
-  `advance_high_water(stamp)` recovery ratchet is removed and the post-recovery
-  `high_water_ms` is seeded to that captured wallclock.
+  `advance_high_water(stamp)` recovery ratchet is removed. **Finding 3 (§7.4):**
+  `_recovery_now_ms` is used ONLY as the Rule 4 replay drop clock; it is NOT
+  seeded into the live `_high_water_ms` clock. Post-recovery `_high_water_ms`
+  is the persisted loaded value or `None`; only live event-time writes advance
+  it (verified: `partition.py` lines 391–393).
 - `quixstreams/state/rocksdb/transaction.py` — backfill branch in
   `_maybe_flip_or_reject` re-plumbed for the chunked method: `prepare()` now
   forwards `processed_offsets` into `_maybe_flip_or_reject`, which computes
@@ -339,16 +354,20 @@ Modified:
   window now retains all N records; one rebuilt after the window drops the
   genuinely-expired ones. `SENTINEL_NEVER` entries always survive. The live
   read-time path (`transaction.py`) is unchanged and stays event-time.
+  **Clock isolation (Finding 3, §7.4):** the wallclock (`_recovery_now_ms`) is
+  used ONLY as the Rule 4 replay drop clock and is NOT seeded into the live
+  `_high_water_ms` clock. After recovery, `_high_water_ms` is the persisted
+  loaded value or `None`; only live event-time writes advance it. This means
+  post-rebuild writes with historical event-time timestamps (reprocessing
+  workloads) are not immediately expired.
   **Accepted trade-off:** expiry-on-rebuild is now tied to *when* the rebuild
   runs (wallclock), not the data's event-time — correct for live/near-real-time
   streams, but a store rebuilt long after its data was written drops entries
   whose expiry is in the wallclock past even under historical reprocessing. See
   `spec-recovery-wallclock.md` §5 for the full trade-off and `open-points.md`
-  (OP-1, now resolved). **NOTE:** the equivalent recovery filter in
-  `quixstreams/state/memory/partition.py:recover_from_changelog_message` still
-  uses the old stamp-ratchet logic; the fix was scoped to the RocksDB partition
-  only (per spec), so the in-memory store retains the OP-1 collapse — flag for a
-  follow-up if the memory backend is used with TTL + changelog recovery.
+  (OP-1, now resolved). **Memory backend parity:** `memory/partition.py` mirrors
+  the same wallclock fix — `_recovery_now_ms` captured once, used as the Rule 4
+  drop clock; the old stamp-ratchet is removed there too.
 - **OP-3 (recovery stamped-vs-legacy discovery) — RESOLVED (§8.7 per-record
   changelog header).** Recovery flip-discovery used to peek at value content
   (`_looks_like_stamped_value`): any default-CF replay value whose leading 8
@@ -397,10 +416,26 @@ Modified:
     on this branch because the test env re-seeds fresh and the live Maxio store
     never successfully flipped (its changelog is still all-un-stamped legacy).
   - **Memory backend.** Produce-side header is emitted for memory partitions via
-    the base `_prepare` for free, but its `recover_from_changelog_message`
-    intentionally still uses the value-content heuristic (signature updated to
-    accept and ignore `ttl_stamped`); its recovery-read fix is bundled with the
-    pending OP-2 decision and deliberately out of scope here.
+    the base `_prepare` for free. `recover_from_changelog_message` routes on the
+    `ttl_stamped` header (same as RocksDB — value-content heuristic removed).
+- **Finding-1 / §7.1 (stock v3.24.0 changelog self-heal) — RESOLVED
+  (total-quorum stamp adoption).** A store created on the v3.24.0 TTL preview
+  writes stamped values to its changelog WITHOUT the `__ttl_stamped__` header
+  (the header was introduced later). On a cold restore these land in the
+  `__ttl_backfill_pending__` census as verbatim header-absent records. After
+  replay, `complete_recovery()` runs `_all_pending_values_are_stamped()`: it
+  point-gets every pending key's current default-CF value and requires **every**
+  one to pass `_safe_decode_stamp` (strict 8-byte stamp validation). Short-
+  circuits on the first failure so the pure-legacy path pays a single point-get.
+  If the total quorum holds, `_adopt_v3240_stamps()` fires: flip into TTL mode,
+  keep every default-CF value **verbatim** (no re-wrap — each record's original
+  v3.24.0 stamp is preserved), rebuild the `__ttl_index__` from those stamps,
+  discard the census, emit one `[INFO]`. Adoption is local and idempotent; no
+  changelog re-production is needed (a later cold restore re-derives the same
+  result). Residual R2': any validation failure (a true v3.23.6 never-stamped
+  value, or a MIXED-A changelog) returns `False` from the quorum check and falls
+  through to the verbatim / §15.2 completion path unchanged — the self-heal is
+  all-or-nothing at the store level.
 - **OP-4 (cold restore of a MIXED / incomplete-migration changelog strands
   leftover legacy records) — RESOLVED (§8.8 replay-driven completion).** §8.7
   fixed *classification* but not the backfill **gate**: an interrupted backfill
@@ -435,18 +470,20 @@ Modified:
     `expires_at_ms = self._recovery_now_ms + _ttl_to_ms(legacy_records_ttl)`. The
     leftovers have no event-time and there is no triggering live `ttl=` write to
     borrow a `high_water` from; recovery already judges every survivor by
-    `wallclock_now` (Rule 4) and seeds the post-recovery high-water to it, so the
-    leftovers get a full fresh `legacy_records_ttl` window from the rebuild moment.
-  - **Config-absent — reject loudly (wrinkle #1).** If completion is needed but
-    `legacy_records_ttl is None`, the replay finishes cleanly (no data lost /
-    corrupted) and `complete_recovery()` raises the operator-callable
-    `IncompatibleStateStoreError` naming `legacy_records_ttl`, stating the leftover
-    count, and pointing at restoring the field + redeploying — **not** at deleting
-    state (Quix Cloud has no customer-callable state reset). Landing the leftovers
-    as never-expire + WARN was rejected: it reproduces exactly the silent
-    never-expire bug OP-4 exists to kill. **Rule 2 amended:** `legacy_records_ttl`
-    may be removed only after the migration is COMPLETE (an all-stamped changelog /
-    empty pending CF), not merely started.
+    `wallclock_now` (Rule 4), so the leftovers get a full fresh `legacy_records_ttl`
+    window from the rebuild moment. Note: `_recovery_now_ms` is used ONLY to derive
+    this completion expiry — it is NOT seeded into the live `_high_water_ms` clock
+    (Finding 3, §7.4).
+  - **Config-absent — auto-complete at survivor-derived expiry (§15.2,
+    2026-07-02).** If completion is needed but `legacy_records_ttl is None`,
+    `complete_recovery()` derives the expiry from `_recovery_max_survivor_expiry_ms`
+    — the maximum surviving future stamp among the stamped cohort already present in
+    the changelog. Leftover legacy records inherit that same expiry window, giving
+    them the same lifetime as the already-stamped records. If no future stamp
+    survives (no `__ttl_stamped__`-header record with a future expiry in the replay),
+    the leftovers are stamped `SENTINEL_NEVER` (never-expire) and a `[WARNING]` is
+    emitted. **The prior raise of `IncompatibleStateStoreError` was removed** — no
+    hard error remains on this cold-restore completion path.
   - **Unchanged paths.** All-legacy (first-enablement, §8.6): `_recovery_saw_stamped`
     is False → completion is a no-op even though pending holds every key (the live
     first-`ttl=`-write backfill owns it). All-stamped (§8.7): pending is empty →
@@ -457,9 +494,9 @@ Modified:
     the replayed delta, so the pending CF is never populated for them. The only
     recovery is a **forced full rebuild** (wipe the local volume → next start is a
     full cold restore) — which depends on a Quix Cloud wipe/rebuild affordance that
-    may not exist (MEMORY `quix-cloud-no-state-reset`). **Flag to Ludvík.** Memory
-    backend is out of scope here (bundled with OP-2); its
-    `complete_recovery()` is the base no-op.
+    may not exist (MEMORY `quix-cloud-no-state-reset`). **Flag to Ludvík.**
+    Memory backend has a full `complete_recovery()` implementation (mirrors
+    RocksDB at the semantics level) — it is not the base no-op.
 - **Large stores — OOM fixed (chunked backfill).** The single-shot backfill held
   several whole-store-sized copies and was OOM-killed at ~165k records on a
   500 MB Quix Cloud deployment. The backfill is now chunked
