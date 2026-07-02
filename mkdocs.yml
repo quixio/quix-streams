@@ -55,6 +55,7 @@ nav:
     - Serialization Formats: advanced/serialization.md
     - Schema Registry: advanced/schema-registry.md
     - Stateful Processing: advanced/stateful-processing.md
+    - State TTL — Cookbook: advanced/state-ttl.md
     - Managing Kafka Topics: advanced/topics.md
     - Using Producer & Consumer: advanced/producer-consumer-lowlevel.md
     - StreamingDataFrame Assignment Rules: advanced/dataframe-assignments.md

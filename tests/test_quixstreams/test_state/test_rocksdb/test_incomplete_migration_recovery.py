@@ -18,10 +18,12 @@ legacy keys as never-expiring forever.
 §8.8 fix (this module): during replay census the header-absent leftover keys into
 the local-only ``__ttl_backfill_pending__`` CF (delete on stamped supersession);
 at end of recovery, if a stamped record was seen AND pending is non-empty, run a
-chunked completion backfill that stamps exactly the leftover keys at
-``wallclock_now + legacy_records_ttl`` (Rule 4 wallclock-at-rebuild) and produces
-header-bearing stamped records, leaving the pending CF empty. Config-absent →
-reject loudly. All-legacy / all-stamped changelogs do NOT enter completion.
+chunked completion backfill that stamps exactly the leftover keys at a uniform
+expiry and produces header-bearing stamped records, leaving the pending CF empty.
+Config-present → ``wallclock_now + legacy_records_ttl`` (Rule 4 wallclock-at-
+rebuild). Config-absent → auto-finish at the §15.2 survivor-derived default (the
+max surviving future stamp; the reject was removed by the 2026-07-02 revision).
+All-legacy / all-stamped changelogs do NOT enter completion.
 
 See ``dev-planning/state-ttl-legacy-backfill/spec-incomplete-migration-recovery.md``.
 """
@@ -35,7 +37,6 @@ from quixstreams.state.metadata import (
     TTL_BACKFILL_PENDING_CF_NAME,
 )
 from quixstreams.state.rocksdb import RocksDBOptions
-from quixstreams.state.rocksdb.exceptions import IncompatibleStateStoreError
 from quixstreams.state.rocksdb.metadata import TTL_INDEX_CF_NAME
 from quixstreams.state.rocksdb.ttl_codec import (
     SENTINEL_NEVER,
@@ -163,10 +164,12 @@ class TestMixedChangelogCompletion:
 
         recovered.close()
 
-    def test_config_absent_rejects_loudly(
+    def test_config_absent_auto_completes(
         self, store_partition_factory, changelog_producer_mock
     ):
         now_ms = 1_780_000_000_000
+        # Stamped survivors far in the future → Rule 4 keeps them → they become
+        # the §15.2 survivor-derived completion expiry when config is absent.
         stamp_expiry = now_ms + 30 * DAY_MS
         msgs, legacy_values = _mixed_changelog(2, 3, stamp_expiry)
 
@@ -178,21 +181,32 @@ class TestMixedChangelogCompletion:
         assert recovered.uses_ttl_stamps is True
         assert _pending_keys(recovered) == set(legacy_values.keys())
 
-        with pytest.raises(IncompatibleStateStoreError) as exc:
-            recovered.complete_recovery()
+        changelog_producer_mock.produce.reset_mock()
+        # §15 revision: no raise — auto-finish the migration at the survivor-
+        # derived default (the max surviving future stamp).
+        recovered.complete_recovery()
 
-        message = str(exc.value)
-        assert "legacy_records_ttl" in message
-        assert "3" in message  # leftover count
-        assert "delete" not in message.lower().split("do not delete")[0]
-        assert "do not delete" in message.lower()
-
-        # The leftover records were NOT silently stamped (still raw legacy on disk)
-        # and NOT corrupted; the replay itself succeeded.
-        raw_on_disk = _default_cf(recovered)
+        expected_expiry = stamp_expiry  # survivor-derived (max future stamp)
+        decoded = {k: decode_ttl_value(v) for k, v in _default_cf(recovered).items()}
+        index = _index_cf(recovered)
+        # Leftovers stamp-encoded at the survivor expiry, with index entries and
+        # full raw payload preserved.
         for key, raw in legacy_values.items():
-            assert raw_on_disk[key] == raw
-        assert _pending_keys(recovered) == set(legacy_values.keys())
+            assert decoded[key] == (expected_expiry, raw)
+            assert index[key] == expected_expiry
+
+        # Stamped survivors byte-unchanged (not re-stamped).
+        for i in range(2):
+            key = f"pfx|s{i}".encode()
+            assert decoded[key] == (stamp_expiry, f"stamped-{i}".encode())
+
+        # Pending drained; no never-expire survivors; leftovers produced stamped.
+        assert _pending_keys(recovered) == set()
+        assert all(exp != SENTINEL_NEVER for exp, _ in decoded.values())
+        produced = _captured_stamped_produces(changelog_producer_mock)
+        assert set(produced.keys()) == set(legacy_values.keys())
+        for key, raw in legacy_values.items():
+            assert produced[key] == encode_ttl_value(expected_expiry, raw)
         recovered.close()
 
     def test_interrupt_then_converges_no_double_stamp(

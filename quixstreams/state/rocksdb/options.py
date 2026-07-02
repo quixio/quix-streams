@@ -45,13 +45,14 @@ class RocksDBOptions(RocksDBOptionsType):
         steady-state expiration rates. Only meaningful for TTL-enabled
         stores; ignored otherwise.
         Default - ``10_000``.
-    :param legacy_records_ttl: opt-in for enabling TTL on a **populated**
-        legacy store that already holds un-stamped records. When ``None``
-        (the default), the first ``state.set(..., ttl=...)`` write on a
-        populated legacy store raises ``IncompatibleStateStoreError`` —
-        byte-for-byte the v3.24 behavior. When set to a strictly positive
-        ``timedelta``, the partition instead **backfills** its pre-existing
-        un-stamped records with a uniform expiry of
+    :param legacy_records_ttl: expiry for pre-existing records when enabling
+        TTL on a **populated** legacy store that already holds un-stamped
+        records. When ``None`` (the default), the migration still completes:
+        the pre-existing records are backfilled using the ttl the service
+        itself uses (the max ``ttl=`` in the triggering flush) and a WARNING
+        names the implicit value. When set to a strictly positive
+        ``timedelta``, that value is used instead: the partition **backfills**
+        its pre-existing un-stamped records with a uniform expiry of
         ``high_water + legacy_records_ttl`` (event-time high-water at the
         enable moment) and flips into TTL mode in place — no state deletion.
         New records keep getting their true event-time expiry. The backfill

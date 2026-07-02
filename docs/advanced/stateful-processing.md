@@ -220,6 +220,8 @@ State TTL lets you attach an expiry duration to individual writes in a state sto
 
 **If your pipeline never calls `state.set(..., ttl=...)`, nothing changes.** The on-disk layout, changelog bytes, and recovery path are identical to Quix Streams v3.23.6. TTL machinery activates only on the stores that actually use it.
 
+For practical patterns and complete working examples (dedup filter, short-lived cache, toggle/expiry filter, status-in-key with `group_by`, env-var TTL), see the [State TTL — Cookbook](state-ttl.md).
+
 
 ### The API
 
@@ -314,20 +316,18 @@ This is the normal pattern for pipelines that track both transient events and st
 You do not need to declare that a store uses TTL. The framework detects it automatically on the first `state.set(..., ttl=...)` call that reaches a flush.
 
 - **New store (empty).** On the first flush that contains a TTL write, the store switches into TTL mode. The switch is free and transparent.
-- **Store with existing data.** If a store already contains data written without TTL and you deploy a code change that adds `state.set(..., ttl=...)`, there are two outcomes at the next flush:
-  - **`RocksDBOptions(legacy_records_ttl=...)` is set** — the framework backfills every pre-existing record with a uniform expiry and then flips the store into TTL mode in place. No data is deleted. See [Upgrading an existing store](#upgrading-an-existing-legacy-store--legacy_records_ttl) below.
-  - **`legacy_records_ttl` is not set** — the framework raises `IncompatibleStateStoreError`. See [Troubleshooting](#troubleshooting) for the fix.
+- **Store with existing data.** If a store already contains data written without TTL and you deploy a code change that adds `state.set(..., ttl=...)`, the framework auto-migrates at the next flush:
+  - **`RocksDBOptions(legacy_records_ttl=...)` is set** — the framework backfills every pre-existing record with a uniform expiry of `high_water + legacy_records_ttl` and then flips the store into TTL mode in place. No data is deleted. See [Upgrading an existing store](#upgrading-an-existing-legacy-store--legacy_records_ttl) below.
+  - **`legacy_records_ttl` is not set** — the framework still auto-migrates, using the triggering write's own `ttl=` value as the implicit window (`high_water + max(ttl=)` in that batch). A one-time `[WARNING]` names the derived window and how to override it. See [Upgrading an existing store](#upgrading-an-existing-legacy-store--legacy_records_ttl) for details.
 
 Once a store has switched into TTL mode, it stays in TTL mode for the life of that store. Plain `state.set(k, v)` calls on a TTL-enabled store still work and write a "never expires" sentinel — they do not turn off TTL for that key.
 
 
 ### Upgrading an existing (legacy) store — `legacy_records_ttl`
 
-> **Preview feature.** Available from Quix Streams 3.24.1a2.
+If your pipeline was already running before TTL existed, its state store holds records that were written without any expiry stamp. Deploying a new version that calls `state.set(..., ttl=...)` triggers an automatic in-place migration on the first flush: the framework re-stamps every pre-existing un-stamped record with a uniform expiry and flips the store into TTL mode with no state deletion.
 
-If your pipeline was already running before TTL existed, its state store holds records that were written without any expiry stamp. Deploying a new version that calls `state.set(..., ttl=...)` will trigger `IncompatibleStateStoreError` on the first flush — unless you opt in to the in-place migration.
-
-`RocksDBOptions(legacy_records_ttl=timedelta(...))` opts in. When set, the framework backfills every pre-existing un-stamped record with a uniform expiry on the first TTL-enabled flush, then flips the store into TTL mode — all in place, with no state deletion.
+`RocksDBOptions(legacy_records_ttl=timedelta(...))` sets the expiry window for those legacy records explicitly. Without it, the framework derives the window from the triggering write's own `ttl=` value (`high_water + max(ttl=)` in that batch) and emits a one-time `[WARNING]`.
 
 ```python
 from datetime import timedelta
@@ -344,9 +344,9 @@ app = Application(
 
 #### What the option does and does not do
 
-- **Opt-in, default `None`.** Leaving the option unset preserves the original behavior: a populated legacy store still raises `IncompatibleStateStoreError` on the first `ttl=` write.
+- **Optional, default `None`.** The migration runs automatically on the first `ttl=` write whether or not this option is set. Without it, the framework derives the expiry window from the triggering write's own `ttl=` and emits a one-time `[WARNING]` naming the value. Set this option to choose a different uniform expiry window for the legacy cohort.
 - **Activation gate.** Setting the option alone does nothing. The backfill only runs when your code actually calls `state.set(..., ttl=...)`. If your code has no TTL writes, the option is inert and the store stays legacy.
-- **One-time and durable.** The backfill runs exactly once. The re-stamped values are written to the changelog, so the migration survives a restart. Once the store has flipped into TTL mode it will not backfill again, and you can remove `legacy_records_ttl` from your config on the next deploy.
+- **One-time and durable.** The backfill runs exactly once. The re-stamped values and a migration-done marker are written to the changelog, so the migration survives any restart or full cold restore (complete rebuild from the changelog). Once the store has flipped into TTL mode it will not backfill again, and you can remove `legacy_records_ttl` from your config on the next deploy.
 - **Bounded memory.** The backfill runs in chunks of `RocksDBOptions(legacy_backfill_chunk_size=10_000)` (default 10,000 records). A multi-million-record store migrates without running out of memory. Processing pauses for the duration of the one-time backfill.
 - **Migration only.** `legacy_records_ttl` only affects pre-existing un-stamped records. New writes still get their expiry from the `ttl=` argument on each `state.set()` call. A write with no `ttl=` argument is still never-expires, regardless of this option.
 
@@ -354,10 +354,10 @@ app = Application(
 
 | State of the store | `legacy_records_ttl` | Outcome |
 |--------------------|----------------------|---------|
-| Already migrated (`__ttl_enabled__` present) | any | No-op — backfill never re-runs |
+| Already migrated (done-flag present in changelog) | any | No-op — backfill never re-runs |
 | Empty store | any | Clean flip into TTL mode, nothing to backfill |
-| Populated with legacy records | set | Backfill all records, then flip into TTL mode |
-| Populated with legacy records | not set (`None`) | Raises `IncompatibleStateStoreError` |
+| Populated with legacy records | set | Backfill all records at `high_water + legacy_records_ttl`, then flip into TTL mode |
+| Populated with legacy records | not set (`None`) | Auto-migrate using `high_water + max(ttl=)` from the triggering batch; emits one `[WARNING]` naming the derived window |
 
 #### Worked example — upgrading a dedup app
 
@@ -410,35 +410,40 @@ app.run()
 On startup, the log shows the one-time migration:
 
 ```
-[INFO] [quixstreams.state] Backfilled 1234567 legacy records and flipped state store partition into TTL mode (legacy_records_ttl)
+[INFO] [quixstreams.state] Backfilled 1234567 legacy records and flipped state store partition into TTL mode
 ```
 
 After the migration has run once, you can remove `legacy_records_ttl` from `RocksDBOptions` on the next deploy. The store remains in TTL mode permanently.
 
 #### Reference clock — when do migrated records expire?
 
-Legacy records carry no original timestamp, so their true age is unrecoverable. The backfill stamps them to expire `legacy_records_ttl` after the **event-time high-water mark at the moment of migration** — not after each record's original age. All migrated records therefore drain together once the stream's event time advances by `legacy_records_ttl` past the upgrade point.
+Legacy records carry no original timestamp, so their true age is unrecoverable. The backfill stamps them to expire `legacy_records_ttl` (or the implicit derived window) after the **event-time high-water mark at the moment of migration** — not after each record's original age. All migrated records therefore drain together once the stream's event time advances by that window past the upgrade point.
 
 Because expiry is event-time based, the expiry clock advances only while new messages arrive. An idle stream freezes the clock; migrated records do not expire until traffic resumes.
 
-On a **cold restore** (state volume lost, rebuilt from the changelog), expiry for migrated records is judged against the **wall clock at rebuild time** rather than against the event-time stamp written during backfill. This prevents all migrated records from appearing expired simultaneously on replay.
+On a **cold restore** (state volume lost, rebuilt from the changelog), the **drop filter during replay** judges records against the **wall clock at rebuild time**: records whose TTL window has already passed are discarded; those still within their window are kept. After the rebuild, the live event-time clock starts from the first message processed — it is **not** seeded from wall-clock. A reprocessing workload replaying historical timestamps is not affected by when the rebuild ran; TTL expiry is measured from each write's own event-time, as in normal processing.
+
+If a rebuild encounters an interrupted migration (some records already stamped, some not — a "MIXED" changelog), recovery auto-completes the remaining un-stamped records. With `legacy_records_ttl` set, they expire at `wallclock-at-rebuild + legacy_records_ttl`; without it, they inherit the expiry of the already-stamped cohort (or `SENTINEL_NEVER` with a `[WARNING]` in the unlikely case that no stamped record with a future expiry survives). No data is deleted.
+
+A store created on the earlier TTL preview (stock v3.24.0) self-heals automatically during rebuild: its changelog records are already stamped (from v3.24.0's own TTL writes), and recovery recognizes and adopts them verbatim with their original TTLs intact. No config change is needed; the store emerges from recovery fully TTL-enabled and continues normal expiry from each record's original stamp.
 
 
 ### Troubleshooting
 
-#### `IncompatibleStateStoreError` on startup or first flush
+#### Enabling TTL on a store that already has data
 
-**What it means.** You deployed a code change that adds `state.set(..., ttl=...)` to a callback, but the state store for that partition already contains data written before TTL was enabled. The framework refuses to mix the two layouts silently, because silent mixing would defeat the purpose of TTL on deduplication workloads.
+**What happens.** You deployed a code change that adds `state.set(..., ttl=...)` to a callback, and the state store for that partition already contains records written before TTL was enabled. The framework does **not** error and does **not** silently drop the TTL: it **auto-finishes the migration**, re-stamping every pre-existing record with a uniform expiry and flipping the store into TTL mode in place. No state is deleted, and no changelog reset is needed. This works in environments where you cannot access the state directory directly (such as Quix Cloud).
 
-The error log names the state directory path, the approximate number of existing entries, and the action to take:
+**Which expiry the old records get.**
+
+- If you set `legacy_records_ttl` on `RocksDBOptions`, old records expire at `high-water + legacy_records_ttl` (event-time at enable). Use this to choose the window explicitly.
+- If you do **not** set it, old records inherit an *implicit* window equal to the triggering `state.set(..., ttl=...)` write's own duration (`high-water + that ttl`). A one-time `[WARNING]` names the count, the derived window, and how to override it:
 
 ```
-IncompatibleStateStoreError: state store at '<path>' has <N> un-stamped existing entries; cannot enable TTL on a populated store without backfilling them. To enable TTL in place, set a uniform expiry for the existing records via RocksDBOptions(legacy_records_ttl=timedelta(...)) and redeploy: the partition will re-stamp every existing record with an expiry of high-water + legacy_records_ttl (event-time at enable) and flip into TTL mode without deleting any state. New records keep their true event-time expiry.
+[WARNING] [quixstreams.state] Enabled TTL on a populated legacy store WITHOUT legacy_records_ttl configured: auto-backfilled <N> pre-existing record(s) with an implicit expiry of high_water + <ttl_ms> ms (= <expiry>), derived from the triggering state.set(..., ttl=...) write. To choose a different uniform window for legacy records, set RocksDBOptions(legacy_records_ttl=timedelta(...)) and redeploy.
 ```
 
-**How to fix it — preferred: migrate in place.**
-
-Set `legacy_records_ttl` on your `Application` and redeploy. No data is deleted and no changelog reset is needed. This is the only option in environments where you cannot access the state directory directly (such as Quix Cloud).
+For the flagship deduplication workload — where every write uses one constant window — the implicit window equals that window, so the old dedup keys behave exactly as if freshly written at the enable moment. Set `legacy_records_ttl` explicitly only when you want a *different* window for the legacy cohort:
 
 ```python
 from datetime import timedelta
@@ -451,19 +456,11 @@ app = Application(
 )
 ```
 
-On the next flush the framework backfills every pre-existing record with the chosen expiry and flips the store into TTL mode. A one-time `[INFO]` line confirms completion. See [Upgrading an existing store](#upgrading-an-existing-legacy-store--legacy_records_ttl) for the full explanation and a worked example.
+On the next flush the framework backfills every pre-existing record with the chosen (or implicit) expiry and flips the store into TTL mode. A one-time `[INFO]` line confirms completion. See [Upgrading an existing store](#upgrading-an-existing-legacy-store--legacy_records_ttl) for the full explanation and a worked example.
 
-**Alternative: delete and rebuild (last resort, local deployments only).**
+**Cold-restore completion.** If a rebuilt node replays a changelog whose migration was interrupted mid-backfill (some records already stamped, some not), it auto-completes the leftovers at end of recovery. With `legacy_records_ttl` set, they expire at `wallclock-at-rebuild + legacy_records_ttl`; without it, they inherit the expiry of the surviving stamped cohort (or never-expire, with a `[WARNING]`, in the rare case where no surviving stamp remains to derive from). No data is deleted.
 
-If you cannot use `legacy_records_ttl` and can access the state directory:
-
-1. Stop the application.
-2. Delete the local state directory (default: `./state`, or whatever `state_dir` is set to in your `Application`). You can also call `app.clear_state()` before `app.run()`.
-3. Restart the application. The state store rebuilds automatically from the changelog topic.
-
-If the changelog topic also contains records written before TTL was enabled, recovery will rebuild a non-TTL store and the next TTL write will fail again. In that case you also need to delete (or reset the offsets of) the changelog topic before restarting.
-
-> **Note.** The pipeline does not partially commit the failed flush. Your existing state is intact after the error — only the new TTL writes were rejected.
+> **Note.** The one hard error left on this path is a framework guard: if a `ttl=` write reaches flush with no event-time timestamp, the backfill raises `IncompatibleStateStoreError` rather than inventing a wall-clock expiry. That signals a bug in how `state.set(..., ttl=...)` was called (the framework injects the timestamp inside stateful callbacks), not a store-migration problem. Your existing state is intact after such an error.
 
 
 ### Semantics and limits

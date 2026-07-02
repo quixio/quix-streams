@@ -23,7 +23,10 @@ from datetime import timedelta
 from unittest.mock import patch
 
 from quixstreams.state.memory import MemoryStorePartition
-from quixstreams.state.metadata import CHANGELOG_CF_MESSAGE_HEADER
+from quixstreams.state.metadata import (
+    CHANGELOG_CF_MESSAGE_HEADER,
+    TTL_BACKFILL_PENDING_CF_NAME,
+)
 from quixstreams.state.rocksdb.metadata import TTL_INDEX_CF_NAME
 from quixstreams.state.rocksdb.ttl_codec import (
     SENTINEL_NEVER,
@@ -195,8 +198,10 @@ class TestMemoryRecoveryWallclock:
         assert set(recovered_default) == sentinel_keys
         recovered.close()
 
-    # Post-recovery high-water seeded to the session wallclock + monotonic.
-    def test_high_water_seeded_to_wallclock_and_monotonic(
+    # Spec §10 case 11 — post-recovery high-water is the loaded persisted
+    # value or None, never wallclock-seeded (Finding 3, spec §7.4). The
+    # recovery wallclock is used ONLY for the Rule 4 drop filter.
+    def test_high_water_not_wallclock_seeded_after_recovery(
         self, changelog_producer_mock
     ):
         ts = 1_000_000_000_000
@@ -209,14 +214,26 @@ class TestMemoryRecoveryWallclock:
         recovered = MemoryStorePartition(changelog_producer=changelog_producer_mock)
         _replay_default(recovered, msgs, now_ms=now_ms)
 
-        assert recovered.high_water_ms == now_ms
-        recovered.advance_high_water(now_ms - DAY_MS)
-        assert recovered.high_water_ms == now_ms
-        recovered.advance_high_water(now_ms + DAY_MS)
-        assert recovered.high_water_ms == now_ms + DAY_MS
+        # Post-recovery high-water is NOT seeded to the session wallclock.
+        # Memory partitions start fresh (no persisted high-water), so it
+        # remains None after recovery (spec Finding 3, §7.4).
+        assert recovered.high_water_ms is None, (
+            "Post-recovery high_water_ms must be None (not wallclock-seeded); "
+            "recovery wallclock is Rule 4 only (spec Finding 3, §7.4)"
+        )
+        # A live event-time write now sets the high-water.
+        recovered.advance_high_water(ts)
+        assert recovered.high_water_ms == ts
+        # Monotonicity still holds.
+        recovered.advance_high_water(ts - DAY_MS)
+        assert recovered.high_water_ms == ts
+        recovered.advance_high_water(ts + DAY_MS)
+        assert recovered.high_water_ms == ts + DAY_MS
         recovered.close()
 
-    # Wallclock is captured exactly ONCE per session.
+    # Wallclock is captured exactly ONCE per session: a clock that "ticks"
+    # between messages must not change the survivor set. Finding 3 (§7.4):
+    # the wallclock is NOT seeded into the live high_water_ms.
     def test_wallclock_captured_once_per_session(self, changelog_producer_mock):
         ts = 1_000_000_000_000
         ttl = timedelta(days=7)
@@ -241,7 +258,11 @@ class TestMemoryRecoveryWallclock:
 
         # All records survive: the single captured clock governs the session.
         assert _decode_default(recovered) == source_default
-        assert recovered.high_water_ms == uniform_expiry - 1
+        # Finding 3 (§7.4): high_water is NOT seeded to the wallclock.
+        assert recovered.high_water_ms is None, (
+            "Post-recovery high_water_ms must be None (not wallclock-seeded); "
+            "recovery wallclock is Rule 4 only (spec Finding 3, §7.4)"
+        )
         recovered.close()
 
     # Determinism: two rebuilds with the same injected clock are identical.
@@ -330,9 +351,13 @@ class TestMemoryRecoveryRoutesOnHeaderOnly:
 
     def test_first_header_true_latches_for_session(self, changelog_producer_mock):
         # Once flipped on the first header-true record, the partition stays in TTL
-        # mode for the rest of the session even if later records arrive with the
-        # header absent (the produce-side guarantees stamped records carry it; the
-        # latch just mirrors RocksDB's session semantics).
+        # mode (the ``uses_ttl_stamps`` FLAG latches for the session). Per-record
+        # ROUTING, however, is on the header: a later HEADER-ABSENT default-CF
+        # record is a MIXED-changelog leftover — it lands VERBATIM (no stamp
+        # strip, no index write) and is censused into ``__ttl_backfill_pending__``
+        # for completion, mirroring RocksDB (§15.4 item 3; this is the fix for the
+        # memory 8-byte-strip corruption). Was: the memory latch wrongly routed
+        # header-absent records through the stamped branch and indexed them.
         recovered = MemoryStorePartition(changelog_producer=changelog_producer_mock)
         base = 1_000_000_000_000
         recovered._now_ms = lambda: base  # noqa: E731
@@ -342,12 +367,19 @@ class TestMemoryRecoveryRoutesOnHeaderOnly:
         )
         assert recovered.uses_ttl_stamps is True
 
-        # Subsequent stamped record with header absent: still treated as stamped
-        # (the latch holds), so it goes through the stamped branch + index write.
+        # Subsequent HEADER-ABSENT record: the flag latch holds (still TTL mode),
+        # but the record is a leftover — verbatim landing + census, not stamped.
         v1 = encode_ttl_value(base + 365 * DAY_MS, b"v1")
         recovered.recover_from_changelog_message(
             key=b"pfx|k1", value=v1, cf_name="default", offset=1, ttl_stamped=False
         )
+        assert recovered.uses_ttl_stamps is True  # flag still latched
         index = _decode_index(recovered)
-        assert b"pfx|k0" in index and b"pfx|k1" in index
+        assert b"pfx|k0" in index  # header-true → indexed
+        assert b"pfx|k1" not in index  # header-absent leftover → NOT indexed
+        # k1 landed verbatim (raw bytes preserved, no 8-byte strip) and was
+        # censused as a leftover for :meth:`complete_recovery`.
+        assert recovered._state["default"][b"pfx|k1"] == v1
+        assert b"pfx|k1" in recovered._state.get(TTL_BACKFILL_PENDING_CF_NAME, {})
+        recovered.close()
         recovered.close()

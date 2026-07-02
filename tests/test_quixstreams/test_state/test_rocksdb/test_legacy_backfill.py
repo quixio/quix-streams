@@ -6,8 +6,8 @@ Covers spec §11 unit cases 1-9:
 1. ``legacy_records_ttl <= 0`` raises ``ValueError`` at ``RocksDBOptions``.
 2. Populated legacy store + opt-in set → first ``ttl=`` write backfills with
    ``expires_at == high_water + ttl_ms``; index + flip metadata set.
-3. Populated legacy store + opt-in unset → still raises
-   ``IncompatibleStateStoreError`` with the new operator-callable message.
+3. Populated legacy store + opt-in unset → auto-backfills at
+   ``high_water + implicit_ttl`` (spec §15.1; the reject was removed).
 4. Empty store + opt-in set → behaves like the empty-store flip.
 5. Idempotency: backfill once, reopen, write again → no second backfill.
 6. enable_time = event-time high-water, not wall-clock.
@@ -26,7 +26,6 @@ import pytest
 
 from quixstreams.state.metadata import METADATA_CF_NAME
 from quixstreams.state.rocksdb import RocksDBOptions
-from quixstreams.state.rocksdb.exceptions import IncompatibleStateStoreError
 from quixstreams.state.rocksdb.metadata import (
     STATE_FORMAT_VERSION,
     STATE_FORMAT_VERSION_KEY,
@@ -184,26 +183,46 @@ class TestLegacyBackfill:
         )
         partition.close()
 
-    # Case 3 — populated legacy store + opt-in unset → reject (new message)
-    def test_reject_when_opt_in_unset(self, store_partition_factory):
+    # Case 3 — populated legacy store + opt-in unset → auto-backfill (§15.1)
+    def test_populated_store_no_config_auto_backfills(self, store_partition_factory):
         partition = store_partition_factory(name="db")
         _seed_legacy_records(partition, [("k1", "v1")])
         partition.close()
 
         partition = store_partition_factory(name="db", options=RocksDBOptions())
-        with pytest.raises(IncompatibleStateStoreError) as exc_info:
-            with partition.begin() as tx:
-                tx.set(
-                    key="knew",
-                    value="vnew",
-                    prefix=b"pfx",
-                    timestamp=1_000,
-                    ttl=timedelta(days=1),
-                )
-        msg = str(exc_info.value)
-        assert "legacy_records_ttl" in msg
-        assert "delete the state directory" not in msg.lower()
-        assert partition.uses_ttl_stamps is False
+        ts = 1_000
+        # No legacy_records_ttl configured: the §15.1 revision auto-finishes the
+        # migration instead of rejecting, stamping every pre-existing record at
+        # high_water + implicit_ttl, where implicit_ttl is the triggering ttl=
+        # write's own window (max ttl= in the flushing batch).
+        with partition.begin() as tx:
+            tx.set(
+                key="knew",
+                value="vnew",
+                prefix=b"pfx",
+                timestamp=ts,
+                ttl=timedelta(days=1),
+            )
+
+        assert partition.uses_ttl_stamps is True
+        assert partition.high_water_ms == ts
+
+        decoded = _decode_default_cf(partition)
+        # high_water + implicit ttl (1 day) — equals the triggering write's own
+        # absolute stamp in the single-write-at-flip case (§15.1 equivalence).
+        expected_legacy_expiry = ts + DAY_MS
+        legacy_keys = [k for k in decoded if b"knew" not in k]
+        assert len(legacy_keys) == 1
+        for key in legacy_keys:
+            expires_at, _ = decoded[key]
+            assert expires_at == expected_legacy_expiry
+        # The new record keeps its own true event-time expiry.
+        new_key = next(k for k in decoded if b"knew" in k)
+        assert decoded[new_key][0] == ts + DAY_MS
+        # Index carries the backfilled legacy key at the implicit expiry.
+        index = _decode_index_cf(partition)
+        for key in legacy_keys:
+            assert index[key] == expected_legacy_expiry
         partition.close()
 
     # Case 4 — empty store + opt-in set → identical to empty-store flip
@@ -624,8 +643,10 @@ class TestRecoveryWallclock:
         assert set(recovered_default) == sentinel_keys
         recovered.close()
 
-    # Spec §8 case 5 — post-recovery high-water seeding + monotonicity edge.
-    def test_high_water_seeded_to_wallclock_and_monotonic(
+    # Spec §10 case 11 — post-recovery high-water is the loaded persisted
+    # value or None, never wallclock-seeded (Finding 3, spec §7.4). The
+    # recovery wallclock is used ONLY for the Rule 4 drop filter.
+    def test_high_water_not_wallclock_seeded_after_recovery(
         self, store_partition_factory, changelog_producer_mock
     ):
         ts = 1_000_000_000_000
@@ -637,14 +658,22 @@ class TestRecoveryWallclock:
         recovered = store_partition_factory(name="dst")
         _replay_default(recovered, msgs, now_ms=now_ms)
 
-        # High-water seeded to the session wallclock (§3.3).
-        assert recovered.high_water_ms == now_ms
-        # A live event-time below the seed does NOT roll high-water back.
-        recovered.advance_high_water(now_ms - DAY_MS)
-        assert recovered.high_water_ms == now_ms
-        # A live event-time above the seed advances it.
-        recovered.advance_high_water(now_ms + DAY_MS)
-        assert recovered.high_water_ms == now_ms + DAY_MS
+        # Post-recovery high-water is NOT seeded to the session wallclock.
+        # It is None or the loaded persisted value (which is None for a
+        # cold-restore onto a fresh volume with no prior high-water).
+        assert recovered.high_water_ms is None, (
+            "Post-recovery high_water_ms must be None (not wallclock-seeded) "
+            "on a fresh-volume cold restore; the recovery wallclock is used "
+            "ONLY for the Rule 4 drop filter (spec Finding 3, §7.4)"
+        )
+        # A live event-time write now sets the high-water.
+        recovered.advance_high_water(ts)
+        assert recovered.high_water_ms == ts
+        # Monotonicity still holds.
+        recovered.advance_high_water(ts - DAY_MS)
+        assert recovered.high_water_ms == ts
+        recovered.advance_high_water(ts + DAY_MS)
+        assert recovered.high_water_ms == ts + DAY_MS
         recovered.close()
 
     # Spec §8 case 6 — determinism within a single rebuild session.
@@ -676,7 +705,8 @@ class TestRecoveryWallclock:
         assert index_a == index_b
 
     # Wallclock is captured exactly ONCE per session: a clock that "ticks"
-    # between messages must not change the survivor set.
+    # between messages must not change the survivor set. Finding 3 (§7.4):
+    # the wallclock is NOT seeded into the live high_water_ms.
     def test_wallclock_captured_once_per_session(
         self, store_partition_factory, changelog_producer_mock
     ):
@@ -704,5 +734,9 @@ class TestRecoveryWallclock:
         # All records survive: the single captured clock (legacy_expiry - 1)
         # governs the whole session, not the later ticks.
         assert _decode_default_cf(recovered) == source_default
-        assert recovered.high_water_ms == legacy_expiry - 1
+        # Finding 3 (§7.4): high_water is NOT seeded to the wallclock.
+        assert recovered.high_water_ms is None, (
+            "Post-recovery high_water_ms must be None (not wallclock-seeded); "
+            "recovery wallclock is Rule 4 only (spec Finding 3, §7.4)"
+        )
         recovered.close()
