@@ -1019,6 +1019,6 @@ def test_sink_on_conflict_do_nothing_with_metadata(
         row_count = cursor.fetchone()[0]
     postgres_connection.commit()
 
-    assert row_count == 1, (
-        f"Expected 1 row (duplicate silently dropped), got {row_count}"
-    )
+    assert (
+        row_count == 1
+    ), f"Expected 1 row (duplicate silently dropped), got {row_count}"
