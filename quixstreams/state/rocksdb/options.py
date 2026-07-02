@@ -1,4 +1,5 @@
 import dataclasses
+from datetime import timedelta
 from typing import Mapping, Optional
 
 import rocksdict
@@ -44,6 +45,32 @@ class RocksDBOptions(RocksDBOptionsType):
         steady-state expiration rates. Only meaningful for TTL-enabled
         stores; ignored otherwise.
         Default - ``10_000``.
+    :param legacy_records_ttl: opt-in for enabling TTL on a **populated**
+        legacy store that already holds un-stamped records. When ``None``
+        (the default), the first ``state.set(..., ttl=...)`` write on a
+        populated legacy store raises ``IncompatibleStateStoreError`` —
+        byte-for-byte the v3.24 behavior. When set to a strictly positive
+        ``timedelta``, the partition instead **backfills** its pre-existing
+        un-stamped records with a uniform expiry of
+        ``high_water + legacy_records_ttl`` (event-time high-water at the
+        enable moment) and flips into TTL mode in place — no state deletion.
+        New records keep getting their true event-time expiry. The backfill
+        runs exactly once; a redeploy / restart never re-runs it. Ignored for
+        windowed / timestamped stores (they opt out of the TTL stamp
+        machinery at the class level). Must be strictly positive if set;
+        ``<= 0`` raises ``ValueError`` at construction.
+        Default - ``None``.
+    :param legacy_backfill_chunk_size: number of pre-existing records re-stamped
+        per write-batch during the one-time legacy backfill (see
+        ``legacy_records_ttl``). The backfill iterates the populated default CF
+        in chunks of this size; each chunk is re-stamped, produced to the
+        changelog, flushed, and committed before the next chunk is read, so peak
+        transient memory is bounded to one chunk regardless of total store size.
+        Lower it on memory-constrained deployments. Only meaningful on the single
+        backfilling flush; ignored otherwise and on windowed / timestamped
+        stores. Must be strictly positive; ``<= 0`` raises ``ValueError`` at
+        construction.
+        Default - ``10_000``.
 
     Please see `rocksdict.Options` for a complete description of other options.
     """
@@ -65,6 +92,22 @@ class RocksDBOptions(RocksDBOptionsType):
     use_fsync: bool = True
     on_corrupted_recreate: bool = True
     max_evictions_per_flush: int = 10_000
+    legacy_records_ttl: Optional[timedelta] = None
+    legacy_backfill_chunk_size: int = 10_000
+
+    def __post_init__(self) -> None:
+        if self.legacy_records_ttl is not None and self.legacy_records_ttl <= timedelta(
+            0
+        ):
+            raise ValueError(
+                "legacy_records_ttl must be a strictly positive timedelta or "
+                f"None, got {self.legacy_records_ttl!r}"
+            )
+        if self.legacy_backfill_chunk_size <= 0:
+            raise ValueError(
+                "legacy_backfill_chunk_size must be a strictly positive int, "
+                f"got {self.legacy_backfill_chunk_size!r}"
+            )
 
     def to_options(self) -> rocksdict.Options:
         """

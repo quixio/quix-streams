@@ -23,6 +23,7 @@ from .exceptions import (
 from .metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER,
+    CHANGELOG_TTL_STAMPED_HEADER,
 )
 
 logger = logging.getLogger(__name__)
@@ -191,6 +192,12 @@ class RecoveryPartition:
         processed_offsets = json_loads(
             headers.get(CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER, b"null")
         )
+
+        # Stamped-vs-legacy bit (spec §8.7). Out-of-band, never inferred from
+        # value content. Absent header → legacy / un-stamped (default False, also
+        # covers pre-header changelog messages — see §8.7.4 back-compat option a).
+        ttl_stamped = bool(headers.get(CHANGELOG_TTL_STAMPED_HEADER))
+
         if processed_offsets is None or self._should_apply_changelog(
             processed_offsets=processed_offsets
         ):
@@ -211,6 +218,7 @@ class RecoveryPartition:
                 key=key,
                 value=value,
                 offset=changelog_message.offset(),
+                ttl_stamped=ttl_stamped,
             )
         else:
             # Even if the changelog update is skipped, roll the changelog offset
@@ -218,6 +226,18 @@ class RecoveryPartition:
             self._store_partition.write_changelog_offset(
                 offset=changelog_message.offset(),
             )
+
+    def complete_recovery(self):
+        """
+        Finalize recovery for the underlying `StorePartition`.
+
+        Called once by the recovery manager after this partition has reached its
+        changelog high-watermark and before it is unassigned / handed to live
+        processing. Delegates to ``StorePartition.complete_recovery`` (a no-op on
+        every backend except RocksDB, which uses it to complete an interrupted
+        legacy-TTL migration — spec §8.8 / spec-incomplete-migration-recovery.md).
+        """
+        self._store_partition.complete_recovery()
 
     def set_recovery_consume_position(self, offset: int):
         """
@@ -634,6 +654,12 @@ class RecoveryManager:
 
             rp.set_recovery_consume_position(position)
             if rp.finished_recovery_check:
+                # Recovery-finalize seam (spec §8.8): the partition has reached
+                # its changelog high-watermark. Complete any interrupted legacy-
+                # TTL migration before the partition is unassigned and handed to
+                # live processing. A no-op on every shape except a MIXED changelog
+                # restored with ``legacy_records_ttl`` set.
+                rp.complete_recovery()
                 rp_revokes.append(rp)
                 if rp.had_recovery_changes:
                     logger.info(f"Recovery successful for {rp}")

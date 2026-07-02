@@ -5,9 +5,14 @@ GLOBAL_COUNTER_CF_NAME = "__global-counter__"
 GLOBAL_COUNTER_KEY = b"__global_counter__"
 
 # TTL feature constants (see dev-planning/state-ttl/architecture.md).
-# TTL_INDEX_CF_NAME is shared with quixstreams.state.metadata so the base
-# transaction can route writes for it locally, off the changelog.
-from quixstreams.state.metadata import TTL_INDEX_CF_NAME  # noqa: E402, F401
+# TTL_INDEX_CF_NAME / TTL_BACKFILL_PENDING_CF_NAME are shared with
+# quixstreams.state.metadata so the base transaction can route writes for them
+# locally, off the changelog.
+from quixstreams.state.metadata import (  # noqa: E402, F401
+    TTL_BACKFILL_PENDING_CF_NAME,
+    TTL_BACKFILL_STAMPED_CF_NAME,
+    TTL_INDEX_CF_NAME,
+)
 
 # Highest record event-time observed by any transaction on this partition,
 # persisted to the metadata CF on every flush so the sweep / read-time filter
@@ -29,3 +34,13 @@ STATE_FORMAT_VERSION = 2
 # framework on the first ``state.set(..., ttl=...)`` write that landed on a
 # fresh (empty) default CF; once flipped, it stays flipped.
 TTL_ENABLED_KEY = b"__ttl_enabled__"
+
+# Persisted backfill cursor for the legacy-records backfill (Fix A,
+# spec-backfill-completeness.md §3.3). Holds the integer count ``N`` of keys
+# already stamped from the deterministically-sorted census key list. Advanced
+# in the same ``WriteBatch`` as each chunk's puts so a crash mid-backfill
+# resumes at exactly key index ``N`` (no byte-sniffing). Additive metadata key:
+# legacy and already-flipped stores simply never have it (no format-version
+# bump). Lives in the metadata CF, which is in ``LOCAL_ONLY_CFS`` and is never
+# produced to the changelog.
+TTL_BACKFILL_PROGRESS_KEY = b"__ttl_backfill_progress__"

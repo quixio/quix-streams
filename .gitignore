@@ -48,10 +48,8 @@ site/
 # memories (local development notes)
 memories/
 
-.claude/
-
-# local QA / scratch test harnesses
-.tmp/
-
-# planning artifacts (specs, architecture docs, etc.)
+# dev planning (local specs / planning notes)
 dev-planning/
+
+# scratch
+.tmp/

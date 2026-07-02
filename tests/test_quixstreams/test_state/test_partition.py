@@ -34,11 +34,18 @@ class TestStorePartition:
         assert store_partition.get_changelog_offset() == 1
 
     def test_recover_from_changelog_message_already_stamped(self, store_partition):
-        # An already-stamped replay value (>= 8 bytes, sentinel stamp) flips
-        # the recovery partition into TTL mode and is stored verbatim.
+        # A stamped replay value carrying the §8.7 ``__ttl_stamped__`` header
+        # (surfaced as ``ttl_stamped=True``) flips the recovery partition into
+        # TTL mode and is stored verbatim. RocksDB routes purely on the header;
+        # the memory backend still flips via the (unchanged) value-content
+        # heuristic — both reach TTL mode here.
         stamped = encode_ttl_value(SENTINEL_NEVER, b"value")
         store_partition.recover_from_changelog_message(
-            key=b"key", value=stamped, cf_name="default", offset=2
+            key=b"key",
+            value=stamped,
+            cf_name="default",
+            offset=2,
+            ttl_stamped=True,
         )
         assert store_partition.get(b"key") == stamped
         assert store_partition.uses_ttl_stamps is True

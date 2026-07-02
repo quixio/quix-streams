@@ -18,7 +18,7 @@ from typing import (
     overload,
 )
 
-from quixstreams.models import Headers
+from quixstreams.models import HeadersMapping
 from quixstreams.state.exceptions import (
     InvalidChangelogOffset,
     StateSerializationError,
@@ -27,6 +27,7 @@ from quixstreams.state.exceptions import (
 from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER,
+    CHANGELOG_TTL_STAMPED_HEADER,
     DEFAULT_PREFIX,
     LOCAL_ONLY_CFS,
     SEPARATOR,
@@ -604,9 +605,10 @@ class PartitionTransaction(ABC, Generic[K, V]):
             return
 
         logger.debug(
-            f"Flushing state changes to the changelog topic "
-            f'topic_name="{self._changelog_producer.changelog_name}" '
-            f"partition={self._changelog_producer.partition}"
+            'Flushing state changes to the changelog topic topic_name="%s" '
+            "partition=%s",
+            self._changelog_producer.changelog_name,
+            self._changelog_producer.partition,
         )
         source_tp_offset_header = json_dumps(processed_offsets)
         column_families = self._update_cache.get_column_families()
@@ -618,10 +620,24 @@ class PartitionTransaction(ABC, Generic[K, V]):
             if cf_name in LOCAL_ONLY_CFS:
                 continue
 
-            headers: Headers = {
+            headers: HeadersMapping = {
                 CHANGELOG_CF_MESSAGE_HEADER: cf_name,
                 CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER: source_tp_offset_header,
             }
+
+            # TTL stamped/legacy bit (spec §8.7). Carry an out-of-band per-record
+            # header on every ``default``-CF record produced while the partition
+            # is in TTL mode, so cold-restore recovery can route stamped-vs-legacy
+            # reliably without sniffing value content. Read-only attribute probe
+            # on the partition the base already owns: a no-op for any backend that
+            # lacks ``uses_ttl_stamps`` (header omitted → byte-identical legacy
+            # behavior). Broader than "this write carried ttl=": after the flip
+            # even a no-ttl= SENTINEL write carries the 8-byte prefix on the wire
+            # and so must be marked stamped.
+            if cf_name == "default" and getattr(
+                self._partition, "uses_ttl_stamps", False
+            ):
+                headers[CHANGELOG_TTL_STAMPED_HEADER] = b"\x01"
 
             updates = self._update_cache.get_updates(cf_name=cf_name)
             for prefix_update_cache in updates.values():

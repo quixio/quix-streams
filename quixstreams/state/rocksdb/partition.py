@@ -1,5 +1,6 @@
 import logging
 import time
+from datetime import timedelta
 from typing import (
     Dict,
     Iterator,
@@ -12,20 +13,35 @@ from typing import (
 
 from rocksdict import AccessType, ColumnFamily, Rdict, ReadOptions, WriteBatch
 
+from quixstreams.models import HeadersMapping
 from quixstreams.state.base import (
     PartitionTransactionCache,
     StorePartition,
 )
-from quixstreams.state.metadata import LOCAL_ONLY_CFS, METADATA_CF_NAME, Marker
+from quixstreams.state.metadata import (
+    CHANGELOG_CF_MESSAGE_HEADER,
+    CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER,
+    CHANGELOG_TTL_STAMPED_HEADER,
+    LOCAL_ONLY_CFS,
+    METADATA_CF_NAME,
+    Marker,
+)
 from quixstreams.state.recovery import ChangelogProducer
-from quixstreams.state.rocksdb.transaction import RocksDBPartitionTransaction
+from quixstreams.state.rocksdb.transaction import (
+    RocksDBPartitionTransaction,
+    _ttl_to_ms,
+)
 from quixstreams.state.serialization import int_from_bytes, int_to_bytes
+from quixstreams.utils.json import dumps as json_dumps
 
 from .exceptions import IncompatibleStateStoreError, RocksDBCorruptedError
 from .metadata import (
     CHANGELOG_OFFSET_KEY,
     STATE_FORMAT_VERSION,
     STATE_FORMAT_VERSION_KEY,
+    TTL_BACKFILL_PENDING_CF_NAME,
+    TTL_BACKFILL_PROGRESS_KEY,
+    TTL_BACKFILL_STAMPED_CF_NAME,
     TTL_ENABLED_KEY,
     TTL_HIGH_WATER_KEY,
     TTL_INDEX_CF_NAME,
@@ -44,6 +60,13 @@ __all__ = ("RocksDBStorePartition",)
 
 
 logger = logging.getLogger(__name__)
+
+# Census-size threshold above which the in-memory key list is logged as a
+# future spill-to-disk concern (OP-BC-2, spec-backfill-completeness.md §5).
+# At ~80 B per held key, this is ~800 MB — large enough to threaten a small
+# container. The backfill still proceeds in memory; the warning only flags
+# that a multi-million-key store should grow a disk-spill census in future.
+_CENSUS_SPILL_WARN_THRESHOLD = 3_000_000
 
 
 class RocksDBStorePartition(StorePartition):
@@ -94,10 +117,37 @@ class RocksDBStorePartition(StorePartition):
         self._open_max_retries = self._options.open_max_retries
         self._open_retry_backoff = self._options.open_retry_backoff
         self._max_evictions_per_flush = self._options.max_evictions_per_flush
+        # Opt-in for backfilling a populated legacy store on TTL enable.
+        # ``None`` preserves the current reject-on-populated-store behavior;
+        # a strictly positive ``timedelta`` enables the in-place backfill
+        # (see :meth:`backfill_legacy_records`). Read by the transaction layer
+        # through this partition in ``_maybe_flip_or_reject``.
+        self._legacy_records_ttl: Optional[timedelta] = self._options.legacy_records_ttl
+        # Number of pre-existing records re-stamped per write-batch during the
+        # one-time legacy backfill. Bounds peak transient memory to one chunk
+        # (see :meth:`backfill_legacy_records`). Only consulted on the single
+        # backfilling flush.
+        self._legacy_backfill_chunk_size: int = self._options.legacy_backfill_chunk_size
         self._db = self._init_rocksdb()
         self._cf_cache: Dict[str, Rdict] = {}
         self._cf_handle_cache: Dict[str, ColumnFamily] = {}
         self._high_water_ms: Optional[int] = None
+        # Wallclock reference captured once per changelog-recovery session
+        # (lazily, on the first stamped default-CF replay). Used to judge
+        # whether a replayed TTL entry is already expired and to seed the
+        # post-recovery high-water (see :meth:`recover_from_changelog_message`,
+        # spec ``spec-recovery-wallclock.md`` §3.2/§3.3). ``None`` means no
+        # stamped message has been replayed yet in this partition's lifetime;
+        # a fresh partition instance per assignment is a fresh recovery session.
+        self._recovery_now_ms: Optional[int] = None
+        # Incomplete-migration detection (spec §8.8). Set True on the first
+        # header-true default-CF replay (the same condition that flips the
+        # partition into TTL mode). Combined with a non-empty
+        # ``__ttl_backfill_pending__`` CF at end of recovery, it marks a MIXED
+        # (incomplete-migration) changelog whose leftover legacy records must be
+        # completed by :meth:`complete_recovery`. False (the all-legacy first-
+        # enablement case) never triggers completion.
+        self._recovery_saw_stamped: bool = False
 
         # Resolve the **runtime** TTL flag. Subclasses that nail
         # ``uses_ttl_stamps = False`` at the class level (windowed,
@@ -121,6 +171,9 @@ class RocksDBStorePartition(StorePartition):
             self._load_high_water()
             # Pre-create the index CF so writes never race a CF creation.
             self.get_or_create_column_family(TTL_INDEX_CF_NAME)
+            # Drop any dead live-backfill bookkeeping left by the migration that
+            # flipped this store (one-time; no-op once cleaned).
+            self._cleanup_completed_backfill_bookkeeping()
 
     @property
     def high_water_ms(self) -> Optional[int]:
@@ -135,6 +188,20 @@ class RocksDBStorePartition(StorePartition):
         """Cap on per-flush sweep evictions."""
         return self._max_evictions_per_flush
 
+    @property
+    def legacy_records_ttl(self) -> Optional[timedelta]:
+        """
+        Opt-in TTL applied to pre-existing un-stamped records when TTL is
+        enabled on a populated legacy store. ``None`` = reject on populated
+        store (default); a positive ``timedelta`` = backfill in place.
+        """
+        return self._legacy_records_ttl
+
+    @property
+    def legacy_backfill_chunk_size(self) -> int:
+        """Number of records re-stamped per write-batch during the backfill."""
+        return self._legacy_backfill_chunk_size
+
     def advance_high_water(self, timestamp: Optional[int]) -> None:
         """
         Advance the partition's high-water mark monotonically. Called by the
@@ -146,33 +213,48 @@ class RocksDBStorePartition(StorePartition):
         if self._high_water_ms is None or timestamp > self._high_water_ms:
             self._high_water_ms = timestamp
 
+    def _now_ms(self) -> int:
+        """
+        Current wallclock time in epoch milliseconds. Isolated behind a method
+        purely as a test seam so changelog-recovery determinism cases can
+        inject a fixed ``now`` without sleeping (spec §8, case 6).
+        """
+        return int(time.time() * 1000)
+
     def recover_from_changelog_message(
-        self, key: bytes, value: Optional[bytes], cf_name: str, offset: int
+        self,
+        key: bytes,
+        value: Optional[bytes],
+        cf_name: str,
+        offset: int,
+        ttl_stamped: bool = False,
     ):
         cf_handle = self.get_column_family_handle(cf_name)
         batch = WriteBatch(raw_mode=True)
 
-        # Recovery flag-discovery (spec §6.6).
+        # Recovery flip-discovery (spec §8.7).
         #
         # The ``__ttl_enabled__`` key lives in the metadata CF, which is in
         # ``LOCAL_ONLY_CFS`` and therefore never produced to the changelog
         # topic — so a cold-restore recovery cannot read the flag from a
-        # changelog message. We instead infer the partition's TTL mode from
-        # the **first user-data message replayed**: if its value is
-        # stamped (8-byte BE prefix decodable as the sentinel or a
-        # plausible epoch-ms expiry), the source partition was flipped, so
-        # we flip this recovery partition too and stay in TTL mode for the
-        # rest of replay. This is the "peek at the first replayed value"
-        # design called out as the fallback in spec §8.
+        # changelog message. Instead, every stamped ``default``-CF record
+        # produced while the source partition was in TTL mode carries the
+        # out-of-band ``__ttl_stamped__`` header (set in the base ``_prepare``),
+        # surfaced here as ``ttl_stamped``. On the first header-true default-CF
+        # record we flip this recovery partition into TTL mode and latch for the
+        # rest of the session. This REPLACES the old value-content heuristic
+        # (``_looks_like_stamped_value``), which false-positived on legacy 8-byte
+        # epoch-ms values and dropped them (OP-3 / §8.6.3). Header absent → the
+        # record is legacy / un-stamped and replays verbatim below, so a purely
+        # legacy changelog never latches (the §8.6 Option-1 requirement).
         if (
             type(self).uses_ttl_stamps
             and not self.uses_ttl_stamps
             and cf_name == "default"
-            and value
-            and self._looks_like_stamped_value(value)
+            and ttl_stamped
         ):
             logger.info(
-                "Recovery: detected stamped default-CF replay; flipping "
+                "Recovery: __ttl_stamped__ header on default-CF replay; flipping "
                 "partition path=%s into TTL mode for the rest of recovery.",
                 self._path,
             )
@@ -181,6 +263,29 @@ class RocksDBStorePartition(StorePartition):
             # Stamp the on-disk format-version + flag now so a subsequent
             # process restart picks up TTL mode at open time.
             self._stamp_flip_metadata()
+
+        # Incomplete-migration detection / census (spec §8.8). The
+        # stamped-vs-legacy decision is per-record on the ``ttl_stamped`` header,
+        # NOT on the latched ``uses_ttl_stamps`` flag: a MIXED changelog replays
+        # header-absent legacy records AFTER the partition has flipped, and those
+        # must still land verbatim (never re-wrapped) and be censused into
+        # ``__ttl_backfill_pending__`` for the completion backfill. The pending
+        # bookkeeping rides the SAME WriteBatch as the default-CF write so it is
+        # atomic with the replay (§4.1).
+        if type(self).uses_ttl_stamps and cf_name == "default":
+            pending_handle = self.get_column_family_handle(TTL_BACKFILL_PENDING_CF_NAME)
+            if ttl_stamped:
+                # A header-true default-CF record. Mark that the partition
+                # replayed at least one stamped record (the MIXED-detection
+                # half) and drop any earlier legacy census entry for this key —
+                # a later stamped write supersedes it (compaction ordering, §4).
+                self._recovery_saw_stamped = True
+                batch.delete(key, pending_handle)
+            elif value is not None:
+                # A header-absent (legacy) default-CF record. Census the key as a
+                # leftover-legacy candidate; it lands verbatim below. A tombstone
+                # (value is None) is not a leftover record and is not censused.
+                batch.put(key, b"", pending_handle)
 
         if not self.uses_ttl_stamps:
             # Legacy / non-TTL partitions: replay the raw payload verbatim.
@@ -208,17 +313,37 @@ class RocksDBStorePartition(StorePartition):
 
         if value is None:
             batch.delete(key, cf_handle)
+        elif is_main_cf and not ttl_stamped:
+            # Header-absent default-CF record replayed on a (now-)flipped
+            # partition — a leftover legacy record of an interrupted migration
+            # (MIXED changelog, §8.8). It MUST land verbatim (no stamp wrap, no
+            # index entry, no Rule 4 filter): its key was just censused into the
+            # pending CF and the completion backfill (:meth:`complete_recovery`)
+            # will stamp it at end of recovery. Routing here on the per-record
+            # header — not on the latched flag — is the §6.2 fix.
+            batch.put(key, value, cf_handle)
         elif is_main_cf:
             stamped, stamp = self._normalize_replay_value(value)
-            recovery_now = self._high_water_ms
-            if (
-                stamp != SENTINEL_NEVER
-                and recovery_now is not None
-                and stamp <= recovery_now
-            ):
-                # Already-expired entry; skip both the main and the index
-                # write. Roll the changelog offset forward so recovery
-                # progresses.
+            # Judge expiry against the current wallclock captured once per
+            # recovery session, NOT against a stamp-ratcheted pseudo-clock
+            # (the old ``recovery_now = self._high_water_ms`` ratchet collapsed
+            # uniform-expiry backfilled stores; see spec-recovery-wallclock.md
+            # §2/§3). Capture lazily on the first stamped default-CF replay and
+            # seed the post-recovery high-water to the same reference so the
+            # recovery→live boundary is continuous (§3.3). Sentinel-stamped
+            # entries are never compared and always survive (§7).
+            expired = False
+            if stamp != SENTINEL_NEVER:
+                if self._recovery_now_ms is None:
+                    self._recovery_now_ms = self._now_ms()
+                    self._high_water_ms = self._recovery_now_ms
+                recovery_now_ms = self._recovery_now_ms
+                expired = stamp <= recovery_now_ms
+            if expired:
+                # Already-expired against wallclock-at-recovery; skip both the
+                # main and the index write. Roll the changelog offset forward
+                # so recovery progresses. The __ttl_index__ stays consistent
+                # with survivors — a dropped entry writes neither (§7).
                 pass
             else:
                 batch.put(key, stamped, cf_handle)
@@ -231,13 +356,335 @@ class RocksDBStorePartition(StorePartition):
         self._update_changelog_offset(batch=batch, offset=offset)
         self._write(batch)
 
-        # Track the highest stamp seen as a recovery high-water — this is the
-        # only event-time signal available on a fresh partition. Sentinel
-        # stamps don't advance it.
-        if value is not None and is_main_cf:
-            _, stamp = self._normalize_replay_value(value)
-            if stamp != SENTINEL_NEVER:
-                self.advance_high_water(stamp)
+    def complete_recovery(self) -> None:
+        """
+        Recovery-finalize hook (spec §8.8). Called once by the recovery manager
+        after this partition has replayed its changelog up to the high-watermark
+        and before it is handed to live processing.
+
+        Completes an **interrupted legacy-TTL migration**. During replay a MIXED
+        changelog (some ``__ttl_stamped__``-header records + some header-absent
+        legacy records) flips the partition into TTL mode on the first stamped
+        record (so ``_recovery_saw_stamped`` is True) and lands the leftover
+        legacy records verbatim while censusing their keys into
+        ``__ttl_backfill_pending__``. Those leftovers are otherwise stranded as
+        never-expiring forever (the live ``ttl=`` write sees an already-flipped
+        partition and the backfill gate short-circuits — OP-4).
+
+        Trigger (only the MIXED shape — §7):
+
+        - if NOT ``_recovery_saw_stamped`` → all-legacy first-enablement (§8.6);
+          the live first-``ttl=``-write backfill owns it. No-op.
+        - if the pending CF is empty → all-stamped / fully-migrated (§8.7);
+          nothing to complete. No-op.
+        - else (stamped seen AND pending non-empty) → incomplete migration:
+            - if ``legacy_records_ttl is None`` → **reject loudly** with the
+              operator-callable :class:`IncompatibleStateStoreError` (§8): the
+              field is required to finish the migration; restore it and redeploy
+              (do NOT delete state).
+            - else → chunk-backfill exactly the pending keys, stamping each with
+              ``self._recovery_now_ms + _ttl_to_ms(legacy_records_ttl)`` (wallclock-
+              at-rebuild, §5), writing the ``__ttl_index__`` entry, producing a
+              header-bearing stamped record to the changelog, and deleting the key
+              from the pending CF as the chunk commits (the delete IS the durable
+              progress cursor — §6).
+
+        Un-gated by the live flip flag (the partition is already flipped). Idempotent
+        and convergent across interrupts: an interrupted run leaves the still-pending
+        keys in the CF; the next cold restore rebuilds pending from the (now-more-
+        stamped) changelog and resumes over exactly the remainder.
+        """
+        if not type(self).uses_ttl_stamps:
+            # A subclass opted out (windowed / timestamped): the class-level
+            # census gate never fired, so there is nothing to complete or clean.
+            return
+        if not self._recovery_saw_stamped:
+            # No __ttl_stamped__ record was replayed this session, so there is no
+            # migration to complete: a pure-legacy first-enablement (§8.6, owned
+            # by the live first-``ttl=``-write backfill) or an all-legacy replay
+            # on an already-flipped store. Either way the class-level census gate
+            # may have PUT header-absent legacy keys into __ttl_backfill_pending__
+            # (MIXED detection has to census BEFORE the first stamped record can
+            # distinguish them). Those entries are orphans with no completion pass
+            # to drain them, so discard them now — a pure-legacy store then ends
+            # recovery with an empty/absent pending CF and no lasting overhead
+            # (Bug 3, spec-incomplete-migration-recovery.md §8.8).
+            self._discard_backfill_pending()
+            return
+        if not self.uses_ttl_stamps:
+            # Defensive: a stamped record was seen but the partition is somehow
+            # not flipped (the same header flips it, so this is unreachable in
+            # practice). Do not run completion on an unflipped partition.
+            return
+
+        pending_count = self._count_backfill_pending()
+        if pending_count == 0:
+            # All-stamped / fully-migrated changelog (§8.7): nothing leftover.
+            return
+
+        legacy_records_ttl = self._legacy_records_ttl
+        if legacy_records_ttl is None:
+            # Config-absent (wrinkle #1, §8): the replay finished cleanly (no data
+            # lost / corrupted), but completion needs a duration it does not have.
+            # Reject loudly with an operator-callable message — silently landing
+            # the leftovers as never-expire is exactly the OP-4 bug being fixed.
+            raise self._reject_incomplete_migration_no_ttl(pending_count)
+
+        # Wallclock-at-rebuild expiry (wrinkle #2, §5). ``_recovery_now_ms`` was
+        # captured on the first stamped default-CF replay (which is exactly when
+        # ``_recovery_saw_stamped`` was set), so it is normally populated here;
+        # capture defensively if a stamped record was seen but no non-sentinel
+        # stamp ever set it.
+        if self._recovery_now_ms is None:
+            self._recovery_now_ms = self._now_ms()
+            self._high_water_ms = self._recovery_now_ms
+        expires_at_ms = self._recovery_now_ms + _ttl_to_ms(legacy_records_ttl)
+
+        logger.info(
+            "Recovery: completing interrupted legacy-TTL migration at path=%s; "
+            "%d leftover legacy record(s) will be stamped with expiry=%d "
+            "(wallclock-at-rebuild + legacy_records_ttl).",
+            self._path,
+            pending_count,
+            expires_at_ms,
+        )
+        completed = self._complete_pending_backfill(
+            expires_at_ms=expires_at_ms,
+            chunk_size=self._legacy_backfill_chunk_size,
+        )
+        logger.info(
+            "Recovery: completed legacy-TTL migration at path=%s; stamped %d "
+            "leftover record(s); __ttl_backfill_pending__ is now empty.",
+            self._path,
+            completed,
+        )
+
+    def _count_backfill_pending(self) -> int:
+        """Count keys currently in the ``__ttl_backfill_pending__`` census CF."""
+        pending_cf = self.get_or_create_column_family(TTL_BACKFILL_PENDING_CF_NAME)
+        count = 0
+        for _ in pending_cf.keys():
+            count += 1
+        return count
+
+    def _discard_backfill_pending(self) -> None:
+        """
+        Drop the ``__ttl_backfill_pending__`` census CF wholesale (Bug 3 hygiene,
+        spec-incomplete-migration-recovery.md §8.8).
+
+        Called from :meth:`complete_recovery` when no ``__ttl_stamped__`` record
+        was replayed this session: the class-level census gate may have PUT
+        header-absent legacy keys into the pending CF (MIXED detection must census
+        before it can tell stamped from legacy), but with no completion pass those
+        entries are orphans. Dropping the whole CF is O(1) versus O(pending) per-
+        key deletes — the right choice for a large pure-legacy store where every
+        replayed record was censused. Safe because the pending CF is not consulted
+        again in this partition's lifetime: a pure-legacy store's later live
+        backfill uses the separate ``__ttl_backfill_stamped__`` ledger, and
+        recovery-completion does not re-run.
+        """
+        self._drop_local_cf_if_exists(TTL_BACKFILL_PENDING_CF_NAME)
+
+    def _drop_local_cf_if_exists(self, cf_name: str) -> None:
+        """
+        Drop a local-only bookkeeping CF if it exists, evicting it from the CF /
+        handle caches so a later :meth:`get_or_create_column_family` recreates it
+        empty. Never raises: a cleanup failure must not fail recovery or open.
+        """
+        try:
+            if cf_name in self._db.list_cf(self._path):
+                self._db.drop_column_family(cf_name)
+        except Exception:
+            logger.warning(
+                "Failed to drop local bookkeeping CF %s at %s; leaving it in "
+                "place (harmless, never consulted after this point).",
+                cf_name,
+                self._path,
+                exc_info=True,
+            )
+        finally:
+            self._cf_cache.pop(cf_name, None)
+            self._cf_handle_cache.pop(cf_name, None)
+
+    def _cleanup_completed_backfill_bookkeeping(self) -> None:
+        """
+        One-time post-migration cleanup, run on the first open of a partition
+        that is already flipped into TTL mode. A completed in-place live backfill
+        (:meth:`backfill_legacy_records`) leaves two dead artifacts behind: the
+        ``__ttl_backfill_stamped__`` ledger CF and the ``__ttl_backfill_progress__``
+        counter. Once the flip is durable the backfill never re-runs, so neither
+        is ever consulted again; drop them so a migrated store carries no lasting
+        overhead (parallels the Bug 3 pending-CF hygiene on the recovery path).
+
+        Gated on the counter's presence so the common path (empty-store flip /
+        already-cleaned) does exactly one metadata read and no-ops, and the work
+        runs at most once (the counter is deleted here). Crash-safe: it runs only
+        when ``__ttl_enabled__`` is durably set, so dropping the resume ledger can
+        never strand an in-progress migration (a still-legacy interrupted backfill
+        never reaches this branch and keeps its ledger).
+        """
+        metadata_cf = self.get_or_create_column_family(METADATA_CF_NAME)
+        if metadata_cf.get(TTL_BACKFILL_PROGRESS_KEY, default=None) is None:
+            return
+        self._drop_local_cf_if_exists(TTL_BACKFILL_STAMPED_CF_NAME)
+        batch = WriteBatch(raw_mode=True)
+        batch.delete(
+            TTL_BACKFILL_PROGRESS_KEY,
+            self.get_column_family_handle(METADATA_CF_NAME),
+        )
+        self._write(batch)
+
+    def _complete_pending_backfill(
+        self,
+        expires_at_ms: int,
+        chunk_size: int,
+    ) -> int:
+        """
+        Chunk-backfill the leftover legacy keys censused in
+        ``__ttl_backfill_pending__`` (spec §8.8 §6). Mirrors
+        :meth:`backfill_legacy_records` but drives its census from the pending CF
+        instead of the full default CF, and uses the pending-CF delete as its
+        durable progress cursor (no integer cursor needed — a key leaves pending
+        only once it has been stamped + indexed + produced atomically).
+
+        Per chunk (up to ``chunk_size`` pending keys, byte-sorted):
+
+        1. Point-get the key's current default-CF value; wrap it whole with
+           ``encode_ttl_value(expires_at_ms, value)``, write the ``__ttl_index__``
+           entry, and delete the key from the pending CF — all in one WriteBatch.
+        2. Produce the chunk's stamped + header-bearing default-CF records to the
+           changelog, then flush so the producer queue stays bounded.
+        3. Commit the WriteBatch with the raw writer (no sweep — the high-water is
+           seeded to wallclock-at-rebuild and the leftovers expire in the future).
+
+        :return: count of leftover records stamped on this run.
+        """
+        self.get_or_create_column_family(TTL_INDEX_CF_NAME)
+        pending_cf = self.get_or_create_column_family(TTL_BACKFILL_PENDING_CF_NAME)
+        default_cf = self.get_or_create_column_family("default")
+        default_handle = self.get_column_family_handle("default")
+        index_handle = self.get_column_family_handle(TTL_INDEX_CF_NAME)
+        pending_handle = self.get_column_family_handle(TTL_BACKFILL_PENDING_CF_NAME)
+
+        headers: Optional[HeadersMapping] = None
+        if self._changelog_producer is not None:
+            headers = {
+                CHANGELOG_CF_MESSAGE_HEADER: "default",
+                # Completion runs at recovery with no triggering live message, so
+                # there are no processed offsets to encode (cf. the live backfill).
+                CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER: json_dumps(None),
+                # Completion records are stamped, so they carry the §8.7 bit; a
+                # subsequent restore then sees an all-stamped changelog and never
+                # re-enters completion (§6).
+                CHANGELOG_TTL_STAMPED_HEADER: b"\x01",
+            }
+
+        # Total leftover count for the DEBUG progress denominator (logging only).
+        # The pending CF shrinks as the loop deletes stamped keys, so capture it
+        # once up front — but only when DEBUG is on, so the census scan never
+        # runs at INFO. ``stamped_count`` is the cumulative numerator.
+        total_pending = (
+            self._count_backfill_pending() if logger.isEnabledFor(logging.DEBUG) else 0
+        )
+
+        stamped_count = 0
+        while True:
+            # CENSUS one chunk from the pending CF in byte-sorted order. The
+            # pending-CF delete (below) is the cursor, so each pass re-reads the
+            # current head of the CF — a key reappears only if its chunk did not
+            # commit (crash), in which case re-stamping it is harmless (whole-
+            # value-once on the raw legacy value, never on an already-stamped one).
+            chunk_keys: list[bytes] = []
+            for raw_key in pending_cf.keys():
+                chunk_keys.append(cast(bytes, raw_key))
+                if len(chunk_keys) >= chunk_size:
+                    break
+            if not chunk_keys:
+                break
+
+            batch = WriteBatch(raw_mode=True)
+            produce: list[tuple[bytes, bytes]] = []
+            for key in chunk_keys:
+                raw_value = default_cf.get(key, default=None)
+                if raw_value is None:
+                    # Censused key whose default-CF entry vanished (tombstoned
+                    # since census). Nothing to stamp; just drop the stale
+                    # pending entry so the cursor advances.
+                    batch.delete(key, pending_handle)
+                    continue
+                stamped = encode_ttl_value(expires_at_ms, cast(bytes, raw_value))
+                batch.put(key, stamped, default_handle)
+                batch.put(encode_index_key(expires_at_ms, key), b"", index_handle)
+                batch.delete(key, pending_handle)
+                produce.append((key, stamped))
+                stamped_count += 1
+
+            if self._changelog_producer is not None and produce:
+                for key, stamped in produce:
+                    self._changelog_producer.produce(
+                        key=key, value=stamped, headers=headers
+                    )
+                self._changelog_producer.flush()
+
+            # COMMIT atomically: default puts + index puts + pending deletes. The
+            # pending deletes are the durable cursor — a crash before this commit
+            # leaves the chunk's keys in pending and the next pass redoes them.
+            self._write(batch)
+
+            # PROGRESS: one DEBUG line per chunk on the OP-4 recovery-completion
+            # path, distinct from the live backfill message so the source is
+            # clear in logs. Denominator is the initial leftover census; the
+            # caller still emits the final "completed … migration" log at INFO.
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(
+                    "Recovery: legacy-TTL migration completion progress: "
+                    "%d / %d leftover record(s) stamped path=%s",
+                    stamped_count,
+                    total_pending,
+                    self._path,
+                )
+
+            del batch, produce
+
+        return stamped_count
+
+    def _reject_incomplete_migration_no_ttl(
+        self, pending_count: int
+    ) -> "IncompatibleStateStoreError":
+        """
+        Build (and log) the operator-callable ERROR raised when a MIXED
+        (incomplete-migration) changelog is cold-restored but
+        ``legacy_records_ttl`` is absent from config (spec §8). The caller
+        ``raise``s the returned exception.
+
+        Distinct from :meth:`reject_ttl_on_populated_store` (enable-on-populated):
+        here the migration is already in progress and merely needs the duration to
+        finish. The message names ``legacy_records_ttl``, states the leftover
+        count, and points at restoring the field + redeploying — NOT at deleting
+        state (Quix Cloud has no customer-callable state reset).
+        """
+        msg = (
+            f"IncompatibleStateStoreError: state store at {self._path!r} has an "
+            f"incomplete legacy-TTL migration: {pending_count} leftover legacy "
+            "record(s) replayed from a MIXED changelog were never stamped "
+            "(a previous backfill was interrupted). Completing the migration "
+            "requires a uniform expiry for these records, but "
+            "legacy_records_ttl is not set. Restore "
+            "RocksDBOptions(legacy_records_ttl=timedelta(...)) in config and "
+            "redeploy: the partition will stamp the leftover records "
+            "(expiry = wallclock-at-rebuild + legacy_records_ttl) and finish the "
+            "migration. Do NOT delete the state directory — the leftover records "
+            "are intact and only need the expiry to be stamped."
+        )
+        logger.error(
+            msg,
+            extra={
+                "state_store_path": self._path,
+                "pending_leftover_count": pending_count,
+                "operator_action": "restore_legacy_records_ttl",
+            },
+        )
+        return IncompatibleStateStoreError(msg)
 
     def write(
         self,
@@ -316,12 +763,14 @@ class RocksDBStorePartition(StorePartition):
         # It may be None if changelog topics are disabled
         if changelog_offset is not None:
             self._update_changelog_offset(batch=batch, offset=changelog_offset)
-        logger.debug(
-            f"Flushing state changes to the disk "
-            f'path="{self.path}" '
-            f"changelog_offset={changelog_offset} "
-            f"bytes_total={batch.size_in_bytes()}"
-        )
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                'Flushing state changes to the disk path="%s" '
+                "changelog_offset=%s bytes_total=%d",
+                self.path,
+                changelog_offset,
+                batch.size_in_bytes(),
+            )
 
         self._write(batch)
 
@@ -395,30 +844,313 @@ class RocksDBStorePartition(StorePartition):
         self.get_or_create_column_family(TTL_INDEX_CF_NAME)
         self.uses_ttl_stamps = True
 
+    def backfill_legacy_records(
+        self,
+        expires_at_ms: int,
+        changelog_producer: Optional[ChangelogProducer],
+        processed_offsets: Optional[dict[str, int]],
+        staged_default_keys: set[bytes],
+        chunk_size: int,
+    ) -> int:
+        """
+        Provably-complete backfill (Fix A, spec ``spec-backfill-completeness.md``
+        §3): census the full default-CF key list FIRST, then chunk over that
+        frozen list, point-getting each value fresh and re-stamping it with a
+        uniform ``expires_at_ms`` expiry. Persisting and producing each chunk
+        before reading the next bounds peak transient memory to one chunk (plus
+        the key-list census) regardless of total store size.
+
+        Called by the transaction layer from ``prepare()`` when a TTL write is
+        detected on a partition whose default CF is **populated** *and*
+        ``legacy_records_ttl`` is set (the backfill branch of
+        ``_maybe_flip_or_reject``). The companion empty-store flip path
+        (:meth:`flip_into_ttl_mode`) handles the empty-CF case.
+
+        **Why census-then-chunk (no iterate-while-write).** The earlier design
+        held a single live forward iterator over the default CF *while* writing
+        re-stamped values back into that same CF. At real scale (200k+ keys,
+        SST flushes/compactions triggered mid-iteration) that read-while-write
+        pattern can skip or duplicate keys — and a single skipped key flips a
+        populated store into TTL mode with an un-stamped value, which the read
+        path then mis-strips → corruption (the live incident). Instead we freeze
+        the set of keys to stamp up front via a single ``keys()`` scan and drive
+        the write loop from that frozen Python list, point-getting each value
+        with ``default_cf.get(key)``. The read driver is independent of the CF's
+        live structure, so every census key is visited **exactly once**.
+
+        **Stamped-key ledger resume (crash-safe against interleaved writes).**
+        This **supersedes** the original integer-cursor-over-a-re-sorted-list
+        resume of spec §3.3, which double-wrapped/skipped keys when a legacy
+        write landed between a crash and the resume (the sorted census shifted
+        under a stale integer index — shortcut 73191 review; see
+        ``fix-cursor-and-pending-hygiene.md``). Instead, each chunk records the
+        keys it stamped in the local-only ``__ttl_backfill_stamped__`` ledger CF,
+        PUT in the **same WriteBatch** as the stamped values so ledger and data
+        commit atomically. The census then excludes both ``staged_default_keys``
+        and every ledger member. **Invariant:** on any (re-)run the census is
+        exactly ``{keys on disk} − {staged} − {already stamped}``, which is
+        insensitive to population changes across the crash gap — a fresh legacy
+        key written during the gap is simply a not-yet-stamped census key and
+        gets stamped; an already-stamped key is a ledger member and is excluded,
+        so it is never re-read and never re-wrapped (no double-wrap). No integer
+        index into a re-sorted list is ever consulted for resume.
+
+        **Overwritten-key rule.** A ledger key that is *overwritten by a plain
+        (non-``ttl=``) legacy write during the crash→resume gap* is left as that
+        raw value (it stays a ledger member and is excluded from the resumed
+        census); Fix B's fail-safe read then treats it as never-expires — which
+        matches the semantics of the plain write that produced it. An overwrite
+        via a ``ttl=`` write cannot happen out-of-band during the gap: the
+        partition is still legacy, so such a write itself *resumes* the backfill
+        rather than landing a stamped value. No stamp-time value inspection and
+        no write-path ledger maintenance is therefore required.
+
+        **No format inference.** Every value read here is wrapped whole with
+        ``encode_ttl_value(expires_at_ms, value)`` exactly once (census members
+        are by construction not-yet-stamped). ``_looks_like_stamped_value`` is
+        **not** used anywhere in this path; it survives only for the recovery
+        flag-discovery path.
+
+        Per chunk (up to ``chunk_size`` keys from the frozen census list):
+
+        1. Point-get each key's value fresh; wrap whole into a ``WriteBatch`` of
+           default-CF puts + ``__ttl_index__`` puts
+           (``encode_index_key(expires_at_ms, key)``) + a ``__ttl_backfill_stamped__``
+           ledger put per key. Keys deleted since the census (``get`` → ``None``)
+           are skipped and NOT ledgered. ``staged_default_keys`` were already
+           excluded by the census.
+        2. Produce the chunk's re-stamped default-CF records to the changelog
+           (the index and ledger CFs are local-only and are never produced), then
+           ``flush()`` the producer so its in-flight queue stays bounded.
+        3. Stage the observability progress counter into the same batch and commit
+           with the raw writer ``self._write(batch)`` — NOT ``self.write(...)`` —
+           so no sweep runs (the partition is still legacy) and the per-chunk
+           default + index + ledger puts commit atomically together.
+        4. Drop the chunk's structures before reading the next.
+
+        After the last chunk lands the caller writes ``__ttl_enabled__`` / the
+        format version **last**, so the flip is durable only once every census
+        key has been stamped (§3.4 flag-last ordering). The ledger + progress
+        counter are dead weight once flipped and are dropped on the next flipped
+        open (:meth:`_cleanup_completed_backfill_bookkeeping`).
+
+        :param expires_at_ms: uniform absolute event-time expiry to stamp on
+            every pre-existing record (``high_water + legacy_records_ttl``).
+        :param changelog_producer: the partition's changelog producer, or
+            ``None`` when changelog topics are disabled (chunks still persist
+            locally; production is skipped).
+        :param processed_offsets: ``<topic: offset>`` of the latest processed
+            message, encoded into the changelog headers exactly as the base
+            ``_prepare`` path does.
+        :param staged_default_keys: serialized default-CF keys present in the
+            current transaction's update cache (genuine in-batch user writes).
+            They are skipped here and re-stamped with their own true pending
+            stamp by ``_restamp_default_cf_cache_for_flip``.
+        :return: count of pre-existing records re-stamped on this run (already-
+            stamped ledger members, staged, and deleted-since-census keys are not
+            counted).
+        """
+        # Pre-create the index + stamped-ledger CFs so the per-chunk batch never
+        # races a CF creation.
+        self.get_or_create_column_family(TTL_INDEX_CF_NAME)
+        stamped_ledger = self.get_or_create_column_family(TTL_BACKFILL_STAMPED_CF_NAME)
+        default_cf = self.get_or_create_column_family("default")
+        default_handle = self.get_column_family_handle("default")
+        index_handle = self.get_column_family_handle(TTL_INDEX_CF_NAME)
+        metadata_handle = self.get_column_family_handle(METADATA_CF_NAME)
+        stamped_handle = self.get_column_family_handle(TTL_BACKFILL_STAMPED_CF_NAME)
+
+        headers: Optional[HeadersMapping] = None
+        if changelog_producer is not None:
+            headers = {
+                CHANGELOG_CF_MESSAGE_HEADER: "default",
+                CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER: json_dumps(
+                    processed_offsets
+                ),
+                # Backfill records are always stamped (re-stamped legacy values),
+                # so they unconditionally carry the §8.7 stamped bit. The base
+                # ``_prepare`` cannot set it for these because they are produced
+                # directly here, before ``uses_ttl_stamps`` is flipped to True.
+                CHANGELOG_TTL_STAMPED_HEADER: b"\x01",
+            }
+
+        # Step 0 — CENSUS: materialize the not-yet-stamped key list ONCE, with no
+        # concurrent writes to the default CF (backfill is sequential inside
+        # prepare(); processing is paused). Keys only — values are point-got fresh
+        # per chunk. ``sorted`` makes the order explicit and reproducible.
+        # ``staged_default_keys`` are excluded (re-stamped only by the caller's
+        # ``_restamp_default_cf_cache_for_flip``); ``__ttl_backfill_stamped__``
+        # ledger members are excluded because a prior interrupted run already
+        # stamped them — this is the crash-safe resume that makes the census
+        # insensitive to interleaved legacy writes (see the docstring invariant).
+        # The ledger membership test is a point-get on the (separate) ledger CF,
+        # never on the default CF, and never inspects value content.
+        key_list: list[bytes] = sorted(
+            cast(bytes, key)
+            for key in default_cf.keys()
+            if cast(bytes, key) not in staged_default_keys
+            and cast(bytes, key) not in stamped_ledger
+        )
+        total = len(key_list)
+        if total > _CENSUS_SPILL_WARN_THRESHOLD:
+            logger.warning(
+                "TTL legacy backfill censused %d keys at path=%s; the key list "
+                "is held in memory (~80 B/key). For multi-million-key stores a "
+                "spill-to-disk census will be needed (OP-BC-2); proceeding "
+                "in memory for now.",
+                total,
+                self._path,
+            )
+
+        # STARTED bracket (lifecycle log). One INFO line once the census count
+        # is known, before the chunk loop, so an operator sees the migration
+        # bracket open even when the app's periodic status logger is off in
+        # production. The matching FINISHED line is emitted after the last
+        # chunk commits; the per-chunk progress line sits between them and the
+        # caller's "Backfilled N … flipped" log confirms the flip.
+        logger.info(
+            "TTL legacy backfill STARTED: %d records to re-stamp path=%s",
+            total,
+            self._path,
+        )
+
+        # Cumulative count of records stamped by any prior interrupted run, used
+        # only to keep ``__ttl_backfill_progress__`` a monotonic observability
+        # counter across resumes. Resume CORRECTNESS rides the stamped-ledger
+        # census exclusion above, NOT this integer (that was the §3.3 bug).
+        prior_stamped = self._load_backfill_progress()
+
+        restamped = 0
+        run_pos = 0
+        while run_pos < total:
+            chunk_keys = key_list[run_pos : run_pos + chunk_size]
+
+            # RE-STAMP this chunk: point-get each value fresh and wrap whole.
+            batch = WriteBatch(raw_mode=True)
+            produce: list[tuple[bytes, bytes]] = []
+            for key in chunk_keys:
+                raw_value = default_cf.get(key, default=None)
+                if raw_value is None:
+                    # Deleted since the census — nothing to stamp, no index
+                    # entry to create, not ledgered. Skip cleanly (§5 / §8).
+                    continue
+                stamped = encode_ttl_value(expires_at_ms, cast(bytes, raw_value))
+                batch.put(key, stamped, default_handle)
+                batch.put(encode_index_key(expires_at_ms, key), b"", index_handle)
+                # LEDGER this key as stamped IN THE SAME batch, so a crash cannot
+                # leave a key stamped-on-disk but absent from the resume ledger
+                # (which would double-wrap it on the next run).
+                batch.put(key, b"", stamped_handle)
+                produce.append((key, stamped))
+                restamped += 1
+
+            # PRODUCE this chunk's re-stamped default-CF records, then flush so
+            # the producer's in-flight queue does not grow across chunks.
+            if changelog_producer is not None and produce:
+                for key, stamped in produce:
+                    changelog_producer.produce(key=key, value=stamped, headers=headers)
+                changelog_producer.flush()
+
+            # ADVANCE the observability counter IN THE SAME batch as the chunk's
+            # puts. It is cumulative (prior runs + this run) so it never regresses
+            # across a resume; it is NOT read back for resume decisions.
+            run_pos += len(chunk_keys)
+            batch.put(
+                TTL_BACKFILL_PROGRESS_KEY,
+                int_to_bytes(prior_stamped + restamped),
+                metadata_handle,
+            )
+
+            # COMMIT this chunk atomically (default + index + ledger puts +
+            # progress counter).
+            self._write(batch)
+
+            # PROGRESS: one DEBUG line per chunk (~chunk_size records, default
+            # 10k) so a large/long backfill is observable instead of looking
+            # like a hang. ``run_pos`` is this run's census position; the final
+            # completion log is still emitted by the caller.
+            logger.debug(
+                "TTL legacy backfill progress: %d / %d records re-stamped path=%s",
+                run_pos,
+                total,
+                self._path,
+            )
+
+            # RELEASE: drop the chunk's structures before the next iteration.
+            del batch, produce
+
+        # FINISHED bracket (lifecycle log). Closes the STARTED line above after
+        # the last chunk has committed and before returning to the caller. The
+        # caller's "Backfilled N … flipped (legacy_records_ttl)" log is the
+        # separate flip confirmation; this line brackets the backfill loop.
+        logger.info(
+            "TTL legacy backfill FINISHED: %d records re-stamped path=%s",
+            restamped,
+            self._path,
+        )
+
+        return restamped
+
+    def _load_backfill_progress(self) -> int:
+        """
+        Read the persisted backfill progress counter ``__ttl_backfill_progress__``
+        from the metadata CF. Absent / undecodable = ``0`` (first run / no
+        progress yet, or a stale/garbled value from an older build — handled
+        gracefully by restarting the count at 0).
+
+        Since the Bug-1 fix this is an **observability counter only** (cumulative
+        records stamped so far); resume correctness rides the
+        ``__ttl_backfill_stamped__`` ledger census exclusion, not this integer
+        (see :meth:`backfill_legacy_records`). A stale integer left by the old
+        §3.3 integer-cursor build is therefore harmless: it can only make the
+        counter's starting value wrong, never skip or re-stamp a key.
+        """
+        metadata_cf = self.get_or_create_column_family(METADATA_CF_NAME)
+        raw = metadata_cf.get(TTL_BACKFILL_PROGRESS_KEY, default=None)
+        if raw is None:
+            return 0
+        try:
+            return int_from_bytes(cast(bytes, raw))
+        except Exception:
+            logger.warning(
+                "Failed to decode TTL backfill progress cursor at %s; "
+                "restarting the backfill from the beginning.",
+                self._path,
+            )
+            return 0
+
     def reject_ttl_on_populated_store(self) -> "IncompatibleStateStoreError":
         """
         Build (and log) the structured ERROR raised when a TTL write lands on
-        a partition that has existing un-stamped data. The caller is expected
-        to ``raise`` the returned exception; emitting the log line here keeps
-        the message format in one place.
+        a partition that has existing un-stamped data **and** the operator did
+        not opt in to backfill. The caller is expected to ``raise`` the
+        returned exception; emitting the log line here keeps the message format
+        in one place.
 
-        Spec §6.4.1 — silent TTL drop is the worst possible failure mode for
-        the dedup workload this feature exists for, so we halt loudly.
+        Silent TTL drop is the worst possible failure mode for the dedup
+        workload this feature exists for, so we halt loudly. The message points
+        at the operator-callable fix (set ``legacy_records_ttl``), not at
+        deleting the state directory — Quix Cloud has no customer-callable
+        state reset.
         """
         approx_keys = self.estimated_main_cf_key_count()
         msg = (
             f"IncompatibleStateStoreError: state store at {self._path!r} "
             f"has {approx_keys} un-stamped existing entries; cannot enable "
-            "TTL on a populated store. To enable TTL: stop the application, "
-            f"delete the state directory at {self._path!r}, restart — "
-            "recovery will rebuild from the changelog with TTL enabled."
+            "TTL on a populated store without backfilling them. To enable "
+            "TTL in place, set a uniform expiry for the existing records via "
+            "RocksDBOptions(legacy_records_ttl=timedelta(...)) and redeploy: "
+            "the partition will re-stamp every existing record with an expiry "
+            "of high-water + legacy_records_ttl (event-time at enable) and "
+            "flip into TTL mode without deleting any state. New records keep "
+            "their true event-time expiry."
         )
         logger.error(
             msg,
             extra={
                 "state_store_path": self._path,
                 "approx_key_count": approx_keys,
-                "operator_action": "delete_state_directory_and_recover",
+                "operator_action": "set_legacy_records_ttl",
             },
         )
         return IncompatibleStateStoreError(msg)
@@ -696,10 +1428,10 @@ class RocksDBStorePartition(StorePartition):
                 main_expires_at, _ = decode_ttl_value(cast(bytes, main_value))
             except ValueError:
                 logger.warning(
-                    "Malformed TTL value at %s for key %r; dropping orphan "
+                    "Malformed TTL value at %s for key prefix=%r; dropping orphan "
                     "index entry but leaving main untouched.",
                     self._path,
-                    user_key,
+                    user_key[:16],
                 )
                 delete_index_if_not_staged(index_key)
                 continue
@@ -800,8 +1532,14 @@ class RocksDBStorePartition(StorePartition):
 
     def _looks_like_stamped_value(self, value: bytes) -> bool:
         """
-        Heuristic used by the recovery flag-discovery path to decide whether
-        a replayed default-CF value originated from a flipped store.
+        Value-content recognizer for a stamped default-CF value.
+
+        NO LONGER ON THE RECOVERY PATH (spec §8.7). Recovery flip-discovery now
+        routes purely on the out-of-band ``__ttl_stamped__`` changelog header
+        (see ``recover_from_changelog_message``), because this content heuristic
+        false-positives on legacy 8-byte epoch-ms values (OP-3). Retained because
+        ``test_backfill_completeness`` spies on it to assert the backfill never
+        byte-sniffs; it has no remaining live production caller.
 
         Conservative recognizer: the value must be at least 8 bytes long,
         and the leading 8 BE bytes must be either:
