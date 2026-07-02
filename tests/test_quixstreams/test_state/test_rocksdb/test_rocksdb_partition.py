@@ -1,4 +1,5 @@
 import time
+from datetime import timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -10,6 +11,8 @@ from quixstreams.state.rocksdb import (
     RocksDBStorePartition,
 )
 from quixstreams.state.rocksdb.exceptions import RocksDBCorruptedError
+from quixstreams.state.rocksdb.metadata import TTL_INDEX_CF_NAME
+from quixstreams.state.rocksdb.ttl_codec import encode_index_key
 from quixstreams.state.serialization import append_integer
 
 
@@ -167,6 +170,54 @@ class TestRocksDBStorePartition:
 
     def test_ensure_metadata_cf(self, store_partition: RocksDBStorePartition):
         assert store_partition.get_or_create_column_family("__metadata__")
+
+    def test_ttl_sweep_preserves_rewritten_same_stamp_index(
+        self, store_partition_factory
+    ):
+        prefix = b"__key__"
+        ttl = timedelta(milliseconds=100)
+
+        with store_partition_factory() as partition:
+            tx1 = partition.begin()
+            tx1.set(key="k", value="v1", prefix=prefix, timestamp=1000, ttl=ttl)
+            user_key = tx1._serialize_key(key="k", prefix=prefix)
+            index_key = encode_index_key(1100, user_key)
+            tx1.prepare(processed_offsets={"topic": 1})
+            tx1.flush(changelog_offset=1)
+
+            tx2 = partition.begin()
+            # Advance high-water while re-writing k with the same expired stamp.
+            # The sweep reads the old committed index key while the fresh index
+            # key is staged in the same WriteBatch.
+            tx2.set(
+                key="advance",
+                value="tick",
+                prefix=prefix,
+                timestamp=2000,
+                ttl=ttl,
+            )
+            tx2.set(key="k", value="v2", prefix=prefix, timestamp=1000, ttl=ttl)
+            tx2.prepare(processed_offsets={"topic": 2})
+            tx2.flush(changelog_offset=2)
+
+            index_cf = partition.get_or_create_column_family(TTL_INDEX_CF_NAME)
+            main_cf = partition.get_or_create_column_family("default")
+            assert index_cf.get(index_key, default=None) == b""
+            assert main_cf.get(user_key, default=None) is not None
+
+            tx3 = partition.begin()
+            tx3.set(
+                key="advance2",
+                value="tick",
+                prefix=prefix,
+                timestamp=2001,
+                ttl=ttl,
+            )
+            tx3.prepare(processed_offsets={"topic": 3})
+            tx3.flush(changelog_offset=3)
+
+            assert index_cf.get(index_key, default=None) is None
+            assert main_cf.get(user_key, default=None) is None
 
     @pytest.mark.parametrize(
         ["backwards", "expected"],

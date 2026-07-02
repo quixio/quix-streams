@@ -543,6 +543,31 @@ class TestPartitionTransaction:
                 CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER: dumps(processed_offsets),
             }
 
+    def test_ttl_refresh_after_expiry_survives_sweep(self, store_partition_factory):
+        """A key refreshed with a fresh TTL after its previous stamp expired must
+        survive the same-flush sweep. The sweep reads committed disk state, so it
+        must not delete a key the batch just re-wrote (regression: data loss).
+        """
+        from datetime import timedelta
+
+        prefix = b"__key__"
+        ttl = timedelta(milliseconds=100)
+        with store_partition_factory() as partition:
+            # t=1000: write k -> expires 1100
+            tx1 = partition.begin()
+            tx1.set(key="k", value="v1", prefix=prefix, timestamp=1000, ttl=ttl)
+            tx1.prepare(processed_offsets={"topic": 1})
+            tx1.flush(changelog_offset=1)
+
+            # t=2000: refresh k with a fresh ttl -> expires 2100 (still alive)
+            tx2 = partition.begin()
+            tx2.set(key="k", value="v2", prefix=prefix, timestamp=2000, ttl=ttl)
+            tx2.prepare(processed_offsets={"topic": 2})
+            tx2.flush(changelog_offset=2)
+
+            tx3 = partition.begin()
+            assert tx3.get(key="k", prefix=prefix) == "v2"
+
 
 class TestPartitionTransactionCache:
     def test_set_get_key_present(self, cache: PartitionTransactionCache):
