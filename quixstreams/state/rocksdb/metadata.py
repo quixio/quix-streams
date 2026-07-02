@@ -10,6 +10,7 @@ GLOBAL_COUNTER_KEY = b"__global_counter__"
 # locally, off the changelog.
 from quixstreams.state.metadata import (  # noqa: E402, F401
     TTL_BACKFILL_PENDING_CF_NAME,
+    TTL_BACKFILL_STAMPED_CF_NAME,
     TTL_INDEX_CF_NAME,
 )
 

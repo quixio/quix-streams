@@ -41,6 +41,7 @@ from .metadata import (
     STATE_FORMAT_VERSION_KEY,
     TTL_BACKFILL_PENDING_CF_NAME,
     TTL_BACKFILL_PROGRESS_KEY,
+    TTL_BACKFILL_STAMPED_CF_NAME,
     TTL_ENABLED_KEY,
     TTL_HIGH_WATER_KEY,
     TTL_INDEX_CF_NAME,
@@ -170,6 +171,9 @@ class RocksDBStorePartition(StorePartition):
             self._load_high_water()
             # Pre-create the index CF so writes never race a CF creation.
             self.get_or_create_column_family(TTL_INDEX_CF_NAME)
+            # Drop any dead live-backfill bookkeeping left by the migration that
+            # flipped this store (one-time; no-op once cleaned).
+            self._cleanup_completed_backfill_bookkeeping()
 
     @property
     def high_water_ms(self) -> Optional[int]:
@@ -390,14 +394,27 @@ class RocksDBStorePartition(StorePartition):
         keys in the CF; the next cold restore rebuilds pending from the (now-more-
         stamped) changelog and resumes over exactly the remainder.
         """
-        if not (type(self).uses_ttl_stamps and self.uses_ttl_stamps):
-            # Never flipped (pure-legacy partition) or a subclass opted out:
-            # there is no migration to complete.
+        if not type(self).uses_ttl_stamps:
+            # A subclass opted out (windowed / timestamped): the class-level
+            # census gate never fired, so there is nothing to complete or clean.
             return
         if not self._recovery_saw_stamped:
-            # All-legacy first-enablement (§8.6): even if the pending CF holds
-            # every key, completion does NOT run — the live first-``ttl=``-write
-            # backfill owns this case.
+            # No __ttl_stamped__ record was replayed this session, so there is no
+            # migration to complete: a pure-legacy first-enablement (§8.6, owned
+            # by the live first-``ttl=``-write backfill) or an all-legacy replay
+            # on an already-flipped store. Either way the class-level census gate
+            # may have PUT header-absent legacy keys into __ttl_backfill_pending__
+            # (MIXED detection has to census BEFORE the first stamped record can
+            # distinguish them). Those entries are orphans with no completion pass
+            # to drain them, so discard them now — a pure-legacy store then ends
+            # recovery with an empty/absent pending CF and no lasting overhead
+            # (Bug 3, spec-incomplete-migration-recovery.md §8.8).
+            self._discard_backfill_pending()
+            return
+        if not self.uses_ttl_stamps:
+            # Defensive: a stamped record was seen but the partition is somehow
+            # not flipped (the same header flips it, so this is unreachable in
+            # practice). Do not run completion on an unflipped partition.
             return
 
         pending_count = self._count_backfill_pending()
@@ -449,6 +466,73 @@ class RocksDBStorePartition(StorePartition):
         for _ in pending_cf.keys():
             count += 1
         return count
+
+    def _discard_backfill_pending(self) -> None:
+        """
+        Drop the ``__ttl_backfill_pending__`` census CF wholesale (Bug 3 hygiene,
+        spec-incomplete-migration-recovery.md §8.8).
+
+        Called from :meth:`complete_recovery` when no ``__ttl_stamped__`` record
+        was replayed this session: the class-level census gate may have PUT
+        header-absent legacy keys into the pending CF (MIXED detection must census
+        before it can tell stamped from legacy), but with no completion pass those
+        entries are orphans. Dropping the whole CF is O(1) versus O(pending) per-
+        key deletes — the right choice for a large pure-legacy store where every
+        replayed record was censused. Safe because the pending CF is not consulted
+        again in this partition's lifetime: a pure-legacy store's later live
+        backfill uses the separate ``__ttl_backfill_stamped__`` ledger, and
+        recovery-completion does not re-run.
+        """
+        self._drop_local_cf_if_exists(TTL_BACKFILL_PENDING_CF_NAME)
+
+    def _drop_local_cf_if_exists(self, cf_name: str) -> None:
+        """
+        Drop a local-only bookkeeping CF if it exists, evicting it from the CF /
+        handle caches so a later :meth:`get_or_create_column_family` recreates it
+        empty. Never raises: a cleanup failure must not fail recovery or open.
+        """
+        try:
+            if cf_name in self._db.list_cf(self._path):
+                self._db.drop_column_family(cf_name)
+        except Exception:
+            logger.warning(
+                "Failed to drop local bookkeeping CF %s at %s; leaving it in "
+                "place (harmless, never consulted after this point).",
+                cf_name,
+                self._path,
+                exc_info=True,
+            )
+        finally:
+            self._cf_cache.pop(cf_name, None)
+            self._cf_handle_cache.pop(cf_name, None)
+
+    def _cleanup_completed_backfill_bookkeeping(self) -> None:
+        """
+        One-time post-migration cleanup, run on the first open of a partition
+        that is already flipped into TTL mode. A completed in-place live backfill
+        (:meth:`backfill_legacy_records`) leaves two dead artifacts behind: the
+        ``__ttl_backfill_stamped__`` ledger CF and the ``__ttl_backfill_progress__``
+        counter. Once the flip is durable the backfill never re-runs, so neither
+        is ever consulted again; drop them so a migrated store carries no lasting
+        overhead (parallels the Bug 3 pending-CF hygiene on the recovery path).
+
+        Gated on the counter's presence so the common path (empty-store flip /
+        already-cleaned) does exactly one metadata read and no-ops, and the work
+        runs at most once (the counter is deleted here). Crash-safe: it runs only
+        when ``__ttl_enabled__`` is durably set, so dropping the resume ledger can
+        never strand an in-progress migration (a still-legacy interrupted backfill
+        never reaches this branch and keeps its ledger).
+        """
+        metadata_cf = self.get_or_create_column_family(METADATA_CF_NAME)
+        if metadata_cf.get(TTL_BACKFILL_PROGRESS_KEY, default=None) is None:
+            return
+        self._drop_local_cf_if_exists(TTL_BACKFILL_STAMPED_CF_NAME)
+        batch = WriteBatch(raw_mode=True)
+        batch.delete(
+            TTL_BACKFILL_PROGRESS_KEY,
+            self.get_column_family_handle(METADATA_CF_NAME),
+        )
+        self._write(batch)
 
     def _complete_pending_backfill(
         self,
@@ -774,44 +858,61 @@ class RocksDBStorePartition(StorePartition):
         with ``default_cf.get(key)``. The read driver is independent of the CF's
         live structure, so every census key is visited **exactly once**.
 
-        **Deterministic census order + persisted cursor (re-run safety, §3.3).**
-        ``default_cf.keys()`` yields keys in RocksDB byte-sorted order; we
-        ``sorted(...)`` the materialized list to make the order explicit and
-        reproducible across runs. Progress is tracked by an integer cursor ``N``
-        persisted under ``__ttl_backfill_progress__`` in the metadata CF, advanced
-        in the **same WriteBatch** as each chunk's puts. A crash mid-backfill
-        leaves the partition legacy (the flag is written LAST by the caller), so
-        a re-run re-censuses — producing the identical sorted list — and resumes
-        at key index ``N``: keys ``[0:N)`` are known done (skipped via the cursor,
-        **not** byte-sniffed) and keys ``[N:]`` are re-stamped. There is no
-        inference and no double-wrap: a resumed key is read fresh and wrapped
-        whole exactly once.
+        **Stamped-key ledger resume (crash-safe against interleaved writes).**
+        This **supersedes** the original integer-cursor-over-a-re-sorted-list
+        resume of spec §3.3, which double-wrapped/skipped keys when a legacy
+        write landed between a crash and the resume (the sorted census shifted
+        under a stale integer index — shortcut 73191 review; see
+        ``fix-cursor-and-pending-hygiene.md``). Instead, each chunk records the
+        keys it stamped in the local-only ``__ttl_backfill_stamped__`` ledger CF,
+        PUT in the **same WriteBatch** as the stamped values so ledger and data
+        commit atomically. The census then excludes both ``staged_default_keys``
+        and every ledger member. **Invariant:** on any (re-)run the census is
+        exactly ``{keys on disk} − {staged} − {already stamped}``, which is
+        insensitive to population changes across the crash gap — a fresh legacy
+        key written during the gap is simply a not-yet-stamped census key and
+        gets stamped; an already-stamped key is a ledger member and is excluded,
+        so it is never re-read and never re-wrapped (no double-wrap). No integer
+        index into a re-sorted list is ever consulted for resume.
 
-        **No format inference.** On the first run the partition is legacy by
-        precondition (flag absent), so every value is genuine legacy and is
-        wrapped whole with ``encode_ttl_value(expires_at_ms, value)``.
-        ``_looks_like_stamped_value`` is **not** used anywhere in this path; it
-        survives only for the recovery flag-discovery path.
+        **Overwritten-key rule.** A ledger key that is *overwritten by a plain
+        (non-``ttl=``) legacy write during the crash→resume gap* is left as that
+        raw value (it stays a ledger member and is excluded from the resumed
+        census); Fix B's fail-safe read then treats it as never-expires — which
+        matches the semantics of the plain write that produced it. An overwrite
+        via a ``ttl=`` write cannot happen out-of-band during the gap: the
+        partition is still legacy, so such a write itself *resumes* the backfill
+        rather than landing a stamped value. No stamp-time value inspection and
+        no write-path ledger maintenance is therefore required.
+
+        **No format inference.** Every value read here is wrapped whole with
+        ``encode_ttl_value(expires_at_ms, value)`` exactly once (census members
+        are by construction not-yet-stamped). ``_looks_like_stamped_value`` is
+        **not** used anywhere in this path; it survives only for the recovery
+        flag-discovery path.
 
         Per chunk (up to ``chunk_size`` keys from the frozen census list):
 
         1. Point-get each key's value fresh; wrap whole into a ``WriteBatch`` of
            default-CF puts + ``__ttl_index__`` puts
-           (``encode_index_key(expires_at_ms, key)``). Skip ``staged_default_keys``
-           (re-stamped by the caller) and keys deleted since the census
-           (``get`` → ``None``).
+           (``encode_index_key(expires_at_ms, key)``) + a ``__ttl_backfill_stamped__``
+           ledger put per key. Keys deleted since the census (``get`` → ``None``)
+           are skipped and NOT ledgered. ``staged_default_keys`` were already
+           excluded by the census.
         2. Produce the chunk's re-stamped default-CF records to the changelog
-           (the index CF is local-only and is rebuilt on recovery), then
+           (the index and ledger CFs are local-only and are never produced), then
            ``flush()`` the producer so its in-flight queue stays bounded.
-        3. Stage the advanced cursor into the same batch and commit with the raw
-           writer ``self._write(batch)`` — NOT ``self.write(...)`` — so no sweep
-           runs (the partition is still legacy) and the per-chunk default+index
-           puts + cursor commit atomically together.
+        3. Stage the observability progress counter into the same batch and commit
+           with the raw writer ``self._write(batch)`` — NOT ``self.write(...)`` —
+           so no sweep runs (the partition is still legacy) and the per-chunk
+           default + index + ledger puts commit atomically together.
         4. Drop the chunk's structures before reading the next.
 
-        After the cursor reaches ``len(key_list)`` the caller writes
-        ``__ttl_enabled__`` / the format version **last**, so the flip is durable
-        only once every census key has landed (§3.4 flag-last ordering).
+        After the last chunk lands the caller writes ``__ttl_enabled__`` / the
+        format version **last**, so the flip is durable only once every census
+        key has been stamped (§3.4 flag-last ordering). The ledger + progress
+        counter are dead weight once flipped and are dropped on the next flipped
+        open (:meth:`_cleanup_completed_backfill_bookkeeping`).
 
         :param expires_at_ms: uniform absolute event-time expiry to stamp on
             every pre-existing record (``high_water + legacy_records_ttl``).
@@ -825,16 +926,19 @@ class RocksDBStorePartition(StorePartition):
             current transaction's update cache (genuine in-batch user writes).
             They are skipped here and re-stamped with their own true pending
             stamp by ``_restamp_default_cf_cache_for_flip``.
-        :return: count of pre-existing records re-stamped on this run (cursor-
-            skipped, staged, and deleted-since-census keys are not counted).
+        :return: count of pre-existing records re-stamped on this run (already-
+            stamped ledger members, staged, and deleted-since-census keys are not
+            counted).
         """
-        # Pre-create the index CF so the per-chunk batch never races a CF
-        # creation.
+        # Pre-create the index + stamped-ledger CFs so the per-chunk batch never
+        # races a CF creation.
         self.get_or_create_column_family(TTL_INDEX_CF_NAME)
+        stamped_ledger = self.get_or_create_column_family(TTL_BACKFILL_STAMPED_CF_NAME)
         default_cf = self.get_or_create_column_family("default")
         default_handle = self.get_column_family_handle("default")
         index_handle = self.get_column_family_handle(TTL_INDEX_CF_NAME)
         metadata_handle = self.get_column_family_handle(METADATA_CF_NAME)
+        stamped_handle = self.get_column_family_handle(TTL_BACKFILL_STAMPED_CF_NAME)
 
         headers: Optional[HeadersMapping] = None
         if changelog_producer is not None:
@@ -850,18 +954,22 @@ class RocksDBStorePartition(StorePartition):
                 CHANGELOG_TTL_STAMPED_HEADER: b"\x01",
             }
 
-        # Step 0 — CENSUS: materialize the complete, deterministically-ordered
-        # key list ONCE, with no concurrent writes to the default CF (backfill
-        # is sequential inside prepare(); processing is paused). Keys only —
-        # values are point-got fresh per chunk. ``sorted`` makes the resume
-        # order explicit and identical across runs so the integer cursor is
-        # exact (§3.3). ``staged_default_keys`` are excluded here so they are
-        # never censused, never counted in the cursor, and re-stamped only by
-        # the caller's ``_restamp_default_cf_cache_for_flip``.
+        # Step 0 — CENSUS: materialize the not-yet-stamped key list ONCE, with no
+        # concurrent writes to the default CF (backfill is sequential inside
+        # prepare(); processing is paused). Keys only — values are point-got fresh
+        # per chunk. ``sorted`` makes the order explicit and reproducible.
+        # ``staged_default_keys`` are excluded (re-stamped only by the caller's
+        # ``_restamp_default_cf_cache_for_flip``); ``__ttl_backfill_stamped__``
+        # ledger members are excluded because a prior interrupted run already
+        # stamped them — this is the crash-safe resume that makes the census
+        # insensitive to interleaved legacy writes (see the docstring invariant).
+        # The ledger membership test is a point-get on the (separate) ledger CF,
+        # never on the default CF, and never inspects value content.
         key_list: list[bytes] = sorted(
             cast(bytes, key)
             for key in default_cf.keys()
             if cast(bytes, key) not in staged_default_keys
+            and cast(bytes, key) not in stamped_ledger
         )
         total = len(key_list)
         if total > _CENSUS_SPILL_WARN_THRESHOLD:
@@ -886,16 +994,16 @@ class RocksDBStorePartition(StorePartition):
             self._path,
         )
 
-        # Resume from the persisted cursor (0 on a first run / absent key).
-        cursor = self._load_backfill_progress()
-        if cursor > total:
-            # Defensive: census shrank since the cursor was written (keys
-            # deleted between runs). Clamp so the loop is a no-op tail.
-            cursor = total
+        # Cumulative count of records stamped by any prior interrupted run, used
+        # only to keep ``__ttl_backfill_progress__`` a monotonic observability
+        # counter across resumes. Resume CORRECTNESS rides the stamped-ledger
+        # census exclusion above, NOT this integer (that was the §3.3 bug).
+        prior_stamped = self._load_backfill_progress()
 
         restamped = 0
-        while cursor < total:
-            chunk_keys = key_list[cursor : cursor + chunk_size]
+        run_pos = 0
+        while run_pos < total:
+            chunk_keys = key_list[run_pos : run_pos + chunk_size]
 
             # RE-STAMP this chunk: point-get each value fresh and wrap whole.
             batch = WriteBatch(raw_mode=True)
@@ -904,11 +1012,15 @@ class RocksDBStorePartition(StorePartition):
                 raw_value = default_cf.get(key, default=None)
                 if raw_value is None:
                     # Deleted since the census — nothing to stamp, no index
-                    # entry to create. Skip cleanly (§5 / §8 edge cases).
+                    # entry to create, not ledgered. Skip cleanly (§5 / §8).
                     continue
                 stamped = encode_ttl_value(expires_at_ms, cast(bytes, raw_value))
                 batch.put(key, stamped, default_handle)
                 batch.put(encode_index_key(expires_at_ms, key), b"", index_handle)
+                # LEDGER this key as stamped IN THE SAME batch, so a crash cannot
+                # leave a key stamped-on-disk but absent from the resume ledger
+                # (which would double-wrap it on the next run).
+                batch.put(key, b"", stamped_handle)
                 produce.append((key, stamped))
                 restamped += 1
 
@@ -919,28 +1031,27 @@ class RocksDBStorePartition(StorePartition):
                     changelog_producer.produce(key=key, value=stamped, headers=headers)
                 changelog_producer.flush()
 
-            # ADVANCE the cursor IN THE SAME batch as the chunk's puts so the
-            # progress marker and the stamped data commit atomically. A crash
-            # after this commit but before the flag leaves the partition legacy
-            # with the cursor at this value; the re-run resumes here exactly.
-            cursor += len(chunk_keys)
+            # ADVANCE the observability counter IN THE SAME batch as the chunk's
+            # puts. It is cumulative (prior runs + this run) so it never regresses
+            # across a resume; it is NOT read back for resume decisions.
+            run_pos += len(chunk_keys)
             batch.put(
                 TTL_BACKFILL_PROGRESS_KEY,
-                int_to_bytes(cursor),
+                int_to_bytes(prior_stamped + restamped),
                 metadata_handle,
             )
 
-            # COMMIT this chunk atomically (default + index puts + cursor).
+            # COMMIT this chunk atomically (default + index + ledger puts +
+            # progress counter).
             self._write(batch)
 
             # PROGRESS: one DEBUG line per chunk (~chunk_size records, default
             # 10k) so a large/long backfill is observable instead of looking
-            # like a hang. Mirrors recovery's ``Recovery progress … X / Total``
-            # cadence. ``cursor`` is the cumulative census index reached; the
-            # final completion log is still emitted by the caller.
+            # like a hang. ``run_pos`` is this run's census position; the final
+            # completion log is still emitted by the caller.
             logger.debug(
                 "TTL legacy backfill progress: %d / %d records re-stamped path=%s",
-                cursor,
+                run_pos,
                 total,
                 self._path,
             )
@@ -962,10 +1073,17 @@ class RocksDBStorePartition(StorePartition):
 
     def _load_backfill_progress(self) -> int:
         """
-        Read the persisted backfill cursor ``__ttl_backfill_progress__`` from
-        the metadata CF. Absent / undecodable = ``0`` (first run / no progress
-        yet). The cursor is the number of census keys already stamped (Fix A,
-        spec §3.3).
+        Read the persisted backfill progress counter ``__ttl_backfill_progress__``
+        from the metadata CF. Absent / undecodable = ``0`` (first run / no
+        progress yet, or a stale/garbled value from an older build — handled
+        gracefully by restarting the count at 0).
+
+        Since the Bug-1 fix this is an **observability counter only** (cumulative
+        records stamped so far); resume correctness rides the
+        ``__ttl_backfill_stamped__`` ledger census exclusion, not this integer
+        (see :meth:`backfill_legacy_records`). A stale integer left by the old
+        §3.3 integer-cursor build is therefore harmless: it can only make the
+        counter's starting value wrong, never skip or re-stamp a key.
         """
         metadata_cf = self.get_or_create_column_family(METADATA_CF_NAME)
         raw = metadata_cf.get(TTL_BACKFILL_PROGRESS_KEY, default=None)
@@ -1267,10 +1385,10 @@ class RocksDBStorePartition(StorePartition):
                 main_expires_at, _ = decode_ttl_value(cast(bytes, main_value))
             except ValueError:
                 logger.warning(
-                    "Malformed TTL value at %s for key %r; dropping orphan "
+                    "Malformed TTL value at %s for key prefix=%r; dropping orphan "
                     "index entry but leaving main untouched.",
                     self._path,
-                    user_key,
+                    user_key[:16],
                 )
                 batch.delete(index_key, index_handle)
                 continue

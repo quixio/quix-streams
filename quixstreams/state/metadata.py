@@ -22,14 +22,33 @@ TTL_INDEX_CF_NAME = "__ttl_index__"
 # backfill iterates it (the per-key delete is the durable progress cursor). Never
 # produced to the changelog.
 TTL_BACKFILL_PENDING_CF_NAME = "__ttl_backfill_pending__"
+# Local-only ledger of pre-existing legacy keys ALREADY STAMPED by the in-place
+# *live* backfill (:meth:`RocksDBStorePartition.backfill_legacy_records`). It is
+# the crash-safe resume cursor for that path (Bug 1 fix, see
+# dev-planning/state-ttl-legacy-backfill/fix-cursor-and-pending-hygiene.md): each
+# chunk PUTs the keys it stamped into this CF within the SAME WriteBatch as the
+# stamped values, so the ledger and the data commit atomically. On resume the
+# re-derived census excludes ledger members, which makes the backfill insensitive
+# to interleaved legacy writes (a fresh key is simply a not-yet-stamped census
+# key; an already-stamped key is a ledger member and is never re-read or
+# re-wrapped) WITHOUT inspecting value content. Distinct from
+# ``TTL_BACKFILL_PENDING_CF_NAME`` (recovery-completion "to-do" list, delete-on-
+# commit); the two paths are mutually exclusive per partition lifecycle. Never
+# produced to the changelog.
+TTL_BACKFILL_STAMPED_CF_NAME = "__ttl_backfill_stamped__"
 
 # Column families whose writes must NOT be propagated to the changelog topic.
 # Includes metadata (already excluded by virtue of not being touched from
-# user-facing transactions), the TTL secondary expiry index, and the
-# incomplete-migration pending-key census — all local to RocksDB only — see
-# dev-planning/state-ttl/architecture.md.
+# user-facing transactions), the TTL secondary expiry index, the incomplete-
+# migration pending-key census, and the live-backfill stamped-key ledger — all
+# local to RocksDB only — see dev-planning/state-ttl/architecture.md.
 LOCAL_ONLY_CFS = frozenset(
-    {METADATA_CF_NAME, TTL_INDEX_CF_NAME, TTL_BACKFILL_PENDING_CF_NAME}
+    {
+        METADATA_CF_NAME,
+        TTL_INDEX_CF_NAME,
+        TTL_BACKFILL_PENDING_CF_NAME,
+        TTL_BACKFILL_STAMPED_CF_NAME,
+    }
 )
 
 DEFAULT_PREFIX = b""
