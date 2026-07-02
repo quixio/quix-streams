@@ -13,14 +13,10 @@ See ``dev-planning/state-ttl-legacy-backfill/spec-v3240-upgrade-and-recovery-clo
 """
 
 import logging
-from typing import cast
 from unittest.mock import MagicMock, PropertyMock
 
 from quixstreams.state.memory import MemoryStorePartition
 from quixstreams.state.metadata import (
-    CHANGELOG_CF_MESSAGE_HEADER,
-    CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER,
-    CHANGELOG_TTL_STAMPED_HEADER,
     TTL_BACKFILL_PENDING_CF_NAME,
     TTL_MIGRATION_DONE_KEY,
     TTL_SYSTEM_CF_NAME,
@@ -30,7 +26,6 @@ from quixstreams.state.rocksdb import RocksDBOptions, RocksDBStorePartition
 from quixstreams.state.rocksdb.metadata import TTL_INDEX_CF_NAME
 from quixstreams.state.rocksdb.ttl_codec import (
     SENTINEL_NEVER,
-    decode_index_key,
     decode_ttl_value,
     encode_ttl_value,
 )
@@ -194,13 +189,13 @@ class TestQuorumFail:
         partition.complete_recovery()
 
         # Partition must NOT have flipped (quorum failed).
-        assert partition.uses_ttl_stamps is False, (
-            "Quorum-fail: partition must stay legacy when any value fails validation"
-        )
+        assert (
+            partition.uses_ttl_stamps is False
+        ), "Quorum-fail: partition must stay legacy when any value fails validation"
         # Pending census discarded.
-        assert _pending_keys(partition) == set(), (
-            "Pending census must be discarded after quorum-fail"
-        )
+        assert (
+            _pending_keys(partition) == set()
+        ), "Pending census must be discarded after quorum-fail"
         partition.close()
 
 
@@ -294,13 +289,15 @@ class TestDoneFlagBackCompat:
 
         # Flipped via header path (not done-flag path).
         assert partition.uses_ttl_stamps is True
-        assert partition._recovery_saw_migration_done is False, (
-            "Marker-absent changelog must NOT set _recovery_saw_migration_done"
-        )
+        assert (
+            partition._recovery_saw_migration_done is False
+        ), "Marker-absent changelog must NOT set _recovery_saw_migration_done"
         # Values intact.
         for i in range(3):
             val = _read_via_tx(partition, f"k{i}", timestamp=now_ms)
-            assert val == f"v{i}", f"Key k{i} must be readable after header-based recovery"
+            assert (
+                val == f"v{i}"
+            ), f"Key k{i} must be readable after header-based recovery"
         partition.close()
 
 
@@ -356,12 +353,14 @@ class TestMemoryV3240Adoption:
             _replay_memory(partition, msgs, now_ms=now_ms)
             partition.complete_recovery()
 
-        assert partition.uses_ttl_stamps is True, "Memory partition must flip after adoption"
+        assert (
+            partition.uses_ttl_stamps is True
+        ), "Memory partition must flip after adoption"
         for key, expected in keys.items():
             val = _read_memory_tx(partition, key, timestamp=now_ms)
-            assert val == expected, (
-                f"Memory v3.24.0 record {key!r}: expected {expected!r}, got {val!r}"
-            )
+            assert (
+                val == expected
+            ), f"Memory v3.24.0 record {key!r}: expected {expected!r}, got {val!r}"
         assert any(
             "adopted" in r.message.lower() and r.levelno >= logging.INFO
             for r in caplog.records
@@ -392,9 +391,9 @@ class TestMemoryQuorumFail:
         _replay_memory(partition, msgs, now_ms=now_ms)
         partition.complete_recovery()
 
-        assert partition.uses_ttl_stamps is False, (
-            "Memory quorum-fail: partition must stay legacy"
-        )
+        assert (
+            partition.uses_ttl_stamps is False
+        ), "Memory quorum-fail: partition must stay legacy"
         pending = partition._state.get(TTL_BACKFILL_PENDING_CF_NAME, {})
         assert len(pending) == 0, "Pending census must be discarded after quorum-fail"
         partition.close()
@@ -452,7 +451,8 @@ class TestMarkerFlushFailure:
         producer.flush = failing_flush
 
         partition = _rocksdb_partition(
-            tmp_path, name="flush_fail",
+            tmp_path,
+            name="flush_fail",
             options=RocksDBOptions(legacy_records_ttl=None),
             changelog_producer=producer,
         )
@@ -478,7 +478,8 @@ class TestMarkerFlushFailure:
         # Retry with a working producer succeeds.
         producer2 = _make_producer_mock()
         partition2 = _rocksdb_partition(
-            tmp_path, name="flush_fail",
+            tmp_path,
+            name="flush_fail",
             options=RocksDBOptions(legacy_records_ttl=None),
             changelog_producer=producer2,
         )
@@ -487,9 +488,9 @@ class TestMarkerFlushFailure:
 
         system_cf2 = partition2.get_or_create_column_family(TTL_SYSTEM_CF_NAME)
         local_marker2 = system_cf2.get(TTL_MIGRATION_DONE_KEY, default=None)
-        assert local_marker2 is not None, (
-            "Retry with a working producer must successfully mark migration-done"
-        )
+        assert (
+            local_marker2 is not None
+        ), "Retry with a working producer must successfully mark migration-done"
         partition2.close()
 
     def test_memory_flush_failure_surfaces_and_no_local_done(self):
@@ -543,25 +544,29 @@ class TestMemoryDoneFlag:
             stamped = encode_ttl_value(expiry, json_dumps(f"v{i}"))
             msgs.append((raw_key, stamped, "default", True))
         # Done-flag marker.
-        msgs.append((
-            TTL_MIGRATION_DONE_KEY,
-            int_to_bytes(STATE_FORMAT_VERSION),
-            TTL_SYSTEM_CF_NAME,
-            False,
-        ))
+        msgs.append(
+            (
+                TTL_MIGRATION_DONE_KEY,
+                int_to_bytes(STATE_FORMAT_VERSION),
+                TTL_SYSTEM_CF_NAME,
+                False,
+            )
+        )
 
         partition = MemoryStorePartition(changelog_producer=producer)
         _replay_memory(partition, msgs, now_ms=now_ms)
         partition.complete_recovery()
 
-        assert partition.uses_ttl_stamps is True, (
-            "Memory partition must flip via done-flag"
-        )
+        assert (
+            partition.uses_ttl_stamps is True
+        ), "Memory partition must flip via done-flag"
         assert partition._recovery_saw_migration_done is True
         pending = partition._state.get(TTL_BACKFILL_PENDING_CF_NAME, {})
         assert len(pending) == 0, "No pending census after done-flag path"
 
         for i in range(3):
             val = _read_memory_tx(partition, f"k{i}", timestamp=now_ms)
-            assert val == f"v{i}", f"Memory key k{i} must be readable after done-flag restore"
+            assert (
+                val == f"v{i}"
+            ), f"Memory key k{i} must be readable after done-flag restore"
         partition.close()
