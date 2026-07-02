@@ -633,7 +633,9 @@ class RocksDBStorePartition(StorePartition):
         batch. If a fresh write reuses the same expiry stamp as the stale index
         entry being swept, deleting that index key would orphan the fresh value.
         """
-        staged_default: "set[bytes] | frozenset[bytes]" = staged_default_keys or frozenset()
+        staged_default: "set[bytes] | frozenset[bytes]" = (
+            staged_default_keys or frozenset()
+        )
         staged_ttl_index: "set[bytes] | frozenset[bytes]" = (
             staged_ttl_index_keys or frozenset()
         )
@@ -708,10 +710,7 @@ class RocksDBStorePartition(StorePartition):
                 delete_index_if_not_staged(index_key)
                 continue
 
-            if (
-                main_expires_at == idx_expires_at
-                and user_key not in staged_default
-            ):
+            if main_expires_at == idx_expires_at and user_key not in staged_default:
                 batch.delete(user_key, main_handle)
                 delete_index_if_not_staged(index_key)
                 evicted += 1
