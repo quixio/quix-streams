@@ -163,9 +163,9 @@ class TestInterleavedWriteCorruption:
         assert aaa_serialized is not None
         # "aaa" must sort before the first "k0" key.
         first_k_key = next(k for k in all_keys_sorted if b'"k' in k)
-        assert aaa_serialized < first_k_key, (
-            f"Interleaved key {aaa_serialized!r} should sort before {first_k_key!r}"
-        )
+        assert (
+            aaa_serialized < first_k_key
+        ), f"Interleaved key {aaa_serialized!r} should sort before {first_k_key!r}"
         del cf
         partition.close()
 
@@ -200,9 +200,9 @@ class TestInterleavedWriteCorruption:
         for i in range(m):
             key_str = f"k{i}"
             matching = [k for k in decoded if f'"{key_str}"'.encode() in k]
-            assert len(matching) == 1, (
-                f"Expected exactly one entry for {key_str}, found {len(matching)}"
-            )
+            assert (
+                len(matching) == 1
+            ), f"Expected exactly one entry for {key_str}, found {len(matching)}"
             raw_key = matching[0]
             expires_at, payload = decoded[raw_key]
             expected_payload = f'"v{i}"'.encode()
