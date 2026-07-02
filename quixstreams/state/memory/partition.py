@@ -4,19 +4,21 @@ import time
 from datetime import timedelta
 from typing import Any, Dict, Literal, Optional, Union, cast
 
+from quixstreams.models import HeadersMapping
 from quixstreams.state import PartitionTransaction
 from quixstreams.state.base import PartitionTransactionCache, StorePartition
 from quixstreams.state.base.transaction import (
     PartitionTransactionStatus,
     validate_transaction_status,
 )
-from quixstreams.state.exceptions import (
-    IncompatibleStateStoreError,
-    StateSerializationError,
-)
+from quixstreams.state.exceptions import StateSerializationError
 from quixstreams.state.metadata import (
+    CHANGELOG_CF_MESSAGE_HEADER,
+    CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER,
+    CHANGELOG_TTL_STAMPED_HEADER,
     LOCAL_ONLY_CFS,
     METADATA_CF_NAME,
+    TTL_BACKFILL_PENDING_CF_NAME,
     TTL_INDEX_CF_NAME,
     Marker,
 )
@@ -88,6 +90,7 @@ class MemoryStorePartition(StorePartition):
         self,
         changelog_producer: Optional[ChangelogProducer],
         max_evictions_per_flush: int = _DEFAULT_MAX_EVICTIONS_PER_FLUSH,
+        legacy_records_ttl: Optional[timedelta] = None,
     ) -> None:
         super().__init__(
             dumps=json_dumps,
@@ -101,6 +104,13 @@ class MemoryStorePartition(StorePartition):
         }
         self._closed = False
         self._max_evictions_per_flush = max_evictions_per_flush
+        # Optional uniform expiry for leftover legacy records completed during a
+        # MIXED-changelog recovery (spec §15.4 parity with
+        # ``RocksDBOptions.legacy_records_ttl``). ``None`` = auto-finish at the
+        # §15.2 survivor-derived default; a positive ``timedelta`` = complete at
+        # ``wallclock_now + legacy_records_ttl``. MemoryStore has no persistent
+        # options surface, so this is set only via direct construction.
+        self._legacy_records_ttl: Optional[timedelta] = legacy_records_ttl
         self._high_water_ms: Optional[int] = None
         # Wallclock reference captured once per changelog-recovery session
         # (lazily, on the first stamped default-CF replay). Mirrors
@@ -110,6 +120,19 @@ class MemoryStorePartition(StorePartition):
         # ``spec-recovery-wallclock.md`` §3.2/§3.3). ``None`` means no stamped
         # message has been replayed yet in this partition's lifetime.
         self._recovery_now_ms: Optional[int] = None
+        # Incomplete-migration detection (spec §8.8 / §15.4), mirroring
+        # ``RocksDBStorePartition``. Set True on the first header-true default-CF
+        # replay; combined with a non-empty ``__ttl_backfill_pending__`` census at
+        # end of recovery it marks a MIXED changelog whose leftover legacy records
+        # :meth:`complete_recovery` must stamp. False (all-legacy replay) never
+        # triggers completion.
+        self._recovery_saw_stamped: bool = False
+        # §15.2 survivor-derived completion default: max absolute expiry among
+        # replayed default-CF records that are stamped (header-true), non-SENTINEL,
+        # and NOT dropped by the Rule 4 wallclock filter. Used to complete an
+        # incomplete migration when ``legacy_records_ttl`` is absent; ``None`` (no
+        # surviving future stamp) falls back to SENTINEL_NEVER + a WARN.
+        self._recovery_max_survivor_expiry_ms: Optional[int] = None
 
         class_uses_ttl_stamps = type(self).uses_ttl_stamps
         if class_uses_ttl_stamps:
@@ -130,6 +153,16 @@ class MemoryStorePartition(StorePartition):
     @property
     def max_evictions_per_flush(self) -> int:
         return self._max_evictions_per_flush
+
+    @property
+    def legacy_records_ttl(self) -> Optional[timedelta]:
+        """
+        Optional uniform expiry for leftover legacy records completed during a
+        MIXED-changelog recovery (spec §15.4). Mirrors
+        ``RocksDBStorePartition.legacy_records_ttl``. ``None`` = auto-finish at
+        the §15.2 default.
+        """
+        return self._legacy_records_ttl
 
     def advance_high_water(self, timestamp: Optional[int]) -> None:
         if timestamp is None:
@@ -200,24 +233,6 @@ class MemoryStorePartition(StorePartition):
     def estimated_main_cf_key_count(self) -> int:
         return len(self._state.get("default", {}))
 
-    def reject_ttl_on_populated_store(self) -> "IncompatibleStateStoreError":
-        approx_keys = self.estimated_main_cf_key_count()
-        msg = (
-            f"IncompatibleStateStoreError: in-memory state store '{id(self)}' "
-            f"has {approx_keys} un-stamped existing entries; cannot enable "
-            "TTL on a populated store. Restart the application — the "
-            "in-memory store will rebuild from the changelog with TTL "
-            "enabled."
-        )
-        logger.error(
-            msg,
-            extra={
-                "approx_key_count": approx_keys,
-                "operator_action": "restart_application",
-            },
-        )
-        return IncompatibleStateStoreError(msg)
-
     def recover_from_changelog_message(
         self,
         key: bytes,
@@ -254,6 +269,21 @@ class MemoryStorePartition(StorePartition):
             self.uses_ttl_stamps = True
             self._state.setdefault(TTL_INDEX_CF_NAME, {})
 
+        # Incomplete-migration detection / census (spec §8.8 / §15.4), mirroring
+        # ``RocksDBStorePartition``. Gated on the CLASS-level flag (not the
+        # instance flag): a MIXED changelog replays header-absent legacy records
+        # BEFORE the first stamped record flips the partition, so they must be
+        # censused into ``__ttl_backfill_pending__`` now (and land verbatim below).
+        # A header-true replay sets the MIXED-detection latch and supersedes any
+        # earlier legacy census entry for the same key (compaction ordering).
+        if type(self).uses_ttl_stamps and cf_name == "default":
+            pending = self._state.setdefault(TTL_BACKFILL_PENDING_CF_NAME, {})
+            if ttl_stamped:
+                self._recovery_saw_stamped = True
+                pending.pop(key, None)
+            elif value is not None:
+                pending[key] = b""
+
         if not self.uses_ttl_stamps:
             if value:
                 self._state.setdefault(cf_name, {})[key] = value
@@ -270,6 +300,16 @@ class MemoryStorePartition(StorePartition):
 
         if value is None:
             self._state.setdefault(cf_name, {}).pop(key, None)
+        elif is_main_cf and not ttl_stamped:
+            # §15.4 item 3: a header-absent (legacy) default-CF record replayed on
+            # a (now-)flipped partition — a leftover of an interrupted migration
+            # (MIXED changelog). It MUST land VERBATIM (raw bytes), NOT through
+            # ``_normalize_replay_value`` (which would SENTINEL-wrap it, corrupting
+            # the payload the first 8 bytes are later stripped as a fake stamp).
+            # Its key was just censused into the pending map and
+            # :meth:`complete_recovery` will stamp it once at end of recovery.
+            # Mirrors the RocksDB ``is_main_cf and not ttl_stamped`` verbatim branch.
+            self._state.setdefault(cf_name, {})[key] = value
         elif is_main_cf:
             stamped, stamp = self._normalize_replay_value(value)
             # Judge expiry against the current wallclock captured once per
@@ -299,10 +339,127 @@ class MemoryStorePartition(StorePartition):
                     self._state.setdefault(TTL_INDEX_CF_NAME, {})[
                         encode_index_key(stamp, key)
                     ] = b""
+                    # §15.2: surviving future non-sentinel stamp on a header-true
+                    # record — track the max as the config-absent completion
+                    # source (mirrors ``RocksDBStorePartition``).
+                    if (
+                        self._recovery_max_survivor_expiry_ms is None
+                        or stamp > self._recovery_max_survivor_expiry_ms
+                    ):
+                        self._recovery_max_survivor_expiry_ms = stamp
         else:
             self._state.setdefault(cf_name, {})[key] = value
 
         self._changelog_offset = offset
+
+    def complete_recovery(self) -> None:
+        """
+        Recovery-finalize hook (spec §8.8 / §15.4), mirroring
+        :meth:`RocksDBStorePartition.complete_recovery` at the semantics level
+        (in-RAM dicts instead of CFs). There is **no reject branch** — the memory
+        backend never had one, and the §15 revision auto-finishes the migration.
+
+        Completes an interrupted legacy-TTL migration replayed from a MIXED
+        changelog: leftover legacy records landed VERBATIM during replay and were
+        censused into ``__ttl_backfill_pending__``; here they are stamped with a
+        uniform expiry, indexed, produced as header-true stamped records (so a
+        subsequent restore sees an all-stamped changelog and never re-enters
+        completion), and drained from the census.
+
+        - NOT ``_recovery_saw_stamped`` → all-legacy replay: discard the orphan
+          pending census and no-op (Bug 3 hygiene parity).
+        - pending empty → all-stamped / fully migrated: no-op.
+        - else (MIXED) → stamp exactly the pending leftovers with:
+            - ``legacy_records_ttl`` set → ``wallclock_now + legacy_records_ttl``
+              (parity; explicit config wins);
+            - absent → the §15.2 survivor-derived expiry, or ``SENTINEL_NEVER``
+              (never-expire) + a WARN in the all-expired fallback.
+        """
+        if not type(self).uses_ttl_stamps:
+            return
+        if not self._recovery_saw_stamped:
+            # Pure-legacy replay: the class-level census may hold orphan legacy
+            # keys with no completion pass to drain them — discard them wholesale
+            # (Bug 3 hygiene parity with RocksDB's _discard_backfill_pending).
+            self._state.pop(TTL_BACKFILL_PENDING_CF_NAME, None)
+            return
+        if not self.uses_ttl_stamps:
+            return
+
+        pending = self._state.get(TTL_BACKFILL_PENDING_CF_NAME, {})
+        if not pending:
+            return
+
+        legacy_records_ttl = self._legacy_records_ttl
+        if legacy_records_ttl is not None:
+            # Explicit config wins (parity): wallclock-at-rebuild + ttl.
+            if self._recovery_now_ms is None:
+                self._recovery_now_ms = self._now_ms()
+                self._high_water_ms = self._recovery_now_ms
+            expires_at_ms = self._recovery_now_ms + _ttl_to_ms(legacy_records_ttl)
+            logger.info(
+                "Recovery: completing interrupted legacy-TTL migration in "
+                "memory; %d leftover legacy record(s) stamped with expiry=%d "
+                "(wallclock-at-rebuild + legacy_records_ttl).",
+                len(pending),
+                expires_at_ms,
+            )
+        elif self._recovery_max_survivor_expiry_ms is not None:
+            # §15.2 survivor-derived default (config absent).
+            expires_at_ms = self._recovery_max_survivor_expiry_ms
+            logger.warning(
+                "Recovery: completing interrupted legacy-TTL migration in memory "
+                "WITHOUT legacy_records_ttl; %d leftover legacy record(s) stamped "
+                "with expiry=%d, derived from the max surviving stamped record.",
+                len(pending),
+                expires_at_ms,
+            )
+        else:
+            # §15.2 all-expired fallback: never-expire rather than mass-delete.
+            expires_at_ms = SENTINEL_NEVER
+            logger.warning(
+                "Recovery: completing interrupted legacy-TTL migration in memory "
+                "WITHOUT legacy_records_ttl and with NO surviving future stamp; "
+                "%d leftover legacy record(s) stamped as never-expiring "
+                "(SENTINEL_NEVER) to avoid silently deleting them.",
+                len(pending),
+            )
+
+        default = self._state.setdefault("default", {})
+        index = self._state.setdefault(TTL_INDEX_CF_NAME, {})
+        headers: Optional[HeadersMapping] = None
+        if self._changelog_producer is not None:
+            headers = {
+                CHANGELOG_CF_MESSAGE_HEADER: "default",
+                CHANGELOG_PROCESSED_OFFSETS_MESSAGE_HEADER: json_dumps(None),
+                CHANGELOG_TTL_STAMPED_HEADER: b"\x01",
+            }
+
+        produced = False
+        for key in list(pending.keys()):
+            raw_value = default.get(key)
+            if raw_value is None:
+                # Censused key whose default entry vanished since census — drop
+                # the stale pending entry, nothing to stamp.
+                pending.pop(key, None)
+                continue
+            stamped = encode_ttl_value(expires_at_ms, cast(bytes, raw_value))
+            default[key] = stamped
+            # Sentinel-stamped (never-expire) records skip the expiry index.
+            if expires_at_ms != SENTINEL_NEVER:
+                index[encode_index_key(expires_at_ms, key)] = b""
+            if self._changelog_producer is not None:
+                self._changelog_producer.produce(
+                    key=key, value=stamped, headers=headers
+                )
+                produced = True
+            pending.pop(key, None)
+
+        if produced and self._changelog_producer is not None:
+            self._changelog_producer.flush()
+
+        # Drain the (now-empty) census.
+        self._state.pop(TTL_BACKFILL_PENDING_CF_NAME, None)
 
     def get_changelog_offset(self) -> Optional[int]:
         """
@@ -620,8 +777,18 @@ class MemoryPartitionTransaction(PartitionTransaction[bytes, Any]):
         if self._partition.uses_ttl_stamps:
             return
         if self._partition.main_cf_has_user_data():
-            self._status = PartitionTransactionStatus.FAILED
-            raise self._partition.reject_ttl_on_populated_store()
+            # §15.4 open-scope decision: memory parity is recovery-completion
+            # ONLY (no live in-RAM backfill). A populated legacy memory store
+            # arises solely from an all-legacy changelog replay; it re-recovers
+            # from the changelog on every open, so migrating its pre-existing
+            # records is owned by the recovery-completion path
+            # (:meth:`MemoryStorePartition.complete_recovery`), not a live flip.
+            # The §15 revision removed the reject, so we neither reject nor flip
+            # here: staying legacy keeps the pre-existing raw records readable
+            # verbatim (flipping without a backfill would mis-strip them). The
+            # ttl= write lands as legacy this session; a changelog-driven flip on
+            # a later open migrates the store.
+            return
 
         # Empty-store fast path: re-encode default-CF cache entries.
         cache = self._update_cache

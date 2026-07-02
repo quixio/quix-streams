@@ -148,6 +148,17 @@ class RocksDBStorePartition(StorePartition):
         # completed by :meth:`complete_recovery`. False (the all-legacy first-
         # enablement case) never triggers completion.
         self._recovery_saw_stamped: bool = False
+        # §15.2 survivor-derived completion default. Tracks the MAX absolute
+        # expiry among replayed default-CF records that are (i) stamped /
+        # header-true, (ii) non-SENTINEL, and (iii) NOT dropped by the Rule 4
+        # wallclock filter (i.e. still in the future at rebuild). When an
+        # incomplete migration is completed WITHOUT ``legacy_records_ttl`` in
+        # config, the leftover legacy records inherit this expiry — aligning them
+        # with the surviving siblings of their own backfill cohort. ``None`` = no
+        # surviving future stamp was observed (the degenerate all-expired case),
+        # in which case completion falls back to SENTINEL_NEVER + a WARN rather
+        # than deriving a past expiry that would mass-delete on the next sweep.
+        self._recovery_max_survivor_expiry_ms: Optional[int] = None
 
         # Resolve the **runtime** TTL flag. Subclasses that nail
         # ``uses_ttl_stamps = False`` at the class level (windowed,
@@ -350,6 +361,14 @@ class RocksDBStorePartition(StorePartition):
                 if stamp != SENTINEL_NEVER:
                     index_handle = self.get_column_family_handle(TTL_INDEX_CF_NAME)
                     batch.put(encode_index_key(stamp, key), b"", index_handle)
+                    # §15.2: this is a surviving (future, non-sentinel) stamp on
+                    # a header-true record — a candidate source for the leftover
+                    # completion expiry when config is absent. Track the max.
+                    if (
+                        self._recovery_max_survivor_expiry_ms is None
+                        or stamp > self._recovery_max_survivor_expiry_ms
+                    ):
+                        self._recovery_max_survivor_expiry_ms = stamp
         else:
             batch.put(key, value, cf_handle)
 
@@ -377,17 +396,24 @@ class RocksDBStorePartition(StorePartition):
           the live first-``ttl=``-write backfill owns it. No-op.
         - if the pending CF is empty → all-stamped / fully-migrated (§8.7);
           nothing to complete. No-op.
-        - else (stamped seen AND pending non-empty) → incomplete migration:
-            - if ``legacy_records_ttl is None`` → **reject loudly** with the
-              operator-callable :class:`IncompatibleStateStoreError` (§8): the
-              field is required to finish the migration; restore it and redeploy
-              (do NOT delete state).
-            - else → chunk-backfill exactly the pending keys, stamping each with
-              ``self._recovery_now_ms + _ttl_to_ms(legacy_records_ttl)`` (wallclock-
-              at-rebuild, §5), writing the ``__ttl_index__`` entry, producing a
-              header-bearing stamped record to the changelog, and deleting the key
-              from the pending CF as the chunk commits (the delete IS the durable
-              progress cursor — §6).
+        - else (stamped seen AND pending non-empty) → incomplete migration;
+          **auto-finish** (spec §15.2, revised from the removed reject):
+          chunk-backfill exactly the pending keys, stamping each with a uniform
+          ``expires_at_ms``, writing the ``__ttl_index__`` entry, producing a
+          header-bearing stamped record to the changelog, and deleting the key
+          from the pending CF as the chunk commits (the delete IS the durable
+          progress cursor — §6). The uniform expiry is:
+            - ``legacy_records_ttl`` set → ``self._recovery_now_ms +
+              _ttl_to_ms(legacy_records_ttl)`` (wallclock-at-rebuild, §5;
+              explicit config unchanged and always wins);
+            - ``legacy_records_ttl`` absent → the §15.2 survivor-derived expiry
+              ``self._recovery_max_survivor_expiry_ms`` (a future stamp shared
+              with the leftovers' backfill cohort), or ``SENTINEL_NEVER`` +
+              a WARN in the degenerate all-expired case (no surviving future
+              stamp). This replaces the removed config-absent reject — a rebuilt
+              node cannot know the original flip ttl (it lived in a LOCAL_ONLY_CF
+              never on the changelog), so it derives a safe finite value from the
+              replayed cohort instead of erroring.
 
         Un-gated by the live flip flag (the partition is already flipped). Idempotent
         and convergent across interrupts: an interrupted run leaves the still-pending
@@ -423,31 +449,61 @@ class RocksDBStorePartition(StorePartition):
             return
 
         legacy_records_ttl = self._legacy_records_ttl
-        if legacy_records_ttl is None:
-            # Config-absent (wrinkle #1, §8): the replay finished cleanly (no data
-            # lost / corrupted), but completion needs a duration it does not have.
-            # Reject loudly with an operator-callable message — silently landing
-            # the leftovers as never-expire is exactly the OP-4 bug being fixed.
-            raise self._reject_incomplete_migration_no_ttl(pending_count)
-
-        # Wallclock-at-rebuild expiry (wrinkle #2, §5). ``_recovery_now_ms`` was
-        # captured on the first stamped default-CF replay (which is exactly when
-        # ``_recovery_saw_stamped`` was set), so it is normally populated here;
-        # capture defensively if a stamped record was seen but no non-sentinel
-        # stamp ever set it.
-        if self._recovery_now_ms is None:
-            self._recovery_now_ms = self._now_ms()
-            self._high_water_ms = self._recovery_now_ms
-        expires_at_ms = self._recovery_now_ms + _ttl_to_ms(legacy_records_ttl)
-
-        logger.info(
-            "Recovery: completing interrupted legacy-TTL migration at path=%s; "
-            "%d leftover legacy record(s) will be stamped with expiry=%d "
-            "(wallclock-at-rebuild + legacy_records_ttl).",
-            self._path,
-            pending_count,
-            expires_at_ms,
-        )
+        if legacy_records_ttl is not None:
+            # Explicit config wins (unchanged, §5): wallclock-at-rebuild + ttl.
+            # ``_recovery_now_ms`` was captured on the first stamped default-CF
+            # replay (exactly when ``_recovery_saw_stamped`` was set), so it is
+            # normally populated here; capture defensively if a stamped record was
+            # seen but no non-sentinel stamp ever set it.
+            if self._recovery_now_ms is None:
+                self._recovery_now_ms = self._now_ms()
+                self._high_water_ms = self._recovery_now_ms
+            expires_at_ms = self._recovery_now_ms + _ttl_to_ms(legacy_records_ttl)
+            logger.info(
+                "Recovery: completing interrupted legacy-TTL migration at "
+                "path=%s; %d leftover legacy record(s) will be stamped with "
+                "expiry=%d (wallclock-at-rebuild + legacy_records_ttl).",
+                self._path,
+                pending_count,
+                expires_at_ms,
+            )
+        elif self._recovery_max_survivor_expiry_ms is not None:
+            # §15.2 survivor-derived default (config absent): align the leftovers
+            # with the max surviving future stamp of their backfill cohort. A
+            # single uniform value, in the future by construction (Rule 4 already
+            # dropped past-dated stamps during replay, so a tracked survivor is
+            # always > wallclock-at-rebuild).
+            expires_at_ms = self._recovery_max_survivor_expiry_ms
+            logger.warning(
+                "Recovery: completing interrupted legacy-TTL migration at "
+                "path=%s WITHOUT legacy_records_ttl configured; %d leftover "
+                "legacy record(s) will be stamped with expiry=%d, derived from "
+                "the max surviving stamped record (the original flip ttl is not "
+                "recoverable on a cold restore). To pin a different uniform "
+                "window, set RocksDBOptions(legacy_records_ttl=timedelta(...)) "
+                "and redeploy.",
+                self._path,
+                pending_count,
+                expires_at_ms,
+            )
+        else:
+            # §15.2 all-expired fallback (config absent AND no surviving future
+            # stamp): stamping with a past/derived expiry would mass-delete the
+            # leftovers on the next sweep (silent data loss — forbidden, Quix
+            # Cloud has no state reset). Keep them with SENTINEL_NEVER instead and
+            # WARN loudly. Rare corner: interrupted backfill + config removed +
+            # cold restore + every stamp already expired.
+            expires_at_ms = SENTINEL_NEVER
+            logger.warning(
+                "Recovery: completing interrupted legacy-TTL migration at "
+                "path=%s WITHOUT legacy_records_ttl configured and with NO "
+                "surviving future stamp to derive from; %d leftover legacy "
+                "record(s) will be stamped as never-expiring (SENTINEL_NEVER) "
+                "to avoid silently deleting them. To assign a finite expiry, set "
+                "RocksDBOptions(legacy_records_ttl=timedelta(...)) and redeploy.",
+                self._path,
+                pending_count,
+            )
         completed = self._complete_pending_backfill(
             expires_at_ms=expires_at_ms,
             chunk_size=self._legacy_backfill_chunk_size,
@@ -614,7 +670,11 @@ class RocksDBStorePartition(StorePartition):
                     continue
                 stamped = encode_ttl_value(expires_at_ms, cast(bytes, raw_value))
                 batch.put(key, stamped, default_handle)
-                batch.put(encode_index_key(expires_at_ms, key), b"", index_handle)
+                # Sentinel-stamped (never-expire) records skip the expiry index,
+                # per the codec invariant (the §15.2 all-expired fallback stamps
+                # leftovers with SENTINEL_NEVER); every other expiry is indexed.
+                if expires_at_ms != SENTINEL_NEVER:
+                    batch.put(encode_index_key(expires_at_ms, key), b"", index_handle)
                 batch.delete(key, pending_handle)
                 produce.append((key, stamped))
                 stamped_count += 1
@@ -647,44 +707,6 @@ class RocksDBStorePartition(StorePartition):
             del batch, produce
 
         return stamped_count
-
-    def _reject_incomplete_migration_no_ttl(
-        self, pending_count: int
-    ) -> "IncompatibleStateStoreError":
-        """
-        Build (and log) the operator-callable ERROR raised when a MIXED
-        (incomplete-migration) changelog is cold-restored but
-        ``legacy_records_ttl`` is absent from config (spec §8). The caller
-        ``raise``s the returned exception.
-
-        Distinct from :meth:`reject_ttl_on_populated_store` (enable-on-populated):
-        here the migration is already in progress and merely needs the duration to
-        finish. The message names ``legacy_records_ttl``, states the leftover
-        count, and points at restoring the field + redeploying — NOT at deleting
-        state (Quix Cloud has no customer-callable state reset).
-        """
-        msg = (
-            f"IncompatibleStateStoreError: state store at {self._path!r} has an "
-            f"incomplete legacy-TTL migration: {pending_count} leftover legacy "
-            "record(s) replayed from a MIXED changelog were never stamped "
-            "(a previous backfill was interrupted). Completing the migration "
-            "requires a uniform expiry for these records, but "
-            "legacy_records_ttl is not set. Restore "
-            "RocksDBOptions(legacy_records_ttl=timedelta(...)) in config and "
-            "redeploy: the partition will stamp the leftover records "
-            "(expiry = wallclock-at-rebuild + legacy_records_ttl) and finish the "
-            "migration. Do NOT delete the state directory — the leftover records "
-            "are intact and only need the expiry to be stamped."
-        )
-        logger.error(
-            msg,
-            extra={
-                "state_store_path": self._path,
-                "pending_leftover_count": pending_count,
-                "operator_action": "restore_legacy_records_ttl",
-            },
-        )
-        return IncompatibleStateStoreError(msg)
 
     def write(
         self,
@@ -762,7 +784,8 @@ class RocksDBStorePartition(StorePartition):
         """
         Return True if the default column family already contains at least one
         entry. Used by the transaction layer at flush time to decide between
-        the empty-store flip path and the populated-store rejection path.
+        the empty-store flip path and the populated-store auto-backfill path
+        (spec §15.1).
 
         ``seek_to_first`` on the default CF runs once per partition lifetime
         (only on the flush that flips), so its cost is irrelevant.
@@ -771,14 +794,13 @@ class RocksDBStorePartition(StorePartition):
 
     def estimated_main_cf_key_count(self, cap: int = 10_000) -> int:
         """
-        Best-effort count of the keys in the default CF, used in the
-        rejection error message to give the operator a rough scale of the
-        state they are about to wipe.
+        Best-effort count of the keys in the default CF. Retained as a
+        diagnostic helper (spec §15.5) after the populated-store reject it once
+        fed was replaced by the §15.1 auto-backfill.
 
         rocksdict does not expose RocksDB's ``GetEstimatedNumKeys``, so we
-        iterate up to ``cap`` keys; "saturated" means ">= cap". This runs
-        once per partition lifetime (only on the rejection path), so the
-        cost is irrelevant. Returns 0 only if the iteration fails for a
+        iterate up to ``cap`` keys; "saturated" means ">= cap". Returns 0 only
+        if the iteration fails for a
         reason other than emptiness — the operator-visible contract
         documents 0 as "unknown but non-zero".
         """
@@ -1098,42 +1120,6 @@ class RocksDBStorePartition(StorePartition):
                 self._path,
             )
             return 0
-
-    def reject_ttl_on_populated_store(self) -> "IncompatibleStateStoreError":
-        """
-        Build (and log) the structured ERROR raised when a TTL write lands on
-        a partition that has existing un-stamped data **and** the operator did
-        not opt in to backfill. The caller is expected to ``raise`` the
-        returned exception; emitting the log line here keeps the message format
-        in one place.
-
-        Silent TTL drop is the worst possible failure mode for the dedup
-        workload this feature exists for, so we halt loudly. The message points
-        at the operator-callable fix (set ``legacy_records_ttl``), not at
-        deleting the state directory — Quix Cloud has no customer-callable
-        state reset.
-        """
-        approx_keys = self.estimated_main_cf_key_count()
-        msg = (
-            f"IncompatibleStateStoreError: state store at {self._path!r} "
-            f"has {approx_keys} un-stamped existing entries; cannot enable "
-            "TTL on a populated store without backfilling them. To enable "
-            "TTL in place, set a uniform expiry for the existing records via "
-            "RocksDBOptions(legacy_records_ttl=timedelta(...)) and redeploy: "
-            "the partition will re-stamp every existing record with an expiry "
-            "of high-water + legacy_records_ttl (event-time at enable) and "
-            "flip into TTL mode without deleting any state. New records keep "
-            "their true event-time expiry."
-        )
-        logger.error(
-            msg,
-            extra={
-                "state_store_path": self._path,
-                "approx_key_count": approx_keys,
-                "operator_action": "set_legacy_records_ttl",
-            },
-        )
-        return IncompatibleStateStoreError(msg)
 
     def _write(self, batch: WriteBatch):
         """

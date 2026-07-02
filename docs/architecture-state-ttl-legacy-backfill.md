@@ -143,12 +143,14 @@ tx.prepare()                                            (transaction.py)
   └─ _maybe_flip_or_reject()                            <-- the decision
        1. no TTL writes            -> return (legacy, unchanged)
        2. already flipped          -> return (inline-stamped path)
-       3. populated + opt-in unset -> reject_ttl_on_populated_store() (raise)
-       4. empty                    -> flip (empty-store fast path)
-       5. populated + opt-in set   -> CHUNKED BACKFILL:
+       3. empty                    -> flip (empty-store fast path)
+       4. populated                -> CHUNKED BACKFILL (auto-finish, §15.1;
+                                       the opt-in-unset reject was REMOVED):
             staged_default_keys = serialized default-CF keys in this batch
-            expires = _compute_legacy_expiry(legacy_records_ttl)
-                    = high_water + _ttl_to_ms(legacy_records_ttl)
+            # opt-in set   -> expires = high_water + _ttl_to_ms(legacy_records_ttl)
+            # opt-in unset -> expires = high_water + max(ttl=) in this batch
+            #                 (implicit window, derived from the triggering
+            #                  write; emits one WARN before the flip)
             restamped = partition.backfill_legacy_records(
                             expires, changelog_producer, processed_offsets,
                             staged_default_keys, chunk_size)
@@ -244,9 +246,11 @@ Modified:
   cursor in the same batch, raw-write. The `_restamp_one_for_backfill` per-record
   inference helper and the live forward iterator are **removed**;
   `_looks_like_stamped_value` is no longer called by the backfill (kept for
-  recovery flag-discovery). `_CENSUS_SPILL_WARN_THRESHOLD` constant added. Rewrite
-  `reject_ttl_on_populated_store` (operator-callable message;
-  `operator_action="set_legacy_records_ttl"`). **OP-1 recovery-clock fix
+  recovery flag-discovery). `_CENSUS_SPILL_WARN_THRESHOLD` constant added.
+  **§15.1 revision (2026-07-02):** `reject_ttl_on_populated_store` was **removed**
+  — a populated legacy store now auto-backfills (opt-in set → `high_water +
+  legacy_records_ttl`; opt-in unset → `high_water + max(ttl=)` in the triggering
+  batch, with a WARN) instead of raising. **OP-1 recovery-clock fix
   (spec-recovery-wallclock.md):** `recover_from_changelog_message` now judges
   expiry against a wallclock captured once per recovery session
   (`self._recovery_now_ms`, lazily on the first stamped default-CF replay via
@@ -296,10 +300,13 @@ Modified:
   `ttl_stamped` header (not the latched flag) so a header-absent record landing on
   an already-flipped partition is replayed verbatim (the §6.2 fix). New
   `complete_recovery()` + helpers `_count_backfill_pending`,
-  `_complete_pending_backfill` (chunked, pending-CF delete = cursor), and
-  `_reject_incomplete_migration_no_ttl` (operator-callable config-absent reject;
-  `operator_action="restore_legacy_records_ttl"`). Imports `_ttl_to_ms` from
-  `transaction.py`.
+  `_complete_pending_backfill` (chunked, pending-CF delete = cursor). Imports
+  `_ttl_to_ms` from `transaction.py`. **§15.2 revision (2026-07-02):**
+  `_reject_incomplete_migration_no_ttl` was **removed** — a config-absent
+  incomplete migration now auto-completes at the survivor-derived expiry
+  (`_recovery_max_survivor_expiry_ms`, the max surviving future stamp), falling
+  back to `SENTINEL_NEVER` + a WARN when no future stamp survives, instead of
+  raising.
 - `tests/test_quixstreams/test_state/test_rocksdb/test_incomplete_migration_recovery.py`
   — §8.8 suite: MIXED-changelog completion at wallclock expiry (N2 stamped+indexed,
   N1 byte-unchanged, pending empty, header-bearing produces), config-absent loud
