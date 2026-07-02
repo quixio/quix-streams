@@ -198,8 +198,10 @@ class TestMemoryRecoveryWallclock:
         assert set(recovered_default) == sentinel_keys
         recovered.close()
 
-    # Post-recovery high-water seeded to the session wallclock + monotonic.
-    def test_high_water_seeded_to_wallclock_and_monotonic(
+    # Spec §10 case 11 — post-recovery high-water is the loaded persisted
+    # value or None, never wallclock-seeded (Finding 3, spec §7.4). The
+    # recovery wallclock is used ONLY for the Rule 4 drop filter.
+    def test_high_water_not_wallclock_seeded_after_recovery(
         self, changelog_producer_mock
     ):
         ts = 1_000_000_000_000
@@ -212,14 +214,26 @@ class TestMemoryRecoveryWallclock:
         recovered = MemoryStorePartition(changelog_producer=changelog_producer_mock)
         _replay_default(recovered, msgs, now_ms=now_ms)
 
-        assert recovered.high_water_ms == now_ms
-        recovered.advance_high_water(now_ms - DAY_MS)
-        assert recovered.high_water_ms == now_ms
-        recovered.advance_high_water(now_ms + DAY_MS)
-        assert recovered.high_water_ms == now_ms + DAY_MS
+        # Post-recovery high-water is NOT seeded to the session wallclock.
+        # Memory partitions start fresh (no persisted high-water), so it
+        # remains None after recovery (spec Finding 3, §7.4).
+        assert recovered.high_water_ms is None, (
+            "Post-recovery high_water_ms must be None (not wallclock-seeded); "
+            "recovery wallclock is Rule 4 only (spec Finding 3, §7.4)"
+        )
+        # A live event-time write now sets the high-water.
+        recovered.advance_high_water(ts)
+        assert recovered.high_water_ms == ts
+        # Monotonicity still holds.
+        recovered.advance_high_water(ts - DAY_MS)
+        assert recovered.high_water_ms == ts
+        recovered.advance_high_water(ts + DAY_MS)
+        assert recovered.high_water_ms == ts + DAY_MS
         recovered.close()
 
-    # Wallclock is captured exactly ONCE per session.
+    # Wallclock is captured exactly ONCE per session: a clock that "ticks"
+    # between messages must not change the survivor set. Finding 3 (§7.4):
+    # the wallclock is NOT seeded into the live high_water_ms.
     def test_wallclock_captured_once_per_session(self, changelog_producer_mock):
         ts = 1_000_000_000_000
         ttl = timedelta(days=7)
@@ -244,7 +258,11 @@ class TestMemoryRecoveryWallclock:
 
         # All records survive: the single captured clock governs the session.
         assert _decode_default(recovered) == source_default
-        assert recovered.high_water_ms == uniform_expiry - 1
+        # Finding 3 (§7.4): high_water is NOT seeded to the wallclock.
+        assert recovered.high_water_ms is None, (
+            "Post-recovery high_water_ms must be None (not wallclock-seeded); "
+            "recovery wallclock is Rule 4 only (spec Finding 3, §7.4)"
+        )
         recovered.close()
 
     # Determinism: two rebuilds with the same injected clock are identical.

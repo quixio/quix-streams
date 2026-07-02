@@ -25,16 +25,11 @@ from quixstreams.state.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     CHANGELOG_TTL_STAMPED_HEADER,
     TTL_BACKFILL_PENDING_CF_NAME,
-    TTL_INDEX_CF_NAME,
-    Marker,
 )
 from quixstreams.state.recovery import ChangelogProducer
 from quixstreams.state.rocksdb import RocksDBOptions, RocksDBStorePartition
 from quixstreams.state.rocksdb.ttl_codec import (
-    SENTINEL_NEVER,
-    decode_index_key,
     decode_ttl_value,
-    encode_index_key,
     encode_ttl_value,
 )
 
@@ -180,7 +175,13 @@ class TestContractHolds:
         ts = 1_000_000_000_000
         # Flip the store into TTL mode with a TTL write first.
         with partition.begin() as tx:
-            tx.set(key="trigger", value="x", prefix=b"pfx", timestamp=ts, ttl=timedelta(days=1))
+            tx.set(
+                key="trigger",
+                value="x",
+                prefix=b"pfx",
+                timestamp=ts,
+                ttl=timedelta(days=1),
+            )
             tx.set(key="permanent", value="stays", prefix=b"pfx", timestamp=ts)
 
         # Far future: the ttl key is gone, the plain key survives.
@@ -197,12 +198,20 @@ class TestContractHolds:
         partition = _rocksdb_partition(tmp_path)
         ts = 1_000_000_000_000
         with partition.begin() as tx:
-            tx.set(key="k1", value="v1", prefix=b"pfx", timestamp=ts, ttl=timedelta(days=1))
+            tx.set(
+                key="k1", value="v1", prefix=b"pfx", timestamp=ts, ttl=timedelta(days=1)
+            )
 
         # Re-write at ts+0.5 day with a 2-day ttl -> new expiry = ts + 0.5d + 2d.
         ts2 = ts + DAY_MS // 2
         with partition.begin() as tx:
-            tx.set(key="k1", value="v1-refreshed", prefix=b"pfx", timestamp=ts2, ttl=timedelta(days=2))
+            tx.set(
+                key="k1",
+                value="v1-refreshed",
+                prefix=b"pfx",
+                timestamp=ts2,
+                ttl=timedelta(days=2),
+            )
 
         # At old expiry time (ts + 1 day), the refreshed key must still exist.
         val = _read_via_tx(partition, "k1", timestamp=ts + DAY_MS)
@@ -230,7 +239,13 @@ class TestContractHolds:
         )
         ts = 1_000_000_000_000
         with partition.begin() as tx:
-            tx.set(key="new1", value="vnew", prefix=b"pfx", timestamp=ts, ttl=timedelta(days=1))
+            tx.set(
+                key="new1",
+                value="vnew",
+                prefix=b"pfx",
+                timestamp=ts,
+                ttl=timedelta(days=1),
+            )
 
         # Old values readable.
         val1 = _read_via_tx(partition, "old1", timestamp=ts)
@@ -252,7 +267,13 @@ class TestContractHolds:
         )
         ts = 1_000_000_000_000
         with partition.begin() as tx:
-            tx.set(key="new1", value="vnew", prefix=b"pfx", timestamp=ts, ttl=timedelta(days=30))
+            tx.set(
+                key="new1",
+                value="vnew",
+                prefix=b"pfx",
+                timestamp=ts,
+                ttl=timedelta(days=30),
+            )
 
         # Before legacy expiry: readable.
         val = _read_via_tx(partition, "old1", timestamp=ts + 6 * DAY_MS)
@@ -300,7 +321,13 @@ class TestContractHolds:
         ts = 1_000_000_000_000
         # Must NOT raise.
         with partition.begin() as tx:
-            tx.set(key="new1", value="vnew", prefix=b"pfx", timestamp=ts, ttl=timedelta(days=1))
+            tx.set(
+                key="new1",
+                value="vnew",
+                prefix=b"pfx",
+                timestamp=ts,
+                ttl=timedelta(days=1),
+            )
         assert partition.uses_ttl_stamps is True
         partition.close()
 
@@ -313,9 +340,17 @@ class TestContractHolds:
 
         partition = _rocksdb_partition(tmp_path, options=RocksDBOptions())
         ts = 1_000_000_000_000
-        with caplog.at_level(logging.WARNING, logger="quixstreams.state.rocksdb.transaction"):
+        with caplog.at_level(
+            logging.WARNING, logger="quixstreams.state.rocksdb.transaction"
+        ):
             with partition.begin() as tx:
-                tx.set(key="new1", value="vnew", prefix=b"pfx", timestamp=ts, ttl=timedelta(days=1))
+                tx.set(
+                    key="new1",
+                    value="vnew",
+                    prefix=b"pfx",
+                    timestamp=ts,
+                    ttl=timedelta(days=1),
+                )
         assert any(
             "legacy_records_ttl" in rec.message and rec.levelno == logging.WARNING
             for rec in caplog.records
@@ -332,8 +367,20 @@ class TestContractHolds:
         partition = _rocksdb_partition(tmp_path, options=RocksDBOptions())
         ts = 1_000_000_000_000
         with partition.begin() as tx:
-            tx.set(key="new1", value="v1", prefix=b"pfx", timestamp=ts, ttl=timedelta(days=3))
-            tx.set(key="new2", value="v2", prefix=b"pfx", timestamp=ts, ttl=timedelta(days=5))
+            tx.set(
+                key="new1",
+                value="v1",
+                prefix=b"pfx",
+                timestamp=ts,
+                ttl=timedelta(days=3),
+            )
+            tx.set(
+                key="new2",
+                value="v2",
+                prefix=b"pfx",
+                timestamp=ts,
+                ttl=timedelta(days=5),
+            )
 
         # The max ttl in the batch is 5 days. Legacy expiry = ts + 5 days.
         val = _read_via_tx(partition, "old1", timestamp=ts + 5 * DAY_MS - 1)
@@ -442,9 +489,9 @@ class TestContractHolds:
         for key, raw in legacy_values.items():
             exp, payload = decoded[key]
             assert payload == raw, f"Legacy record {key!r} payload must be intact"
-            assert exp == expected_expiry, (
-                f"Legacy record {key!r} should expire at {expected_expiry}"
-            )
+            assert (
+                exp == expected_expiry
+            ), f"Legacy record {key!r} should expire at {expected_expiry}"
         partition.close()
 
     def test_e2_mixed_replay_without_config_completes(self, tmp_path):
@@ -458,9 +505,7 @@ class TestContractHolds:
         stamp_expiry = now_ms + 30 * DAY_MS
         msgs, legacy_values = _mixed_changelog(2, 3, stamp_expiry)
 
-        partition = _rocksdb_partition(
-            tmp_path, name="e2", changelog_producer=producer
-        )
+        partition = _rocksdb_partition(tmp_path, name="e2", changelog_producer=producer)
         _replay_msgs(partition, msgs, now_ms=now_ms)
         # Must NOT raise.
         partition.complete_recovery()
@@ -469,9 +514,9 @@ class TestContractHolds:
         for key, raw in legacy_values.items():
             exp, payload = decoded[key]
             assert payload == raw, f"Legacy record {key!r} payload must be intact"
-            assert exp == stamp_expiry, (
-                f"Legacy record {key!r} should inherit survivor-derived expiry {stamp_expiry}"
-            )
+            assert (
+                exp == stamp_expiry
+            ), f"Legacy record {key!r} should inherit survivor-derived expiry {stamp_expiry}"
         partition.close()
 
     # ---------------------------------------------------------------
@@ -497,20 +542,15 @@ class TestContractHolds:
         bookkeeping residue remains (pending CF empty/absent). This is the one
         allowed internals peek."""
         producer = _make_changelog_producer_mock()
-        partition = _rocksdb_partition(
-            tmp_path, name="h2", changelog_producer=producer
-        )
+        partition = _rocksdb_partition(tmp_path, name="h2", changelog_producer=producer)
         # Replay only legacy (un-stamped) records.
-        msgs = [
-            (f"pfx|k{i}".encode(), f"value-{i}".encode(), False)
-            for i in range(5)
-        ]
+        msgs = [(f"pfx|k{i}".encode(), f"value-{i}".encode(), False) for i in range(5)]
         _replay_msgs(partition, msgs, now_ms=1_780_000_000_000)
         partition.complete_recovery()
 
-        assert partition.uses_ttl_stamps is False, (
-            "A pure-legacy store must not flip into TTL mode"
-        )
+        assert (
+            partition.uses_ttl_stamps is False
+        ), "A pure-legacy store must not flip into TTL mode"
         # Pending CF should be empty/absent after complete_recovery.
         pending = _pending_keys_rocksdb(partition)
         assert pending == set(), (
@@ -543,10 +583,12 @@ class TestContractHolds:
         decoded = _decode_default_cf_memory(partition)
         for key, raw in legacy_values.items():
             exp, payload = decoded[key]
-            assert payload == raw, f"Memory legacy record {key!r} payload must be intact"
-            assert exp == expected_expiry, (
-                f"Memory legacy record {key!r} should expire at {expected_expiry}"
-            )
+            assert (
+                payload == raw
+            ), f"Memory legacy record {key!r} payload must be intact"
+            assert (
+                exp == expected_expiry
+            ), f"Memory legacy record {key!r} should expire at {expected_expiry}"
         partition.close()
 
     def test_i2_memory_mixed_replay_without_config(self):
@@ -567,10 +609,12 @@ class TestContractHolds:
         decoded = _decode_default_cf_memory(partition)
         for key, raw in legacy_values.items():
             exp, payload = decoded[key]
-            assert payload == raw, f"Memory legacy record {key!r} payload must be intact"
-            assert exp == stamp_expiry, (
-                f"Memory legacy record {key!r} should inherit survivor-derived expiry"
-            )
+            assert (
+                payload == raw
+            ), f"Memory legacy record {key!r} payload must be intact"
+            assert (
+                exp == stamp_expiry
+            ), f"Memory legacy record {key!r} should inherit survivor-derived expiry"
         partition.close()
 
     # ---------------------------------------------------------------
@@ -602,7 +646,13 @@ class TestContractHolds:
 
         ts = 1_000_000_000_000
         tx = partition.begin()
-        tx.set(key="new1", value="vnew", prefix=b"pfx", timestamp=ts, ttl=timedelta(days=30))
+        tx.set(
+            key="new1",
+            value="vnew",
+            prefix=b"pfx",
+            timestamp=ts,
+            ttl=timedelta(days=30),
+        )
         tx.prepare(processed_offsets={"topic": 1})
         tx.flush(changelog_offset=0)
 
@@ -621,9 +671,9 @@ class TestContractHolds:
 
         # All produced default-CF records should carry __ttl_stamped__=True
         # (the backfill produced header-bearing stamped records).
-        assert all(s for _, _, s in changelog_msgs), (
-            "All changelog records from a completed migration must be stamped"
-        )
+        assert all(
+            s for _, _, s in changelog_msgs
+        ), "All changelog records from a completed migration must be stamped"
 
         # Step 2: full changelog rebuild into a fresh partition.
         producer2 = _make_changelog_producer_mock()
@@ -639,8 +689,7 @@ class TestContractHolds:
         backfill_warnings = [
             rec
             for rec in caplog.records
-            if rec.levelno == logging.WARNING
-            and "backfill" in rec.message.lower()
+            if rec.levelno == logging.WARNING and "backfill" in rec.message.lower()
         ]
         assert len(backfill_warnings) == 0, (
             f"Changelog rebuild should NOT emit backfill warnings, but got: "
@@ -648,9 +697,9 @@ class TestContractHolds:
         )
 
         # The rebuilt store is TTL-enabled.
-        assert rebuilt.uses_ttl_stamps is True, (
-            "Rebuilt store must come back TTL-enabled"
-        )
+        assert (
+            rebuilt.uses_ttl_stamps is True
+        ), "Rebuilt store must come back TTL-enabled"
 
         # Values intact and TTL-functional: old1/old2 readable,
         # new1 readable before its expiry.
@@ -670,9 +719,7 @@ class TestContractHolds:
 
         # No pending backfill residue.
         pending = _pending_keys_rocksdb(rebuilt)
-        assert pending == set(), (
-            "Rebuilt store must have no pending backfill keys"
-        )
+        assert pending == set(), "Rebuilt store must have no pending backfill keys"
         rebuilt.close()
 
     # ---------------------------------------------------------------
@@ -698,12 +745,18 @@ class TestContractHolds:
         ts = 1_000_000_000_000
         # This flush enables TTL and runs the backfill atomically.
         with partition.begin() as tx:
-            tx.set(key="new1", value="vnew", prefix=b"pfx", timestamp=ts, ttl=timedelta(days=1))
+            tx.set(
+                key="new1",
+                value="vnew",
+                prefix=b"pfx",
+                timestamp=ts,
+                ttl=timedelta(days=1),
+            )
 
         # Immediately after the flush: the store is fully migrated.
-        assert partition.uses_ttl_stamps is True, (
-            "uses_ttl_stamps must be True immediately after the enabling flush"
-        )
+        assert (
+            partition.uses_ttl_stamps is True
+        ), "uses_ttl_stamps must be True immediately after the enabling flush"
 
         # A "new message" arriving right after enable: it sees the fully
         # migrated store. All old keys readable at current event-time.
@@ -717,7 +770,13 @@ class TestContractHolds:
         # New writes go through the stamped path (not legacy).
         ts2 = ts + 1_000
         with partition.begin() as tx:
-            tx.set(key="post_enable", value="pval", prefix=b"pfx", timestamp=ts2, ttl=timedelta(days=2))
+            tx.set(
+                key="post_enable",
+                value="pval",
+                prefix=b"pfx",
+                timestamp=ts2,
+                ttl=timedelta(days=2),
+            )
 
         val = _read_via_tx(partition, "post_enable", timestamp=ts2)
         assert val == "pval", "Post-enable write must be readable"
@@ -727,101 +786,18 @@ class TestContractHolds:
         assert val is None, "Post-enable write must expire at its own ttl"
         partition.close()
 
-
-# ===================================================================
-# TestContractTargets -- expected RED today
-# ===================================================================
-
-
-class TestContractTargets:
-    """Scenarios that are expected to FAIL on the current branch. Each test's
-    failure demonstrates a real defect. These become green as fixes land."""
-
     # ---------------------------------------------------------------
-    # F: Changelog replay of a stock v3.24.0 store
-    # ---------------------------------------------------------------
-
-    def test_f_v3240_changelog_replay_values_intact(self, tmp_path):
-        """F: A stock v3.24.0 changelog replayed into the current code must
-        produce intact values (no 8-byte stamp prefix corruption) and working
-        TTL expiry.
-
-        v3.24.0 changelog records have:
-        - default-CF values stamp-prefixed via encode_ttl_value
-        - __ttl_index__ CF records present
-        - __column_family__ header only, NO __ttl_stamped__ header
-
-        Expected RED: current code treats header-absent default-CF records as
-        legacy (un-stamped) and lands them verbatim. On read, the 8-byte stamp
-        prefix is not stripped (the partition never flipped into TTL mode because
-        no __ttl_stamped__ header was seen), so the user gets corrupted values
-        with the binary prefix prepended.
-        """
-        producer = _make_changelog_producer_mock()
-        now_ms = 1_780_000_000_000
-        expiry = now_ms + 7 * DAY_MS
-
-        # Craft v3.24.0-style changelog messages.
-        user_payloads = {}
-        msgs = []
-        for i in range(5):
-            key = f"pfx|k{i}".encode()
-            raw_payload = f'"value-{i}"'.encode()
-            user_payloads[key] = raw_payload
-            stamped_value = encode_ttl_value(expiry, raw_payload)
-            # v3.24.0: NO __ttl_stamped__ header (header was introduced later).
-            msgs.append((key, stamped_value, False))
-
-        partition = _rocksdb_partition(tmp_path, name="f", changelog_producer=producer)
-        _replay_msgs(partition, msgs, now_ms=now_ms)
-        partition.complete_recovery()
-
-        # Every value must read back intact (the raw user payload, not the
-        # stamped blob). This is the assertion that demonstrates the corruption.
-        for key, expected_payload in user_payloads.items():
-            raw = partition.get(key, cf_name="default")
-            if raw is Marker.UNDEFINED:
-                pytest.fail(
-                    f"v3.24.0 record {key!r} returned UNDEFINED after replay. "
-                    "The partition likely did not flip into TTL mode and stored "
-                    "the value verbatim; on read the stamp was not stripped."
-                )
-            # If we got a value back, check it's not the full stamped blob.
-            assert raw != encode_ttl_value(expiry, expected_payload), (
-                f"v3.24.0 record {key!r}: the stored value IS the full stamped "
-                f"blob (8-byte prefix + payload). The code failed to detect that "
-                f"this was a v3.24.0 stamped record (no __ttl_stamped__ header) "
-                f"and stored it verbatim, corrupting reads."
-            )
-            # The raw value should decode to the original user payload.
-            try:
-                stamp, payload = decode_ttl_value(raw)
-                assert payload == expected_payload, (
-                    f"v3.24.0 record {key!r}: decoded payload does not match. "
-                    f"Expected {expected_payload!r}, got {payload!r}"
-                )
-            except (ValueError, TypeError):
-                pytest.fail(
-                    f"v3.24.0 record {key!r}: stored value could not be decoded "
-                    f"as a stamped value. Got {raw!r}"
-                )
-        partition.close()
-
-    # ---------------------------------------------------------------
-    # G: Changelog rebuild + old event-time writes
+    # G: Old event-time writes after changelog rebuild
     # ---------------------------------------------------------------
 
     def test_g_old_event_time_after_changelog_rebuild(self, tmp_path):
-        """G: After a changelog rebuild (which seeds the clock to wallclock),
-        live writes with OLD event-time timestamps (hours behind wallclock)
-        + their own ttl must be readable immediately after writing (not
-        instantly expired) and must survive at least one flush.
-
-        Expected RED: current code uses the wallclock-seeded high_water for
-        read-time expiry checks. A write with timestamp << wallclock produces
-        an absolute expiry = old_ts + ttl which is <= the wallclock-seeded
-        high_water, so the value is instantly UNDEFINED on read.
-        """
+        """G: After a changelog rebuild, live writes with OLD event-time
+        timestamps (hours/days behind wallclock) + their own ttl must be
+        readable immediately after writing. The recovery wallclock is used
+        ONLY for the Rule 4 replay drop filter and is NOT seeded into the
+        live high_water_ms clock (spec Finding 3, section 7.4). Post-recovery
+        high_water is the loaded persisted value or None; only live event-time
+        writes advance it."""
         producer = _make_changelog_producer_mock()
         now_ms = 1_780_000_000_000
 
@@ -837,26 +813,27 @@ class TestContractTargets:
         _replay_msgs(partition, msgs, now_ms=now_ms)
         partition.complete_recovery()
 
-        # The high_water is now seeded to now_ms (~wallclock). A live write with
-        # an OLD event-time (3 hours behind wallclock) + 1-day ttl:
-        # absolute expiry = (now_ms - 3h) + 1 day = now_ms + 21 hours.
-        # This is in the future relative to real time, so the value MUST be
-        # readable. But if the code compares expiry against the wallclock-seeded
-        # high_water (now_ms), then 21 hours < 0? No -- let's use a worse case:
-        # old_ts is 2 days behind wallclock, ttl = 1 day.
-        # expiry = (now_ms - 2d) + 1d = now_ms - 1d. This IS <= now_ms.
+        # Post-recovery: high_water is NOT wallclock-seeded (Finding 3 fix).
+        # A live write with old event-time (2 days behind wallclock) + 1-day
+        # ttl produces an absolute expiry = old_ts + 1d = now_ms - 1d. Since
+        # the high_water is NOT seeded to now_ms, this does NOT instantly
+        # expire. The first live event-time write sets the high_water.
         old_ts = now_ms - 2 * DAY_MS
         write_ttl = timedelta(days=1)
         with partition.begin() as tx:
-            tx.set(key="late", value="late-val", prefix=b"pfx", timestamp=old_ts, ttl=write_ttl)
+            tx.set(
+                key="late",
+                value="late-val",
+                prefix=b"pfx",
+                timestamp=old_ts,
+                ttl=write_ttl,
+            )
 
-        # The value was just written. It should be readable at the SAME old_ts.
+        # The value was just written. It must be readable at its own timestamp.
         val = _read_via_tx(partition, "late", timestamp=old_ts)
         assert val == "late-val", (
             f"A value just written with timestamp={old_ts} and ttl=1d should be "
-            f"readable immediately at the same timestamp. Got {val!r} instead. "
-            f"The wallclock-seeded high_water ({now_ms}) likely caused the "
-            f"expiry ({old_ts + DAY_MS}) to be treated as already-passed."
+            f"readable at the same timestamp. Got {val!r} instead."
         )
         partition.close()
 
@@ -864,14 +841,11 @@ class TestContractTargets:
     # I-target: Memory backend WARNING on populated legacy store
     # ---------------------------------------------------------------
 
-    def test_i_target_memory_populated_legacy_warning(self, caplog):
-        """I-target: A live ttl= write on a populated legacy MEMORY store
-        should emit a WARNING (currently a silent no-op: the write lands as
-        legacy without stamping).
-
-        Expected RED: the memory backend's _maybe_flip_or_reject early-returns
-        on a populated store without emitting any diagnostic.
-        """
+    def test_i_holds_memory_populated_legacy_warning(self, caplog):
+        """I-holds: A live ttl= write on a populated legacy MEMORY store emits
+        a WARNING (spec section 7.3 row I-target). The warning tells the
+        operator that the ttl= write landed as legacy (un-stamped) this session
+        and that migration is owned by the next changelog rebuild."""
         producer = _make_changelog_producer_mock()
         partition = MemoryStorePartition(changelog_producer=producer)
         # Populate with legacy data (direct replay, no TTL header).
@@ -883,7 +857,13 @@ class TestContractTargets:
         ts = 1_000_000_000_000
         with caplog.at_level(logging.WARNING):
             with partition.begin() as tx:
-                tx.set(key="new1", value="vnew", prefix=b"pfx", timestamp=ts, ttl=timedelta(days=1))
+                tx.set(
+                    key="new1",
+                    value="vnew",
+                    prefix=b"pfx",
+                    timestamp=ts,
+                    ttl=timedelta(days=1),
+                )
 
         warnings = [
             rec
@@ -893,8 +873,7 @@ class TestContractTargets:
         ]
         assert len(warnings) > 0, (
             "A WARNING should be emitted when a ttl= write hits a populated "
-            "legacy memory store, but no relevant WARNING was logged. The "
-            "memory backend silently swallows the ttl= write as legacy."
+            "legacy memory store, but no relevant WARNING was logged."
         )
         partition.close()
 
@@ -905,19 +884,17 @@ class TestContractTargets:
     def test_j_expire_rewrite_same_flush(self, tmp_path):
         """J: A key written with ttl, expired (high-water advanced past expiry),
         then re-written with a fresh ttl in a later flush must read back the new
-        value. The sweep must not evict a value that was re-written in the same
-        flush.
-
-        Expected RED on this branch: the fix lives in PR #1129, not yet merged.
-        This test documents the merge dependency.
-        """
+        value. The sweep's staged_default_keys guard prevents eviction of keys
+        re-written in the same flush."""
         partition = _rocksdb_partition(tmp_path)
         ts = 1_000_000_000_000
         ttl_short = timedelta(days=1)
 
         # Write key with short ttl.
         with partition.begin() as tx:
-            tx.set(key="dedup", value="first", prefix=b"pfx", timestamp=ts, ttl=ttl_short)
+            tx.set(
+                key="dedup", value="first", prefix=b"pfx", timestamp=ts, ttl=ttl_short
+            )
 
         # Advance high-water past expiry.
         ts_expired = ts + DAY_MS + 1
@@ -928,14 +905,133 @@ class TestContractTargets:
         ts_rewrite = ts_expired + 1_000
         ttl_long = timedelta(days=7)
         with partition.begin() as tx:
-            tx.set(key="dedup", value="second", prefix=b"pfx", timestamp=ts_rewrite, ttl=ttl_long)
+            tx.set(
+                key="dedup",
+                value="second",
+                prefix=b"pfx",
+                timestamp=ts_rewrite,
+                ttl=ttl_long,
+            )
 
         # The new value must be readable.
         val = _read_via_tx(partition, "dedup", timestamp=ts_rewrite)
         assert val == "second", (
             f"After re-writing an expired key with a fresh ttl, the new value "
-            f"must be readable. Got {val!r} instead. This is the sweep "
-            f"same-flush bug: the old stale index entry causes the sweep to "
-            f"evict the freshly-written value. Fix is in PR #1129."
+            f"must be readable. Got {val!r} instead."
+        )
+        partition.close()
+
+
+# ===================================================================
+# TestContractTargets -- expected RED today
+# ===================================================================
+
+
+class TestContractTargets:
+    """Scenarios that started RED as the contract loop's work queue and went
+    green as fixes landed (rounds 1-3). Kept in their own class for history;
+    all are now regression gates like TestContractHolds."""
+
+    # ---------------------------------------------------------------
+    # F: Changelog replay of a stock v3.24.0 store (self-heal)
+    # ---------------------------------------------------------------
+
+    def test_f_v3240_changelog_replay_values_intact(self, tmp_path, caplog):
+        """F: Replaying a stock v3.24.0 changelog (stamped values, no
+        __ttl_stamped__ header, no __ttl_index__ records) must: (1) complete
+        recovery without crash; (2) return every value as the ORIGINAL user
+        payload via the transaction read surface; (3) preserve TTL semantics
+        afterward (a record whose v3.24.0 stamp is in the future survives, new
+        writes with ttl= expire correctly); (4) emit an INFO adoption log.
+
+        The design adopts the existing v3.24.0 stamps verbatim (no byte
+        changes to stored values) and the TTL-mode flip makes transaction reads
+        strip the 8-byte prefix transparently. Customers keep their original
+        v3.24.0 TTLs. The __ttl_migration_done__ flag closes this class for
+        every store migrated on this branch onward.
+
+        Expected RED until ArchDev round 2 self-heal lands.
+        """
+        from quixstreams.utils.json import dumps as json_dumps
+
+        producer = _make_changelog_producer_mock()
+        now_ms = 1_780_000_000_000
+        expiry = now_ms + 7 * DAY_MS
+
+        # Craft v3.24.0-style changelog messages: 3 keys with future expiry
+        # (should survive), 2 keys with past expiry (should be expired).
+        # Keys must use the same serialization as the transaction layer:
+        # prefix + "|" + json_dumps(key_string).
+        future_keys = {}
+        msgs = []
+        past_expiry = now_ms - DAY_MS
+        for i in range(3):
+            key = f"k_future_{i}"
+            user_value = f"value-{i}"
+            future_keys[key] = user_value
+            raw_key = b"pfx|" + json_dumps(key)
+            stamped_value = encode_ttl_value(expiry, json_dumps(user_value))
+            msgs.append((raw_key, stamped_value, False))
+        for i in range(2):
+            key = f"k_expired_{i}"
+            raw_key = b"pfx|" + json_dumps(key)
+            stamped_value = encode_ttl_value(past_expiry, json_dumps(f"old-{i}"))
+            msgs.append((raw_key, stamped_value, False))
+
+        partition = _rocksdb_partition(tmp_path, name="f", changelog_producer=producer)
+
+        caplog.clear()
+        with caplog.at_level(logging.INFO):
+            _replay_msgs(partition, msgs, now_ms=now_ms)
+            # (1) Recovery must complete without crash.
+            partition.complete_recovery()
+
+        # (2) Every future-stamped value must read back as the ORIGINAL payload
+        # through the transaction surface (the user API, not raw bytes).
+        for key, expected_value in future_keys.items():
+            val = _read_via_tx(partition, key, timestamp=now_ms)
+            assert val == expected_value, (
+                f"v3.24.0 record {key!r}: expected original payload "
+                f"{expected_value!r} via tx.get(), got {val!r}. The self-heal "
+                f"has not adopted the existing v3.24.0 stamps."
+            )
+
+        # (3a) New writes with ttl= work correctly on the adopted store.
+        # Must run BEFORE the expiry checks because those advance the
+        # high_water past the future records' stamps and the sweep on the
+        # next flush would evict them.
+        ts_new = now_ms + 1_000
+        new_ttl = timedelta(days=2)
+        with partition.begin() as tx:
+            tx.set(
+                key="post_adopt",
+                value="new-val",
+                prefix=b"pfx",
+                timestamp=ts_new,
+                ttl=new_ttl,
+            )
+
+        val = _read_via_tx(partition, "post_adopt", timestamp=ts_new)
+        assert val == "new-val", "Post-adoption write must be readable"
+        val = _read_via_tx(partition, "post_adopt", timestamp=ts_new + 2 * DAY_MS)
+        assert val is None, "Post-adoption write must expire at its own ttl"
+
+        # (3b) TTL semantics: future-stamped records expire at their stamp.
+        for key in future_keys:
+            val = _read_via_tx(partition, key, timestamp=expiry)
+            assert (
+                val is None
+            ), f"v3.24.0 record {key!r} should be expired at stamp={expiry}"
+
+        # (4) An INFO adoption log must be emitted during recovery.
+        adoption_logs = [
+            rec
+            for rec in caplog.records
+            if rec.levelno >= logging.INFO
+            and ("v3.24.0" in rec.message.lower() or "adopt" in rec.message.lower())
+        ]
+        assert len(adoption_logs) > 0, (
+            "An INFO-level adoption log should be emitted when a v3.24.0 "
+            "changelog is detected and adopted."
         )
         partition.close()
