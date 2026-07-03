@@ -465,9 +465,9 @@ On the next flush the framework backfills every pre-existing record with the cho
 
 ### Semantics and limits
 
-- **Expiry is event-time only.** There is no wall-clock fallback. A pipeline replaying old Kafka offsets sees entries expire relative to the timestamps in the data, not relative to today's date.
+- **Expiry is event-time only in live processing.** A pipeline replaying old Kafka offsets sees entries expire relative to the timestamps in the data, not relative to today's date. During a **rebuild from the changelog** (cold restore), entries whose expiry has already passed by real-world clock at the moment the rebuild runs are not restored — even if the pipeline's event-time clock has not yet advanced past them. This is intentional: a purely event-time recovery filter would restore all uniformly-expiry-stamped records regardless of how much real time has elapsed since the store was written. After the rebuild, live processing is event-time only as normal. See [Reference clock — when do migrated records expire?](#reference-clock--when-do-migrated-records-expire) above for details on how the drop filter works during replay.
 - **Reads are always consistent.** Once an entry's event-time expiry has passed relative to the current record's timestamp, `state.get()` returns `None` — even if the entry has not yet been physically deleted from disk. You will never read a stale expired value.
-- **Physical eviction is approximate.** Expired entries are swept from disk inside each `flush()`, capped at 10,000 evictions per flush by default. On a high-throughput partition, physical deletion can lag behind logical expiry. Disk space is eventually reclaimed; reads remain correct in the meantime.
+- **Physical eviction is approximate.** Expired entries are swept inside each `flush()`, capped at 10,000 evictions per flush by default. Each eviction also writes a tombstone to the store's changelog topic, so under the default `compact` policy the changelog physically shrinks in step with the local store. On a high-throughput partition, physical deletion can lag behind logical expiry — both local disk and changelog storage are bounded by the sweep budget. Space is eventually reclaimed; reads remain correct in the meantime.
 - **No TTL on windowed stores.** Windowed aggregations manage their own retention via `grace_ms`. Passing `ttl=` to `state.set()` inside a windowed aggregation has no effect.
 - **No per-store or per-callback default TTL.** There is no `ttl=` argument on `.apply()`, `.update()`, `.filter()`, or `register_store()`. Pass `ttl=` on each `state.set()` call where you want expiry.
 - **Overwriting a key without `ttl=` on a TTL-enabled store makes it permanent.** Calling `state.set(k, v)` (no `ttl`) after a prior `state.set(k, v, ttl=...)` removes the expiry from that key. This is intentional: it gives you three primitives — expire, make permanent, delete.
@@ -490,7 +490,7 @@ The variable scopes its effect to `quixstreams.state` and its children. Non-stat
 
 ### Tuning sweep budget
 
-On partitions with a very high sustained expiration rate, the default 10,000 evictions per flush may not keep up with expiring entries. Disk space will grow even though reads remain correct. To increase the budget:
+On partitions with a very high sustained expiration rate, the default 10,000 evictions per flush may not keep up with expiring entries. Local disk space and changelog storage will both grow even though reads remain correct — the same budget governs tombstone production to the changelog as governs local evictions. To increase the budget:
 
 ```python
 from quixstreams import Application
@@ -509,14 +509,16 @@ At the default `commit_interval` of 5 seconds, 10,000 evictions per flush transl
 
 ### Changelog topic configuration
 
-For long-running pipelines with TTL-enabled stores, set the changelog topic's retention to at least `ttl + a buffer`:
+The changelog topic for a TTL-enabled store uses `cleanup.policy=compact` by default. With sweep tombstones enabled (the default), expired keys are written to the changelog as tombstones when they are evicted locally. Log compaction removes the superseded record and, after `delete.retention.ms`, the tombstone — so the changelog physically shrinks in step with the local store. No extra retention configuration is required.
+
+`cleanup.policy=compact,delete` with an explicit `retention.ms` is optional. It acts as a secondary safeguard for keys on partitions that stopped receiving writes before those keys expired. Such keys are never revisited by the sweep, so their last changelog record persists until a future write triggers eviction or until you manually trigger topic compaction.
 
 ```
 cleanup.policy = compact,delete
 retention.ms   = <max_expected_ttl_ms + buffer>
 ```
 
-Without this, the changelog retains expired entries indefinitely. This is harmless for correctness (recovery filters them out) but wastes storage. The `compact` policy alone keeps the latest value per key forever; you need `delete` as well to enforce time-based purging.
+To disable sweep tombstones and restore the previous local-only eviction behavior, set `RocksDBOptions(ttl_changelog_tombstones=False)`. With this option, the changelog retains the last record of each expired key until compaction reclaims it — identical to the behavior before sweep tombstones were introduced. In that case, `cleanup.policy=compact,delete` with a retention window is the recommended way to reclaim changelog space predictably. The `ttl_changelog_tombstones` flag has no effect on windowed or timestamped stores.
 
 
 ### API reference

@@ -230,6 +230,25 @@ if __name__ == "__main__":
 event (even with identical status) is treated as fresh and forwarded.
 
 
+## Changelog storage and sweep tombstones
+
+When a key expires and is swept from the local store, the framework also writes a tombstone (a delete marker) to the store's changelog topic. Under the default `compact` policy, Kafka removes the superseded record and, after `delete.retention.ms`, the tombstone itself — so the changelog physically shrinks in step with the local store. You do not need to configure `cleanup.policy=compact,delete` or set a retention window for this to work.
+
+The sweep budget (`max_evictions_per_flush`, default 10,000) governs tombstone production at the same rate as local evictions. A higher budget evicts and tombstones more keys per flush.
+
+To disable tombstone production and revert to local-only eviction:
+
+```python
+from quixstreams.state.rocksdb.options import RocksDBOptions
+
+app = Application(
+    rocksdb_options=RocksDBOptions(ttl_changelog_tombstones=False),
+)
+```
+
+With `ttl_changelog_tombstones=False`, the changelog retains the last record of each expired key until compaction reclaims it. This is identical to the behavior before sweep tombstones were introduced, and may be useful if you manage changelog retention manually or want to defer to a `cleanup.policy=compact,delete` retention window. This flag has no effect on windowed or timestamped stores.
+
+
 ## Upgrading an existing store
 
 If your pipeline was already running before TTL was introduced, see
